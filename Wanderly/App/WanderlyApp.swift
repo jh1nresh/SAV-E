@@ -36,6 +36,7 @@ struct SignInView: View {
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
+    @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
     var body: some View {
@@ -67,7 +68,7 @@ struct SignInView: View {
                         isLoading = true
                         defer { isLoading = false }
                         do { try await authService.signInWithApple() }
-                        catch { errorMessage = error.localizedDescription }
+                        catch { presentAuthError(error) }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -79,7 +80,7 @@ struct SignInView: View {
                         isLoading = true
                         defer { isLoading = false }
                         do { try await authService.signInWithGoogle() }
-                        catch { errorMessage = error.localizedDescription }
+                        catch { presentAuthError(error) }
                     }
                 }) {
                     HStack {
@@ -118,7 +119,7 @@ struct SignInView: View {
                                     try await authService.signInWithEmail(email)
                                     showEmailCode = true
                                 } catch {
-                                    errorMessage = error.localizedDescription
+                                    presentAuthError(error)
                                 }
                             }
                         }
@@ -141,7 +142,7 @@ struct SignInView: View {
                                 isLoading = true
                                 defer { isLoading = false }
                                 do { try await authService.verifyEmailCode(verificationCode) }
-                                catch { errorMessage = error.localizedDescription }
+                                catch { presentAuthError(error) }
                             }
                         }
                         .font(.subheadline)
@@ -164,10 +165,32 @@ struct SignInView: View {
             }
         }
         .background(Color.wanderlyCream)
-        .alert("Sign In Failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+        .alert(errorTitle, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+    }
+
+    private func presentAuthError(_ error: Error) {
+        let rawMessage = error.localizedDescription
+        print("Wanderly sign-in failed: \(rawMessage)")
+
+        if rawMessage.contains("disallowed_login_method") || rawMessage.contains("not allowed") {
+            errorTitle = "Google Isn't Enabled"
+            errorMessage = "Turn on Google in Privy, or use email sign-in for now."
+        } else if rawMessage.contains("invalid_native_app_id") {
+            errorTitle = "App Not Allowed"
+            errorMessage = "Add com.wanderly.app to the allowed app identifiers in Privy."
+        } else if rawMessage.contains("Invalid app client ID") {
+            errorTitle = "Auth Setup Needed"
+            errorMessage = "Check the iOS client ID in Privy and try again."
+        } else if rawMessage.contains("Missing Privy config") {
+            errorTitle = "Auth Setup Needed"
+            errorMessage = rawMessage
+        } else {
+            errorTitle = "Can't Sign In"
+            errorMessage = "Something went wrong. Try again in a moment."
         }
     }
 }

@@ -19,7 +19,7 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
 
 - **SwiftUI** + **MapKit** for UI
 - **Privy iOS SDK** for auth (Sign in with Apple / Google / Email + embedded wallet)
-- **Supabase Edge Functions** for backend persistence
+- **Railway Node API + Railway Postgres** for backend persistence
 - **Gemini API** for AI content parsing
 - **Google Places API** for place matching and details
 - **App Clip** target for shareable trip links
@@ -36,18 +36,28 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
 2. Fill in your local API keys in `Wanderly/Resources/Secrets.plist` and `WanderlyShareExtension/Secrets.plist`:
    - `GEMINI_API_KEY` — from Google AI Studio
    - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
-   - `SUPABASE_URL` — from [Supabase Dashboard](https://supabase.com/dashboard)
-   - `WANDERLY_API_URL` — optional override; defaults to `${SUPABASE_URL}/functions/v1/wanderly-api`
-   - `PRIVY_APP_ID` and `PRIVY_APP_CLIENT_ID` — from [Privy Dashboard](https://dashboard.privy.io/)
+   - `WANDERLY_API_URL` — Railway backend service URL
+   - `PRIVY_APP_ID` — from Privy Dashboard → App Settings → Basics
+   - `PRIVY_APP_CLIENT_ID` — from Privy Dashboard → App Settings → Clients. The iOS app client must allow bundle id `com.wanderly.app` and URL scheme `wanderly`.
    - Keep real values out of commits.
 
-3. Configure and deploy the backend proxy:
+3. Configure the Railway backend:
    ```bash
-   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...
-   supabase secrets set PRIVY_APP_ID=...
-   supabase secrets set PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
-   supabase db push
-   supabase functions deploy wanderly-api --no-verify-jwt
+   cd backend
+   npm install
+   npm run build
+   ```
+
+   Railway service variables:
+   ```bash
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   PRIVY_APP_ID=...
+   PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
+   ```
+
+   Apply the schema to Railway Postgres:
+   ```bash
+   psql "$DATABASE_URL" -f sql/schema.sql
    ```
 
 4. Generate the Xcode project:
@@ -82,6 +92,7 @@ Wanderly/
 └── Resources/              Assets
 WanderlyShareExtension/     Share Extension target
 WanderlyClip/               App Clip target
+backend/                    Railway API + Postgres schema
 ```
 
 ## Design Theme
@@ -98,7 +109,7 @@ WanderlyClip/               App Clip target
 ## Dependencies (Swift Package Manager)
 
 - [privy-io/privy-ios](https://github.com/privy-io/privy-ios) — Authentication
-- Supabase Edge Functions — Backend persistence boundary
+- Railway — Backend hosting + Postgres
 - Google Places API — REST via URLSession
 - Gemini API — REST via URLSession
 

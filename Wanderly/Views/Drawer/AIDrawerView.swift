@@ -8,8 +8,10 @@ struct AIDrawerView: View {
     var body: some View {
         VStack(spacing: 0) {
             searchBar
-            Divider()
-            contentArea
+            if showsContentArea {
+                Divider()
+                contentArea
+            }
         }
         .background(Color.wanderlyCream)
         .sheet(isPresented: $viewModel.showPlaceList) {
@@ -25,6 +27,12 @@ struct AIDrawerView: View {
                 case .displaying(let r):
                     drawerDetent = r.componentType == .tripItinerary ? .large : .medium
                 }
+            }
+        }
+        .onChange(of: drawerDetent) { _, detent in
+            guard case .idle = viewModel.drawerState else { return }
+            if detent != .height(72) {
+                searchFocused = true
             }
         }
     }
@@ -163,12 +171,34 @@ struct AIDrawerView: View {
         }
     }
 
+    private func messageView(_ text: String) -> some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.wanderlyCharcoal)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var isLoading: Bool {
+        if case .loading = viewModel.drawerState { return true }
+        return false
+    }
+
+    private var showsContentArea: Bool {
+        if case .idle = viewModel.drawerState, drawerDetent == .height(72) { return false }
+        return true
+    }
+
     // MARK: - Idle suggestions
 
     private var suggestionsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                // Quick actions
                 HStack(spacing: 12) {
                     Button(action: { viewModel.showPlaceList = true }) {
                         HStack(spacing: 6) {
@@ -193,7 +223,6 @@ struct AIDrawerView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 
-                // Chat history
                 if !viewModel.chatHistory.isEmpty {
                     Text("Recent")
                         .font(.caption)
@@ -223,7 +252,6 @@ struct AIDrawerView: View {
                     }
                 }
 
-                // Suggestions
                 Text("Try asking")
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -231,16 +259,16 @@ struct AIDrawerView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
 
-                ForEach(suggestions, id: \.self) { s in
+                ForEach(suggestions, id: \.self) { suggestion in
                     Button(action: {
-                        viewModel.query = s
+                        viewModel.query = suggestion
                         Task { await viewModel.submit() }
                     }) {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.up.left")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
-                            Text(s)
+                            Text(suggestion)
                                 .font(.subheadline)
                                 .foregroundColor(.wanderlyCharcoal)
                             Spacer()
@@ -253,27 +281,9 @@ struct AIDrawerView: View {
         }
     }
 
-    private func messageView(_ text: String) -> some View {
-        VStack(spacing: 8) {
-            Spacer()
-            Text(text)
-                .font(.subheadline)
-                .foregroundColor(.wanderlyCharcoal)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var isLoading: Bool {
-        if case .loading = viewModel.drawerState { return true }
-        return false
-    }
-
     private let suggestions = [
         "Show my food spots on the map",
-        "Navigate to the nearest café",
+        "Navigate to the nearest cafe",
         "Plan a 2-day itinerary",
         "What haven't I visited yet?",
     ]

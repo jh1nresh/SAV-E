@@ -23,6 +23,7 @@ Packages/
 Package.resolved
 *.xcodeproj
 node_modules/
+backend/dist/
 
 # CocoaPods
 Pods/
@@ -43,6 +44,7 @@ fastlane/test_output
 .env
 .env.local
 .env.production
+supabase/.temp/
 
 # OS files
 .DS_Store

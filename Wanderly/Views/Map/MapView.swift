@@ -22,7 +22,6 @@ struct MapView: View {
                     }
                 }
 
-                // Top bar: category pills + profile button
                 HStack(spacing: 0) {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {

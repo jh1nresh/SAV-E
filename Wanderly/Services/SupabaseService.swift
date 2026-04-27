@@ -26,11 +26,11 @@ enum SupabaseError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "Supabase not configured"
+        case .notConfigured: return "Wanderly API not configured"
         case .notAuthenticated: return "User not authenticated"
         case .recordNotFound: return "Record not found"
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
-        case .apiError(let code, let msg): return "Supabase error \(code): \(msg)"
+        case .apiError(let code, let msg): return "Wanderly API error \(code): \(msg)"
         }
     }
 }
@@ -46,9 +46,6 @@ final class SupabaseService: SupabaseServiceProtocol {
         if let explicit = ProcessInfo.processInfo.environment["WANDERLY_API_URL"]
             ?? Self.keyFromPlist("WANDERLY_API_URL") {
             self.apiBaseURL = explicit
-        } else if let supabaseURL = ProcessInfo.processInfo.environment["SUPABASE_URL"]
-            ?? Self.keyFromPlist("SUPABASE_URL") {
-            self.apiBaseURL = "\(supabaseURL)/functions/v1/wanderly-api"
         } else {
             self.apiBaseURL = nil
         }
