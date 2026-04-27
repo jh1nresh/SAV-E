@@ -21,13 +21,14 @@ struct PendingSharedPlace: Codable {
 final class PendingPlaceImportService {
     static let shared = PendingPlaceImportService()
 
-    private let defaults: UserDefaults
+    private let defaults: UserDefaults?
 
     init(defaults: UserDefaults? = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName)) {
-        self.defaults = defaults ?? .standard
+        self.defaults = defaults
     }
 
     func consumePendingPlaces() -> [PendingSharedPlace] {
+        guard let defaults else { return [] }
         let pending = loadPendingPlaces()
         defaults.removeObject(forKey: WanderlySharedStorage.pendingPlacesKey)
         return pending
@@ -40,6 +41,7 @@ final class PendingPlaceImportService {
     }
 
     private func loadPendingPlaces() -> [PendingSharedPlace] {
+        guard let defaults else { return [] }
         guard let data = defaults.data(forKey: WanderlySharedStorage.pendingPlacesKey) else {
             return []
         }
@@ -47,6 +49,7 @@ final class PendingPlaceImportService {
     }
 
     private func save(_ places: [PendingSharedPlace]) {
+        guard let defaults else { return }
         guard let data = try? JSONEncoder().encode(places) else { return }
         defaults.set(data, forKey: WanderlySharedStorage.pendingPlacesKey)
     }

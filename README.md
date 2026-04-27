@@ -40,12 +40,17 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
    - `PRIVY_APP_ID` and `PRIVY_APP_CLIENT_ID` — from [Privy Dashboard](https://dashboard.privy.io/)
    - Keep real values out of commits.
 
-3. Open the project in Xcode:
+3. Generate the Xcode project:
+   ```bash
+   xcodegen generate
+   ```
+
+4. Open the project in Xcode:
    ```bash
    open Wanderly.xcodeproj
    ```
 
-4. Build and run on simulator or device.
+5. Build and run on simulator or device.
 
 ## Project Structure
 

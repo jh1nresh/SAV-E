@@ -383,11 +383,17 @@ struct ShareExtensionView: View {
             savedAt: Date()
         )
 
-        let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) ?? .standard
+        guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) else {
+            parseError = "Shared app storage is unavailable"
+            return
+        }
         var pending = loadPendingPlaces(from: defaults)
         pending.append(pendingPlace)
         if let data = try? JSONEncoder().encode(pending) {
             defaults.set(data, forKey: WanderlySharedStorage.pendingPlacesKey)
+        } else {
+            parseError = "Couldn't save this place"
+            return
         }
 
         isSaved = true
