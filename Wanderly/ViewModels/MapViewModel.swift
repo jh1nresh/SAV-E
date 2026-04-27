@@ -18,10 +18,15 @@ final class MapViewModel: ObservableObject {
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
+    private let pendingImportService: PendingPlaceImportService
 
-    init(supabaseService: SupabaseServiceProtocol = SupabaseService.shared) {
+    init(
+        supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
+        pendingImportService: PendingPlaceImportService = .shared
+    ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
+        self.pendingImportService = pendingImportService
     }
 
     // MARK: - Computed
@@ -54,9 +59,57 @@ final class MapViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             places = try await supabaseService.fetchPlaces(for: userId)
+            try await importPendingPlaces(for: userId)
         } catch {
             print("MapViewModel: failed to load places: \(error)")
         }
+    }
+
+    private func importPendingPlaces(for userId: String) async throws {
+        let pending = pendingImportService.consumePendingPlaces()
+        guard !pending.isEmpty else { return }
+
+        var importedPlaces: [Place] = []
+        var failedImports: [PendingSharedPlace] = []
+
+        for pendingPlace in pending {
+            let place = Place(
+                id: UUID(),
+                name: pendingPlace.name,
+                address: pendingPlace.address,
+                latitude: pendingPlace.latitude,
+                longitude: pendingPlace.longitude,
+                googlePlaceId: nil,
+                category: PlaceCategory(rawValue: pendingPlace.category) ?? .food,
+                status: .wantToGo,
+                rating: nil,
+                note: pendingPlace.sourceText,
+                sourceUrl: pendingPlace.sourceURL,
+                sourcePlatform: sourcePlatform(from: pendingPlace.sourceURL),
+                sourceImageUrl: nil,
+                extractedDishes: pendingPlace.dishes,
+                priceRange: pendingPlace.priceRange,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: pendingPlace.savedAt
+            )
+
+            do {
+                try await supabaseService.savePlace(place, userId: userId)
+                importedPlaces.append(place)
+            } catch {
+                failedImports.append(pendingPlace)
+                print("MapViewModel: failed to import shared place \(pendingPlace.name): \(error)")
+            }
+        }
+
+        if !importedPlaces.isEmpty {
+            let importedIds = Set(importedPlaces.map(\.id))
+            places = importedPlaces + places.filter { !importedIds.contains($0.id) }
+        }
+        pendingImportService.restorePendingPlaces(failedImports)
     }
 
     func selectPlace(_ place: Place) {
@@ -160,5 +213,16 @@ final class MapViewModel: ObservableObject {
             longitudeDelta: max((lngs.max()! - lngs.min()!) * 1.4, 0.01)
         )
         return MKCoordinateRegion(center: center, span: span)
+    }
+
+    private func sourcePlatform(from urlString: String?) -> SourcePlatform {
+        guard let host = urlString.flatMap(URL.init(string:))?.host()?.lowercased() else {
+            return .other
+        }
+        if host.contains("instagram") { return .instagram }
+        if host.contains("threads") { return .threads }
+        if host.contains("xiaohongshu") || host.contains("xhslink") { return .xiaohongshu }
+        if host.contains("google") || host.contains("maps") { return .googleMaps }
+        return .other
     }
 }

@@ -63,7 +63,7 @@ struct ItineraryStop: Identifiable, Equatable {
     let note: String?
 }
 
-// MARK: - Codable DTOs (what Claude actually returns)
+// MARK: - Codable DTOs (what Gemini actually returns)
 
 struct WanderlyAIResponseDTO: Codable {
     let componentType: String

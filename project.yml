@@ -25,11 +25,14 @@ targets:
     dependencies:
       - package: Privy
         product: Privy
+      - target: WanderlyShareExtension
     info:
       path: Wanderly/Info.plist
       properties:
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UIApplicationSupportsIndirectInputEvents: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -52,6 +55,7 @@ targets:
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Wanderly/Wanderly.entitlements
 
   WanderlyClip:
     type: application.on-demand-install-capable
@@ -67,6 +71,16 @@ targets:
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
         INFOPLIST_KEY_UILaunchScreen_Generation: true
+        INFOPLIST_KEY_UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_NSAppClip:
           NSAppClipRequestEphemeralUserNotification: false
           NSAppClipRequestLocationConfirmation: false
@@ -87,7 +101,31 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: WanderlyShareExtension/Info.plist
-    dependencies:
-      - target: Wanderly
-        embed: false
-        link: false
+        CODE_SIGN_ENTITLEMENTS: WanderlyShareExtension/WanderlyShareExtension.entitlements
+schemes:
+  Wanderly:
+    build:
+      targets:
+        Wanderly: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+  WanderlyShareExtension:
+    build:
+      targets:
+        WanderlyShareExtension: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+  WanderlyClip:
+    build:
+      targets:
+        WanderlyClip: all
+    run:
+      config: Debug
+    archive:
+      config: Release

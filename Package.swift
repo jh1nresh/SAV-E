@@ -14,13 +14,13 @@ let package = Package(
     ],
     dependencies: [
         // Privy iOS SDK for authentication
-        .package(url: "https://github.com/privy-io/privy-ios.git", from: "1.0.0"),
+        .package(url: "https://github.com/privy-io/privy-ios.git", .upToNextMinor(from: "2.10.1")),
     ],
     targets: [
         .target(
             name: "Wanderly",
             dependencies: [
-                .product(name: "PrivySDK", package: "privy-ios"),
+                .product(name: "Privy", package: "privy-ios"),
             ],
             path: "Wanderly"
         ),

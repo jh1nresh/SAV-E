@@ -54,7 +54,7 @@ final class TripViewModel: ObservableObject {
 
         // TODO: Implement route optimization
         // 1. Call Google Directions API for waypoint optimization
-        // 2. Call Claude API for smart scheduling based on opening hours
+        // 2. Call Gemini API for smart scheduling based on opening hours
         try? await Task.sleep(nanoseconds: 1_500_000_000) // Simulate delay
 
         if let index = trips.firstIndex(where: { $0.id == trip.id }) {

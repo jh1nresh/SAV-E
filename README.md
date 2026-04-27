@@ -20,7 +20,7 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
 - **SwiftUI** + **MapKit** for UI
 - **Privy iOS SDK** for auth (Sign in with Apple / Google / Email + embedded wallet)
 - **Supabase Swift SDK** for backend (DB + Storage)
-- **Claude API** (Anthropic) for AI content parsing
+- **Gemini API** for AI content parsing
 - **Google Places API** for place matching and details
 - **App Clip** target for shareable trip links
 - **Share Extension** target for cross-app saving
@@ -33,20 +33,21 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
    cd wanderly
    ```
 
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Fill in your API keys in `.env`:
-   - `ANTHROPIC_API_KEY` — from [Anthropic Console](https://console.anthropic.com/)
+2. Fill in your local API keys in `Wanderly/Resources/Secrets.plist` and `WanderlyShareExtension/Secrets.plist`:
+   - `GEMINI_API_KEY` — from Google AI Studio
    - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
    - `SUPABASE_URL` and `SUPABASE_ANON_KEY` — from [Supabase Dashboard](https://supabase.com/dashboard)
-   - `PRIVY_APP_ID` — from [Privy Dashboard](https://dashboard.privy.io/)
+   - `PRIVY_APP_ID` and `PRIVY_APP_CLIENT_ID` — from [Privy Dashboard](https://dashboard.privy.io/)
+   - Keep real values out of commits.
+
+3. Generate the Xcode project:
+   ```bash
+   xcodegen generate
+   ```
 
 4. Open the project in Xcode:
    ```bash
-   open Package.swift
+   open Wanderly.xcodeproj
    ```
 
 5. Build and run on simulator or device.
@@ -89,7 +90,7 @@ WanderlyClip/               App Clip target
 - [privy-io/privy-ios](https://github.com/privy-io/privy-ios) — Authentication
 - [supabase/supabase-swift](https://github.com/supabase/supabase-swift) — Backend
 - Google Places API — REST via URLSession
-- Claude API — REST via URLSession
+- Gemini API — REST via URLSession
 
 ## License
 

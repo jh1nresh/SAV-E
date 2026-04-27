@@ -35,6 +35,24 @@ struct ParsedPlace {
     var priceRange: String?
 }
 
+private enum WanderlySharedStorage {
+    static let appGroupSuiteName = "group.com.wanderly.app"
+    static let pendingPlacesKey = "pendingPlaces"
+}
+
+private struct PendingSharedPlace: Codable {
+    var name: String
+    var address: String
+    var category: String
+    var latitude: Double
+    var longitude: Double
+    var dishes: [String]
+    var priceRange: String?
+    var sourceURL: String?
+    var sourceText: String?
+    var savedAt: Date
+}
+
 // MARK: - Share Extension SwiftUI View
 
 struct ShareExtensionView: View {
@@ -350,30 +368,45 @@ struct ShareExtensionView: View {
     // MARK: - Save
 
     private func savePlace() {
-        // Save to UserDefaults in shared App Group for main app to pick up
-        // For now, use a simple shared container
-        if let place = parsedPlace {
-            let placeData: [String: Any] = [
-                "name": place.name,
-                "address": place.address,
-                "category": selectedCategory,
-                "latitude": place.latitude,
-                "longitude": place.longitude,
-                "dishes": place.dishes,
-                "priceRange": place.priceRange ?? "",
-                "savedAt": Date().timeIntervalSince1970
-            ]
+        guard let place = parsedPlace else { return }
 
-            // Store in shared UserDefaults (App Group needed for production)
-            var pending = UserDefaults.standard.array(forKey: "pendingPlaces") as? [[String: Any]] ?? []
-            pending.append(placeData)
-            UserDefaults.standard.set(pending, forKey: "pendingPlaces")
+        let pendingPlace = PendingSharedPlace(
+            name: place.name,
+            address: place.address,
+            category: selectedCategory,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            dishes: place.dishes,
+            priceRange: place.priceRange,
+            sourceURL: sharedURL.isEmpty ? nil : sharedURL,
+            sourceText: sharedText.isEmpty ? nil : sharedText,
+            savedAt: Date()
+        )
+
+        guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) else {
+            parseError = "Shared app storage is unavailable"
+            return
+        }
+        var pending = loadPendingPlaces(from: defaults)
+        pending.append(pendingPlace)
+        if let data = try? JSONEncoder().encode(pending) {
+            defaults.set(data, forKey: WanderlySharedStorage.pendingPlacesKey)
+        } else {
+            parseError = "Couldn't save this place"
+            return
         }
 
         isSaved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             extensionContext?.completeRequest(returningItems: nil)
         }
+    }
+
+    private func loadPendingPlaces(from defaults: UserDefaults) -> [PendingSharedPlace] {
+        guard let data = defaults.data(forKey: WanderlySharedStorage.pendingPlacesKey) else {
+            return []
+        }
+        return (try? JSONDecoder().decode([PendingSharedPlace].self, from: data)) ?? []
     }
 
     // MARK: - Helpers
