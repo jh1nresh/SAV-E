@@ -38,7 +38,7 @@ Wanderly/
 │   │   ├── Trip.swift
 │   │   └── UserProfile.swift
 │   ├── Services/
-│   │   ├── AIParsingService.swift   (Claude Vision API integration)
+│   │   ├── AIParsingService.swift   (Gemini API integration)
 │   │   ├── GooglePlacesService.swift
 │   │   ├── SupabaseService.swift
 │   │   └── PrivyAuthService.swift
@@ -75,7 +75,7 @@ Wanderly/
 - SwiftUI + MapKit for UI
 - Privy iOS SDK for auth (Sign in with Apple/Google/Email + embedded wallet)
 - Supabase Swift SDK for backend (DB + Storage)
-- Claude API (Anthropic Swift) for AI parsing
+- Gemini API for AI parsing
 - Google Places API for place matching
 - App Clip target for shareable trip links
 - Share Extension target for cross-app saving
@@ -83,7 +83,7 @@ Wanderly/
 ## Key Features to Stub
 1. **Map View** — MapKit with custom annotations, category-colored pins, clustering, bottom sheet on tap
 2. **List View** — Filterable (Want to Go/Visited/All + categories), sortable (Nearest/Recent/Rating), swipe to mark visited
-3. **Trip Planner** — City selector, timeline view, drag-to-reorder, "Optimize Route" button (Google Maps Directions API for waypoint optimization + Claude for smart scheduling based on opening hours)
+3. **Trip Planner** — City selector, timeline view, drag-to-reorder, "Optimize Route" button (Google Maps Directions API for waypoint optimization + Gemini for smart scheduling based on opening hours)
 4. **Share Extension** — Accept URLs + images from any app, show AI parsing result, save to map
 5. **Profile** — Stats (saved/visited/cities), world map visualization, collections, subscription management
 6. **Onboarding** — 3-step carousel
@@ -94,7 +94,7 @@ Wanderly/
 - privy-io/privy-ios
 - supabase/supabase-swift  
 - For Google Places: use REST API directly (URLSession)
-- For Claude API: use REST API directly (URLSession)
+- For Gemini API: use REST API directly (URLSession)
 
 ## Data Model
 ```swift
