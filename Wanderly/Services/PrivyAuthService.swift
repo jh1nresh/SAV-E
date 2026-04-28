@@ -15,11 +15,13 @@ enum AuthState: Equatable {
 enum AuthError: LocalizedError {
     case signInFailed(String)
     case invalidCode
+    case missingPrivyConfig(String)
 
     var errorDescription: String? {
         switch self {
         case .signInFailed(let reason): return "Sign in failed: \(reason)"
         case .invalidCode: return "No pending email — call signInWithEmail first"
+        case .missingPrivyConfig(let key): return "Missing Privy config: \(key)"
         }
     }
 }
@@ -33,6 +35,8 @@ final class PrivyAuthService: ObservableObject {
     let privy: Privy
     @Published var authState: AuthState = .unknown
     private var pendingEmail: String?
+    private let appId: String
+    private let clientId: String
 
     var isAuthenticated: Bool {
         if case .authenticated = authState { return true }
@@ -45,8 +49,10 @@ final class PrivyAuthService: ObservableObject {
     }
 
     private init() {
-        let appId    = Self.keyFromPlist("PRIVY_APP_ID")     ?? ""
+        let appId = Self.keyFromPlist("PRIVY_APP_ID") ?? ""
         let clientId = Self.keyFromPlist("PRIVY_APP_CLIENT_ID") ?? ""
+        self.appId = appId
+        self.clientId = clientId
         let config   = PrivyConfig(appId: appId, appClientId: clientId)
         self.privy   = PrivySdk.initialize(config: config)
 
@@ -63,6 +69,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Apple
 
     func signInWithApple() async throws {
+        try validateConfig()
         let user = try await privy.oAuth.login(with: .apple)
         authState = .authenticated(userId: user.id)
     }
@@ -70,6 +77,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Google
 
     func signInWithGoogle() async throws {
+        try validateConfig()
         let user = try await privy.oAuth.login(with: .google)
         authState = .authenticated(userId: user.id)
     }
@@ -77,6 +85,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Email OTP
 
     func signInWithEmail(_ email: String) async throws {
+        try validateConfig()
         pendingEmail = email
         try await privy.email.sendCode(to: email)
     }
@@ -114,6 +123,11 @@ final class PrivyAuthService: ObservableObject {
         @unknown default:
             authState = .unknown
         }
+    }
+
+    private func validateConfig() throws {
+        if appId.isEmpty { throw AuthError.missingPrivyConfig("PRIVY_APP_ID") }
+        if clientId.isEmpty { throw AuthError.missingPrivyConfig("PRIVY_APP_CLIENT_ID") }
     }
 
     private static func keyFromPlist(_ key: String) -> String? {

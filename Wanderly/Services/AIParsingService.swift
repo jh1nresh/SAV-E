@@ -31,8 +31,8 @@ enum AIParsingError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse: return "Invalid response from AI service"
-        case .apiKeyMissing: return "Gemini API key not configured"
+        case .invalidResponse: return "AI returned something unexpected. Try again."
+        case .apiKeyMissing: return "AI isn't configured yet."
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .parsingFailed(let reason): return "Parsing failed: \(reason)"
         }
@@ -110,7 +110,7 @@ final class AIParsingService: AIParsingServiceProtocol {
 
         let base64 = imageData.base64EncodedString()
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -144,7 +144,7 @@ final class AIParsingService: AIParsingServiceProtocol {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw AIParsingError.parsingFailed("Gemini API error \(code)")
+            throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: code))
         }
 
         return try parseGeminiResponse(data)
@@ -155,7 +155,7 @@ final class AIParsingService: AIParsingServiceProtocol {
     private func callGemini(prompt: String) async throws -> ParsedPlaceResult {
         guard let apiKey else { throw AIParsingError.apiKeyMissing }
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -171,10 +171,20 @@ final class AIParsingService: AIParsingServiceProtocol {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw AIParsingError.parsingFailed("Gemini API error \(code)")
+            throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: code))
         }
 
         return try parseGeminiResponse(data)
+    }
+
+    private static func userFacingGeminiError(statusCode: Int) -> String {
+        if statusCode == 429 {
+            return "AI is busy right now. Try again in a minute."
+        }
+        if statusCode == 401 || statusCode == 403 {
+            return "AI access needs attention."
+        }
+        return "AI request failed. Try again in a moment."
     }
 
     private func parseGeminiResponse(_ data: Data) throws -> ParsedPlaceResult {
@@ -188,8 +198,10 @@ final class AIParsingService: AIParsingServiceProtocol {
 
         // Extract JSON
         var jsonString = text
-        if let start = text.range(of: "{"), let end = text.range(of: "}", options: .backwards) {
-            jsonString = String(text[start.lowerBound...end.upperBound])
+        if let start = text.range(of: "{"),
+           let end = text.range(of: "}", options: .backwards),
+           start.lowerBound < end.upperBound {
+            jsonString = String(text[start.lowerBound..<end.upperBound])
         }
         guard let jsonData = jsonString.data(using: .utf8),
               let dict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {

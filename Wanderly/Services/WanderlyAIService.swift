@@ -9,6 +9,12 @@ struct ConversationTurn: Equatable {
 final class WanderlyAIService {
     static let shared = WanderlyAIService()
 
+    private static let modelFallbacks = [
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-flash-lite-latest"
+    ]
+
     private let apiKey: String?
 
     init(apiKey: String? = nil) {
@@ -29,15 +35,13 @@ final class WanderlyAIService {
     }
 
     func query(_ userMessage: String, places: [Place], conversationHistory: [ConversationTurn] = []) async throws -> WanderlyAIResponse {
+        if let localResponse = localIntentResponse(for: userMessage, places: places) {
+            return localResponse
+        }
+
         guard let apiKey, !apiKey.isEmpty else {
             throw WanderlyAIError.apiKeyMissing
         }
-
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)")!
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Build multi-turn contents array
         var contents: [[String: Any]] = []
@@ -63,28 +67,96 @@ final class WanderlyAIService {
             ]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let requestBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        var lastError: WanderlyAIError?
+        for model in Self.modelFallbacks {
+            let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = requestBody
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                lastError = .apiError(0)
+                continue
+            }
+
+            if http.statusCode == 200 {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                guard let candidates = json?["candidates"] as? [[String: Any]],
+                      let content = candidates.first?["content"] as? [String: Any],
+                      let parts = content["parts"] as? [[String: Any]],
+                      let text = parts.first?["text"] as? String else {
+                    throw WanderlyAIError.emptyResponse
+                }
+
+                return try parseResponse(text)
+            }
+
             let responseBody = String(data: data, encoding: .utf8) ?? "no body"
-            print("Gemini API error \(statusCode): \(responseBody)")
-            throw WanderlyAIError.apiError(statusCode)
+            print("Gemini API error \(http.statusCode) on \(model): \(responseBody)")
+            lastError = .apiError(http.statusCode)
+            if http.statusCode != 404 && http.statusCode != 429 {
+                break
+            }
         }
 
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let candidates = json?["candidates"] as? [[String: Any]],
-              let content = candidates.first?["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first?["text"] as? String else {
-            throw WanderlyAIError.emptyResponse
-        }
-
-        return try parseResponse(text)
+        throw lastError ?? WanderlyAIError.apiError(0)
     }
 
     // MARK: - Private
+
+    private func localIntentResponse(for message: String, places: [Place]) -> WanderlyAIResponse? {
+        let normalized = message.lowercased()
+        guard normalized.contains("show") || normalized.contains("map") || normalized.contains("spots") || normalized.contains("places") else {
+            return nil
+        }
+
+        let categories: [(PlaceCategory, [String])] = [
+            (.food, ["food", "restaurant", "restaurants", "eat", "eats"]),
+            (.cafe, ["cafe", "coffee"]),
+            (.bar, ["bar", "drink", "drinks"]),
+            (.attraction, ["attraction", "attractions", "sight", "sights"]),
+            (.stay, ["stay", "hotel", "hotels"]),
+            (.shopping, ["shopping", "shop", "shops"])
+        ]
+
+        guard let category = categories.first(where: { _, aliases in
+            aliases.contains { normalized.contains($0) }
+        })?.0 else {
+            return nil
+        }
+
+        let filtered = places.filter { $0.category == category }
+        guard !filtered.isEmpty else {
+            return WanderlyAIResponse(
+                componentType: .message,
+                title: nil,
+                placeIds: [],
+                navigationPlaceId: nil,
+                transportMode: .walking,
+                itineraryDays: [],
+                messageText: "No \(category.displayName.lowercased()) places saved yet.",
+                mapAction: nil,
+                aiMessage: nil
+            )
+        }
+
+        let ids = filtered.map { $0.id.uuidString }
+        return WanderlyAIResponse(
+            componentType: .placeList,
+            title: "\(category.displayName) spots",
+            placeIds: ids,
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: nil,
+            mapAction: MapActionData(type: .filterPins, placeIds: ids, lat: nil, lng: nil, span: nil),
+            aiMessage: "Showing your \(category.displayName.lowercased()) spots."
+        )
+    }
 
     private func systemPrompt(places: [Place]) -> String {
         let placesJSON = places.map { p in
@@ -141,8 +213,10 @@ final class WanderlyAIService {
 
     private func parseResponse(_ text: String) throws -> WanderlyAIResponse {
         var jsonString = text
-        if let start = text.range(of: "{"), let end = text.range(of: "}", options: .backwards) {
-            jsonString = String(text[start.lowerBound...end.upperBound])
+        if let start = text.range(of: "{"),
+           let end = text.range(of: "}", options: .backwards),
+           start.lowerBound < end.upperBound {
+            jsonString = String(text[start.lowerBound..<end.upperBound])
         }
         guard let data = jsonString.data(using: .utf8) else { throw WanderlyAIError.parseError }
         let dto = try JSONDecoder().decode(WanderlyAIResponseDTO.self, from: data)
@@ -186,10 +260,20 @@ enum WanderlyAIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .apiKeyMissing: return "GEMINI_API_KEY not configured"
-        case .apiError(let code): return "Gemini API returned \(code)"
-        case .emptyResponse: return "Empty response from AI"
-        case .parseError: return "Couldn't parse AI response"
+        case .apiKeyMissing:
+            return "AI isn't configured yet."
+        case .apiError(let code):
+            if code == 429 {
+                return "AI is busy right now. Try again in a minute."
+            }
+            if code == 401 || code == 403 {
+                return "AI access needs attention."
+            }
+            return "AI request failed. Try again in a moment."
+        case .emptyResponse:
+            return "AI didn't return an answer. Try again."
+        case .parseError:
+            return "AI returned something unexpected. Try again."
         }
     }
 }

@@ -1,5 +1,7 @@
 # Backend Service-Role API Spec
 
+> Superseded by `specs/railway-backend-migration.md` on 2026-04-27. The API contract remains, but deployment moved from Supabase Edge Functions to Railway backend + Railway Postgres.
+
 Date: 2026-04-27
 
 ## Goal

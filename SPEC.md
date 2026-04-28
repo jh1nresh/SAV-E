@@ -40,7 +40,7 @@ Wanderly/
 │   ├── Services/
 │   │   ├── AIParsingService.swift   (Gemini API integration)
 │   │   ├── GooglePlacesService.swift
-│   │   ├── SupabaseService.swift
+│   │   ├── SupabaseService.swift  # legacy name; calls WANDERLY_API_URL
 │   │   └── PrivyAuthService.swift
 │   ├── ViewModels/
 │   │   ├── MapViewModel.swift
@@ -74,7 +74,7 @@ Wanderly/
 ## Tech Stack
 - SwiftUI + MapKit for UI
 - Privy iOS SDK for auth (Sign in with Apple/Google/Email + embedded wallet)
-- Supabase Swift SDK for backend (DB + Storage)
+- Railway Node API + Railway Postgres for backend persistence
 - Gemini API for AI parsing
 - Google Places API for place matching
 - App Clip target for shareable trip links
@@ -92,7 +92,7 @@ Wanderly/
 
 ## Dependencies (Swift Package Manager)
 - privy-io/privy-ios
-- supabase/supabase-swift  
+- Railway backend API over URLSession
 - For Google Places: use REST API directly (URLSession)
 - For Gemini API: use REST API directly (URLSession)
 

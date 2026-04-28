@@ -59,6 +59,7 @@ struct ShareExtensionView: View {
     weak var extensionContext: NSExtensionContext?
     @State private var sharedURL: String = ""
     @State private var sharedText: String = ""
+    @State private var sharedTitle: String = ""
     @State private var parsedPlace: ParsedPlace?
     @State private var isParsing = true
     @State private var isSaved = false
@@ -239,6 +240,13 @@ struct ShareExtensionView: View {
 
         // Extract URL or text
         for item in items {
+            if let title = item.attributedTitle?.string, !title.isEmpty {
+                sharedTitle = title
+            }
+            if let text = item.attributedContentText?.string, !text.isEmpty, sharedText.isEmpty {
+                sharedText = text
+            }
+
             guard let attachments = item.attachments else { continue }
             for attachment in attachments {
                 if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
@@ -265,7 +273,12 @@ struct ShareExtensionView: View {
             parsedPlace = try await parseWithGemini(content: content)
             selectedCategory = parsedPlace?.category ?? "food"
         } catch {
-            parseError = error.localizedDescription
+            if let fallback = fallbackPlace(from: content, title: sharedTitle, text: sharedText) {
+                parsedPlace = fallback
+                selectedCategory = fallback.category
+            } else {
+                parseError = userFacingParseError(from: error)
+            }
         }
         isParsing = false
     }
@@ -277,7 +290,7 @@ struct ShareExtensionView: View {
             throw NSError(domain: "wanderly", code: 1, userInfo: [NSLocalizedDescriptionKey: "GEMINI_API_KEY not configured"])
         }
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -330,8 +343,10 @@ struct ShareExtensionView: View {
 
         // Parse JSON from response
         var jsonString = text
-        if let start = text.range(of: "{"), let end = text.range(of: "}", options: .backwards) {
-            jsonString = String(text[start.lowerBound...end.upperBound])
+        if let start = text.range(of: "{"),
+           let end = text.range(of: "}", options: .backwards),
+           start.lowerBound < end.upperBound {
+            jsonString = String(text[start.lowerBound..<end.upperBound])
         }
         guard let jsonData = jsonString.data(using: .utf8),
               let dict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
@@ -348,6 +363,112 @@ struct ShareExtensionView: View {
             dishes: dict["dishes"] as? [String] ?? [],
             priceRange: dict["priceRange"] as? String
         )
+    }
+
+    private func fallbackPlace(from content: String, title: String, text: String) -> ParsedPlace? {
+        let candidateName = bestFallbackName(content: content, title: title, text: text)
+        guard let name = candidateName, !name.isEmpty else { return nil }
+
+        let category = fallbackCategory(from: [name, content, text].joined(separator: " "))
+        let coordinates = fallbackCoordinates(from: [name, content, text].joined(separator: " "))
+
+        return ParsedPlace(
+            name: name,
+            address: fallbackAddress(from: text),
+            category: category,
+            iconName: iconForCategory(category),
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            dishes: [],
+            priceRange: nil
+        )
+    }
+
+    private func bestFallbackName(content: String, title: String, text: String) -> String? {
+        for candidate in [title, queryName(from: content), text] {
+            let cleaned = cleanFallbackName(candidate)
+            if !cleaned.isEmpty {
+                return cleaned
+            }
+        }
+        return nil
+    }
+
+    private func queryName(from content: String) -> String {
+        guard let url = URL(string: content),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return ""
+        }
+
+        for key in ["q", "query", "search", "destination", "daddr"] {
+            if let value = components.queryItems?.first(where: { $0.name == key })?.value, !value.isEmpty {
+                return value
+            }
+        }
+
+        let decodedPath = url.path.removingPercentEncoding ?? url.path
+        for prefix in ["/maps/place/", "/maps/search/"] {
+            if decodedPath.hasPrefix(prefix) {
+                let value = decodedPath
+                    .dropFirst(prefix.count)
+                    .split(separator: "/")
+                    .first
+                    .map(String.init) ?? ""
+                return value.replacingOccurrences(of: "+", with: " ")
+            }
+        }
+
+        return decodedPath
+            .replacingOccurrences(of: "+", with: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    private func cleanFallbackName(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: " - Google Maps", with: "")
+            .replacingOccurrences(of: "| Google Maps", with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func fallbackAddress(from text: String) -> String {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        return lines.first(where: { line in
+            line.range(of: #"\d+ .+"#, options: .regularExpression) != nil
+        }) ?? ""
+    }
+
+    private func fallbackCategory(from content: String) -> String {
+        let value = content.lowercased()
+        if value.contains("cafe") || value.contains("coffee") { return "cafe" }
+        if value.contains("bar") || value.contains("cocktail") { return "bar" }
+        if value.contains("hotel") || value.contains("stay") { return "stay" }
+        if value.contains("shop") || value.contains("store") { return "shopping" }
+        if value.contains("bakery") || value.contains("restaurant") || value.contains("food") { return "food" }
+        return "attraction"
+    }
+
+    private func fallbackCoordinates(from content: String) -> (latitude: Double, longitude: Double) {
+        let value = content.lowercased()
+        if value.contains("san francisco") {
+            return (37.7749, -122.4194)
+        }
+        return (0, 0)
+    }
+
+    private func userFacingParseError(from error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.code == 429 {
+            return "AI is busy right now. Try again in a minute."
+        }
+        if nsError.code == 401 || nsError.code == 403 {
+            return "AI access needs attention."
+        }
+        return error.localizedDescription
     }
 
     private func geminiAPIKey() -> String? {
