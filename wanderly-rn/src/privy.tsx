@@ -1,21 +1,44 @@
+import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
 import { ReactNode } from "react";
 
-type OptionalPrivyClient = {
-  ready: boolean;
-  authenticated: boolean;
-  getAccessToken: () => Promise<string | null>;
-  login: () => void;
-  logout: () => Promise<void>;
-};
+const privyAppId = "__WANDERLY_PRIVY_APP_ID__";
+const privyClientId = "__WANDERLY_PRIVY_APP_CLIENT_ID__";
 
-export function WanderlyPrivyProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+function hasConfiguredValue(value: string): boolean {
+  return value.length > 0 && !value.startsWith("__WANDERLY_");
 }
 
-export function useOptionalPrivy(): OptionalPrivyClient | null {
-  return null;
+export function WanderlyPrivyProvider({ children }: { children: ReactNode }) {
+  if (!hasPrivyConfig()) {
+    return <>{children}</>;
+  }
+
+  return (
+    <PrivyProvider
+      appId={privyAppId}
+      clientId={privyClientId}
+      config={{
+        appearance: {
+          theme: "light",
+          accentColor: "#CB623D",
+          logo: undefined,
+        },
+        loginMethods: ["email", "google", "apple"],
+      }}
+    >
+      {children}
+    </PrivyProvider>
+  );
+}
+
+export function useOptionalPrivy() {
+  try {
+    return usePrivy();
+  } catch {
+    return null;
+  }
 }
 
 export function hasPrivyConfig(): boolean {
-  return false;
+  return hasConfiguredValue(privyAppId) && hasConfiguredValue(privyClientId);
 }
