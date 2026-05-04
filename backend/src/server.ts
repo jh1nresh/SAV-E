@@ -77,7 +77,7 @@ createServer(async (request, response) => {
       return sendJson(response, { ok: true, service: "wanderly-backend" });
     }
 
-    const userId = await verifiedPrivySubject(request);
+    const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
     const [resource, id] = url.pathname.split("/").filter(Boolean);
@@ -252,11 +252,21 @@ async function ensureProfile(userId: string): Promise<void> {
   );
 }
 
-async function verifiedPrivySubject(request: IncomingMessage): Promise<string> {
+async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) throw new ApiError(401, "Missing bearer token");
+  if (token) return verifiedPrivySubject(token);
 
+  const guestId = request.headers["x-wanderly-guest-id"];
+  const normalizedGuestId = Array.isArray(guestId) ? guestId[0] : guestId;
+  if (typeof normalizedGuestId === "string" && /^guest_[0-9a-fA-F-]{36}$/.test(normalizedGuestId)) {
+    return normalizedGuestId;
+  }
+
+  throw new ApiError(401, "Missing bearer token or guest id");
+}
+
+async function verifiedPrivySubject(token: string): Promise<string> {
   const key = await verificationKey();
   const { payload } = await jwtVerify(token, key, {
     issuer: "privy.io",
@@ -370,7 +380,7 @@ function tripsSelect(whereClause: string): string {
 function sendJson(response: ServerResponse, body: unknown, status = 200): void {
   response.writeHead(status, {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Allow-Headers": "authorization, content-type, x-wanderly-guest-id",
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Content-Type": "application/json",
   });

@@ -2,3 +2,6 @@
 !vercel.json
 !wanderly-rn
 !wanderly-rn/**
+wanderly-rn/.expo
+wanderly-rn/dist
+wanderly-rn/node_modules

@@ -28,6 +28,10 @@ export function parseSharedLink(input: string): Place | null {
     return buildEventPlace(url, "luma");
   }
 
+  if (platform === "instagram" || platform === "threads" || platform === "xiaohongshu") {
+    return buildSocialPlace(url, platform);
+  }
+
   return buildGenericPlace(url);
 }
 
@@ -43,6 +47,9 @@ function detectPlatform(host: string): SourcePlatform {
   if (host.includes("google.") || host.includes("maps.app.goo.gl")) return "googleMaps";
   if (host.includes("maps.apple.com")) return "appleMaps";
   if (host.includes("lu.ma")) return "luma";
+  if (host.includes("instagram.com") || host.includes("instagr.am")) return "instagram";
+  if (host.includes("threads.net")) return "threads";
+  if (host.includes("xiaohongshu") || host.includes("xhslink")) return "xiaohongshu";
   return "other";
 }
 
@@ -129,8 +136,25 @@ function buildGenericPlace(url: URL): Place {
     category: inferCategory(name),
     sourcePlatform: "other",
     sourceUrl: url.toString(),
-    note: "Imported from a shared link. Review the details before adding to a route.",
-    importKind: "generic",
+    note: "Draft imported from a shared link. Confirm the real place before planning a route.",
+    importKind: "draft",
+  });
+}
+
+function buildSocialPlace(url: URL, sourcePlatform: SourcePlatform): Place {
+  const slug = url.pathname.split("/").filter(Boolean).pop() || sourcePlatform;
+  const name = titleize(slug);
+
+  return buildPlace({
+    name: cleanName(name),
+    address: sourcePlatformLabel(sourcePlatform),
+    latitude: 37.7749,
+    longitude: -122.4194,
+    category: inferCategory(name),
+    sourcePlatform,
+    sourceUrl: url.toString(),
+    note: `Draft imported from ${sourcePlatformLabel(sourcePlatform)}. Confirm the real place before planning a route.`,
+    importKind: "draft",
   });
 }
 
@@ -228,4 +252,17 @@ function inferVenueNameFromSlug(slug: string): string | null {
   if (conventionMatch?.[1]) return titleize(conventionMatch[1]);
 
   return null;
+}
+
+function sourcePlatformLabel(platform: SourcePlatform): string {
+  switch (platform) {
+    case "instagram":
+      return "Instagram";
+    case "threads":
+      return "Threads";
+    case "xiaohongshu":
+      return "Xiaohongshu";
+    default:
+      return "Shared link";
+  }
 }
