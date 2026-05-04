@@ -7,7 +7,7 @@ export type PlaceCategory =
   | "shopping";
 
 export type PlaceStatus = "wantToGo" | "visited";
-export type ImportKind = "place" | "event" | "generic";
+export type ImportKind = "place" | "event" | "draft";
 
 export type SourcePlatform =
   | "instagram"
@@ -49,6 +49,26 @@ export type SharedTripData = {
   name: string;
   city: string;
   stops: SharedStop[];
+};
+
+export type TripStop = {
+  id: string;
+  placeId?: string | null;
+  placeName: string;
+  day: number;
+  orderIndex: number;
+  startTime?: string | null;
+  duration?: number | null;
+  note?: string | null;
+};
+
+export type TripRecord = {
+  id: string;
+  name: string;
+  city: string;
+  isOptimized: boolean;
+  createdAt?: string;
+  tripStops: TripStop[];
 };
 
 export const categoryLabel: Record<PlaceCategory, string> = {

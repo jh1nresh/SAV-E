@@ -29,7 +29,7 @@ psql "$DATABASE_URL" -f backend/sql/schema.sql
 
 ## Routes
 
-All persistence routes require `Authorization: Bearer <Privy access token>`.
+Persistence routes accept either `Authorization: Bearer <Privy access token>` or `x-wanderly-guest-id: guest_<uuid>`.
 
 - `GET /places`
 - `POST /places`
