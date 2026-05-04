@@ -1,10 +1,10 @@
-# React Native Consensus Demo
+# React Native Product Build
 
 ## Goal
 
-Ship a React Native version of Wanderly that is good enough for in-person testing at Consensus on 2026-05-04.
+Ship a React Native version of Wanderly that is usable as a product-facing build for small-group testing on 2026-05-04.
 
-This is a demo app, not a full parity rewrite of the native iOS product.
+This is still not full parity with the native iOS product, but it should feel product-ready enough to share as a live web build.
 
 ## Scope
 
@@ -23,11 +23,11 @@ This is a demo app, not a full parity rewrite of the native iOS product.
 - No cross-app Share Extension rewrite.
 - No App Clip equivalent.
 - No backend write path to Railway for this pass.
-- No map SDK integration unless it is trivial; list-first is acceptable for the demo.
+- No map SDK integration unless it is trivial; list-first is acceptable for this web-first release.
 
 ## Product Shape
 
-The RN demo should have three tabs:
+The RN product build should have three tabs:
 
 1. `Places`
    - paste a supported place or event link
@@ -56,6 +56,7 @@ The RN demo should have three tabs:
 - Local state only.
 - Persist bookmarks locally on-device.
 - Use clipboard import for fast mobile testing.
+- Support Expo Web static export for deployment.
 - Keep code self-contained and readable.
 - Use a clean mobile-first UI with a Wanderly-like warm palette.
 
@@ -63,6 +64,7 @@ The RN demo should have three tabs:
 
 - `npm install` succeeds in `wanderly-rn/`.
 - `npx expo start` launches the app.
+- `npx expo export -p web` succeeds.
 - User can:
   - open the app in Expo Go
   - paste a supported link and save it into bookmarks
@@ -71,6 +73,7 @@ The RN demo should have three tabs:
   - select bookmarked places
   - create a trip link
   - share the next stop to Tesla via Apple Maps URL
+  - open the same build in a deployed web URL
 - Trip payload matches Wanderly's existing `SharedTripData` fields:
   - `name`
   - `city`
@@ -78,7 +81,7 @@ The RN demo should have three tabs:
 
 ## Follow-up
 
-- If the demo lands well, phase 2 should evaluate:
+- If the product build lands well, phase 2 should evaluate:
   - Privy React Native auth
   - Railway-backed persistence
   - native share ingestion on Android/iOS

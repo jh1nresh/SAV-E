@@ -59,3 +59,4 @@ Thumbs.db
 *.ipa
 *.dSYM.zip
 *.dSYM
+.vercel

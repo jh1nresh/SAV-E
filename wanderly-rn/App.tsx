@@ -47,7 +47,7 @@ const storageKey = "@wanderly-rn/bookmarks";
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("places");
   const [activeCategory, setActiveCategory] = useState<PlaceCategory | "all">("all");
-  const [tripName, setTripName] = useState("Consensus Friend Run");
+  const [tripName, setTripName] = useState("Weekend Drive");
   const [tripCity, setTripCity] = useState("Miami");
   const [bookmarks, setBookmarks] = useState<Place[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -220,9 +220,9 @@ export default function App() {
       <StatusBar style="dark" />
       <View style={styles.appShell}>
         <View style={styles.header}>
-          <Text style={styles.brand}>Wanderly RN</Text>
+          <Text style={styles.brand}>Wanderly</Text>
           <Text style={styles.subtitle}>
-            Import a place or event link, save it to bookmarks, then build the trip you want to hand off.
+            Save places, refine event stops, and turn bookmarks into a trip you can share or hand off.
           </Text>
         </View>
 
