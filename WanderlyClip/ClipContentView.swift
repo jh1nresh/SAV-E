@@ -190,7 +190,7 @@ struct ClipContentView: View {
     }
 
     private func openInFullApp() {
-        guard let url = URL(string: "wanderly://trip") else { return }
+        guard let url = tripData?.toURL(baseURL: "wanderly://trip") ?? URL(string: "wanderly://trip") else { return }
         UIApplication.shared.open(url)
     }
 }
@@ -202,9 +202,9 @@ extension SharedTripData {
         name: "SF Food Tour",
         city: "San Francisco",
         stops: [
-            SharedStop(id: UUID(), name: "Tartine Bakery", address: "600 Guerrero St, SF", lat: 37.7614, lng: -122.4241, time: "9:00 AM", note: "Must try the morning bun"),
-            SharedStop(id: UUID(), name: "Dolores Park", address: "Dolores St, SF", lat: 37.7596, lng: -122.4269, time: "10:30 AM", note: nil),
-            SharedStop(id: UUID(), name: "Bi-Rite Creamery", address: "3692 18th St, SF", lat: 37.7618, lng: -122.4256, time: "12:00 PM", note: "Salted caramel ice cream"),
+            SharedStop(id: UUID().uuidString, name: "Tartine Bakery", address: "600 Guerrero St, SF", lat: 37.7614, lng: -122.4241, time: "9:00 AM", note: "Must try the morning bun"),
+            SharedStop(id: UUID().uuidString, name: "Dolores Park", address: "Dolores St, SF", lat: 37.7596, lng: -122.4269, time: "10:30 AM", note: nil),
+            SharedStop(id: UUID().uuidString, name: "Bi-Rite Creamery", address: "3692 18th St, SF", lat: 37.7618, lng: -122.4256, time: "12:00 PM", note: "Salted caramel ice cream"),
         ]
     )
 }

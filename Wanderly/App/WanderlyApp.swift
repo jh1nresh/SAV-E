@@ -4,6 +4,7 @@ import SwiftUI
 struct WanderlyApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var openedTrip: SharedTripData?
 
     var body: some Scene {
         WindowGroup {
@@ -24,7 +25,27 @@ struct WanderlyApp: App {
                 }
             }
             .preferredColorScheme(nil) // Respect system setting
+            .onOpenURL(perform: handleIncomingURL)
+            .alert("Trip Link Ready", isPresented: Binding(
+                get: { openedTrip != nil },
+                set: { if !$0 { openedTrip = nil } }
+            )) {
+                Button("OK") { openedTrip = nil }
+            } message: {
+                if let openedTrip {
+                    Text("\(openedTrip.name) has \(openedTrip.stops.count) stops. Full trip import is coming next.")
+                }
+            }
         }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme == "wanderly",
+              url.host == "trip",
+              let trip = SharedTripData.from(url: url) else {
+            return
+        }
+        openedTrip = trip
     }
 }
 

@@ -2,18 +2,18 @@
 
 AI-powered place discovery and trip planning app for iOS.
 
-Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI extracts place details and pins them on your personal map. Plan trips, optimize routes, and track your adventures.
+Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the web — Wanderly extracts place details and pins them on your personal map. Plan trips, optimize routes, and track your adventures.
 
 ## Features
 
 - **Map View** — MapKit with custom category-colored pins, clustering, and bottom sheet details
 - **Place List** — Filterable (Want to Go / Visited / All), sortable (Nearest / Recent / Rating), swipe actions
 - **Trip Planner** — City selector, timeline view, drag-to-reorder, AI route optimization
-- **Share Extension** — Accept URLs and images from any app, AI-parse and save to map
+- **Share Extension** — Accept URLs and text from other apps, parse, and save to map
 - **Profile** — Stats, world map visualization, collections, subscription management
 - **Onboarding** — 3-step carousel
 - **Place Detail** — Photo carousel, info grid, notes, navigate button, source link
-- **App Clip** — Lightweight version for opening shared trip links
+- **App Clip** — Target exists for shared trip links, but first TestFlight/App Store submission should ship native iOS + Share Extension first
 
 ## Tech Stack
 
@@ -22,7 +22,7 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
 - **Railway Node API + Railway Postgres** for backend persistence
 - **Gemini API** for AI content parsing
 - **Google Places API** for place matching and details
-- **App Clip** target for shareable trip links
+- **App Clip** target for shareable trip links, deferred until Associated Domains, AASA, and App Clip Experience setup are complete
 - **Share Extension** target for cross-app saving
 
 ## Setup
@@ -71,6 +71,18 @@ Save places from Instagram, Threads, Xiaohongshu, or any app — Wanderly's AI e
    ```
 
 6. Build and run on simulator or device.
+
+## First TestFlight Boundary
+
+Ship the native iOS app and Share Extension first. The App Clip target is kept in the project, but should not be treated as review-ready until `wanderly.app` associated domains, the Apple App Site Association file, and an App Clip Experience are configured in App Store Connect.
+
+Before uploading a build:
+
+- register App IDs for `com.wanderly.app`, `com.wanderly.app.ShareExtension`, and later `com.wanderly.app.Clip`
+- enable the App Group `group.com.wanderly.app` for the app and Share Extension
+- configure signing team/profiles in Xcode or release xcconfig
+- confirm the App Store icon and privacy manifest are included
+- keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
 
 ## Project Structure
 

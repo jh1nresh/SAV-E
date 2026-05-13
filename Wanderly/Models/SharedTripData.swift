@@ -9,7 +9,7 @@ struct SharedTripData: Codable {
     let stops: [SharedStop]
 
     struct SharedStop: Codable, Identifiable {
-        let id: UUID
+        let id: String
         let name: String
         let address: String
         let lat: Double
@@ -50,7 +50,7 @@ struct SharedTripData: Codable {
             day.stops.map { stop in
                 let place = stop.placeId.flatMap { placeMap[$0] }
                 return SharedStop(
-                    id: UUID(),
+                    id: UUID().uuidString,
                     name: stop.placeName,
                     address: place?.address ?? "",
                     lat: place?.latitude ?? 0,

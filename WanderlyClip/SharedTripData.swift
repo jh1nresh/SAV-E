@@ -9,7 +9,7 @@ struct SharedTripData: Codable {
     let stops: [SharedStop]
 
     struct SharedStop: Codable, Identifiable {
-        let id: UUID
+        let id: String
         let name: String
         let address: String
         let lat: Double
