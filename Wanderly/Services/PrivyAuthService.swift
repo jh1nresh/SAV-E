@@ -37,6 +37,7 @@ final class PrivyAuthService: ObservableObject {
     private var pendingEmail: String?
     private let appId: String
     private let clientId: String
+    private var authStateTask: Task<Void, Never>?
 
     var isAuthenticated: Bool {
         if case .authenticated = authState { return true }
@@ -56,7 +57,12 @@ final class PrivyAuthService: ObservableObject {
         let config   = PrivyConfig(appId: appId, appClientId: clientId)
         self.privy   = PrivySdk.initialize(config: config)
 
+        observeAuthState()
         Task { await restoreSession() }
+    }
+
+    deinit {
+        authStateTask?.cancel()
     }
 
     // MARK: - Session Restore
@@ -64,6 +70,15 @@ final class PrivyAuthService: ObservableObject {
     func restoreSession() async {
         let state = await privy.getAuthState()
         applyPrivyState(state)
+    }
+
+    private func observeAuthState() {
+        authStateTask = Task { [weak self] in
+            guard let self else { return }
+            for await state in self.privy.authStateStream {
+                self.applyPrivyState(state)
+            }
+        }
     }
 
     // MARK: - Apple

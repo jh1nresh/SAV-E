@@ -15,7 +15,9 @@ struct WanderlyApp: App {
                     }
                 } else {
                     switch authService.authState {
-                    case .unauthenticated, .unknown:
+                    case .unknown:
+                        AuthLoadingView()
+                    case .unauthenticated:
                         SignInView()
                             .environmentObject(authService)
                     case .authenticated:
@@ -46,6 +48,22 @@ struct WanderlyApp: App {
             return
         }
         openedTrip = trip
+    }
+}
+
+// MARK: - Auth Loading View
+
+struct AuthLoadingView: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .tint(.wanderlyTerracotta)
+            Text("Opening Wanderly")
+                .font(.headline)
+                .foregroundColor(.wanderlyCharcoal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.wanderlyCream)
     }
 }
 
