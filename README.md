@@ -84,6 +84,27 @@ Before uploading a build:
 - confirm the App Store icon and privacy manifest are included
 - keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
 
+## App Clip Trip Links
+
+Wanderly trip links use this shape:
+
+```text
+https://wanderly.app/trip?d=<base64-url-encoded SharedTripData JSON>
+```
+
+The App Clip target can preview this payload and pass it to the full app through `wanderly://trip?d=...`. The full app also handles the same `https://wanderly.app/trip?...` universal link when installed.
+
+Before this works for friends without the full app installed:
+
+- enable Associated Domains on `com.wanderly.app` and `com.wanderly.app.Clip` in Apple Developer
+- keep `applinks:wanderly.app` and `appclips:wanderly.app` in the app entitlement
+- keep `appclips:wanderly.app` in the App Clip entitlement
+- set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
+- create the App Clip Experience in App Store Connect for `https://wanderly.app/trip`
+- wait for Apple's associated-domain CDN to pick up the AASA file
+
+Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip. If `APPLE_TEAM_ID` is missing, the web build writes a disabled AASA placeholder with no app IDs so Vercel does not serve the SPA shell as Apple association data.
+
 ## Project Structure
 
 ```

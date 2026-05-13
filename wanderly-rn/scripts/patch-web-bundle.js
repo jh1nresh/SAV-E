@@ -1,7 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+const appBundleId = "com.wanderly.app";
+const appClipBundleId = "com.wanderly.app.Clip";
+const associatedDomain = "wanderly.app";
+const distRoot = path.join(__dirname, "..", "dist");
 const distDir = path.join(__dirname, "..", "dist", "_expo", "static", "js", "web");
+const publicDir = path.join(__dirname, "..", "public");
 const importMetaReplacement = '({ env: { MODE: "production" } })';
 const replacementValues = {
   "__WANDERLY_API_URL__": process.env.EXPO_PUBLIC_WANDERLY_API_URL ?? "",
@@ -17,6 +22,9 @@ const publicEnvKeys = [
 if (!fs.existsSync(distDir)) {
   process.exit(0);
 }
+
+copyPublicAssets();
+writeAppleAppSiteAssociation();
 
 for (const fileName of fs.readdirSync(distDir)) {
   if (!fileName.endsWith(".js")) continue;
@@ -46,4 +54,70 @@ for (const fileName of fs.readdirSync(distDir)) {
     fs.writeFileSync(filePath, source);
     console.log(`Patched web bundle ${fileName}`);
   }
+}
+
+function copyPublicAssets() {
+  if (!fs.existsSync(publicDir) || !fs.existsSync(distRoot)) return;
+  fs.cpSync(publicDir, distRoot, { recursive: true });
+}
+
+function writeAppleAppSiteAssociation() {
+  const rawTeamId = process.env.APPLE_TEAM_ID;
+  const teamId = normalizedAppleTeamId(rawTeamId);
+  if (!fs.existsSync(distRoot)) return;
+
+  const wellKnownDir = path.join(distRoot, ".well-known");
+  fs.mkdirSync(wellKnownDir, { recursive: true });
+
+  const association = teamId
+    ? buildEnabledAssociation(teamId)
+    : {
+        applinks: { details: [] },
+        appclips: { apps: [] },
+      };
+
+  fs.writeFileSync(
+    path.join(wellKnownDir, "apple-app-site-association"),
+    JSON.stringify(association, null, 2),
+  );
+  if (teamId) {
+    console.log(`Wrote apple-app-site-association for ${associatedDomain}`);
+  } else if (!rawTeamId) {
+    console.warn("APPLE_TEAM_ID is not set; wrote disabled apple-app-site-association placeholder");
+  }
+}
+
+function normalizedAppleTeamId(value) {
+  if (!value) return "";
+
+  const teamId = value.trim().toUpperCase();
+  if (/^[A-Z0-9]{10}$/.test(teamId)) {
+    return teamId;
+  }
+
+  console.warn("APPLE_TEAM_ID is invalid; wrote disabled apple-app-site-association placeholder");
+  return "";
+}
+
+function buildEnabledAssociation(teamId) {
+  const appId = `${teamId}.${appBundleId}`;
+  const appClipId = `${teamId}.${appClipBundleId}`;
+  return {
+    applinks: {
+      details: [
+        {
+          appIDs: [appId],
+          components: [
+            {
+              "/": "/trip",
+              comment: "Wanderly shared trip preview links",
+            },
+          ],
+        },
+      ],
+    },
+    appclips: {
+      apps: [appClipId],
+    },
+  };
 }

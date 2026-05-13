@@ -6,5 +6,14 @@
 	<array>
 		<string>group.com.wanderly.app</string>
 	</array>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:wanderly.app</string>
+		<string>appclips:wanderly.app</string>
+	</array>
+	<key>com.apple.developer.associated-appclip-app-identifiers</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.wanderly.app.Clip</string>
+	</array>
 </dict>
 </plist>

@@ -4,6 +4,17 @@
   "buildCommand": "cd wanderly-rn && npm run export:web",
   "outputDirectory": "wanderly-rn/dist",
   "framework": null,
+  "headers": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

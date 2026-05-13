@@ -74,9 +74,19 @@ function WanderlyApp() {
   const [importLink, setImportLink] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [pendingImport, setPendingImport] = useState<Place | null>(null);
+  const [incomingTrip, setIncomingTrip] = useState<SharedTripData | null>(null);
   const [guestId, setGuestId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    void hydrateInitialTripLink();
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      applyIncomingTripLink(url);
+    });
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     void bootstrap();
@@ -98,8 +108,34 @@ function WanderlyApp() {
   const tripData = buildSharedTripData(tripName, tripCity, selectedPlaces);
   const tripLink = buildTripLink(tripData);
   const decodedTrip = decodeTripLink(tripLink);
+  const previewTrip = incomingTrip ?? decodedTrip;
   const nextStop = selectedPlaces[0];
   const importedCount = bookmarks.filter((place) => Boolean(place.sourceUrl)).length;
+
+  async function hydrateInitialTripLink() {
+    const initialUrl = await Linking.getInitialURL();
+    if (initialUrl) {
+      applyIncomingTripLink(initialUrl);
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.location?.href) {
+      applyIncomingTripLink(window.location.href);
+    }
+  }
+
+  function applyIncomingTripLink(url: string) {
+    if (!isWanderlyTripLink(url)) return;
+
+    const trip = decodeTripLink(url);
+    if (!trip) return;
+
+    setIncomingTrip(trip);
+    setTripName(trip.name);
+    setTripCity(trip.city);
+    setActiveTab("share");
+    setImportMessage(`Opened shared trip: ${trip.name}`);
+  }
 
   async function bootstrap() {
     if (!authReady) return;
@@ -569,6 +605,13 @@ function WanderlyApp() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Tesla handoff</Text>
 
+              {incomingTrip ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Opened trip link</Text>
+                  <DecodedTrip trip={incomingTrip} />
+                </View>
+              ) : null}
+
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Share summary</Text>
                 <Text style={styles.previewHeadline}>{tripName}</Text>
@@ -596,7 +639,7 @@ function WanderlyApp() {
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>Decoded payload</Text>
-                {decodedTrip ? <DecodedTrip trip={decodedTrip} /> : <Text style={styles.emptyText}>Invalid trip link.</Text>}
+                {previewTrip ? <DecodedTrip trip={previewTrip} /> : <Text style={styles.emptyText}>Invalid trip link.</Text>}
               </View>
             </View>
           ) : null}
@@ -604,6 +647,15 @@ function WanderlyApp() {
       </View>
     </SafeAreaView>
   );
+}
+
+function isWanderlyTripLink(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "wanderly.app" && url.pathname === "/trip";
+  } catch {
+    return false;
+  }
 }
 
 function defaultSelectedIds(places: Place[]) {

@@ -31,11 +31,8 @@ struct ClipContentView: View {
             handleIncomingURL(url)
         }
         .task {
-            // If no URL arrives after 1s, show mock data for demo
             try? await Task.sleep(for: .seconds(1))
             if tripData == nil {
-                tripData = SharedTripData.demo
-                updateCamera(for: SharedTripData.demo.stops)
                 isLoading = false
             }
         }
@@ -165,12 +162,31 @@ struct ClipContentView: View {
         guard let url else { return }
         print("App Clip opened with URL: \(url)")
 
+        guard isTripLink(url) else {
+            tripData = nil
+            isLoading = false
+            return
+        }
+
         if let data = SharedTripData.from(url: url) {
             tripData = data
             updateCamera(for: data.stops)
         }
         // Invalid URL data → tripData stays nil → errorView shown
         isLoading = false
+    }
+
+    private func isTripLink(_ url: URL) -> Bool {
+        guard url.scheme == "https" &&
+            url.host == "wanderly.app" &&
+            url.path == "/trip",
+            let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+
+        return components.queryItems?.contains { item in
+            item.name == "d" && item.value?.isEmpty == false
+        } == true
     }
 
     private func updateCamera(for stops: [SharedTripData.SharedStop]) {

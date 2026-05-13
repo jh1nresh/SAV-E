@@ -28,6 +28,10 @@ struct WanderlyApp: App {
             }
             .preferredColorScheme(nil) // Respect system setting
             .onOpenURL(perform: handleIncomingURL)
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                guard let url = activity.webpageURL else { return }
+                handleIncomingURL(url)
+            }
             .alert("Trip Link Ready", isPresented: Binding(
                 get: { openedTrip != nil },
                 set: { if !$0 { openedTrip = nil } }
@@ -42,12 +46,20 @@ struct WanderlyApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        guard url.scheme == "wanderly",
-              url.host == "trip",
+        guard isTripLink(url),
               let trip = SharedTripData.from(url: url) else {
             return
         }
         openedTrip = trip
+    }
+
+    private func isTripLink(_ url: URL) -> Bool {
+        if url.scheme == "wanderly", url.host == "trip" {
+            return true
+        }
+        return url.scheme == "https" &&
+            url.host == "wanderly.app" &&
+            url.path == "/trip"
     }
 }
 
