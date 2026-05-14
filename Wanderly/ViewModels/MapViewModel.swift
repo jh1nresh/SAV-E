@@ -88,6 +88,7 @@ final class MapViewModel: ObservableObject {
 
         if !importedPlaces.isEmpty {
             places = importedPlaces + places
+            revealImportedPlaces(importedPlaces)
         }
 
         pendingImportService.restorePendingPlaces(pending)
@@ -124,8 +125,22 @@ final class MapViewModel: ObservableObject {
                 return true
             }
             places = newImports + places
+            revealImportedPlaces(newImports)
         }
         pendingImportService.restorePendingPlaces(failedImports)
+    }
+
+    private func revealImportedPlaces(_ importedPlaces: [Place]) {
+        guard let first = importedPlaces.first else { return }
+        activeFilter = nil
+        selectedCategories.removeAll()
+        selectedPlace = first
+        if first.latitude != 0 || first.longitude != 0 {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: first.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            ))
+        }
     }
 
     func selectPlace(_ place: Place) {

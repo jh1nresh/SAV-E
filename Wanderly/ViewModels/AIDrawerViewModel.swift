@@ -23,8 +23,7 @@ final class AIDrawerViewModel: ObservableObject {
         let timestamp: Date
     }
 
-    // TODO: inject from shared data layer; for now mirrors mock
-    var places: [Place] = Place.mockList
+    @Published var places: [Place] = Place.mockList
 
     private let aiService: WanderlyAIService
 

@@ -22,9 +22,15 @@ struct ContentView: View {
             .onChange(of: mapVM.selectedPlace) { _, place in
                 if let place { drawerVM.showPlace(place) }
             }
+            .onChange(of: mapVM.places) { _, places in
+                drawerVM.places = places
+            }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
-                mapVM.importPendingPlacesForLocalUse()
+                Task { await mapVM.loadPlaces() }
+            }
+            .task {
+                drawerVM.places = mapVM.places
             }
     }
 }
