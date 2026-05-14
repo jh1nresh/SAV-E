@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct AIDrawerView: View {
     @ObservedObject var viewModel: AIDrawerViewModel
@@ -9,6 +10,7 @@ struct AIDrawerView: View {
     }
     @FocusState private var searchFocused: Bool
     @State private var showGoogleTakeoutImport = false
+    @State private var addSpotStatus: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -248,6 +250,8 @@ struct AIDrawerView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 
+                addSpotsHub
+
                 if !viewModel.chatHistory.isEmpty {
                     Text("Recent")
                         .font(.caption)
@@ -312,4 +316,220 @@ struct AIDrawerView: View {
         "Plan a 2-day itinerary",
         "What haven't I visited yet?",
     ]
+
+    // MARK: - Add Spots
+
+    private var addSpotsHub: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Add Spots")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.wanderlyCharcoal)
+                    Text("Bring in links, notes, screenshots, or agent commands.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Text("\(viewModel.places.count)")
+                    .font(.caption.monospacedDigit())
+                    .fontWeight(.semibold)
+                    .foregroundColor(.wanderlyTerracotta)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.wanderlyTerracotta.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+
+            LazyVGrid(columns: addSpotColumns, spacing: 10) {
+                AddSpotCard(
+                    icon: "camera.viewfinder",
+                    title: "Social Link",
+                    subtitle: "Share IG, TikTok, or XHS to SAV-E",
+                    tone: .terracotta
+                ) {
+                    showSocialImportGuide()
+                }
+
+                AddSpotCard(
+                    icon: "link",
+                    title: "Paste URL",
+                    subtitle: "Use public metadata when available",
+                    tone: .sage
+                ) {
+                    importClipboardURL()
+                }
+
+                AddSpotCard(
+                    icon: "note.text",
+                    title: "Notes",
+                    subtitle: "Turn a list into place drafts",
+                    tone: .amber
+                ) {
+                    focusAgentPrompt("Turn these notes into place drafts: ")
+                }
+
+                AddSpotCard(
+                    icon: "photo.on.rectangle.angled",
+                    title: "Screenshots",
+                    subtitle: "Extract visible place text",
+                    tone: .blue
+                ) {
+                    showScreenshotGuide()
+                }
+
+                AddSpotCard(
+                    icon: "magnifyingglass",
+                    title: "Search Location",
+                    subtitle: "Find a spot before saving",
+                    tone: .charcoal
+                ) {
+                    focusAgentPrompt("Find this place and help me save it: ")
+                }
+
+                AddSpotCard(
+                    icon: "sparkles.rectangle.stack",
+                    title: "Agent Command",
+                    subtitle: "Ask SAV-E to organize places",
+                    tone: .terracotta
+                ) {
+                    focusAgentPrompt("Help me organize my saved places into a plan for ")
+                }
+            }
+
+            if let addSpotStatus {
+                Text(addSpotStatus)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+    }
+
+    private var addSpotColumns: [GridItem] {
+        [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10),
+        ]
+    }
+
+    private func showSocialImportGuide() {
+        addSpotStatus = nil
+        viewModel.showMessage(
+            title: "Social Link",
+            message: "Share a public Instagram, TikTok, or Xiaohongshu link to SAV-E from the iOS share sheet. SAV-E reads public preview metadata and only saves a place when it finds an explicit venue and address."
+        )
+    }
+
+    private func showScreenshotGuide() {
+        addSpotStatus = nil
+        viewModel.showMessage(
+            title: "Screenshots",
+            message: "Screenshot import should stay in review until SAV-E can read visible place text and confirm a real location. For now, share the original link or paste the place name into the agent."
+        )
+    }
+
+    private func importClipboardURL() {
+        guard let clipboardText = UIPasteboard.general.string,
+              let url = firstURL(in: clipboardText) else {
+            addSpotStatus = "Clipboard does not contain a URL yet. Copy a place or social link, then tap Paste URL again."
+            return
+        }
+
+        addSpotStatus = "Clipboard link loaded into the agent prompt."
+        focusAgentPrompt("Import this public place link if it has reliable metadata: \(url.absoluteString)")
+    }
+
+    private func focusAgentPrompt(_ prompt: String) {
+        viewModel.startNewConversation()
+        viewModel.query = prompt
+        withAnimation { drawerDetent = .medium }
+        searchFocused = true
+    }
+
+    private func firstURL(in text: String) -> URL? {
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return detector?
+            .matches(in: text, options: [], range: range)
+            .compactMap(\.url)
+            .first { url in
+                guard let scheme = url.scheme?.lowercased() else { return false }
+                return scheme == "http" || scheme == "https"
+            }
+    }
+}
+
+private struct AddSpotCard: View {
+    enum Tone {
+        case terracotta, sage, amber, blue, charcoal
+
+        var color: Color {
+            switch self {
+            case .terracotta: return .wanderlyTerracotta
+            case .sage: return .wanderlySage
+            case .amber: return .wanderlyAmber
+            case .blue: return Color(hex: "5B8FA8")
+            case .charcoal: return .wanderlyCharcoal
+            }
+        }
+    }
+
+    let icon: String
+    let title: String
+    let subtitle: String
+    let tone: Tone
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(tone.color)
+                    .frame(width: 38, height: 38)
+                    .background(tone.color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.wanderlyCharcoal)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.86)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 126, alignment: .topLeading)
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.wanderlyCream)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color.wanderlyCharcoal.opacity(0.06), lineWidth: 1)
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
+    }
 }

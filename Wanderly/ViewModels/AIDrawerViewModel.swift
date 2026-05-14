@@ -83,6 +83,20 @@ final class AIDrawerViewModel: ObservableObject {
         conversationTurns = []
     }
 
+    func showMessage(title: String, message: String) {
+        drawerState = .displaying(WanderlyAIResponse(
+            componentType: .message,
+            title: title,
+            placeIds: [],
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: message,
+            mapAction: nil,
+            aiMessage: message
+        ))
+    }
+
     func resolvePlaces(from ids: [String]) -> [Place] {
         let uuids = Set(ids.compactMap { UUID(uuidString: $0) })
         return places.filter { uuids.contains($0.id) }
