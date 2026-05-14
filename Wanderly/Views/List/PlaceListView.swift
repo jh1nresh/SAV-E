@@ -91,7 +91,7 @@ struct PlaceListView: View {
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
-                                    Task { await viewModel.deletePlace(place) }
+                                    Task { try? await viewModel.deletePlace(place) }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -102,12 +102,22 @@ struct PlaceListView: View {
                     .scrollContentBackground(.hidden)
                     .background(Color.wanderlyCream)
                 }
+
+                if let deleteError = viewModel.deleteError {
+                    Text(deleteError)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
             }
             .background(Color.wanderlyCream)
             .navigationTitle("Places")
             .searchable(text: $viewModel.searchText, prompt: "Search places...")
             .navigationDestination(for: Place.self) { place in
-                PlaceDetailView(place: place)
+                PlaceDetailView(place: place) {
+                    try await viewModel.deletePlace(place)
+                }
             }
         }
         .task {

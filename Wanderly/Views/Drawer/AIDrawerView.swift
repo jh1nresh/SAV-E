@@ -8,6 +8,7 @@ struct AIDrawerView: View {
     var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
         GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
     }
+    var onDeletePlace: (Place) async throws -> Void = { _ in }
     @FocusState private var searchFocused: Bool
     @State private var showGoogleTakeoutImport = false
     @State private var addSpotStatus: String?
@@ -167,7 +168,13 @@ struct AIDrawerView: View {
             }
 
         case .placeDetail(let place):
-            PlaceBottomSheet(place: place)
+            PlaceBottomSheet(place: place) {
+                try await onDeletePlace(place)
+                viewModel.removePlace(place)
+                withAnimation(.spring(duration: 0.3)) {
+                    drawerDetent = .height(72)
+                }
+            }
 
         case .error(let msg):
             VStack(spacing: 10) {

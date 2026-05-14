@@ -3,7 +3,12 @@ import MapKit
 
 struct PlaceDetailView: View {
     let place: Place
+    var onDelete: (() async throws -> Void)?
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         ScrollView {
@@ -173,17 +178,62 @@ struct PlaceDetailView: View {
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 32)
+
+                if let deleteError {
+                    Text(deleteError)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                }
             }
+            .padding(.bottom, 32)
         }
         .background(Color.wanderlyCream)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if onDelete != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .disabled(isDeleting)
+                }
+            }
+        }
+        .confirmationDialog(
+            "Delete \(place.name)?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Place", role: .destructive) {
+                Task { await deletePlace() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the saved place from SAV-E.")
+        }
     }
 
     private func openInMaps() {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
         mapItem.name = place.name
         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+    }
+
+    private func deletePlace() async {
+        guard let onDelete else { return }
+        isDeleting = true
+        deleteError = nil
+        defer { isDeleting = false }
+
+        do {
+            try await onDelete()
+            dismiss()
+        } catch {
+            deleteError = error.localizedDescription
+        }
     }
 }
 

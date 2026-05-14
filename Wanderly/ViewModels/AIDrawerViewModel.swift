@@ -70,6 +70,14 @@ final class AIDrawerViewModel: ObservableObject {
                                   lat: place.latitude, lng: place.longitude, span: 0.01)
     }
 
+    func removePlace(_ place: Place) {
+        places.removeAll { $0.id == place.id }
+        if case .placeDetail(let selected) = drawerState, selected.id == place.id {
+            drawerState = .idle
+        }
+        mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
+    }
+
     func reset() {
         drawerState = .idle
         query = ""

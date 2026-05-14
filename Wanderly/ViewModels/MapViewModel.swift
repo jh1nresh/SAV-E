@@ -152,6 +152,25 @@ final class MapViewModel: ObservableObject {
         selectedPlace = place
     }
 
+    func deletePlace(_ place: Place) async throws {
+        let previousPlaces = places
+        places.removeAll { $0.id == place.id }
+        if selectedPlace?.id == place.id {
+            selectedPlace = nil
+        }
+        activeFilter?.remove(place.id)
+        routeCoordinates.removeAll()
+        calculatedRoute = nil
+
+        do {
+            try await supabaseService.deletePlace(place.id)
+        } catch {
+            places = previousPlaces
+            selectedPlace = place
+            throw error
+        }
+    }
+
     func focusOnUserLocationOnLaunch() async {
         guard !didRequestInitialLocation else { return }
         didRequestInitialLocation = true

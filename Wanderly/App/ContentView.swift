@@ -15,6 +15,9 @@ struct ContentView: View {
                     existingPlacesForImport: mapVM.places,
                     onSaveGoogleTakeoutImport: { drafts in
                         try await mapVM.saveImportedPlaces(drafts)
+                    },
+                    onDeletePlace: { place in
+                        try await mapVM.deletePlace(place)
                     }
                 )
                     .presentationDetents([.height(72), .medium, .large], selection: $drawerDetent)

@@ -21,6 +21,7 @@ final class PlaceListViewModel: ObservableObject {
     @Published var selectedCategories: Set<PlaceCategory> = []
     @Published var searchText: String = ""
     @Published var isLoading = false
+    @Published var deleteError: String?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
@@ -154,12 +155,17 @@ final class PlaceListViewModel: ObservableObject {
         }
     }
 
-    func deletePlace(_ place: Place) async {
+    func deletePlace(_ place: Place) async throws {
+        let previousPlaces = places
         places.removeAll { $0.id == place.id }
+        deleteError = nil
         do {
             try await supabaseService.deletePlace(place.id)
         } catch {
+            places = previousPlaces
+            deleteError = error.localizedDescription
             print("Failed to delete place: \(error)")
+            throw error
         }
     }
 }

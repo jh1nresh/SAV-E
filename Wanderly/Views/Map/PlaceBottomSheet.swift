@@ -2,6 +2,10 @@ import SwiftUI
 
 struct PlaceBottomSheet: View {
     let place: Place
+    var onDelete: (() async throws -> Void)?
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -106,20 +110,54 @@ struct PlaceBottomSheet: View {
                         .cornerRadius(16)
                 }
 
-                Button(action: {}) {
-                    Label("Details", systemImage: "info.circle")
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label(isDeleting ? "Deleting..." : "Delete", systemImage: "trash")
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.wanderlySage.opacity(0.2))
-                        .foregroundColor(.wanderlyCharcoal)
+                        .background(Color.red.opacity(0.12))
+                        .foregroundColor(.red)
                         .cornerRadius(16)
                 }
+                .disabled(isDeleting || onDelete == nil)
+            }
+
+            if let deleteError {
+                Text(deleteError)
+                    .font(.caption)
+                    .foregroundColor(.red)
             }
         }
         .padding()
         .background(Color.wanderlyCream)
+        .confirmationDialog(
+            "Delete \(place.name)?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Place", role: .destructive) {
+                Task { await deletePlace() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the saved place from SAV-E.")
+        }
+    }
+
+    private func deletePlace() async {
+        guard let onDelete else { return }
+        isDeleting = true
+        deleteError = nil
+        defer { isDeleting = false }
+
+        do {
+            try await onDelete()
+        } catch {
+            deleteError = error.localizedDescription
+        }
     }
 }
 
