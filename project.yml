@@ -29,6 +29,23 @@ targets:
       - path: Wanderly
         excludes:
           - Resources/Secrets.plist
+          - Resources/Secrets.plist.template
+      - path: Wanderly/Resources/Secrets.plist
+        optional: true
+        buildPhase: resources
+    preBuildScripts:
+      - name: Create Local Secrets.plist
+        script: |
+          set -euo pipefail
+          secrets="${SRCROOT}/Wanderly/Resources/Secrets.plist"
+          template="${SRCROOT}/Wanderly/Resources/Secrets.plist.template"
+          if [ ! -f "$secrets" ]; then
+            cp "$template" "$secrets"
+          fi
+        inputFiles:
+          - $(SRCROOT)/Wanderly/Resources/Secrets.plist.template
+        outputFiles:
+          - $(SRCROOT)/Wanderly/Resources/Secrets.plist
     dependencies:
       - package: Privy
         product: Privy
@@ -111,6 +128,23 @@ targets:
       - path: WanderlyShareExtension
         excludes:
           - Secrets.plist
+          - Secrets.plist.template
+      - path: WanderlyShareExtension/Secrets.plist
+        optional: true
+        buildPhase: resources
+    preBuildScripts:
+      - name: Create Local Secrets.plist
+        script: |
+          set -euo pipefail
+          secrets="${SRCROOT}/WanderlyShareExtension/Secrets.plist"
+          template="${SRCROOT}/WanderlyShareExtension/Secrets.plist.template"
+          if [ ! -f "$secrets" ]; then
+            cp "$template" "$secrets"
+          fi
+        inputFiles:
+          - $(SRCROOT)/WanderlyShareExtension/Secrets.plist.template
+        outputFiles:
+          - $(SRCROOT)/WanderlyShareExtension/Secrets.plist
     settings:
       base:
         DEVELOPMENT_TEAM: JC6858UYM9

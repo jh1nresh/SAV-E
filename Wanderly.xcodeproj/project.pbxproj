@@ -43,7 +43,9 @@
 		9EF348338705836E38E56F54 /* Privy in Frameworks */ = {isa = PBXBuildFile; productRef = 9AEC21E0AA21AA2589449ABB /* Privy */; };
 		A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903A65214BCAA12AD2190D28 /* MapViewModel.swift */; };
 		A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */; };
+		AEDD962720DD378E62B8B659 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 63D3F58B9435221309DE0A3B /* Secrets.plist */; };
 		AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3939451E82A6558254D3250D /* GooglePlacesService.swift */; };
+		B435FEB2824A8C16146C170F /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 77C0511D8DDA1FE33188BAB6 /* Secrets.plist */; };
 		BCAD4123ACE867DA79F69A22 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECDC9A866952173B6DC923C /* EmptyStateView.swift */; };
 		BD194FECB33EC91F78CCEDFF /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560440B2921EE257D2BF57A1 /* SharedTripData.swift */; };
 		BD49BA2E1292FE93EC063A29 /* PlatformIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */; };
@@ -132,9 +134,11 @@
 		560440B2921EE257D2BF57A1 /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
 		5EFE7E456EC9AE78D349FF1F /* PlaceListComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListComponent.swift; sourceTree = "<group>"; };
 		62A066A6F8F79E541E817AED /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
+		63D3F58B9435221309DE0A3B /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		71B4BE3FB34EFED93F712E17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		73F600376C0B250B61F4915F /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		760FB746C459D7D2917A3A71 /* WanderlyClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyClip.entitlements; sourceTree = "<group>"; };
+		77C0511D8DDA1FE33188BAB6 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListViewModel.swift; sourceTree = "<group>"; };
 		7D8FDE6E93564AB450C09578 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		7ECDC9A866952173B6DC923C /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 			children = (
 				E13C1C53E31D45A01D6519F5 /* Assets.xcassets */,
 				EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */,
+				63D3F58B9435221309DE0A3B /* Secrets.plist */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -371,6 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				71B4BE3FB34EFED93F712E17 /* Info.plist */,
+				77C0511D8DDA1FE33188BAB6 /* Secrets.plist */,
 				52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */,
 				16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */,
 			);
@@ -421,7 +427,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1E85095316CB310A976DDA9F /* Build configuration list for PBXNativeTarget "WanderlyShareExtension" */;
 			buildPhases = (
+				4AD4D2AEA58CD374F8CCB06E /* Create Local Secrets.plist */,
 				4A62812F23F8E51197482623 /* Sources */,
+				244EEF0FD063942BD3E410BB /* Resources */,
 			);
 			buildRules = (
 			);
@@ -438,6 +446,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3ADEC6F85D8EC51D5FBF311E /* Build configuration list for PBXNativeTarget "Wanderly" */;
 			buildPhases = (
+				1512A3FBDE688EE00A8A2BF1 /* Create Local Secrets.plist */,
 				5F6C575670A099365C547BEA /* Sources */,
 				68C237C0965124415B58F445 /* Resources */,
 				A1B43C02DFFC85212E33C051 /* Frameworks */,
@@ -526,12 +535,21 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		244EEF0FD063942BD3E410BB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B435FEB2824A8C16146C170F /* Secrets.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		68C237C0965124415B58F445 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				66F92C2CA0CE791724D1D71F /* Assets.xcassets in Resources */,
 				83E19CAE97D2B1701467240E /* PrivacyInfo.xcprivacy in Resources */,
+				AEDD962720DD378E62B8B659 /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -544,6 +562,49 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1512A3FBDE688EE00A8A2BF1 /* Create Local Secrets.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Wanderly/Resources/Secrets.plist.template",
+			);
+			name = "Create Local Secrets.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Wanderly/Resources/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nsecrets=\"${SRCROOT}/Wanderly/Resources/Secrets.plist\"\ntemplate=\"${SRCROOT}/Wanderly/Resources/Secrets.plist.template\"\nif [ ! -f \"$secrets\" ]; then\n  cp \"$template\" \"$secrets\"\nfi\n";
+		};
+		4AD4D2AEA58CD374F8CCB06E /* Create Local Secrets.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/WanderlyShareExtension/Secrets.plist.template",
+			);
+			name = "Create Local Secrets.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/WanderlyShareExtension/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nsecrets=\"${SRCROOT}/WanderlyShareExtension/Secrets.plist\"\ntemplate=\"${SRCROOT}/WanderlyShareExtension/Secrets.plist.template\"\nif [ ! -f \"$secrets\" ]; then\n  cp \"$template\" \"$secrets\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4A62812F23F8E51197482623 /* Sources */ = {
@@ -828,7 +889,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -886,7 +947,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
