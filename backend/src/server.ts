@@ -100,6 +100,55 @@ const agentDecisionFields = [
   "created_at",
 ] as const;
 
+const agentCapabilityFields = [
+  "id",
+  "agent_family",
+  "vertical",
+  "action",
+  "description",
+  "risk_level",
+  "input_schema",
+  "output_schema",
+  "enabled",
+  "created_at",
+] as const;
+
+const agentToolCallFields = [
+  "id",
+  "capability_id",
+  "capture_id",
+  "recommendation_set_id",
+  "input",
+  "output",
+  "status",
+  "error",
+  "created_at",
+] as const;
+
+const recommendationSetFields = [
+  "id",
+  "capture_id",
+  "prompt",
+  "summary",
+  "context",
+  "status",
+  "created_at",
+] as const;
+
+const recommendationItemFields = [
+  "id",
+  "recommendation_set_id",
+  "place_candidate_id",
+  "place_id",
+  "rank",
+  "title",
+  "rationale",
+  "r8_score",
+  "slr_status",
+  "evidence",
+  "created_at",
+] as const;
+
 createServer(async (request, response) => {
   if (request.method === "OPTIONS") {
     return sendJson(response, null, 204);
@@ -121,6 +170,9 @@ createServer(async (request, response) => {
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "memory") {
       return await handleMemory(request, response, url.pathname.split("/").filter(Boolean).slice(1), url, userId);
+    }
+    if (resource === "agents") {
+      return await handleAgents(request, response, url.pathname.split("/").filter(Boolean).slice(1), url, userId);
     }
 
     return sendJson(response, { error: "Not found" }, 404);
@@ -292,6 +344,7 @@ async function handleMemory(
   if (kind === "captures") return await handleMemoryCaptures(request, response, id, userId);
   if (kind === "candidates") return await handleMemoryCandidates(request, response, id, url, userId);
   if (kind === "decisions") return await handleMemoryDecisions(request, response, url, userId);
+  if (kind === "recommendations") return await handleMemoryRecommendations(request, response, id, userId);
 
   return sendJson(response, { error: "Unsupported memory route" }, 405);
 }
@@ -440,6 +493,148 @@ async function handleMemoryDecisions(
   return sendJson(response, { error: "Unsupported memory decisions route" }, 405);
 }
 
+async function handleMemoryRecommendations(
+  request: IncomingMessage,
+  response: ServerResponse,
+  recommendationSetId: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET" && !recommendationSetId) {
+    const sets = await recommendationSetsForUser(userId);
+    return sendJson(response, sets);
+  }
+
+  if (request.method === "GET" && recommendationSetId) {
+    const sets = await recommendationSetsForUser(userId, recommendationSetId);
+    if (!sets[0]) return sendJson(response, { error: "Recommendation not found" }, 404);
+    return sendJson(response, sets[0]);
+  }
+
+  if (request.method === "POST" && !recommendationSetId) {
+    const body = await readJson(request);
+    const items = Array.isArray(body.items) ? body.items.map(asObject) : [];
+    await ensureOwnedCaptureReference(body.capture_id, userId);
+    for (const item of items) await ensureRecommendationItemReferences(item, userId);
+
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const setBody = withOwner(writableFields(body, ["items"]), userId);
+      const setInsert = buildInsert("recommendation_sets", setBody, [...recommendationSetFields, "user_id"]);
+      const { rows: setRows } = await client.query(`${setInsert.sql} returning *`, setInsert.values);
+      const recommendationSet = setRows[0] as { id: string };
+
+      const itemRows: JsonBody[] = [];
+      for (const item of items) {
+        const itemBody = { ...writableFields(item, ["recommendation_set_id", "created_at"]), recommendation_set_id: recommendationSet.id };
+        const itemInsert = buildInsert("recommendation_items", itemBody, recommendationItemFields);
+        const { rows } = await client.query(`${itemInsert.sql} returning *`, itemInsert.values);
+        itemRows.push(asObject(rows[0]));
+      }
+
+      await client.query("commit");
+      return sendJson(response, assembleRecommendationSets(setRows, itemRows)[0], 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  if (request.method === "PATCH" && recommendationSetId) {
+    const body = writableFields(await readJson(request), ["id", "user_id", "items", "created_at", "updated_at"]);
+    await ensureOwnedCaptureReference(body.capture_id, userId);
+    const update = buildUpdate("recommendation_sets", body, recommendationSetFields);
+    if (!update) return sendJson(response, { error: "No writable fields" }, 400);
+
+    const values = [...update.values, recommendationSetId, userId];
+    const { rows } = await pool.query(
+      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning *`,
+      values,
+    );
+    if (!rows[0]) return sendJson(response, { error: "Recommendation not found" }, 404);
+
+    const sets = await recommendationSetsForUser(userId, recommendationSetId);
+    return sendJson(response, sets[0]);
+  }
+
+  return sendJson(response, { error: "Unsupported memory recommendations route" }, 405);
+}
+
+async function handleAgents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  segments: string[],
+  url: URL,
+  userId: string,
+): Promise<void> {
+  const [kind] = segments;
+
+  if (kind === "capabilities") return await handleAgentCapabilities(request, response);
+  if (kind === "tool-calls") return await handleAgentToolCalls(request, response, url, userId);
+
+  return sendJson(response, { error: "Unsupported agents route" }, 405);
+}
+
+async function handleAgentCapabilities(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  if (request.method !== "GET") return sendJson(response, { error: "Unsupported agent capabilities route" }, 405);
+
+  const { rows } = await pool.query(
+    "select * from agent_capabilities where enabled = true order by agent_family, vertical, action",
+  );
+  return sendJson(response, rows.map(formatAgentCapability));
+}
+
+async function handleAgentToolCalls(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET") {
+    const capabilityId = url.searchParams.get("capability_id");
+    const recommendationSetId = url.searchParams.get("recommendation_set_id");
+    const filters = ["user_id = $1"];
+    const values: QueryValue[] = [userId];
+
+    if (capabilityId) {
+      values.push(capabilityId);
+      filters.push(`capability_id = $${values.length}`);
+    }
+
+    if (recommendationSetId) {
+      values.push(recommendationSetId);
+      filters.push(`recommendation_set_id = $${values.length}`);
+    }
+
+    const { rows } = await pool.query(
+      `select * from agent_tool_calls where ${filters.join(" and ")} order by created_at desc`,
+      values,
+    );
+    return sendJson(response, rows.map(formatAgentToolCall));
+  }
+
+  if (request.method === "POST") {
+    const body = await readJson(request);
+    const capabilityId = typeof body.capability_id === "string" ? body.capability_id : undefined;
+    if (!capabilityId) return sendJson(response, { error: "capability_id is required" }, 400);
+    await ensureCapabilityEnabled(capabilityId);
+    await ensureOwnedCaptureReference(body.capture_id, userId);
+    await ensureOwnedRecommendationSetReference(body.recommendation_set_id, userId);
+
+    const callBody = withOwner(body, userId);
+    const insert = buildInsert("agent_tool_calls", callBody, [...agentToolCallFields, "user_id"]);
+    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+    return sendJson(response, formatAgentToolCall(rows[0]), 201);
+  }
+
+  return sendJson(response, { error: "Unsupported agent tool calls route" }, 405);
+}
+
 async function ensureCaptureOwner(captureId: string, userId: string): Promise<void> {
   const { rows } = await pool.query("select id from captures where id = $1 and user_id = $2", [captureId, userId]);
   if (!rows[0]) throw new ApiError(404, "Capture not found");
@@ -462,6 +657,41 @@ async function ensureOwnedPlaceReference(placeId: unknown, userId: string): Prom
 
   const { rows } = await pool.query("select id from places where id = $1 and user_id = $2", [placeId, userId]);
   if (!rows[0]) throw new ApiError(404, "Place not found");
+}
+
+async function ensureOwnedCaptureReference(captureId: unknown, userId: string): Promise<void> {
+  if (captureId === undefined || captureId === null) return;
+  if (typeof captureId !== "string") throw new ApiError(400, "capture_id must be a string");
+  await ensureCaptureOwner(captureId, userId);
+}
+
+async function ensureOwnedCandidateReference(candidateId: unknown, userId: string): Promise<void> {
+  if (candidateId === undefined || candidateId === null) return;
+  if (typeof candidateId !== "string") throw new ApiError(400, "place_candidate_id must be a string");
+  await ensureCandidateOwner(candidateId, userId);
+}
+
+async function ensureOwnedRecommendationSetReference(recommendationSetId: unknown, userId: string): Promise<void> {
+  if (recommendationSetId === undefined || recommendationSetId === null) return;
+  if (typeof recommendationSetId !== "string") throw new ApiError(400, "recommendation_set_id must be a string");
+
+  const { rows } = await pool.query("select id from recommendation_sets where id = $1 and user_id = $2", [
+    recommendationSetId,
+    userId,
+  ]);
+  if (!rows[0]) throw new ApiError(404, "Recommendation not found");
+}
+
+async function ensureRecommendationItemReferences(item: JsonBody, userId: string): Promise<void> {
+  await ensureOwnedCandidateReference(item.place_candidate_id, userId);
+  await ensureOwnedPlaceReference(item.place_id, userId);
+}
+
+async function ensureCapabilityEnabled(capabilityId: string): Promise<void> {
+  const { rows } = await pool.query("select id from agent_capabilities where id = $1 and enabled = true", [
+    capabilityId,
+  ]);
+  if (!rows[0]) throw new ApiError(404, "Capability not found");
 }
 
 async function ensureProfile(userId: string): Promise<void> {
@@ -599,6 +829,43 @@ function tripsSelect(whereClause: string, orderClause = ""): string {
   `;
 }
 
+async function recommendationSetsForUser(userId: string, recommendationSetId?: string): Promise<JsonBody[]> {
+  const values = recommendationSetId ? [userId, recommendationSetId] : [userId];
+  const where = recommendationSetId ? "where user_id = $1 and id = $2" : "where user_id = $1";
+  const { rows: setRows } = await pool.query(
+    `select * from recommendation_sets ${where} order by created_at desc`,
+    values,
+  );
+  if (setRows.length === 0) return [];
+
+  const setIds = setRows.map((row) => (row as { id: string }).id);
+  const { rows: itemRows } = await pool.query(
+    "select * from recommendation_items where recommendation_set_id = any($1::uuid[]) order by rank, created_at",
+    [setIds],
+  );
+
+  return assembleRecommendationSets(setRows, itemRows);
+}
+
+function assembleRecommendationSets(setRows: JsonBody[], itemRows: JsonBody[]): JsonBody[] {
+  const itemsBySetId = new Map<string, JsonBody[]>();
+  for (const row of itemRows) {
+    const item = formatRecommendationItem(row);
+    const setId = String(item.recommendation_set_id);
+    const items = itemsBySetId.get(setId) ?? [];
+    items.push(item);
+    itemsBySetId.set(setId, items);
+  }
+
+  return setRows.map((row) => {
+    const set = formatRecommendationSet(row);
+    return {
+      ...set,
+      items: itemsBySetId.get(String(set.id)) ?? [],
+    };
+  });
+}
+
 function sendJson(response: ServerResponse, body: unknown, status = 200): void {
   response.writeHead(status, {
     "Access-Control-Allow-Origin": "*",
@@ -635,6 +902,22 @@ function formatPlaceCandidate(row: JsonBody): JsonBody {
 }
 
 function formatAgentDecision(row: JsonBody): JsonBody {
+  return formatDates(row);
+}
+
+function formatAgentCapability(row: JsonBody): JsonBody {
+  return formatDates(row);
+}
+
+function formatAgentToolCall(row: JsonBody): JsonBody {
+  return formatDates(row);
+}
+
+function formatRecommendationSet(row: JsonBody): JsonBody {
+  return formatDates(row);
+}
+
+function formatRecommendationItem(row: JsonBody): JsonBody {
   return formatDates(row);
 }
 

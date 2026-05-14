@@ -122,6 +122,133 @@ create table if not exists agent_decisions (
 
 create index if not exists idx_agent_decisions_candidate_id on agent_decisions(candidate_id);
 
+create table if not exists agent_capabilities (
+    id text primary key,
+    agent_family text not null,
+    vertical text not null,
+    action text not null,
+    description text not null default '',
+    risk_level text not null default 'read',
+    input_schema jsonb not null default '{}'::jsonb,
+    output_schema jsonb not null default '{}'::jsonb,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint agent_capabilities_family_check check (agent_family in ('R8', 'SLR', 'BYR', 'NEG', 'VFY')),
+    constraint agent_capabilities_risk_check check (risk_level in ('read', 'quote', 'hold', 'purchase')),
+    constraint agent_capabilities_action_unique unique (agent_family, vertical, action)
+);
+
+create index if not exists idx_agent_capabilities_family on agent_capabilities(agent_family, vertical);
+create index if not exists idx_agent_capabilities_enabled on agent_capabilities(enabled);
+
+create table if not exists recommendation_sets (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    capture_id uuid references captures(id) on delete set null,
+    prompt text not null default '',
+    summary text not null default '',
+    context jsonb not null default '{}'::jsonb,
+    status text not null default 'draft',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint recommendation_sets_status_check check (status in ('draft', 'review', 'accepted', 'archived'))
+);
+
+create index if not exists idx_recommendation_sets_user_id on recommendation_sets(user_id, created_at desc);
+create index if not exists idx_recommendation_sets_capture_id on recommendation_sets(capture_id);
+
+create table if not exists recommendation_items (
+    id uuid primary key default gen_random_uuid(),
+    recommendation_set_id uuid references recommendation_sets(id) on delete cascade not null,
+    place_candidate_id uuid references place_candidates(id) on delete set null,
+    place_id uuid references places(id) on delete set null,
+    rank integer not null default 0,
+    title text not null,
+    rationale text not null default '',
+    r8_score double precision,
+    slr_status text not null default 'not_checked',
+    evidence jsonb not null default '[]'::jsonb,
+    created_at timestamptz not null default now(),
+    constraint recommendation_items_r8_score_check check (r8_score is null or (r8_score >= 0 and r8_score <= 1)),
+    constraint recommendation_items_slr_status_check check (slr_status in ('not_checked', 'available', 'unavailable', 'needs_handoff', 'error'))
+);
+
+create index if not exists idx_recommendation_items_set_id on recommendation_items(recommendation_set_id, rank);
+create index if not exists idx_recommendation_items_candidate_id on recommendation_items(place_candidate_id);
+
+create table if not exists agent_tool_calls (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    capability_id text references agent_capabilities(id) on delete restrict not null,
+    capture_id uuid references captures(id) on delete set null,
+    recommendation_set_id uuid references recommendation_sets(id) on delete set null,
+    input jsonb not null default '{}'::jsonb,
+    output jsonb,
+    status text not null default 'pending',
+    error text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint agent_tool_calls_status_check check (status in ('pending', 'running', 'succeeded', 'failed', 'cancelled'))
+);
+
+create index if not exists idx_agent_tool_calls_user_id on agent_tool_calls(user_id, created_at desc);
+create index if not exists idx_agent_tool_calls_capability_id on agent_tool_calls(capability_id);
+create index if not exists idx_agent_tool_calls_recommendation_set_id on agent_tool_calls(recommendation_set_id);
+
+insert into agent_capabilities (id, agent_family, vertical, action, description, risk_level, input_schema, output_schema)
+values
+    (
+        'R8.rank_places',
+        'R8',
+        'places',
+        'rank_places',
+        'Rank candidate places against user taste, trip context, and constraints.',
+        'read',
+        '{"type":"object","required":["candidates"],"properties":{"candidates":{"type":"array"},"context":{"type":"object"}}}'::jsonb,
+        '{"type":"object","required":["ranked_items"],"properties":{"ranked_items":{"type":"array"}}}'::jsonb
+    ),
+    (
+        'R8.explain_match',
+        'R8',
+        'places',
+        'explain_match',
+        'Explain why a candidate matches or does not match the user taste profile.',
+        'read',
+        '{"type":"object","required":["candidate"],"properties":{"candidate":{"type":"object"},"user_memory":{"type":"object"}}}'::jsonb,
+        '{"type":"object","required":["reasons"],"properties":{"reasons":{"type":"array"},"warnings":{"type":"array"}}}'::jsonb
+    ),
+    (
+        'SLR.restaurants.search_availability',
+        'SLR',
+        'restaurants',
+        'search_availability',
+        'Check restaurant availability or handoff links without confirming a reservation.',
+        'quote',
+        '{"type":"object","required":["party_size","date"],"properties":{"party_size":{"type":"number"},"date":{"type":"string"},"place":{"type":"object"}}}'::jsonb,
+        '{"type":"object","required":["options"],"properties":{"options":{"type":"array"},"handoff_url":{"type":"string"}}}'::jsonb
+    ),
+    (
+        'SLR.flights.search_itineraries',
+        'SLR',
+        'flights',
+        'search_itineraries',
+        'Search flight itinerary options without booking or payment.',
+        'quote',
+        '{"type":"object","required":["origin","destination","departure_date"],"properties":{"origin":{"type":"string"},"destination":{"type":"string"},"departure_date":{"type":"string"},"return_date":{"type":"string"}}}'::jsonb,
+        '{"type":"object","required":["itineraries"],"properties":{"itineraries":{"type":"array"},"handoff_url":{"type":"string"}}}'::jsonb
+    )
+on conflict (id) do update
+set agent_family = excluded.agent_family,
+    vertical = excluded.vertical,
+    action = excluded.action,
+    description = excluded.description,
+    risk_level = excluded.risk_level,
+    input_schema = excluded.input_schema,
+    output_schema = excluded.output_schema,
+    enabled = true,
+    updated_at = now();
+
 create table if not exists collections (
     id uuid primary key default gen_random_uuid(),
     user_id text references profiles(id) on delete cascade not null,
@@ -176,4 +303,16 @@ create trigger update_captures_updated_at before update on captures
 
 drop trigger if exists update_place_candidates_updated_at on place_candidates;
 create trigger update_place_candidates_updated_at before update on place_candidates
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_agent_capabilities_updated_at on agent_capabilities;
+create trigger update_agent_capabilities_updated_at before update on agent_capabilities
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_recommendation_sets_updated_at on recommendation_sets;
+create trigger update_recommendation_sets_updated_at before update on recommendation_sets
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_agent_tool_calls_updated_at on agent_tool_calls;
+create trigger update_agent_tool_calls_updated_at before update on agent_tool_calls
     for each row execute procedure update_updated_at();
