@@ -12,7 +12,9 @@
 		0D8DD94A2CFC096B7752E6FA /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */; };
 		0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E74EF49B8A57D105D2D652 /* SharedTripData.swift */; };
 		19637D9F3EDFF2329A9979DB /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05191C82E70D6C2149B74EB7 /* ProfileView.swift */; };
+		227F30DF4C70A4290E51F93D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A29B2157900BCDDFE28B627B /* ZIPFoundation */; };
 		25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D582904A9679056480966665 /* TripTimelineCard.swift */; };
+		2677F52D743629F377833945 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D361AE888D21B3766DD265FD /* LocationService.swift */; };
 		33757E80FAA9F8BC208B06D5 /* WanderlyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		348DE07F8D4F598B28DE45A6 /* AIDrawerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */; };
 		37E5463A0876A9A8A488CBA5 /* WanderlyClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */; };
@@ -29,6 +31,7 @@
 		5ABFBF83CDFEF1512B2CD4A8 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */; };
 		66F92C2CA0CE791724D1D71F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E13C1C53E31D45A01D6519F5 /* Assets.xcassets */; };
 		6C2A34FA11F4149D5F1D26EA /* TripItineraryComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */; };
+		6C452B24209329AC54B287F1 /* GoogleTakeoutImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA0D1693E6B1F8D87EE88DA /* GoogleTakeoutImportView.swift */; };
 		74335232F64578F6C51A16C2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0E478C4828BA2AD2022551 /* ContentView.swift */; };
 		76068D6F46F6328F2B1D2432 /* AIParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8FDE6E93564AB450C09578 /* AIParsingService.swift */; };
 		76D430AA3B1F4E1EB96B77CF /* TripViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10954376731AA5088DDEBEA /* TripViewModel.swift */; };
@@ -47,10 +50,12 @@
 		C19497B630FAA95D35232A48 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89976B73F7C977BD6F35B903 /* UserProfile.swift */; };
 		C97CF8F1B771B3956C8B86B3 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */; };
 		D42B36179CADE7932242599D /* WanderlyAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */; };
+		D53AA8C2DBC231ABA8E9ED74 /* GoogleTakeoutImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AB949B14D33E31CD3A280BB /* GoogleTakeoutImport.swift */; };
 		D8C6243F6D083E8C9EC2092D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */; };
 		D99CEE5968320C3A75D537F8 /* WanderlyClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = A57E086170BE289FC60E45C5 /* WanderlyClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E0EF8B3281AF0AE07B3CA461 /* PlaceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D14373C25E6C1A46308955A /* PlaceListView.swift */; };
 		E1E3F7D9319056F541095254 /* PlaceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */; };
+		E7B4FE596AB72D438E1B8A83 /* GoogleTakeoutImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD6620A9DEB09C15873615BC /* GoogleTakeoutImportService.swift */; };
 		E8880348DF753D6DB2CA3B6C /* AIDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5210F08F016F1E68361D82DB /* AIDrawerView.swift */; };
 		F2C02CDCA0EB3A3EBAC48016 /* PlaceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */; };
 		F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8960D65E893E5FDF9FCFF097 /* StatsView.swift */; };
@@ -115,10 +120,12 @@
 		3242EA4BEADB508579B41237 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationService.swift; sourceTree = "<group>"; };
 		3939451E82A6558254D3250D /* GooglePlacesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesService.swift; sourceTree = "<group>"; };
+		3AB949B14D33E31CD3A280BB /* GoogleTakeoutImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImport.swift; sourceTree = "<group>"; };
 		3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDrawerViewModel.swift; sourceTree = "<group>"; };
 		42CE4BE52D193035348E4005 /* WanderlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyApp.swift; sourceTree = "<group>"; };
 		43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
+		4BA0D1693E6B1F8D87EE88DA /* GoogleTakeoutImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImportView.swift; sourceTree = "<group>"; };
 		5210F08F016F1E68361D82DB /* AIDrawerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDrawerView.swift; sourceTree = "<group>"; };
 		52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		54E6F570FEC5900B20243363 /* CategoryPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPill.swift; sourceTree = "<group>"; };
@@ -143,9 +150,11 @@
 		BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyClipApp.swift; sourceTree = "<group>"; };
 		C2F4C10AEE6E547B29704866 /* ClipContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentView.swift; sourceTree = "<group>"; };
 		C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCardComponent.swift; sourceTree = "<group>"; };
+		D361AE888D21B3766DD265FD /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentPreview.swift; sourceTree = "<group>"; };
 		D582904A9679056480966665 /* TripTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripTimelineCard.swift; sourceTree = "<group>"; };
 		DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingPlaceImportService.swift; sourceTree = "<group>"; };
+		DD6620A9DEB09C15873615BC /* GoogleTakeoutImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImportService.swift; sourceTree = "<group>"; };
 		E13C1C53E31D45A01D6519F5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripItineraryComponent.swift; sourceTree = "<group>"; };
 		EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -160,6 +169,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9EF348338705836E38E56F54 /* Privy in Frameworks */,
+				227F30DF4C70A4290E51F93D /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -270,6 +280,7 @@
 			children = (
 				2DC264C7501410D7372ABFE9 /* Detail */,
 				618A16311C0E70E03B7A0AD5 /* Drawer */,
+				E4B1D8B2249904D6AE801D42 /* Import */,
 				C89713A2F3FDEAC783174A58 /* List */,
 				9ECB9211EF6DA03A490F7696 /* Map */,
 				E9ED325A2A3402CFFF826220 /* Onboarding */,
@@ -322,6 +333,7 @@
 			isa = PBXGroup;
 			children = (
 				AA5555D27FE182EFE3DDC93C /* AIResponse.swift */,
+				3AB949B14D33E31CD3A280BB /* GoogleTakeoutImport.swift */,
 				077202B483361C14C41E6962 /* Place.swift */,
 				02E74EF49B8A57D105D2D652 /* SharedTripData.swift */,
 				62A066A6F8F79E541E817AED /* Trip.swift */,
@@ -335,6 +347,8 @@
 			children = (
 				7D8FDE6E93564AB450C09578 /* AIParsingService.swift */,
 				3939451E82A6558254D3250D /* GooglePlacesService.swift */,
+				DD6620A9DEB09C15873615BC /* GoogleTakeoutImportService.swift */,
+				D361AE888D21B3766DD265FD /* LocationService.swift */,
 				368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */,
 				DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */,
 				2EA2DE34F0656884DCAB54CD /* PrivyAuthService.swift */,
@@ -371,6 +385,14 @@
 				851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E4B1D8B2249904D6AE801D42 /* Import */ = {
+			isa = PBXGroup;
+			children = (
+				4BA0D1693E6B1F8D87EE88DA /* GoogleTakeoutImportView.swift */,
+			);
+			path = Import;
 			sourceTree = "<group>";
 		};
 		E9ED325A2A3402CFFF826220 /* Onboarding */ = {
@@ -431,6 +453,7 @@
 			name = Wanderly;
 			packageProductDependencies = (
 				9AEC21E0AA21AA2589449ABB /* Privy */,
+				A29B2157900BCDDFE28B627B /* ZIPFoundation */,
 			);
 			productName = Wanderly;
 			productReference = 03620D4EA81151AB71F38192 /* Wanderly.app */;
@@ -488,6 +511,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */,
+				6D23DAAE0E5F0AF7EBAEC513 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D4876E130669B270D00D1540 /* Products */;
@@ -554,6 +578,10 @@
 				74335232F64578F6C51A16C2 /* ContentView.swift in Sources */,
 				BCAD4123ACE867DA79F69A22 /* EmptyStateView.swift in Sources */,
 				AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */,
+				D53AA8C2DBC231ABA8E9ED74 /* GoogleTakeoutImport.swift in Sources */,
+				E7B4FE596AB72D438E1B8A83 /* GoogleTakeoutImportService.swift in Sources */,
+				6C452B24209329AC54B287F1 /* GoogleTakeoutImportView.swift in Sources */,
+				2677F52D743629F377833945 /* LocationService.swift in Sources */,
 				47655ADFBDE28A5156D9DF2C /* MapView.swift in Sources */,
 				A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */,
 				F9459E3F07900F355AD069FD /* NavigationCardComponent.swift in Sources */,
@@ -926,6 +954,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		6D23DAAE0E5F0AF7EBAEC513 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.19;
+			};
+		};
 		CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/privy-io/privy-ios";
@@ -941,6 +977,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */;
 			productName = Privy;
+		};
+		A29B2157900BCDDFE28B627B /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6D23DAAE0E5F0AF7EBAEC513 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

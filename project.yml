@@ -17,6 +17,9 @@ packages:
   Privy:
     url: https://github.com/privy-io/privy-ios
     minorVersion: 2.10.1
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation
+    from: 0.9.19
 
 targets:
   Wanderly:
@@ -29,6 +32,8 @@ targets:
     dependencies:
       - package: Privy
         product: Privy
+      - package: ZIPFoundation
+        product: ZIPFoundation
       - target: WanderlyShareExtension
       - target: WanderlyClip
         embed: true

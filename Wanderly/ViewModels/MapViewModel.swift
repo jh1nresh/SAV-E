@@ -14,20 +14,25 @@ final class MapViewModel: ObservableObject {
     @Published var activeFilter: Set<UUID>?       // nil = show all
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var isLoading = false
+    @Published var isLocatingUser = false
     @Published var calculatedRoute: MKPolyline?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
+    private let locationService: LocationService
     private var importedPendingKeys: Set<String> = []
+    private var didRequestInitialLocation = false
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
-        pendingImportService: PendingPlaceImportService = .shared
+        pendingImportService: PendingPlaceImportService = .shared,
+        locationService: LocationService? = nil
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
+        self.locationService = locationService ?? .shared
     }
 
     // MARK: - Computed
@@ -147,12 +152,70 @@ final class MapViewModel: ObservableObject {
         selectedPlace = place
     }
 
+    func focusOnUserLocationOnLaunch() async {
+        guard !didRequestInitialLocation else { return }
+        didRequestInitialLocation = true
+        await focusOnUserLocation()
+    }
+
+    func focusOnUserLocation() async {
+        guard !isLocatingUser else { return }
+        isLocatingUser = true
+        defer { isLocatingUser = false }
+
+        guard let location = await locationService.requestCurrentLocation() else { return }
+
+        cameraPosition = .region(MKCoordinateRegion(
+            center: location.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+        ))
+    }
+
     func toggleCategory(_ category: PlaceCategory) {
         if selectedCategories.contains(category) {
             selectedCategories.remove(category)
         } else {
             selectedCategories.insert(category)
         }
+    }
+
+    func saveImportedPlaces(_ drafts: [ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary {
+        guard let userId = authService.currentUserId else {
+            throw SupabaseError.notAuthenticated
+        }
+
+        let existingKeys = Set(places.map(\.importDeduplicationKey))
+        var batchKeys: Set<String> = []
+        var savedPlaces: [Place] = []
+        var skippedDuplicates = 0
+        var reviewDrafts = 0
+
+        for draft in drafts {
+            guard let place = draft.toPlace() else {
+                reviewDrafts += 1
+                continue
+            }
+
+            let key = draft.deduplicationKey
+            guard !existingKeys.contains(key), !batchKeys.contains(key) else {
+                skippedDuplicates += 1
+                continue
+            }
+
+            try await supabaseService.savePlace(place, userId: userId)
+            batchKeys.insert(key)
+            savedPlaces.append(place)
+        }
+
+        if !savedPlaces.isEmpty {
+            places = savedPlaces + places
+        }
+
+        return GoogleTakeoutSaveSummary(
+            saved: savedPlaces.count,
+            skippedDuplicates: skippedDuplicates,
+            reviewDrafts: reviewDrafts
+        )
     }
 
     // MARK: - Apply AI map action

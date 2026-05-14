@@ -9,7 +9,14 @@ struct ContentView: View {
     var body: some View {
         MapView(viewModel: mapVM)
             .sheet(isPresented: .constant(true)) {
-                AIDrawerView(viewModel: drawerVM, drawerDetent: $drawerDetent)
+                AIDrawerView(
+                    viewModel: drawerVM,
+                    drawerDetent: $drawerDetent,
+                    existingPlacesForImport: mapVM.places,
+                    onSaveGoogleTakeoutImport: { drafts in
+                        try await mapVM.saveImportedPlaces(drafts)
+                    }
+                )
                     .presentationDetents([.height(72), .medium, .large], selection: $drawerDetent)
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))

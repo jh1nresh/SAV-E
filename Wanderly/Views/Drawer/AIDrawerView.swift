@@ -3,7 +3,12 @@ import SwiftUI
 struct AIDrawerView: View {
     @ObservedObject var viewModel: AIDrawerViewModel
     @Binding var drawerDetent: PresentationDetent
+    var existingPlacesForImport: [Place] = []
+    var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
+        GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
+    }
     @FocusState private var searchFocused: Bool
+    @State private var showGoogleTakeoutImport = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -16,6 +21,12 @@ struct AIDrawerView: View {
         .background(Color.wanderlyCream)
         .sheet(isPresented: $viewModel.showPlaceList) {
             PlaceListView()
+        }
+        .sheet(isPresented: $showGoogleTakeoutImport) {
+            GoogleTakeoutImportView(
+                existingPlaces: existingPlacesForImport,
+                onSave: onSaveGoogleTakeoutImport
+            )
         }
         .onChange(of: viewModel.drawerState) { _, state in
             withAnimation(.spring(duration: 0.3)) {
@@ -204,6 +215,20 @@ struct AIDrawerView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "list.bullet")
                             Text("My Places")
+                        }
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.wanderlyTerracotta)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color.wanderlyTerracotta.opacity(0.1))
+                        .cornerRadius(16)
+                    }
+
+                    Button(action: { showGoogleTakeoutImport = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "tray.and.arrow.down")
+                            Text("Import")
                         }
                         .font(.caption)
                         .fontWeight(.semibold)

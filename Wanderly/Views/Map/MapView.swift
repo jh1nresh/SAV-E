@@ -9,6 +9,8 @@ struct MapView: View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 Map(position: $viewModel.cameraPosition) {
+                    UserAnnotation()
+
                     ForEach(viewModel.filteredPlaces) { place in
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(place: place) {
@@ -20,6 +22,10 @@ struct MapView: View {
                         MapPolyline(polyline)
                             .stroke(Color.wanderlyTerracotta, lineWidth: 3)
                     }
+                }
+                .mapControls {
+                    MapUserLocationButton()
+                    MapCompass()
                 }
 
                 HStack(spacing: 0) {
@@ -57,7 +63,10 @@ struct MapView: View {
         .sheet(isPresented: $showProfile) {
             ProfileView()
         }
-        .task { await viewModel.loadPlaces() }
+        .task {
+            await viewModel.loadPlaces()
+            await viewModel.focusOnUserLocationOnLaunch()
+        }
     }
 }
 
