@@ -1,6 +1,7 @@
 import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
+import CoreLocation
 
 class ShareViewController: UIViewController {
     override func viewDidLoad() {
@@ -284,6 +285,19 @@ struct ShareExtensionView: View {
             return
         }
 
+        if let sourceURL = URL(string: parseContent),
+           isSocialURL(sourceURL),
+           let metadataPlace = await deterministicSocialMetadataPlace(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText
+           ) {
+            parsedPlace = metadataPlace
+            selectedCategory = metadataPlace.category
+            isParsing = false
+            return
+        }
+
         let aiContent = [sharedTitle, sharedText, metadata.title, metadata.description, parseContent]
             .compactMap { $0 }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -298,7 +312,10 @@ struct ShareExtensionView: View {
             parsedPlace = try await parseWithGemini(content: aiContent, sourceURLString: parseContent)
             selectedCategory = parsedPlace?.category ?? "food"
         } catch {
-            if let fallback = fallbackPlace(from: parseContent, title: sharedTitle, text: sharedText) {
+            let isSocialSource = URL(string: parseContent).map(isSocialURL) ?? false
+            if !isSocialSource,
+               let fallback = fallbackPlace(from: parseContent, title: sharedTitle, text: sharedText),
+               isValidCoordinate(latitude: fallback.latitude, longitude: fallback.longitude) {
                 parsedPlace = fallback
                 selectedCategory = fallback.category
             } else {
@@ -460,11 +477,155 @@ struct ShareExtensionView: View {
         value
             .replacingOccurrences(of: "&amp;", with: "&")
             .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#034;", with: "\"")
             .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&#039;", with: "'")
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func deterministicSocialMetadataPlace(
+        from metadata: ShareMetadata,
+        sharedTitle: String,
+        sharedText: String
+    ) async -> ParsedPlace? {
+        let evidence = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        guard let address = firstAddress(in: evidence),
+              let name = firstPlaceName(in: evidence) else {
+            return nil
+        }
+
+        guard let coordinates = await geocodeAddress(address) else {
+            return nil
+        }
+
+        let category = fallbackCategory(from: evidence)
+        return ParsedPlace(
+            name: name,
+            address: address,
+            category: category,
+            iconName: iconForCategory(category),
+            latitude: coordinates.latitude,
+            longitude: coordinates.longitude,
+            dishes: dishHints(from: evidence),
+            priceRange: priceRangeHint(from: evidence)
+        )
+    }
+
+    private func publicMetadataEvidence(from metadata: ShareMetadata, sharedTitle: String, sharedText: String) -> String {
+        [sharedTitle, sharedText, metadata.title, metadata.description]
+            .compactMap { $0 }
+            .map(cleanHTMLText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private func firstPlaceName(in content: String) -> String? {
+        let patterns = [
+            #"[\[【]\s*([^\]】]{2,80})\s*[\]】]"#
+        ]
+
+        for pattern in patterns {
+            if let match = firstRegexCapture(in: content, pattern: pattern) {
+                let cleaned = cleanPlaceName(match)
+                if isUsablePlaceName(cleaned) {
+                    return cleaned
+                }
+            }
+        }
+        return nil
+    }
+
+    private func firstAddress(in content: String) -> String? {
+        let patterns = [
+            #"\b\d{1,6}\s+[A-Za-z0-9][A-Za-z0-9 .,'#&/-]+,\s*[A-Za-z .'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?\b"#,
+            #"\b\d{1,6}\s+[A-Za-z0-9][A-Za-z0-9 .,'#&/-]+,\s*[A-Za-z .'-]+,\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA)\b"#
+        ]
+
+        for pattern in patterns {
+            if let match = firstRegexMatch(in: content, pattern: pattern) {
+                return cleanHTMLText(match)
+            }
+        }
+        return nil
+    }
+
+    private func geocodeAddress(_ address: String) async -> (latitude: Double, longitude: Double)? {
+        await withCheckedContinuation { continuation in
+            CLGeocoder().geocodeAddressString(address) { placemarks, _ in
+                guard let coordinate = placemarks?.first?.location?.coordinate,
+                      self.isValidCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: (coordinate.latitude, coordinate.longitude))
+            }
+        }
+    }
+
+    private func firstRegexCapture(in content: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        let range = NSRange(content.startIndex..<content.endIndex, in: content)
+        guard let match = regex.firstMatch(in: content, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: content) else {
+            return nil
+        }
+        return String(content[captureRange])
+    }
+
+    private func firstRegexMatch(in content: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        let range = NSRange(content.startIndex..<content.endIndex, in: content)
+        guard let match = regex.firstMatch(in: content, range: range),
+              let matchRange = Range(match.range, in: content) else {
+            return nil
+        }
+        return String(content[matchRange])
+    }
+
+    private func cleanPlaceName(_ value: String) -> String {
+        cleanHTMLText(value)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]【】\"'“”.,:;! "))
+            .split(separator: "\n")
+            .first
+            .map(String.init) ?? ""
+    }
+
+    private func isUsablePlaceName(_ value: String) -> Bool {
+        let lowered = value.lowercased()
+        guard value.count >= 2,
+              value.count <= 80,
+              !lowered.contains("instagram"),
+              !lowered.contains("reel"),
+              !lowered.contains("comment"),
+              !lowered.contains("like") else {
+            return false
+        }
+        return true
+    }
+
+    private func dishHints(from content: String) -> [String] {
+        let keywords = ["matcha", "hojicha", "latte", "coffee", "tea", "ramen", "noodle", "pizza", "taco", "burger", "sushi", "dessert"]
+        let lowercased = content.lowercased()
+        return keywords.filter { lowercased.contains($0) }.prefix(4).map { keyword in
+            keyword.split(separator: " ").map { $0.capitalized }.joined(separator: " ")
+        }
+    }
+
+    private func priceRangeHint(from content: String) -> String? {
+        if content.range(of: #"\$\d+"#, options: .regularExpression) != nil {
+            return "$$"
+        }
+        return nil
     }
 
     private func hasMeaningfulPlaceContext(_ content: String, sourceURLString: String) -> Bool {
