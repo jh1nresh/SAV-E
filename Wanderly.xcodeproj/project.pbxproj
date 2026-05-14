@@ -1,0 +1,948 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0BC95BCDBDCEA26A6A3BE1EC /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A85A7930C0B725F89A6D9CD4 /* PlaceDetailView.swift */; };
+		0BD4C6DA5B323497CFAFFE4E /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A066A6F8F79E541E817AED /* Trip.swift */; };
+		0D8DD94A2CFC096B7752E6FA /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */; };
+		0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E74EF49B8A57D105D2D652 /* SharedTripData.swift */; };
+		19637D9F3EDFF2329A9979DB /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05191C82E70D6C2149B74EB7 /* ProfileView.swift */; };
+		25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D582904A9679056480966665 /* TripTimelineCard.swift */; };
+		33757E80FAA9F8BC208B06D5 /* WanderlyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		348DE07F8D4F598B28DE45A6 /* AIDrawerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */; };
+		37E5463A0876A9A8A488CBA5 /* WanderlyClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */; };
+		3940D24F410C832173C2A3F7 /* PrivyAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EA2DE34F0656884DCAB54CD /* PrivyAuthService.swift */; };
+		3C47D91BEEB572F207301996 /* ClipContentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */; };
+		3C7C8030AE94DB96C22525E8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E13C1C53E31D45A01D6519F5 /* Assets.xcassets */; };
+		428BB50934904B5BD89A32E9 /* CategoryPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54E6F570FEC5900B20243363 /* CategoryPill.swift */; };
+		4494A33E37F3FE7115D165A8 /* TripPlannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F600376C0B250B61F4915F /* TripPlannerView.swift */; };
+		45E2727ABBA252A81A67B5F8 /* PlaceListComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EFE7E456EC9AE78D349FF1F /* PlaceListComponent.swift */; };
+		46A52BEE4475E8E11DDE344F /* NavigationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */; };
+		47655ADFBDE28A5156D9DF2C /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25737D32F2BF5066893998E /* MapView.swift */; };
+		4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */; };
+		52DCC474C35F735154417A8D /* AIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5555D27FE182EFE3DDC93C /* AIResponse.swift */; };
+		5ABFBF83CDFEF1512B2CD4A8 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */; };
+		66F92C2CA0CE791724D1D71F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E13C1C53E31D45A01D6519F5 /* Assets.xcassets */; };
+		6C2A34FA11F4149D5F1D26EA /* TripItineraryComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */; };
+		74335232F64578F6C51A16C2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0E478C4828BA2AD2022551 /* ContentView.swift */; };
+		76068D6F46F6328F2B1D2432 /* AIParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8FDE6E93564AB450C09578 /* AIParsingService.swift */; };
+		76D430AA3B1F4E1EB96B77CF /* TripViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10954376731AA5088DDEBEA /* TripViewModel.swift */; };
+		7D12FEF322E5753B2E2B1C58 /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC8F70BFBB3AC56AADC443E /* Color+Theme.swift */; };
+		83E19CAE97D2B1701467240E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */; };
+		8A13B9656469B56F6F99096A /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077202B483361C14C41E6962 /* Place.swift */; };
+		94A09F6F9A7C50033699A242 /* ClipContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2F4C10AEE6E547B29704866 /* ClipContentView.swift */; };
+		99C08C1AEBD94EC560476469 /* WanderlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CE4BE52D193035348E4005 /* WanderlyApp.swift */; };
+		9EF348338705836E38E56F54 /* Privy in Frameworks */ = {isa = PBXBuildFile; productRef = 9AEC21E0AA21AA2589449ABB /* Privy */; };
+		A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903A65214BCAA12AD2190D28 /* MapViewModel.swift */; };
+		A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */; };
+		AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3939451E82A6558254D3250D /* GooglePlacesService.swift */; };
+		BCAD4123ACE867DA79F69A22 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECDC9A866952173B6DC923C /* EmptyStateView.swift */; };
+		BD194FECB33EC91F78CCEDFF /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560440B2921EE257D2BF57A1 /* SharedTripData.swift */; };
+		BD49BA2E1292FE93EC063A29 /* PlatformIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */; };
+		C19497B630FAA95D35232A48 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89976B73F7C977BD6F35B903 /* UserProfile.swift */; };
+		C97CF8F1B771B3956C8B86B3 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */; };
+		D42B36179CADE7932242599D /* WanderlyAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */; };
+		D8C6243F6D083E8C9EC2092D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */; };
+		D99CEE5968320C3A75D537F8 /* WanderlyClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = A57E086170BE289FC60E45C5 /* WanderlyClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E0EF8B3281AF0AE07B3CA461 /* PlaceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D14373C25E6C1A46308955A /* PlaceListView.swift */; };
+		E1E3F7D9319056F541095254 /* PlaceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */; };
+		E8880348DF753D6DB2CA3B6C /* AIDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5210F08F016F1E68361D82DB /* AIDrawerView.swift */; };
+		F2C02CDCA0EB3A3EBAC48016 /* PlaceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */; };
+		F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8960D65E893E5FDF9FCFF097 /* StatsView.swift */; };
+		F9459E3F07900F355AD069FD /* NavigationCardComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0793CFF0DBC1BE794C95574E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E03D93A0B433FED35DCE12F1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E6CCD0BB89E25C77DA2CF32;
+			remoteInfo = WanderlyShareExtension;
+		};
+		67A6610BDF9C7946FBF06A49 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E03D93A0B433FED35DCE12F1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C15508628E04BBA3344816C6;
+			remoteInfo = WanderlyClip;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		31836989C0CC140F5363FF2D /* Embed App Clips */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips";
+			dstSubfolderSpec = 16;
+			files = (
+				D99CEE5968320C3A75D537F8 /* WanderlyClip.app in Embed App Clips */,
+			);
+			name = "Embed App Clips";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5CF4A66284D9D2D416664CFA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				33757E80FAA9F8BC208B06D5 /* WanderlyShareExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		007FD1658A93016422088CDF /* Wanderly.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Wanderly.entitlements; sourceTree = "<group>"; };
+		02E74EF49B8A57D105D2D652 /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
+		03620D4EA81151AB71F38192 /* Wanderly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wanderly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		05191C82E70D6C2149B74EB7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		077202B483361C14C41E6962 /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
+		09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyAIService.swift; sourceTree = "<group>"; };
+		12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
+		16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyShareExtension.entitlements; sourceTree = "<group>"; };
+		1D14373C25E6C1A46308955A /* PlaceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListView.swift; sourceTree = "<group>"; };
+		1DC8F70BFBB3AC56AADC443E /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
+		28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCard.swift; sourceTree = "<group>"; };
+		2EA2DE34F0656884DCAB54CD /* PrivyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivyAuthService.swift; sourceTree = "<group>"; };
+		3242EA4BEADB508579B41237 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationService.swift; sourceTree = "<group>"; };
+		3939451E82A6558254D3250D /* GooglePlacesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesService.swift; sourceTree = "<group>"; };
+		3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDrawerViewModel.swift; sourceTree = "<group>"; };
+		42CE4BE52D193035348E4005 /* WanderlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyApp.swift; sourceTree = "<group>"; };
+		43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
+		5210F08F016F1E68361D82DB /* AIDrawerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDrawerView.swift; sourceTree = "<group>"; };
+		52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		54E6F570FEC5900B20243363 /* CategoryPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryPill.swift; sourceTree = "<group>"; };
+		560440B2921EE257D2BF57A1 /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
+		5EFE7E456EC9AE78D349FF1F /* PlaceListComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListComponent.swift; sourceTree = "<group>"; };
+		62A066A6F8F79E541E817AED /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
+		71B4BE3FB34EFED93F712E17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		73F600376C0B250B61F4915F /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
+		760FB746C459D7D2917A3A71 /* WanderlyClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyClip.entitlements; sourceTree = "<group>"; };
+		78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListViewModel.swift; sourceTree = "<group>"; };
+		7D8FDE6E93564AB450C09578 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
+		7ECDC9A866952173B6DC923C /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WanderlyShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8960D65E893E5FDF9FCFF097 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		89976B73F7C977BD6F35B903 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
+		8E0E478C4828BA2AD2022551 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		903A65214BCAA12AD2190D28 /* MapViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapViewModel.swift; sourceTree = "<group>"; };
+		A57E086170BE289FC60E45C5 /* WanderlyClip.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = WanderlyClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A85A7930C0B725F89A6D9CD4 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
+		AA5555D27FE182EFE3DDC93C /* AIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResponse.swift; sourceTree = "<group>"; };
+		B25737D32F2BF5066893998E /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
+		BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyClipApp.swift; sourceTree = "<group>"; };
+		C2F4C10AEE6E547B29704866 /* ClipContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentView.swift; sourceTree = "<group>"; };
+		C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCardComponent.swift; sourceTree = "<group>"; };
+		D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentPreview.swift; sourceTree = "<group>"; };
+		D582904A9679056480966665 /* TripTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripTimelineCard.swift; sourceTree = "<group>"; };
+		DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingPlaceImportService.swift; sourceTree = "<group>"; };
+		E13C1C53E31D45A01D6519F5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripItineraryComponent.swift; sourceTree = "<group>"; };
+		EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F10954376731AA5088DDEBEA /* TripViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripViewModel.swift; sourceTree = "<group>"; };
+		F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformIcon.swift; sourceTree = "<group>"; };
+		FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceBottomSheet.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B43C02DFFC85212E33C051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9EF348338705836E38E56F54 /* Privy in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		04FB3BBA0DB6D392841BA92D /* Trips */ = {
+			isa = PBXGroup;
+			children = (
+				73F600376C0B250B61F4915F /* TripPlannerView.swift */,
+				D582904A9679056480966665 /* TripTimelineCard.swift */,
+			);
+			path = Trips;
+			sourceTree = "<group>";
+		};
+		0E0FB99CC5E1C9FE6C389AAB /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				1DC8F70BFBB3AC56AADC443E /* Color+Theme.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		28117A7B622428ED58F18AB9 = {
+			isa = PBXGroup;
+			children = (
+				44A03D4CF06B6AEAC1F22E00 /* Wanderly */,
+				EC9E8387A6D6DF481B325DBF /* WanderlyClip */,
+				D37D8D4B160A8BF7C6F69F94 /* WanderlyShareExtension */,
+				D4876E130669B270D00D1540 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2D60648381DC9BE290145238 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				E13C1C53E31D45A01D6519F5 /* Assets.xcassets */,
+				EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		2DC264C7501410D7372ABFE9 /* Detail */ = {
+			isa = PBXGroup;
+			children = (
+				A85A7930C0B725F89A6D9CD4 /* PlaceDetailView.swift */,
+			);
+			path = Detail;
+			sourceTree = "<group>";
+		};
+		32E51832748CB63131CE6E95 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8E0E478C4828BA2AD2022551 /* ContentView.swift */,
+				42CE4BE52D193035348E4005 /* WanderlyApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		417BB26D85130DC218537AAC /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				05191C82E70D6C2149B74EB7 /* ProfileView.swift */,
+				8960D65E893E5FDF9FCFF097 /* StatsView.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
+		44A03D4CF06B6AEAC1F22E00 /* Wanderly */ = {
+			isa = PBXGroup;
+			children = (
+				3242EA4BEADB508579B41237 /* Info.plist */,
+				007FD1658A93016422088CDF /* Wanderly.entitlements */,
+				32E51832748CB63131CE6E95 /* App */,
+				0E0FB99CC5E1C9FE6C389AAB /* Extensions */,
+				AB4310B0998D8FA59B28D7F4 /* Models */,
+				2D60648381DC9BE290145238 /* Resources */,
+				AC364BC3AE941D4BCBDAC818 /* Services */,
+				4B39AC486298FD6CC65CC654 /* ViewModels */,
+				6FFEF824A2F52318E5D77944 /* Views */,
+			);
+			path = Wanderly;
+			sourceTree = "<group>";
+		};
+		4B39AC486298FD6CC65CC654 /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */,
+				903A65214BCAA12AD2190D28 /* MapViewModel.swift */,
+				78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */,
+				12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */,
+				F10954376731AA5088DDEBEA /* TripViewModel.swift */,
+			);
+			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		618A16311C0E70E03B7A0AD5 /* Drawer */ = {
+			isa = PBXGroup;
+			children = (
+				5210F08F016F1E68361D82DB /* AIDrawerView.swift */,
+				8C75D24BBF81B38093CE57B4 /* Components */,
+			);
+			path = Drawer;
+			sourceTree = "<group>";
+		};
+		6FFEF824A2F52318E5D77944 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				2DC264C7501410D7372ABFE9 /* Detail */,
+				618A16311C0E70E03B7A0AD5 /* Drawer */,
+				C89713A2F3FDEAC783174A58 /* List */,
+				9ECB9211EF6DA03A490F7696 /* Map */,
+				E9ED325A2A3402CFFF826220 /* Onboarding */,
+				927D8AB35EF017494E865104 /* Previews */,
+				417BB26D85130DC218537AAC /* Profile */,
+				A137896D47D94040DD0A9C35 /* Shared */,
+				04FB3BBA0DB6D392841BA92D /* Trips */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		8C75D24BBF81B38093CE57B4 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */,
+				5EFE7E456EC9AE78D349FF1F /* PlaceListComponent.swift */,
+				E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		927D8AB35EF017494E865104 /* Previews */ = {
+			isa = PBXGroup;
+			children = (
+				D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */,
+			);
+			path = Previews;
+			sourceTree = "<group>";
+		};
+		9ECB9211EF6DA03A490F7696 /* Map */ = {
+			isa = PBXGroup;
+			children = (
+				B25737D32F2BF5066893998E /* MapView.swift */,
+				FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */,
+			);
+			path = Map;
+			sourceTree = "<group>";
+		};
+		A137896D47D94040DD0A9C35 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				54E6F570FEC5900B20243363 /* CategoryPill.swift */,
+				7ECDC9A866952173B6DC923C /* EmptyStateView.swift */,
+				F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		AB4310B0998D8FA59B28D7F4 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AA5555D27FE182EFE3DDC93C /* AIResponse.swift */,
+				077202B483361C14C41E6962 /* Place.swift */,
+				02E74EF49B8A57D105D2D652 /* SharedTripData.swift */,
+				62A066A6F8F79E541E817AED /* Trip.swift */,
+				89976B73F7C977BD6F35B903 /* UserProfile.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AC364BC3AE941D4BCBDAC818 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				7D8FDE6E93564AB450C09578 /* AIParsingService.swift */,
+				3939451E82A6558254D3250D /* GooglePlacesService.swift */,
+				368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */,
+				DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */,
+				2EA2DE34F0656884DCAB54CD /* PrivyAuthService.swift */,
+				48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */,
+				09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		C89713A2F3FDEAC783174A58 /* List */ = {
+			isa = PBXGroup;
+			children = (
+				28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */,
+				1D14373C25E6C1A46308955A /* PlaceListView.swift */,
+			);
+			path = List;
+			sourceTree = "<group>";
+		};
+		D37D8D4B160A8BF7C6F69F94 /* WanderlyShareExtension */ = {
+			isa = PBXGroup;
+			children = (
+				71B4BE3FB34EFED93F712E17 /* Info.plist */,
+				52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */,
+				16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */,
+			);
+			path = WanderlyShareExtension;
+			sourceTree = "<group>";
+		};
+		D4876E130669B270D00D1540 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				03620D4EA81151AB71F38192 /* Wanderly.app */,
+				A57E086170BE289FC60E45C5 /* WanderlyClip.app */,
+				851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E9ED325A2A3402CFFF826220 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		EC9E8387A6D6DF481B325DBF /* WanderlyClip */ = {
+			isa = PBXGroup;
+			children = (
+				C2F4C10AEE6E547B29704866 /* ClipContentView.swift */,
+				560440B2921EE257D2BF57A1 /* SharedTripData.swift */,
+				760FB746C459D7D2917A3A71 /* WanderlyClip.entitlements */,
+				BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */,
+			);
+			path = WanderlyClip;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1E85095316CB310A976DDA9F /* Build configuration list for PBXNativeTarget "WanderlyShareExtension" */;
+			buildPhases = (
+				4A62812F23F8E51197482623 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WanderlyShareExtension;
+			packageProductDependencies = (
+			);
+			productName = WanderlyShareExtension;
+			productReference = 851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		70B8A21AF73E33F8B1BE0D31 /* Wanderly */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3ADEC6F85D8EC51D5FBF311E /* Build configuration list for PBXNativeTarget "Wanderly" */;
+			buildPhases = (
+				5F6C575670A099365C547BEA /* Sources */,
+				68C237C0965124415B58F445 /* Resources */,
+				A1B43C02DFFC85212E33C051 /* Frameworks */,
+				5CF4A66284D9D2D416664CFA /* Embed Foundation Extensions */,
+				31836989C0CC140F5363FF2D /* Embed App Clips */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BFD6D7A5DAE20AD61A7875C3 /* PBXTargetDependency */,
+				ED8B39FE01CC26EC54EE820D /* PBXTargetDependency */,
+			);
+			name = Wanderly;
+			packageProductDependencies = (
+				9AEC21E0AA21AA2589449ABB /* Privy */,
+			);
+			productName = Wanderly;
+			productReference = 03620D4EA81151AB71F38192 /* Wanderly.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C15508628E04BBA3344816C6 /* WanderlyClip */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEB984501EE222A00C07C2B7 /* Build configuration list for PBXNativeTarget "WanderlyClip" */;
+			buildPhases = (
+				4F1DEDAA154CDF07F328188C /* Sources */,
+				D926309CF2E0F99048F9EB42 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WanderlyClip;
+			packageProductDependencies = (
+			);
+			productName = WanderlyClip;
+			productReference = A57E086170BE289FC60E45C5 /* WanderlyClip.app */;
+			productType = "com.apple.product-type.application.on-demand-install-capable";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		E03D93A0B433FED35DCE12F1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					5E6CCD0BB89E25C77DA2CF32 = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
+					70B8A21AF73E33F8B1BE0D31 = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
+					C15508628E04BBA3344816C6 = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = C1FBE1035693947A0EB96631 /* Build configuration list for PBXProject "Wanderly" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 28117A7B622428ED58F18AB9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D4876E130669B270D00D1540 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				70B8A21AF73E33F8B1BE0D31 /* Wanderly */,
+				C15508628E04BBA3344816C6 /* WanderlyClip */,
+				5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		68C237C0965124415B58F445 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				66F92C2CA0CE791724D1D71F /* Assets.xcassets in Resources */,
+				83E19CAE97D2B1701467240E /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D926309CF2E0F99048F9EB42 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3C7C8030AE94DB96C22525E8 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4A62812F23F8E51197482623 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4F1DEDAA154CDF07F328188C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				94A09F6F9A7C50033699A242 /* ClipContentView.swift in Sources */,
+				BD194FECB33EC91F78CCEDFF /* SharedTripData.swift in Sources */,
+				37E5463A0876A9A8A488CBA5 /* WanderlyClipApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5F6C575670A099365C547BEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E8880348DF753D6DB2CA3B6C /* AIDrawerView.swift in Sources */,
+				348DE07F8D4F598B28DE45A6 /* AIDrawerViewModel.swift in Sources */,
+				76068D6F46F6328F2B1D2432 /* AIParsingService.swift in Sources */,
+				52DCC474C35F735154417A8D /* AIResponse.swift in Sources */,
+				428BB50934904B5BD89A32E9 /* CategoryPill.swift in Sources */,
+				3C47D91BEEB572F207301996 /* ClipContentPreview.swift in Sources */,
+				7D12FEF322E5753B2E2B1C58 /* Color+Theme.swift in Sources */,
+				74335232F64578F6C51A16C2 /* ContentView.swift in Sources */,
+				BCAD4123ACE867DA79F69A22 /* EmptyStateView.swift in Sources */,
+				AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */,
+				47655ADFBDE28A5156D9DF2C /* MapView.swift in Sources */,
+				A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */,
+				F9459E3F07900F355AD069FD /* NavigationCardComponent.swift in Sources */,
+				46A52BEE4475E8E11DDE344F /* NavigationService.swift in Sources */,
+				D8C6243F6D083E8C9EC2092D /* OnboardingView.swift in Sources */,
+				C97CF8F1B771B3956C8B86B3 /* PendingPlaceImportService.swift in Sources */,
+				8A13B9656469B56F6F99096A /* Place.swift in Sources */,
+				0D8DD94A2CFC096B7752E6FA /* PlaceBottomSheet.swift in Sources */,
+				E1E3F7D9319056F541095254 /* PlaceCard.swift in Sources */,
+				0BC95BCDBDCEA26A6A3BE1EC /* PlaceDetailView.swift in Sources */,
+				45E2727ABBA252A81A67B5F8 /* PlaceListComponent.swift in Sources */,
+				E0EF8B3281AF0AE07B3CA461 /* PlaceListView.swift in Sources */,
+				F2C02CDCA0EB3A3EBAC48016 /* PlaceListViewModel.swift in Sources */,
+				BD49BA2E1292FE93EC063A29 /* PlatformIcon.swift in Sources */,
+				3940D24F410C832173C2A3F7 /* PrivyAuthService.swift in Sources */,
+				19637D9F3EDFF2329A9979DB /* ProfileView.swift in Sources */,
+				A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */,
+				0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */,
+				F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */,
+				5ABFBF83CDFEF1512B2CD4A8 /* SupabaseService.swift in Sources */,
+				0BD4C6DA5B323497CFAFFE4E /* Trip.swift in Sources */,
+				6C2A34FA11F4149D5F1D26EA /* TripItineraryComponent.swift in Sources */,
+				4494A33E37F3FE7115D165A8 /* TripPlannerView.swift in Sources */,
+				25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */,
+				76D430AA3B1F4E1EB96B77CF /* TripViewModel.swift in Sources */,
+				C19497B630FAA95D35232A48 /* UserProfile.swift in Sources */,
+				D42B36179CADE7932242599D /* WanderlyAIService.swift in Sources */,
+				99C08C1AEBD94EC560476469 /* WanderlyApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BFD6D7A5DAE20AD61A7875C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */;
+			targetProxy = 0793CFF0DBC1BE794C95574E /* PBXContainerItemProxy */;
+		};
+		ED8B39FE01CC26EC54EE820D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C15508628E04BBA3344816C6 /* WanderlyClip */;
+			targetProxy = 67A6610BDF9C7946FBF06A49 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2D46DB50120E8CACA52D3DB9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Wanderly/Wanderly.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				INFOPLIST_FILE = Wanderly/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		315069C911C4F08B409C7FDF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WanderlyShareExtension/WanderlyShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WanderlyShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.ShareExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		565CE5E02CD7AADBF2829FA6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		83B3F3D2772FB2C342BD9EA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9DDC1D5A8B651CE6C3A803E0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = WanderlyShareExtension/WanderlyShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WanderlyShareExtension/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.ShareExtension;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ADC31ED9F4DA5AC4E75D4A1F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WanderlyClip/WanderlyClip.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_GENERATION_MODE = GeneratedFile;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.Clip;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CBD0331FE1D4A984A67AD47A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Wanderly/Wanderly.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				INFOPLIST_FILE = Wanderly/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EF405DE3B1A444B1FDECCEBD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = WanderlyClip/WanderlyClip.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_GENERATION_MODE = GeneratedFile;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.Clip;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1E85095316CB310A976DDA9F /* Build configuration list for PBXNativeTarget "WanderlyShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				315069C911C4F08B409C7FDF /* Debug */,
+				9DDC1D5A8B651CE6C3A803E0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3ADEC6F85D8EC51D5FBF311E /* Build configuration list for PBXNativeTarget "Wanderly" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CBD0331FE1D4A984A67AD47A /* Debug */,
+				2D46DB50120E8CACA52D3DB9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C1FBE1035693947A0EB96631 /* Build configuration list for PBXProject "Wanderly" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				83B3F3D2772FB2C342BD9EA3 /* Debug */,
+				565CE5E02CD7AADBF2829FA6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EEB984501EE222A00C07C2B7 /* Build configuration list for PBXNativeTarget "WanderlyClip" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ADC31ED9F4DA5AC4E75D4A1F /* Debug */,
+				EF405DE3B1A444B1FDECCEBD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/privy-io/privy-ios";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9AEC21E0AA21AA2589449ABB /* Privy */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CB803A4D865B909CF73C50FE /* XCRemoteSwiftPackageReference "privy-ios" */;
+			productName = Privy;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = E03D93A0B433FED35DCE12F1 /* Project object */;
+}

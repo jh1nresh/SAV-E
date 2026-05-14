@@ -24,6 +24,8 @@ targets:
     platform: iOS
     sources:
       - path: Wanderly
+        excludes:
+          - Resources/Secrets.plist
     dependencies:
       - package: Privy
         product: Privy
@@ -102,6 +104,8 @@ targets:
     platform: iOS
     sources:
       - path: WanderlyShareExtension
+        excludes:
+          - Secrets.plist
     settings:
       base:
         DEVELOPMENT_TEAM: JC6858UYM9

@@ -22,6 +22,11 @@ xcuserdata/
 Packages/
 Package.resolved
 *.xcodeproj
+!Wanderly.xcodeproj/
+!Wanderly.xcodeproj/**
+Wanderly.xcodeproj/**/xcuserdata/
+Wanderly.xcodeproj/**/*.xcuserstate
+Wanderly.xcodeproj/**/xcdebugger/
 node_modules/
 backend/dist/
 
