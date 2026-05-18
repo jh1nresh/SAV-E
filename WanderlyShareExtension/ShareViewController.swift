@@ -82,8 +82,10 @@ struct ShareExtensionView: View {
     @State private var sharedTitle: String = ""
     @State private var parsedPlace: ParsedPlace?
     @State private var reviewCandidate: PendingReviewCandidate?
+    @State private var reviewCandidates: [PendingReviewCandidate] = []
     @State private var isParsing = true
     @State private var isSaved = false
+    @State private var savedReviewCandidateCount: Int?
     @State private var parseError: String?
     @State private var selectedCategory: String = "food"
 
@@ -109,14 +111,20 @@ struct ShareExtensionView: View {
                             .font(.system(size: 56))
                             .foregroundColor(Color(hex: "A8B5A0"))
 
-                        Text("Saved to SAV-E!")
+                        Text(savedReviewCandidateCount == nil ? "Saved to SAV-E!" : "Added to Review")
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundColor(Color(hex: "2C2C2E"))
 
-                        Text("Open the app to see it on your map.")
+                        Text(savedReviewCandidateCount.map { count in
+                            count == 1
+                                ? "Open SAV-E to finish importing this candidate into Review."
+                                : "Open SAV-E to finish importing these \(count) candidates into Review."
+                        } ?? "Open the app to see it on your map.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
                     }
                     .frame(maxHeight: .infinity)
                 } else if let error = parseError {
@@ -134,8 +142,10 @@ struct ShareExtensionView: View {
                     }
                     .frame(maxHeight: .infinity)
                     .padding()
+                } else if !reviewCandidates.isEmpty {
+                    reviewCandidatesPreview(reviewCandidates)
                 } else if let candidate = reviewCandidate {
-                    reviewCandidatePreview(candidate)
+                    reviewCandidatesPreview([candidate])
                 } else if let place = parsedPlace {
                     placePreview(place)
                 }
@@ -252,10 +262,10 @@ struct ShareExtensionView: View {
         .padding()
     }
 
-    private func reviewCandidatePreview(_ candidate: PendingReviewCandidate) -> some View {
+    private func reviewCandidatesPreview(_ candidates: [PendingReviewCandidate]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Review Candidate")
+                Text(candidates.count == 1 ? "Review Candidate" : "Review Candidates")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -267,10 +277,10 @@ struct ShareExtensionView: View {
                         .cornerRadius(10)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(candidate.candidateName)
+                        Text(candidates.count == 1 ? candidates[0].candidateName : "\(candidates.count) possible places")
                             .font(.headline)
                             .foregroundColor(Color(hex: "2C2C2E"))
-                        Text(candidate.address.isEmpty ? "Needs address confirmation" : candidate.address)
+                        Text(candidates.count == 1 ? (candidates[0].address.isEmpty ? "Needs address confirmation" : candidates[0].address) : "Review each candidate in SAV-E before saving.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -287,7 +297,27 @@ struct ShareExtensionView: View {
             .background(Color(hex: "FFF8F0"))
             .cornerRadius(16)
 
-            if !candidate.evidence.isEmpty {
+            if candidates.count > 1 {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(candidate.candidateName)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(hex: "2C2C2E"))
+                                Text(candidate.address.isEmpty ? "Needs address confirmation" : candidate.address)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(Color.white.opacity(0.62))
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+            } else if let candidate = candidates.first, !candidate.evidence.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Evidence")
                         .font(.caption)
@@ -303,8 +333,8 @@ struct ShareExtensionView: View {
 
             Spacer()
 
-            Button(action: saveReviewCandidate) {
-                Text("Add to Review")
+            Button(action: saveReviewCandidates) {
+                Text(candidates.count == 1 ? "Add to Review" : "Add \(candidates.count) to Review")
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -376,6 +406,22 @@ struct ShareExtensionView: View {
             selectedCategory = metadataPlace.category
             isParsing = false
             return
+        }
+
+        if let sourceURL = URL(string: parseContent),
+           isSocialURL(sourceURL) {
+            let candidates = socialReviewCandidates(
+                from: metadata,
+                sharedTitle: sharedTitle,
+                sharedText: sharedText,
+                sourceURLString: parseContent
+            )
+            if !candidates.isEmpty {
+                reviewCandidates = candidates
+                selectedCategory = reviewCandidates.first?.category ?? "stay"
+                isParsing = false
+                return
+            }
         }
 
         if let sourceURL = URL(string: parseContent),
@@ -577,8 +623,11 @@ struct ShareExtensionView: View {
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: #"[ \t\f]+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\n\s+"#, with: "\n", options: .regularExpression)
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -681,6 +730,103 @@ struct ShareExtensionView: View {
             missingInfo: Array(Set(missingInfo)).sorted(),
             savedAt: Date()
         )
+    }
+
+    private func socialReviewCandidates(
+        from metadata: ShareMetadata,
+        sharedTitle: String,
+        sharedText: String,
+        sourceURLString: String
+    ) -> [PendingReviewCandidate] {
+        let evidenceText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        let lines = evidenceText
+            .components(separatedBy: .newlines)
+            .map(cleanHTMLText)
+            .filter { !$0.isEmpty }
+
+        var sections: [(name: String, details: [String])] = []
+        var currentName: String?
+        var currentDetails: [String] = []
+
+        for line in lines {
+            if let name = numberedCandidateName(from: line) {
+                if let currentName {
+                    sections.append((currentName, currentDetails))
+                }
+                currentName = name
+                currentDetails = []
+            } else if currentName != nil {
+                currentDetails.append(line)
+            }
+        }
+        if let currentName {
+            sections.append((currentName, currentDetails))
+        }
+
+        let candidates: [PendingReviewCandidate] = sections.compactMap { section in
+            let name = cleanPlaceName(section.name)
+            guard isUsablePlaceName(name) else { return nil }
+            let detailsText = section.details.joined(separator: "\n")
+            let address = firstLocationPin(in: detailsText) ?? cityAddress(in: detailsText) ?? ""
+            var evidence = [
+                "Source URL: \(sourceURLString)",
+                "Public metadata candidate: \(name)"
+            ]
+            if !address.isEmpty {
+                evidence.append("Location clue: \(address)")
+            }
+            if !detailsText.isEmpty {
+                evidence.append(String(detailsText.prefix(300)))
+            }
+
+            var missingInfo = ["Confirm official address", "Confirm coordinates", "Cross-check official source or map listing"]
+            if address.isEmpty {
+                missingInfo.append("No structured location metadata")
+            }
+
+            return PendingReviewCandidate(
+                candidateName: name,
+                address: address,
+                category: fallbackCategory(from: "\(name) \(detailsText)"),
+                sourceURL: sourceURLString,
+                sourceText: evidenceText.isEmpty ? nil : evidenceText,
+                evidence: evidence,
+                confidence: address.isEmpty ? 0.48 : 0.58,
+                missingInfo: Array(Set(missingInfo)).sorted(),
+                savedAt: Date()
+            )
+        }
+
+        var seenKeys = Set<String>()
+        return candidates.filter { candidate in
+            let key = "\(candidate.candidateName.lowercased())|\(candidate.address.lowercased())"
+            guard !seenKeys.contains(key) else { return false }
+            seenKeys.insert(key)
+            return true
+        }
+    }
+
+    private func numberedCandidateName(from line: String) -> String? {
+        firstRegexCapture(in: line, pattern: #"^\s*(?:\d{1,2}[\.)]|[①②③④⑤⑥⑦⑧⑨])\s*([^\n\r]+)"#)
+    }
+
+    private func firstLocationPin(in content: String) -> String? {
+        let patterns = [
+            #"📍\s*([^\n\r\.]+)"#,
+            #"\bLocation:\s*([^\n\r\.]+)"#
+        ]
+        for pattern in patterns {
+            if let match = firstRegexCapture(in: content, pattern: pattern) {
+                let cleaned = cleanHTMLText(match)
+                if !cleaned.isEmpty { return cleaned }
+            }
+        }
+        return nil
+    }
+
+    private func cityAddress(in content: String) -> String? {
+        firstRegexCapture(in: content, pattern: #"\b([A-Z][A-Za-z .'-]{2,40},\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO|Bali|Indonesia))\b"#)
+            .map(cleanHTMLText)
     }
 
     private func publicMetadataEvidence(from metadata: ShareMetadata, sharedTitle: String, sharedText: String) -> String {
@@ -1146,28 +1292,31 @@ struct ShareExtensionView: View {
             return
         }
 
+        savedReviewCandidateCount = nil
         isSaved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             extensionContext?.completeRequest(returningItems: nil)
         }
     }
 
-    private func saveReviewCandidate() {
-        guard let candidate = reviewCandidate else { return }
+    private func saveReviewCandidates() {
+        let candidates = reviewCandidates.isEmpty ? reviewCandidate.map { [$0] } ?? [] : reviewCandidates
+        guard !candidates.isEmpty else { return }
         guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) else {
             parseError = "Shared app storage is unavailable"
             return
         }
 
         var pending = loadPendingReviewCandidates(from: defaults)
-        pending.append(candidate)
+        pending.append(contentsOf: candidates)
         if let data = try? JSONEncoder().encode(pending) {
             defaults.set(data, forKey: WanderlySharedStorage.pendingReviewCandidatesKey)
         } else {
-            parseError = "Couldn't save this review candidate"
+            parseError = "Couldn't save review candidates"
             return
         }
 
+        savedReviewCandidateCount = candidates.count
         isSaved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             extensionContext?.completeRequest(returningItems: nil)

@@ -800,7 +800,9 @@ struct AIDrawerView: View {
         Task {
             do {
                 let count = try await onImportURLAsReviewCandidates(url)
-                addSpotStatus = count == 1 ? "Added 1 review candidate." : "Added \(count) review candidates."
+                addSpotStatus = count == 1
+                    ? "Added 1 candidate to Review. Confirm it before saving."
+                    : "Added \(count) candidates to Review. Confirm them before saving."
                 openReviewInbox()
             } catch {
                 addSpotStatus = error.localizedDescription
