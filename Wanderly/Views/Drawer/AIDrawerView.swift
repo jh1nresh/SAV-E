@@ -381,65 +381,34 @@ struct AIDrawerView: View {
     private var suggestionsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 12) {
-                    Button(action: { viewModel.showPlaceList = true }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "list.bullet")
-                            Text("My Places")
-                        }
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyTerracotta)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.wanderlyTerracotta.opacity(0.1))
-                        .cornerRadius(16)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        DrawerActionChip(
+                            title: "My Places",
+                            systemImage: "list.bullet",
+                            count: nil,
+                            action: { viewModel.showPlaceList = true }
+                        )
+
+                        DrawerActionChip(
+                            title: "Import",
+                            systemImage: "tray.and.arrow.down",
+                            count: nil,
+                            action: { showGoogleTakeoutImport = true }
+                        )
+
+                        DrawerActionChip(
+                            title: "Review",
+                            systemImage: "checklist.unchecked",
+                            count: reviewCandidates.isEmpty ? nil : reviewCandidates.count,
+                            action: openReviewInbox
+                        )
+
+                        SavedCountChip(count: viewModel.places.count)
                     }
-
-                    Button(action: { showGoogleTakeoutImport = true }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "tray.and.arrow.down")
-                            Text("Import")
-                        }
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyTerracotta)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.wanderlyTerracotta.opacity(0.1))
-                        .cornerRadius(16)
-                    }
-
-                    Button(action: openReviewInbox) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checklist.unchecked")
-                            Text("Review")
-                            if !reviewCandidates.isEmpty {
-                                Text("\(reviewCandidates.count)")
-                                    .font(.caption2.monospacedDigit())
-                                    .fontWeight(.bold)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Color.wanderlyTerracotta.opacity(0.16))
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyTerracotta)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.wanderlyTerracotta.opacity(0.1))
-                        .cornerRadius(16)
-                    }
-
-                    Text("\(viewModel.places.count) saved")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Spacer()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 2)
                 }
-                .padding(.horizontal, 16)
                 .padding(.top, 14)
 
                 addSpotsHub
@@ -1017,6 +986,65 @@ private struct CandidateActionButton: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+    }
+}
+
+private struct DrawerActionChip: View {
+    var title: String
+    var systemImage: String
+    var count: Int?
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 16)
+
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                if let count {
+                    Text("\(count)")
+                        .font(.caption2.monospacedDigit().weight(.bold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.wanderlyTerracotta.opacity(0.14))
+                        .clipShape(Capsule())
+                }
+            }
+            .foregroundColor(.wanderlyTerracotta)
+            .frame(height: 38)
+            .padding(.horizontal, 12)
+            .background(Color.wanderlyTerracotta.opacity(0.09))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+}
+
+private struct SavedCountChip: View {
+    var count: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.caption.weight(.semibold))
+            Text("\(count) saved")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .foregroundColor(.secondary)
+        .frame(height: 38)
+        .padding(.horizontal, 12)
+        .background(Color.white.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
