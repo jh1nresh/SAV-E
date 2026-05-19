@@ -2,8 +2,8 @@ import Foundation
 
 enum WanderlySharedStorage {
     static let appGroupSuiteName = "group.com.wanderly.app"
-    static let pendingPlacesKey = "pendingPlaces"
-    static let pendingReviewCandidatesKey = "pendingReviewCandidates"
+    static let pendingPlacesFileName = "pending-places.json"
+    static let pendingReviewCandidatesFileName = "pending-review-candidates.json"
 }
 
 struct PendingSharedPlace: Codable {
@@ -63,64 +63,80 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 final class PendingPlaceImportService {
     static let shared = PendingPlaceImportService()
 
-    private let defaults: UserDefaults?
+    private let fileManager: FileManager
 
-    init(defaults: UserDefaults? = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName)) {
-        self.defaults = defaults
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
     }
 
     func consumePendingPlaces() -> [PendingSharedPlace] {
-        guard let defaults else { return [] }
-        let pending = loadPendingPlaces()
-        defaults.removeObject(forKey: WanderlySharedStorage.pendingPlacesKey)
-        return pending
+        consumePendingArray(named: WanderlySharedStorage.pendingPlacesFileName, as: PendingSharedPlace.self)
     }
 
     func restorePendingPlaces(_ places: [PendingSharedPlace]) {
-        guard !places.isEmpty else { return }
-        let existing = loadPendingPlaces()
-        save(existing + places)
+        appendPendingArray(places, named: WanderlySharedStorage.pendingPlacesFileName)
     }
 
     func consumePendingReviewCandidates() -> [PendingReviewCandidate] {
-        guard let defaults else { return [] }
-        let pending = loadPendingReviewCandidates()
-        defaults.removeObject(forKey: WanderlySharedStorage.pendingReviewCandidatesKey)
-        return pending
+        consumePendingArray(named: WanderlySharedStorage.pendingReviewCandidatesFileName, as: PendingReviewCandidate.self)
     }
 
     func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate]) {
-        guard !candidates.isEmpty else { return }
-        let existing = loadPendingReviewCandidates()
-        saveReviewCandidates(existing + candidates)
+        appendPendingArray(candidates, named: WanderlySharedStorage.pendingReviewCandidatesFileName)
     }
 
-    private func loadPendingPlaces() -> [PendingSharedPlace] {
-        guard let defaults else { return [] }
-        guard let data = defaults.data(forKey: WanderlySharedStorage.pendingPlacesKey) else {
-            return []
+    private func consumePendingArray<Element: Decodable>(named fileName: String, as elementType: Element.Type) -> [Element] {
+        guard let url = pendingFileURL(named: fileName) else { return [] }
+        var result: [Element] = []
+        coordinate(url: url, purpose: "consume \(fileName)") {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            do {
+                result = try loadArray([Element].self, from: url)
+                try fileManager.removeItem(at: url)
+            } catch {
+                print("PendingPlaceImportService: preserving unreadable \(fileName): \(error)")
+                result = []
+            }
         }
-        return (try? JSONDecoder().decode([PendingSharedPlace].self, from: data)) ?? []
+        return result
     }
 
-    private func save(_ places: [PendingSharedPlace]) {
-        guard let defaults else { return }
-        guard let data = try? JSONEncoder().encode(places) else { return }
-        defaults.set(data, forKey: WanderlySharedStorage.pendingPlacesKey)
-    }
-
-    private func loadPendingReviewCandidates() -> [PendingReviewCandidate] {
-        guard let defaults else { return [] }
-        guard let data = defaults.data(forKey: WanderlySharedStorage.pendingReviewCandidatesKey) else {
-            return []
+    private func appendPendingArray<Element: Codable>(_ items: [Element], named fileName: String) {
+        guard !items.isEmpty, let url = pendingFileURL(named: fileName) else { return }
+        coordinate(url: url, purpose: "append \(fileName)") {
+            do {
+                try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                let existing = try loadArray([Element].self, from: url)
+                let data = try JSONEncoder().encode(existing + items)
+                try data.write(to: url, options: [.atomic])
+            } catch {
+                print("PendingPlaceImportService: failed to append \(fileName): \(error)")
+            }
         }
-        return (try? JSONDecoder().decode([PendingReviewCandidate].self, from: data)) ?? []
     }
 
-    private func saveReviewCandidates(_ candidates: [PendingReviewCandidate]) {
-        guard let defaults else { return }
-        guard let data = try? JSONEncoder().encode(candidates) else { return }
-        defaults.set(data, forKey: WanderlySharedStorage.pendingReviewCandidatesKey)
+    private func loadArray<Element: Decodable>(_ type: [Element].Type, from url: URL) throws -> [Element] {
+        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(type, from: data)
+    }
+
+    private func coordinate(url: URL, purpose: String, _ work: () -> Void) {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        coordinator.coordinate(writingItemAt: url, options: [], error: &coordinationError) { _ in
+            work()
+        }
+        if let coordinationError {
+            print("PendingPlaceImportService: failed to coordinate \(purpose): \(coordinationError)")
+        }
+    }
+
+    private func pendingFileURL(named fileName: String) -> URL? {
+        guard let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: WanderlySharedStorage.appGroupSuiteName) else {
+            return nil
+        }
+        return containerURL.appendingPathComponent(fileName)
     }
 }
 

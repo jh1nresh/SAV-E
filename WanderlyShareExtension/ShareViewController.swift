@@ -38,8 +38,8 @@ struct ParsedPlace {
 
 private enum WanderlySharedStorage {
     static let appGroupSuiteName = "group.com.wanderly.app"
-    static let pendingPlacesKey = "pendingPlaces"
-    static let pendingReviewCandidatesKey = "pendingReviewCandidates"
+    static let pendingPlacesFileName = "pending-places.json"
+    static let pendingReviewCandidatesFileName = "pending-review-candidates.json"
 }
 
 private struct PendingSharedPlace: Codable {
@@ -1466,18 +1466,11 @@ struct ShareExtensionView: View {
             savedAt: Date()
         )
 
-        guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) else {
+        guard let fileURL = appGroupFileURL(named: WanderlySharedStorage.pendingPlacesFileName) else {
             parseError = "Shared app storage is unavailable"
             return
         }
-        var pending = loadPendingPlaces(from: defaults)
-        pending.append(pendingPlace)
-        if let data = try? JSONEncoder().encode(pending) {
-            defaults.set(data, forKey: WanderlySharedStorage.pendingPlacesKey)
-        } else {
-            parseError = "Couldn't save this place"
-            return
-        }
+        guard appendPendingItems([pendingPlace], to: fileURL, as: PendingSharedPlace.self) else { return }
 
         savedReviewCandidateCount = nil
         isSaved = true
@@ -1489,19 +1482,12 @@ struct ShareExtensionView: View {
     private func saveReviewCandidates() {
         let candidates = reviewCandidates.isEmpty ? reviewCandidate.map { [$0] } ?? [] : reviewCandidates
         guard !candidates.isEmpty else { return }
-        guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName) else {
+        guard let fileURL = appGroupFileURL(named: WanderlySharedStorage.pendingReviewCandidatesFileName) else {
             parseError = "Shared app storage is unavailable"
             return
         }
 
-        var pending = loadPendingReviewCandidates(from: defaults)
-        pending.append(contentsOf: candidates)
-        if let data = try? JSONEncoder().encode(pending) {
-            defaults.set(data, forKey: WanderlySharedStorage.pendingReviewCandidatesKey)
-        } else {
-            parseError = "Couldn't save review candidates"
-            return
-        }
+        guard appendPendingItems(candidates, to: fileURL, as: PendingReviewCandidate.self) else { return }
 
         savedReviewCandidateCount = candidates.count
         isSaved = true
@@ -1510,23 +1496,8 @@ struct ShareExtensionView: View {
         }
     }
 
-    private func loadPendingPlaces(from defaults: UserDefaults) -> [PendingSharedPlace] {
-        guard let data = defaults.data(forKey: WanderlySharedStorage.pendingPlacesKey) else {
-            return []
-        }
-        return (try? JSONDecoder().decode([PendingSharedPlace].self, from: data)) ?? []
-    }
-
-    private func loadPendingReviewCandidates(from defaults: UserDefaults) -> [PendingReviewCandidate] {
-        guard let data = defaults.data(forKey: WanderlySharedStorage.pendingReviewCandidatesKey) else {
-            return []
-        }
-        return (try? JSONDecoder().decode([PendingReviewCandidate].self, from: data)) ?? []
-    }
-
     private func saveSourceOnlyMemory(_ source: String, reason: String) {
-        guard let defaults = UserDefaults(suiteName: WanderlySharedStorage.appGroupSuiteName),
-              let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WanderlySharedStorage.appGroupSuiteName) else {
+        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: WanderlySharedStorage.appGroupSuiteName) else {
             return
         }
 
@@ -1546,13 +1517,65 @@ struct ShareExtensionView: View {
         records.insert(record, at: 0)
 
         guard let data = try? JSONEncoder.shareMemory.encode(records) else { return }
-        try? data.write(to: fileURL, options: [.atomic])
-        defaults.synchronize()
+        _ = write(data, to: fileURL)
     }
 
     private func loadMemoryRecords(from fileURL: URL) -> [ShareMemoryRecord] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         return (try? JSONDecoder.shareMemory.decode([ShareMemoryRecord].self, from: data)) ?? []
+    }
+
+    private func appGroupFileURL(named fileName: String) -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: WanderlySharedStorage.appGroupSuiteName)?
+            .appendingPathComponent(fileName)
+    }
+
+    private func appendPendingItems<Element: Codable>(_ items: [Element], to fileURL: URL, as elementType: Element.Type) -> Bool {
+        guard !items.isEmpty else { return true }
+
+        var success = false
+        let coordinated = coordinate(fileURL, purpose: "append pending queue") {
+            do {
+                let existing = try loadArray([Element].self, from: fileURL)
+                let data = try JSONEncoder().encode(existing + items)
+                success = write(data, to: fileURL)
+            } catch {
+                parseError = "Couldn't read shared app storage"
+                success = false
+            }
+        }
+        return coordinated && success
+    }
+
+    private func loadArray<Element: Decodable>(_ type: [Element].Type, from fileURL: URL) throws -> [Element] {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
+        let data = try Data(contentsOf: fileURL)
+        return try JSONDecoder().decode(type, from: data)
+    }
+
+    private func coordinate(_ fileURL: URL, purpose: String, _ work: () -> Void) -> Bool {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        coordinator.coordinate(writingItemAt: fileURL, options: [], error: &coordinationError) { _ in
+            work()
+        }
+        if coordinationError != nil {
+            parseError = "Couldn't coordinate shared app storage"
+            return false
+        }
+        return true
+    }
+
+    private func write(_ data: Data, to fileURL: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: fileURL, options: [.atomic])
+            return true
+        } catch {
+            parseError = "Couldn't write shared app storage"
+            return false
+        }
     }
 
     // MARK: - Helpers
