@@ -1,0 +1,32 @@
+{
+  "schema": "reservation.quote.v0",
+  "id": "quote_ulaman_2026_05_19_1930",
+  "cardId": "save_google_maps_ulaman_confirmed",
+  "capability": "SLR.restaurants.search_availability",
+  "placeRef": {
+    "name": "Ulaman Eco Luxury Resort",
+    "sourceUrl": "https://www.google.com/maps/place/Ulaman+Bali/@-8.5929653,115.1305649,17z"
+  },
+  "requestedAt": "2026-05-19T18:45:00-07:00",
+  "partySize": 2,
+  "dateTime": "2026-05-19T19:30:00-07:00",
+  "provider": "manual",
+  "status": "available",
+  "options": [
+    {
+      "time": "19:30",
+      "partySize": 2,
+      "depositRequired": false,
+      "cancellationPolicy": "unknown",
+      "handoffUrl": "https://example.com/handoff/ulaman-availability"
+    }
+  ],
+  "expiresAt": "2026-05-19T18:55:00-07:00",
+  "riskLevel": "quote",
+  "sideEffect": false,
+  "agentToolCallTrace": {
+    "table": "agent_tool_calls",
+    "status": "succeeded",
+    "autoBook": false
+  }
+}

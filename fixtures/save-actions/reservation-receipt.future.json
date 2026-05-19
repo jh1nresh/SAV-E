@@ -1,0 +1,26 @@
+{
+  "schema": "reservation.receipt.v0",
+  "id": "res_future_manual_confirmation",
+  "cardId": "save_google_maps_ulaman_confirmed",
+  "quoteId": "quote_ulaman_2026_05_19_1930",
+  "placeRef": {
+    "name": "Ulaman Eco Luxury Resort",
+    "sourceUrl": "https://www.google.com/maps/place/Ulaman+Bali/@-8.5929653,115.1305649,17z"
+  },
+  "provider": "manual",
+  "reservationTime": "2026-05-19T19:30:00-07:00",
+  "partySize": 2,
+  "status": "confirmed",
+  "confirmationCode": "redacted",
+  "proofLevel": "manual_confirmation",
+  "riskLevel": "hold",
+  "userConfirmed": true,
+  "sideEffect": true,
+  "createdAt": "2026-05-19T18:58:00-07:00",
+  "executionBoundary": {
+    "fixtureOnly": true,
+    "externalBookingApiCalled": false,
+    "paymentApiCalled": false,
+    "notes": "This fixture documents future receipt shape only. V1 must not create reservations automatically."
+  }
+}

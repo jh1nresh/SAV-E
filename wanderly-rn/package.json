@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "export:web": "expo export -p web && node scripts/patch-web-bundle.js",
     "check:import-links": "node scripts/check-import-link-fixtures.js",
-    "check:save-cards": "node scripts/check-save-card-fixtures.js"
+    "check:save-cards": "node scripts/check-save-card-fixtures.js",
+    "check:save-actions": "node scripts/check-save-action-fixtures.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

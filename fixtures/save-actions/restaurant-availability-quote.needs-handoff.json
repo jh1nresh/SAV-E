@@ -1,0 +1,32 @@
+{
+  "schema": "reservation.quote.v0",
+  "id": "quote_riverside_2026_05_19_handoff",
+  "cardId": "save_luma_agent_dinner_source_only",
+  "capability": "SLR.restaurants.search_availability",
+  "placeRef": {
+    "name": "Riverside Hall",
+    "sourceUrl": "https://lu.ma/save-agent-dinner-at-riverside-hall"
+  },
+  "requestedAt": "2026-05-19T18:50:00-07:00",
+  "partySize": 4,
+  "dateTime": "2026-05-20T20:00:00-07:00",
+  "provider": "unknown",
+  "status": "needs_handoff",
+  "options": [],
+  "expiresAt": "2026-05-19T19:00:00-07:00",
+  "riskLevel": "quote",
+  "sideEffect": false,
+  "handoff": {
+    "reason": "Exact venue address or provider is unavailable from the source card.",
+    "requiresUserInput": [
+      "Confirm official venue",
+      "Confirm date/time",
+      "Confirm acceptable booking provider"
+    ]
+  },
+  "agentToolCallTrace": {
+    "table": "agent_tool_calls",
+    "status": "succeeded",
+    "autoBook": false
+  }
+}
