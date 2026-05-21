@@ -424,7 +424,7 @@ struct ShareExtensionView: View {
 
         if let sourceURL = URL(string: parseContent),
            isSocialURL(sourceURL) {
-            let candidates = socialReviewCandidates(
+            let candidates = await socialAnalysisReviewCandidates(
                 from: metadata,
                 sharedTitle: sharedTitle,
                 sharedText: sharedText,
@@ -436,76 +436,6 @@ struct ShareExtensionView: View {
                 isParsing = false
                 return
             }
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let candidate = captionNamedSocialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: parseContent
-           ) {
-            reviewCandidate = candidate
-            selectedCategory = candidate.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let candidate = chineseSocialTitleReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: parseContent
-           ) {
-            reviewCandidate = candidate
-            selectedCategory = candidate.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let candidate = captionLineSocialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: parseContent
-           ) {
-            reviewCandidate = candidate
-            selectedCategory = candidate.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let candidate = socialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: parseContent
-           ) {
-            reviewCandidate = candidate
-            selectedCategory = candidate.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let candidate = await ocrFallbackReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: parseContent
-           ) {
-            reviewCandidate = candidate
-            selectedCategory = candidate.category
-            isParsing = false
-            return
         }
 
         let aiContent = [sharedTitle, sharedText, metadata.title, metadata.description, parseContent]
@@ -1003,6 +933,108 @@ struct ShareExtensionView: View {
         )
     }
 
+    private func socialAnalysisReviewCandidates(
+        from metadata: ShareMetadata,
+        sharedTitle: String,
+        sharedText: String,
+        sourceURLString: String
+    ) async -> [PendingReviewCandidate] {
+        var candidates = socialReviewCandidates(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        )
+        if let candidate = captionNamedSocialReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+        if let candidate = chineseSocialTitleReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+        if let candidate = captionLineSocialReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+        if let candidate = socialReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+        if let candidate = await ocrFallbackReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+
+        return rankedSocialAnalysisCandidates(candidates.map(markAsSocialAnalysisCandidate))
+    }
+
+    private func rankedSocialAnalysisCandidates(_ candidates: [PendingReviewCandidate]) -> [PendingReviewCandidate] {
+        var seenKeys = Set<String>()
+        return candidates
+            .sorted { lhs, rhs in
+                socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
+            }
+            .filter { candidate in
+                let key = "\(candidate.candidateName.lowercased())|\(candidate.address.lowercased())"
+                guard !seenKeys.contains(key) else { return false }
+                seenKeys.insert(key)
+                return true
+            }
+    }
+
+    private func socialAnalysisScore(_ candidate: PendingReviewCandidate) -> Double {
+        var score = candidate.confidence
+        let evidence = candidate.evidence.joined(separator: " ").lowercased()
+        if !candidate.address.isEmpty { score += 0.18 }
+        if evidence.contains("ocr-derived candidate") { score += 0.08 }
+        if evidence.contains("named place") || evidence.contains("named venue") || evidence.contains("place line") { score += 0.16 }
+        if evidence.contains("resolved public profile") { score += 0.12 }
+        if evidence.contains("instagram handle") || evidence.contains("social handle") { score += 0.04 }
+        if SocialPlaceEvidenceScorer.isRejectedTitle(candidate.candidateName) { score -= 1.0 }
+        return score
+    }
+
+    private func markAsSocialAnalysisCandidate(_ candidate: PendingReviewCandidate) -> PendingReviewCandidate {
+        var analyzed = candidate
+        analyzed.evidence = appendUniqueEvidence(
+            analyzed.evidence,
+            ["Analysis pipeline: collected metadata/caption/OCR anchors, scored candidate evidence, and kept unresolved fields for review"]
+        )
+        return analyzed
+    }
+
+    private func appendUniqueEvidence(_ values: [String], _ newValues: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values + newValues {
+            guard !value.isEmpty, !seen.contains(value) else { continue }
+            seen.insert(value)
+            result.append(value)
+        }
+        return result
+    }
+
     private func socialReviewCandidates(
         from metadata: ShareMetadata,
         sharedTitle: String,
@@ -1138,9 +1170,23 @@ struct ShareExtensionView: View {
         guard lines.count >= 2 else { return nil }
 
         for (index, line) in lines.enumerated() where looksLikeAddressLine(line) {
+            let priorLines = Array(lines.prefix(index))
+
+            // Prefer structural venue anchors over the closest freeform line.
+            // This mirrors the manual analysis flow: first look for an explicit
+            // venue token (`Venue / menu`, quoted venue, or handle), then use the
+            // address as corroborating evidence. It avoids treating review-section
+            // headers, dishes, or prose near the address as place names.
+            for priorLine in priorLines {
+                guard let candidate = candidateNameFromCaptionLine(priorLine) else { continue }
+                if isLikelyCaptionPlaceName(candidate) {
+                    return (candidate, line)
+                }
+            }
+
             var previousIndex = index - 1
             while previousIndex >= 0 {
-                let candidate = candidateNameFromCaptionLine(lines[previousIndex]) ?? cleanPlaceName(lines[previousIndex])
+                let candidate = cleanPlaceName(lines[previousIndex])
                 if isLikelyCaptionPlaceName(candidate) {
                     return (candidate, line)
                 }

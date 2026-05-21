@@ -60,6 +60,7 @@ enum SocialPlaceEvidenceScorer {
         guard !looksLikeAddressLine(value),
               !looksLikeOperatingHoursLine(value),
               !looksLikeReviewMetricLine(value),
+              !looksLikeMenuOrPriceLine(value),
               !looksLikeMarketingLine(value),
               !looksLikeHashtagsOnlyLine(value),
               !looksLikeGenericProductOrCityLine(value),
@@ -78,6 +79,7 @@ enum SocialPlaceEvidenceScorer {
         looksLikeAddressLine(value) ||
             looksLikeOperatingHoursLine(value) ||
             looksLikeReviewMetricLine(value) ||
+            looksLikeMenuOrPriceLine(value) ||
             looksLikeMarketingLine(value) ||
             looksLikeHashtagsOnlyLine(value) ||
             looksLikeGenericProductOrCityLine(value)
@@ -108,13 +110,23 @@ enum SocialPlaceEvidenceScorer {
             of: #"(美味程度|環境衛生|环境卫生|服务态度|服務態度|再訪意願|再访意愿|評分|评分|rating|review)\s*[：:]"#,
             options: [.regularExpression, .caseInsensitive]
         ) != nil ||
-        value.range(of: #"^[^\n]{0,20}[：:].*[🌕🌖🌗🌘🌑⭐★]"#, options: [.regularExpression]) != nil
+        value.range(of: #"^[^\n]{0,20}[：:].*[🌕🌖🌗🌘🌑⭐★]"#, options: [.regularExpression]) != nil ||
+        value.range(of: #"^(整體|整体|總評|总评|補充|补充)\s*$"#, options: [.regularExpression]) != nil
+    }
+
+    static func looksLikeMenuOrPriceLine(_ value: String) -> Bool {
+        value.range(
+            of: #"(?i)(以下餐點及價位|以下餐点及价位|餐點及價位|餐点及价位|menu|price)"#,
+            options: [.regularExpression]
+        ) != nil ||
+        value.range(of: #"(?:[$＄]|NT\$?|TWD|¥|￥)\s*\d{2,6}|\d{2,6}\s*(?:元|円|日圓|日圆)"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     static func looksLikeMarketingLine(_ value: String) -> Bool {
         let patterns = [
             #"最難訂|更難搶|不是米其林|不是餐廳|文化盛宴|文化大秀|門票|時段|位置交給|短短\d+分鐘|從.+到.+"#,
             #"台南爆漿巴斯克|巴斯克控不能錯過|不要說你吃過巴斯克蛋糕|一入口直接幸福感爆棚"#,
+            #"^(?:💡\s*)?(補充|补充)\s*(?:💡)?|既視感|点就对了|點就對了"#,
             #"(?i)follow|save this|likes|comments|instagram|must try|don't miss|viral"#
         ]
         return patterns.contains { pattern in

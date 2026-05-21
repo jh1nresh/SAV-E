@@ -98,21 +98,62 @@ final class SocialLinkReviewCandidateService {
     }
 
     func reviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) -> [PendingReviewCandidate] {
-        var candidates = numberedCandidates(from: evidenceText, sourceURL: sourceURL)
-        if candidates.isEmpty, let captionCandidate = captionNamedCandidate(from: evidenceText, sourceURL: sourceURL) {
-            candidates = [captionCandidate]
+        let candidates = analyzedCandidates(from: evidenceText, sourceURL: sourceURL)
+        return rankedCandidates(candidates)
+    }
+
+    private func analyzedCandidates(from evidenceText: String, sourceURL: String) -> [PendingReviewCandidate] {
+        var candidates: [PendingReviewCandidate] = []
+        candidates.append(contentsOf: numberedCandidates(from: evidenceText, sourceURL: sourceURL))
+        if let captionCandidate = captionNamedCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(captionCandidate)
         }
-        if candidates.isEmpty, let titleCandidate = chineseSocialTitleCandidate(from: evidenceText, sourceURL: sourceURL) {
-            candidates = [titleCandidate]
+        if let titleCandidate = chineseSocialTitleCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(titleCandidate)
         }
-        if candidates.isEmpty, let lineCandidate = captionLineCandidate(from: evidenceText, sourceURL: sourceURL) {
-            candidates = [lineCandidate]
+        if let lineCandidate = captionLineCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(lineCandidate)
         }
-        if candidates.isEmpty, let handleCandidate = handleCandidate(from: evidenceText, sourceURL: sourceURL) {
-            candidates = [handleCandidate]
+        if let handleCandidate = handleCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(handleCandidate)
         }
 
+        return candidates.map(markAsAnalyzedCandidate)
+    }
+
+    private func rankedCandidates(_ candidates: [PendingReviewCandidate]) -> [PendingReviewCandidate] {
+        var seenKeys = Set<String>()
         return candidates
+            .sorted { lhs, rhs in
+                socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
+            }
+            .filter { candidate in
+                let key = "\(candidate.candidateName.lowercased())|\(candidate.address.lowercased())"
+                guard !seenKeys.contains(key) else { return false }
+                seenKeys.insert(key)
+                return true
+            }
+    }
+
+    private func socialAnalysisScore(_ candidate: PendingReviewCandidate) -> Double {
+        var score = candidate.confidence
+        let evidence = candidate.evidence.joined(separator: " ").lowercased()
+        if !candidate.address.isEmpty { score += 0.18 }
+        if evidence.contains("venue anchor") || evidence.contains("named place") { score += 0.16 }
+        if evidence.contains("resolved public profile") { score += 0.12 }
+        if evidence.contains("social handle") { score += 0.04 }
+        if evidence.contains("source url") { score += 0.01 }
+        if SocialPlaceEvidenceScorer.isRejectedTitle(candidate.candidateName) { score -= 1.0 }
+        return score
+    }
+
+    private func markAsAnalyzedCandidate(_ candidate: PendingReviewCandidate) -> PendingReviewCandidate {
+        var analyzed = candidate
+        analyzed.evidence = appendUnique(
+            analyzed.evidence,
+            ["Analysis pipeline: collected metadata/caption anchors, scored candidate evidence, and kept unresolved fields for review"]
+        )
+        return analyzed
     }
 
     private func fetchMetadata(from url: URL) async -> PublicMetadata {
@@ -464,9 +505,23 @@ final class SocialLinkReviewCandidateService {
         guard lines.count >= 2 else { return nil }
 
         for (index, line) in lines.enumerated() where looksLikeAddressLine(line) {
+            let priorLines = Array(lines.prefix(index))
+
+            // Prefer structural venue anchors over the closest freeform line.
+            // This mirrors the manual analysis flow: first look for an explicit
+            // venue token (`Venue / menu`, quoted venue, or handle), then use the
+            // address as corroborating evidence. It avoids treating review-section
+            // headers, dishes, or prose near the address as place names.
+            for priorLine in priorLines {
+                guard let candidate = candidateNameFromCaptionLine(priorLine) else { continue }
+                if isLikelyCaptionPlaceName(candidate) {
+                    return (candidate, line)
+                }
+            }
+
             var previousIndex = index - 1
             while previousIndex >= 0 {
-                let candidate = candidateNameFromCaptionLine(lines[previousIndex]) ?? cleanCandidateName(lines[previousIndex])
+                let candidate = cleanCandidateName(lines[previousIndex])
                 if isLikelyCaptionPlaceName(candidate) {
                     return (candidate, line)
                 }
