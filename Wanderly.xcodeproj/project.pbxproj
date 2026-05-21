@@ -15,6 +15,7 @@
 		227F30DF4C70A4290E51F93D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A29B2157900BCDDFE28B627B /* ZIPFoundation */; };
 		25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D582904A9679056480966665 /* TripTimelineCard.swift */; };
 		2677F52D743629F377833945 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D361AE888D21B3766DD265FD /* LocationService.swift */; };
+		2BA4D87BB9CF09131F768B8C /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */; };
 		33757E80FAA9F8BC208B06D5 /* WanderlyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		348DE07F8D4F598B28DE45A6 /* AIDrawerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */; };
 		37E5463A0876A9A8A488CBA5 /* WanderlyClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */; };
@@ -170,6 +171,7 @@
 		C09120C4FFC2D6CA18D10FDF /* SaveLocalVaultService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultService.swift; sourceTree = "<group>"; };
 		C2F4C10AEE6E547B29704866 /* ClipContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentView.swift; sourceTree = "<group>"; };
 		C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCardComponent.swift; sourceTree = "<group>"; };
+		CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
 		D361AE888D21B3766DD265FD /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentPreview.swift; sourceTree = "<group>"; };
 		D582904A9679056480966665 /* TripTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripTimelineCard.swift; sourceTree = "<group>"; };
@@ -410,6 +412,7 @@
 				71B4BE3FB34EFED93F712E17 /* Info.plist */,
 				77C0511D8DDA1FE33188BAB6 /* Secrets.plist */,
 				52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */,
+				CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */,
 				16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */,
 			);
 			path = WanderlyShareExtension;
@@ -644,6 +647,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */,
+				2BA4D87BB9CF09131F768B8C /* SocialOCRCandidateHeuristics.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

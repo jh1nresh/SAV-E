@@ -2,6 +2,7 @@ import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
 import CoreLocation
+import Vision
 
 class ShareViewController: UIViewController {
     override func viewDidLoad() {
@@ -59,6 +60,7 @@ private struct ShareMetadata {
     var resolvedURL: String?
     var title: String?
     var description: String?
+    var imageData: Data?
 }
 
 private struct PendingReviewCandidate: Codable {
@@ -492,6 +494,20 @@ struct ShareExtensionView: View {
             return
         }
 
+        if let sourceURL = URL(string: parseContent),
+           isSocialURL(sourceURL),
+           let candidate = await ocrFallbackReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: parseContent
+           ) {
+            reviewCandidate = candidate
+            selectedCategory = candidate.category
+            isParsing = false
+            return
+        }
+
         let aiContent = [sharedTitle, sharedText, metadata.title, metadata.description, parseContent]
             .compactMap { $0 }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -625,13 +641,39 @@ struct ShareExtensionView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             let resolvedURL = response.url?.absoluteString ?? url.absoluteString
             let html = String(data: data.prefix(200_000), encoding: .utf8) ?? ""
+            let imageData = await metadataImageData(in: html, baseURL: response.url ?? url)
+            print("SAV-E share metadata imageData bytes=\(imageData?.count ?? 0)")
             return ShareMetadata(
                 resolvedURL: resolvedURL,
                 title: metadataValue(in: html, keys: ["og:title", "twitter:title", "title"]),
-                description: metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
+                description: metadataValue(in: html, keys: ["og:description", "twitter:description", "description"]),
+                imageData: imageData
             )
         } catch {
             return ShareMetadata(resolvedURL: url.absoluteString, title: nil, description: nil)
+        }
+    }
+
+    private func metadataImageData(in html: String, baseURL: URL) async -> Data? {
+        guard let imageValue = metadataValue(in: html, keys: ["og:image", "twitter:image", "image"]),
+              let imageURL = URL(string: imageValue, relativeTo: baseURL)?.absoluteURL,
+              imageURL.scheme?.hasPrefix("http") == true else {
+            return nil
+        }
+
+        var request = URLRequest(url: imageURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard data.count <= 5_000_000,
+                  (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 else {
+                return nil
+            }
+            return data
+        } catch {
+            return nil
         }
     }
 
@@ -785,6 +827,75 @@ struct ShareExtensionView: View {
             missingInfo: Array(Set(missingInfo)).sorted(),
             savedAt: Date()
         )
+    }
+
+    private func ocrFallbackReviewCandidate(
+        from metadata: ShareMetadata,
+        sharedTitle: String,
+        sharedText: String,
+        sourceURLString: String
+    ) async -> PendingReviewCandidate? {
+        guard let imageData = metadata.imageData else { return nil }
+        let ocrLines = await recognizedTextLines(from: imageData)
+        guard let result = SocialOCRCandidateHeuristics.candidate(from: ocrLines) else { return nil }
+
+        let captionText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        let ocrText = ocrLines.joined(separator: "\n")
+        let combinedText = [sourceURLString, captionText, ocrText]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        let category = fallbackCategory(from: ([result.name, captionText, ocrText].joined(separator: "\n")))
+        var evidence = [
+            "Source URL: \(sourceURLString)",
+            "OCR-derived candidate: \(result.name)"
+        ]
+        if !ocrText.isEmpty {
+            evidence.append("OCR text: \(String(ocrText.prefix(300)))")
+        }
+
+        return PendingReviewCandidate(
+            candidateName: result.name,
+            address: "",
+            category: category,
+            sourceURL: sourceURLString,
+            sourceText: combinedText,
+            evidence: evidence,
+            confidence: result.confidence,
+            missingInfo: [
+                "Confirm exact address",
+                "Confirm coordinates",
+                "Cross-check official source or map listing",
+                "OCR-derived candidate; verify venue identity"
+            ],
+            savedAt: Date()
+        )
+    }
+
+    private func recognizedTextLines(from imageData: Data) async -> [String] {
+        guard let image = UIImage(data: imageData),
+              let cgImage = image.cgImage else {
+            return []
+        }
+
+        return await withCheckedContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, _ in
+                let observations = request.results as? [VNRecognizedTextObservation] ?? []
+                let lines = observations
+                    .compactMap { $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                continuation.resume(returning: lines)
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["zh-Hant", "zh-Hans", "en-US"]
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                continuation.resume(returning: [])
+            }
+        }
     }
 
     private func captionNamedSocialReviewCandidate(
@@ -1524,8 +1635,8 @@ struct ShareExtensionView: View {
         if value.contains("bar") || value.contains("cocktail") { return "bar" }
         if value.contains("hotel") || value.contains("stay") || value.contains("resort") { return "stay" }
         if value.contains("shop") || value.contains("store") { return "shopping" }
-        if value.contains("bakery") || value.contains("restaurant") || value.contains("food") { return "food" }
-        if content.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌"#, options: .regularExpression) != nil { return "food" }
+        if value.contains("bakery") || value.contains("restaurant") || value.contains("food") || value.contains("dessert") || value.contains("cake") { return "food" }
+        if content.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌|巴斯克|蛋糕|甜點|甜点"#, options: .regularExpression) != nil { return "food" }
         return "attraction"
     }
 
