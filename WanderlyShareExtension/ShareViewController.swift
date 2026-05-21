@@ -1185,6 +1185,7 @@ struct ShareExtensionView: View {
         let lowered = value.lowercased()
         guard !looksLikeAddressLine(value),
               !looksLikeOperatingHoursLine(value),
+              !looksLikeReviewMetricLine(value),
               !looksLikeMarketingLine(value),
               !lowered.contains("likes"),
               !lowered.contains("comments"),
@@ -1200,6 +1201,17 @@ struct ShareExtensionView: View {
     }
 
     private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        if let leadingName = firstRegexCapture(in: line, pattern: #"^([^/\n]{2,60})\s*/"#) {
+            let cleaned = cleanPlaceName(leadingName)
+            if isUsablePlaceName(cleaned),
+               !looksLikeAddressLine(cleaned),
+               !looksLikeOperatingHoursLine(cleaned),
+               !looksLikeReviewMetricLine(cleaned),
+               !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+
         let isVenueIntroLine = line.range(of: #"@|名店|插旗|開幕|新店|店名|餐廳|餐厅|restaurant"#, options: [.regularExpression, .caseInsensitive]) != nil
         if isVenueIntroLine,
            let quoted = firstRegexCapture(in: line, pattern: #"[「\"]\s*([^」\"]{2,60})\s*[」\"]"#) {
@@ -1219,6 +1231,11 @@ struct ShareExtensionView: View {
 
     private func looksLikeOperatingHoursLine(_ value: String) -> Bool {
         value.range(of: #"(?i)(營業|营业|hours?|open|closed|週[一二三四五六日天]|周[一二三四五六日天]|星期|\b\d{1,2}:\d{2}\s*[-–—~至]\s*\d{1,2}:\d{2})"#, options: [.regularExpression]) != nil
+    }
+
+    private func looksLikeReviewMetricLine(_ value: String) -> Bool {
+        value.range(of: #"(美味程度|環境衛生|服务态度|服務態度|再訪意願|再访意愿|評分|评分|rating|review)\s*[：:]"#, options: [.regularExpression, .caseInsensitive]) != nil ||
+        value.range(of: #"^[^\n]{0,16}[：:].*[🌕🌖🌗🌘🌑⭐★]"#, options: [.regularExpression]) != nil
     }
 
     private func looksLikeMarketingLine(_ value: String) -> Bool {
