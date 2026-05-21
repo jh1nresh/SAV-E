@@ -6,22 +6,22 @@ struct OnboardingView: View {
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
-            icon: "mappin.and.ellipse",
-            title: "Save Places from Anywhere",
-            subtitle: "Share a link from Instagram, Threads, or any app — SAV-E's AI extracts the place details and pins it on your map.",
+            icon: "sparkle.magnifyingglass",
+            title: "Send Any Place Signal",
+            subtitle: "Share links, posts, screenshots, notes, or map URLs. SAV-E investigates the real place before it saves anything.",
             color: .wanderlyTerracotta
         ),
         OnboardingPage(
-            icon: "airplane",
-            title: "Plan Trips Effortlessly",
-            subtitle: "Group your saved spots into trips. Drag to reorder, optimize routes, and let AI schedule your perfect day.",
-            color: .wanderlySage
+            icon: "checklist.checked",
+            title: "Review Before Saving",
+            subtitle: "Uncertain places become review candidates with evidence, confidence, and missing details instead of fake pins.",
+            color: Color(hex: "5B8FA8")
         ),
         OnboardingPage(
-            icon: "globe.americas.fill",
-            title: "Track Your Adventures",
-            subtitle: "Mark places as visited, build collections, and watch your world map grow with every new discovery.",
-            color: .wanderlyAmber
+            icon: "map.fill",
+            title: "Plan From Memory",
+            subtitle: "Confirmed places become agent-readable memory SAV-E can use for trips, maps, and future restaurant or flight actions.",
+            color: Color(hex: "8B5E83")
         ),
     ]
 
@@ -29,13 +29,18 @@ struct OnboardingView: View {
         ZStack(alignment: .bottom) {
             TabView(selection: $currentPage) {
                 ForEach(pages.indices, id: \.self) { index in
-                    VStack(spacing: 32) {
+                    VStack(spacing: 30) {
                         Spacer()
 
-                        Image(systemName: pages[index].icon)
-                            .font(.system(size: 80))
-                            .foregroundColor(pages[index].color)
-                            .padding(.bottom, 8)
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                                .fill(pages[index].color.opacity(0.10))
+                                .frame(width: 132, height: 132)
+
+                            Image(systemName: pages[index].icon)
+                                .font(.system(size: 64, weight: .semibold))
+                                .foregroundColor(pages[index].color)
+                        }
 
                         VStack(spacing: 12) {
                             Text(pages[index].title)
@@ -46,6 +51,7 @@ struct OnboardingView: View {
 
                             Text(pages[index].subtitle)
                                 .font(.subheadline)
+                                .lineSpacing(3)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
@@ -79,7 +85,7 @@ struct OnboardingView: View {
                         onComplete()
                     }
                 }) {
-                    Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
+                    Text(currentPage < pages.count - 1 ? "Next" : "Start with SAV-E")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
