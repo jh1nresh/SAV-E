@@ -71,6 +71,8 @@ struct AIDrawerView: View {
             TextField("Ask about your places...", text: $viewModel.query)
                 .font(.subheadline)
                 .foregroundColor(.wanderlyCharcoal)
+                .lineLimit(1)
+                .frame(height: 24)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit { submitSearchField() }
@@ -114,6 +116,7 @@ struct AIDrawerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .frame(height: 64)
     }
 
     // MARK: - Content
@@ -764,9 +767,16 @@ struct AIDrawerView: View {
     private func focusAgentPrompt(_ prompt: String) {
         showReviewInbox = false
         viewModel.startNewConversation()
-        viewModel.query = prompt
+        viewModel.query = singleLinePrompt(prompt)
         withAnimation { drawerDetent = .medium }
         searchFocused = true
+    }
+
+    private func singleLinePrompt(_ prompt: String) -> String {
+        prompt
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private func firstURL(in text: String) -> URL? {
