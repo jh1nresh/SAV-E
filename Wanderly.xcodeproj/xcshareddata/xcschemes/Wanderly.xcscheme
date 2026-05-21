@@ -21,6 +21,20 @@
                ReferencedContainer = "container:Wanderly.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1CA83326C3A3EB2A8CE18140"
+               BuildableName = "WanderlyTests.xctest"
+               BlueprintName = "WanderlyTests"
+               ReferencedContainer = "container:Wanderly.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -41,16 +55,18 @@
       <Testables>
          <TestableReference
             skipped = "NO"
-            parallelizable = "YES">
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "D197BC7877E37D6F068C228A"
+               BlueprintIdentifier = "1CA83326C3A3EB2A8CE18140"
                BuildableName = "WanderlyTests.xctest"
                BlueprintName = "WanderlyTests"
                ReferencedContainer = "container:Wanderly.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

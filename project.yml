@@ -161,13 +161,34 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: WanderlyShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: WanderlyShareExtension/WanderlyShareExtension.entitlements
+
+  WanderlyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/SocialPlacePipelineTests
+    dependencies:
+      - target: Wanderly
+    settings:
+      base:
+        DEVELOPMENT_TEAM: JC6858UYM9
+        CODE_SIGN_STYLE: Automatic
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.tests
+        GENERATE_INFOPLIST_FILE: true
+        INFOPLIST_KEY_CFBundleDisplayName: WanderlyTests
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Wanderly.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wanderly"
 schemes:
   Wanderly:
     build:
       targets:
         Wanderly: all
+        WanderlyTests: [test]
     run:
       config: Debug
+    test:
+      targets:
+        - WanderlyTests
     archive:
       config: Release
 

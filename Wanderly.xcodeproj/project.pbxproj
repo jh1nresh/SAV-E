@@ -12,12 +12,12 @@
 		0BE657B273F6C933AFA42F53 /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319592FEE4143DA8414BF1E9 /* SocialPlaceEvidence.swift */; };
 		0D8DD94A2CFC096B7752E6FA /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */; };
 		0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E74EF49B8A57D105D2D652 /* SharedTripData.swift */; };
+		1263A60FFAD7A5F3A889289A /* SocialPlacePipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */; };
 		19637D9F3EDFF2329A9979DB /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05191C82E70D6C2149B74EB7 /* ProfileView.swift */; };
 		227F30DF4C70A4290E51F93D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A29B2157900BCDDFE28B627B /* ZIPFoundation */; };
 		230CFEDD9D415489D5AE1E71 /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319592FEE4143DA8414BF1E9 /* SocialPlaceEvidence.swift */; };
 		25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = D582904A9679056480966665 /* TripTimelineCard.swift */; };
 		2677F52D743629F377833945 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D361AE888D21B3766DD265FD /* LocationService.swift */; };
-		2BA4D87BB9CF09131F768B8C /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */; };
 		33757E80FAA9F8BC208B06D5 /* WanderlyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		348DE07F8D4F598B28DE45A6 /* AIDrawerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */; };
 		37E5463A0876A9A8A488CBA5 /* WanderlyClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */; };
@@ -41,6 +41,7 @@
 		74335232F64578F6C51A16C2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0E478C4828BA2AD2022551 /* ContentView.swift */; };
 		76068D6F46F6328F2B1D2432 /* AIParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D8FDE6E93564AB450C09578 /* AIParsingService.swift */; };
 		76D430AA3B1F4E1EB96B77CF /* TripViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10954376731AA5088DDEBEA /* TripViewModel.swift */; };
+		7C7136D0D553C7A82A8C4102 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */; };
 		7D12FEF322E5753B2E2B1C58 /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DC8F70BFBB3AC56AADC443E /* Color+Theme.swift */; };
 		83E19CAE97D2B1701467240E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = EAFBDA310E860F9B4B83E97F /* PrivacyInfo.xcprivacy */; };
 		8A13B9656469B56F6F99096A /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 077202B483361C14C41E6962 /* Place.swift */; };
@@ -55,6 +56,7 @@
 		A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */; };
 		AEDD962720DD378E62B8B659 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 63D3F58B9435221309DE0A3B /* Secrets.plist */; };
 		AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3939451E82A6558254D3250D /* GooglePlacesService.swift */; };
+		B33BD18CDE01407C819D7891 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */; };
 		B435FEB2824A8C16146C170F /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 77C0511D8DDA1FE33188BAB6 /* Secrets.plist */; };
 		BCAD4123ACE867DA79F69A22 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECDC9A866952173B6DC923C /* EmptyStateView.swift */; };
 		BD194FECB33EC91F78CCEDFF /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 560440B2921EE257D2BF57A1 /* SharedTripData.swift */; };
@@ -73,8 +75,6 @@
 		F2C02CDCA0EB3A3EBAC48016 /* PlaceListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */; };
 		F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8960D65E893E5FDF9FCFF097 /* StatsView.swift */; };
 		F9459E3F07900F355AD069FD /* NavigationCardComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */; };
-		B44CFF49B7AA7143C6A9018F /* SocialPlacePipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ECC87C67BFC50F74EAA900E /* SocialPlacePipelineTests.swift */; };
-		4EE648333D5DE1167DF272ED /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -92,7 +92,7 @@
 			remoteGlobalIDString = C15508628E04BBA3344816C6;
 			remoteInfo = WanderlyClip;
 		};
-		68FBA6E897EED0670F6D39B8 /* PBXContainerItemProxy */ = {
+		E9654C9E8DC2C1E01E6D093B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E03D93A0B433FED35DCE12F1 /* Project object */;
 			proxyType = 1;
@@ -134,6 +134,7 @@
 		077202B483361C14C41E6962 /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
 		09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyAIService.swift; sourceTree = "<group>"; };
 		0CFEFFE39C4FB79943231A84 /* SaveMemoryDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryDebugView.swift; sourceTree = "<group>"; };
+		106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlacePipelineTests.swift; sourceTree = "<group>"; };
 		12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyShareExtension.entitlements; sourceTree = "<group>"; };
 		1CAC45BB8058CD2642E2A578 /* SaveMemoryRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryRecord.swift; sourceTree = "<group>"; };
@@ -161,6 +162,7 @@
 		60C11340722858704F2CE328 /* SocialLinkReviewCandidateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialLinkReviewCandidateService.swift; sourceTree = "<group>"; };
 		62A066A6F8F79E541E817AED /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		63D3F58B9435221309DE0A3B /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
+		6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
 		71B4BE3FB34EFED93F712E17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		73F600376C0B250B61F4915F /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		760FB746C459D7D2917A3A71 /* WanderlyClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyClip.entitlements; sourceTree = "<group>"; };
@@ -169,6 +171,7 @@
 		7D8FDE6E93564AB450C09578 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		7ECDC9A866952173B6DC923C /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WanderlyShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		88C84F22D63C77B4CAE46817 /* WanderlyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WanderlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8960D65E893E5FDF9FCFF097 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		89976B73F7C977BD6F35B903 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		8C694C07E0D956CCE9D0C60C /* SaveCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCard.swift; sourceTree = "<group>"; };
@@ -183,7 +186,6 @@
 		C09120C4FFC2D6CA18D10FDF /* SaveLocalVaultService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultService.swift; sourceTree = "<group>"; };
 		C2F4C10AEE6E547B29704866 /* ClipContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentView.swift; sourceTree = "<group>"; };
 		C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationCardComponent.swift; sourceTree = "<group>"; };
-		CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
 		D361AE888D21B3766DD265FD /* LocationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
 		D3F0D8561BF3280B1FC8411B /* ClipContentPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentPreview.swift; sourceTree = "<group>"; };
 		D582904A9679056480966665 /* TripTimelineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripTimelineCard.swift; sourceTree = "<group>"; };
@@ -195,8 +197,6 @@
 		F10954376731AA5088DDEBEA /* TripViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripViewModel.swift; sourceTree = "<group>"; };
 		F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformIcon.swift; sourceTree = "<group>"; };
 		FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceBottomSheet.swift; sourceTree = "<group>"; };
-		1ECC87C67BFC50F74EAA900E /* SocialPlacePipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlacePipelineTests.swift; sourceTree = "<group>"; };
-		40EFA9AA95859A8BC6F1C50E /* WanderlyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WanderlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,12 +207,6 @@
 				9EF348338705836E38E56F54 /* Privy in Frameworks */,
 				227F30DF4C70A4290E51F93D /* ZIPFoundation in Frameworks */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2D38F090C3B18A4A61718499 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = ();
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -238,11 +232,11 @@
 		28117A7B622428ED58F18AB9 = {
 			isa = PBXGroup;
 			children = (
+				6F020980FAD90275974F0EC0 /* SocialPlacePipelineTests */,
 				44A03D4CF06B6AEAC1F22E00 /* Wanderly */,
 				EC9E8387A6D6DF481B325DBF /* WanderlyClip */,
 				B080FA919C6D70C31ED546F9 /* WanderlyShared */,
 				D37D8D4B160A8BF7C6F69F94 /* WanderlyShareExtension */,
-				EA93D1DA2187722BD98C7025 /* Tests */,
 				D4876E130669B270D00D1540 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -320,6 +314,15 @@
 				8C75D24BBF81B38093CE57B4 /* Components */,
 			);
 			path = Drawer;
+			sourceTree = "<group>";
+		};
+		6F020980FAD90275974F0EC0 /* SocialPlacePipelineTests */ = {
+			isa = PBXGroup;
+			children = (
+				106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */,
+			);
+			name = SocialPlacePipelineTests;
+			path = Tests/SocialPlacePipelineTests;
 			sourceTree = "<group>";
 		};
 		6FFEF824A2F52318E5D77944 /* Views */ = {
@@ -422,6 +425,7 @@
 		B080FA919C6D70C31ED546F9 /* WanderlyShared */ = {
 			isa = PBXGroup;
 			children = (
+				6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */,
 				319592FEE4143DA8414BF1E9 /* SocialPlaceEvidence.swift */,
 			);
 			path = WanderlyShared;
@@ -442,7 +446,6 @@
 				71B4BE3FB34EFED93F712E17 /* Info.plist */,
 				77C0511D8DDA1FE33188BAB6 /* Secrets.plist */,
 				52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */,
-				CE61E0A0FD71712CB5155219 /* SocialOCRCandidateHeuristics.swift */,
 				16123E7668CFA95557CB27E0 /* WanderlyShareExtension.entitlements */,
 			);
 			path = WanderlyShareExtension;
@@ -454,7 +457,7 @@
 				03620D4EA81151AB71F38192 /* Wanderly.app */,
 				A57E086170BE289FC60E45C5 /* WanderlyClip.app */,
 				851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */,
-				40EFA9AA95859A8BC6F1C50E /* WanderlyTests.xctest */,
+				88C84F22D63C77B4CAE46817 /* WanderlyTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -486,17 +489,27 @@
 			path = WanderlyClip;
 			sourceTree = "<group>";
 		};
-		EA93D1DA2187722BD98C7025 /* Tests */ = {
-			isa = PBXGroup;
-			children = (
-				1ECC87C67BFC50F74EAA900E /* SocialPlacePipelineTests.swift */,
-			);
-			path = Tests/SocialPlacePipelineTests;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1CA83326C3A3EB2A8CE18140 /* WanderlyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C99FDE3BC8375F28EF07AAA /* Build configuration list for PBXNativeTarget "WanderlyTests" */;
+			buildPhases = (
+				06AE12DFE0FFE5EF5B7A5176 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5F3B75D7C7C506455694E0FA /* PBXTargetDependency */,
+			);
+			name = WanderlyTests;
+			packageProductDependencies = (
+			);
+			productName = WanderlyTests;
+			productReference = 88C84F22D63C77B4CAE46817 /* WanderlyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1E85095316CB310A976DDA9F /* Build configuration list for PBXNativeTarget "WanderlyShareExtension" */;
@@ -560,24 +573,6 @@
 			productReference = A57E086170BE289FC60E45C5 /* WanderlyClip.app */;
 			productType = "com.apple.product-type.application.on-demand-install-capable";
 		};
-		D197BC7877E37D6F068C228A /* WanderlyTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 90D304D48E4FFD34AE905AA9 /* Build configuration list for PBXNativeTarget "WanderlyTests" */;
-			buildPhases = (
-				D7E055A73CB72BEF1E86273B /* Sources */,
-				40578A2BCDF31F69ECB4DC15 /* Resources */,
-				2D38F090C3B18A4A61718499 /* Frameworks */,
-			);
-			buildRules = ();
-			dependencies = (
-				568D8A6D3B900D25F0832842 /* PBXTargetDependency */,
-			);
-			name = WanderlyTests;
-			packageProductDependencies = ();
-			productName = WanderlyTests;
-			productReference = 40EFA9AA95859A8BC6F1C50E /* WanderlyTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -587,6 +582,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
 				TargetAttributes = {
+					1CA83326C3A3EB2A8CE18140 = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
 					5E6CCD0BB89E25C77DA2CF32 = {
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
@@ -598,10 +597,6 @@
 					C15508628E04BBA3344816C6 = {
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
-					};
-					D197BC7877E37D6F068C228A = {
-						CreatedOnToolsVersion = 16.0;
-						TestTargetID = 70B8A21AF73E33F8B1BE0D31;
 					};
 				};
 			};
@@ -626,7 +621,7 @@
 				70B8A21AF73E33F8B1BE0D31 /* Wanderly */,
 				C15508628E04BBA3344816C6 /* WanderlyClip */,
 				5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */,
-				D197BC7877E37D6F068C228A /* WanderlyTests */,
+				1CA83326C3A3EB2A8CE18140 /* WanderlyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -656,12 +651,6 @@
 			files = (
 				3C7C8030AE94DB96C22525E8 /* Assets.xcassets in Resources */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		40578A2BCDF31F69ECB4DC15 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = ();
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -710,12 +699,20 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		06AE12DFE0FFE5EF5B7A5176 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1263A60FFAD7A5F3A889289A /* SocialPlacePipelineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4A62812F23F8E51197482623 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */,
-				2BA4D87BB9CF09131F768B8C /* SocialOCRCandidateHeuristics.swift in Sources */,
+				B33BD18CDE01407C819D7891 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				0BE657B273F6C933AFA42F53 /* SocialPlaceEvidence.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -774,8 +771,8 @@
 				95CA35085C85CE5B72DD2279 /* SavePlaceFromURLIntent.swift in Sources */,
 				0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */,
 				990CC6A0705CC916C9092CF7 /* SocialLinkReviewCandidateService.swift in Sources */,
+				7C7136D0D553C7A82A8C4102 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				230CFEDD9D415489D5AE1E71 /* SocialPlaceEvidence.swift in Sources */,
-				4EE648333D5DE1167DF272ED /* SocialOCRCandidateHeuristics.swift in Sources */,
 				F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */,
 				5ABFBF83CDFEF1512B2CD4A8 /* SupabaseService.swift in Sources */,
 				0BD4C6DA5B323497CFAFFE4E /* Trip.swift in Sources */,
@@ -789,17 +786,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D7E055A73CB72BEF1E86273B /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B44CFF49B7AA7143C6A9018F /* SocialPlacePipelineTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5F3B75D7C7C506455694E0FA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 70B8A21AF73E33F8B1BE0D31 /* Wanderly */;
+			targetProxy = E9654C9E8DC2C1E01E6D093B /* PBXContainerItemProxy */;
+		};
 		BFD6D7A5DAE20AD61A7875C3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5E6CCD0BB89E25C77DA2CF32 /* WanderlyShareExtension */;
@@ -809,11 +803,6 @@
 			isa = PBXTargetDependency;
 			target = C15508628E04BBA3344816C6 /* WanderlyClip */;
 			targetProxy = 67A6610BDF9C7946FBF06A49 /* PBXContainerItemProxy */;
-		};
-		568D8A6D3B900D25F0832842 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 70B8A21AF73E33F8B1BE0D31 /* Wanderly */;
-			targetProxy = 68FBA6E897EED0670F6D39B8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -916,6 +905,26 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6AA6C9510282D4CA883774C9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = WanderlyTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wanderly.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wanderly";
 			};
 			name = Release;
 		};
@@ -1066,6 +1075,26 @@
 			};
 			name = Debug;
 		};
+		ED5D1DD0A33E8B71022B3A26 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = WanderlyTests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wanderly.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wanderly";
+			};
+			name = Debug;
+		};
 		EF405DE3B1A444B1FDECCEBD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1105,55 +1134,18 @@
 			};
 			name = Release;
 		};
-		346EEE18C20A6098A84BD324 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = JC6858UYM9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = WanderlyTests;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wanderly.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wanderly";
-			};
-			name = Debug;
-		};
-		E542B5885774B42D74391F76 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = JC6858UYM9;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = WanderlyTests;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wanderly.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wanderly";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1C99FDE3BC8375F28EF07AAA /* Build configuration list for PBXNativeTarget "WanderlyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ED5D1DD0A33E8B71022B3A26 /* Debug */,
+				6AA6C9510282D4CA883774C9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		1E85095316CB310A976DDA9F /* Build configuration list for PBXNativeTarget "WanderlyShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1186,15 +1178,6 @@
 			buildConfigurations = (
 				ADC31ED9F4DA5AC4E75D4A1F /* Debug */,
 				EF405DE3B1A444B1FDECCEBD /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		90D304D48E4FFD34AE905AA9 /* Build configuration list for PBXNativeTarget "WanderlyTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				346EEE18C20A6098A84BD324 /* Debug */,
-				E542B5885774B42D74391F76 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
