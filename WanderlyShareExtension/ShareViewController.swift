@@ -110,22 +110,30 @@ struct ShareExtensionView: View {
             VStack(spacing: 24) {
                 if isParsing {
                     VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.2)
-                            .tint(Color(hex: "C75B39"))
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.72))
+                                .frame(width: 84, height: 84)
+                                .shadow(color: Color(hex: "F3A6B6").opacity(0.22), radius: 18, y: 8)
+                            Text("🐾")
+                                .font(.system(size: 34))
+                            ProgressView()
+                                .scaleEffect(0.9)
+                                .tint(Color(hex: "E8849B"))
+                                .offset(y: 42)
+                        }
 
-                        Text("AI is parsing the shared content...")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        Text("SAV-E is sniffing for a place...")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(Color(hex: "6B4E57"))
                     }
                     .frame(maxHeight: .infinity)
                 } else if isSaved {
                     VStack(spacing: 16) {
-                        Image(systemName: "checkmark.circle.fill")
+                        Text("🌸")
                             .font(.system(size: 56))
-                            .foregroundColor(Color(hex: "A8B5A0"))
 
-                        Text(savedReviewCandidateCount == nil ? "Saved to SAV-E!" : "Added to Review")
+                        Text(savedReviewCandidateCount == nil ? "Saved to SAV-E!" : "Tucked into Review")
                             .font(.title3)
                             .fontWeight(.semibold)
                             .foregroundColor(Color(hex: "2C2C2E"))
@@ -140,22 +148,34 @@ struct ShareExtensionView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
                     }
+                    .padding(24)
+                    .background(Color.white.opacity(0.78))
+                    .cornerRadius(28)
+                    .shadow(color: Color(hex: "E8849B").opacity(0.16), radius: 20, y: 10)
                     .frame(maxHeight: .infinity)
                 } else if let error = parseError {
                     VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 40))
-                            .foregroundColor(Color(hex: "C75B39"))
-                        Text("Couldn't parse this content")
-                            .font(.headline)
+                        Text("🧸")
+                            .font(.system(size: 46))
+                        Text("SAV-E needs one more clue")
+                            .font(.title3.weight(.semibold))
                             .foregroundColor(Color(hex: "2C2C2E"))
                         Text(error)
+                            .font(.subheadline)
+                            .foregroundColor(Color(hex: "6B4E57"))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                        Text("Try sharing a map link, a clearer caption, or a frame with the place name 💌")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(hex: "9B6B78"))
                             .multilineTextAlignment(.center)
                     }
+                    .padding(24)
+                    .background(Color.white.opacity(0.82))
+                    .cornerRadius(28)
+                    .shadow(color: Color(hex: "E8849B").opacity(0.16), radius: 20, y: 10)
                     .frame(maxHeight: .infinity)
-                    .padding()
+                    .padding(.horizontal, 20)
                 } else if !reviewCandidates.isEmpty {
                     reviewCandidatesPreview(reviewCandidates)
                 } else if let candidate = reviewCandidate {
@@ -164,8 +184,14 @@ struct ShareExtensionView: View {
                     placePreview(place)
                 }
             }
-            .background(Color(hex: "FFF8F0"))
-            .navigationTitle("Save Place")
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: "FFF6F8"), Color(hex: "FFF8E8"), Color(hex: "F1FBF5")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("SAV-E ✨")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -279,16 +305,17 @@ struct ShareExtensionView: View {
     private func reviewCandidatesPreview(_ candidates: [PendingReviewCandidate]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(candidates.count == 1 ? "Review Candidate" : "Review Candidates")
+                Text(candidates.count == 1 ? "Tiny clue found" : "Tiny clues found")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(hex: "9B6B78"))
 
                 HStack {
-                    Image(systemName: "sparkle.magnifyingglass")
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Color(hex: "C75B39"))
-                        .cornerRadius(10)
+                    Text("🔎")
+                        .font(.system(size: 24))
+                        .frame(width: 42, height: 42)
+                        .background(Color(hex: "FFE1EA"))
+                        .cornerRadius(14)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(candidates.count == 1 ? candidates[0].candidateName : "\(candidates.count) possible places")
@@ -302,14 +329,15 @@ struct ShareExtensionView: View {
                     Spacer()
                 }
 
-                Text("SAV-E found a likely place signal, but it needs review before it can become a saved place.")
+                Text("SAV-E spotted a likely place signal. Give it a quick Review cuddle before it becomes a saved place.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(hex: "6B4E57"))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding()
-            .background(Color(hex: "FFF8F0"))
-            .cornerRadius(16)
+            .background(Color.white.opacity(0.82))
+            .cornerRadius(24)
+            .shadow(color: Color(hex: "E8849B").opacity(0.13), radius: 18, y: 8)
 
             if candidates.count > 1 {
                 ScrollView {
@@ -326,8 +354,8 @@ struct ShareExtensionView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
-                            .background(Color.white.opacity(0.62))
-                            .cornerRadius(10)
+                            .background(Color.white.opacity(0.72))
+                            .cornerRadius(14)
                         }
                     }
                 }
@@ -348,13 +376,14 @@ struct ShareExtensionView: View {
             Spacer()
 
             Button(action: saveReviewCandidates) {
-                Text(candidates.count == 1 ? "Add to Review" : "Add \(candidates.count) to Review")
+                Text(candidates.count == 1 ? "Add to Review 💌" : "Add \(candidates.count) to Review 💌")
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color(hex: "C75B39"))
-                    .cornerRadius(16)
+                    .background(Color(hex: "E8849B"))
+                    .cornerRadius(20)
+                    .shadow(color: Color(hex: "E8849B").opacity(0.25), radius: 12, y: 6)
             }
         }
         .padding()
@@ -1629,9 +1658,10 @@ struct ShareExtensionView: View {
 
     private func fallbackCategory(from content: String) -> String {
         let value = content.lowercased()
+        let stayCategoryPattern = #"\b(inn|guest ?house|ryokan|motel)\b|酒店|飯店|饭店|旅館|旅馆|旅店|旅宿|民宿|客棧|客栈|度假村|ホテル|ゲストハウス|료칸|호텔|리조트|모텔|여관|여인숙|게스트하우스"#
         if value.contains("cafe") || value.contains("coffee") || value.contains("tea") { return "cafe" }
         if value.contains("bar") || value.contains("cocktail") { return "bar" }
-        if value.contains("hotel") || value.contains("stay") || value.contains("resort") { return "stay" }
+        if value.contains("hotel") || value.contains("stay") || value.contains("resort") || content.range(of: stayCategoryPattern, options: [.regularExpression, .caseInsensitive]) != nil { return "stay" }
         if value.contains("shop") || value.contains("store") { return "shopping" }
         if value.contains("bakery") || value.contains("restaurant") || value.contains("food") || value.contains("dessert") || value.contains("cake") { return "food" }
         if content.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌|巴斯克|蛋糕|甜點|甜点"#, options: .regularExpression) != nil { return "food" }

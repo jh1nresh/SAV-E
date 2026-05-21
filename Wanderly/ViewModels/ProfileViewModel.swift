@@ -25,7 +25,13 @@ final class ProfileViewModel: ObservableObject {
             if let profile = try await supabaseService.fetchProfile(for: userId) {
                 self.profile = profile
             }
+        } catch is CancellationError {
+            // View lifecycle cancelled the profile load; do not surface as a user-facing error.
         } catch {
+            if (error as? URLError)?.code == .cancelled {
+                // URLSession cancellation is expected when the view task is torn down.
+                return
+            }
             errorMessage = error.localizedDescription
             print("Failed to load profile: \(error)")
         }

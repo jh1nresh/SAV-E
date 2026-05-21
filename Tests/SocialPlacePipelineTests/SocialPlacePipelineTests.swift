@@ -105,6 +105,47 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result?.supportingLines.contains("Tula Basque") == true)
     }
 
+    func testOCRFrameFindsCJKHotelVenueFromThumbnailText() {
+        let fixtures = [
+            (
+                expectedName: "高雄洲際酒店",
+                expectedSupportingLine: "高雄洲際酒店",
+                lines: [
+                    "高雄洲際酒店",
+                    "早餐吃到下午 2:30",
+                    "高空無邊際泳池",
+                    "亞灣海景"
+                ]
+            ),
+            (
+                expectedName: "箱根ゲストハウス",
+                expectedSupportingLine: "箱根ゲストハウス",
+                lines: [
+                    "箱根ゲストハウス",
+                    "温泉まで徒歩5分",
+                    "Hakone travel notes"
+                ]
+            ),
+            (
+                expectedName: "부산 호텔 라온",
+                expectedSupportingLine: "부산 호텔 라온",
+                lines: [
+                    "부산 호텔 라온",
+                    "해운대 근처",
+                    "rooftop view"
+                ]
+            )
+        ]
+
+        for fixture in fixtures {
+            let result = SocialOCRCandidateHeuristics.candidate(from: fixture.lines)
+
+            XCTAssertEqual(result?.name, fixture.expectedName)
+            XCTAssertGreaterThanOrEqual(result?.confidence ?? 0, 0.45)
+            XCTAssertTrue(result?.supportingLines.contains(fixture.expectedSupportingLine) == true)
+        }
+    }
+
     func testSocialPipelineRegressionCasesStayStable() {
         let service = SocialLinkReviewCandidateService()
 
