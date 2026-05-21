@@ -1038,7 +1038,7 @@ struct ShareExtensionView: View {
         for (index, line) in lines.enumerated() where looksLikeAddressLine(line) {
             var previousIndex = index - 1
             while previousIndex >= 0 {
-                let candidate = cleanPlaceName(lines[previousIndex])
+                let candidate = candidateNameFromCaptionLine(lines[previousIndex]) ?? cleanPlaceName(lines[previousIndex])
                 if isLikelyCaptionPlaceName(candidate) {
                     return (candidate, line)
                 }
@@ -1073,6 +1073,7 @@ struct ShareExtensionView: View {
         guard isUsablePlaceName(value) else { return false }
         let lowered = value.lowercased()
         guard !looksLikeAddressLine(value),
+              !looksLikeOperatingHoursLine(value),
               !looksLikeMarketingLine(value),
               !lowered.contains("likes"),
               !lowered.contains("comments"),
@@ -1085,6 +1086,28 @@ struct ShareExtensionView: View {
             return false
         }
         return value.range(of: #"[A-Za-z\u4e00-\u9fff]"#, options: .regularExpression) != nil
+    }
+
+    private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        let isVenueIntroLine = line.range(of: #"@|名店|插旗|開幕|新店|店名|餐廳|餐厅|restaurant"#, options: [.regularExpression, .caseInsensitive]) != nil
+        if isVenueIntroLine,
+           let quoted = firstRegexCapture(in: line, pattern: #"[「\"]\s*([^」\"]{2,60})\s*[」\"]"#) {
+            let cleaned = cleanPlaceName(quoted)
+            if isUsablePlaceName(cleaned), !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+        if let handle = firstRegexCapture(in: line, pattern: #"@([A-Za-z0-9._]{3,30})"#) {
+            let cleaned = displayName(fromSocialHandle: handle)
+            if isUsablePlaceName(cleaned), !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+        return nil
+    }
+
+    private func looksLikeOperatingHoursLine(_ value: String) -> Bool {
+        value.range(of: #"(?i)(營業|营业|hours?|open|closed|週[一二三四五六日天]|周[一二三四五六日天]|星期|\b\d{1,2}:\d{2}\s*[-–—~至]\s*\d{1,2}:\d{2})"#, options: [.regularExpression]) != nil
     }
 
     private func looksLikeMarketingLine(_ value: String) -> Bool {
@@ -1502,7 +1525,7 @@ struct ShareExtensionView: View {
         if value.contains("hotel") || value.contains("stay") || value.contains("resort") { return "stay" }
         if value.contains("shop") || value.contains("store") { return "shopping" }
         if value.contains("bakery") || value.contains("restaurant") || value.contains("food") { return "food" }
-        if content.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐"#, options: .regularExpression) != nil { return "food" }
+        if content.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌"#, options: .regularExpression) != nil { return "food" }
         return "attraction"
     }
 

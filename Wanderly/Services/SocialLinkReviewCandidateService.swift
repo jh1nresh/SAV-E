@@ -315,7 +315,7 @@ final class SocialLinkReviewCandidateService {
         for (index, line) in lines.enumerated() where looksLikeAddressLine(line) {
             var previousIndex = index - 1
             while previousIndex >= 0 {
-                let candidate = cleanCandidateName(lines[previousIndex])
+                let candidate = candidateNameFromCaptionLine(lines[previousIndex]) ?? cleanCandidateName(lines[previousIndex])
                 if isLikelyCaptionPlaceName(candidate) {
                     return (candidate, line)
                 }
@@ -350,6 +350,7 @@ final class SocialLinkReviewCandidateService {
         guard isUsableCandidateName(value) else { return false }
         let lowered = value.lowercased()
         guard !looksLikeAddressLine(value),
+              !looksLikeOperatingHoursLine(value),
               !looksLikeMarketingLine(value),
               !lowered.contains("likes"),
               !lowered.contains("comments"),
@@ -362,6 +363,28 @@ final class SocialLinkReviewCandidateService {
             return false
         }
         return value.range(of: #"[A-Za-z\u4e00-\u9fff]"#, options: .regularExpression) != nil
+    }
+
+    private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        let isVenueIntroLine = line.range(of: #"@|名店|插旗|開幕|新店|店名|餐廳|餐厅|restaurant"#, options: [.regularExpression, .caseInsensitive]) != nil
+        if isVenueIntroLine,
+           let quoted = firstCapture(in: line, pattern: #"[「\"]\s*([^」\"]{2,60})\s*[」\"]"#) {
+            let cleaned = cleanCandidateName(quoted)
+            if isUsableCandidateName(cleaned), !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+        if let handle = firstCapture(in: line, pattern: #"@([A-Za-z0-9._]{3,30})"#) {
+            let cleaned = displayName(fromSocialHandle: handle)
+            if isUsableCandidateName(cleaned), !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+        return nil
+    }
+
+    private func looksLikeOperatingHoursLine(_ value: String) -> Bool {
+        value.range(of: #"(?i)(營業|营业|hours?|open|closed|週[一二三四五六日天]|周[一二三四五六日天]|星期|\b\d{1,2}:\d{2}\s*[-–—~至]\s*\d{1,2}:\d{2})"#, options: [.regularExpression]) != nil
     }
 
     private func looksLikeMarketingLine(_ value: String) -> Bool {
@@ -458,7 +481,7 @@ final class SocialLinkReviewCandidateService {
         if lowered.range(of: #"restaurant|food|eat|cafe|coffee|tea|bar"#, options: .regularExpression) != nil {
             return "food"
         }
-        if text.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐"#, options: .regularExpression) != nil {
+        if text.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌"#, options: .regularExpression) != nil {
             return "food"
         }
         return "attraction"
