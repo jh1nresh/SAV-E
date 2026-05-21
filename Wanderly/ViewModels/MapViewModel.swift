@@ -171,10 +171,11 @@ final class MapViewModel: ObservableObject {
         var failedCandidates: [PendingReviewCandidate] = []
 
         for candidate in pending {
-            mirrorToLocalVault(candidate)
+            let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+            mirrorToLocalVault(refinedCandidate)
             do {
-                let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
-                try await supabaseService.createPlaceCandidate(candidate, captureId: captureId, userId: userId)
+                let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                try await supabaseService.createPlaceCandidate(refinedCandidate, captureId: captureId, userId: userId)
             } catch {
                 failedCandidates.append(candidate)
                 print("MapViewModel: failed to import review candidate \(candidate.candidateName): \(error)")

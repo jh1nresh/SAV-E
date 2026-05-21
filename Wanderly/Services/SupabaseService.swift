@@ -136,6 +136,8 @@ final class SupabaseService: SupabaseServiceProtocol {
             "name": candidate.candidateName,
             "address": candidate.address,
             "city": "",
+            "latitude": candidate.latitude,
+            "longitude": candidate.longitude,
             "evidence": evidence,
             "confidence": candidate.confidence,
             "missing_info": candidate.missingInfo,

@@ -23,12 +23,19 @@ struct PendingReviewCandidate: Codable {
     var candidateName: String
     var address: String
     var category: String
+    var latitude: Double? = nil
+    var longitude: Double? = nil
     var sourceURL: String?
     var sourceText: String?
     var evidence: [String]
     var confidence: Double
     var missingInfo: [String]
     var savedAt: Date
+
+    var hasReliableCoordinates: Bool {
+        guard let latitude, let longitude else { return false }
+        return latitude != 0 || longitude != 0
+    }
 }
 
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {

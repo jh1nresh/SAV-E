@@ -27,17 +27,20 @@ final class PlaceListViewModel: ObservableObject {
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
     private let saveLocalVaultService: SaveLocalVaultService
+    private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private var importedPendingKeys: Set<String> = []
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
         pendingImportService: PendingPlaceImportService = .shared,
-        saveLocalVaultService: SaveLocalVaultService = .shared
+        saveLocalVaultService: SaveLocalVaultService = .shared,
+        socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
         self.saveLocalVaultService = saveLocalVaultService
+        self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
     }
 
     var filteredPlaces: [Place] {
@@ -157,15 +160,16 @@ final class PlaceListViewModel: ObservableObject {
         var failedCandidates: [PendingReviewCandidate] = []
 
         for candidate in pending {
+            let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
             do {
-                _ = try saveLocalVaultService.saveReviewCandidate(candidate)
+                _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate)
             } catch {
                 print("PlaceListViewModel: failed to mirror review candidate to local vault: \(error)")
             }
 
             do {
-                let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
-                try await supabaseService.createPlaceCandidate(candidate, captureId: captureId, userId: userId)
+                let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                try await supabaseService.createPlaceCandidate(refinedCandidate, captureId: captureId, userId: userId)
             } catch {
                 failedCandidates.append(candidate)
                 print("PlaceListViewModel: failed to import review candidate \(candidate.candidateName): \(error)")
