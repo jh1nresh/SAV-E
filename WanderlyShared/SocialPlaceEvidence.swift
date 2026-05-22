@@ -197,11 +197,29 @@ enum SocialPlaceEvidenceScorer {
     }
 
     private static func cleanProfileName(_ value: String, normalizedHandle: String) -> String {
-        value
+        if let quotedName = quotedVenueName(in: value) {
+            return quotedName
+        }
+
+        return value
             .replacingOccurrences(of: #"(?i)Instagram photos and videos|Instagram|官方|Official"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"@"# + NSRegularExpression.escapedPattern(for: normalizedHandle), with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r|•·:-–—()[]{}\"'“”"))
+    }
+
+    private static func quotedVenueName(in value: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) else {
+            return nil
+        }
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        guard let match = regex.firstMatch(in: value, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: value) else {
+            return nil
+        }
+        let cleaned = cleanCandidateName(String(value[captureRange]))
+        return isUsableCandidateName(cleaned) ? cleaned : nil
     }
 
     private static func isUsableProfileName(_ value: String, normalizedHandle: String) -> Bool {

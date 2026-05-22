@@ -184,6 +184,24 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(yakiniku.first?.candidateName, "YAKINIKU 37west NY")
         XCTAssertNotEqual(yakiniku.first?.candidateName, "再訪意願：🌕🌕🌕🌕🌗")
 
+        let ushigoro = service.reviewCandidates(
+            fromEvidenceText: """
+            #GIRLSTALK美食
+            來自東京的頂級燒肉名店「USHIGORO S.」 @ushigoro.s.tw 正式插旗台北‼️💥
+            主打少見的「和牛燒肉割烹」形式。
+            📍中山區樂群三路299號2樓
+            📅 5/8正式開放inline訂位
+            """,
+            sourceURL: "https://www.instagram.com/reel/DYG2S_4n3_e/"
+        )
+        XCTAssertEqual(ushigoro.first?.candidateName, "USHIGORO S")
+        XCTAssertNotEqual(
+            ushigoro.first?.candidateName,
+            "來自東京的頂級燒肉名店「USHIGORO S.」 @ushigoro.s.tw 正式插旗台北‼️💥"
+        )
+        XCTAssertEqual(ushigoro.first?.address, "中山區樂群三路299號2樓")
+        XCTAssertEqual(ushigoro.first?.category, "food")
+
         let addressOnly = service.reviewCandidates(
             fromEvidenceText: """
             11:00-21:30

@@ -108,6 +108,9 @@ final class SocialLinkReviewCandidateService {
         if let captionCandidate = captionNamedCandidate(from: evidenceText, sourceURL: sourceURL) {
             candidates.append(captionCandidate)
         }
+        if let venueIntroCandidate = captionVenueIntroCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(venueIntroCandidate)
+        }
         if let titleCandidate = chineseSocialTitleCandidate(from: evidenceText, sourceURL: sourceURL) {
             candidates.append(titleCandidate)
         }
@@ -266,6 +269,35 @@ final class SocialLinkReviewCandidateService {
             sourceText: evidenceText,
             evidence: evidence,
             confidence: address.isEmpty ? 0.5 : 0.62,
+            missingInfo: missingInfo(tier: tier, hasAddress: !address.isEmpty),
+            savedAt: Date()
+        )
+    }
+
+    private func captionVenueIntroCandidate(from evidenceText: String, sourceURL: String) -> PendingReviewCandidate? {
+        guard let name = venueIntroName(in: evidenceText) else { return nil }
+        let address = firstLocationPin(in: evidenceText) ?? streetAddressLine(in: evidenceText) ?? locatedCity(in: evidenceText) ?? cityAddress(in: evidenceText) ?? ""
+        let tier = SocialPlaceEvidenceScorer.tier(hasAddress: !address.isEmpty)
+        var evidence = [
+            "Source URL: \(sourceURL)",
+            "Evidence tier: \(tier.rawValue)",
+            "Public metadata venue anchor: \(name)"
+        ]
+        if !address.isEmpty {
+            evidence.append("Location clue: \(address)")
+        }
+        if !evidenceText.isEmpty {
+            evidence.append(String(evidenceText.prefix(500)))
+        }
+
+        return PendingReviewCandidate(
+            candidateName: name,
+            address: address,
+            category: category(from: "\(name) \(evidenceText)"),
+            sourceURL: sourceURL,
+            sourceText: evidenceText,
+            evidence: evidence,
+            confidence: address.isEmpty ? 0.56 : 0.66,
             missingInfo: missingInfo(tier: tier, hasAddress: !address.isEmpty),
             savedAt: Date()
         )
@@ -535,6 +567,28 @@ final class SocialLinkReviewCandidateService {
             }
         }
         return nil
+    }
+
+    private func venueIntroName(in text: String) -> String? {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map(cleanHTMLText)
+            .filter { !$0.isEmpty }
+
+        for line in lines where looksLikeVenueIntroLine(line) {
+            if let quoted = firstCapture(in: line, pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) {
+                let cleaned = cleanCandidateName(quoted)
+                if isUsableCandidateName(cleaned), !looksLikeMarketingLine(cleaned) {
+                    return cleaned
+                }
+            }
+        }
+        return nil
+    }
+
+    private func looksLikeVenueIntroLine(_ line: String) -> Bool {
+        let pattern = #"名店|餐廳|餐厅|正式插旗|插旗|開幕|新店|店名|restaurant|from\s+tokyo|來自東京|頂級燒肉"#
+        return line.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func chineseVenueName(in text: String) -> String? {

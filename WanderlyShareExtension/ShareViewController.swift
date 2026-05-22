@@ -914,6 +914,42 @@ struct ShareExtensionView: View {
         )
     }
 
+    private func captionVenueIntroReviewCandidate(
+        from metadata: ShareMetadata,
+        sharedTitle: String,
+        sharedText: String,
+        sourceURLString: String
+    ) -> PendingReviewCandidate? {
+        let evidenceText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        guard let name = venueIntroName(in: evidenceText) else { return nil }
+        let address = firstLocationPin(in: evidenceText) ?? streetAddressLine(in: evidenceText) ?? locatedCity(in: evidenceText) ?? cityAddress(in: evidenceText) ?? firstAddress(in: evidenceText) ?? ""
+        let category = fallbackCategory(from: "\(name) \(evidenceText)")
+        let tier = SocialPlaceEvidenceScorer.tier(hasAddress: !address.isEmpty)
+        var evidence = [
+            "Source URL: \(sourceURLString)",
+            "Evidence tier: \(tier.rawValue)",
+            "Public metadata venue anchor: \(name)"
+        ]
+        if !address.isEmpty {
+            evidence.append("Location clue: \(address)")
+        }
+        if !evidenceText.isEmpty {
+            evidence.append(String(evidenceText.prefix(300)))
+        }
+
+        return PendingReviewCandidate(
+            candidateName: name,
+            address: address,
+            category: category,
+            sourceURL: sourceURLString,
+            sourceText: evidenceText.isEmpty ? nil : evidenceText,
+            evidence: evidence,
+            confidence: address.isEmpty ? 0.56 : 0.66,
+            missingInfo: SocialPlaceEvidenceScorer.missingInfo(tier: tier, hasAddress: !address.isEmpty),
+            savedAt: Date()
+        )
+    }
+
     private func chineseSocialTitleReviewCandidate(
         from metadata: ShareMetadata,
         sharedTitle: String,
@@ -995,6 +1031,14 @@ struct ShareExtensionView: View {
             sourceURLString: sourceURLString
         )
         if let candidate = captionNamedSocialReviewCandidate(
+            from: metadata,
+            sharedTitle: sharedTitle,
+            sharedText: sharedText,
+            sourceURLString: sourceURLString
+        ) {
+            candidates.append(candidate)
+        }
+        if let candidate = captionVenueIntroReviewCandidate(
             from: metadata,
             sharedTitle: sharedTitle,
             sharedText: sharedText,
@@ -1173,6 +1217,28 @@ struct ShareExtensionView: View {
             }
         }
         return nil
+    }
+
+    private func venueIntroName(in content: String) -> String? {
+        let lines = content
+            .components(separatedBy: .newlines)
+            .map(cleanHTMLText)
+            .filter { !$0.isEmpty }
+
+        for line in lines where looksLikeVenueIntroLine(line) {
+            if let quoted = firstRegexCapture(in: line, pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) {
+                let cleaned = cleanPlaceName(quoted)
+                if isUsablePlaceName(cleaned), !looksLikeMarketingLine(cleaned) {
+                    return cleaned
+                }
+            }
+        }
+        return nil
+    }
+
+    private func looksLikeVenueIntroLine(_ line: String) -> Bool {
+        let pattern = #"名店|餐廳|餐厅|正式插旗|插旗|開幕|新店|店名|restaurant|from\s+tokyo|來自東京|頂級燒肉"#
+        return line.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func chineseVenueName(in content: String) -> String? {
