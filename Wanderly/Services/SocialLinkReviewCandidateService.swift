@@ -98,7 +98,19 @@ final class SocialLinkReviewCandidateService {
     }
 
     func reviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) -> [PendingReviewCandidate] {
-        let candidates = analyzedCandidates(from: evidenceText, sourceURL: sourceURL)
+        let candidates = SocialPlaceParser()
+            .parse(
+                evidence: SocialPlaceSourceEvidence(
+                    sourceURL: sourceURL,
+                    resolvedURL: sourceURL,
+                    sharedTitle: nil,
+                    sharedText: evidenceText,
+                    metadataTitle: nil,
+                    metadataDescription: nil,
+                    ocrLines: []
+                )
+            )
+            .map { pendingReviewCandidate(from: $0, sourceURL: sourceURL, sourceText: evidenceText) }
         return rankedCandidates(candidates)
     }
 
@@ -131,7 +143,7 @@ final class SocialLinkReviewCandidateService {
                 socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
             }
             .filter { candidate in
-                let key = "\(candidate.candidateName.lowercased())|\(candidate.address.lowercased())"
+                let key = "\(SocialPlaceParser.canonicalPlaceName(candidate.candidateName))|\(SocialPlaceParser.canonicalPlaceName(candidate.address))"
                 guard !seenKeys.contains(key) else { return false }
                 seenKeys.insert(key)
                 return true
@@ -142,7 +154,8 @@ final class SocialLinkReviewCandidateService {
         var score = candidate.confidence
         let evidence = candidate.evidence.joined(separator: " ").lowercased()
         if !candidate.address.isEmpty { score += 0.18 }
-        if evidence.contains("venue anchor") || evidence.contains("named place") { score += 0.16 }
+        if evidence.contains("venue anchor") || evidence.contains("named place") || evidence.contains("venue name") { score += 0.16 }
+        if evidence.contains("venue handle") { score += 0.08 }
         if evidence.contains("resolved public profile") { score += 0.12 }
         if evidence.contains("social handle") { score += 0.04 }
         if evidence.contains("source url") { score += 0.01 }
@@ -157,6 +170,45 @@ final class SocialLinkReviewCandidateService {
             ["Analysis pipeline: collected metadata/caption anchors, scored candidate evidence, and kept unresolved fields for review"]
         )
         return analyzed
+    }
+
+    private func pendingReviewCandidate(
+        from draft: SocialPlaceCandidateDraft,
+        sourceURL: String,
+        sourceText: String
+    ) -> PendingReviewCandidate {
+        PendingReviewCandidate(
+            candidateName: draft.displayName,
+            address: draft.locationClues.first ?? "",
+            category: draft.category,
+            sourceURL: sourceURL,
+            sourceText: sourceText.isEmpty ? nil : sourceText,
+            evidence: evidenceStrings(from: draft, sourceURL: sourceURL),
+            confidence: draft.confidence,
+            missingInfo: draft.missingInfo,
+            savedAt: Date()
+        )
+    }
+
+    private func evidenceStrings(from draft: SocialPlaceCandidateDraft, sourceURL: String) -> [String] {
+        var values = ["Source URL: \(sourceURL)"]
+        values.append(contentsOf: draft.evidenceChips)
+        values.append(contentsOf: draft.evidence.compactMap { atom in
+            atom.line.contains("Resolved public profile") ? atom.line : nil
+        })
+        if !draft.locationClues.isEmpty {
+            values.append(contentsOf: draft.locationClues.map { "Location clue: \($0)" })
+        }
+        if !draft.venueHandles.isEmpty {
+            values.append(contentsOf: draft.venueHandles.map { "Venue handle: @\($0)" })
+        }
+        if !draft.creatorHandles.isEmpty {
+            values.append(contentsOf: draft.creatorHandles.map { "Creator handle: @\($0)" })
+        }
+        if !draft.bookingLinks.isEmpty {
+            values.append(contentsOf: draft.bookingLinks.map { "Booking link: \($0)" })
+        }
+        return appendUnique([], values)
     }
 
     private func fetchMetadata(from url: URL) async -> PublicMetadata {
@@ -401,8 +453,9 @@ final class SocialLinkReviewCandidateService {
             chineseCityClue(in: evidenceText)
         ]
         let categoryClue = category(from: "\(candidate.category) \(evidenceText)")
-        let profileName = firstSocialHandle(in: evidenceText).map {
-            SocialPlaceEvidenceScorer.resolvedDisplayName(fromSocialHandle: $0, evidenceText: evidenceText).name
+        guard !candidate.candidateName.isEmpty,
+              !SocialPlaceEvidenceScorer.isRejectedTitle(candidate.candidateName) else {
+            return []
         }
         let cityText = cityClues
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -410,10 +463,8 @@ final class SocialLinkReviewCandidateService {
             .joined(separator: " ")
         let seeds: [[String?]] = [
             [candidate.candidateName, candidate.address, cityText, categoryClue],
-            [profileName, cityText, categoryClue],
             [candidate.candidateName, cityText, categoryClue],
-            [candidate.candidateName, candidate.address],
-            [profileName, candidate.address]
+            [candidate.candidateName, candidate.address]
         ]
         var seen = Set<String>()
         return seeds.compactMap { parts in

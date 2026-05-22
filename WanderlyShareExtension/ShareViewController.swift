@@ -1024,62 +1024,73 @@ struct ShareExtensionView: View {
         sharedText: String,
         sourceURLString: String
     ) async -> [PendingReviewCandidate] {
-        var candidates = socialReviewCandidates(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
+        let evidenceText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        let ocrLines: [String]
+        if let imageData = metadata.imageData {
+            ocrLines = await recognizedTextLines(from: imageData)
+        } else {
+            ocrLines = []
+        }
+
+        let drafts = SocialPlaceParser().parse(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: sourceURLString,
+                resolvedURL: metadata.resolvedURL,
+                sharedTitle: sharedTitle,
+                sharedText: sharedText,
+                metadataTitle: metadata.title,
+                metadataDescription: metadata.description,
+                ocrLines: ocrLines
+            )
         )
-        if let candidate = captionNamedSocialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
-        }
-        if let candidate = captionVenueIntroReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
-        }
-        if let candidate = chineseSocialTitleReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
-        }
-        if let candidate = captionLineSocialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
-        }
-        if let candidate = socialReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
-        }
-        if let candidate = await ocrFallbackReviewCandidate(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText,
-            sourceURLString: sourceURLString
-        ) {
-            candidates.append(candidate)
+        let candidates = drafts.map {
+            pendingReviewCandidate(from: $0, sourceURLString: sourceURLString, sourceText: evidenceText, ocrLines: ocrLines)
         }
 
         return rankedSocialAnalysisCandidates(candidates.map(markAsSocialAnalysisCandidate))
+    }
+
+    private func pendingReviewCandidate(
+        from draft: SocialPlaceCandidateDraft,
+        sourceURLString: String,
+        sourceText: String,
+        ocrLines: [String]
+    ) -> PendingReviewCandidate {
+        let combinedSourceText = [sourceText, ocrLines.joined(separator: "\n")]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        return PendingReviewCandidate(
+            candidateName: draft.displayName,
+            address: draft.locationClues.first ?? "",
+            category: draft.category,
+            sourceURL: sourceURLString,
+            sourceText: combinedSourceText.isEmpty ? nil : combinedSourceText,
+            evidence: evidenceStrings(from: draft, sourceURLString: sourceURLString),
+            confidence: draft.confidence,
+            missingInfo: draft.missingInfo,
+            savedAt: Date()
+        )
+    }
+
+    private func evidenceStrings(from draft: SocialPlaceCandidateDraft, sourceURLString: String) -> [String] {
+        var values = sourceURLString.isEmpty ? [] : ["Source URL: \(sourceURLString)"]
+        values.append(contentsOf: draft.evidenceChips)
+        values.append(contentsOf: draft.evidence.compactMap { atom in
+            atom.line.contains("Resolved public profile") ? atom.line : nil
+        })
+        if !draft.locationClues.isEmpty {
+            values.append(contentsOf: draft.locationClues.map { "Location clue: \($0)" })
+        }
+        if !draft.venueHandles.isEmpty {
+            values.append(contentsOf: draft.venueHandles.map { "Venue handle: @\($0)" })
+        }
+        if !draft.creatorHandles.isEmpty {
+            values.append(contentsOf: draft.creatorHandles.map { "Creator handle: @\($0)" })
+        }
+        if !draft.bookingLinks.isEmpty {
+            values.append(contentsOf: draft.bookingLinks.map { "Booking link: \($0)" })
+        }
+        return appendUniqueEvidence([], values)
     }
 
     private func rankedSocialAnalysisCandidates(_ candidates: [PendingReviewCandidate]) -> [PendingReviewCandidate] {
@@ -1089,7 +1100,7 @@ struct ShareExtensionView: View {
                 socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
             }
             .filter { candidate in
-                let key = "\(candidate.candidateName.lowercased())|\(candidate.address.lowercased())"
+                let key = "\(SocialPlaceParser.canonicalPlaceName(candidate.candidateName))|\(SocialPlaceParser.canonicalPlaceName(candidate.address))"
                 guard !seenKeys.contains(key) else { return false }
                 seenKeys.insert(key)
                 return true
@@ -1101,7 +1112,8 @@ struct ShareExtensionView: View {
         let evidence = candidate.evidence.joined(separator: " ").lowercased()
         if !candidate.address.isEmpty { score += 0.18 }
         if evidence.contains("ocr-derived candidate") { score += 0.08 }
-        if evidence.contains("named place") || evidence.contains("named venue") || evidence.contains("place line") { score += 0.16 }
+        if evidence.contains("named place") || evidence.contains("named venue") || evidence.contains("place line") || evidence.contains("venue name") { score += 0.16 }
+        if evidence.contains("venue handle") { score += 0.08 }
         if evidence.contains("resolved public profile") { score += 0.12 }
         if evidence.contains("instagram handle") || evidence.contains("social handle") { score += 0.04 }
         if SocialPlaceEvidenceScorer.isRejectedTitle(candidate.candidateName) { score -= 1.0 }

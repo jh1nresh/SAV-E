@@ -53,7 +53,9 @@
 		99C08C1AEBD94EC560476469 /* WanderlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CE4BE52D193035348E4005 /* WanderlyApp.swift */; };
 		9EF348338705836E38E56F54 /* Privy in Frameworks */ = {isa = PBXBuildFile; productRef = 9AEC21E0AA21AA2589449ABB /* Privy */; };
 		A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903A65214BCAA12AD2190D28 /* MapViewModel.swift */; };
+		A36DA56215269A9D45024E96 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1CD74A229155347FD4060F /* SocialPlaceParser.swift */; };
 		A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12A0719A1B2AAA710A23B16F /* ProfileViewModel.swift */; };
+		AB06EE0C0D6E5704B7BD0469 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1CD74A229155347FD4060F /* SocialPlaceParser.swift */; };
 		AEDD962720DD378E62B8B659 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 63D3F58B9435221309DE0A3B /* Secrets.plist */; };
 		AF350EA915E5F6350300BCBE /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3939451E82A6558254D3250D /* GooglePlacesService.swift */; };
 		B33BD18CDE01407C819D7891 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */; };
@@ -163,6 +165,7 @@
 		62A066A6F8F79E541E817AED /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		63D3F58B9435221309DE0A3B /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
+		6C1CD74A229155347FD4060F /* SocialPlaceParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlaceParser.swift; sourceTree = "<group>"; };
 		71B4BE3FB34EFED93F712E17 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		73F600376C0B250B61F4915F /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
 		760FB746C459D7D2917A3A71 /* WanderlyClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WanderlyClip.entitlements; sourceTree = "<group>"; };
@@ -427,6 +430,7 @@
 			children = (
 				6A42C72F97728A06A761F9C4 /* SocialOCRCandidateHeuristics.swift */,
 				319592FEE4143DA8414BF1E9 /* SocialPlaceEvidence.swift */,
+				6C1CD74A229155347FD4060F /* SocialPlaceParser.swift */,
 			);
 			path = WanderlyShared;
 			sourceTree = "<group>";
@@ -714,6 +718,7 @@
 				4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */,
 				B33BD18CDE01407C819D7891 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				0BE657B273F6C933AFA42F53 /* SocialPlaceEvidence.swift in Sources */,
+				AB06EE0C0D6E5704B7BD0469 /* SocialPlaceParser.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -773,6 +778,7 @@
 				990CC6A0705CC916C9092CF7 /* SocialLinkReviewCandidateService.swift in Sources */,
 				7C7136D0D553C7A82A8C4102 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				230CFEDD9D415489D5AE1E71 /* SocialPlaceEvidence.swift in Sources */,
+				A36DA56215269A9D45024E96 /* SocialPlaceParser.swift in Sources */,
 				F43D54ECBE89485DA5C13A03 /* StatsView.swift in Sources */,
 				5ABFBF83CDFEF1512B2CD4A8 /* SupabaseService.swift in Sources */,
 				0BD4C6DA5B323497CFAFFE4E /* Trip.swift in Sources */,

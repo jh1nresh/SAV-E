@@ -51,6 +51,83 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
 }
 
 final class SocialPlacePipelineTests: XCTestCase {
+    func testAgentParserMergesNumberedPlaceEvidence() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/spyglass/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: """
+                1. The Spectacular Spyglass Treehouse (@artistree_treehouse)
+                📍 Occidental, California
+
+                2. The Sonoma Spyglass (@sonomaspyglass)
+                📍 Sebastopol, California
+                airbnb.com/h/sweet-sonoma-spyglass
+                """,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.placesFound.map(\.displayName), [
+            "The Spectacular Spyglass Treehouse",
+            "The Sonoma Spyglass"
+        ])
+        XCTAssertEqual(analysis.placesFound.first?.category, "stay")
+        XCTAssertEqual(analysis.placesFound.first?.locationClues.first, "Occidental, California")
+        XCTAssertTrue(analysis.placesFound.first?.venueHandles.contains("artistree_treehouse") == true)
+        XCTAssertTrue(analysis.placesFound[1].venueHandles.contains("sonomaspyglass"))
+        XCTAssertTrue(analysis.placesFound[1].bookingLinks.contains("airbnb.com/h/sweet-sonoma-spyglass"))
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName.contains("@") })
+    }
+
+    func testAgentParserRejectsCreatorHandleForJWMarriottStay() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/jw/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: """
+                Please follow @elisolanooo for more hidden gems.
+                This is the JW Marriott Desert Springs in the Coachella Valley Area.
+                """,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.placesFound.count, 1)
+        XCTAssertEqual(analysis.placesFound.first?.displayName, "JW Marriott Desert Springs")
+        XCTAssertEqual(analysis.placesFound.first?.category, "stay")
+        XCTAssertEqual(analysis.placesFound.first?.locationClues.first, "Coachella Valley Area")
+        XCTAssertTrue(analysis.discardedCandidates.contains { $0.value == "Elisolanooo" && $0.reason.contains("creator handle") })
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "Elisolanooo" })
+        XCTAssertFalse(analysis.placesFound.first?.venueHandles.contains("elisolanooo") == true)
+        XCTAssertTrue(analysis.placesFound.first?.missingInfo.contains("Confirm coordinates") == true)
+    }
+
+    func testCreatorOnlySocialLinkDoesNotBecomePlace() {
+        let candidates = SocialPlaceParser().parse(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/creator-only/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: """
+                Please follow @travelcreator for daily hidden gems.
+                Here are my favorite cozy stays this winter.
+                """,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertTrue(candidates.isEmpty)
+    }
+
     func testProfileResolverUsesMetadataDisplayNameBeforeRawHandle() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -109,6 +186,34 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(refined.latitude, 24.2)
         XCTAssertEqual(refined.longitude, 120.7)
         XCTAssertTrue(refined.evidence.contains("Google Places refined match: Known Cafe"))
+    }
+
+    func testPlacesRefinementQueriesSkipCreatorHandles() async {
+        let google = StubGooglePlacesService()
+        let service = SocialLinkReviewCandidateService(googlePlacesService: google)
+        let evidence = """
+        Please follow @elisolanooo for more hidden gems.
+        This is the JW Marriott Desert Springs in the Coachella Valley Area.
+        """
+        let candidate = PendingReviewCandidate(
+            candidateName: "JW Marriott Desert Springs",
+            address: "Coachella Valley Area",
+            category: "stay",
+            latitude: nil,
+            longitude: nil,
+            sourceURL: "https://www.instagram.com/reel/jw/",
+            sourceText: evidence,
+            evidence: ["Venue name: JW Marriott Desert Springs", "Creator handle: @elisolanooo"],
+            confidence: 0.64,
+            missingInfo: ["Confirm coordinates"],
+            savedAt: Date()
+        )
+
+        _ = await service.refineCandidate(candidate, evidenceText: evidence)
+
+        XCTAssertFalse(google.queries.contains { $0.localizedCaseInsensitiveContains("elisolanooo") })
+        XCTAssertFalse(google.queries.contains { $0.localizedCaseInsensitiveContains("Eli Solanooo") })
+        XCTAssertTrue(google.queries.contains { $0.localizedCaseInsensitiveContains("JW Marriott Desert Springs") })
     }
 
     func testOCRFramePairsBrandWithNearbyDescriptor() {

@@ -1,0 +1,768 @@
+import Foundation
+
+enum SocialEvidenceRole: String, Codable {
+    case creatorHandle
+    case venueHandle
+    case venueName
+    case cityClue
+    case address
+    case bookingLink
+    case marketingText
+    case sourceAccount
+    case categoryClue
+}
+
+enum SocialEvidenceSource: String, Codable {
+    case numberedCaption
+    case captionSentence
+    case metadataTitle
+    case metadataDescription
+    case locationPin
+    case socialHandle
+    case bookingLink
+    case ocr
+}
+
+struct SocialPlaceSourceEvidence {
+    var sourceURL: String
+    var resolvedURL: String?
+    var sharedTitle: String?
+    var sharedText: String?
+    var metadataTitle: String?
+    var metadataDescription: String?
+    var ocrLines: [String]
+
+    var combinedText: String {
+        [sharedTitle, sharedText, metadataTitle, metadataDescription, ocrLines.joined(separator: "\n")]
+            .compactMap { $0 }
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+}
+
+struct SocialEvidenceAtom {
+    var source: SocialEvidenceSource
+    var role: SocialEvidenceRole
+    var value: String
+    var line: String
+    var confidence: Double
+
+    var chip: String {
+        switch role {
+        case .creatorHandle:
+            return "Creator handle: @\(value)"
+        case .venueHandle:
+            return "Venue handle: @\(value)"
+        case .venueName:
+            return "Venue name: \(value)"
+        case .cityClue:
+            return "Location clue: \(value)"
+        case .address:
+            return "Address clue: \(value)"
+        case .bookingLink:
+            return "Booking link: \(value)"
+        case .marketingText:
+            return "Marketing text ignored"
+        case .sourceAccount:
+            return "Source account: @\(value)"
+        case .categoryClue:
+            return "Category clue: \(value)"
+        }
+    }
+}
+
+struct SocialPlaceCandidateDraft {
+    var canonicalName: String
+    var displayName: String
+    var category: String
+    var handles: [String]
+    var creatorHandles: [String]
+    var venueHandles: [String]
+    var locationClues: [String]
+    var bookingLinks: [String]
+    var evidence: [SocialEvidenceAtom]
+    var confidence: Double
+    var missingInfo: [String]
+
+    var hasAddress: Bool {
+        !locationClues.isEmpty
+    }
+
+    var evidenceChips: [String] {
+        Array(NSOrderedSet(array: evidence.map(\.chip))) as? [String] ?? evidence.map(\.chip)
+    }
+}
+
+struct SocialPlaceSourceActor {
+    var handle: String
+    var role: SocialEvidenceRole
+    var why: String
+}
+
+struct SocialPlaceDiscardedCandidate {
+    var value: String
+    var reason: String
+}
+
+struct SocialPlaceAgentAnalysis {
+    var sourceSummary: String
+    var placesFound: [SocialPlaceCandidateDraft]
+    var sourceActors: [SocialPlaceSourceActor]
+    var discardedCandidates: [SocialPlaceDiscardedCandidate]
+    var nextBestAction: String
+}
+
+struct SocialPlaceParser {
+    func parse(evidence: SocialPlaceSourceEvidence) -> [SocialPlaceCandidateDraft] {
+        analyze(evidence: evidence).placesFound
+    }
+
+    func analyze(evidence: SocialPlaceSourceEvidence) -> SocialPlaceAgentAnalysis {
+        let text = evidence.combinedText
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { !$0.isEmpty }
+
+        let handleContexts = handleContexts(in: lines)
+        let creatorHandles = Set(handleContexts.filter { $0.role == .creatorHandle }.map(\.handle))
+        let sourceActors = handleContexts
+            .filter { $0.role == .creatorHandle || $0.role == .sourceAccount }
+            .map { SocialPlaceSourceActor(handle: $0.handle, role: $0.role, why: $0.reason) }
+        let discarded = creatorHandles.map {
+            SocialPlaceDiscardedCandidate(
+                value: SocialPlaceEvidenceScorer.displayName(fromSocialHandle: $0),
+                reason: "creator handle, not a venue"
+            )
+        }
+
+        var candidates: [SocialPlaceCandidateDraft] = []
+        candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
+        candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL))
+        candidates.append(contentsOf: englishStayCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+        candidates.append(contentsOf: inferredAddressCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+        candidates.append(contentsOf: chineseVenueCandidates(from: text, sourceURL: evidence.sourceURL))
+        candidates.append(contentsOf: handleOnlyCandidates(from: handleContexts, sourceURL: evidence.sourceURL, fullText: text, creatorHandles: creatorHandles))
+        candidates.append(contentsOf: ocrCandidates(from: evidence.ocrLines, sourceURL: evidence.sourceURL, fullText: text))
+
+        let merged = mergeCandidates(candidates)
+            .filter { !SocialPlaceEvidenceScorer.isRejectedTitle($0.displayName) }
+
+        return SocialPlaceAgentAnalysis(
+            sourceSummary: sourceSummary(for: text, ocrLineCount: evidence.ocrLines.count),
+            placesFound: merged,
+            sourceActors: uniqueActors(sourceActors),
+            discardedCandidates: uniqueDiscarded(discarded),
+            nextBestAction: merged.isEmpty
+                ? "Add one more clue: place name, screenshot, caption, or map link."
+                : "Open Review to confirm exact address and coordinates."
+        )
+    }
+
+    static func canonicalPlaceName(_ value: String) -> String {
+        SocialPlaceEvidenceScorer.cleanCandidateName(value)
+            .replacingOccurrences(of: #"^\s*(?:\d{1,2}[\.)]|[①②③④⑤⑥⑦⑧⑨])\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s*\(@[A-Za-z0-9._]{3,30}\)\s*"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)\b(the)\s+(?=(?:spectacular|sonoma|jw|marriott|ulaman|four|known|new)\b)"#, with: "$1 ", options: .regularExpression)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: #"[^a-z0-9\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Candidate builders
+
+    private func numberedCandidates(
+        from lines: [String],
+        sourceURL: String,
+        fullText: String,
+        handleContexts: [HandleContext]
+    ) -> [SocialPlaceCandidateDraft] {
+        var sections: [(line: String, details: [String])] = []
+        var currentLine: String?
+        var currentDetails: [String] = []
+
+        for line in lines {
+            if numberedName(from: line) != nil {
+                if let currentLine {
+                    sections.append((currentLine, currentDetails))
+                }
+                currentLine = line
+                currentDetails = []
+            } else if currentLine != nil {
+                currentDetails.append(line)
+            }
+        }
+        if let currentLine {
+            sections.append((currentLine, currentDetails))
+        }
+
+        return sections.compactMap { section in
+            guard let rawName = numberedName(from: section.line) else { return nil }
+            let extracted = extractNameAndHandles(from: rawName)
+            let name = SocialPlaceEvidenceScorer.cleanCandidateName(extracted.name)
+            guard SocialPlaceEvidenceScorer.isUsableCandidateName(name) else { return nil }
+
+            let detailsText = section.details.joined(separator: "\n")
+            let location = firstLocationClue(in: detailsText)
+            let bookingLinks = bookingLinks(in: detailsText)
+            let category = category(from: "\(name)\n\(detailsText)")
+            let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+            var atoms = [
+                SocialEvidenceAtom(source: .numberedCaption, role: .venueName, value: name, line: section.line, confidence: 0.72)
+            ]
+            atoms.append(contentsOf: extracted.handles.map {
+                SocialEvidenceAtom(source: .socialHandle, role: .venueHandle, value: $0, line: section.line, confidence: 0.64)
+            })
+            if let location {
+                atoms.append(SocialEvidenceAtom(source: .locationPin, role: .cityClue, value: location, line: detailsText, confidence: 0.62))
+            }
+            atoms.append(contentsOf: bookingLinks.map {
+                SocialEvidenceAtom(source: .bookingLink, role: .bookingLink, value: $0, line: detailsText, confidence: 0.58)
+            })
+
+            return draft(
+                name: name,
+                category: category,
+                sourceURL: sourceURL,
+                fullText: fullText,
+                handles: extracted.handles,
+                venueHandles: extracted.handles,
+                locationClues: location.map { [$0] } ?? [],
+                bookingLinks: bookingLinks,
+                atoms: atoms,
+                confidence: location == nil ? 0.56 : 0.66,
+                tier: tier
+            )
+        }
+    }
+
+    private func bracketedCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+        let patterns = [
+            #"[\[【]\s*([^\]】]{2,80})\s*[\]】]"#,
+            #"(?i)\b(?:at|spot|place)\s+([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n)"#
+        ]
+        return patterns.compactMap { pattern in
+            guard let name = firstCapture(in: text, pattern: pattern) else { return nil }
+            let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
+            guard SocialPlaceEvidenceScorer.isUsableCandidateName(cleaned) else { return nil }
+            let location = firstLocationClue(in: text)
+            let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+            return draft(
+                name: cleaned,
+                category: category(from: "\(cleaned)\n\(text)"),
+                sourceURL: sourceURL,
+                fullText: text,
+                locationClues: location.map { [$0] } ?? [],
+                atoms: [
+                    SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: cleaned, line: text, confidence: 0.6)
+                ],
+                confidence: location == nil ? 0.52 : 0.64,
+                tier: tier
+            )
+        }
+    }
+
+    private func englishStayCandidates(from lines: [String], sourceURL: String, fullText: String) -> [SocialPlaceCandidateDraft] {
+        lines.compactMap { line in
+            if let match = englishThisIsStayMatch(in: line) {
+                let name = SocialPlaceEvidenceScorer.cleanCandidateName(match.name)
+                guard SocialPlaceEvidenceScorer.isUsableCandidateName(name), looksLikeStayVenue(name) else { return nil }
+                let location = SocialPlaceEvidenceScorer.cleanText(match.area)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，"))
+                return draft(
+                    name: name,
+                    category: "stay",
+                    sourceURL: sourceURL,
+                    fullText: fullText,
+                    locationClues: location.isEmpty ? [] : [location],
+                    atoms: [
+                        SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: name, line: line, confidence: 0.68),
+                        SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: location, line: line, confidence: 0.56)
+                    ],
+                    confidence: 0.64,
+                    tier: .weakCandidate
+                )
+            }
+
+            if let name = firstCapture(in: line, pattern: #"(?i)\b(?:staying at|welcome to|check out)\s+([A-Z][A-Za-z0-9 &'._-]{2,80})(?:[.!?,\n\r]|$)"#) {
+                let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
+                guard SocialPlaceEvidenceScorer.isUsableCandidateName(cleaned), looksLikeStayVenue(cleaned) else { return nil }
+                let location = firstLocationClue(in: fullText)
+                return draft(
+                    name: cleaned,
+                    category: "stay",
+                    sourceURL: sourceURL,
+                    fullText: fullText,
+                    locationClues: location.map { [$0] } ?? [],
+                    atoms: [
+                        SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: cleaned, line: line, confidence: 0.64)
+                    ],
+                    confidence: 0.58,
+                    tier: SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+                )
+            }
+            return nil
+        }
+    }
+
+    private func inferredAddressCandidates(from lines: [String], sourceURL: String, fullText: String) -> [SocialPlaceCandidateDraft] {
+        guard lines.count >= 2 else { return [] }
+        var result: [SocialPlaceCandidateDraft] = []
+        for (index, line) in lines.enumerated() where SocialPlaceEvidenceScorer.looksLikeAddressLine(line) {
+            let priorLines = Array(lines.prefix(index))
+            for priorLine in priorLines {
+                guard let name = candidateNameFromCaptionLine(priorLine) else { continue }
+                let address = firstLocationClue(in: line) ?? line
+                result.append(
+                    draft(
+                        name: name,
+                        category: category(from: "\(name)\n\(fullText)"),
+                        sourceURL: sourceURL,
+                        fullText: fullText,
+                        locationClues: [address],
+                        atoms: [
+                            SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: name, line: priorLine, confidence: 0.62),
+                            SocialEvidenceAtom(source: .captionSentence, role: .address, value: address, line: line, confidence: 0.68)
+                        ],
+                        confidence: 0.68,
+                        tier: .likely
+                    )
+                )
+                break
+            }
+        }
+        return result
+    }
+
+    private func chineseVenueCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+        var names: [String] = []
+        if let quoted = quotedVenueName(in: text) {
+            names.append(quoted)
+        }
+        if let composed = composedChineseVenueName(in: text) {
+            names.append(composed)
+        }
+
+        let location = firstLocationClue(in: text)
+        return names.compactMap { name in
+            guard SocialPlaceEvidenceScorer.isUsableCandidateName(name) else { return nil }
+            return draft(
+                name: name,
+                category: category(from: "\(name)\n\(text)"),
+                sourceURL: sourceURL,
+                fullText: text,
+                locationClues: location.map { [$0] } ?? [],
+                atoms: [
+                    SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: name, line: text, confidence: 0.66)
+                ],
+                confidence: location == nil ? 0.58 : 0.68,
+                tier: SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+            )
+        }
+    }
+
+    private func handleOnlyCandidates(
+        from contexts: [HandleContext],
+        sourceURL: String,
+        fullText: String,
+        creatorHandles: Set<String>
+    ) -> [SocialPlaceCandidateDraft] {
+        contexts.compactMap { context in
+            guard (context.role == .venueHandle || context.role == .sourceAccount),
+                  !creatorHandles.contains(context.handle) else { return nil }
+            let resolved = SocialPlaceEvidenceScorer.resolvedDisplayName(fromSocialHandle: context.handle, evidenceText: fullText)
+            guard context.role == .venueHandle || resolved.evidence != nil else { return nil }
+            let name = resolved.name
+            guard SocialPlaceEvidenceScorer.isUsableCandidateName(name) else { return nil }
+            let location = firstLocationClue(in: fullText)
+            let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil, isResolvedHandle: resolved.evidence != nil)
+            var atoms = [
+                SocialEvidenceAtom(source: .socialHandle, role: .venueHandle, value: context.handle, line: context.line, confidence: 0.56)
+            ]
+            if let profileEvidence = resolved.evidence {
+                atoms.append(SocialEvidenceAtom(source: .socialHandle, role: .venueName, value: name, line: profileEvidence, confidence: 0.62))
+            }
+            if let location {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: location, line: fullText, confidence: 0.48))
+            }
+            return draft(
+                name: name,
+                category: category(from: "\(context.line)\n\(fullText)"),
+                sourceURL: sourceURL,
+                fullText: fullText,
+                handles: [context.handle],
+                venueHandles: [context.handle],
+                locationClues: location.map { [$0] } ?? [],
+                atoms: atoms,
+                confidence: min(0.52 + resolved.confidenceBoost, 0.72),
+                tier: tier
+            )
+        }
+    }
+
+    private func ocrCandidates(from ocrLines: [String], sourceURL: String, fullText: String) -> [SocialPlaceCandidateDraft] {
+        guard let result = SocialOCRCandidateHeuristics.candidate(from: ocrLines) else { return [] }
+        let ocrText = ocrLines.joined(separator: "\n")
+        return [
+            draft(
+                name: result.name,
+                category: category(from: "\(result.name)\n\(fullText)\n\(ocrText)"),
+                sourceURL: sourceURL,
+                fullText: fullText,
+                atoms: [
+                    SocialEvidenceAtom(source: .ocr, role: .venueName, value: result.name, line: ocrText, confidence: result.confidence)
+                ],
+                confidence: result.confidence,
+                tier: .weakCandidate,
+                extraMissingInfo: ["OCR-derived candidate; verify venue identity"]
+            )
+        ]
+    }
+
+    // MARK: - Draft assembly
+
+    private func draft(
+        name: String,
+        category: String,
+        sourceURL: String,
+        fullText: String,
+        handles: [String] = [],
+        creatorHandles: [String] = [],
+        venueHandles: [String] = [],
+        locationClues: [String] = [],
+        bookingLinks: [String] = [],
+        atoms: [SocialEvidenceAtom],
+        confidence: Double,
+        tier: SocialPlaceEvidenceTier,
+        extraMissingInfo: [String] = []
+    ) -> SocialPlaceCandidateDraft {
+        let displayName = cleanDisplayName(name)
+        let hasAddress = !locationClues.isEmpty
+        let sourceAtom = SocialEvidenceAtom(source: .metadataDescription, role: .sourceAccount, value: sourceURL, line: sourceURL, confidence: 0.2)
+        let tierAtom = SocialEvidenceAtom(source: .metadataDescription, role: .categoryClue, value: "Evidence tier: \(tier.rawValue)", line: fullText, confidence: 0.2)
+        let allAtoms = appendUniqueAtoms(atoms + [sourceAtom, tierAtom])
+        let missing = SocialPlaceEvidenceScorer.missingInfo(tier: tier, hasAddress: hasAddress) + extraMissingInfo
+
+        return SocialPlaceCandidateDraft(
+            canonicalName: Self.canonicalPlaceName(displayName),
+            displayName: displayName,
+            category: category,
+            handles: uniqueStrings(handles),
+            creatorHandles: uniqueStrings(creatorHandles),
+            venueHandles: uniqueStrings(venueHandles),
+            locationClues: uniqueStrings(locationClues),
+            bookingLinks: uniqueStrings(bookingLinks),
+            evidence: allAtoms,
+            confidence: confidence,
+            missingInfo: uniqueStrings(missing).sorted()
+        )
+    }
+
+    private func mergeCandidates(_ candidates: [SocialPlaceCandidateDraft]) -> [SocialPlaceCandidateDraft] {
+        var orderedKeys: [String] = []
+        var merged: [String: SocialPlaceCandidateDraft] = [:]
+
+        for candidate in candidates where !candidate.canonicalName.isEmpty {
+            let key = candidate.canonicalName
+
+            if var existing = merged[key] {
+                existing.handles = uniqueStrings(existing.handles + candidate.handles)
+                existing.creatorHandles = uniqueStrings(existing.creatorHandles + candidate.creatorHandles)
+                existing.venueHandles = uniqueStrings(existing.venueHandles + candidate.venueHandles)
+                existing.locationClues = uniqueStrings(existing.locationClues + candidate.locationClues)
+                existing.bookingLinks = uniqueStrings(existing.bookingLinks + candidate.bookingLinks)
+                existing.evidence = appendUniqueAtoms(existing.evidence + candidate.evidence)
+                existing.confidence = max(existing.confidence, candidate.confidence)
+                existing.missingInfo = uniqueStrings(existing.missingInfo + candidate.missingInfo).sorted()
+                merged[key] = existing
+            } else {
+                orderedKeys.append(key)
+                merged[key] = candidate
+            }
+        }
+        return orderedKeys.compactMap { merged[$0] }
+    }
+
+    // MARK: - Handles
+
+    private struct HandleContext {
+        var handle: String
+        var line: String
+        var role: SocialEvidenceRole
+        var reason: String
+    }
+
+    private func handleContexts(in lines: [String]) -> [HandleContext] {
+        lines.flatMap { line in
+            handles(in: line).map { handle in
+                let role = classify(handle: handle, line: line)
+                return HandleContext(handle: handle, line: line, role: role.role, reason: role.reason)
+            }
+        }
+    }
+
+    private func classify(handle: String, line: String) -> (role: SocialEvidenceRole, reason: String) {
+        let lowered = line.lowercased()
+        let escaped = NSRegularExpression.escapedPattern(for: handle)
+        let followPattern = #"(?i)\b(?:please\s+)?follow\s+@"# + escaped + #"\b"#
+        if line.range(of: followPattern, options: .regularExpression) != nil ||
+            lowered.range(of: #"\b(?:creator|travel tips|hidden gems|guide|by|via)\b"#, options: .regularExpression) != nil && !looksVenueContext(line) {
+            return (.creatorHandle, "Appears near creator/follow language; not near a venue line.")
+        }
+        if numberedName(from: line) != nil ||
+            line.range(of: #"(?i)\b(?:staying at|located at|book|reserve|hotel|resort|restaurant|cafe|airbnb|villa|treehouse)\b"#, options: .regularExpression) != nil {
+            return (.venueHandle, "Appears inside a venue/stay/place line.")
+        }
+        return (.sourceAccount, "Handle kept as provenance; not enough evidence to make it a place.")
+    }
+
+    private func handles(in text: String) -> [String] {
+        let ignored: Set<String> = ["instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "wanderly", "save", "media"]
+        guard let regex = try? NSRegularExpression(pattern: #"@([A-Za-z0-9._]{3,30})"#) else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: range).compactMap { match in
+            guard match.numberOfRanges > 1,
+                  let handleRange = Range(match.range(at: 1), in: text) else { return nil }
+            let handle = String(text[handleRange]).lowercased()
+            guard !ignored.contains(handle),
+                  !handle.contains("instagram"),
+                  handle.range(of: #"\d{5,}"#, options: .regularExpression) == nil else {
+                return nil
+            }
+            return handle
+        }
+    }
+
+    // MARK: - Extraction helpers
+
+    private func numberedName(from line: String) -> String? {
+        firstCapture(in: line, pattern: #"^\s*(?:\d{1,2}[\.)]|[①②③④⑤⑥⑦⑧⑨])\s*([^\n\r]+)"#)
+    }
+
+    private func extractNameAndHandles(from value: String) -> (name: String, handles: [String]) {
+        let handles = handles(in: value)
+        let name = value
+            .replacingOccurrences(of: #"\s*\(@[A-Za-z0-9._]{3,30}\)\s*"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"@[A-Za-z0-9._]{3,30}"#, with: " ", options: .regularExpression)
+        return (name, handles)
+    }
+
+    private func cleanDisplayName(_ value: String) -> String {
+        SocialPlaceEvidenceScorer.cleanCandidateName(value)
+            .replacingOccurrences(of: #"^\s*(?:\d{1,2}[\.)]|[①②③④⑤⑥⑦⑧⑨])\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s*\(@[A-Za-z0-9._]{3,30}\)\s*"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " .,:;!。！"))
+    }
+
+    private func firstLocationClue(in text: String) -> String? {
+        let patterns = [
+            #"📍\s*([^\n\r\.]+)"#,
+            #"\bLocation:\s*([^\n\r\.]+)"#,
+            #"(?i)\b(?:located|based)\s+in\s+([A-Z][A-Za-z .'-]{2,40})(?:[.!?,\n\r]|$)"#,
+            #"\b([A-Z][A-Za-z .'-]{2,40},\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO|Bali|Indonesia|Chongqing|China|California))\b"#
+        ]
+        for pattern in patterns {
+            guard let value = firstCapture(in: text, pattern: pattern) else { continue }
+            let cleaned = SocialPlaceEvidenceScorer.cleanText(value)
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，"))
+            if !cleaned.isEmpty { return cleaned }
+        }
+        return text
+            .components(separatedBy: .newlines)
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .first(where: SocialPlaceEvidenceScorer.looksLikeAddressLine)
+    }
+
+    private func englishThisIsStayMatch(in line: String) -> (name: String, area: String)? {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?i)\bThis is(?: the)?\s+(.{2,80}?)\s+(?:in|near)\s+(?:the\s+)?([A-Z][A-Za-z .'-]{2,80})(?:[.!?\n\r]|$)"#
+        ) else { return nil }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, range: range),
+              match.numberOfRanges > 2,
+              let nameRange = Range(match.range(at: 1), in: line),
+              let areaRange = Range(match.range(at: 2), in: line) else {
+            return nil
+        }
+        return (String(line[nameRange]), String(line[areaRange]))
+    }
+
+    private func looksLikeStayVenue(_ value: String) -> Bool {
+        value.range(of: #"(?i)\b(hotel|resort|marriott|hyatt|hilton|villa|cabin|treehouse|spa|lodge|inn|airbnb|glamping|retreat|spyglass|ulaman)\b"#, options: .regularExpression) != nil
+    }
+
+    private func looksVenueContext(_ line: String) -> Bool {
+        line.range(of: #"(?i)\b(staying at|located at|book|reserve|hotel|resort|restaurant|cafe|airbnb|villa|treehouse|spot|place)\b"#, options: .regularExpression) != nil
+    }
+
+    private func bookingLinks(in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"\b(?:https?://)?(?:www\.)?(?:airbnb|booking|resy|opentable|inline|tablecheck)\.[^\s]+"#, options: [.caseInsensitive]) else {
+            return []
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: range).compactMap { match in
+            Range(match.range, in: text).map { String(text[$0]) }
+        }
+    }
+
+    private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        if let leadingName = firstCapture(in: line, pattern: #"^([^/\n]{2,60})\s*/"#) {
+            let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(leadingName)
+            if SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) {
+                return cleaned
+            }
+        }
+
+        if let numbered = numberedName(from: line) {
+            let extracted = extractNameAndHandles(from: numbered)
+            let cleaned = cleanDisplayName(extracted.name)
+            if SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) {
+                return cleaned
+            }
+        }
+
+        if line.range(of: #"主打|形式|course|コース|menu|price|餐點|價位"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return nil
+        }
+        if let quoted = quotedVenueName(in: line) {
+            return quoted
+        }
+        return nil
+    }
+
+    private func quotedVenueName(in text: String) -> String? {
+        let venueIntroPattern = #"名店|餐廳|餐厅|正式插旗|插旗|開幕|新店|店名|restaurant|from\s+tokyo|來自東京|頂級燒肉"#
+        for line in text.components(separatedBy: .newlines)
+            where line.range(of: venueIntroPattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            if let quoted = firstCapture(in: line, pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) {
+                let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(quoted)
+                if SocialPlaceEvidenceScorer.isUsableCandidateName(cleaned) {
+                    return cleaned
+                }
+            }
+        }
+        guard let quoted = firstCapture(in: text, pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) else { return nil }
+        let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(quoted)
+        return SocialPlaceEvidenceScorer.isUsableCandidateName(cleaned) ? cleaned : nil
+    }
+
+    private func composedChineseVenueName(in text: String) -> String? {
+        let patterns = [
+            #"(?:^|[\n\r])[-\s]*(?:[\u4e00-\u9fff]{0,4})?(?:全新開幕|新開幕|開幕)\s*([^\s新主题主題\-－—–:]{2,16})\s*(?:新主題|主题|主題)\s*[-－—–:]\s*([\u4e00-\u9fffA-Za-z0-9]{2,24})"#,
+            #"([\u4e00-\u9fffA-Za-z0-9]{2,24})\s*[·・‧]\s*([\u4e00-\u9fffA-Za-z0-9]{2,24})"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 2,
+                  let brandRange = Range(match.range(at: 1), in: text),
+                  let themeRange = Range(match.range(at: 2), in: text) else { continue }
+            let brand = SocialPlaceEvidenceScorer.cleanCandidateName(String(text[brandRange]))
+            let theme = SocialPlaceEvidenceScorer.cleanCandidateName(String(text[themeRange]))
+            let name = "\(brand)·\(theme)"
+            if SocialPlaceEvidenceScorer.isUsableCandidateName(name), !SocialPlaceEvidenceScorer.looksLikeMarketingLine(name) {
+                return name
+            }
+        }
+        return nil
+    }
+
+    private func category(from text: String) -> String {
+        let lowered = text.lowercased()
+        if lowered.range(of: #"airbnb|stay|hotel|resort|villa|home|cabin|treehouse|marriott|hyatt|hilton|lodge|inn|glamping|retreat"#, options: .regularExpression) != nil {
+            return "stay"
+        }
+        if lowered.range(of: #"restaurant|food|eat|cafe|coffee|tea|bar|hot pot|sukiyaki|yakiniku"#, options: .regularExpression) != nil {
+            return "food"
+        }
+        if text.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌|壽喜燒"#, options: .regularExpression) != nil {
+            return "food"
+        }
+        return "attraction"
+    }
+
+    private func firstCapture(in text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        return String(text[captureRange])
+    }
+
+    private func candidateScore(_ candidate: SocialPlaceCandidateDraft) -> Double {
+        var score = candidate.confidence
+        if !candidate.locationClues.isEmpty { score += 0.14 }
+        if !candidate.venueHandles.isEmpty { score += 0.08 }
+        if !candidate.bookingLinks.isEmpty { score += 0.06 }
+        if candidate.category == "stay" || candidate.category == "food" { score += 0.03 }
+        return score
+    }
+
+    private func sourceSummary(for text: String, ocrLineCount: Int) -> String {
+        var parts: [String] = []
+        if text.lowercased().contains("instagram") || text.contains("@") {
+            parts.append("social caption")
+        }
+        if text.components(separatedBy: .newlines).contains(where: { numberedName(from: $0) != nil }) {
+            parts.append("numbered list")
+        }
+        if ocrLineCount > 0 {
+            parts.append("OCR text")
+        }
+        return parts.isEmpty ? "public link evidence" : parts.joined(separator: " with ")
+    }
+
+    private func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in values {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(trimmed)
+        }
+        return result
+    }
+
+    private func appendUniqueAtoms(_ atoms: [SocialEvidenceAtom]) -> [SocialEvidenceAtom] {
+        var seen = Set<String>()
+        var result: [SocialEvidenceAtom] = []
+        for atom in atoms {
+            let key = "\(atom.role.rawValue)|\(atom.value.lowercased())|\(atom.line.lowercased())"
+            guard !seen.contains(key), !atom.value.isEmpty else { continue }
+            seen.insert(key)
+            result.append(atom)
+        }
+        return result
+    }
+
+    private func uniqueActors(_ actors: [SocialPlaceSourceActor]) -> [SocialPlaceSourceActor] {
+        var seen = Set<String>()
+        return actors.filter { actor in
+            let key = "\(actor.role.rawValue)|\(actor.handle)"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+
+    private func uniqueDiscarded(_ discarded: [SocialPlaceDiscardedCandidate]) -> [SocialPlaceDiscardedCandidate] {
+        var seen = Set<String>()
+        return discarded.filter { item in
+            let key = "\(item.value.lowercased())|\(item.reason)"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+}
