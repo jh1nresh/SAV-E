@@ -115,6 +115,63 @@ test("runSourceSearchRecovery uses injected fetcher and returns candidates", asy
   assert.equal(output.candidates[0].name, "The Porch at The Ranch at Laguna Beach");
 });
 
+test("runSourceSearchRecovery creates review candidate from explicit source metadata address", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/DWmzyodgbuv/?igsh=tracking",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="Lorna: OC Insider on Instagram: &quot;&#x1f4cd; The Porch at The Ranch at Laguna Beach &#064;theranchlb
+31106 Coast Hwy, Laguna Beach&quot;">
+          <meta property="og:description" content="6,930 likes - thescenesouthoc: &quot;&#x1f4cd; The Porch at The Ranch at Laguna Beach &#064;theranchlb
+31106 Coast Hwy, Laguna Beach. Tucked inside Aliso Canyon.&quot;">
+        `;
+      }
+
+      return `
+        <div class="result">
+          <a class="result__a" href="https://www.instagram.com/reels/">Instagram</a>
+        </div>
+      `;
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "The Porch at The Ranch at Laguna Beach");
+  assert.equal(output.candidates[0].address, "31106 Coast Hwy, Laguna Beach");
+  assert.equal(output.candidates[0].confidence, 0.62);
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("Source metadata contains explicit place/address evidence")));
+});
+
+test("runSourceSearchRecovery skips hours and uses venue line before non-US address", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/DYmFHrizV3E/?igsh=tracking",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="城市記憶 on Instagram: &quot;跑了幾次Jo &amp; Dawson的延南洞店
+-
+👉🏻Jo &amp; Dawson 光化門店
+🍽️07:30-20:00
+📍首爾特別市 鐘路區 淸進洞 70&quot;">
+        `;
+      }
+
+      return "";
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "Jo & Dawson 光化門店");
+  assert.equal(output.candidates[0].address, "首爾特別市 鐘路區 淸進洞 70");
+});
+
 test("runSourceSearchRecovery keeps generic live search pages diagnostic-only", async () => {
   const output = await runSourceSearchRecovery(
     {

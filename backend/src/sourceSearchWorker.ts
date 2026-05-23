@@ -28,6 +28,12 @@ export type SourceSearchOutput = {
   errors: string[];
 };
 
+type SourceMetadata = {
+  resolvedURL?: string;
+  title?: string;
+  description?: string;
+};
+
 type FetchText = (url: string) => Promise<string>;
 
 const defaultMaxQueries = 4;
@@ -37,9 +43,11 @@ export async function runSourceSearchRecovery(
   input: SourceSearchInput,
   fetchText: FetchText = defaultFetchText,
 ): Promise<SourceSearchOutput> {
-  const queries = buildSourceRecoveryQueries(input).slice(0, input.maxQueries ?? defaultMaxQueries);
-  const searchResults: SourceSearchResult[] = [];
   const errors: string[] = [];
+  const sourceMetadata = await fetchSourceMetadata(input.sourceUrl, fetchText, errors);
+  const enrichedInput = inputWithSourceMetadata(input, sourceMetadata);
+  const queries = buildSourceRecoveryQueries(enrichedInput).slice(0, input.maxQueries ?? defaultMaxQueries);
+  const searchResults: SourceSearchResult[] = [];
 
   for (const query of queries) {
     try {
@@ -54,7 +62,10 @@ export async function runSourceSearchRecovery(
   return {
     queries,
     searchResults,
-    candidates: candidatesFromSearchResults(searchResults),
+    candidates: dedupeCandidates([
+      ...candidatesFromSourceMetadata(sourceMetadata),
+      ...candidatesFromSearchResults(searchResults),
+    ]),
     errors,
   };
 }
@@ -86,6 +97,17 @@ export function buildSourceRecoveryQueries(input: SourceSearchInput): string[] {
   return unique(queries).filter(Boolean).slice(0, defaultMaxQueries);
 }
 
+function inputWithSourceMetadata(input: SourceSearchInput, metadata: SourceMetadata | undefined): SourceSearchInput {
+  if (!metadata) return input;
+  const metadataText = [metadata.title, metadata.description].filter(Boolean).join("\n");
+  return {
+    ...input,
+    sourceUrl: metadata.resolvedURL ?? input.sourceUrl,
+    title: [input.title, metadata.title].filter(Boolean).join(" "),
+    rawText: [input.rawText, metadataText].filter(Boolean).join("\n"),
+  };
+}
+
 export function parseDuckDuckGoResults(html: string, query: string): SourceSearchResult[] {
   const results: SourceSearchResult[] = [];
   const blocks = html.match(/<div[^>]+class="[^"]*result[^"]*"[\s\S]*?(?=<div[^>]+class="[^"]*result[^"]*"|$)/gi) ?? [];
@@ -109,6 +131,33 @@ export function parseDuckDuckGoResults(html: string, query: string): SourceSearc
   }
 
   return results;
+}
+
+function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): SourceSearchCandidate[] {
+  if (!metadata) return [];
+  const evidenceText = decodedMetadataText(metadata);
+  const address = addressFromText(evidenceText);
+  if (!address) return [];
+
+  const name = sourceMetadataPlaceName(evidenceText, address);
+  if (!name || !isUsableCandidateName(name)) return [];
+
+  return [{
+    name,
+    address,
+    evidence: [
+      "Source metadata contains explicit place/address evidence",
+      metadata.title ? `Source metadata title: ${cleanText(metadata.title)}` : "",
+      metadata.description ? `Source metadata description: ${cleanText(metadata.description)}` : "",
+      metadata.resolvedURL ? `Source metadata URL: ${metadata.resolvedURL}` : "",
+    ].filter(Boolean),
+    confidence: 0.62,
+    missingInfo: [
+      "Confirm exact address",
+      "Verified coordinates",
+      "Source metadata-derived candidate; verify before saving",
+    ],
+  }];
 }
 
 export function candidatesFromSearchResults(results: SourceSearchResult[]): SourceSearchCandidate[] {
@@ -147,6 +196,45 @@ export function candidatesFromSearchResults(results: SourceSearchResult[]): Sour
   }
 
   return candidates.slice(0, 5);
+}
+
+function dedupeCandidates(candidates: SourceSearchCandidate[]): SourceSearchCandidate[] {
+  const seen = new Set<string>();
+  const result: SourceSearchCandidate[] = [];
+  for (const candidate of candidates) {
+    const key = `${canonicalName(candidate.name)}|${canonicalName(candidate.address)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(candidate);
+  }
+  return result.slice(0, 5);
+}
+
+function sourceMetadataPlaceName(text: string, address: string): string | undefined {
+  const addressIndex = text.indexOf(address);
+  if (addressIndex < 0) return undefined;
+
+  const beforeAddress = text.slice(0, addressIndex);
+  const candidates = beforeAddress
+    .split(/\n|["“”]/)
+    .map(cleanMetadataPlaceLine)
+    .filter((line) => line && isUsableCandidateName(line) && !looksLikeHours(line));
+
+  return candidates.at(-1);
+}
+
+function cleanMetadataPlaceLine(value: string): string {
+  let line = cleanText(value);
+  const pinIndex = line.lastIndexOf("📍");
+  if (pinIndex >= 0) line = line.slice(pinIndex + 2);
+  line = line
+    .replace(/^[^:]{1,80}\bon\s+Instagram:\s*/i, "")
+    .replace(/^.*?:\s*(?=[^:]{2,90}$)/, "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/\s+[@#][A-Za-z0-9._-]{3,30}\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return line;
 }
 
 function isReviewableSearchResult(result: SourceSearchResult): boolean {
@@ -242,11 +330,15 @@ function addressFromText(text: string): string | undefined {
     /\b\d{1,6}\s+[A-Za-z0-9 .'-]{2,80}\b(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Highway|Hwy\.?|Coast Hwy)\b(?:,\s*[A-Za-z .'-]{2,40})?/i,
     /[\u4e00-\u9fff]{2,}(?:市|区|區|路|街|道)[\u4e00-\u9fffA-Za-z0-9\-－\s]{0,40}\d{1,6}\s*(?:号|號)?/,
   ];
-  return patterns.map((pattern) => text.match(pattern)?.[0]).find(Boolean);
+  return patterns.map((pattern) => text.match(pattern)?.[0]?.trim()).find(Boolean);
 }
 
 function looksLikeAddress(value: string): boolean {
   return addressFromText(value) !== undefined;
+}
+
+function looksLikeHours(value: string): boolean {
+  return /\b\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}\b/.test(value);
 }
 
 function instagramReelID(url?: URL): string | undefined {
@@ -271,14 +363,77 @@ function duckDuckGoHTMLURL(query: string): string {
 }
 
 async function defaultFetchText(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "SAV-E source recovery worker/1.0",
-      "Accept": "text/html,application/xhtml+xml",
-    },
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "SAV-E source recovery worker/1.0",
+        "Accept": "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchSourceMetadata(
+  sourceUrl: string | null | undefined,
+  fetchText: FetchText,
+  errors: string[],
+): Promise<SourceMetadata | undefined> {
+  const source = sourceUrl?.trim();
+  const url = source ? safeURL(source) : undefined;
+  if (!url || !["http:", "https:"].includes(url.protocol)) return undefined;
+
+  try {
+    const html = await fetchText(url.toString());
+    const metadata = sourceMetadataFromHTML(html, url.toString());
+    return metadata.title || metadata.description || metadata.resolvedURL ? metadata : undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown source metadata error";
+    errors.push(`source metadata ${url.toString()}: ${message}`);
+    return undefined;
+  }
+}
+
+function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
+  return {
+    resolvedURL,
+    title: metadataValue(html, ["og:title", "twitter:title"]) ?? htmlTitle(html),
+    description: metadataValue(html, ["og:description", "twitter:description", "description"]),
+  };
+}
+
+function metadataValue(html: string, keys: string[]): string | undefined {
+  const keySet = new Set(keys.map((key) => key.toLowerCase()));
+  const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
+  for (const tag of tags) {
+    const property = attrValue(tag, "property") ?? attrValue(tag, "name");
+    if (!property || !keySet.has(property.toLowerCase())) continue;
+    const content = attrValue(tag, "content");
+    if (content) return content;
+  }
+  return undefined;
+}
+
+function attrValue(tag: string, name: string): string | undefined {
+  const pattern = new RegExp(`\\b${name}\\s*=\\s*([\"'])([\\s\\S]*?)\\1`, "i");
+  return tag.match(pattern)?.[2];
+}
+
+function htmlTitle(html: string): string | undefined {
+  return html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+}
+
+function decodedMetadataText(metadata: SourceMetadata): string {
+  return [metadata.title, metadata.description]
+    .filter(Boolean)
+    .map((value) => decodeHTML(value ?? ""))
+    .join("\n");
 }
 
 function safeURL(value: string): URL | undefined {
@@ -319,6 +474,8 @@ function stripTags(value: string): string {
 
 function decodeHTML(value: string): string {
   return value
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#([0-9]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, "\"")
     .replace(/&#034;/g, "\"")
