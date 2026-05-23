@@ -1,7 +1,6 @@
 import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
-import CoreLocation
 import Vision
 
 class ShareViewController: UIViewController {
@@ -458,19 +457,6 @@ struct ShareExtensionView: View {
         }
 
         if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL),
-           let metadataPlace = await deterministicSocialMetadataPlace(
-            from: metadata,
-            sharedTitle: sharedTitle,
-            sharedText: sharedText
-           ) {
-            parsedPlace = metadataPlace
-            selectedCategory = metadataPlace.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
            isSocialURL(sourceURL) {
             let candidates = await socialAnalysisReviewCandidates(
                 from: metadata,
@@ -484,6 +470,10 @@ struct ShareExtensionView: View {
                 isParsing = false
                 return
             }
+            saveSourceOnlyMemory(parseContent, reason: "No reliable social review candidate found")
+            parseError = "SAV-E needs one more clue before it can review this social post. Share a map link, screenshot, or caption with a visible place name."
+            isParsing = false
+            return
         }
 
         let aiContent = [sharedTitle, sharedText, metadata.title, metadata.description, parseContent]
@@ -737,34 +727,6 @@ struct ShareExtensionView: View {
         }
 
         return decoded
-    }
-
-    private func deterministicSocialMetadataPlace(
-        from metadata: ShareMetadata,
-        sharedTitle: String,
-        sharedText: String
-    ) async -> ParsedPlace? {
-        let evidence = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
-        guard let address = firstAddress(in: evidence),
-              let name = firstPlaceName(in: evidence) else {
-            return nil
-        }
-
-        guard let coordinates = await geocodeAddress(address) else {
-            return nil
-        }
-
-        let category = fallbackCategory(from: evidence)
-        return ParsedPlace(
-            name: name,
-            address: address,
-            category: category,
-            iconName: iconForCategory(category),
-            latitude: coordinates.latitude,
-            longitude: coordinates.longitude,
-            dishes: dishHints(from: evidence),
-            priceRange: priceRangeHint(from: evidence)
-        )
     }
 
     private func socialReviewCandidate(
@@ -1452,19 +1414,6 @@ struct ShareExtensionView: View {
 
     private func displayName(fromSocialHandle handle: String) -> String {
         SocialPlaceEvidenceScorer.displayName(fromSocialHandle: handle)
-    }
-
-    private func geocodeAddress(_ address: String) async -> (latitude: Double, longitude: Double)? {
-        await withCheckedContinuation { continuation in
-            CLGeocoder().geocodeAddressString(address) { placemarks, _ in
-                guard let coordinate = placemarks?.first?.location?.coordinate,
-                      self.isValidCoordinate(latitude: coordinate.latitude, longitude: coordinate.longitude) else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: (coordinate.latitude, coordinate.longitude))
-            }
-        }
     }
 
     private func firstRegexCapture(in content: String, pattern: String) -> String? {

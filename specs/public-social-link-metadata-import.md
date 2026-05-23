@@ -1,6 +1,11 @@
 # Public Social Link Metadata Import
 
-> Last updated: 2026-05-13
+> Last updated: 2026-05-22
+
+> Superseded boundary: social links now follow
+> `specs/share-extension-social-review-only.md`. Public metadata may create
+> review candidates, but the Share Extension should not geocode social metadata
+> directly into a Map Stamp.
 
 ## Goal
 
@@ -17,19 +22,15 @@ Let SAV-E import public Instagram/TikTok/Xiaohongshu-style social links when the
 ## Native iOS Share Extension
 
 1. User shares an Instagram/TikTok/Xiaohongshu link to SAV-E.
-2. SAV-E fetches public page metadata.
-3. If metadata includes an explicit address, SAV-E extracts:
-   - place name
-   - address
-   - category
-   - source URL
-4. SAV-E geocodes the explicit address to coordinates.
-5. If geocoding succeeds, SAV-E saves the pending place to shared app storage.
-6. If metadata or geocoding is not reliable, SAV-E shows a no-guessing error and asks for a map link or visible place details.
+2. SAV-E fetches public page metadata and optional thumbnail OCR.
+3. SAV-E runs evidence through the shared social parser.
+4. If evidence is strong enough, SAV-E saves pending review candidates.
+5. If evidence is weak, SAV-E preserves source-only memory and asks for a map link, screenshot, or visible place details.
+6. The main app Review flow handles confirmation/refinement before any saved place is created.
 
 ## Acceptance Criteria
 
-- The Instagram Reel public metadata example for Chafinity in Costa Mesa can produce a saveable pending place.
+- The Instagram Reel public metadata example for Chafinity in Costa Mesa can produce a review candidate.
 - Social links without an explicit place/address do not save fake pins.
-- AI fallback is allowed only after meaningful metadata is present and must still pass coordinate/city validation.
+- AI fallback is allowed for non-social links only in the Share Extension direct-save flow.
 - The extension does not default uncertain social imports to San Francisco or `(0, 0)`.

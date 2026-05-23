@@ -153,6 +153,29 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.evidence.joined(separator: " ").contains("Venue handle: @citiesmemory") })
     }
 
+    func testInstagramReelCaptionWithKoreanAddressCreatesReviewCandidate() {
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            城市記憶 LESTER | TANG, CHIH-CHUN on Instagram: "吃了四五次以上的超強韓牛！！
+            -
+            之前朋友說想吃韓牛的時候，我們總是會約在明洞的一片里脊，想不到弘大也有分店而且店內氣氛還更好。
+            -
+            👉🏻一片里脊 弘大店
+            📍首爾特別市 麻浦區 東橋洞 164-23
+            🚇弘益大學入口地鐵站
+            -
+            #韓國美食 #首爾美食 #弘大美食 #韓牛".
+            """,
+            sourceURL: "https://www.instagram.com/reel/DYJuEzgTy79/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "一片里脊 弘大店")
+        XCTAssertEqual(candidates.first?.address, "首爾特別市 麻浦區 東橋洞 164-23")
+        XCTAssertEqual(candidates.first?.category, "food")
+        XCTAssertNotEqual(candidates.first?.candidateName, "TANG, CHIH-CHUN")
+    }
+
     func testVenueMarkerStripsStoreNamePrefixBeforeScoring() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
