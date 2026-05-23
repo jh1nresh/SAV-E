@@ -53,8 +53,12 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
 final class SocialPlacePipelineTests: XCTestCase {
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
-        let candidates = try await service.reviewCandidates(
-            from: URL(string: "https://www.instagram.com/reel/DWkTzpIibh0/?igsh=NTc4MTIwNjQ2YQ==")!
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            Paseo at Downtown Disney District on Instagram: "Dinner spot at Downtown Disney.
+            📍 Downtown Disney District, CA"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DWkTzpIibh0/"
         )
 
         XCTAssertEqual(candidates.first?.candidateName, "Paseo at Downtown Disney District")
@@ -64,14 +68,40 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     func testInstagramRestaurantCaptionUsesNamedVenueBeforeAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
-        let candidates = try await service.reviewCandidates(
-            from: URL(string: "https://www.instagram.com/reel/DYoDyPWvDkr/?igsh=NTc4MTIwNjQ2YQ==")!
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            瑞塔 Rita wu on Instagram: "台中·餐廳
+            「吃得懂」
+            元紀·台灣菜
+            🏠臺中市西屯區安和東路5號
+            """,
+            sourceURL: "https://www.instagram.com/reel/DYoDyPWvDkr/"
         )
 
         XCTAssertEqual(candidates.first?.candidateName, "元紀·台灣菜")
         XCTAssertEqual(candidates.first?.address, "🏠臺中市西屯區安和東路5號")
         XCTAssertFalse(candidates.contains { $0.candidateName == "吃得懂" })
         XCTAssertFalse(candidates.contains { $0.candidateName == "台中·餐廳" })
+    }
+
+    func testInstagramPinVenueLineUsesNextLineHighwayAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            Lorna: OC Insider 在 Instagram: "📍 The Porch at The Ranch at Laguna Beach @theranchlb
+            31106 Coast Hwy, Laguna Beach
+            Tucked inside Aliso Canyon, this open-air patio has live music on weekends, fire tables, and a full menu with wine, cocktails, and coffee. Valet is complimentary.
+
+            Follow @thescenesouthoc for more hidden gems like this!
+            #lagunabeach #orangecounty #happyhour"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DWmzyodgbuv/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "The Porch at The Ranch at Laguna Beach")
+        XCTAssertEqual(candidates.first?.address, "31106 Coast Hwy, Laguna Beach")
+        XCTAssertFalse(candidates.contains { $0.candidateName == "Lorna" })
+        XCTAssertFalse(candidates.contains { $0.candidateName == "OC Insider" })
     }
 
     func testAgentParserMergesNumberedPlaceEvidence() {

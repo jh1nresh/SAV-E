@@ -1448,6 +1448,19 @@ struct ShareExtensionView: View {
     }
 
     private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        if !looksLikeAddressLine(line),
+           line.contains("@"),
+           let pinnedName = firstRegexCapture(in: line, pattern: #"📍\s*([^@\n\r]{2,80})(?:\s+@[A-Za-z0-9._]{3,30})?"#) {
+            let cleaned = cleanPlaceName(pinnedName)
+            if isUsablePlaceName(cleaned),
+               !looksLikeAddressLine(cleaned),
+               !looksLikeOperatingHoursLine(cleaned),
+               !looksLikeReviewMetricLine(cleaned),
+               !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+
         if let leadingName = firstRegexCapture(in: line, pattern: #"^([^/\n]{2,60})\s*/"#) {
             let cleaned = cleanPlaceName(leadingName)
             if isUsablePlaceName(cleaned),
@@ -1589,6 +1602,10 @@ struct ShareExtensionView: View {
 
     private func cleanPlaceName(_ value: String) -> String {
         SocialPlaceEvidenceScorer.cleanCandidateName(value)
+            .replacingOccurrences(of: #"\s*\(@[A-Za-z0-9._]{3,30}\)\s*"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+@[A-Za-z0-9._]{3,30}\b"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " .,:;!。！"))
     }
 
     private func isUsablePlaceName(_ value: String) -> Bool {

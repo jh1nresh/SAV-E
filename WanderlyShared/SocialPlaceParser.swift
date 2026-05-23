@@ -596,6 +596,7 @@ struct SocialPlaceParser {
         SocialPlaceEvidenceScorer.cleanCandidateName(value)
             .replacingOccurrences(of: #"^\s*(?:\d{1,2}[\.)]|[①②③④⑤⑥⑦⑧⑨])\s*"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"\s*\(@[A-Za-z0-9._]{3,30}\)\s*"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+@[A-Za-z0-9._]{3,30}\b"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " .,:;!。！"))
     }
@@ -656,6 +657,15 @@ struct SocialPlaceParser {
     }
 
     private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        if !SocialPlaceEvidenceScorer.looksLikeAddressLine(line),
+           let pinnedName = firstCapture(in: line, pattern: #"📍\s*([^@\n\r]{2,80})(?:\s+@[A-Za-z0-9._]{3,30})?"#) {
+            let cleaned = cleanDisplayName(pinnedName)
+            if (line.contains("@") || looksLikeVenueTitle(cleaned)),
+               SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) {
+                return cleaned
+            }
+        }
+
         if let leadingName = firstCapture(in: line, pattern: #"^([^/\n]{2,60})\s*/"#) {
             let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(leadingName)
             if SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) {
@@ -681,6 +691,7 @@ struct SocialPlaceParser {
             firstScalar == 0x2192 ||
             firstScalar == 0x279C ||
             firstScalar == 0x1F4CC ||
+            firstScalar == 0x1F4CD ||
             trimmedLine.hasPrefix("店名")
         if hasVenueMarker {
             let markerStripped = trimmedLine
