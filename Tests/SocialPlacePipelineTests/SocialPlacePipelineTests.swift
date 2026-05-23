@@ -319,6 +319,65 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate?.evidence.joined(separator: " ").contains("Evidence tier: weakCandidate") == true)
     }
 
+    func testInstagramCoffeeShopListTreatsHandlesAsPlaceCluesNotCaptionLabels() {
+        let service = SocialLinkReviewCandidateService()
+        let evidenceText = """
+        Teresa | LA & OC Lifestyle • Travel Creator on Instagram: "The coffee shops in Los Angeles County I always end up returning to ☕️
+
+        @theboyandthebearco @stereoscopecoffee @musocoffeela
+        → best for coffee quality
+
+        @elorea @archives.ofus
+        → unique coffee experiences
+
+        @fasttimescoffee @est.today.cafe
+        → atmosphere & aesthetic
+
+        @moducafe
+        → desserts worth it
+
+        Which one would you go to first?
+
+        #losangeles #hiddengem #coffeeshop #coffeeislife #lacoffee".
+        """
+
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: evidenceText,
+            sourceURL: "https://www.instagram.com/reel/DYsbskQyclc/"
+        )
+
+        let names = candidates.map(\.candidateName)
+        XCTAssertTrue(names.contains("Fasttimescoffee"))
+        XCTAssertTrue(names.contains("Theboyandthebearco"))
+        XCTAssertTrue(names.contains("Stereoscopecoffee"))
+        XCTAssertTrue(names.contains("Musocoffee La"))
+        XCTAssertTrue(names.contains("Elorea"))
+        XCTAssertTrue(names.contains("Archives Ofus"))
+        XCTAssertTrue(names.contains("Est Today Cafe"))
+        XCTAssertTrue(names.contains("Moducafe"))
+        XCTAssertFalse(names.contains("unique coffee experiences"))
+        XCTAssertFalse(names.contains("MY FAVORITE"))
+        XCTAssertFalse(names.contains("Teresa"))
+        XCTAssertTrue(candidates.allSatisfy { $0.latitude == nil && $0.longitude == nil })
+        XCTAssertTrue(candidates.first { $0.candidateName == "Fasttimescoffee" }?.evidence.joined(separator: " ").contains("Venue handle: @fasttimescoffee") == true)
+    }
+
+    func testOCRRejectsGenericCoffeeListLabelsAndFavoriteHeader() {
+        let candidates = SocialPlaceParser().parse(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/DYsbskQyclc/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: nil,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: ["MY FAVORITE", "unique coffee experiences"]
+            )
+        )
+
+        XCTAssertTrue(candidates.isEmpty)
+    }
+
     func testURLOnlyInstagramReelProducesSourceOnlyEvidenceDebugCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYsourceOnly/"

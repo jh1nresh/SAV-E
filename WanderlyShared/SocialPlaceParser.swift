@@ -125,7 +125,7 @@ struct SocialPlaceParser {
             .map(SocialPlaceEvidenceScorer.cleanText)
             .filter { !$0.isEmpty }
 
-        let handleContexts = handleContexts(in: lines)
+        let handleContexts = handleContexts(in: lines, fullText: text)
         let creatorHandles = Set(handleContexts.filter { $0.role == .creatorHandle }.map(\.handle))
         let sourceActors = handleContexts
             .filter { $0.role == .creatorHandle || $0.role == .sourceAccount }
@@ -401,7 +401,13 @@ struct SocialPlaceParser {
         contexts.compactMap { context in
             guard (context.role == .venueHandle || sourceAccountCanBecomeCandidate(context, sourceURL: sourceURL)),
                   !creatorHandles.contains(context.handle) else { return nil }
-            let resolved = SocialPlaceEvidenceScorer.resolvedDisplayName(fromSocialHandle: context.handle, evidenceText: fullText)
+            let resolved = context.role == .venueHandle && looksLikeSocialPlaceList(fullText)
+                ? (
+                    name: SocialPlaceEvidenceScorer.displayName(fromSocialHandle: context.handle),
+                    evidence: Optional<String>.none,
+                    confidenceBoost: 0.0
+                )
+                : SocialPlaceEvidenceScorer.resolvedDisplayName(fromSocialHandle: context.handle, evidenceText: fullText)
             guard context.role == .venueHandle || resolved.evidence != nil else { return nil }
             let name = resolved.name
             guard SocialPlaceEvidenceScorer.isUsableCandidateName(name) else { return nil }
@@ -537,19 +543,22 @@ struct SocialPlaceParser {
         var reason: String
     }
 
-    private func handleContexts(in lines: [String]) -> [HandleContext] {
+    private func handleContexts(in lines: [String], fullText: String) -> [HandleContext] {
         lines.flatMap { line in
             handles(in: line).map { handle in
-                let role = classify(handle: handle, line: line)
+                let role = classify(handle: handle, line: line, fullText: fullText)
                 return HandleContext(handle: handle, line: line, role: role.role, reason: role.reason)
             }
         }
     }
 
-    private func classify(handle: String, line: String) -> (role: SocialEvidenceRole, reason: String) {
+    private func classify(handle: String, line: String, fullText: String) -> (role: SocialEvidenceRole, reason: String) {
         let lowered = line.lowercased()
         let escaped = NSRegularExpression.escapedPattern(for: handle)
         let followPattern = #"(?i)\b(?:please\s+)?follow\s+@"# + escaped + #"\b"#
+        if looksLikeInstagramOwnerLine(line) {
+            return (.sourceAccount, "Handle appears in Instagram profile/source metadata; keep as provenance unless the shared URL is that profile.")
+        }
         if line.range(of: followPattern, options: .regularExpression) != nil ||
             lowered.range(of: #"\b(?:creator|travel tips|hidden gems|guide|by|via)\b"#, options: .regularExpression) != nil && !looksVenueContext(line) {
             return (.creatorHandle, "Appears near creator/follow language; not near a venue line.")
@@ -558,7 +567,26 @@ struct SocialPlaceParser {
             line.range(of: #"(?i)\b(?:staying at|located at|book|reserve|hotel|resort|restaurant|cafe|airbnb|villa|treehouse)\b"#, options: .regularExpression) != nil {
             return (.venueHandle, "Appears inside a venue/stay/place line.")
         }
+        if looksLikeSocialPlaceList(fullText), handles(in: line).count > 0 {
+            return (.venueHandle, "Appears in a social place-list caption; keep as venue handle evidence pending enrichment.")
+        }
         return (.sourceAccount, "Handle kept as provenance; not enough evidence to make it a place.")
+    }
+
+    private func looksLikeInstagramOwnerLine(_ line: String) -> Bool {
+        line.range(of: #"(?i)\b(?:on\s+Instagram|Instagram\s+reel|Instagram\s+photos\s+and\s+videos)\b"#, options: .regularExpression) != nil ||
+            line.range(of: #"\([^\n\r]{0,80}@[A-Za-z0-9._]{3,30}\)[^\n\r]{0,80}(?:Instagram|reel)"#, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private func looksLikeSocialPlaceList(_ text: String) -> Bool {
+        text.range(
+            of: #"(?i)\b(?:coffee\s+shops?|restaurants?|cafes?|bars?|bakeries|dessert\s+shops?|places?|spots?)\b[^\n\r]{0,80}\b(?:county|city|la|los angeles|oc|orange county|tokyo|taipei|seoul|paris|london|new york|returning to|favorite|favourite|best)\b"#,
+            options: .regularExpression
+        ) != nil ||
+        text.range(
+            of: #"(?i)\b(?:best for|worth it|atmosphere|aesthetic|coffee quality|unique coffee experiences|go to first)\b"#,
+            options: .regularExpression
+        ) != nil
     }
 
     private func handles(in text: String) -> [String] {
