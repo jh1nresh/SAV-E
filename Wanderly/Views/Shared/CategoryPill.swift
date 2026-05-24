@@ -5,18 +5,34 @@ struct CategoryPill: View {
     var isSelected: Bool = false
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Image(systemName: category.iconName)
-                .font(.caption2)
+                .font(.system(size: 10, weight: .black))
+                .foregroundColor(.saveInk)
+                .frame(width: 21, height: 21)
+                .background(isSelected ? Color.saveMint : Color.saveNotebookPage)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             Text(category.displayName)
-                .font(.caption)
-                .fontWeight(.medium)
+                .font(.caption2.weight(.black))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(isSelected ? Color.categoryColor(for: category) : Color.categoryColor(for: category).opacity(0.15))
-        .foregroundColor(isSelected ? .white : Color.categoryColor(for: category))
-        .cornerRadius(16)
+        .padding(.leading, 6)
+        .padding(.trailing, 9)
+        .frame(height: 34)
+        .background(isSelected ? Color.saveHoney : Color.saveNotebookPage.opacity(0.86))
+        .foregroundColor(.saveInk)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: isSelected ? 1.8 : 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityLabel(category.displayName)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
 

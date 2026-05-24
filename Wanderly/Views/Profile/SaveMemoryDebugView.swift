@@ -25,12 +25,12 @@ struct SaveMemoryDebugView: View {
                     HStack {
                         Text(record.displayTitle)
                             .font(.headline)
-                            .foregroundColor(.wanderlyCharcoal)
+                            .foregroundColor(.saveInk)
                         Spacer()
                         Text(record.state.displayName)
                             .font(.caption)
                             .fontWeight(.semibold)
-                            .foregroundColor(.wanderlyTerracotta)
+                            .foregroundColor(.saveCocoa)
                     }
 
                     if let address = record.address {
@@ -43,7 +43,7 @@ struct SaveMemoryDebugView: View {
                         Link(destination: url) {
                             Label("Open source", systemImage: "link")
                                 .font(.caption.weight(.semibold))
-                                .foregroundColor(.wanderlyTerracotta)
+                                .foregroundColor(.saveCocoa)
                         }
                     }
 
@@ -87,10 +87,10 @@ struct SaveMemoryDebugView: View {
                 Text(diagnostic.statusLabel)
                     .font(.caption2)
                     .fontWeight(.bold)
-                    .foregroundColor(.wanderlyTerracotta)
+                    .foregroundColor(.saveCocoa)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.wanderlyTerracotta.opacity(0.12))
+                    .background(Color.saveCocoa.opacity(0.12))
                     .cornerRadius(999)
                 Text(diagnostic.primaryActionLabel)
                     .font(.caption2)
@@ -108,12 +108,12 @@ struct SaveMemoryDebugView: View {
                 Text("Next best clue: \(diagnostic.nextBestClue)")
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.wanderlyTerracotta)
+                    .foregroundColor(.saveCocoa)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(10)
-        .background(Color.wanderlyTerracotta.opacity(0.08))
+        .background(Color.saveCocoa.opacity(0.08))
         .cornerRadius(12)
     }
 

@@ -20,7 +20,7 @@ export function WanderlyPrivyProvider({ children }: { children: ReactNode }) {
       config={{
         appearance: {
           theme: "light",
-          accentColor: "#CB623D",
+          accentColor: "#FFE24A",
           logo: undefined,
         },
         loginMethods: ["email", "google", "apple"],

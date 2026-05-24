@@ -24,10 +24,7 @@ struct PlatformIcon: View {
 
     private var iconColor: Color {
         switch platform {
-        case .instagram: return Color(hex: "E1306C")
-        case .threads: return .primary
-        case .xiaohongshu: return Color(hex: "FE2C55")
-        case .googleMaps: return Color(hex: "4285F4")
+        case .instagram, .threads, .xiaohongshu, .googleMaps: return .saveCocoa
         case .other: return .secondary
         }
     }

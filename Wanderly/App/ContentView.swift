@@ -37,7 +37,7 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .interactiveDismissDisabled(true)
-                    .presentationBackground(Color.wanderlyCream)
+                    .presentationBackground(Color.saveNotebookPage)
             }
             .onChange(of: drawerVM.mapAction) { _, action in
                 if let action { mapVM.apply(action) }

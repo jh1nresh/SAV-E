@@ -20,7 +20,7 @@ struct MapView: View {
                     }
                     if let polyline = viewModel.routePolyline {
                         MapPolyline(polyline)
-                            .stroke(Color.wanderlyTerracotta, lineWidth: 3)
+                            .stroke(Color.saveCocoa, lineWidth: 3)
                     }
                 }
                 .mapControls {
@@ -42,35 +42,18 @@ struct MapView: View {
                     }
                 }
 
-                HStack(spacing: 0) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(PlaceCategory.allCases, id: \.self) { category in
-                                CategoryPill(
-                                    category: category,
-                                    isSelected: viewModel.selectedCategories.contains(category)
-                                )
-                                .onTapGesture { viewModel.toggleCategory(category) }
-                            }
-                        }
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
+                TopNotebookNavBar(
+                    selectedCategories: viewModel.selectedCategories,
+                    reviewCount: viewModel.reviewCandidates.count,
+                    onToggleCategory: { category in
+                        viewModel.toggleCategory(category)
+                    },
+                    onOpenProfile: {
+                        showProfile = true
                     }
-
-                    Button(action: { showProfile = true }) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.wanderlyTerracotta)
-                            .background(
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                                    .frame(width: 36, height: 36)
-                            )
-                    }
-                    .padding(.trailing, 16)
-                }
-                .background(.ultraThinMaterial)
-                .padding(.top, geo.safeAreaInsets.top)
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, geo.safeAreaInsets.top + 8)
             }
             .ignoresSafeArea()
         }
@@ -83,6 +66,112 @@ struct MapView: View {
     }
 }
 
+private struct TopNotebookNavBar: View {
+    let selectedCategories: Set<PlaceCategory>
+    let reviewCount: Int
+    let onToggleCategory: (PlaceCategory) -> Void
+    let onOpenProfile: () -> Void
+
+    var body: some View {
+        HStack(spacing: 9) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.caption.weight(.black))
+                Text("SAV-E")
+                    .font(.caption.weight(.black))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.saveInk)
+            .padding(.horizontal, 10)
+            .frame(height: 38)
+            .background(Color.saveHoney)
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .accessibilityHidden(true)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(PlaceCategory.allCases, id: \.self) { category in
+                        CategoryPill(
+                            category: category,
+                            isSelected: selectedCategories.contains(category)
+                        )
+                        .onTapGesture { onToggleCategory(category) }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 0.04),
+                        .init(color: .black, location: 0.94),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+
+            PassportNavButton(reviewCount: reviewCount, action: onOpenProfile)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+private struct PassportNavButton: View {
+    let reviewCount: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(Color.saveMint)
+                    .frame(width: 42, height: 38)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+                    )
+
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 21, weight: .black))
+                    .foregroundColor(.saveInk)
+
+                if reviewCount > 0 {
+                    Text("\(reviewCount)")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.saveHoney)
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
+                        .frame(maxWidth: 24)
+                        .offset(x: 12, y: -12)
+                }
+            }
+            .frame(width: 42, height: 38)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open SAV-E Passport")
+        .accessibilityValue(reviewCount > 0 ? "\(reviewCount) waiting clues" : "No waiting clues")
+    }
+}
+
 private struct CurrentLocationButton: View {
     let isLocating: Bool
     let action: () -> Void
@@ -91,21 +180,20 @@ private struct CurrentLocationButton: View {
         Button(action: action) {
             ZStack {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color.saveCard)
+                    .fill(Color.saveNotebookPage)
                     .frame(width: 54, height: 54)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.white.opacity(0.85), lineWidth: 1)
+                            .stroke(Color.saveNotebookLine, lineWidth: 2)
                     )
-                    .shadow(color: Color.saveCocoa.opacity(0.18), radius: 12, y: 6)
 
                 if isLocating {
                     ProgressView()
-                        .tint(.wanderlyTerracotta)
+                        .tint(.saveInk)
                 } else {
                     Image(systemName: "location.fill")
                         .font(.system(size: 21, weight: .semibold))
-                        .foregroundColor(.wanderlyTerracotta)
+                        .foregroundColor(.saveInk)
                 }
             }
         }
@@ -126,23 +214,13 @@ struct PlaceMapPin: View {
         Button(action: onTap) {
             VStack(spacing: 0) {
                 ZStack(alignment: .topTrailing) {
-                    Image(systemName: place.category.iconName)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(Color.saveStampForeground(for: place.category))
-                        .frame(width: 38, height: 38)
-                        .background(Color.saveStampColor(for: place.category))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.9), lineWidth: 2)
-                        )
-                        .shadow(color: Color.saveCocoa.opacity(0.20), radius: 5, y: 3)
+                    SaveEggBadge(state: .hatched(place.category), size: 42)
 
                     if place.status == .visited {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.saveBerry)
-                            .background(Circle().fill(Color.white))
+                            .foregroundColor(.saveSignal)
+                            .background(Circle().fill(Color.saveNotebookPage))
                             .offset(x: 5, y: -5)
                     }
                 }

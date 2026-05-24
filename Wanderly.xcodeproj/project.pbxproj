@@ -11,6 +11,7 @@
 		0BD4C6DA5B323497CFAFFE4E /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62A066A6F8F79E541E817AED /* Trip.swift */; };
 		0BE657B273F6C933AFA42F53 /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319592FEE4143DA8414BF1E9 /* SocialPlaceEvidence.swift */; };
 		0D8DD94A2CFC096B7752E6FA /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA66B7E10DCF1DE875D7E19A /* PlaceBottomSheet.swift */; };
+		0EF4A80AAE9A996FE63A5029 /* SaveEggBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2566FCE86BCB9542221D7C3 /* SaveEggBadge.swift */; };
 		0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E74EF49B8A57D105D2D652 /* SharedTripData.swift */; };
 		1263A60FFAD7A5F3A889289A /* SocialPlacePipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */; };
 		19637D9F3EDFF2329A9979DB /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05191C82E70D6C2149B74EB7 /* ProfileView.swift */; };
@@ -185,6 +186,7 @@
 		A85A7930C0B725F89A6D9CD4 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
 		AA5555D27FE182EFE3DDC93C /* AIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResponse.swift; sourceTree = "<group>"; };
 		AE8A86F620D71B6551485114 /* SAVEAppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEAppShortcuts.swift; sourceTree = "<group>"; };
+		B2566FCE86BCB9542221D7C3 /* SaveEggBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveEggBadge.swift; sourceTree = "<group>"; };
 		B25737D32F2BF5066893998E /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
 		BA1EE43098CE11980FE39320 /* WanderlyClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyClipApp.swift; sourceTree = "<group>"; };
 		C09120C4FFC2D6CA18D10FDF /* SaveLocalVaultService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultService.swift; sourceTree = "<group>"; };
@@ -391,6 +393,7 @@
 				7ECDC9A866952173B6DC923C /* EmptyStateView.swift */,
 				C5ECE6C1F7F66FCFF9EF27DD /* EvidenceLinkList.swift */,
 				F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */,
+				B2566FCE86BCB9542221D7C3 /* SaveEggBadge.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -774,6 +777,7 @@
 				A8F6AF476904D7E0D48A302C /* ProfileViewModel.swift in Sources */,
 				64A68F19F5DDD030240FA986 /* SAVEAppShortcuts.swift in Sources */,
 				F125C9CB78ECB1B234AA5520 /* SaveCard.swift in Sources */,
+				0EF4A80AAE9A996FE63A5029 /* SaveEggBadge.swift in Sources */,
 				55744843693323A5DA49375E /* SaveLocalVaultService.swift in Sources */,
 				917E129F589B3D0820EB4AAF /* SaveMemoryDebugView.swift in Sources */,
 				8F3CBE1758875AD906D45736 /* SaveMemoryRecord.swift in Sources */,
@@ -1037,7 +1041,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1117,7 +1121,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (

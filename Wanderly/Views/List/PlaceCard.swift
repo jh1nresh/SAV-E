@@ -5,14 +5,14 @@ struct PlaceCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            categoryStamp
+            memoryEgg
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(place.name)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
                         .lineLimit(1)
 
                     Spacer()
@@ -30,7 +30,7 @@ struct PlaceCard: View {
                         HStack(spacing: 2) {
                             Image(systemName: "star.fill")
                                 .font(.system(size: 10))
-                                .foregroundColor(.orange)
+                                .foregroundColor(.saveHoney)
                             Text(String(format: "%.1f", rating))
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -50,27 +50,24 @@ struct PlaceCard: View {
                         .fontWeight(.semibold)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(place.status == .visited ? Color.saveMint : Color.saveBlush)
-                        .foregroundColor(place.status == .visited ? Color.saveCocoa : Color.saveBerry)
+                        .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.42))
+                        .foregroundColor(.saveCocoa)
                         .cornerRadius(8)
                 }
             }
         }
         .padding(12)
-        .wanderlyCard()
+        .saveNotebookPage(cornerRadius: 16)
     }
 
-    private var categoryStamp: some View {
-        Image(systemName: place.category.iconName)
-            .font(.title3.weight(.bold))
-            .foregroundColor(Color.saveStampForeground(for: place.category))
-            .frame(width: 46, height: 46)
-            .background(Color.saveStampColor(for: place.category))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.white.opacity(0.9), lineWidth: 2)
-            )
+    private var memoryEgg: some View {
+        VStack(spacing: 4) {
+            SaveEggBadge(state: .hatched(place.category), size: 44)
+            Text("HATCHED")
+                .font(.system(size: 7, weight: .black))
+                .foregroundColor(.saveCocoa)
+        }
+        .frame(width: 54)
     }
 
     private var sourceBadge: some View {
@@ -78,11 +75,15 @@ struct PlaceCard: View {
             PlatformIcon(platform: place.sourcePlatform, size: 12)
             Text(sourceLabel)
                 .font(.caption2.weight(.semibold))
-                .foregroundColor(.saveRose)
+                .foregroundColor(.saveCocoa)
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(Color.saveBlush)
+        .background(Color.saveNotebookPage)
+        .overlay(
+            Capsule()
+                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+        )
         .clipShape(Capsule())
     }
 
@@ -91,7 +92,7 @@ struct PlaceCard: View {
     }
 
     private var statusLabel: String {
-        place.status == .visited ? "Visited" : "Memory saved"
+        place.status == .visited ? "Visited" : "Hatched"
     }
 }
 
@@ -101,5 +102,5 @@ struct PlaceCard: View {
         PlaceCard(place: Place.mockList[1])
     }
     .padding()
-    .background(Color.wanderlyCream)
+    .background(SaveDottedBackground())
 }

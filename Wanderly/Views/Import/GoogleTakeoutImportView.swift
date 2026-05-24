@@ -26,7 +26,7 @@ struct GoogleTakeoutImportView: View {
                     emptyState
                 }
             }
-            .background(Color.wanderlyCream)
+            .background(SaveDottedBackground())
             .navigationTitle("Import Google Takeout")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -58,13 +58,13 @@ struct GoogleTakeoutImportView: View {
 
             Image(systemName: "square.and.arrow.down")
                 .font(.system(size: 44))
-                .foregroundColor(.wanderlyTerracotta)
+                .foregroundColor(.saveCocoa)
 
             VStack(spacing: 8) {
                 Text("Import saved places")
                     .font(.title3)
                     .fontWeight(.semibold)
-                    .foregroundColor(.wanderlyCharcoal)
+                    .foregroundColor(.saveInk)
 
                 Text("Choose a Google Takeout export. SAV-E previews everything first and only saves places with real coordinates.")
                     .font(.subheadline)
@@ -78,19 +78,23 @@ struct GoogleTakeoutImportView: View {
             } label: {
                 HStack(spacing: 8) {
                     if isParsing {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.saveInk)
                     } else {
                         Image(systemName: "doc.badge.plus")
                     }
                     Text(isParsing ? "Reading export..." : "Choose .zip, .json, .geojson, or .kml")
                 }
                 .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
+                .fontWeight(.black)
+                .foregroundColor(.saveInk)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.wanderlyTerracotta)
+                .background(Color.saveHoney)
                 .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.82), lineWidth: 1.1)
+                )
             }
             .disabled(isParsing)
             .padding(.horizontal, 24)
@@ -151,7 +155,7 @@ struct GoogleTakeoutImportView: View {
                     Text(result.fileName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
                         .lineLimit(1)
                     Text("\(result.readyDrafts.count) ready · \(result.reviewDrafts.count) review drafts")
                         .font(.caption)
@@ -164,7 +168,7 @@ struct GoogleTakeoutImportView: View {
                     selectedDraftIds = Set(readyDrafts(result).map(\.id))
                 }
                 .font(.caption)
-                .foregroundColor(.wanderlyTerracotta)
+                .foregroundColor(.saveCocoa)
             }
 
             if let saveSummary {
@@ -193,14 +197,14 @@ struct GoogleTakeoutImportView: View {
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: selectable ? (selectedDraftIds.contains(draft.id) ? "checkmark.circle.fill" : "circle") : "exclamationmark.triangle")
-                    .foregroundColor(selectable ? .wanderlyTerracotta : .wanderlyAmber)
+                    .foregroundColor(selectable ? .saveCocoa : .saveHoney)
                     .frame(width: 22)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(draft.name)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
 
                     if !draft.address.isEmpty {
                         Text(draft.address)
@@ -233,24 +237,28 @@ struct GoogleTakeoutImportView: View {
             } label: {
                 HStack(spacing: 8) {
                     if isSaving {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(.saveInk)
                     } else {
                         Image(systemName: "tray.and.arrow.down.fill")
                     }
                     Text(isSaving ? "Saving..." : "Save selected places")
                 }
                 .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
+                .fontWeight(.black)
+                .foregroundColor(selectedDraftIds.isEmpty ? .secondary : .saveInk)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(selectedDraftIds.isEmpty ? Color.gray.opacity(0.4) : Color.wanderlyTerracotta)
+                .background(selectedDraftIds.isEmpty ? Color.saveNotebookLine.opacity(0.12) : Color.saveHoney)
                 .cornerRadius(14)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(selectedDraftIds.isEmpty ? 0.24 : 0.82), lineWidth: 1.1)
+                )
             }
             .disabled(selectedDraftIds.isEmpty || isSaving)
         }
         .padding(16)
-        .background(Color.wanderlyCream)
+        .background(Color.saveNotebookPage)
     }
 
     private var allowedContentTypes: [UTType] {

@@ -67,15 +67,19 @@ struct WanderlyApp: App {
 
 struct AuthLoadingView: View {
     var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .tint(.wanderlyTerracotta)
-            Text("Opening SAV-E")
-                .font(.headline)
-                .foregroundColor(.wanderlyCharcoal)
+        ZStack {
+            SaveDottedBackground()
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                ProgressView()
+                    .tint(.saveInk)
+                Text("Opening SAV-E")
+                    .font(.headline)
+                    .foregroundColor(.saveInk)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.wanderlyCream)
     }
 }
 
@@ -91,35 +95,39 @@ struct SignInView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 24)
+        ZStack {
+            SaveDottedBackground()
+                .ignoresSafeArea()
 
-            SignInHero()
-                .padding(.horizontal, 24)
+            VStack(spacing: 0) {
+                Spacer(minLength: 24)
 
-            Spacer(minLength: 22)
+                SignInHero()
+                    .padding(.horizontal, 24)
 
-            SignInWorkflowStrip()
+                Spacer(minLength: 22)
+
+                SignInWorkflowStrip()
+                    .padding(.horizontal, 22)
+
+                Spacer(minLength: 24)
+
+                VStack(spacing: 12) {
+                    appleSignInButton
+                    googleSignInButton
+                    emailSignInSection
+                }
                 .padding(.horizontal, 22)
-
-            Spacer(minLength: 24)
-
-            VStack(spacing: 12) {
-                appleSignInButton
-                googleSignInButton
-                emailSignInSection
+                .padding(.bottom, 28)
             }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 28)
         }
         .overlay(alignment: .bottom) {
             if isLoading {
                 ProgressView()
-                    .tint(.wanderlyTerracotta)
+                    .tint(.saveInk)
                     .padding(.bottom, 10)
             }
         }
-        .background(Color.wanderlyCream)
         .alert(errorTitle, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -178,16 +186,15 @@ struct SignInView: View {
                 Text("Continue with Google")
             }
             .font(.headline)
-            .foregroundColor(.wanderlyCharcoal)
+            .foregroundColor(.saveInk)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color.white)
+            .background(Color.saveNotebookPage)
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    .stroke(Color.saveNotebookLine, lineWidth: 2)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -196,13 +203,13 @@ struct SignInView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Rectangle()
-                    .fill(Color.wanderlyTerracotta.opacity(0.14))
+                    .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
                 Text("or use email")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.saveCocoa.opacity(0.68))
                 Rectangle()
-                    .fill(Color.wanderlyTerracotta.opacity(0.14))
+                    .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
             }
 
@@ -249,28 +256,22 @@ private struct SignInHero: View {
     var body: some View {
         VStack(spacing: 18) {
             ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(Color.wanderlyTerracotta.opacity(0.10))
-                    .frame(width: 96, height: 96)
-
-                Image(systemName: "map.fill")
-                    .font(.system(size: 50, weight: .semibold))
-                    .foregroundColor(.wanderlyTerracotta)
+                SaveEggBadge(state: .clue, size: 98)
             }
 
             VStack(spacing: 8) {
                 Text("SAV-E")
                     .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .foregroundColor(.wanderlyCharcoal)
+                    .foregroundColor(.saveInk)
 
                 Text("Your personal place agent.")
                     .font(.title3.weight(.semibold))
-                    .foregroundColor(.wanderlyCharcoal)
+                    .foregroundColor(.saveInk)
 
                 Text("Send links, posts, screenshots, notes, or maps. SAV-E investigates first, then asks before saving.")
                     .font(.subheadline)
                     .lineSpacing(3)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.saveInk.opacity(0.66))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -280,9 +281,9 @@ private struct SignInHero: View {
 
 private struct SignInWorkflowStrip: View {
     private let steps: [(String, String, Color)] = [
-        ("Capture", "link or media", .wanderlyTerracotta),
-        ("Review", "with evidence", Color(hex: "5B8FA8")),
-        ("Remember", "confirmed places", Color(hex: "8B5E83")),
+        ("Capture", "link or media", .saveHoney),
+        ("Review", "with evidence", .saveSky),
+        ("Hatch", "memory cards", .saveMint),
     ]
 
     var body: some View {
@@ -309,26 +310,30 @@ private struct WorkflowStepCard: View {
         VStack(alignment: .leading, spacing: 5) {
             Circle()
                 .fill(tint)
-                .frame(width: 8, height: 8)
+                .frame(width: 10, height: 10)
+                .overlay(
+                    Circle()
+                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                )
 
             Text(title)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.wanderlyCharcoal)
+                .foregroundColor(.saveInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
             Text(subtitle)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.saveCocoa.opacity(0.68))
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.white.opacity(0.78))
+        .background(Color.saveNotebookPage.opacity(0.96))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(0.16), lineWidth: 1)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
@@ -349,19 +354,23 @@ private struct SignInInputRow: View {
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .foregroundColor(.wanderlyCharcoal)
+                .foregroundColor(.saveInk)
 
             Button(buttonTitle, action: action)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(isDisabled ? .secondary : .wanderlyTerracotta)
+                .font(.subheadline.weight(.black))
+                .foregroundColor(isDisabled ? Color.saveCocoa.opacity(0.42) : .saveInk)
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .background(isDisabled ? Color.clear : Color.saveHoney)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .disabled(isDisabled)
         }
         .padding(.horizontal, 14)
         .frame(height: 52)
-        .background(Color.white.opacity(0.86))
+        .background(Color.saveNotebookPage.opacity(0.96))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }

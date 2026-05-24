@@ -60,7 +60,7 @@ struct PlaceListView: View {
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
                         }
-                        .foregroundColor(.wanderlyTerracotta)
+                        .foregroundColor(.saveCocoa)
                     }
                 }
                 .padding(.horizontal)
@@ -79,7 +79,7 @@ struct PlaceListView: View {
                             NavigationLink(value: place) {
                                 PlaceCard(place: place)
                             }
-                            .listRowBackground(Color.wanderlyCream)
+                            .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
                                 Button {
@@ -87,7 +87,7 @@ struct PlaceListView: View {
                                 } label: {
                                     Label("Visited", systemImage: "checkmark.circle.fill")
                                 }
-                                .tint(.wanderlySage)
+                                .tint(.saveSuccess)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
@@ -100,7 +100,7 @@ struct PlaceListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .background(Color.wanderlyCream)
+                    .background(SaveDottedBackground())
                 }
 
                 if let deleteError = viewModel.deleteError {
@@ -111,7 +111,7 @@ struct PlaceListView: View {
                         .padding(.bottom, 8)
                 }
             }
-            .background(Color.wanderlyCream)
+            .background(SaveDottedBackground())
             .navigationTitle("Places")
             .searchable(text: $viewModel.searchText, prompt: "Search places...")
             .navigationDestination(for: Place.self) { place in

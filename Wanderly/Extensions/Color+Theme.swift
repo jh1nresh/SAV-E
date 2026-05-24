@@ -1,68 +1,35 @@
 import SwiftUI
 
 extension Color {
-    // MARK: - Wanderly Light Theme
-    static let wanderlyCream = Color(hex: "FFF8F0")
-    static let wanderlyTerracotta = Color(hex: "C75B39")
-    static let wanderlySage = Color(hex: "A8B5A0")
-    static let wanderlyCharcoal = Color(hex: "2C2C2E")
-
-    // MARK: - Wanderly Dark Theme
-    static let wanderlyDarkBackground = Color(hex: "1C1C1E")
-    static let wanderlyAmber = Color(hex: "E8A87C")
-
-    // MARK: - Semantic Colors
-    static let wanderlyBackground = Color("WanderlyBackground")
-    static let wanderlyAccent = Color("WanderlyAccent")
-    static let wanderlySecondary = Color("WanderlySecondary")
-    static let wanderlyText = Color("WanderlyText")
-
-    // MARK: - SAV-E Agent Passport Theme
-    static let saveBlush = Color(hex: "FFF6F8")
-    static let savePeach = Color(hex: "FFF1D8")
-    static let saveCream = Color(hex: "FFF8E8")
-    static let saveMint = Color(hex: "F1FBF5")
-    static let saveBerry = Color(hex: "E8849B")
-    static let saveCocoa = Color(hex: "6B4E57")
-    static let saveRose = Color(hex: "9B6B78")
-    static let saveHoney = Color(hex: "F4B860")
-    static let saveSky = Color(hex: "BEE7F8")
-    static let saveLavender = Color(hex: "DCC8FF")
-    static let saveCard = Color.white.opacity(0.82)
-    static let saveInk = Color(hex: "241D21")
-    static let savePaper = Color(hex: "FFFDF7")
-    static let saveLedger = Color(hex: "EFE7D6")
-    static let saveSignal = Color(hex: "7C8CFF")
-    static let saveSuccess = Color(hex: "7FB78A")
+    // MARK: - SAV-E Field Notebook Theme
+    static let saveCream = Color(hex: "FFF7E8")
+    static let saveMint = Color(hex: "B8F5C8")
+    static let saveCocoa = Color(hex: "111111")
+    static let saveHoney = Color(hex: "FFE24A")
+    static let saveSky = Color(hex: "7EDAEF")
+    static let saveInk = Color(hex: "111111")
+    static let savePaper = Color(hex: "FFF0D6")
+    static let saveLedger = Color(hex: "FFF7E8")
+    static let saveSignal = Color(hex: "FF8A65")
+    static let saveSuccess = Color(hex: "B8F5C8")
+    static let saveCoral = Color(hex: "FF8A65")
+    static let savePink = Color(hex: "FFD7E8")
+    static let saveNotebookBackground = Color(hex: "FFF7E8")
+    static let saveNotebookPage = Color(hex: "FFF0D6")
+    static let saveNotebookSpine = Color(hex: "FFE24A")
+    static let saveNotebookLine = Color(hex: "111111")
 
     // MARK: - Category Colors
     static func categoryColor(for category: PlaceCategory) -> Color {
-        switch category {
-        case .food: return .wanderlyTerracotta
-        case .cafe: return Color(hex: "B07D62")
-        case .bar: return Color(hex: "8B5E83")
-        case .attraction: return Color(hex: "5B8FA8")
-        case .stay: return .wanderlySage
-        case .shopping: return Color(hex: "C4956A")
-        }
+        saveStampColor(for: category)
     }
 
     static func saveStampColor(for category: PlaceCategory) -> Color {
-        switch category {
-        case .food: return .saveBerry
-        case .cafe: return .savePeach
-        case .bar: return .saveLavender
-        case .attraction: return .saveSky
-        case .stay: return .saveMint
-        case .shopping: return .saveHoney
-        }
+        .saveHoney
     }
 
     static func saveStampForeground(for category: PlaceCategory) -> Color {
-        switch category {
-        case .cafe, .stay, .attraction, .shopping: return .saveCocoa
-        case .food, .bar: return .white
-        }
+        .saveInk
     }
 
     // MARK: - Hex Initializer
@@ -89,19 +56,31 @@ extension Color {
     }
 }
 
-// MARK: - View Modifier for Wanderly Theme
-
-struct WanderlyCardStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .background(Color.wanderlyCream)
-            .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+extension View {
+    func saveNotebookPage(cornerRadius: CGFloat = 18) -> some View {
+        background(Color.saveNotebookPage)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
-extension View {
-    func wanderlyCard() -> some View {
-        modifier(WanderlyCardStyle())
+struct SaveDottedBackground: View {
+    var body: some View {
+        Color.saveNotebookBackground
+            .overlay {
+                Canvas { context, size in
+                    let spacing: CGFloat = 18
+                    for x in stride(from: CGFloat(8), through: size.width, by: spacing) {
+                        for y in stride(from: CGFloat(8), through: size.height, by: spacing) {
+                            let rect = CGRect(x: x, y: y, width: 2, height: 2)
+                            context.fill(Path(ellipseIn: rect), with: .color(Color.saveNotebookLine.opacity(0.08)))
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+            }
     }
 }

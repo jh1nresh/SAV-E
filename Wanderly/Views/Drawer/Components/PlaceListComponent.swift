@@ -6,50 +6,65 @@ struct PlaceListComponent: View {
     let aiMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
+                    Text("MEMORY MATCHES")
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.saveMint.opacity(0.72))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
+
                     Text(title)
-                        .font(.headline)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .font(.title3.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(2)
                     if let msg = aiMessage {
                         Text(msg)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.saveInk.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer()
                 Text("\(places.count)")
                     .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .fontWeight(.black)
+                    .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.wanderlyTerracotta)
+                    .background(Color.saveHoney)
                     .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.saveNotebookLine, lineWidth: 1)
+                    )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-
-            Divider()
 
             if places.isEmpty {
                 Text("No matching places in your collection.")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.saveInk.opacity(0.72))
                     .frame(maxWidth: .infinity)
                     .padding(32)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(places) { place in
-                            PlaceCard(place: place)
-                                .padding(.horizontal, 12)
-                        }
+                LazyVStack(spacing: 8) {
+                    ForEach(places) { place in
+                        PlaceCard(place: place)
                     }
-                    .padding(.vertical, 8)
                 }
             }
         }
+        .padding(14)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }

@@ -11,12 +11,12 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 48))
-                .foregroundColor(.wanderlySage)
+                .foregroundColor(.saveSignal)
 
             Text(title)
                 .font(.title3)
                 .fontWeight(.semibold)
-                .foregroundColor(.wanderlyCharcoal)
+                .foregroundColor(.saveInk)
 
             Text(subtitle)
                 .font(.subheadline)
@@ -28,12 +28,16 @@ struct EmptyStateView: View {
                 Button(action: action) {
                     Text(actionTitle)
                         .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                        .fontWeight(.black)
+                        .foregroundColor(.saveInk)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 10)
-                        .background(Color.wanderlyTerracotta)
+                        .background(Color.saveHoney)
                         .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.82), lineWidth: 1.1)
+                        )
                 }
                 .padding(.top, 8)
             }

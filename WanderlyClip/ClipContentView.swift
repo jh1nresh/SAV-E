@@ -20,7 +20,7 @@ struct ClipContentView: View {
                     errorView
                 }
             }
-            .background(Color(hex: "FFF8F0"))
+            .background(ClipDottedBackground())
             .navigationTitle("Trip Preview")
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -46,7 +46,7 @@ struct ClipContentView: View {
                 Map(position: $cameraPosition) {
                     ForEach(trip.stops) { stop in
                         Marker(stop.name, coordinate: stop.coordinate)
-                            .tint(Color(hex: "C75B39"))
+                            .tint(Color.saveCoral)
                     }
                 }
                 .frame(height: 200)
@@ -57,7 +57,7 @@ struct ClipContentView: View {
                     Text(trip.name)
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(hex: "2C2C2E"))
+                        .foregroundColor(Color.saveInk)
 
                     Text("\(trip.stops.count) stops \(trip.city.isEmpty ? "" : "in \(trip.city)")")
                         .font(.subheadline)
@@ -71,14 +71,14 @@ struct ClipContentView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.title3)
-                                .foregroundColor(Color(hex: "C75B39"))
+                                .foregroundColor(Color.saveCoral)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack {
                                     Text(stop.name)
                                         .font(.subheadline)
                                         .fontWeight(.medium)
-                                        .foregroundColor(Color(hex: "2C2C2E"))
+                                        .foregroundColor(Color.saveInk)
                                     Spacer()
                                     if let time = stop.time {
                                         Text(time)
@@ -94,15 +94,20 @@ struct ClipContentView: View {
                                 if let note = stop.note {
                                     Text(note)
                                         .font(.caption)
-                                        .foregroundColor(Color(hex: "C75B39").opacity(0.8))
+                                        .foregroundColor(Color.saveCoral)
                                 }
                             }
 
                             Spacer()
                         }
                         .padding(12)
-                        .background(Color(hex: "FFF8F0"))
-                        .cornerRadius(16)
+                        .background(Color.savePaper)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
+                        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
                     }
                 }
                 .padding(.horizontal)
@@ -111,11 +116,16 @@ struct ClipContentView: View {
                     Button(action: openInFullApp) {
                         Text("Open in SAV-E")
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.saveInk)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color(hex: "C75B39"))
+                            .background(Color.saveHoney)
                             .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
+                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
                     }
                 }
                 .padding(.horizontal)
@@ -130,7 +140,7 @@ struct ClipContentView: View {
         VStack(spacing: 16) {
             Spacer()
             ProgressView()
-                .tint(Color(hex: "C75B39"))
+                .tint(Color.saveInk)
             Text("Loading trip...")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -144,10 +154,10 @@ struct ClipContentView: View {
             Spacer()
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
-                .foregroundColor(Color(hex: "C75B39"))
+                .foregroundColor(Color.saveCoral)
             Text("Couldn't load this trip")
                 .font(.headline)
-                .foregroundColor(Color(hex: "2C2C2E"))
+                .foregroundColor(Color.saveInk)
             Text("The link may be invalid or expired.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -228,6 +238,16 @@ extension SharedTripData {
 // MARK: - Hex Color (standalone for App Clip target)
 
 extension Color {
+    static let saveCream = Color(hex: "FFF7E8")
+    static let saveHoney = Color(hex: "FFE24A")
+    static let saveCoral = Color(hex: "FF8A65")
+    static let saveSky = Color(hex: "7EDAEF")
+    static let saveMint = Color(hex: "B8F5C8")
+    static let savePink = Color(hex: "FFD7E8")
+    static let saveInk = Color(hex: "111111")
+    static let savePaper = Color(hex: "FFF0D6")
+    static let saveNotebookLine = Color(hex: "111111")
+
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0
@@ -248,5 +268,23 @@ extension Color {
             blue: Double(b) / 255,
             opacity: Double(a) / 255
         )
+    }
+}
+
+private struct ClipDottedBackground: View {
+    var body: some View {
+        Color.saveCream
+            .overlay {
+                Canvas { context, size in
+                    let spacing: CGFloat = 18
+                    for x in stride(from: CGFloat(8), through: size.width, by: spacing) {
+                        for y in stride(from: CGFloat(8), through: size.height, by: spacing) {
+                            let rect = CGRect(x: x, y: y, width: 2, height: 2)
+                            context.fill(Path(ellipseIn: rect), with: .color(Color.saveNotebookLine.opacity(0.08)))
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+            }
     }
 }

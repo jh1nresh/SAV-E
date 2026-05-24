@@ -10,12 +10,18 @@ struct PlaceBottomSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
+                SaveEggBadge(state: .hatched(place.category), size: 52)
+
                 VStack(alignment: .leading, spacing: 4) {
+                    Text("HATCHED MEMORY")
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveCocoa)
+
                     Text(place.name)
                         .font(.title3)
                         .fontWeight(.bold)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
 
                     Text(place.address)
                         .font(.subheadline)
@@ -24,7 +30,7 @@ struct PlaceBottomSheet: View {
 
                 Spacer()
 
-                CategoryPill(category: place.category)
+                CategoryPill(category: place.category, isSelected: true)
             }
 
             Divider()
@@ -34,7 +40,7 @@ struct PlaceBottomSheet: View {
                 if let rating = place.googleRating {
                     Label(String(format: "%.1f", rating), systemImage: "star.fill")
                         .font(.subheadline)
-                        .foregroundColor(.orange)
+                        .foregroundColor(.saveCocoa)
                 }
 
                 if let priceRange = place.priceRange {
@@ -52,12 +58,13 @@ struct PlaceBottomSheet: View {
 
                 Spacer()
 
-                Text(place.status.displayName)
+                Text(place.status == .visited ? "Visited" : "Egg hatched")
                     .font(.caption)
-                    .fontWeight(.medium)
+                    .fontWeight(.black)
+                    .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(place.status == .visited ? Color.wanderlySage.opacity(0.3) : Color.wanderlyTerracotta.opacity(0.15))
+                    .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.64))
                     .cornerRadius(8)
             }
 
@@ -75,7 +82,8 @@ struct PlaceBottomSheet: View {
                                 .font(.caption)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(Color.wanderlyTerracotta.opacity(0.1))
+                                .foregroundColor(.saveInk)
+                                .background(Color.saveHoney.opacity(0.30))
                                 .cornerRadius(12)
                         }
                     }
@@ -91,7 +99,7 @@ struct PlaceBottomSheet: View {
                         .foregroundColor(.secondary)
                     Text(note)
                         .font(.subheadline)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
                 }
             }
 
@@ -102,12 +110,16 @@ struct PlaceBottomSheet: View {
                 }) {
                     Label("Navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.wanderlyTerracotta)
-                        .foregroundColor(.white)
-                        .cornerRadius(16)
+                        .background(Color.saveHoney)
+                        .foregroundColor(.saveInk)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
                 }
 
                 Button(role: .destructive) {
@@ -115,12 +127,16 @@ struct PlaceBottomSheet: View {
                 } label: {
                     Label(isDeleting ? "Deleting..." : "Delete", systemImage: "trash")
                         .font(.subheadline)
-                        .fontWeight(.medium)
+                        .fontWeight(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.red.opacity(0.12))
+                        .background(Color.saveNotebookPage)
                         .foregroundColor(.red)
-                        .cornerRadius(16)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
                 }
                 .disabled(isDeleting || onDelete == nil)
             }
@@ -132,7 +148,7 @@ struct PlaceBottomSheet: View {
             }
         }
         .padding()
-        .background(Color.wanderlyCream)
+        .background(SaveDottedBackground())
         .confirmationDialog(
             "Delete \(place.name)?",
             isPresented: $showDeleteConfirmation,

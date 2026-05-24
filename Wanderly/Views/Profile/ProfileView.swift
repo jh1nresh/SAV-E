@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProfileView: View {
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var draftDisplayName = ""
@@ -10,6 +11,17 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    PassportTopBar(
+                        waitingClues: waitingClues,
+                        onClose: { dismiss() },
+                        onEdit: {
+                            draftDisplayName = viewModel.profile.displayName
+                            showEditProfile = true
+                        }
+                    )
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+
                     PassportHero(
                         profile: viewModel.profile,
                         onEdit: {
@@ -18,7 +30,6 @@ struct ProfileView: View {
                         }
                     )
                     .padding(.horizontal)
-                    .padding(.top, 16)
 
                     StatsView(profile: viewModel.profile, waitingClues: waitingClues)
 
@@ -43,12 +54,12 @@ struct ProfileView: View {
                         Text("Passport Controls")
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, 4)
 
                         NavigationLink {
                             SaveMemoryDebugView()
                         } label: {
-                            SettingsRow(icon: "tray.full", title: "Local Memory", color: .wanderlyTerracotta)
+                            SettingsRow(icon: "tray.full", title: "Local Memory", color: .saveCocoa)
                         }
                         .buttonStyle(.plain)
 
@@ -56,29 +67,14 @@ struct ProfileView: View {
                             Task { await viewModel.signOut() }
                         }
                     }
+                    .padding(12)
+                    .saveNotebookPage(cornerRadius: 18)
                     .padding(.horizontal)
                 }
                 .padding(.bottom, 32)
             }
-            .background(
-                LinearGradient(
-                    colors: [Color.saveCream, Color.saveBlush.opacity(0.72), Color.saveMint.opacity(0.72)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .navigationTitle("SAV-E Passport")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        draftDisplayName = viewModel.profile.displayName
-                        showEditProfile = true
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .disabled(viewModel.isLoading)
-                }
-            }
+            .background(SaveDottedBackground())
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             await viewModel.loadProfile()
@@ -110,39 +106,89 @@ private struct EditProfileSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("SAV-E Passport") {
-                    TextField("Name", text: $displayName)
-                        .textInputAutocapitalization(.words)
-                        .focused($isNameFocused)
-
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.red)
+            VStack(spacing: 18) {
+                HStack(spacing: 12) {
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .frame(width: 38, height: 38)
+                            .background(Color.saveNotebookPage)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
-                }
+                    .disabled(isSaving)
 
-                Section {
-                    Text("This name appears on your SAV-E passport. Email and sign-in provider are managed by your login account.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .navigationTitle("Edit Passport")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Saving..." : "Save") {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Edit Passport")
+                            .font(.title3.weight(.black))
+                            .foregroundColor(.saveInk)
+                        Text("This is how SAV-E labels your memory book.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
                         Task { await onSave() }
+                    } label: {
+                        Text(isSaving ? "Saving..." : "Save")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .padding(.horizontal, 13)
+                            .frame(height: 38)
+                            .background(Color.saveHoney)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
                     }
                     .disabled(isSaving)
                 }
+                .padding(.horizontal)
+                .padding(.top, 18)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("PASSPORT NAME")
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveCocoa)
+
+                    TextField("Name", text: $displayName)
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(.saveInk)
+                        .textInputAutocapitalization(.words)
+                        .focused($isNameFocused)
+                        .padding(14)
+                        .background(Color.saveNotebookPage)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.red)
+                    } else {
+                        Text("Email and sign-in provider stay managed by your login account.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(16)
+                .saveNotebookPage(cornerRadius: 20)
+                .padding(.horizontal)
+
+                Spacer()
             }
+            .background(SaveDottedBackground())
+            .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear {
             isNameFocused = true
@@ -152,79 +198,165 @@ private struct EditProfileSheet: View {
 
 // MARK: - Passport
 
+private struct PassportTopBar: View {
+    let waitingClues: Int
+    let onClose: () -> Void
+    let onEdit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            PassportIconButton(systemName: "xmark", action: onClose)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SAV-E Passport")
+                    .font(.headline.weight(.black))
+                    .foregroundColor(.saveInk)
+                Text(waitingClues == 1 ? "1 clue waiting" : "\(waitingClues) clues waiting")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: onEdit) {
+                HStack(spacing: 6) {
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.black))
+                    Text("Edit")
+                        .font(.caption.weight(.black))
+                }
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 11)
+                        .frame(height: 38)
+                        .background(Color.saveHoney)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+    }
+}
+
+private struct PassportIconButton: View {
+    let systemName: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.caption.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 38, height: 38)
+                .background(Color.saveNotebookPage)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct PassportHero: View {
     let profile: UserProfile
     let onEdit: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.saveInk, Color.saveCocoa],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+        HStack(spacing: 0) {
+            PassportNotebookSpine(color: .saveNotebookSpine)
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.saveHoney)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
                             )
-                        )
-                    Image(systemName: "passport.fill")
-                        .font(.system(size: 32, weight: .black))
-                        .foregroundColor(.saveHoney)
-                }
-                .frame(width: 70, height: 78)
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 18, weight: .black))
-                        .foregroundColor(.saveSuccess)
-                        .background(Circle().fill(Color.savePaper))
-                        .offset(x: 5, y: 5)
+                        Image(systemName: "passport.fill")
+                            .font(.system(size: 32, weight: .black))
+                            .foregroundColor(.saveInk)
+                    }
+                    .frame(width: 70, height: 78)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 18, weight: .black))
+                            .foregroundColor(.saveSuccess)
+                            .background(Circle().fill(Color.saveNotebookPage))
+                            .offset(x: 5, y: 5)
+                    }
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("SAV-E Passport")
+                            .font(.caption2.weight(.black))
+                            .foregroundColor(.saveCocoa)
+                        Text(profile.displayName)
+                            .font(.title2.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .lineLimit(2)
+                        Text(profile.email ?? "Local memory agent")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("SAV-E Passport")
-                        .font(.caption2.weight(.black))
-                        .foregroundColor(.saveHoney)
-                    Text(profile.displayName)
-                        .font(.title2.weight(.black))
-                        .foregroundColor(.savePaper)
-                        .lineLimit(2)
-                    Text(profile.email ?? "Local memory agent")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.savePaper.opacity(0.76))
-                        .lineLimit(1)
+                HStack(spacing: 8) {
+                    PassportBadge(text: "MEMORY AGENT", color: .saveHoney)
+                    PassportBadge(text: "REVIEW FIRST", color: .saveSignal)
+                    Spacer()
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .frame(width: 32, height: 32)
+                            .background(Color.saveHoney)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit Passport")
                 }
-
-                Spacer(minLength: 0)
             }
-
-            HStack(spacing: 8) {
-                PassportBadge(text: "MEMORY AGENT", color: .saveHoney)
-                PassportBadge(text: "REVIEW FIRST", color: .saveSky)
-                Spacer()
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .font(.caption.weight(.black))
-                        .foregroundColor(.saveInk)
-                        .frame(width: 32, height: 32)
-                        .background(Color.savePaper.opacity(0.92))
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Edit Passport")
-            }
+            .padding(16)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.saveInk)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(Color.saveHoney)
-                        .frame(height: 4)
-                        .padding(.horizontal, 16)
-                }
-        )
+        .saveNotebookPage(cornerRadius: 22)
+    }
+}
+
+private struct PassportNotebookSpine: View {
+    var color: Color
+
+    var body: some View {
+        VStack(spacing: 11) {
+            ForEach(0..<4, id: \.self) { _ in
+                Circle()
+                    .fill(Color.saveNotebookPage)
+                    .frame(width: 7, height: 7)
+                    .overlay(Circle().stroke(Color.saveCocoa.opacity(0.16), lineWidth: 1))
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(width: 24)
+        .padding(.top, 18)
+        .background(color.opacity(0.86))
     }
 }
 
@@ -235,12 +367,12 @@ private struct PassportBadge: View {
     var body: some View {
         Text(text)
             .font(.caption2.weight(.black))
-            .foregroundColor(.savePaper)
+            .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(color.opacity(0.22))
+            .background(color.opacity(0.38))
             .clipShape(Capsule())
     }
 }
@@ -279,12 +411,7 @@ private struct PassportStampSection: View {
             PassportStampRow(icon: "calendar", title: "Joined", value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
         }
         .padding()
-        .background(Color.savePaper.opacity(0.88))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveCocoa.opacity(0.10), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .saveNotebookPage(cornerRadius: 18)
         .padding(.horizontal)
     }
 }
@@ -332,11 +459,13 @@ struct SettingsRow: View {
                 Image(systemName: icon)
                     .font(.subheadline)
                     .foregroundColor(color)
-                    .frame(width: 24)
+                    .frame(width: 32, height: 32)
+                    .background(color.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 Text(title)
                     .font(.subheadline)
-                    .foregroundColor(.wanderlyCharcoal)
+                    .foregroundColor(.saveInk)
 
                 Spacer()
 
@@ -345,7 +474,7 @@ struct SettingsRow: View {
                     .foregroundColor(.secondary)
             }
             .padding(.vertical, 14)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 4)
         }
     }
 }

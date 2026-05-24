@@ -6,22 +6,22 @@ struct OnboardingView: View {
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
-            icon: "pawprint.fill",
+            icon: "magnifyingglass.circle.fill",
             title: "Save spots while you scroll",
-            subtitle: "Share an IG post, map link, screenshot, or note. SAV-E will sniff for the real place.",
-            color: .saveBerry
-        ),
-        OnboardingPage(
-            icon: "bird.fill",
-            title: "No more fake pins",
-            subtitle: "If SAV-E is unsure, it keeps the clue in Review until you confirm it.",
+            subtitle: "Share an IG post, map link, screenshot, or note. SAV-E turns messy clues into reviewable places.",
             color: .saveHoney
         ),
         OnboardingPage(
-            icon: "suitcase.rolling.fill",
+            icon: "checkmark.seal.fill",
+            title: "No more fake pins",
+            subtitle: "If SAV-E is unsure, it keeps the clue in Review until you confirm it.",
+            color: .saveSky
+        ),
+        OnboardingPage(
+            icon: "rectangle.stack.badge.plus",
             title: "Turn memories into trips",
             subtitle: "Your confirmed spots become a private travel memory SAV-E can plan from.",
-            color: Color(hex: "5B8FA8")
+            color: .saveCocoa
         ),
     ]
 
@@ -33,8 +33,12 @@ struct OnboardingView: View {
                         Spacer()
 
                         ZStack {
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(pages[index].color.opacity(0.14))
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(Color.saveNotebookPage)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                        .stroke(Color.saveNotebookLine.opacity(0.86), lineWidth: 1.2)
+                                )
                                 .frame(width: 132, height: 132)
 
                             Image(systemName: pages[index].icon)
@@ -45,8 +49,8 @@ struct OnboardingView: View {
                         VStack(spacing: 12) {
                             Text(pages[index].title)
                                 .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.wanderlyCharcoal)
+                                .fontWeight(.black)
+                                .foregroundColor(.saveInk)
                                 .multilineTextAlignment(.center)
 
                             Text(pages[index].subtitle)
@@ -70,7 +74,7 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     ForEach(pages.indices, id: \.self) { index in
                         Capsule()
-                            .fill(index == currentPage ? Color.saveBerry : Color.saveBerry.opacity(0.26))
+                            .fill(index == currentPage ? Color.saveCocoa : Color.saveCocoa.opacity(0.26))
                             .frame(width: index == currentPage ? 24 : 8, height: 8)
                             .animation(.easeInOut(duration: 0.2), value: currentPage)
                     }
@@ -90,7 +94,7 @@ struct OnboardingView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(Color.saveBerry)
+                        .background(Color.saveInk)
                         .cornerRadius(16)
                 }
                 .padding(.horizontal, 24)
@@ -106,13 +110,7 @@ struct OnboardingView: View {
                 }
             }
         }
-        .background(
-            LinearGradient(
-                colors: [Color.saveBlush, Color.saveCream, Color.saveMint],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(SaveDottedBackground())
     }
 }
 

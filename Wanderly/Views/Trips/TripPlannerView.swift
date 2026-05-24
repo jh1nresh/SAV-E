@@ -29,7 +29,7 @@ struct TripPlannerView: View {
                         }
                         .padding()
                     }
-                    .background(Color.wanderlyCream)
+                    .background(SaveDottedBackground())
                 }
             }
             .navigationTitle("Trips")
@@ -37,7 +37,7 @@ struct TripPlannerView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showNewTrip = true }) {
                         Image(systemName: "plus")
-                            .foregroundColor(.wanderlyTerracotta)
+                            .foregroundColor(.saveCocoa)
                     }
                 }
             }
@@ -77,7 +77,7 @@ struct TripCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(trip.name)
                         .font(.headline)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .foregroundColor(.saveInk)
 
                     Text(trip.city)
                         .font(.subheadline)
@@ -88,7 +88,7 @@ struct TripCard: View {
 
                 if trip.isOptimized {
                     Image(systemName: "checkmark.seal.fill")
-                        .foregroundColor(.wanderlySage)
+                        .foregroundColor(.saveSignal)
                         .font(.title3)
                 }
             }
@@ -104,7 +104,7 @@ struct TripCard: View {
             }
         }
         .padding(16)
-        .wanderlyCard()
+        .saveNotebookPage(cornerRadius: 18)
     }
 }
 
@@ -144,10 +144,15 @@ struct TripDetailView: View {
                         Text(viewModel.isOptimizing ? "Optimizing..." : "Optimize Route")
                     }
                     .frame(maxWidth: .infinity)
-                    .foregroundColor(.white)
+                    .font(.subheadline.weight(.black))
+                    .foregroundColor(.saveInk)
                     .padding(.vertical, 10)
-                    .background(Color.wanderlyTerracotta)
+                    .background(Color.saveHoney)
                     .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.82), lineWidth: 1.1)
+                    )
                 }
                 .disabled(viewModel.isOptimizing)
                 .listRowBackground(Color.clear)

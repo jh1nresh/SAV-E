@@ -8,25 +8,44 @@ struct TripItineraryComponent: View {
     @State private var showShareSheet = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
+                    Text("PLAN READY")
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.saveSky.opacity(0.48))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
+
                     Text(title)
-                        .font(.headline)
-                        .foregroundColor(.wanderlyCharcoal)
+                        .font(.title3.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(2)
                     if let msg = aiMessage {
                         Text(msg)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.saveInk.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer()
 
                 Button(action: { showShareSheet = true }) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.subheadline)
-                        .foregroundColor(.wanderlyTerracotta)
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(width: 34, height: 34)
+                        .background(Color.saveMint.opacity(0.74))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
+                .buttonStyle(.plain)
                 .sheet(isPresented: $showShareSheet) {
                     if let url = buildShareURL() {
                         ShareSheet(items: [url])
@@ -34,24 +53,31 @@ struct TripItineraryComponent: View {
                 }
 
                 Label("\(days.count) days", systemImage: "calendar")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.wanderlyTerracotta)
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.saveHoney)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
 
-            Divider()
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(days) { day in
-                        DaySection(day: day)
-                    }
+            LazyVStack(alignment: .leading, spacing: 12) {
+                ForEach(days) { day in
+                    DaySection(day: day)
                 }
-                .padding(16)
             }
         }
+        .padding(14)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func buildShareURL() -> URL? {
@@ -81,21 +107,27 @@ private struct DaySection: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(day.label ?? "Day \(day.dayNumber)")
                 .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.wanderlyTerracotta)
-                .padding(.bottom, 10)
+                .fontWeight(.black)
+                .foregroundColor(.saveInk)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color.saveHoney.opacity(0.66))
+                .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                .clipShape(Capsule())
+                .padding(.bottom, 12)
 
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
                 HStack(alignment: .top, spacing: 12) {
                     // Timeline
                     VStack(spacing: 0) {
                         Circle()
-                            .fill(Color.wanderlyTerracotta)
-                            .frame(width: 8, height: 8)
+                            .fill(Color.saveHoney)
+                            .frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
                             .padding(.top, 5)
                         if index < day.stops.count - 1 {
                             Rectangle()
-                                .fill(Color.wanderlyTerracotta.opacity(0.25))
+                                .fill(Color.saveNotebookLine.opacity(0.22))
                                 .frame(width: 2)
                                 .frame(maxHeight: .infinity)
                         }
@@ -107,24 +139,30 @@ private struct DaySection: View {
                         HStack {
                             Text(stop.placeName)
                                 .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.wanderlyCharcoal)
+                                .fontWeight(.black)
+                                .foregroundColor(.saveInk)
+                                .lineLimit(2)
                             Spacer()
                             if let time = stop.time {
                                 Text(time)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .font(.caption2.weight(.black))
+                                    .foregroundColor(.saveInk)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(Color.saveMint.opacity(0.74))
+                                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                                    .clipShape(Capsule())
                             }
                         }
                         if let duration = stop.duration {
                             Text("\(duration) min")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.saveInk.opacity(0.76))
                         }
                         if let note = stop.note {
                             Text(note)
                                 .font(.caption)
-                                .foregroundColor(.wanderlyTerracotta.opacity(0.8))
+                                .foregroundColor(.saveInk.opacity(0.78))
                                 .padding(.top, 1)
                         }
                     }
@@ -133,7 +171,11 @@ private struct DaySection: View {
             }
         }
         .padding(14)
-        .background(Color.white.opacity(0.6))
-        .cornerRadius(12)
+        .background(Color.saveHoney.opacity(0.12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

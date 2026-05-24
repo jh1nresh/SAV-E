@@ -23,7 +23,7 @@ private struct PreviewClipStop: Identifiable {
                 Map {
                     ForEach(stops) { stop in
                         Marker(stop.name, coordinate: stop.coordinate)
-                            .tint(Color(hex: "C75B39"))
+                            .tint(Color.saveCoral)
                     }
                 }
                 .frame(height: 200)
@@ -34,7 +34,7 @@ private struct PreviewClipStop: Identifiable {
                     Text("Shared Trip")
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(Color(hex: "2C2C2E"))
+                        .foregroundColor(Color.saveInk)
                     Text("\(stops.count) stops")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -47,12 +47,12 @@ private struct PreviewClipStop: Identifiable {
                         HStack(spacing: 12) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.title3)
-                                .foregroundColor(Color(hex: "C75B39"))
+                                .foregroundColor(Color.saveCoral)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(stop.name)
                                     .font(.subheadline)
                                     .fontWeight(.medium)
-                                    .foregroundColor(Color(hex: "2C2C2E"))
+                                    .foregroundColor(Color.saveInk)
                                 Text(stop.address)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -60,8 +60,7 @@ private struct PreviewClipStop: Identifiable {
                             Spacer()
                         }
                         .padding(12)
-                        .background(Color(hex: "FFF8F0"))
-                        .cornerRadius(16)
+                        .saveNotebookPage(cornerRadius: 16)
                     }
                 }
                 .padding(.horizontal)
@@ -70,23 +69,27 @@ private struct PreviewClipStop: Identifiable {
                     Button(action: {}) {
                         Text("Open in SAV-E")
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.saveInk)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(Color(hex: "C75B39"))
+                            .background(Color.saveHoney)
                             .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
                     }
                     Button(action: {}) {
                         Text("Get the Full App")
                             .font(.subheadline)
-                            .foregroundColor(Color(hex: "C75B39"))
+                            .foregroundColor(Color.saveInk)
                     }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
             }
         }
-        .background(Color(hex: "FFF8F0"))
+        .background(SaveDottedBackground())
         .navigationTitle("Trip Preview")
         .navigationBarTitleDisplayMode(.inline)
     }
