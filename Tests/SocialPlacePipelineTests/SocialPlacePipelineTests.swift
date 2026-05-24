@@ -460,6 +460,29 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty)
     }
 
+    func testInstagramActivityVenueMarkerWithNextLineAddressCreatesReviewCandidate() {
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            Bitter Root Pottery on Instagram: "📍Bitter Root Pottery Baroque Location
+            7461 Beverly Blvd (Penthouse) LA, CA 90036
+
+            For bookings ➡️ www.bitterrootpottery.com"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DXxN8ENyfIe/"
+        )
+
+        let candidate = candidates.first
+        XCTAssertEqual(candidate?.candidateName, "Bitter Root Pottery Baroque Location")
+        XCTAssertEqual(candidate?.address, "7461 Beverly Blvd (Penthouse) LA, CA 90036")
+        XCTAssertEqual(candidate?.category, "attraction")
+        XCTAssertEqual(candidate?.isSourceOnly, false)
+        XCTAssertNil(candidate?.latitude)
+        XCTAssertNil(candidate?.longitude)
+        XCTAssertTrue(candidate?.evidence.joined(separator: " ").contains("Booking link: www.bitterrootpottery.com") == true)
+        XCTAssertFalse(candidates.contains { $0.candidateName == "Bitter Root Pottery" })
+    }
+
     func testURLOnlyInstagramReelProducesSourceOnlyEvidenceDebugCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYsourceOnly/"

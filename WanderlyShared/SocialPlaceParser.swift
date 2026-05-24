@@ -359,6 +359,14 @@ struct SocialPlaceParser {
             for priorLine in priorLines {
                 guard let name = candidateNameFromCaptionLine(priorLine) else { continue }
                 let address = firstLocationClue(in: line) ?? cleanLocationMarker(from: line)
+                let bookingLinks = bookingLinks(in: fullText)
+                var atoms = [
+                    SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: name, line: priorLine, confidence: 0.62),
+                    SocialEvidenceAtom(source: .captionSentence, role: .address, value: address, line: line, confidence: 0.68)
+                ]
+                atoms.append(contentsOf: bookingLinks.map {
+                    SocialEvidenceAtom(source: .bookingLink, role: .bookingLink, value: $0, line: fullText, confidence: 0.56)
+                })
                 result.append(
                     draft(
                         name: name,
@@ -366,10 +374,8 @@ struct SocialPlaceParser {
                         sourceURL: sourceURL,
                         fullText: fullText,
                         locationClues: [address],
-                        atoms: [
-                            SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: name, line: priorLine, confidence: 0.62),
-                            SocialEvidenceAtom(source: .captionSentence, role: .address, value: address, line: line, confidence: 0.68)
-                        ],
+                        bookingLinks: bookingLinks,
+                        atoms: atoms,
                         confidence: 0.68,
                         tier: .likely
                     )
@@ -567,6 +573,19 @@ struct SocialPlaceParser {
                 existing.confidence = max(existing.confidence, candidate.confidence)
                 existing.missingInfo = uniqueStrings(existing.missingInfo + candidate.missingInfo).sorted()
                 merged[key] = existing
+            } else if let richerKey = orderedKeys.first(where: { existingKey in
+                existingKey.count > key.count &&
+                    existingKey.contains(key) &&
+                    merged[existingKey]?.locationClues.isEmpty == false
+            }), var existing = merged[richerKey] {
+                existing.handles = uniqueStrings(existing.handles + candidate.handles)
+                existing.creatorHandles = uniqueStrings(existing.creatorHandles + candidate.creatorHandles)
+                existing.venueHandles = uniqueStrings(existing.venueHandles + candidate.venueHandles)
+                existing.bookingLinks = uniqueStrings(existing.bookingLinks + candidate.bookingLinks)
+                existing.evidence = appendUniqueAtoms(existing.evidence + candidate.evidence)
+                existing.confidence = max(existing.confidence, candidate.confidence)
+                existing.missingInfo = uniqueStrings(existing.missingInfo + candidate.missingInfo).sorted()
+                merged[richerKey] = existing
             } else {
                 orderedKeys.append(key)
                 merged[key] = candidate
@@ -698,6 +717,8 @@ struct SocialPlaceParser {
             .replacingOccurrences(of: #"(?i)^\s*(?:located\s+at|located|address)\s*[:：]?\s*[📍🗺]?\s*"#, with: "", options: .regularExpression)
         if let streetAddress = firstStreetAddress(in: cleaned) {
             return streetAddress
+                .replacingOccurrences(of: #"(?i)\s+(?:if\s+you|to\s+check|for\s+more).*$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，"))
         }
         return cleaned
     }
@@ -721,7 +742,7 @@ struct SocialPlaceParser {
     }
 
     private func looksLikeVenueTitle(_ value: String) -> Bool {
-        value.range(of: #"(?i)\b(restaurant|cafe|coffee|bar|bakery|bistro|kitchen|grill|pizzeria|taqueria|sushi|ramen|hotel|resort|inn|villa|district|market|mall|museum|gallery|park|beach|garden|paseo|dining)\b"#, options: .regularExpression) != nil
+        value.range(of: #"(?i)\b(restaurant|cafe|coffee|bar|bakery|bistro|kitchen|grill|pizzeria|taqueria|sushi|ramen|hotel|resort|inn|villa|district|market|mall|museum|gallery|park|beach|garden|paseo|dining|pottery|ceramics?|studio|workshops?|classes?|lessons?|experience|atelier)\b"#, options: .regularExpression) != nil
     }
 
     private func looksVenueContext(_ line: String) -> Bool {
@@ -729,19 +750,27 @@ struct SocialPlaceParser {
     }
 
     private func bookingLinks(in text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: #"\b(?:https?://)?(?:www\.)?(?:airbnb|booking|resy|opentable|inline|tablecheck)\.[^\s]+"#, options: [.caseInsensitive]) else {
-            return []
+        let patterns: [(pattern: String, captureIndex: Int)] = [
+            (#"\b((?:https?://)?(?:www\.)?(?:airbnb|booking|resy|opentable|inline|tablecheck)\.[^\s]+)"#, 1),
+            (#"(?i)\b(?:for\s+bookings?|bookings?|book|reserve|reservations?|appointments?)\b[\s\S]{0,80}?\b((?:https?://)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[^\s]*)?)"#, 1)
+        ]
+
+        let links = patterns.flatMap { spec -> [String] in
+            guard let regex = try? NSRegularExpression(pattern: spec.pattern, options: [.caseInsensitive]) else { return [] }
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            return regex.matches(in: text, range: range).compactMap { match in
+                guard match.numberOfRanges > spec.captureIndex,
+                      let range = Range(match.range(at: spec.captureIndex), in: text) else { return nil }
+                return String(text[range]).trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，\"'”’"))
+            }
         }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.matches(in: text, range: range).compactMap { match in
-            Range(match.range, in: text).map { String(text[$0]) }
-        }
+        return uniqueStrings(links)
     }
 
     private func firstStreetAddress(in text: String) -> String? {
         firstCapture(
             in: text,
-            pattern: #"\b(\d{1,6}\s+[A-Za-z0-9 .'-]{2,80}\b(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Highway|Hwy\.?|Coast Hwy|Old Street)(?:,\s*[A-Za-z0-9 .'-]{2,60}){0,2}(?:\s+\d{5}(?:-\d{4})?)?)\b"#
+            pattern: #"\b(\d{1,6}\s+[A-Za-z0-9 .'-]{2,80}\b(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Highway|Hwy\.?|Coast Hwy|Old Street)(?:\s*\([^\n\r)]{2,40}\))?(?:,?\s*[A-Za-z0-9 .'-]{2,60}){0,2}(?:,?\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO))?(?:\s+\d{5}(?:-\d{4})?)?)\b"#
         )
     }
 
@@ -865,7 +894,10 @@ struct SocialPlaceParser {
         if lowered.range(of: #"airbnb|stay|hotel|resort|villa|home|cabin|treehouse|marriott|hyatt|hilton|lodge|inn|glamping|retreat"#, options: .regularExpression) != nil {
             return "stay"
         }
-        if lowered.range(of: #"restaurant|food|eat|cafe|coffee|tea|bar|hot pot|sukiyaki|yakiniku"#, options: .regularExpression) != nil {
+        if lowered.range(of: #"\b(pottery|ceramics?|studio|workshops?|classes?|lessons?|experience|atelier)\b"#, options: .regularExpression) != nil {
+            return "attraction"
+        }
+        if lowered.range(of: #"\b(restaurant|food|eat|cafe|coffee|tea|bar|hot pot|sukiyaki|yakiniku)\b"#, options: .regularExpression) != nil {
             return "food"
         }
         if text.range(of: #"晚餐|餐廳|餐厅|美食|咖啡|茶|酒吧|料理|餐|燒肉|烧肉|火鍋|火锅|牛舌|壽喜燒"#, options: .regularExpression) != nil {
