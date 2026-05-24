@@ -531,7 +531,94 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.placesFound.isEmpty)
         XCTAssertEqual(analysis.topic, "restaurants in LA")
         XCTAssertTrue(analysis.regionClues.contains("LA"))
+        XCTAssertEqual(analysis.understanding.sourceType, .singlePlaceRecommendation)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
+        XCTAssertFalse(analysis.recoveryStrategies.contains(.directParse))
         XCTAssertTrue(analysis.nextBestAction.contains("source recovery search"))
+    }
+
+    func testMultiHandleListUnderstandingUsesListModeAndHandleResolver() {
+        let evidenceText = """
+        @theboyandthebearco @stereoscopecoffee @musocoffeela
+        → best for coffee quality
+
+        @elorea @archives.ofus
+        → unique coffee experiences
+        """
+
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/DYsbskQyclc/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: evidenceText,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.understanding.sourceType, .multiPlaceList)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.listMode))
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.handleResolver))
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "best for coffee quality" })
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "unique coffee experiences" })
+    }
+
+    func testVagueLifestyleCaptionAsksForEvidenceAndSourceReceipt() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/vague/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: "slow down and enjoy the vibe",
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.understanding.sourceType, .vagueLifestyleCaption)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.askForMoreEvidence))
+        XCTAssertEqual(analysis.understanding.evidenceTier, .sourceOnly)
+        XCTAssertTrue(analysis.placesFound.isEmpty)
+    }
+
+    func testMapShareUnderstandingRoutesToMapResolution() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://maps.app.goo.gl/abc123",
+                resolvedURL: nil,
+                sharedTitle: "Google Maps",
+                sharedText: nil,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.understanding.sourceType, .mapShare)
+        XCTAssertEqual(analysis.primaryRecoveryStrategy, .mapLinkResolution)
+        XCTAssertFalse(analysis.recoveryStrategies.contains(.publicSearchRecovery))
+    }
+
+    func testBookingLinkUnderstandingRoutesToBookingResolution() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.opentable.com/r/example-restaurant",
+                resolvedURL: nil,
+                sharedTitle: "Reserve Example Restaurant",
+                sharedText: "Book a table for dinner",
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.understanding.sourceType, .bookingOrReservation)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.bookingLinkResolution))
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
     func testCreatorOnlyHandleDoesNotBecomePlaceBearingSource() {
@@ -550,6 +637,9 @@ final class SocialPlacePipelineTests: XCTestCase {
         )
 
         XCTAssertEqual(analysis.sourceIntent, .creatorOnly)
+        XCTAssertEqual(analysis.understanding.sourceType, .creatorSourceOnly)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.sourceOnlyReceipt))
+        XCTAssertFalse(analysis.recoveryStrategies.contains(.handleResolver))
         XCTAssertFalse(analysis.isPlaceBearing)
         XCTAssertTrue(analysis.placesFound.isEmpty)
     }

@@ -114,6 +114,34 @@ enum SocialPlaceSourceType: String, Codable {
     case creatorOnly
     case sourceOnly
     case unknown
+    case singlePlaceRecommendation
+    case creatorSourceOnly
+    case ocrHeavySource
+    case mapShare
+    case bookingOrReservation
+    case activityOrExperienceVenue
+    case vagueLifestyleCaption
+    case ambiguous
+}
+
+enum SocialPlaceRecoveryStrategy: String, Codable, Hashable {
+    case directParse
+    case publicSearchRecovery
+    case handleResolver
+    case listMode
+    case ocrExtraction
+    case mapLinkResolution
+    case bookingLinkResolution
+    case askForMoreEvidence
+    case sourceOnlyReceipt
+}
+
+struct SocialPlaceSourceUnderstanding {
+    var sourceType: SocialPlaceSourceType
+    var recoveryStrategies: [SocialPlaceRecoveryStrategy]
+    var evidenceTier: SocialPlaceEvidenceTier
+    var reasons: [String]
+    var missingInfo: [String]
 }
 
 enum SocialPlaceSourceIntent: String, Codable {
@@ -152,8 +180,284 @@ struct SocialPlaceAgentAnalysis {
     var isPlaceBearing: Bool
     var placeBearingReason: String?
     var recoveryHints: [SocialPlaceRecoveryHint]
+    var understanding: SocialPlaceSourceUnderstanding
     var confidence: Double
     var nextBestAction: String
+}
+
+extension SocialPlaceAgentAnalysis {
+    var recoveryStrategies: [SocialPlaceRecoveryStrategy] {
+        understanding.recoveryStrategies
+    }
+
+    var primaryRecoveryStrategy: SocialPlaceRecoveryStrategy {
+        understanding.recoveryStrategies.first ?? .sourceOnlyReceipt
+    }
+}
+
+struct SocialSourceClassifier {
+    func classify(
+        evidence: SocialPlaceSourceEvidence,
+        legacySourceType: SocialPlaceSourceType,
+        sourceIntent: SocialPlaceSourceIntent,
+        placesFound: [SocialPlaceCandidateDraft],
+        groups: [SocialPlaceSourceGroup],
+        creatorHandles: Set<String>,
+        regionClues: [String]
+    ) -> SocialPlaceSourceUnderstanding {
+        let text = evidence.combinedText
+        let hasVenueHandles = placesFound.contains { !$0.venueHandles.isEmpty } ||
+            groups.contains { !$0.venueHandles.isEmpty }
+        let hasBookingClues = isBookingSource(evidence.sourceURL) ||
+            isBookingText(text) ||
+            placesFound.contains { !$0.bookingLinks.isEmpty }
+        let hasMapClues = isMapShare(evidence.sourceURL) || isMapShare(evidence.resolvedURL) || isMapText(text)
+        let hasOCRClues = !evidence.ocrLines.isEmpty
+        let hasDirectCandidates = !placesFound.isEmpty
+        let isPlaceBearing = isPlaceBearingIntent(sourceIntent)
+
+        let type: SocialPlaceSourceType
+        if hasMapClues {
+            type = .mapShare
+        } else if hasBookingClues {
+            type = .bookingOrReservation
+        } else if legacySourceType == .multiPlaceList || !groups.isEmpty {
+            type = .multiPlaceList
+        } else if looksLikeActivityOrExperience(text: text, placesFound: placesFound) {
+            type = .activityOrExperienceVenue
+        } else if hasOCRClues && !hasDirectCandidates {
+            type = .ocrHeavySource
+        } else if hasDirectCandidates || isSinglePlaceIntent(sourceIntent) {
+            type = .singlePlaceRecommendation
+        } else if legacySourceType == .creatorOnly || (!creatorHandles.isEmpty && !hasVenueHandles) {
+            type = .creatorSourceOnly
+        } else if isVagueLifestyleCaption(text) {
+            type = .vagueLifestyleCaption
+        } else if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            type = .sourceOnly
+        } else if isPlaceBearing {
+            type = .singlePlaceRecommendation
+        } else {
+            type = .ambiguous
+        }
+
+        let strategies = recoveryStrategies(
+            sourceType: type,
+            sourceIntent: sourceIntent,
+            hasDirectCandidates: hasDirectCandidates,
+            hasVenueHandles: hasVenueHandles,
+            hasOCRClues: hasOCRClues
+        )
+
+        return SocialPlaceSourceUnderstanding(
+            sourceType: type,
+            recoveryStrategies: strategies,
+            evidenceTier: evidenceTier(
+                sourceType: type,
+                hasDirectCandidates: hasDirectCandidates,
+                hasVerifiedAddressClue: placesFound.contains { !$0.locationClues.isEmpty }
+            ),
+            reasons: reasons(
+                sourceType: type,
+                sourceIntent: sourceIntent,
+                hasDirectCandidates: hasDirectCandidates,
+                hasVenueHandles: hasVenueHandles,
+                hasOCRClues: hasOCRClues,
+                regionClues: regionClues
+            ),
+            missingInfo: missingInfo(sourceType: type, strategies: strategies)
+        )
+    }
+
+    private func recoveryStrategies(
+        sourceType: SocialPlaceSourceType,
+        sourceIntent: SocialPlaceSourceIntent,
+        hasDirectCandidates: Bool,
+        hasVenueHandles: Bool,
+        hasOCRClues: Bool
+    ) -> [SocialPlaceRecoveryStrategy] {
+        var strategies: [SocialPlaceRecoveryStrategy] = []
+
+        switch sourceType {
+        case .mapShare:
+            strategies.append(.mapLinkResolution)
+        case .bookingOrReservation:
+            strategies.append(.bookingLinkResolution)
+        case .multiPlaceList:
+            strategies.append(.listMode)
+        case .ocrHeavySource:
+            strategies.append(.ocrExtraction)
+        case .creatorSourceOnly, .sourceOnly:
+            strategies.append(.sourceOnlyReceipt)
+        case .vagueLifestyleCaption, .ambiguous, .unknown:
+            strategies.append(.askForMoreEvidence)
+        case .singlePlaceRecommendation, .activityOrExperienceVenue, .singleVenuePost:
+            break
+        case .creatorOnly:
+            strategies.append(.sourceOnlyReceipt)
+        }
+
+        if hasDirectCandidates {
+            strategies.append(.directParse)
+        }
+        if hasVenueHandles {
+            strategies.append(.handleResolver)
+        }
+        if shouldRunPublicSearch(sourceType: sourceType, sourceIntent: sourceIntent, hasDirectCandidates: hasDirectCandidates) {
+            strategies.append(.publicSearchRecovery)
+        }
+        if hasOCRClues, !strategies.contains(.ocrExtraction) {
+            strategies.append(.ocrExtraction)
+        }
+        if strategies.isEmpty {
+            strategies.append(.askForMoreEvidence)
+        }
+
+        return uniqueStrategies(strategies)
+    }
+
+    private func shouldRunPublicSearch(
+        sourceType: SocialPlaceSourceType,
+        sourceIntent: SocialPlaceSourceIntent,
+        hasDirectCandidates: Bool
+    ) -> Bool {
+        switch sourceType {
+        case .singlePlaceRecommendation, .multiPlaceList, .activityOrExperienceVenue, .ocrHeavySource, .bookingOrReservation:
+            return true
+        case .mapShare:
+            return false
+        case .vagueLifestyleCaption, .ambiguous, .unknown:
+            return isPlaceBearingIntent(sourceIntent)
+        case .singleVenuePost:
+            return !hasDirectCandidates || isPlaceBearingIntent(sourceIntent)
+        case .sourceOnly, .creatorOnly, .creatorSourceOnly:
+            return false
+        }
+    }
+
+    private func evidenceTier(
+        sourceType: SocialPlaceSourceType,
+        hasDirectCandidates: Bool,
+        hasVerifiedAddressClue: Bool
+    ) -> SocialPlaceEvidenceTier {
+        if sourceType == .mapShare || hasVerifiedAddressClue { return .likely }
+        if hasDirectCandidates { return .weakCandidate }
+        switch sourceType {
+        case .sourceOnly, .creatorOnly, .creatorSourceOnly, .vagueLifestyleCaption, .ambiguous, .unknown:
+            return .sourceOnly
+        case .singleVenuePost, .singlePlaceRecommendation, .multiPlaceList, .ocrHeavySource, .bookingOrReservation, .activityOrExperienceVenue, .mapShare:
+            return .weakCandidate
+        }
+    }
+
+    private func reasons(
+        sourceType: SocialPlaceSourceType,
+        sourceIntent: SocialPlaceSourceIntent,
+        hasDirectCandidates: Bool,
+        hasVenueHandles: Bool,
+        hasOCRClues: Bool,
+        regionClues: [String]
+    ) -> [String] {
+        var values = ["classified as \(sourceType.rawValue)", "intent \(sourceIntent.rawValue)"]
+        if hasDirectCandidates { values.append("direct venue clue present") }
+        if hasVenueHandles { values.append("venue handle clue present") }
+        if hasOCRClues { values.append("OCR evidence present") }
+        if let region = regionClues.first { values.append("region clue: \(region)") }
+        return values
+    }
+
+    private func missingInfo(sourceType: SocialPlaceSourceType, strategies: [SocialPlaceRecoveryStrategy]) -> [String] {
+        var values: [String] = []
+        if strategies.contains(.publicSearchRecovery) {
+            values.append("Public corroboration")
+        }
+        if strategies.contains(.handleResolver) {
+            values.append("Handle ownership check")
+        }
+        if strategies.contains(.mapLinkResolution) || strategies.contains(.bookingLinkResolution) {
+            values.append("Structured place resolution")
+        }
+        if strategies.contains(.askForMoreEvidence) {
+            values.append("More evidence from user")
+        }
+        switch sourceType {
+        case .singlePlaceRecommendation, .multiPlaceList, .ocrHeavySource, .bookingOrReservation, .activityOrExperienceVenue:
+            values.append("Verified map/place match")
+        case .creatorSourceOnly, .sourceOnly, .vagueLifestyleCaption, .ambiguous, .unknown, .creatorOnly:
+            values.append("Usable venue name")
+        case .mapShare, .singleVenuePost:
+            break
+        }
+        return Array(Set(values)).sorted()
+    }
+
+    private func isSinglePlaceIntent(_ intent: SocialPlaceSourceIntent) -> Bool {
+        switch intent {
+        case .restaurantRecommendation, .cafeRecommendation, .travelRecommendation, .stayRecommendation, .singleVenuePost, .unknownPlaceBearing:
+            return true
+        case .nonPlace, .creatorOnly, .multiPlaceList:
+            return false
+        }
+    }
+
+    private func isPlaceBearingIntent(_ intent: SocialPlaceSourceIntent) -> Bool {
+        switch intent {
+        case .nonPlace, .creatorOnly:
+            return false
+        case .restaurantRecommendation, .cafeRecommendation, .travelRecommendation, .stayRecommendation, .multiPlaceList, .singleVenuePost, .unknownPlaceBearing:
+            return true
+        }
+    }
+
+    private func isMapShare(_ rawURL: String?) -> Bool {
+        guard let rawURL, let url = URL(string: rawURL) else { return false }
+        let host = url.host?.lowercased() ?? ""
+        return host.contains("google.com") && url.path.lowercased().contains("/maps") ||
+            host == "maps.app.goo.gl" ||
+            host.contains("maps.apple.com") ||
+            host.contains("goo.gl")
+    }
+
+    private func isMapText(_ text: String) -> Bool {
+        text.range(of: #"(?i)(google maps|apple maps|maps\.app\.goo\.gl|maps\.apple\.com|/maps/place)"#, options: .regularExpression) != nil
+    }
+
+    private func isBookingSource(_ rawURL: String?) -> Bool {
+        guard let rawURL, let url = URL(string: rawURL) else { return false }
+        let host = url.host?.lowercased() ?? ""
+        return host.contains("opentable") ||
+            host.contains("resy") ||
+            host.contains("tock") ||
+            host.contains("sevenrooms") ||
+            host.contains("booking.com") ||
+            host.contains("airbnb")
+    }
+
+    private func isBookingText(_ text: String) -> Bool {
+        text.range(of: #"(?i)\b(?:book|booking|reservation|reserve|resy|opentable|tock|sevenrooms)\b"#, options: .regularExpression) != nil
+    }
+
+    private func looksLikeActivityOrExperience(text: String, placesFound: [SocialPlaceCandidateDraft]) -> Bool {
+        if placesFound.contains(where: { $0.category == "attraction" && !$0.bookingLinks.isEmpty }) {
+            return true
+        }
+        return text.range(of: #"(?i)\b(?:pottery|ceramics?|workshops?|classes?|lessons?|experience|activity|tour)\b"#, options: .regularExpression) != nil
+    }
+
+    private func isVagueLifestyleCaption(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        return lowered.range(of: #"\b(?:vibe|aesthetic|weekend|slow down|hidden gem|perfect day|save this)\b"#, options: .regularExpression) != nil
+    }
+
+    private func uniqueStrategies(_ values: [SocialPlaceRecoveryStrategy]) -> [SocialPlaceRecoveryStrategy] {
+        var seen = Set<SocialPlaceRecoveryStrategy>()
+        var result: [SocialPlaceRecoveryStrategy] = []
+        for value in values where !seen.contains(value) {
+            seen.insert(value)
+            result.append(value)
+        }
+        return result
+    }
 }
 
 struct SocialPlaceParser {
@@ -214,6 +518,15 @@ struct SocialPlaceParser {
             creatorHandles: creatorHandles
         )
         let isPlaceBearing = isPlaceBearingIntent(intent)
+        let understanding = SocialSourceClassifier().classify(
+            evidence: evidence,
+            legacySourceType: sourceType,
+            sourceIntent: intent,
+            placesFound: merged,
+            groups: sourceGroups,
+            creatorHandles: creatorHandles,
+            regionClues: regionClues
+        )
 
         return SocialPlaceAgentAnalysis(
             sourceType: sourceType,
@@ -228,6 +541,7 @@ struct SocialPlaceParser {
             isPlaceBearing: isPlaceBearing,
             placeBearingReason: isPlaceBearing ? placeBearingReason(intent: intent, topic: topic, regionClues: regionClues) : nil,
             recoveryHints: recoveryHints(intent: intent, topic: topic, regionClues: regionClues, text: text),
+            understanding: understanding,
             confidence: sourceConfidence(sourceType: sourceType, groups: sourceGroups, candidates: merged),
             nextBestAction: merged.isEmpty
                 ? isPlaceBearing
@@ -1327,13 +1641,17 @@ struct SocialPlaceParser {
         switch sourceType {
         case .multiPlaceList:
             return min(0.5 + Double(groups.count) * 0.05 + Double(candidates.count) * 0.01, 0.78)
-        case .singleVenuePost:
+        case .singleVenuePost, .singlePlaceRecommendation, .activityOrExperienceVenue, .bookingOrReservation, .mapShare:
             return candidates.first?.confidence ?? 0.5
-        case .creatorOnly:
+        case .creatorOnly, .creatorSourceOnly:
             return 0.32
         case .sourceOnly:
             return 0.24
-        case .unknown:
+        case .ocrHeavySource:
+            return 0.38
+        case .vagueLifestyleCaption:
+            return 0.28
+        case .ambiguous, .unknown:
             return 0.4
         }
     }
