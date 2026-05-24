@@ -53,7 +53,12 @@ final class WanderlyAIService {
             return localResponse
         }
 
+        let deterministicDraft = DeterministicTripPlanner().plan(for: userMessage, places: places)
+
         guard let apiKey, !apiKey.isEmpty else {
+            if let deterministicDraft {
+                return deterministicDraft
+            }
             throw WanderlyAIError.apiKeyMissing
         }
 
@@ -61,7 +66,15 @@ final class WanderlyAIService {
         var contents: [[String: Any]] = []
 
         // System instruction as first user message
-        contents.append(["role": "user", "parts": [["text": systemPrompt(places: places)]]])
+        contents.append([
+            "role": "user",
+            "parts": [[
+                "text": systemPrompt(
+                    places: places,
+                    deterministicDraftJSON: deterministicDraft.map { encodeResponse($0) }
+                )
+            ]]
+        ])
         contents.append(["role": "model", "parts": [["text": "Understood. I will respond only with valid JSON using the saved places."]]])
 
         // Previous conversation turns
@@ -106,7 +119,11 @@ final class WanderlyAIService {
                     throw WanderlyAIError.emptyResponse
                 }
 
-                return try parseResponse(text)
+                let parsed = try parseResponse(text)
+                if let deterministicDraft {
+                    return validatedItineraryPolish(parsed, fallback: deterministicDraft, places: places)
+                }
+                return parsed
             }
 
             let responseBody = String(data: data, encoding: .utf8) ?? "no body"
@@ -117,6 +134,9 @@ final class WanderlyAIService {
             }
         }
 
+        if let deterministicDraft {
+            return deterministicDraft
+        }
         throw lastError ?? WanderlyAIError.apiError(0)
     }
 
@@ -172,16 +192,31 @@ final class WanderlyAIService {
         )
     }
 
-    private func systemPrompt(places: [Place]) -> String {
+    private func systemPrompt(places: [Place], deterministicDraftJSON: String? = nil) -> String {
         let placesJSON = places.map { p in
             #"{"id":"\#(p.id)","name":"\#(p.name)","address":"\#(p.address)","category":"\#(p.category.rawValue)","status":"\#(p.status.rawValue)","lat":\#(p.latitude),"lng":\#(p.longitude)}"#
         }.joined(separator: ",\n")
+
+        let deterministicDraftSection: String
+        if let deterministicDraftJSON {
+            deterministicDraftSection = """
+
+            DETERMINISTIC PLANNER DRAFT:
+            \(deterministicDraftJSON)
+
+            Use this draft as the source of truth for itinerary place IDs, day grouping, stop order, first-pass times, and map route IDs.
+            You may polish the title, aiMessage, and stop notes. Do not introduce unknown place IDs or claim live travel times.
+            """
+        } else {
+            deterministicDraftSection = ""
+        }
 
         return """
         You are SAV-E's AI assistant. You help users explore their saved places and plan trips.
 
         USER'S SAVED PLACES:
         [\(placesJSON)]
+        \(deterministicDraftSection)
 
         CRITICAL: Respond ONLY with a valid JSON object. No markdown. No text outside the JSON.
 
@@ -219,6 +254,7 @@ final class WanderlyAIService {
 
         RULES:
         - For itinerary requests: use saved places to build a realistic schedule with smart times and geographic order.
+        - If a DETERMINISTIC PLANNER DRAFT is provided, preserve its place IDs, day grouping, stop order, first-pass times, and mapAction. Polish explanation and notes only.
         - For destination-specific requests, choose saved places whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.
         - If the saved places are far apart, still plan them honestly with realistic travel notes instead of rejecting them as "not in San Francisco".
         - placeList: set placeIds + mapAction.filterPins with same ids
@@ -227,6 +263,22 @@ final class WanderlyAIService {
         - message: set messageText only, no mapAction. Only use for greetings or when there are truly zero relevant places.
         - Only reference places from the SAVED PLACES list above using their exact "id" values
         """
+    }
+
+    private func validatedItineraryPolish(_ response: WanderlyAIResponse, fallback: WanderlyAIResponse, places: [Place]) -> WanderlyAIResponse {
+        guard response.componentType == .tripItinerary,
+              !response.itineraryDays.isEmpty else {
+            return fallback
+        }
+
+        let validIDs = Set(places.map { $0.id.uuidString })
+        let stopIDs = response.itineraryDays.flatMap(\.stops).compactMap(\.placeId)
+        guard !stopIDs.isEmpty,
+              stopIDs.allSatisfy({ validIDs.contains($0) }) else {
+            return fallback
+        }
+
+        return response
     }
 
     private func parseResponse(_ text: String) throws -> WanderlyAIResponse {
