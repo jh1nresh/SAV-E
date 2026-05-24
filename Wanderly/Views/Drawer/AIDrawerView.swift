@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct AIDrawerView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @ObservedObject var viewModel: AIDrawerViewModel
     @Binding var drawerDetent: PresentationDetent
     var existingPlacesForImport: [Place] = []
@@ -75,7 +76,7 @@ struct AIDrawerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .symbolEffect(.pulse, isActive: isLoading)
 
-            TextField("Ask about your places...", text: $viewModel.query)
+            TextField(languageSettings.text(.askPlaceholder), text: $viewModel.query)
                 .font(.subheadline)
                 .foregroundColor(.saveInk)
                 .lineLimit(1)
@@ -119,7 +120,7 @@ struct AIDrawerView: View {
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.4))
                     .clipShape(Capsule())
                 }
-                .accessibilityLabel("Open review candidates")
+                .accessibilityLabel(languageSettings.text(.openReviewCandidates))
             }
         }
         .padding(.horizontal, 12)
@@ -163,13 +164,13 @@ struct AIDrawerView: View {
             VStack(spacing: 12) {
                 Spacer()
                 ProgressView().tint(.saveInk)
-                Text("Memo is sorting the clues...").font(.subheadline).foregroundColor(.saveCocoa.opacity(0.78))
+                Text(languageSettings.text(.memoSorting)).font(.subheadline).foregroundColor(.saveCocoa.opacity(0.78))
                 Button(action: {
                     viewModel.cancelCurrentRequest()
                     searchFocused = false
                     withAnimation { drawerDetent = .medium }
                 }) {
-                    Label("Cancel", systemImage: "xmark")
+                    Label(languageSettings.text(.cancel), systemImage: "xmark")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.saveInk)
@@ -250,7 +251,7 @@ struct AIDrawerView: View {
                     .font(.caption).foregroundColor(.saveCocoa.opacity(0.74))
                     .multilineTextAlignment(.center).padding(.horizontal)
                 HStack(spacing: 12) {
-                    Button("Back") {
+                    Button(languageSettings.text(.back)) {
                         viewModel.returnToCommands()
                         withAnimation { drawerDetent = .medium }
                     }
@@ -258,7 +259,7 @@ struct AIDrawerView: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.saveCocoa.opacity(0.72))
 
-                    Button("Try again") { Task { await viewModel.submit() } }
+                    Button(languageSettings.text(.tryAgain)) { Task { await viewModel.submit() } }
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.saveCocoa)
@@ -288,7 +289,7 @@ struct AIDrawerView: View {
                     )
                     .clipShape(Circle())
             }
-            .accessibilityLabel("Back to commands")
+            .accessibilityLabel(languageSettings.text(.backToCommands))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(navigationTitle)
@@ -321,7 +322,7 @@ struct AIDrawerView: View {
                     )
                     .clipShape(Circle())
             }
-            .accessibilityLabel("Close drawer content")
+            .accessibilityLabel(languageSettings.text(.closeDrawerContent))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -345,30 +346,30 @@ struct AIDrawerView: View {
     private var navigationTitle: String {
         switch viewModel.drawerState {
         case .idle:
-            return "SAV-E"
+            return languageSettings.text(.appName)
         case .loading:
-            return "Thinking"
+            return languageSettings.text(.thinking)
         case .displaying(let response):
-            return response.title ?? "Answer"
+            return response.title ?? languageSettings.text(.answer)
         case .placeDetail(let place):
             return place.name
         case .error:
-            return "Couldn’t finish"
+            return languageSettings.text(.couldntFinish)
         }
     }
 
     private var navigationSubtitle: String {
         switch viewModel.drawerState {
         case .idle:
-            return "Commands"
+            return languageSettings.text(.commands)
         case .loading:
-            return "You can cancel and keep using SAV-E."
+            return languageSettings.text(.loadingSubtitle)
         case .displaying:
-            return "Back returns to commands."
+            return languageSettings.text(.answerSubtitle)
         case .placeDetail:
-            return "Back returns to your command drawer."
+            return languageSettings.text(.placeDetailSubtitle)
         case .error:
-            return "Try again or return to commands."
+            return languageSettings.text(.errorSubtitle)
         }
     }
 

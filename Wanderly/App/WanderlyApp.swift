@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct WanderlyApp: App {
     @StateObject private var authService = PrivyAuthService.shared
+    @StateObject private var languageSettings = AppLanguageSettings()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var openedTrip: SharedTripData?
 
@@ -26,20 +27,25 @@ struct WanderlyApp: App {
                     }
                 }
             }
+            .environmentObject(languageSettings)
             .preferredColorScheme(.light)
             .onOpenURL(perform: handleIncomingURL)
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 guard let url = activity.webpageURL else { return }
                 handleIncomingURL(url)
             }
-            .alert("Trip Link Ready", isPresented: Binding(
+            .alert(languageSettings.text(.tripLinkReady), isPresented: Binding(
                 get: { openedTrip != nil },
                 set: { if !$0 { openedTrip = nil } }
             )) {
-                Button("OK") { openedTrip = nil }
+                Button(languageSettings.text(.ok)) { openedTrip = nil }
             } message: {
                 if let openedTrip {
-                    Text("\(openedTrip.name) has \(openedTrip.stops.count) stops. Full trip import is coming next.")
+                    Text(String(
+                        format: languageSettings.text(.tripLinkMessage),
+                        openedTrip.name,
+                        openedTrip.stops.count
+                    ))
                 }
             }
         }
@@ -66,6 +72,8 @@ struct WanderlyApp: App {
 // MARK: - Auth Loading View
 
 struct AuthLoadingView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
     var body: some View {
         ZStack {
             SaveDottedBackground()
@@ -74,7 +82,7 @@ struct AuthLoadingView: View {
             VStack(spacing: 14) {
                 ProgressView()
                     .tint(.saveInk)
-                Text("Opening SAV-E")
+                Text(languageSettings.text(.opening))
                     .font(.headline)
                     .foregroundColor(.saveInk)
             }
@@ -87,6 +95,7 @@ struct AuthLoadingView: View {
 
 struct SignInView: View {
     @EnvironmentObject var authService: PrivyAuthService
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @State private var email = ""
     @State private var showEmailCode = false
     @State private var verificationCode = ""
@@ -129,7 +138,7 @@ struct SignInView: View {
             }
         }
         .alert(errorTitle, isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button("OK") { errorMessage = nil }
+            Button(languageSettings.text(.ok)) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
         }
@@ -140,20 +149,20 @@ struct SignInView: View {
         print("SAV-E sign-in failed: \(rawMessage)")
 
         if rawMessage.contains("disallowed_login_method") || rawMessage.contains("not allowed") {
-            errorTitle = "Google Isn't Enabled"
-            errorMessage = "Turn on Google in Privy, or use email sign-in for now."
+            errorTitle = languageSettings.text(.googleNotEnabled)
+            errorMessage = languageSettings.text(.googleNotEnabledMessage)
         } else if rawMessage.contains("invalid_native_app_id") {
-            errorTitle = "App Not Allowed"
-            errorMessage = "Add com.wanderly.app to the allowed app identifiers in Privy."
+            errorTitle = languageSettings.text(.appNotAllowed)
+            errorMessage = languageSettings.text(.appNotAllowedMessage)
         } else if rawMessage.contains("Invalid app client ID") {
-            errorTitle = "Auth Setup Needed"
+            errorTitle = languageSettings.text(.authSetupNeeded)
             errorMessage = "Check the iOS client ID in Privy and try again."
         } else if rawMessage.contains("Missing Privy config") {
-            errorTitle = "Auth Setup Needed"
+            errorTitle = languageSettings.text(.authSetupNeeded)
             errorMessage = rawMessage
         } else {
-            errorTitle = "Can't Sign In"
-            errorMessage = "Something went wrong. Try again in a moment."
+            errorTitle = languageSettings.text(.cantSignIn)
+            errorMessage = languageSettings.text(.genericSignInError)
         }
     }
 
@@ -183,7 +192,7 @@ struct SignInView: View {
             HStack(spacing: 10) {
                 Image(systemName: "g.circle.fill")
                     .font(.headline)
-                Text("Continue with Google")
+                Text(languageSettings.text(.continueWithGoogle))
             }
             .font(.headline)
             .foregroundColor(.saveInk)
@@ -205,7 +214,7 @@ struct SignInView: View {
                 Rectangle()
                     .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
-                Text("or use email")
+                Text(languageSettings.text(.orUseEmail))
                     .font(.caption)
                     .foregroundColor(.saveCocoa.opacity(0.68))
                 Rectangle()
@@ -215,9 +224,9 @@ struct SignInView: View {
 
             if !showEmailCode {
                 SignInInputRow(
-                    placeholder: "Email address",
+                    placeholder: languageSettings.text(.emailAddress),
                     text: $email,
-                    buttonTitle: "Send Code",
+                    buttonTitle: languageSettings.text(.sendCode),
                     keyboardType: .emailAddress,
                     isDisabled: email.isEmpty || isLoading
                 ) {
@@ -234,9 +243,9 @@ struct SignInView: View {
                 }
             } else {
                 SignInInputRow(
-                    placeholder: "Verification code",
+                    placeholder: languageSettings.text(.verificationCode),
                     text: $verificationCode,
-                    buttonTitle: "Verify",
+                    buttonTitle: languageSettings.text(.verify),
                     keyboardType: .numberPad,
                     isDisabled: verificationCode.isEmpty || isLoading
                 ) {
@@ -253,20 +262,22 @@ struct SignInView: View {
 }
 
 private struct SignInHero: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
     var body: some View {
         VStack(spacing: 18) {
             MemoMascotMark(size: 132)
 
             VStack(spacing: 8) {
-                Text("SAV-E")
+                Text(languageSettings.text(.appName))
                     .font(.system(size: 38, weight: .bold, design: .rounded))
                     .foregroundColor(.saveInk)
 
-                Text("Your personal place memory.")
+                Text(languageSettings.text(.signInTagline))
                     .font(.title3.weight(.semibold))
                     .foregroundColor(.saveInk)
 
-                Text("Drop in links, posts, screenshots, notes, or maps. Memo helps SAV-E turn them into reviewable place cards.")
+                Text(languageSettings.text(.signInDescription))
                     .font(.subheadline)
                     .lineSpacing(3)
                     .foregroundColor(.saveInk.opacity(0.66))
@@ -278,11 +289,15 @@ private struct SignInHero: View {
 }
 
 private struct SignInWorkflowStrip: View {
-    private let steps: [(String, String, Color)] = [
-        ("Capture", "link or media", .saveHoney),
-        ("Review", "with evidence", .saveSky),
-        ("Save", "memory cards", .saveMint),
-    ]
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
+    private var steps: [(String, String, Color)] {
+        [
+            (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), .saveHoney),
+            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), .saveSky),
+            (languageSettings.text(.save), languageSettings.text(.saveSubtitle), .saveMint),
+        ]
+    }
 
     var body: some View {
         HStack(spacing: 8) {

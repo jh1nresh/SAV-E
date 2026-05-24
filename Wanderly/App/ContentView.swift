@@ -61,4 +61,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(AppLanguageSettings())
 }

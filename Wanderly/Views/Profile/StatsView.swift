@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StatsView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let profile: UserProfile
     var waitingClues: Int = 0
 
@@ -9,10 +10,10 @@ struct StatsView: View {
             GridItem(.flexible(), spacing: 8),
             GridItem(.flexible(), spacing: 8),
         ], spacing: 8) {
-            StatItem(value: "\(profile.savedCount)", label: "Memories", color: .saveCocoa, icon: "rectangle.stack.fill")
-            StatItem(value: "\(profile.visitedCount)", label: "Verified", color: .saveSuccess, icon: "checkmark.seal.fill")
-            StatItem(value: "\(profile.citiesCount)", label: "Cities", color: .saveHoney, icon: "building.2.fill")
-            StatItem(value: "\(waitingClues)", label: "Waiting clues", color: .saveSignal, icon: "circle.hexagongrid.fill")
+            StatItem(value: "\(profile.savedCount)", label: languageSettings.text(.memoryCards), color: .saveCocoa, icon: "rectangle.stack.fill")
+            StatItem(value: "\(profile.visitedCount)", label: languageSettings.text(.verified), color: .saveSuccess, icon: "checkmark.seal.fill")
+            StatItem(value: "\(profile.citiesCount)", label: languageSettings.text(.cities), color: .saveHoney, icon: "building.2.fill")
+            StatItem(value: "\(waitingClues)", label: languageSettings.text(.waitingClues), color: .saveSignal, icon: "circle.hexagongrid.fill")
         }
         .padding(12)
         .saveNotebookPage(cornerRadius: 18)
@@ -62,6 +63,7 @@ struct StatItem: View {
 
 #Preview {
     StatsView(profile: .mock)
+        .environmentObject(AppLanguageSettings())
         .padding()
         .background(SaveDottedBackground())
 }

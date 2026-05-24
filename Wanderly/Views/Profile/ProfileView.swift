@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
+    @State private var showLanguageSettings = false
     @State private var draftDisplayName = ""
     var waitingClues: Int = 0
 
@@ -51,7 +53,7 @@ struct ProfileView: View {
                     PassportStampSection(profile: viewModel.profile, waitingClues: waitingClues)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Passport Controls")
+                        Text(languageSettings.text(.passportControls))
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
                             .padding(.horizontal, 4)
@@ -59,11 +61,20 @@ struct ProfileView: View {
                         NavigationLink {
                             SaveMemoryDebugView()
                         } label: {
-                            SettingsRow(icon: "tray.full", title: "Local Memory", color: .saveCocoa)
+                            SettingsRow(icon: "tray.full", title: languageSettings.text(.localMemory), color: .saveCocoa)
                         }
                         .buttonStyle(.plain)
 
-                        SettingsRow(icon: "arrow.right.square", title: "Sign Out", color: .red) {
+                        SettingsRow(
+                            icon: "globe.asia.australia.fill",
+                            title: languageSettings.text(.language),
+                            detail: languageSettings.language.displayName,
+                            color: .saveSky
+                        ) {
+                            showLanguageSettings = true
+                        }
+
+                        SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .red) {
                             Task { await viewModel.signOut() }
                         }
                     }
@@ -91,12 +102,16 @@ struct ProfileView: View {
                 }
             )
         }
+        .sheet(isPresented: $showLanguageSettings) {
+            LanguageSettingsSheet()
+        }
     }
 }
 
 // MARK: - Edit Profile
 
 private struct EditProfileSheet: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Binding var displayName: String
     let isSaving: Bool
     let errorMessage: String?
@@ -123,10 +138,10 @@ private struct EditProfileSheet: View {
                     .disabled(isSaving)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Edit Passport")
+                        Text(languageSettings.text(.editPassport))
                             .font(.title3.weight(.black))
                             .foregroundColor(.saveInk)
-                        Text("This is how SAV-E labels your memory book.")
+                        Text(languageSettings.text(.editPassportDescription))
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.saveMutedText)
                     }
@@ -136,7 +151,7 @@ private struct EditProfileSheet: View {
                     Button {
                         Task { await onSave() }
                     } label: {
-                        Text(isSaving ? "Saving..." : "Save")
+                        Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 13)
@@ -154,11 +169,11 @@ private struct EditProfileSheet: View {
                 .padding(.top, 18)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("PASSPORT NAME")
+                    Text(languageSettings.text(.passportName))
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa)
 
-                    TextField("Name", text: $displayName)
+                    TextField(languageSettings.text(.name), text: $displayName)
                         .font(.title3.weight(.bold))
                         .foregroundColor(.saveInk)
                         .textInputAutocapitalization(.words)
@@ -176,7 +191,7 @@ private struct EditProfileSheet: View {
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.red)
                     } else {
-                        Text("Email and sign-in provider stay managed by your login account.")
+                        Text(languageSettings.text(.accountManagedByLogin))
                             .font(.caption)
                             .foregroundColor(.saveMutedText)
                     }
@@ -199,6 +214,7 @@ private struct EditProfileSheet: View {
 // MARK: - Passport
 
 private struct PassportTopBar: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let waitingClues: Int
     let onClose: () -> Void
     let onEdit: () -> Void
@@ -208,10 +224,10 @@ private struct PassportTopBar: View {
             PassportIconButton(systemName: "xmark", action: onClose)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("SAV-E Passport")
+                Text(languageSettings.text(.profileTitle))
                     .font(.headline.weight(.black))
                     .foregroundColor(.saveInk)
-                Text(waitingClues == 1 ? "Memo has 1 clue waiting" : "Memo has \(waitingClues) clues waiting")
+                Text(languageSettings.memoWaitingText(waitingClues))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveMutedText)
             }
@@ -222,7 +238,7 @@ private struct PassportTopBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: "pencil")
                         .font(.caption.weight(.black))
-                    Text("Edit")
+                    Text(languageSettings.text(.edit))
                         .font(.caption.weight(.black))
                 }
                         .foregroundColor(.saveInk)
@@ -269,6 +285,7 @@ private struct PassportIconButton: View {
 }
 
 private struct PassportHero: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let profile: UserProfile
     let onEdit: () -> Void
 
@@ -288,14 +305,14 @@ private struct PassportHero: View {
                         }
 
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("SAV-E Passport")
+                        Text(languageSettings.text(.profileTitle))
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
                         Text(profile.displayName)
                             .font(.title2.weight(.black))
                             .foregroundColor(.saveInk)
                             .lineLimit(2)
-                        Text(profile.email ?? "Local Memo helper")
+                        Text(profile.email ?? languageSettings.text(.localMemoHelper))
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.saveMutedText)
                             .lineLimit(1)
@@ -305,8 +322,8 @@ private struct PassportHero: View {
                 }
 
                 HStack(spacing: 8) {
-                    PassportBadge(text: "MEMO HELPER", color: .saveHoney)
-                    PassportBadge(text: "REVIEW FIRST", color: .saveSignal)
+                    PassportBadge(text: languageSettings.text(.memoHelper), color: .saveHoney)
+                    PassportBadge(text: languageSettings.text(.reviewFirst), color: .saveSignal)
                     Spacer()
                     Button(action: onEdit) {
                         Image(systemName: "pencil")
@@ -321,7 +338,7 @@ private struct PassportHero: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Edit Passport")
+                    .accessibilityLabel(languageSettings.text(.editPassportAccessibility))
                 }
             }
             .padding(16)
@@ -367,17 +384,18 @@ private struct PassportBadge: View {
 }
 
 private struct PassportStampSection: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let profile: UserProfile
     let waitingClues: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Passport Stamps")
+                Text(languageSettings.text(.passportStamps))
                     .font(.headline.weight(.black))
                     .foregroundColor(.saveInk)
                 Spacer()
-                Text("MEMO BOOK")
+                Text(languageSettings.text(.memoBook))
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveCocoa)
                     .padding(.horizontal, 8)
@@ -386,11 +404,11 @@ private struct PassportStampSection: View {
                     .clipShape(Capsule())
             }
 
-            PassportStampRow(icon: "rectangle.stack.fill", title: "Memory cards", value: "\(profile.savedCount) saved")
-            PassportStampRow(icon: "checkmark.seal.fill", title: "Verified", value: "\(max(profile.savedCount - waitingClues, 0)) ready to plan")
-            PassportStampRow(icon: "building.2.fill", title: "Cities", value: "\(profile.citiesCount) city stamps")
-            PassportStampRow(icon: "circle.hexagongrid.fill", title: "Waiting clues", value: waitingClues == 1 ? "1 maybe place" : "\(waitingClues) maybe places")
-            PassportStampRow(icon: "calendar", title: "Member since", value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
+            PassportStampRow(icon: "rectangle.stack.fill", title: languageSettings.text(.memoryCards), value: languageSettings.savedCountText(profile.savedCount))
+            PassportStampRow(icon: "checkmark.seal.fill", title: languageSettings.text(.verified), value: languageSettings.verifiedCountText(max(profile.savedCount - waitingClues, 0)))
+            PassportStampRow(icon: "building.2.fill", title: languageSettings.text(.cities), value: languageSettings.cityCountText(profile.citiesCount))
+            PassportStampRow(icon: "circle.hexagongrid.fill", title: languageSettings.text(.waitingClues), value: languageSettings.waitingPlaceText(waitingClues))
+            PassportStampRow(icon: "calendar", title: languageSettings.text(.memberSince), value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
         }
         .padding()
         .saveNotebookPage(cornerRadius: 18)
@@ -432,6 +450,7 @@ private struct PassportStampRow: View {
 struct SettingsRow: View {
     let icon: String
     let title: String
+    var detail: String? = nil
     let color: Color
     var action: (() -> Void)?
 
@@ -445,9 +464,17 @@ struct SettingsRow: View {
                     .background(color.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(.saveInk)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline)
+                        .foregroundColor(.saveInk)
+
+                    if let detail {
+                        Text(detail)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveMutedText)
+                    }
+                }
 
                 Spacer()
 
@@ -461,6 +488,82 @@ struct SettingsRow: View {
     }
 }
 
+private struct LanguageSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 12) {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .frame(width: 38, height: 38)
+                            .background(Color.saveNotebookPage)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(languageSettings.text(.chooseLanguage))
+                            .font(.title3.weight(.black))
+                            .foregroundColor(.saveInk)
+                        Text(languageSettings.text(.languageDescription))
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveMutedText)
+                    }
+                }
+                .padding(.top, 18)
+
+                VStack(spacing: 10) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Button {
+                            languageSettings.language = language
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(language.displayName)
+                                    .font(.headline.weight(.bold))
+                                    .foregroundColor(.saveInk)
+
+                                Spacer()
+
+                                if languageSettings.language == language {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.title3.weight(.black))
+                                        .foregroundColor(.saveSuccess)
+                                }
+                            }
+                            .padding(14)
+                            .background(
+                                languageSettings.language == language
+                                ? Color.saveHoney.opacity(0.3)
+                                : Color.saveNotebookPage.opacity(0.94)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .background(SaveDottedBackground())
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+}
+
 #Preview {
     ProfileView()
+        .environmentObject(AppLanguageSettings())
 }
