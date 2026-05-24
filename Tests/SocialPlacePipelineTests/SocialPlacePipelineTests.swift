@@ -2,11 +2,42 @@ import XCTest
 import CoreLocation
 @testable import Wanderly
 
+private final class StubPublicSourceSearchService: PublicSourceSearchServiceProtocol {
+    var queries: [String] = []
+
+    func search(query: String) async throws -> [PublicSourceSearchResult] {
+        queries.append(query)
+        if query.contains("DW2ZpyADbZ6") || query.contains("favorite restaurants in LA") {
+            return [
+                PublicSourceSearchResult(
+                    title: "Talia's favorite restaurants in LA - Instagram mirror",
+                    url: "https://example.com/ig/DW2ZpyADbZ6",
+                    snippet: "Talia says one of my absolutely favorite restaurants in LA is Quarter Sheets Pizza Club. Save this for a slow dinner night."
+                )
+            ]
+        }
+        return []
+    }
+}
+
 private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
     var queries: [String] = []
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
         queries.append(query)
+        if query.contains("Quarter Sheets Pizza Club") {
+            return [
+                GooglePlaceMatch(
+                    id: "quarter-sheets-pizza-club",
+                    name: "Quarter Sheets Pizza Club",
+                    address: "1305 Portia St, Los Angeles, CA 90026",
+                    latitude: 34.0779,
+                    longitude: -118.2543,
+                    rating: 4.6,
+                    priceLevel: 2
+                )
+            ]
+        }
         if query.contains("Known Cafe") {
             return [
                 GooglePlaceMatch(
@@ -51,6 +82,36 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
 }
 
 final class SocialPlacePipelineTests: XCTestCase {
+    func testPlaceBearingSourceRunsPublicSearchAndPlacesMatchWithEvidenceReceipt() async throws {
+        let places = StubGooglePlacesService()
+        let search = StubPublicSourceSearchService()
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: places,
+            publicSourceSearchService: search
+        )
+
+        let candidates = try await service.recoverReviewCandidates(
+            fromEvidenceText: """
+            Talia on Instagram: "This is one of my absolutely favorite restaurants in LA.
+            Save this for a slow dinner night."
+            """,
+            sourceURL: "https://www.instagram.com/reel/DW2ZpyADbZ6/"
+        )
+
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.candidateName, "Quarter Sheets Pizza Club")
+        XCTAssertEqual(candidate.address, "1305 Portia St, Los Angeles, CA 90026")
+        XCTAssertEqual(candidate.latitude, 34.0779)
+        XCTAssertEqual(candidate.longitude, -118.2543)
+        XCTAssertEqual(candidate.reviewState, "map_match_ready")
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertTrue(search.queries.contains { $0.contains("DW2ZpyADbZ6") })
+        XCTAssertTrue(places.queries.contains { $0.contains("Quarter Sheets Pizza Club") && $0.contains("LA") })
+        XCTAssertTrue(candidate.evidence.contains { $0.contains("Public web search result") && $0.contains("Quarter Sheets Pizza Club") })
+        XCTAssertTrue(candidate.evidenceDiagnostic?.canSaveAsMapStamp == true)
+        XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains { $0.contains("Recovered venue candidate: Quarter Sheets Pizza Club") } == true)
+    }
+
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(

@@ -11,13 +11,84 @@ enum SocialLinkReviewCandidateError: LocalizedError {
     }
 }
 
+struct PublicSourceSearchResult: Hashable {
+    var title: String
+    var url: String
+    var snippet: String
+}
+
+protocol PublicSourceSearchServiceProtocol {
+    func search(query: String) async throws -> [PublicSourceSearchResult]
+}
+
+final class PublicSourceSearchService: PublicSourceSearchServiceProtocol {
+    static let shared = PublicSourceSearchService()
+
+    func search(query: String) async throws -> [PublicSourceSearchResult] {
+        var components = URLComponents(string: "https://duckduckgo.com/html/")
+        components?.queryItems = [URLQueryItem(name: "q", value: query)]
+        guard let url = components?.url else { return [] }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let html = String(data: data.prefix(250_000), encoding: .utf8) ?? ""
+        return parseDuckDuckGoResults(from: html)
+    }
+
+    private func parseDuckDuckGoResults(from html: String) -> [PublicSourceSearchResult] {
+        let blocks = html.components(separatedBy: "result__body")
+        var results: [PublicSourceSearchResult] = []
+        for block in blocks.dropFirst().prefix(5) {
+            let title = firstCapture(in: block, pattern: #"result__a[^>]*>(.*?)</a>"#)
+            let url = firstCapture(in: block, pattern: #"result__url[^>]*>(.*?)</a>"#) ?? ""
+            let snippet = firstCapture(in: block, pattern: #"result__snippet[^>]*>(.*?)</a>"#) ??
+                firstCapture(in: block, pattern: #"result__snippet[^>]*>(.*?)</div>"#) ?? ""
+            let cleanedTitle = cleanHTMLText(title ?? "")
+            let cleanedSnippet = cleanHTMLText(snippet)
+            guard !cleanedTitle.isEmpty || !cleanedSnippet.isEmpty else { continue }
+            results.append(PublicSourceSearchResult(title: cleanedTitle, url: cleanHTMLText(url), snippet: cleanedSnippet))
+        }
+        return results
+    }
+
+    private func firstCapture(in text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[captureRange])
+    }
+
+    private func cleanHTMLText(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: #"<[^>]+>"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 final class SocialLinkReviewCandidateService {
     static let shared = SocialLinkReviewCandidateService()
 
     private let googlePlacesService: GooglePlacesServiceProtocol
+    private let publicSourceSearchService: PublicSourceSearchServiceProtocol
 
-    init(googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared) {
+    init(
+        googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
+        publicSourceSearchService: PublicSourceSearchServiceProtocol = PublicSourceSearchService.shared
+    ) {
         self.googlePlacesService = googlePlacesService
+        self.publicSourceSearchService = publicSourceSearchService
     }
 
     private struct PublicMetadata {
@@ -35,12 +106,32 @@ final class SocialLinkReviewCandidateService {
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
-        let candidates = await refineCandidates(
-            reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL),
-            evidenceText: evidenceText
-        )
+        return try await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL)
+    }
 
-        return candidates
+    func recoverReviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) async throws -> [PendingReviewCandidate] {
+        let initial = reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
+        let shouldRunRecovery = initial.contains { $0.isPlaceBearingSource || $0.isSourceOnly }
+        guard shouldRunRecovery else {
+            return await refineCandidates(initial, evidenceText: evidenceText)
+        }
+
+        let analysis = analyze(evidenceText: evidenceText, sourceURL: sourceURL)
+        guard analysis.isPlaceBearing else { return initial }
+
+        let queries = sourceRecoverySearchQueries(evidenceText: evidenceText, sourceURL: sourceURL, analysis: analysis)
+        let searchResults = await publicSearchResults(for: queries)
+        let recovered = sourceRecoveryCandidates(
+            from: searchResults,
+            analysis: analysis,
+            evidenceText: evidenceText,
+            sourceURL: sourceURL
+        )
+        let refinedRecovered = await refineCandidates(recovered, evidenceText: sourceRecoveryEvidenceText(evidenceText: evidenceText, results: searchResults))
+        let mapReady = refinedRecovered.filter { $0.hasReliableCoordinates }
+        if !mapReady.isEmpty { return rankedCandidates(mapReady) }
+        if !refinedRecovered.isEmpty { return rankedCandidates(refinedRecovered) }
+        return initial
     }
 
     func refineCandidate(_ candidate: PendingReviewCandidate, evidenceText: String? = nil) async -> PendingReviewCandidate {
@@ -80,6 +171,7 @@ final class SocialLinkReviewCandidateService {
                 existing: refined.evidenceDiagnostic,
                 match: match
             )
+            refined.reviewState = "map_match_ready"
             return refined
         } catch {
             var unresolved = candidate
@@ -97,6 +189,127 @@ final class SocialLinkReviewCandidateService {
             refined.append(await refineCandidate(candidate, evidenceText: evidenceText))
         }
         return refined
+    }
+
+    private func publicSearchResults(for queries: [String]) async -> [PublicSourceSearchResult] {
+        var results: [PublicSourceSearchResult] = []
+        var seen = Set<PublicSourceSearchResult>()
+        for query in queries.prefix(4) {
+            do {
+                for result in try await publicSourceSearchService.search(query: query).prefix(5) where !seen.contains(result) {
+                    seen.insert(result)
+                    results.append(result)
+                }
+            } catch {
+                continue
+            }
+        }
+        return results
+    }
+
+    private func sourceRecoveryCandidates(
+        from results: [PublicSourceSearchResult],
+        analysis: SocialPlaceAgentAnalysis,
+        evidenceText: String,
+        sourceURL: String
+    ) -> [PendingReviewCandidate] {
+        let region = primaryRegion(from: analysis.regionClues)
+        return results.compactMap { result in
+            guard let name = recoveredVenueName(from: result, analysis: analysis), isUsableCandidateName(name) else { return nil }
+            let combinedText = sourceRecoveryEvidenceText(evidenceText: evidenceText, results: [result])
+            let tier = SocialPlaceEvidenceTier.weakCandidate
+            let evidence = appendUnique(
+                [],
+                [
+                    "Source URL: \(sourceURL)",
+                    "Evidence tier: \(tier.rawValue)",
+                    "Recovered venue candidate: \(name)",
+                    "Public web search result: \(result.title) — \(result.snippet)",
+                    result.url.isEmpty ? "" : "Public web search URL: \(result.url)"
+                ]
+            )
+            return PendingReviewCandidate(
+                candidateName: name,
+                address: region ?? "",
+                category: category(for: analysis.sourceIntent),
+                sourceURL: sourceURL,
+                sourceText: combinedText,
+                evidence: evidence,
+                confidence: 0.58,
+                missingInfo: ["Google Places match required", "User confirmation required"],
+                savedAt: Date(),
+                evidenceDiagnostic: sourceRecoveryDiagnostic(
+                    analysis: analysis,
+                    sourceURL: sourceURL,
+                    result: result,
+                    recoveredName: name
+                ),
+                reviewState: "source_recovered_candidate"
+            )
+        }
+    }
+
+    private func recoveredVenueName(from result: PublicSourceSearchResult, analysis: SocialPlaceAgentAnalysis) -> String? {
+        let text = "\(result.title)\n\(result.snippet)"
+        let patterns = [
+            #"(?i)favorite restaurants? in [A-Za-z .'-]{2,40}\s+is\s+([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#,
+            #"(?i)favorite restaurants? in [A-Za-z .'-]{2,40}\s*[:\-–—]\s*([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#,
+            #"(?i)(?:at|try|visit|saved?|spot is|restaurant is|cafe is)\s+([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#
+        ]
+        for pattern in patterns {
+            if let match = firstCapture(in: text, pattern: pattern) {
+                let cleaned = cleanRecoveredVenueName(match)
+                if isUsableCandidateName(cleaned) { return cleaned }
+            }
+        }
+        if let quoted = firstCapture(in: text, pattern: #"[“\"]([A-Z][A-Za-z0-9 &'’'\-.]{2,70})[”\"]"#) {
+            let cleaned = cleanRecoveredVenueName(quoted)
+            if isUsableCandidateName(cleaned) { return cleaned }
+        }
+        return nil
+    }
+
+    private func cleanRecoveredVenueName(_ value: String) -> String {
+        cleanCandidateName(value)
+            .replacingOccurrences(of: #"(?i)\s+(?:save this|for a|with|because|near|in)\b.*$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.,:;!?'\"“”"))
+    }
+
+    private func sourceRecoveryEvidenceText(evidenceText: String, results: [PublicSourceSearchResult]) -> String {
+        ([evidenceText] + results.map { "\($0.title)\n\($0.snippet)" })
+            .map(cleanHTMLText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private func sourceRecoveryDiagnostic(
+        analysis: SocialPlaceAgentAnalysis,
+        sourceURL: String,
+        result: PublicSourceSearchResult,
+        recoveredName: String
+    ) -> SocialPlaceEvidenceDiagnostic {
+        SocialPlaceEvidenceDiagnostic(
+            found: appendUnique(
+                [],
+                [
+                    "Source URL: \(sourceURL)",
+                    "Place-bearing source: \(analysis.placeBearingReason ?? analysis.sourceIntent.rawValue)",
+                    "Recovered venue candidate: \(recoveredName)",
+                    "Public web search result: \(result.title)",
+                    result.url.isEmpty ? "" : "Public web search URL: \(result.url)"
+                ]
+            ),
+            attempts: [
+                "Checked public metadata/caption/OCR text for place-bearing intent",
+                "Ran public web search recovery queries",
+                "Extracted venue candidate from public search snippets",
+                "Prepared Google Places refinement query",
+                "Did not use logged-in Instagram scraping"
+            ],
+            missingFields: ["Verified address", "Verified coordinates"],
+            nextBestClue: "Confirm the Google Places match before saving this as a Map Stamp."
+        )
     }
 
     func reviewCandidatesOrSourceOnly(fromEvidenceText evidenceText: String, sourceURL: String) -> [PendingReviewCandidate] {
