@@ -203,6 +203,125 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
     }
 
+    func testSourceOnlyEvidenceDrawerIncludesMissingFieldsAndRecoveryQuery() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "pasta",
+            places: [],
+            localRecords: [
+                SaveMemoryRecord(
+                    state: .sourceOnly,
+                    sourceURL: "https://www.instagram.com/reel/pasta/",
+                    title: "Best pasta reel",
+                    evidence: ["Caption says best pasta in LA"],
+                    evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
+                        found: ["Source URL: https://www.instagram.com/reel/pasta/"],
+                        attempts: ["Checked public metadata/caption text"],
+                        missingFields: ["exact venue", "address", "coordinates"],
+                        nextBestClue: "Run source recovery search",
+                        suggestedSearchQueries: ["best pasta LA instagram reel"]
+                    )
+                )
+            ]
+        )
+
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+        let drawer = result.evidenceDrawer
+
+        XCTAssertEqual(result.objectType, .sourceOnlyClue)
+        XCTAssertEqual(drawer.sourcePlatform, .instagram)
+        XCTAssertEqual(drawer.missingFields, ["exact venue", "address", "coordinates"])
+        XCTAssertEqual(drawer.recoveryQueries, ["best pasta LA instagram reel"])
+        XCTAssertTrue(drawer.candidateExplanation?.contains("without creating a saved place") == true)
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value.contains("best pasta in LA") })
+    }
+
+    func testUnsavedMapCandidateEvidenceDrawerShowsMapEvidenceWithoutMemoryClaim() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "nearby sushi",
+            places: [],
+            localRecords: [],
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Sushi Gen",
+                    subtitle: "Little Tokyo · Japanese",
+                    latitude: 34.0478,
+                    longitude: -118.2386,
+                    category: .food,
+                    rating: 4.6,
+                    reviewCount: 4100,
+                    sourceURL: "https://maps.google.com/?q=Sushi+Gen",
+                    sourcePlatform: .googleMaps,
+                    evidence: ["Visible on map"]
+                )
+            ]
+        )
+
+        let result = try XCTUnwrap(response.newRecommendations.results.first)
+        let drawer = result.evidenceDrawer
+
+        XCTAssertEqual(result.objectType, .mapVisibleUnsavedPlace)
+        XCTAssertEqual(result.userState, .unsaved)
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .rating && $0.value == "4.6" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .reviewCount && $0.value == "4100" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .coordinates && $0.value == "present" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Unsaved in SAV-E" })
+        XCTAssertEqual(drawer.candidateExplanation, "This is a map result, not a SAV-E memory yet.")
+    }
+
+    func testSavedPlaceEvidenceDrawerIncludesSourcePlatformAndAddress() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "kato",
+            places: [
+                place(
+                    name: "Kato",
+                    address: "777 S Alameda St, Los Angeles, CA",
+                    category: .food,
+                    sourceUrl: "https://www.instagram.com/reel/kato/"
+                )
+            ],
+            localRecords: []
+        )
+
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+        let drawer = result.evidenceDrawer
+
+        XCTAssertEqual(result.objectType, .savedPlace)
+        XCTAssertEqual(drawer.sourcePlatform, .instagram)
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.label == "Platform" && $0.value == "Instagram" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .address && $0.value == "777 S Alameda St, Los Angeles, CA" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Saved in SAV-E" })
+    }
+
+    func testEvidenceDrawerDoesNotTrustLookalikeSourceHost() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "lookalike",
+            places: [],
+            localRecords: [
+                SaveMemoryRecord(
+                    state: .sourceOnly,
+                    sourceURL: "https://notinstagram.com/reel/source/",
+                    title: "Lookalike source",
+                    evidence: ["Caption says cafe"],
+                    evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
+                        found: ["Source URL: https://notinstagram.com/reel/source/"],
+                        attempts: ["Checked public metadata"],
+                        missingFields: ["verified source platform"],
+                        nextBestClue: "Share the original social link"
+                    )
+                )
+            ]
+        )
+
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+        XCTAssertEqual(result.sourcePlatform, .other)
+        XCTAssertNotEqual(result.evidenceDrawer.sourcePlatform, .instagram)
+        XCTAssertFalse(result.evidenceDrawer.evidenceAtoms.contains { $0.label == "Platform" && $0.value == "Instagram" })
+    }
+
     private func place(
         name: String,
         address: String,

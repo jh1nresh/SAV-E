@@ -71,6 +71,7 @@ struct SaveSearchController {
             confidence: nil,
             missingInfo: [],
             evidence: placeEvidence(place),
+            recoveryQueries: [],
             createdAt: place.createdAt,
             canRunRecovery: false,
             isRecommendationShell: false,
@@ -116,6 +117,7 @@ struct SaveSearchController {
             confidence: nil,
             missingInfo: record.evidenceDiagnostic?.missingFields ?? [],
             evidence: record.evidence,
+            recoveryQueries: recoveryQueries(from: record.evidenceDiagnostic),
             createdAt: record.createdAt,
             canRunRecovery: record.state == .sourceOnly,
             isRecommendationShell: false,
@@ -142,6 +144,7 @@ struct SaveSearchController {
             confidence: nil,
             missingInfo: ["Choose a result before it becomes a review clue or memory card"],
             evidence: ["Recommendation shell only; no map pin or saved place was created"],
+            recoveryQueries: [],
             createdAt: Date(),
             canRunRecovery: false,
             isRecommendationShell: true,
@@ -168,6 +171,7 @@ struct SaveSearchController {
             confidence: nil,
             missingInfo: [],
             evidence: candidate.evidence.isEmpty ? ["Visible on map; not saved yet"] : candidate.evidence,
+            recoveryQueries: [],
             createdAt: candidate.createdAt,
             canRunRecovery: false,
             isRecommendationShell: false,
@@ -189,6 +193,14 @@ struct SaveSearchController {
         return evidence
     }
 
+    private func recoveryQueries(from diagnostic: SocialPlaceEvidenceDiagnostic?) -> [String] {
+        guard let diagnostic else { return [] }
+        if let suggestedSearchQueries = diagnostic.suggestedSearchQueries, !suggestedSearchQueries.isEmpty {
+            return suggestedSearchQueries
+        }
+        return diagnostic.nextBestClue.isEmpty ? [] : [diagnostic.nextBestClue]
+    }
+
     private func sourceSubtitle(from sourceURL: String?) -> String {
         guard let sourceURL, let url = URL(string: sourceURL), let host = url.host else {
             return "Saved source"
@@ -197,11 +209,13 @@ struct SaveSearchController {
     }
 
     private func sourcePlatform(from sourceURL: String?) -> SourcePlatform? {
-        guard let host = sourceURL.flatMap(URL.init(string:))?.host?.lowercased() else { return nil }
-        if host.contains("instagram") { return .instagram }
-        if host.contains("threads") { return .threads }
-        if host.contains("xiaohongshu") || host.contains("xhslink") { return .xiaohongshu }
-        if host.contains("google") || host.contains("maps") { return .googleMaps }
+        guard let host = sourceURL.flatMap(URL.init(string:))?.host?.lowercased().removingWWWPrefix else { return nil }
+        if host.matchesDomain("instagram.com") { return .instagram }
+        if host.matchesDomain("threads.net") || host.matchesDomain("threads.com") { return .threads }
+        if host.matchesDomain("xiaohongshu.com") || host.matchesDomain("xhslink.com") { return .xiaohongshu }
+        if host.matchesDomain("google.com") || host.matchesDomain("goo.gl") || host.matchesDomain("maps.app.goo.gl") {
+            return .googleMaps
+        }
         return .other
     }
 
@@ -212,6 +226,16 @@ struct SaveSearchController {
             .filter { !$0.isEmpty }
         guard pieces.count >= 2 else { return pieces.first }
         return pieces[pieces.count - 2]
+    }
+}
+
+private extension String {
+    var removingWWWPrefix: String {
+        hasPrefix("www.") ? String(dropFirst(4)) : self
+    }
+
+    func matchesDomain(_ domain: String) -> Bool {
+        self == domain || hasSuffix(".\(domain)")
     }
 }
 

@@ -265,6 +265,7 @@ private struct SaveSearchResultCard: View {
             }
 
             SaveAgentActionDrawerPreview(result: result)
+            SaveEvidenceDrawerPreview(model: result.evidenceDrawer)
         }
         .padding(12)
         .saveNotebookPage(cornerRadius: 18)
@@ -313,11 +314,6 @@ private struct SaveAgentActionDrawerPreview: View {
                 .foregroundColor(.saveMutedText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(drawer.evidenceSummary)
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(.saveCocoa)
-                .fixedSize(horizontal: false, vertical: true)
-
             HStack(alignment: .top, spacing: 6) {
                 actionView(drawer.primaryAction, isPrimary: true)
 
@@ -361,6 +357,103 @@ private struct SaveAgentActionDrawerPreview: View {
             .background(isPrimary ? Color.saveHoney : Color.saveNotebookPage)
             .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
             .clipShape(Capsule())
+    }
+}
+
+private struct SaveEvidenceDrawerPreview: View {
+    let model: SaveEvidenceDrawerModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "doc.text.magnifyingglass")
+                Text("Evidence")
+                Spacer(minLength: 0)
+                Text(model.confidenceLabel)
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .font(.caption.weight(.black))
+            .foregroundColor(.saveInk)
+
+            if let provenanceLabel = model.provenanceLabel {
+                Text(provenanceLabel)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ForEach(model.evidenceAtoms.prefix(5)) { atom in
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: iconName(for: atom.kind))
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveCocoa)
+                        .frame(width: 14)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(atom.label)
+                            .font(.caption2.weight(.black))
+                            .foregroundColor(.saveInk)
+                        Text(atom.value)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.saveMutedText)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+
+            if !model.missingFields.isEmpty {
+                evidenceLine(title: "Missing", value: model.missingFields.prefix(3).joined(separator: ", "))
+            }
+
+            if !model.recoveryQueries.isEmpty {
+                evidenceLine(title: "Next recovery", value: model.recoveryQueries.prefix(2).joined(separator: " · "))
+            }
+
+            if let candidateExplanation = model.candidateExplanation {
+                Text(candidateExplanation)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveCocoa)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(Color.saveNotebookPage.opacity(0.88))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func evidenceLine(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.caption2.weight(.black))
+                .foregroundColor(.saveInk)
+            Text(value)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveMutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func iconName(for kind: SaveEvidenceAtomKind) -> String {
+        switch kind {
+        case .sourceURL: return "link"
+        case .caption: return "text.quote"
+        case .creator: return "person.crop.circle"
+        case .venueHandle: return "at"
+        case .address: return "mappin"
+        case .city: return "building.2"
+        case .coordinates: return "location"
+        case .rating: return "star.fill"
+        case .reviewCount: return "text.bubble"
+        case .userNote: return "note.text"
+        case .receipt: return "receipt"
+        }
     }
 }
 

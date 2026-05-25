@@ -207,6 +207,195 @@ struct SaveAgentActionDrawerModel: Hashable {
     }
 }
 
+struct SaveEvidenceDrawerModel: Hashable {
+    var sourceURL: String?
+    var sourcePlatform: SourcePlatform?
+    var provenanceLabel: String?
+    var confidenceLabel: String
+    var evidenceAtoms: [SaveEvidenceAtom]
+    var missingFields: [String]
+    var recoveryQueries: [String]
+    var candidateExplanation: String?
+
+    init(result: SaveSearchResult) {
+        sourceURL = result.sourceURL
+        sourcePlatform = result.sourcePlatform
+        provenanceLabel = Self.provenanceLabel(for: result)
+        confidenceLabel = Self.confidenceLabel(for: result)
+        evidenceAtoms = Self.evidenceAtoms(for: result)
+        missingFields = result.missingInfo
+        recoveryQueries = result.recoveryQueries
+        candidateExplanation = Self.candidateExplanation(for: result)
+    }
+
+    private static func provenanceLabel(for result: SaveSearchResult) -> String? {
+        switch result.objectType {
+        case .sourceOnlyClue:
+            return result.sourcePlatform.map { "Source-only clue from \($0.displayName)" } ?? "Source-only clue"
+        case .pendingCandidate:
+            return "Review candidate; confirm before saving"
+        case .mapVisibleUnsavedPlace:
+            return "Map-visible candidate; not saved to SAV-E"
+        case .savedPlace:
+            return "Saved SAV-E memory"
+        case .triedMemory:
+            return "Visited SAV-E memory"
+        case .review:
+            return "Private review"
+        case .tripStop:
+            return "Trip stop"
+        case .newRecommendation:
+            return "Recommendation shell"
+        }
+    }
+
+    private static func confidenceLabel(for result: SaveSearchResult) -> String {
+        if let confidence = result.confidence {
+            return "\(Int((confidence * 100).rounded()))% confidence"
+        }
+        switch result.objectType {
+        case .sourceOnlyClue:
+            return "Exact place unconfirmed"
+        case .pendingCandidate:
+            return "Candidate needs review"
+        case .mapVisibleUnsavedPlace:
+            return "Map evidence present"
+        case .savedPlace, .triedMemory, .tripStop:
+            return "Saved memory"
+        case .review:
+            return "Review evidence"
+        case .newRecommendation:
+            return "Unsaved recommendation"
+        }
+    }
+
+    private static func candidateExplanation(for result: SaveSearchResult) -> String? {
+        switch result.objectType {
+        case .sourceOnlyClue:
+            return "SAV-E is preserving the source clue without creating a saved place."
+        case .pendingCandidate:
+            return "This can become a memory only after the place evidence is confirmed."
+        case .mapVisibleUnsavedPlace:
+            return "This is a map result, not a SAV-E memory yet."
+        case .savedPlace:
+            return "This is already saved in SAV-E."
+        case .newRecommendation:
+            return "Choose a concrete place before saving anything to SAV-E."
+        case .triedMemory, .review, .tripStop:
+            return nil
+        }
+    }
+
+    private static func evidenceAtoms(for result: SaveSearchResult) -> [SaveEvidenceAtom] {
+        var atoms: [SaveEvidenceAtom] = []
+
+        if let sourceURL = result.sourceURL, !sourceURL.isEmpty {
+            atoms.append(SaveEvidenceAtom(kind: .sourceURL, label: "Source", value: sourceURL))
+        } else if result.objectType == .mapVisibleUnsavedPlace {
+            atoms.append(SaveEvidenceAtom(kind: .sourceURL, label: "Source", value: "Map result"))
+        }
+
+        if let sourcePlatform = result.sourcePlatform {
+            atoms.append(SaveEvidenceAtom(kind: .sourceURL, label: "Platform", value: sourcePlatform.displayName))
+        }
+        if !result.subtitle.isEmpty, result.objectType != .sourceOnlyClue {
+            let label = result.objectType == .mapVisibleUnsavedPlace ? "Map label" : "Address"
+            atoms.append(SaveEvidenceAtom(kind: .address, label: label, value: result.subtitle))
+        }
+        if result.latitude != nil, result.longitude != nil {
+            atoms.append(SaveEvidenceAtom(kind: .coordinates, label: "Coordinates", value: "present"))
+        }
+        if let rating = result.rating {
+            atoms.append(SaveEvidenceAtom(kind: .rating, label: "Rating", value: String(format: "%.1f", rating)))
+        }
+        if let reviewCount = result.reviewCount {
+            atoms.append(SaveEvidenceAtom(kind: .reviewCount, label: "Reviews", value: "\(reviewCount)"))
+        }
+        if result.userState == .unsaved {
+            atoms.append(SaveEvidenceAtom(kind: .receipt, label: "State", value: "Unsaved in SAV-E"))
+        } else if result.objectType == .savedPlace {
+            atoms.append(SaveEvidenceAtom(kind: .receipt, label: "State", value: "Saved in SAV-E"))
+        }
+
+        for evidence in result.evidence {
+            if let atom = SaveEvidenceAtom(evidenceLine: evidence) {
+                atoms.append(atom)
+            }
+        }
+
+        return Self.uniqueAtoms(atoms)
+    }
+
+    private static func uniqueAtoms(_ atoms: [SaveEvidenceAtom]) -> [SaveEvidenceAtom] {
+        var seen = Set<String>()
+        return atoms.filter { atom in
+            let key = "\(atom.kind.rawValue)|\(atom.label)|\(atom.value)"
+            return seen.insert(key).inserted
+        }
+    }
+}
+
+struct SaveEvidenceAtom: Identifiable, Hashable {
+    var id: UUID
+    var kind: SaveEvidenceAtomKind
+    var label: String
+    var value: String
+
+    init(id: UUID = UUID(), kind: SaveEvidenceAtomKind, label: String, value: String) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+        self.value = value
+    }
+
+    init?(evidenceLine: String) {
+        let line = evidenceLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return nil }
+
+        let lowered = line.lowercased()
+        if lowered.hasPrefix("source url:") || lowered.hasPrefix("source:") {
+            self.init(kind: .sourceURL, label: "Source", value: Self.value(afterColonIn: line))
+        } else if lowered.contains("caption") {
+            self.init(kind: .caption, label: "Caption clue", value: line)
+        } else if lowered.contains("creator") || lowered.contains("provenance") {
+            self.init(kind: .creator, label: "Creator/provenance", value: line)
+        } else if lowered.contains("venue handle") {
+            self.init(kind: .venueHandle, label: "Venue handle", value: line)
+        } else if lowered.contains("address") {
+            self.init(kind: .address, label: "Address clue", value: line)
+        } else if lowered.contains("coordinate") {
+            self.init(kind: .coordinates, label: "Coordinates", value: line)
+        } else if lowered.contains("rating") {
+            self.init(kind: .rating, label: "Rating", value: line)
+        } else if lowered.contains("review") {
+            self.init(kind: .reviewCount, label: "Review clue", value: line)
+        } else if lowered.contains("receipt") {
+            self.init(kind: .receipt, label: "Receipt", value: line)
+        } else {
+            self.init(kind: .userNote, label: "Evidence", value: line)
+        }
+    }
+
+    private static func value(afterColonIn line: String) -> String {
+        guard let colon = line.firstIndex(of: ":") else { return line }
+        return String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+enum SaveEvidenceAtomKind: String, Hashable {
+    case sourceURL
+    case caption
+    case creator
+    case venueHandle
+    case address
+    case city
+    case coordinates
+    case rating
+    case reviewCount
+    case userNote
+    case receipt
+}
+
 struct SaveMapCandidate: Identifiable, Hashable {
     var id: String
     var title: String
@@ -341,6 +530,7 @@ struct SaveSearchResult: Identifiable, Hashable {
     var confidence: Double?
     var missingInfo: [String]
     var evidence: [String]
+    var recoveryQueries: [String]
     var createdAt: Date
     var canRunRecovery: Bool
     var isRecommendationShell: Bool
@@ -359,6 +549,7 @@ struct SaveSearchResult: Identifiable, Hashable {
             reviewCount.map { "reviews \($0)" },
             missingInfo.joined(separator: " "),
             evidence.joined(separator: " "),
+            recoveryQueries.joined(separator: " "),
         ]
         .compactMap { $0 }
         .joined(separator: " ")
@@ -366,6 +557,10 @@ struct SaveSearchResult: Identifiable, Hashable {
 
     var agentDrawer: SaveAgentActionDrawerModel {
         SaveAgentActionDrawerModel(result: self)
+    }
+
+    var evidenceDrawer: SaveEvidenceDrawerModel {
+        SaveEvidenceDrawerModel(result: self)
     }
 }
 
