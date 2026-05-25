@@ -24,25 +24,29 @@ final class PlaceListViewModel: ObservableObject {
     @Published var searchText: String = ""
     @Published var isLoading = false
     @Published var deleteError: String?
+    @Published private(set) var localMemoryRecords: [SaveMemoryRecord] = []
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
     private let saveLocalVaultService: SaveLocalVaultService
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
+    private let searchController: SaveSearchController
     private var importedPendingKeys: Set<String> = []
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
         pendingImportService: PendingPlaceImportService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
-        socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared
+        socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
+        searchController: SaveSearchController = SaveSearchController()
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
         self.saveLocalVaultService = saveLocalVaultService
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
+        self.searchController = searchController
     }
 
     var filteredPlaces: [Place] {
@@ -78,9 +82,14 @@ final class PlaceListViewModel: ObservableObject {
         return result
     }
 
+    var saveSearchResponse: SaveSearchResponse {
+        searchController.search(query: searchText, places: places, localRecords: localMemoryRecords)
+    }
+
     func loadPlaces() async {
         isLoading = true
         defer { isLoading = false }
+        loadLocalMemoryRecords()
 
         guard let userId = authService.currentUserId else {
             importPendingPlacesForLocalUse()
@@ -91,6 +100,7 @@ final class PlaceListViewModel: ObservableObject {
             places = try await supabaseService.fetchPlaces(for: userId)
             try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
             try await importPendingPlaces(for: userId)
+            loadLocalMemoryRecords()
         } catch {
             print("Failed to load places: \(error)")
             importPendingPlacesForLocalUse()
@@ -192,6 +202,15 @@ final class PlaceListViewModel: ObservableObject {
             try await supabaseService.updatePlace(places[index])
         } catch {
             print("Failed to update place: \(error)")
+        }
+    }
+
+    private func loadLocalMemoryRecords() {
+        do {
+            localMemoryRecords = try saveLocalVaultService.recentRecords(limit: 100)
+        } catch {
+            localMemoryRecords = []
+            print("PlaceListViewModel: failed to load local memory records: \(error)")
         }
     }
 
