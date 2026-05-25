@@ -264,27 +264,7 @@ private struct SaveSearchResultCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if result.primaryAction != .none && result.primaryAction != .openSource {
-                Label(result.primaryAction.displayName, systemImage: result.primaryAction.systemImage)
-                    .font(.caption.weight(.black))
-                    .foregroundColor(.saveInk)
-            }
-
-            if let sourceURL = result.sourceURL, let url = URL(string: sourceURL) {
-                Link(destination: url) {
-                    Label("Open source", systemImage: "link")
-                        .font(.caption.weight(.black))
-                        .foregroundColor(.saveInk)
-                }
-            } else if result.primaryAction == .openSource {
-                Label(result.primaryAction.displayName, systemImage: result.primaryAction.systemImage)
-                    .font(.caption.weight(.black))
-                    .foregroundColor(.saveInk)
-            } else if result.isRecommendationShell {
-                Label("No place saved yet", systemImage: "sparkle.magnifyingglass")
-                    .font(.caption.weight(.black))
-                    .foregroundColor(.saveCocoa)
-            }
+            SaveAgentActionDrawerPreview(result: result)
         }
         .padding(12)
         .saveNotebookPage(cornerRadius: 18)
@@ -311,6 +291,76 @@ private struct SaveSearchResultCard: View {
         case .tripStop: return .saveSky
         case .newRecommendation: return .saveSky.opacity(0.72)
         }
+    }
+}
+
+private struct SaveAgentActionDrawerPreview: View {
+    let result: SaveSearchResult
+
+    private var drawer: SaveAgentActionDrawerModel { result.agentDrawer }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                Text(drawer.heading)
+            }
+            .font(.caption.weight(.black))
+            .foregroundColor(.saveInk)
+
+            Text(drawer.contextLine)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveMutedText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(drawer.evidenceSummary)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(alignment: .top, spacing: 6) {
+                actionView(drawer.primaryAction, isPrimary: true)
+
+                ForEach(drawer.secondaryActions.prefix(2)) { action in
+                    actionView(action, isPrimary: false)
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.saveSky.opacity(0.2))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func actionView(_ action: SaveAgentDrawerAction, isPrimary: Bool) -> some View {
+        if action.kind == .openSource, let sourceURL = result.sourceURL, let url = URL(string: sourceURL) {
+            Link(destination: url) {
+                actionLabel(action, isPrimary: isPrimary)
+            }
+        } else if action.kind != .none {
+            actionLabel(action, isPrimary: isPrimary)
+        } else if result.isRecommendationShell {
+            Label("No place saved yet", systemImage: "sparkle.magnifyingglass")
+                .font(.caption.weight(.black))
+                .foregroundColor(.saveCocoa)
+        }
+    }
+
+    private func actionLabel(_ action: SaveAgentDrawerAction, isPrimary: Bool) -> some View {
+        Label(action.label, systemImage: action.systemImage)
+            .font(.caption2.weight(.black))
+            .foregroundColor(.saveInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(isPrimary ? Color.saveHoney : Color.saveNotebookPage)
+            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .clipShape(Capsule())
     }
 }
 

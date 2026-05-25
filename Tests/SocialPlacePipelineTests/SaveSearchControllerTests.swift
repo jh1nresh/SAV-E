@@ -128,11 +128,87 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(draft.proofRefs.first?.commitmentHash, "sha256-placeholder")
     }
 
+    func testAgentActionDrawerAdaptsToPlaceMemoryState() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "",
+            places: [
+                place(
+                    name: "Kato",
+                    address: "777 S Alameda St, Los Angeles, CA",
+                    category: .food,
+                    sourceUrl: "https://www.instagram.com/reel/kato/"
+                )
+            ],
+            localRecords: [
+                SaveMemoryRecord(
+                    state: .sourceOnly,
+                    sourceURL: "https://www.instagram.com/reel/source-only/",
+                    title: "Pasta reel clue",
+                    evidence: ["Caption says best pasta in LA"],
+                    evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
+                        found: ["Instagram source"],
+                        attempts: ["Parsed caption"],
+                        missingFields: ["exact place", "coordinates"],
+                        nextBestClue: "Find tagged venue profile"
+                    )
+                ),
+                SaveMemoryRecord(
+                    state: .sourceOnly,
+                    sourceURL: "javascript:alert(1)",
+                    title: "Malformed source clue",
+                    evidence: ["Invalid source URL should not render as a link"],
+                    evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
+                        found: ["Source text"],
+                        attempts: ["Parsed source"],
+                        missingFields: ["valid source URL"],
+                        nextBestClue: "Share the original link"
+                    )
+                )
+            ],
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Sushi Gen",
+                    subtitle: "Little Tokyo · Japanese",
+                    latitude: 34.0478,
+                    longitude: -118.2386,
+                    category: .food,
+                    rating: 4.6,
+                    reviewCount: 4100,
+                    sourceURL: "https://maps.google.com/?q=Sushi+Gen",
+                    sourcePlatform: .googleMaps,
+                    evidence: ["Visible on map", "Google rating 4.6"]
+                )
+            ]
+        )
+
+        let sourceOnly = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Pasta reel clue" })
+        XCTAssertEqual(sourceOnly.agentDrawer.primaryAction.kind, .runRecovery)
+        XCTAssertEqual(sourceOnly.agentDrawer.heading, "Recover exact place")
+        XCTAssertTrue(sourceOnly.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
+        XCTAssertTrue(sourceOnly.agentDrawer.evidenceSummary.contains("Missing: exact place, coordinates"))
+
+        let malformedSource = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Malformed source clue" })
+        XCTAssertFalse(malformedSource.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
+
+        let savedPlace = try XCTUnwrap(response.fromYourSave.results.first { $0.objectType == .savedPlace })
+        XCTAssertEqual(savedPlace.agentDrawer.primaryAction.kind, .planAround)
+        XCTAssertTrue(savedPlace.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
+        XCTAssertTrue(savedPlace.agentDrawer.secondaryActions.map(\.kind).contains(.addToTrip))
+
+        let unsavedMapPlace = try XCTUnwrap(response.newRecommendations.results.first { $0.objectType == .mapVisibleUnsavedPlace })
+        XCTAssertEqual(unsavedMapPlace.agentDrawer.primaryAction.kind, .savePlace)
+        XCTAssertEqual(unsavedMapPlace.agentDrawer.heading, "Collect map place")
+        XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.planAround))
+        XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
+    }
+
     private func place(
         name: String,
         address: String,
         category: PlaceCategory,
-        status: PlaceStatus = .wantToGo
+        status: PlaceStatus = .wantToGo,
+        sourceUrl: String? = nil
     ) -> Place {
         Place(
             id: UUID(),
@@ -145,7 +221,7 @@ final class SaveSearchControllerTests: XCTestCase {
             status: status,
             rating: nil,
             note: nil,
-            sourceUrl: nil,
+            sourceUrl: sourceUrl,
             sourcePlatform: .instagram,
             sourceImageUrl: nil,
             extractedDishes: nil,

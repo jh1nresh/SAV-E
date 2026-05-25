@@ -29,6 +29,11 @@ enum SaveSearchPrimaryAction: String, Codable, Hashable {
     case runRecovery = "run_recovery"
     case savePlace = "save_place"
     case planAround = "plan_around"
+    case addToTrip = "add_to_trip"
+    case markTried = "mark_tried"
+    case addReview = "add_review"
+    case addProof = "add_proof"
+    case showNearby = "show_nearby"
     case none = "none"
 
     var displayName: String {
@@ -37,6 +42,11 @@ enum SaveSearchPrimaryAction: String, Codable, Hashable {
         case .runRecovery: return "Find exact place"
         case .savePlace: return "Save this place"
         case .planAround: return "Plan around this"
+        case .addToTrip: return "Add to trip"
+        case .markTried: return "Mark as tried"
+        case .addReview: return "Add private review"
+        case .addProof: return "Add proof"
+        case .showNearby: return "Show nearby"
         case .none: return "No action"
         }
     }
@@ -47,8 +57,153 @@ enum SaveSearchPrimaryAction: String, Codable, Hashable {
         case .runRecovery: return "sparkle.magnifyingglass"
         case .savePlace: return "bookmark.badge.plus"
         case .planAround: return "wand.and.stars"
+        case .addToTrip: return "plus.square.on.square"
+        case .markTried: return "checkmark.seal"
+        case .addReview: return "text.bubble"
+        case .addProof: return "receipt"
+        case .showNearby: return "location.magnifyingglass"
         case .none: return "circle"
         }
+    }
+}
+
+struct SaveAgentDrawerAction: Identifiable, Hashable {
+    var kind: SaveSearchPrimaryAction
+    var label: String
+    var systemImage: String
+
+    var id: SaveSearchPrimaryAction { kind }
+
+    init(kind: SaveSearchPrimaryAction, label: String? = nil) {
+        self.kind = kind
+        self.label = label ?? kind.displayName
+        self.systemImage = kind.systemImage
+    }
+}
+
+struct SaveAgentActionDrawerModel: Hashable {
+    var heading: String
+    var contextLine: String
+    var primaryAction: SaveAgentDrawerAction
+    var secondaryActions: [SaveAgentDrawerAction]
+    var evidenceSummary: String
+    var missingInfo: [String]
+
+    init(result: SaveSearchResult) {
+        heading = Self.heading(for: result)
+        contextLine = Self.contextLine(for: result)
+        primaryAction = SaveAgentDrawerAction(kind: Self.primaryAction(for: result))
+        secondaryActions = Self.secondaryActions(for: result, excluding: primaryAction.kind)
+        evidenceSummary = Self.evidenceSummary(for: result)
+        missingInfo = result.missingInfo
+    }
+
+    private static func heading(for result: SaveSearchResult) -> String {
+        switch result.objectType {
+        case .sourceOnlyClue: return "Recover exact place"
+        case .pendingCandidate: return "Confirm candidate"
+        case .mapVisibleUnsavedPlace: return "Collect map place"
+        case .savedPlace: return "Plan from memory"
+        case .triedMemory: return "Capture tried memory"
+        case .review: return "Upgrade review proof"
+        case .tripStop: return "Use trip stop"
+        case .newRecommendation: return "Search outside SAV-E"
+        }
+    }
+
+    private static func contextLine(for result: SaveSearchResult) -> String {
+        switch result.objectType {
+        case .sourceOnlyClue:
+            return "SAV-E has a source clue but still needs a confirmed map match."
+        case .pendingCandidate:
+            return "SAV-E found a likely place; confirm it before it becomes a memory card."
+        case .mapVisibleUnsavedPlace:
+            return "This place is visible on the map but is not saved to your SAV-E yet."
+        case .savedPlace:
+            return "Use this saved place as an anchor for nearby plans and trips."
+        case .triedMemory:
+            return "Turn the visit into a private review or proof-backed memory."
+        case .review:
+            return "Keep the review private by default and add proof only when useful."
+        case .tripStop:
+            return "Reuse this stop in a route or guide."
+        case .newRecommendation:
+            return "Search new places without mixing them into saved memories."
+        }
+    }
+
+    private static func primaryAction(for result: SaveSearchResult) -> SaveSearchPrimaryAction {
+        switch result.objectType {
+        case .sourceOnlyClue: return .runRecovery
+        case .pendingCandidate, .mapVisibleUnsavedPlace: return .savePlace
+        case .savedPlace, .tripStop: return .planAround
+        case .triedMemory: return .addReview
+        case .review: return .addProof
+        case .newRecommendation: return result.primaryAction
+        }
+    }
+
+    private static func secondaryActions(for result: SaveSearchResult, excluding primary: SaveSearchPrimaryAction) -> [SaveAgentDrawerAction] {
+        var actions: [SaveSearchPrimaryAction] = []
+
+        switch result.objectType {
+        case .sourceOnlyClue:
+            actions = [.openSource]
+        case .pendingCandidate:
+            actions = [.openSource, .runRecovery]
+        case .mapVisibleUnsavedPlace:
+            actions = [.planAround, .openSource, .showNearby]
+        case .savedPlace:
+            actions = [.openSource, .addToTrip, .showNearby, .markTried]
+        case .triedMemory:
+            actions = [.addProof, .planAround, .addToTrip]
+        case .review:
+            actions = [.openSource, .planAround]
+        case .tripStop:
+            actions = [.addToTrip, .showNearby]
+        case .newRecommendation:
+            actions = []
+        }
+
+        if !hasValidHTTPSourceURL(result.sourceURL) {
+            actions.removeAll { $0 == .openSource }
+        }
+        actions.removeAll { $0 == primary || $0 == .none }
+
+        var seen = Set<SaveSearchPrimaryAction>()
+        return actions.compactMap { action in
+            guard seen.insert(action).inserted else { return nil }
+            return SaveAgentDrawerAction(kind: action)
+        }
+    }
+
+    private static func hasValidHTTPSourceURL(_ sourceURL: String?) -> Bool {
+        guard
+            let rawValue = sourceURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+            let url = URL(string: rawValue),
+            let scheme = url.scheme?.lowercased(),
+            (scheme == "http" || scheme == "https"),
+            url.host?.isEmpty == false
+        else {
+            return false
+        }
+        return true
+    }
+
+    private static func evidenceSummary(for result: SaveSearchResult) -> String {
+        if !result.missingInfo.isEmpty {
+            return "Missing: \(result.missingInfo.prefix(3).joined(separator: ", "))"
+        }
+        if result.objectType == .mapVisibleUnsavedPlace {
+            return "Evidence: \(result.evidence.first ?? "Visible on map; not saved yet")"
+        }
+        if let sourcePlatform = result.sourcePlatform {
+            return "Evidence: \(sourcePlatform.displayName) source linked"
+        }
+        if let first = result.evidence.first {
+            return "Evidence: \(first)"
+        }
+        return "Evidence: no source attached yet"
     }
 }
 
@@ -207,6 +362,10 @@ struct SaveSearchResult: Identifiable, Hashable {
         ]
         .compactMap { $0 }
         .joined(separator: " ")
+    }
+
+    var agentDrawer: SaveAgentActionDrawerModel {
+        SaveAgentActionDrawerModel(result: self)
     }
 }
 
