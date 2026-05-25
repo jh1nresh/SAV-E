@@ -143,7 +143,7 @@ struct PlaceDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
 
-                    if let sourceUrl = place.sourceUrl, let url = URL(string: sourceUrl) {
+                    if let url = normalizedSourceURL {
                         Button(action: { openURL(url) }) {
                             Label("Source", systemImage: "link")
                                 .font(.subheadline)
@@ -257,6 +257,18 @@ struct PlaceDetailView: View {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
         mapItem.name = place.name
         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+    }
+
+    private var normalizedSourceURL: URL? {
+        guard let raw = place.sourceUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty
+        else { return nil }
+
+        if let url = URL(string: raw), url.scheme != nil {
+            return url
+        }
+
+        return URL(string: "https://\(raw)")
     }
 
     private func deletePlace() async {

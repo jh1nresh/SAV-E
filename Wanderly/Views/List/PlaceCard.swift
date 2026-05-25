@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaceCard: View {
     let place: Place
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -45,14 +46,7 @@ struct PlaceCard: View {
 
                     Spacer()
 
-                    Text(sourceLabel.uppercased())
-                        .font(.system(size: 10))
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.saveHoney.opacity(0.42))
-                        .foregroundColor(.saveCocoa)
-                        .cornerRadius(8)
+                    sourceBadge
                 }
             }
         }
@@ -90,6 +84,50 @@ struct PlaceCard: View {
 
     private var sourceLabel: String {
         place.sourcePlatform == .other ? "Memory" : "\(place.sourcePlatform.displayName) memory"
+    }
+
+    @ViewBuilder
+    private var sourceBadge: some View {
+        if let url = normalizedSourceURL {
+            Button {
+                openURL(url)
+            } label: {
+                sourceBadgeLabel(isLinked: true)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Open source")
+        } else {
+            sourceBadgeLabel(isLinked: false)
+        }
+    }
+
+    private func sourceBadgeLabel(isLinked: Bool) -> some View {
+        HStack(spacing: 3) {
+            if isLinked {
+                Image(systemName: "link")
+                    .font(.system(size: 9, weight: .black))
+            }
+            Text(sourceLabel.uppercased())
+                .font(.system(size: 10))
+                .fontWeight(.semibold)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color.saveHoney.opacity(0.42))
+        .foregroundColor(.saveCocoa)
+        .cornerRadius(8)
+    }
+
+    private var normalizedSourceURL: URL? {
+        guard let raw = place.sourceUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty
+        else { return nil }
+
+        if let url = URL(string: raw), url.scheme != nil {
+            return url
+        }
+
+        return URL(string: "https://\(raw)")
     }
 }
 
