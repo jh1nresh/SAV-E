@@ -651,6 +651,10 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(analysis.understanding.sourceType, .singlePlaceRecommendation)
         XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
         XCTAssertFalse(analysis.recoveryStrategies.contains(.directParse))
+        XCTAssertEqual(analysis.resolverDecision.kind, .pendingCandidate)
+        XCTAssertTrue(analysis.resolverDecision.shouldRunPublicSearch)
+        XCTAssertFalse(analysis.resolverDecision.allowsDirectSave)
+        XCTAssertTrue(analysis.resolverDecision.requiredEvidence.contains("Public corroboration"))
         XCTAssertTrue(analysis.nextBestAction.contains("source recovery search"))
     }
 
@@ -679,6 +683,9 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.recoveryStrategies.contains(.listMode))
         XCTAssertTrue(analysis.recoveryStrategies.contains(.handleResolver))
         XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
+        XCTAssertEqual(analysis.resolverDecision.kind, .multiPlaceList)
+        XCTAssertTrue(analysis.resolverDecision.shouldRunPublicSearch)
+        XCTAssertFalse(analysis.resolverDecision.allowsDirectSave)
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "best for coffee quality" })
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "unique coffee experiences" })
     }
@@ -699,6 +706,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(analysis.understanding.sourceType, .vagueLifestyleCaption)
         XCTAssertTrue(analysis.recoveryStrategies.contains(.askForMoreEvidence))
         XCTAssertEqual(analysis.understanding.evidenceTier, .sourceOnly)
+        XCTAssertEqual(analysis.resolverDecision.kind, .reject)
+        XCTAssertFalse(analysis.resolverDecision.shouldRunPublicSearch)
         XCTAssertTrue(analysis.placesFound.isEmpty)
     }
 
@@ -717,6 +726,9 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         XCTAssertEqual(analysis.understanding.sourceType, .mapShare)
         XCTAssertEqual(analysis.primaryRecoveryStrategy, .mapLinkResolution)
+        XCTAssertEqual(analysis.resolverDecision.kind, .pendingCandidate)
+        XCTAssertFalse(analysis.resolverDecision.allowsDirectSave)
+        XCTAssertTrue(analysis.resolverDecision.requiredEvidence.contains("Structured map resolution"))
         XCTAssertFalse(analysis.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
@@ -735,6 +747,8 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         XCTAssertEqual(analysis.understanding.sourceType, .bookingOrReservation)
         XCTAssertTrue(analysis.recoveryStrategies.contains(.bookingLinkResolution))
+        XCTAssertEqual(analysis.resolverDecision.kind, .pendingCandidate)
+        XCTAssertTrue(analysis.resolverDecision.requiredEvidence.contains("Map/place match"))
         XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
@@ -758,6 +772,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.recoveryStrategies.contains(.sourceOnlyReceipt))
         XCTAssertFalse(analysis.recoveryStrategies.contains(.handleResolver))
         XCTAssertFalse(analysis.isPlaceBearing)
+        XCTAssertEqual(analysis.resolverDecision.kind, .sourceOnly)
+        XCTAssertFalse(analysis.resolverDecision.shouldRunPublicSearch)
         XCTAssertTrue(analysis.placesFound.isEmpty)
     }
 
@@ -875,6 +891,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Source intent: restaurantRecommendation") == true)
         XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Place clue")
         XCTAssertEqual(candidate.evidenceDiagnostic?.primaryActionLabel, "Run recovery search")
+        XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Resolver decision: pendingCandidate") == true)
         XCTAssertEqual(candidate.evidenceDiagnostic?.suggestedSearchQueries?.first, "\"DW2ZpyADbZ6\" restaurant LA")
         XCTAssertFalse(candidate.evidenceDiagnostic?.suggestedSearchQueries?.joined(separator: " ").contains("igsh") == true)
         XCTAssertTrue(candidate.evidenceDiagnostic?.nextBestClue.contains("source recovery search") == true)

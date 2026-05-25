@@ -117,7 +117,7 @@ final class SocialLinkReviewCandidateService {
         }
 
         let analysis = analyze(evidenceText: evidenceText, sourceURL: sourceURL)
-        guard analysis.isPlaceBearing else { return initial }
+        guard analysis.isPlaceBearing || analysis.resolverDecision.shouldRunPublicSearch else { return initial }
 
         let queries = sourceRecoverySearchQueries(evidenceText: evidenceText, sourceURL: sourceURL, analysis: analysis)
         let searchResults = await publicSearchResults(for: queries)
@@ -916,6 +916,7 @@ final class SocialLinkReviewCandidateService {
             found.append("Place-bearing source: \(reason)")
         }
         found.append("Source intent: \(analysis.sourceIntent.rawValue)")
+        found.append("Resolver decision: \(analysis.resolverDecision.kind.rawValue)")
         if let topic = analysis.topic {
             found.append("Topic clue: \(topic)")
         }
@@ -926,6 +927,7 @@ final class SocialLinkReviewCandidateService {
             found: appendUnique([], found),
             attempts: [
                 "Checked public metadata/caption text for explicit place names",
+                "Applied bounded resolver decision before any save action",
                 "Classified the source as place-bearing even though no exact venue was verified",
                 "Kept this in Review instead of inventing a map pin",
                 "Prepared public source-recovery search queries",

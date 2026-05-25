@@ -156,6 +156,52 @@ enum SocialPlaceSourceIntent: String, Codable {
     case unknownPlaceBearing
 }
 
+enum SocialPlaceResolverDecisionKind: String, Codable {
+    case verifiedCandidate
+    case pendingCandidate
+    case multiPlaceList
+    case sourceOnly
+    case reject
+}
+
+struct SocialPlaceResolverDecision: Codable, Hashable {
+    var kind: SocialPlaceResolverDecisionKind
+    var confidence: Double
+    var reasons: [String]
+    var requiredEvidence: [String]
+    var nextAction: String
+
+    var allowsDirectSave: Bool {
+        kind == .verifiedCandidate
+    }
+
+    var shouldRunPublicSearch: Bool {
+        switch kind {
+        case .pendingCandidate, .multiPlaceList:
+            return requiredEvidence.contains("Public corroboration") ||
+                requiredEvidence.contains("Map/place match") ||
+                nextAction.lowercased().contains("search")
+        case .verifiedCandidate, .sourceOnly, .reject:
+            return false
+        }
+    }
+
+    var reviewState: String {
+        switch kind {
+        case .verifiedCandidate:
+            return "map_match_ready"
+        case .pendingCandidate:
+            return "pending_candidate"
+        case .multiPlaceList:
+            return "multi_place_list"
+        case .sourceOnly:
+            return "source_only"
+        case .reject:
+            return "rejected_non_place"
+        }
+    }
+}
+
 struct SocialPlaceRecoveryHint: Codable, Hashable {
     var label: String
     var queryFragment: String
@@ -181,6 +227,7 @@ struct SocialPlaceAgentAnalysis {
     var placeBearingReason: String?
     var recoveryHints: [SocialPlaceRecoveryHint]
     var understanding: SocialPlaceSourceUnderstanding
+    var resolverDecision: SocialPlaceResolverDecision
     var confidence: Double
     var nextBestAction: String
 }
@@ -192,6 +239,109 @@ extension SocialPlaceAgentAnalysis {
 
     var primaryRecoveryStrategy: SocialPlaceRecoveryStrategy {
         understanding.recoveryStrategies.first ?? .sourceOnlyReceipt
+    }
+}
+
+extension SocialPlaceResolverDecision {
+    static func resolve(
+        sourceType: SocialPlaceSourceType,
+        sourceIntent: SocialPlaceSourceIntent,
+        placesFound: [SocialPlaceCandidateDraft],
+        groups: [SocialPlaceSourceGroup],
+        understanding: SocialPlaceSourceUnderstanding,
+        isPlaceBearing: Bool
+    ) -> SocialPlaceResolverDecision {
+        let hasCandidates = !placesFound.isEmpty
+        let hasAddress = placesFound.contains { !$0.locationClues.isEmpty }
+        let hasVerifiedMapMatch = placesFound.contains { draft in
+            draft.evidenceChips.contains { $0.localizedCaseInsensitiveContains("coordinates") }
+        }
+        let strategies = understanding.recoveryStrategies
+        let reasons = understanding.reasons
+
+        if sourceType == .mapShare {
+            return SocialPlaceResolverDecision(
+                kind: hasVerifiedMapMatch ? .verifiedCandidate : .pendingCandidate,
+                confidence: hasVerifiedMapMatch ? 0.9 : 0.68,
+                reasons: reasons + ["structured map source should be resolved before saving"],
+                requiredEvidence: hasVerifiedMapMatch ? ["User confirmation"] : ["Structured map resolution", "Coordinates"],
+                nextAction: hasVerifiedMapMatch
+                    ? "Ask the user to confirm the map match."
+                    : "Resolve the map link into a candidate before saving."
+            )
+        }
+
+        if sourceType == .bookingOrReservation {
+            return SocialPlaceResolverDecision(
+                kind: .pendingCandidate,
+                confidence: hasAddress ? 0.66 : 0.52,
+                reasons: reasons + ["booking source can name a venue but still needs map verification"],
+                requiredEvidence: ["Map/place match", "Coordinates", "User confirmation"],
+                nextAction: "Extract the venue from the booking source, then refine against Places before saving."
+            )
+        }
+
+        if sourceIntent == .nonPlace && !hasCandidates && !isPlaceBearing {
+            return SocialPlaceResolverDecision(
+                kind: sourceType == .sourceOnly ? .sourceOnly : .reject,
+                confidence: 0,
+                reasons: reasons + ["no place-bearing intent or candidate evidence"],
+                requiredEvidence: ["Venue name", "Address or map link"],
+                nextAction: sourceType == .sourceOnly
+                    ? "Keep the source receipt and ask for a caption, screenshot, or map link."
+                    : "Do not create a place candidate until the user adds clearer place evidence."
+            )
+        }
+
+        if sourceType == .multiPlaceList || !groups.isEmpty || sourceIntent == .multiPlaceList {
+            return SocialPlaceResolverDecision(
+                kind: .multiPlaceList,
+                confidence: min(max(understanding.evidenceTier == .sourceOnly ? 0.42 : 0.62, 0.42), 0.72),
+                reasons: reasons + ["source contains multiple venue/list groups"],
+                requiredEvidence: ["User selects candidates", "Map/place match", "Public corroboration"],
+                nextAction: "Show multiple review candidates; let the user add one or all before map confirmation."
+            )
+        }
+
+        if hasCandidates {
+            return SocialPlaceResolverDecision(
+                kind: hasAddress && hasVerifiedMapMatch ? .verifiedCandidate : .pendingCandidate,
+                confidence: hasAddress ? 0.66 : 0.5,
+                reasons: reasons + ["candidate exists but is not a saved place until coordinates are verified"],
+                requiredEvidence: hasAddress
+                    ? ["Coordinates", "User confirmation"]
+                    : ["Address", "Coordinates", "User confirmation"],
+                nextAction: "Create a review candidate and require Places/map confirmation before saving."
+            )
+        }
+
+        if isPlaceBearing || strategies.contains(.publicSearchRecovery) {
+            return SocialPlaceResolverDecision(
+                kind: .pendingCandidate,
+                confidence: 0.35,
+                reasons: reasons + ["place-bearing source lacks a verified venue name"],
+                requiredEvidence: ["Public corroboration", "Venue name", "Map/place match"],
+                nextAction: "Run source recovery search; keep the result in Review unless a map match is confirmed."
+            )
+        }
+
+        if sourceType == .creatorSourceOnly || sourceType == .creatorOnly || sourceType == .sourceOnly {
+            return SocialPlaceResolverDecision(
+                kind: .sourceOnly,
+                confidence: 0,
+                reasons: reasons + ["source has no safe venue evidence"],
+                requiredEvidence: ["Venue name", "Address or map link"],
+                nextAction: "Keep a source receipt and ask for a better clue."
+            )
+        }
+
+        return SocialPlaceResolverDecision(
+            kind: .reject,
+            confidence: 0,
+            reasons: reasons + ["ambiguous or vague text should not become a place"],
+            requiredEvidence: ["Venue name", "Address or map link"],
+            nextAction: "Ask for a screenshot, caption, or map link before creating a candidate."
+        )
     }
 }
 
@@ -529,6 +679,14 @@ struct SocialPlaceParser {
             creatorHandles: creatorHandles,
             regionClues: regionClues
         )
+        let resolverDecision = SocialPlaceResolverDecision.resolve(
+            sourceType: understanding.sourceType,
+            sourceIntent: intent,
+            placesFound: merged,
+            groups: sourceGroups,
+            understanding: understanding,
+            isPlaceBearing: isPlaceBearing
+        )
 
         return SocialPlaceAgentAnalysis(
             sourceType: sourceType,
@@ -544,6 +702,7 @@ struct SocialPlaceParser {
             placeBearingReason: isPlaceBearing ? placeBearingReason(intent: intent, topic: topic, regionClues: regionClues) : nil,
             recoveryHints: recoveryHints(intent: intent, topic: topic, regionClues: regionClues, text: text),
             understanding: understanding,
+            resolverDecision: resolverDecision,
             confidence: sourceConfidence(sourceType: sourceType, groups: sourceGroups, candidates: merged),
             nextBestAction: merged.isEmpty
                 ? isPlaceBearing
