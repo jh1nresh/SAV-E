@@ -51,6 +51,6 @@ source URL / text
 ```bash
 xcodegen generate
 xcodebuild -project Wanderly.xcodeproj -scheme Wanderly -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
-cd wanderly-rn && npm run check:import-links && npx tsc --noEmit
+cd save-rn && npm run check:import-links && npx tsc --noEmit
 git diff --check
 ```

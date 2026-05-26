@@ -3,7 +3,7 @@ import MapKit
 
 // MARK: - AI Response (domain model)
 
-struct WanderlyAIResponse: Equatable {
+struct SaveAIResponse: Equatable {
     let componentType: ComponentType
     let title: String?
     let placeIds: [String]
@@ -65,7 +65,7 @@ struct ItineraryStop: Identifiable, Equatable {
 
 // MARK: - Codable DTOs (what Gemini actually returns)
 
-struct WanderlyAIResponseDTO: Codable {
+struct SaveAIResponseDTO: Codable {
     let componentType: String
     let title: String?
     let placeIds: [String]?
@@ -76,13 +76,13 @@ struct WanderlyAIResponseDTO: Codable {
     let mapAction: MapActionData?
     let aiMessage: String?
 
-    func toResponse() -> WanderlyAIResponse {
-        WanderlyAIResponse(
-            componentType: WanderlyAIResponse.ComponentType(rawValue: componentType) ?? .message,
+    func toResponse() -> SaveAIResponse {
+        SaveAIResponse(
+            componentType: SaveAIResponse.ComponentType(rawValue: componentType) ?? .message,
             title: title,
             placeIds: placeIds ?? [],
             navigationPlaceId: navigationPlaceId,
-            transportMode: WanderlyAIResponse.TransportMode(rawValue: transportMode ?? "walking") ?? .walking,
+            transportMode: SaveAIResponse.TransportMode(rawValue: transportMode ?? "walking") ?? .walking,
             itineraryDays: (itineraryDays ?? []).map { $0.toModel() },
             messageText: messageText,
             mapAction: mapAction,

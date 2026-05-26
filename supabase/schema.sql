@@ -1,4 +1,4 @@
--- Wanderly Supabase Schema
+-- SAV-E Supabase Schema
 -- Run this in Supabase SQL Editor (Dashboard → SQL Editor → New Query)
 
 -- Enable UUID extension
@@ -19,7 +19,7 @@ create table public.profiles (
 );
 
 alter table public.profiles enable row level security;
--- No anon-key table policies. `wanderly-api` uses service role and enforces
+-- No anon-key table policies. `save-api` uses service role and enforces
 -- ownership with the verified Privy subject.
 
 -- ============================================================

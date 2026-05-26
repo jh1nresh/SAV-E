@@ -81,7 +81,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
             makePlace("Anaheim Dinner", address: "Anaheim, CA", latitude: 33.8353, longitude: -117.9145, category: .food)
         ]
 
-        let response = try await WanderlyAIService(apiKey: "").query("Plan a one day Anaheim trip", places: places)
+        let response = try await SaveAIService(apiKey: "").query("Plan a one day Anaheim trip", places: places)
 
         XCTAssertEqual(response.componentType, .tripItinerary)
         XCTAssertEqual(response.itineraryDays.count, 1)

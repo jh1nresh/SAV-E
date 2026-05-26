@@ -60,9 +60,9 @@ Railway service environment variables:
 
 iOS uses:
 
-- `WANDERLY_API_URL=https://<railway-service-domain>`
+- `SAVE_API_URL=https://<railway-service-domain>`
 
-`WANDERLY_API_URL` is the canonical backend URL. The old `SUPABASE_URL` fallback should be removed to avoid accidental calls to the retired Supabase function.
+`SAVE_API_URL` is the canonical backend URL. The old `SUPABASE_URL` fallback should be removed to avoid accidental calls to the retired Supabase function.
 
 ## Acceptance Criteria
 

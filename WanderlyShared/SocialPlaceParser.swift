@@ -1196,7 +1196,7 @@ struct SocialPlaceParser {
     }
 
     private func handles(in text: String) -> [String] {
-        let ignored: Set<String> = ["instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "wanderly", "save", "media"]
+        let ignored: Set<String> = ["instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "save", "media"]
         guard let regex = try? NSRegularExpression(pattern: #"@([A-Za-z0-9._]{3,30})"#) else { return [] }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.matches(in: text, range: range).compactMap { match in

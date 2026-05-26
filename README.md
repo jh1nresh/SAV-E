@@ -29,8 +29,8 @@ Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/JhiNResH/wanderly.git
-   cd wanderly
+   git clone https://github.com/JhiNResH/SAV-E.git
+   cd SAV-E
    ```
 
 2. Bootstrap local secrets:
@@ -42,7 +42,7 @@ Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the
    Xcode also creates these local files from the templates during build if they are missing. It does not overwrite existing local `Secrets.plist` files; when templates change, compare them manually and add any new keys to your local files. Fill in your local API keys in `Wanderly/Resources/Secrets.plist` and `WanderlyShareExtension/Secrets.plist`:
    - `GEMINI_API_KEY` — from Google AI Studio
    - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
-   - `WANDERLY_API_URL` — Railway backend service URL
+   - `SAVE_API_URL` — Railway backend service URL
    - `PRIVY_APP_ID` — from Privy Dashboard → App Settings → Basics
    - `PRIVY_APP_CLIENT_ID` — from Privy Dashboard → App Settings → Clients. The iOS app client must allow bundle id `com.wanderly.app` and URL scheme `wanderly`.
    - Keep real values out of commits.

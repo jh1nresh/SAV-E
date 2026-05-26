@@ -14,7 +14,7 @@ struct DeterministicTripPlanner {
         let note: String
     }
 
-    func plan(for message: String, places: [Place]) -> WanderlyAIResponse? {
+    func plan(for message: String, places: [Place]) -> SaveAIResponse? {
         guard isItineraryRequest(message), !places.isEmpty else { return nil }
 
         let days = requestedDayCount(from: message, placeCount: places.count)
@@ -42,7 +42,7 @@ struct DeterministicTripPlanner {
         }
 
         let placeIds = orderedPlaces.map { $0.id.uuidString }
-        return WanderlyAIResponse(
+        return SaveAIResponse(
             componentType: .tripItinerary,
             title: title(for: message, dayCount: itineraryDays.count),
             placeIds: placeIds,

@@ -485,7 +485,7 @@ struct ShareExtensionView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
-                        extensionContext?.cancelRequest(withError: NSError(domain: "com.wanderly", code: 0))
+                        extensionContext?.cancelRequest(withError: NSError(domain: "com.save", code: 0))
                     }
                 }
             }
@@ -1100,7 +1100,7 @@ struct ShareExtensionView: View {
         // Parse with Gemini only when the shared URL does not contain usable map coordinates.
         do {
             guard hasMeaningfulPlaceContext(aiContent, sourceURLString: parseContent) else {
-                throw NSError(domain: "wanderly", code: 4, userInfo: [NSLocalizedDescriptionKey: "Share a map link or a post with a visible place name so SAV-E does not guess the wrong city."])
+                throw NSError(domain: "save", code: 4, userInfo: [NSLocalizedDescriptionKey: "Share a map link or a post with a visible place name so SAV-E does not guess the wrong city."])
             }
             let aiPlace = try await parseWithGemini(content: aiContent, sourceURLString: parseContent)
             if hasReliableCoordinates(aiPlace) {
@@ -1110,7 +1110,7 @@ struct ShareExtensionView: View {
                 reviewCandidate = candidate
                 selectedCategory = candidate.category
             } else {
-                throw NSError(domain: "wanderly", code: 5, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this post. Share the map link or include the place name."])
+                throw NSError(domain: "save", code: 5, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this post. Share the map link or include the place name."])
             }
         } catch {
             saveSourceOnlyMemory(parseContent, reason: error.localizedDescription)
@@ -1123,7 +1123,7 @@ struct ShareExtensionView: View {
 
     private func parseWithGemini(content: String, sourceURLString: String) async throws -> ParsedPlace {
         guard let apiKey = geminiAPIKey(), !apiKey.isEmpty else {
-            throw NSError(domain: "wanderly", code: 1, userInfo: [NSLocalizedDescriptionKey: "GEMINI_API_KEY not configured"])
+            throw NSError(domain: "save", code: 1, userInfo: [NSLocalizedDescriptionKey: "GEMINI_API_KEY not configured"])
         }
 
         let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
@@ -1171,7 +1171,7 @@ struct ShareExtensionView: View {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw NSError(domain: "wanderly", code: code, userInfo: [NSLocalizedDescriptionKey: "Gemini API error \(code)"])
+            throw NSError(domain: "save", code: code, userInfo: [NSLocalizedDescriptionKey: "Gemini API error \(code)"])
         }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -1179,7 +1179,7 @@ struct ShareExtensionView: View {
               let responseContent = candidates.first?["content"] as? [String: Any],
               let parts = responseContent["parts"] as? [[String: Any]],
               let text = parts.first?["text"] as? String else {
-            throw NSError(domain: "wanderly", code: 2, userInfo: [NSLocalizedDescriptionKey: "Empty AI response"])
+            throw NSError(domain: "save", code: 2, userInfo: [NSLocalizedDescriptionKey: "Empty AI response"])
         }
 
         // Parse JSON from response
@@ -1191,7 +1191,7 @@ struct ShareExtensionView: View {
         }
         guard let jsonData = jsonString.data(using: .utf8),
               let dict = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            throw NSError(domain: "wanderly", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't parse AI response"])
+            throw NSError(domain: "save", code: 3, userInfo: [NSLocalizedDescriptionKey: "Couldn't parse AI response"])
         }
 
         let place = ParsedPlace(
@@ -2449,7 +2449,7 @@ struct ShareExtensionView: View {
 
     private func firstSocialHandle(in content: String) -> String? {
         let ignoredHandles: Set<String> = [
-            "instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "wanderly", "save"
+            "instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "save"
         ]
         guard let regex = try? NSRegularExpression(pattern: #"@([A-Za-z0-9._]{3,30})"#) else { return nil }
         let range = NSRange(content.startIndex..<content.endIndex, in: content)
@@ -2553,12 +2553,12 @@ struct ShareExtensionView: View {
             let sourceMentionsCity = source.contains(sourceChinese) || source.contains(sourceEnglish)
             let placeMentionsWrongCity = combinedPlace.contains(wrongChinese) || combinedPlace.contains(wrongEnglish)
             if sourceMentionsCity && placeMentionsWrongCity {
-                throw NSError(domain: "wanderly", code: 7, userInfo: [NSLocalizedDescriptionKey: "The parsed place conflicts with the city in the post. Share the exact map link to avoid saving the wrong place."])
+                throw NSError(domain: "save", code: 7, userInfo: [NSLocalizedDescriptionKey: "The parsed place conflicts with the city in the post. Share the exact map link to avoid saving the wrong place."])
             }
         }
 
         if let url = URL(string: sourceURLString), isSocialURL(url), place.name == "Unknown Place" {
-            throw NSError(domain: "wanderly", code: 8, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this social post."])
+            throw NSError(domain: "save", code: 8, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this social post."])
         }
     }
 

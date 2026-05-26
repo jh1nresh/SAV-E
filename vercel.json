@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd wanderly-rn && npm install",
-  "buildCommand": "cd wanderly-rn && npm run export:web",
-  "outputDirectory": "wanderly-rn/dist",
+  "installCommand": "cd save-rn && npm install",
+  "buildCommand": "cd save-rn && npm run export:web",
+  "outputDirectory": "save-rn/dist",
   "framework": null,
   "headers": [
     {

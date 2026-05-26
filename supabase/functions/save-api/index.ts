@@ -295,7 +295,7 @@ function normalizePem(key: string): string {
 function routeFromUrl(rawUrl: string): { resource: string; id?: string } {
   const url = new URL(rawUrl);
   const parts = url.pathname.split("/").filter(Boolean);
-  const functionIndex = parts.lastIndexOf("wanderly-api");
+  const functionIndex = parts.lastIndexOf("save-api");
   const routeParts = functionIndex >= 0
     ? parts.slice(functionIndex + 1)
     : parts;

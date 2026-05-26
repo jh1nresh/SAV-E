@@ -62,7 +62,7 @@
 		94A09F6F9A7C50033699A242 /* ClipContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2F4C10AEE6E547B29704866 /* ClipContentView.swift */; };
 		95CA35085C85CE5B72DD2279 /* SavePlaceFromURLIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6416B0532D74DC9352BEBF /* SavePlaceFromURLIntent.swift */; };
 		990CC6A0705CC916C9092CF7 /* SocialLinkReviewCandidateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C11340722858704F2CE328 /* SocialLinkReviewCandidateService.swift */; };
-		99C08C1AEBD94EC560476469 /* WanderlyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CE4BE52D193035348E4005 /* WanderlyApp.swift */; };
+		99C08C1AEBD94EC560476469 /* SaveApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42CE4BE52D193035348E4005 /* SaveApp.swift */; };
 		9EF348338705836E38E56F54 /* Privy in Frameworks */ = {isa = PBXBuildFile; productRef = 9AEC21E0AA21AA2589449ABB /* Privy */; };
 		A0E5547C98CF5125DCA587A2 /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 903A65214BCAA12AD2190D28 /* MapViewModel.swift */; };
 		A36DA56215269A9D45024E96 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1CD74A229155347FD4060F /* SocialPlaceParser.swift */; };
@@ -79,7 +79,7 @@
 		BD49BA2E1292FE93EC063A29 /* PlatformIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4061D8BC422CE2AA6DCEA08 /* PlatformIcon.swift */; };
 		C19497B630FAA95D35232A48 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89976B73F7C977BD6F35B903 /* UserProfile.swift */; };
 		C97CF8F1B771B3956C8B86B3 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5800871A09AE09EBFF9C32 /* PendingPlaceImportService.swift */; };
-		D42B36179CADE7932242599D /* WanderlyAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */; };
+		D42B36179CADE7932242599D /* SaveAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C48A9EF48A490DB7DD410A /* SaveAIService.swift */; };
 		D53AA8C2DBC231ABA8E9ED74 /* GoogleTakeoutImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AB949B14D33E31CD3A280BB /* GoogleTakeoutImport.swift */; };
 		D8C6243F6D083E8C9EC2092D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */; };
 		D99CEE5968320C3A75D537F8 /* WanderlyClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = A57E086170BE289FC60E45C5 /* WanderlyClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -151,7 +151,7 @@
 		03620D4EA81151AB71F38192 /* Wanderly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Wanderly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		05191C82E70D6C2149B74EB7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		077202B483361C14C41E6962 /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
-		09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyAIService.swift; sourceTree = "<group>"; };
+		09C48A9EF48A490DB7DD410A /* SaveAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAIService.swift; sourceTree = "<group>"; };
 		0CFEFFE39C4FB79943231A84 /* SaveMemoryDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryDebugView.swift; sourceTree = "<group>"; };
 		0DC77D2FDA5C5A3F29AF777C /* SavePlanAroundController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAroundController.swift; sourceTree = "<group>"; };
 		106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlacePipelineTests.swift; sourceTree = "<group>"; };
@@ -176,7 +176,7 @@
 		3D6416B0532D74DC9352BEBF /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
 		3DD7B4457DC96D743D1728AD /* AIDrawerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDrawerViewModel.swift; sourceTree = "<group>"; };
 		3E4590D96689E07CCDFA4DAE /* SavePlanAroundModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAroundModels.swift; sourceTree = "<group>"; };
-		42CE4BE52D193035348E4005 /* WanderlyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanderlyApp.swift; sourceTree = "<group>"; };
+		42CE4BE52D193035348E4005 /* SaveApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveApp.swift; sourceTree = "<group>"; };
 		43C8DECCE1214BDC52FE60EB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		4849E66E6A2A457D90597722 /* AskSaveMemoryIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSaveMemoryIntent.swift; sourceTree = "<group>"; };
 		48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
@@ -301,7 +301,7 @@
 			isa = PBXGroup;
 			children = (
 				8E0E478C4828BA2AD2022551 /* ContentView.swift */,
-				42CE4BE52D193035348E4005 /* WanderlyApp.swift */,
+				42CE4BE52D193035348E4005 /* SaveApp.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -479,7 +479,7 @@
 				AD2A9F911FA1E203134267D8 /* SaveSearchController.swift */,
 				60C11340722858704F2CE328 /* SocialLinkReviewCandidateService.swift */,
 				48EDA3962FE01B51F63EB1B0 /* SupabaseService.swift */,
-				09C48A9EF48A490DB7DD410A /* WanderlyAIService.swift */,
+				09C48A9EF48A490DB7DD410A /* SaveAIService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -863,8 +863,8 @@
 				25D6800A0C00D8FB12F334E7 /* TripTimelineCard.swift in Sources */,
 				76D430AA3B1F4E1EB96B77CF /* TripViewModel.swift in Sources */,
 				C19497B630FAA95D35232A48 /* UserProfile.swift in Sources */,
-				D42B36179CADE7932242599D /* WanderlyAIService.swift in Sources */,
-				99C08C1AEBD94EC560476469 /* WanderlyApp.swift in Sources */,
+				D42B36179CADE7932242599D /* SaveAIService.swift in Sources */,
+				99C08C1AEBD94EC560476469 /* SaveApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

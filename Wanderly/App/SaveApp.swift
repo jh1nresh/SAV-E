@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct WanderlyApp: App {
+struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false

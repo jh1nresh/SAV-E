@@ -6,7 +6,7 @@ final class AIDrawerViewModel: ObservableObject {
     enum DrawerState: Equatable {
         case idle
         case loading
-        case displaying(WanderlyAIResponse)
+        case displaying(SaveAIResponse)
         case saveSearchResults(SaveSearchResponse)
         case placeDetail(Place)
         case reviewCandidateDetail(PlaceReviewCandidate)
@@ -29,14 +29,14 @@ final class AIDrawerViewModel: ObservableObject {
     @Published var places: [Place] = []
     @Published var mapCandidates: [SaveMapCandidate] = []
 
-    private let aiService: WanderlyAIService
+    private let aiService: SaveAIService
     private let saveSearchController: SaveSearchController
 
     /// Multi-turn conversation context for the current session.
     private var conversationTurns: [ConversationTurn] = []
     private var activeRequestID: UUID?
 
-    init(aiService: WanderlyAIService = .shared, saveSearchController: SaveSearchController = SaveSearchController()) {
+    init(aiService: SaveAIService = .shared, saveSearchController: SaveSearchController = SaveSearchController()) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
     }
@@ -159,7 +159,7 @@ final class AIDrawerViewModel: ObservableObject {
     }
 
     func showMessage(title: String, message: String) {
-        drawerState = .displaying(WanderlyAIResponse(
+        drawerState = .displaying(SaveAIResponse(
             componentType: .message,
             title: title,
             placeIds: [],

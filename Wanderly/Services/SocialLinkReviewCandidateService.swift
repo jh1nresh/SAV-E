@@ -1507,7 +1507,7 @@ final class SocialLinkReviewCandidateService {
 
     private func firstSocialHandle(in text: String) -> String? {
         let ignoredHandles: Set<String> = [
-            "instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "wanderly", "save", "media"
+            "instagram", "reels", "reel", "explore", "threads", "tiktok", "xiaohongshu", "save", "media"
         ]
         guard let regex = try? NSRegularExpression(pattern: #"@([A-Za-z0-9._]{3,30})"#) else { return nil }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)

@@ -1,8 +1,8 @@
 import { Place, TripRecord } from "./models";
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_WANDERLY_API_URL?.replace(/\/$/, "");
+const apiBaseUrl = process.env.EXPO_PUBLIC_SAVE_API_URL?.replace(/\/$/, "");
 
-export type WanderlyAuth = {
+export type SaveAuth = {
   accessToken?: string;
   guestId?: string;
 };
@@ -43,7 +43,7 @@ type BackendTrip = {
 
 function requireApiBaseUrl(): string {
   if (!apiBaseUrl) {
-    throw new Error("Missing EXPO_PUBLIC_WANDERLY_API_URL");
+    throw new Error("Missing EXPO_PUBLIC_SAVE_API_URL");
   }
   return apiBaseUrl;
 }
@@ -52,7 +52,7 @@ export function hasApiConfig(): boolean {
   return Boolean(apiBaseUrl);
 }
 
-function requestHeaders({ accessToken, guestId }: WanderlyAuth): HeadersInit {
+function requestHeaders({ accessToken, guestId }: SaveAuth): HeadersInit {
   const baseHeaders = {
     "Content-Type": "application/json",
   };
@@ -64,7 +64,7 @@ function requestHeaders({ accessToken, guestId }: WanderlyAuth): HeadersInit {
 
     return {
       ...baseHeaders,
-      "x-wanderly-guest-id": guestId,
+      "x-save-guest-id": guestId,
     };
   }
 
@@ -77,7 +77,7 @@ function requestHeaders({ accessToken, guestId }: WanderlyAuth): HeadersInit {
 async function apiRequest<T>(
   path: string,
   init: RequestInit,
-  headersInput: WanderlyAuth
+  headersInput: SaveAuth
 ): Promise<T> {
   const response = await fetch(`${requireApiBaseUrl()}${path}`, {
     ...init,
@@ -99,12 +99,12 @@ async function apiRequest<T>(
   return (await response.json()) as T;
 }
 
-export async function fetchPlaces(auth: WanderlyAuth): Promise<Place[]> {
+export async function fetchPlaces(auth: SaveAuth): Promise<Place[]> {
   const places = await apiRequest<BackendPlace[]>("/places", { method: "GET" }, auth);
   return places.map(mapPlace);
 }
 
-export async function createPlace(auth: WanderlyAuth, place: Place): Promise<Place> {
+export async function createPlace(auth: SaveAuth, place: Place): Promise<Place> {
   const body = {
     name: place.name,
     address: place.address,
@@ -129,13 +129,13 @@ export async function createPlace(auth: WanderlyAuth, place: Place): Promise<Pla
   return mapPlace(created);
 }
 
-export async function fetchTrips(auth: WanderlyAuth): Promise<TripRecord[]> {
+export async function fetchTrips(auth: SaveAuth): Promise<TripRecord[]> {
   const trips = await apiRequest<BackendTrip[]>("/trips", { method: "GET" }, auth);
   return trips.map(mapTrip);
 }
 
 export async function createTrip(
-  auth: WanderlyAuth,
+  auth: SaveAuth,
   input: { name: string; city: string; places: Place[] }
 ): Promise<TripRecord> {
   const body = {

@@ -15,7 +15,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { createPlace, createTrip, fetchPlaces, fetchTrips, hasApiConfig, WanderlyAuth } from "./src/api";
+import { createPlace, createTrip, fetchPlaces, fetchTrips, hasApiConfig, SaveAuth } from "./src/api";
 import { parseSharedLink } from "./src/importLink";
 import {
   categoryLabel,
@@ -25,7 +25,7 @@ import {
   TripRecord,
   statusLabel,
 } from "./src/models";
-import { hasPrivyConfig, useOptionalPrivy, WanderlyPrivyProvider } from "./src/privy";
+import { hasPrivyConfig, useOptionalPrivy, SavePrivyProvider } from "./src/privy";
 import {
   buildAppleMapsUrl,
   buildSharedTripData,
@@ -45,19 +45,19 @@ const allCategories: Array<PlaceCategory | "all"> = [
   "shopping",
 ];
 
-const storageKey = "@wanderly-rn/bookmarks";
-const guestIdStorageKey = "@wanderly-rn/guest-id";
+const storageKey = "@save-rn/bookmarks";
+const guestIdStorageKey = "@save-rn/guest-id";
 const seededSamplePlaceIds = new Set(["tartine", "ramen-nagi", "the-interval", "palace-of-fine-arts"]);
 
 export default function App() {
   return (
-    <WanderlyPrivyProvider>
-      <WanderlyApp />
-    </WanderlyPrivyProvider>
+    <SavePrivyProvider>
+      <SaveApp />
+    </SavePrivyProvider>
   );
 }
 
-function WanderlyApp() {
+function SaveApp() {
   const privy = useOptionalPrivy();
   const privyEnabled = hasPrivyConfig();
   const apiEnabled = hasApiConfig();
@@ -125,7 +125,7 @@ function WanderlyApp() {
   }
 
   function applyIncomingTripLink(url: string) {
-    if (!isWanderlyTripLink(url)) return;
+    if (!isSaveTripLink(url)) return;
 
     const trip = decodeTripLink(url);
     if (!trip) return;
@@ -165,7 +165,7 @@ function WanderlyApp() {
     }
   }
 
-  async function loadRemoteData(auth: WanderlyAuth) {
+  async function loadRemoteData(auth: SaveAuth) {
     setIsSyncing(true);
     try {
       const [remotePlaces, remoteTrips] = await Promise.all([
@@ -201,7 +201,7 @@ function WanderlyApp() {
     await AsyncStorage.setItem(storageKey, JSON.stringify(next));
   }
 
-  async function resolveAuthContext(): Promise<WanderlyAuth> {
+  async function resolveAuthContext(): Promise<SaveAuth> {
     if (authenticated && privy) {
       const accessToken = await privy.getAccessToken();
       if (!accessToken) {
@@ -316,7 +316,7 @@ function WanderlyApp() {
 
   async function saveTripToAccount() {
     if (!apiEnabled) {
-      Alert.alert("Backend not configured", "Add EXPO_PUBLIC_WANDERLY_API_URL first.");
+      Alert.alert("Backend not configured", "Add EXPO_PUBLIC_SAVE_API_URL first.");
       return;
     }
     if (selectedPlaces.length === 0) {
@@ -656,7 +656,7 @@ function WanderlyApp() {
   );
 }
 
-function isWanderlyTripLink(value: string) {
+function isSaveTripLink(value: string) {
   try {
     const url = new URL(value);
     return url.protocol === "https:" && url.hostname === "wanderly.app" && url.pathname === "/trip";

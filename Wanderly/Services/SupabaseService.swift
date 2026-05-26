@@ -48,8 +48,8 @@ final class SupabaseService: SupabaseServiceProtocol {
     private let apiBaseURL: String?
 
     init() {
-        if let explicit = ProcessInfo.processInfo.environment["WANDERLY_API_URL"]
-            ?? Self.keyFromPlist("WANDERLY_API_URL") {
+        if let explicit = ProcessInfo.processInfo.environment["SAVE_API_URL"]
+            ?? Self.keyFromPlist("SAVE_API_URL") {
             self.apiBaseURL = explicit
         } else {
             self.apiBaseURL = nil

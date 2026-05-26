@@ -1,4 +1,4 @@
-# wanderly-api
+# save-api
 
 Supabase Edge Function that proxies SAV-E mobile persistence through a service-role backend.
 
@@ -13,7 +13,7 @@ supabase secrets set PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
 Deploy with Supabase JWT verification disabled so the function can receive and verify Privy access tokens:
 
 ```bash
-supabase functions deploy wanderly-api --no-verify-jwt
+supabase functions deploy save-api --no-verify-jwt
 ```
 
 The mobile app sends:

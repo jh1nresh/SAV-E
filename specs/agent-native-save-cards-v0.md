@@ -31,8 +31,8 @@ The repo already has most raw pieces:
   - `backend/src/server.ts`: `/memory/*` and `/agents/*` routes
 - Share surfaces:
   - `WanderlyClip/ClipContentView.swift` currently previews `wanderly.app/trip?d=<base64>`
-  - `wanderly-rn/src/sharedTrip.ts` builds/decodes base64 trip links
-  - `wanderly-rn/App.tsx` already has import, trip selection, and share tab
+  - `save-rn/src/sharedTrip.ts` builds/decodes base64 trip links
+  - `save-rn/App.tsx` already has import, trip selection, and share tab
 
 Missing piece: there is no first-class `SAV-E Card` schema/render/import contract. Existing sharing is trip-link specific and app-shaped.
 
@@ -155,7 +155,7 @@ Current App Clip only knows `wanderly.app/trip?d=<base64>`. V0 should not expand
 ### Slice A — schema package / model
 
 - Add `SaveCard` model in Swift.
-- Add TS equivalent under `wanderly-rn/src/saveCard.ts` or `src/models.ts`.
+- Add TS equivalent under `save-rn/src/saveCard.ts` or `src/models.ts`.
 - Add sample fixtures under `fixtures/save-cards/`.
 - Add validator tests.
 
@@ -184,7 +184,7 @@ Acceptance:
 
 Acceptance:
 
-- `npm --prefix wanderly-rn run ...` check passes.
+- `npm --prefix save-rn run ...` check passes.
 - A fixture card renders as a human-readable page.
 
 ### Slice D — brain dogfood importer

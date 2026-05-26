@@ -3,7 +3,7 @@ import MapKit
 
 struct NavigationCardComponent: View {
     let place: Place
-    let mode: WanderlyAIResponse.TransportMode
+    let mode: SaveAIResponse.TransportMode
 
     var body: some View {
         VStack(spacing: 18) {

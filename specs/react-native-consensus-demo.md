@@ -8,7 +8,7 @@ This is still not full parity with the native iOS product, but it should feel pr
 
 ## Scope
 
-- Create a new Expo-based React Native app under `wanderly-rn/`.
+- Create a new Expo-based React Native app under `save-rn/`.
 - Use local data plus imported links for places and trips so the app works without Privy auth.
 - Support three core flows:
   - import a place or event link into saved bookmarks
@@ -62,7 +62,7 @@ The RN product build should have three tabs:
 
 ## Acceptance Criteria
 
-- `npm install` succeeds in `wanderly-rn/`.
+- `npm install` succeeds in `save-rn/`.
 - `npx expo start` launches the app.
 - `npx expo export -p web` succeeds.
 - User can:

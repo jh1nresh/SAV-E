@@ -1,2 +1,2 @@
-[functions.wanderly-api]
+[functions.save-api]
 verify_jwt = false

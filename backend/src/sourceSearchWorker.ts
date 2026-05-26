@@ -440,7 +440,7 @@ function instagramReelID(url?: URL): string | undefined {
 }
 
 function firstSocialHandle(text: string): string | undefined {
-  const ignored = new Set(["instagram", "reels", "reel", "explore", "threads", "tiktok", "wanderly", "save"]);
+  const ignored = new Set(["instagram", "reels", "reel", "explore", "threads", "tiktok", "save", "save"]);
   for (const match of text.matchAll(/@([A-Za-z0-9._]{3,30})/g)) {
     const handle = match[1].toLowerCase();
     if (!ignored.has(handle) && !handle.includes("instagram") && !/\d{5,}/.test(handle)) return handle;

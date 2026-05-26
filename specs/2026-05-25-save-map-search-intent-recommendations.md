@@ -154,7 +154,7 @@ Wanderly/Views/Map/MapView.swift
 Wanderly/ViewModels/MapViewModel.swift
 Wanderly/Views/Drawer/AIDrawerView.swift
 Wanderly/ViewModels/AIDrawerViewModel.swift
-Wanderly/Services/WanderlyAIService.swift
+Wanderly/Services/SaveAIService.swift
 ```
 
 Current behavior:
@@ -162,8 +162,8 @@ Current behavior:
 - `MapView` renders saved places from `viewModel.filteredPlaces` as tappable annotations.
 - `MapViewModel` has `reviewCandidates` and `reviewCandidatesOnMap`, but map search is not the primary user flow.
 - `AIDrawerView` already has a query field and submit behavior.
-- `AIDrawerViewModel.submit()` sends the query to `WanderlyAIService` with saved places.
-- `WanderlyAIService.localIntentResponse` only handles coarse English category commands such as food/cafe/bar/attraction when query contains `show/map/spots/places`.
+- `AIDrawerViewModel.submit()` sends the query to `SaveAIService` with saved places.
+- `SaveAIService.localIntentResponse` only handles coarse English category commands such as food/cafe/bar/attraction when query contains `show/map/spots/places`.
 - The AI prompt says it can use saved places and create lists/itineraries, but the product does not yet feel like map-native search/recommendation.
 
 This means the right V0 is not a new page. It should extend the existing drawer + map action loop.
@@ -316,7 +316,7 @@ Files likely touched:
 ```text
 Wanderly/Services/SaveIntentRecommendationService.swift
 Wanderly/ViewModels/AIDrawerViewModel.swift
-Wanderly/Services/WanderlyAIService.swift
+Wanderly/Services/SaveAIService.swift
 Wanderly/Views/Drawer/AIDrawerView.swift
 WanderlyTests/SaveIntentRecommendationServiceTests.swift
 ```
@@ -334,7 +334,7 @@ Acceptance:
 Files likely touched:
 
 ```text
-Wanderly/Models/WanderlyAIResponse.swift
+Wanderly/Models/SaveAIResponse.swift
 Wanderly/Views/Drawer/AIDrawerView.swift
 Wanderly/Views/Map/MapView.swift
 ```

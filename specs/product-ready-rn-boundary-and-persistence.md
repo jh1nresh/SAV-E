@@ -28,18 +28,18 @@ RN Web is not required to match native iOS feature-for-feature.
 
 ## Persistence Model
 
-RN Web uses a guest session model when `EXPO_PUBLIC_WANDERLY_API_URL` is configured. It only falls back to local `AsyncStorage` when the backend URL is missing.
+RN Web uses a guest session model when `EXPO_PUBLIC_SAVE_API_URL` is configured. It only falls back to local `AsyncStorage` when the backend URL is missing.
 
 ### Guest Session
 
 - On first launch, RN Web generates or restores a device-scoped guest id.
-- RN Web calls the backend with `x-wanderly-guest-id`; the backend creates the guest profile on first request.
+- RN Web calls the backend with `x-save-guest-id`; the backend creates the guest profile on first request.
 - Guest places and trips persist in Railway/Postgres under that guest profile id.
 
 ### Backend Ownership
 
 - Privy-authenticated users keep using the existing bearer-token path.
-- RN Web guest users use a low-friction path keyed by `x-wanderly-guest-id`.
+- RN Web guest users use a low-friction path keyed by `x-save-guest-id`.
 - Guest ids should be namespaced, for example `guest_<uuid>`, so they cannot collide with Privy subject ids.
 
 ## API Direction
@@ -59,7 +59,7 @@ Add guest-aware API handling to the existing Railway backend:
 Auth resolution order:
 
 1. valid Privy bearer token -> authenticated personal profile
-2. `x-wanderly-guest-id` header -> guest web profile
+2. `x-save-guest-id` header -> guest web profile
 3. otherwise reject with 401
 
 ## Link Parsing Scope
@@ -80,7 +80,7 @@ The first product-ready pass does not need full server-side scraping. It does ne
 - RN Web trips survive refresh and browser restart through Railway persistence
 - native iOS behavior remains unchanged
 - backend still accepts existing Privy-authenticated native requests
-- backend accepts `x-wanderly-guest-id: guest_<uuid>` for RN Web guest persistence
+- backend accepts `x-save-guest-id: guest_<uuid>` for RN Web guest persistence
 - RN Web can import Instagram links with explicit `sourcePlatform = instagram`
 - RN Web can import Google Maps / Apple Maps / Luma links with current specialized handling
 - RN Web must not show seeded fake places when authenticated backend data is empty

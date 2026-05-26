@@ -6,8 +6,8 @@ struct ConversationTurn: Equatable {
     let assistantResponse: String
 }
 
-final class WanderlyAIService {
-    static let shared = WanderlyAIService()
+final class SaveAIService {
+    static let shared = SaveAIService()
 
     private static let modelFallbacks = [
         "gemini-2.5-flash-lite",
@@ -22,7 +22,7 @@ final class WanderlyAIService {
             ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
             ?? Self.keyFromPlist("GEMINI_API_KEY")
         self.apiKey = resolved
-        print("[WanderlyAI] API key resolved: \(resolved != nil ? "yes" : "nil")")
+        print("[SaveAI] API key resolved: \(resolved != nil ? "yes" : "nil")")
     }
 
     private static func keyFromPlist(_ key: String) -> String? {
@@ -34,9 +34,9 @@ final class WanderlyAIService {
         return value
     }
 
-    func query(_ userMessage: String, places: [Place], conversationHistory: [ConversationTurn] = []) async throws -> WanderlyAIResponse {
+    func query(_ userMessage: String, places: [Place], conversationHistory: [ConversationTurn] = []) async throws -> SaveAIResponse {
         guard !places.isEmpty else {
-            return WanderlyAIResponse(
+            return SaveAIResponse(
                 componentType: .message,
                 title: nil,
                 placeIds: [],
@@ -59,7 +59,7 @@ final class WanderlyAIService {
             if let deterministicDraft {
                 return deterministicDraft
             }
-            throw WanderlyAIError.apiKeyMissing
+            throw SaveAIError.apiKeyMissing
         }
 
         // Build multi-turn contents array
@@ -96,7 +96,7 @@ final class WanderlyAIService {
 
         let requestBody = try JSONSerialization.data(withJSONObject: body)
 
-        var lastError: WanderlyAIError?
+        var lastError: SaveAIError?
         for model in Self.modelFallbacks {
             let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
             var request = URLRequest(url: endpoint)
@@ -130,7 +130,7 @@ final class WanderlyAIService {
                     if let deterministicDraft {
                         return deterministicDraft
                     }
-                    throw WanderlyAIError.parseError
+                    throw SaveAIError.parseError
                 }
 
                 guard let candidates = json["candidates"] as? [[String: Any]],
@@ -140,7 +140,7 @@ final class WanderlyAIService {
                     if let deterministicDraft {
                         return deterministicDraft
                     }
-                    throw WanderlyAIError.emptyResponse
+                    throw SaveAIError.emptyResponse
                 }
 
                 do {
@@ -154,7 +154,7 @@ final class WanderlyAIService {
                     if let deterministicDraft {
                         return deterministicDraft
                     }
-                    throw WanderlyAIError.parseError
+                    throw SaveAIError.parseError
                 }
             }
 
@@ -169,12 +169,12 @@ final class WanderlyAIService {
         if let deterministicDraft {
             return deterministicDraft
         }
-        throw lastError ?? WanderlyAIError.apiError(0)
+        throw lastError ?? SaveAIError.apiError(0)
     }
 
     // MARK: - Private
 
-    private func localIntentResponse(for message: String, places: [Place]) -> WanderlyAIResponse? {
+    private func localIntentResponse(for message: String, places: [Place]) -> SaveAIResponse? {
         let normalized = message.lowercased()
         guard normalized.contains("show") || normalized.contains("map") || normalized.contains("spots") || normalized.contains("places") else {
             return nil
@@ -197,7 +197,7 @@ final class WanderlyAIService {
 
         let filtered = places.filter { $0.category == category }
         guard !filtered.isEmpty else {
-            return WanderlyAIResponse(
+            return SaveAIResponse(
                 componentType: .message,
                 title: nil,
                 placeIds: [],
@@ -211,7 +211,7 @@ final class WanderlyAIService {
         }
 
         let ids = filtered.map { $0.id.uuidString }
-        return WanderlyAIResponse(
+        return SaveAIResponse(
             componentType: .placeList,
             title: "\(category.displayName) spots",
             placeIds: ids,
@@ -298,7 +298,7 @@ final class WanderlyAIService {
         """
     }
 
-    private func validatedItineraryPolish(_ response: WanderlyAIResponse, fallback: WanderlyAIResponse, places: [Place]) -> WanderlyAIResponse {
+    private func validatedItineraryPolish(_ response: SaveAIResponse, fallback: SaveAIResponse, places: [Place]) -> SaveAIResponse {
         guard response.componentType == .tripItinerary,
               !response.itineraryDays.isEmpty else {
             return fallback
@@ -314,20 +314,20 @@ final class WanderlyAIService {
         return response
     }
 
-    private func parseResponse(_ text: String) throws -> WanderlyAIResponse {
+    private func parseResponse(_ text: String) throws -> SaveAIResponse {
         var jsonString = text
         if let start = text.range(of: "{"),
            let end = text.range(of: "}", options: .backwards),
            start.lowerBound < end.upperBound {
             jsonString = String(text[start.lowerBound..<end.upperBound])
         }
-        guard let data = jsonString.data(using: .utf8) else { throw WanderlyAIError.parseError }
-        let dto = try JSONDecoder().decode(WanderlyAIResponseDTO.self, from: data)
+        guard let data = jsonString.data(using: .utf8) else { throw SaveAIError.parseError }
+        let dto = try JSONDecoder().decode(SaveAIResponseDTO.self, from: data)
         return dto.toResponse()
     }
 
     /// Re-encode an AI response back to JSON string for conversation context.
-    func encodeResponse(_ response: WanderlyAIResponse) -> String {
+    func encodeResponse(_ response: SaveAIResponse) -> String {
         // Build a minimal JSON representation to send back as context
         var dict: [String: Any] = ["componentType": response.componentType.rawValue]
         if let title = response.title { dict["title"] = title }
@@ -355,7 +355,7 @@ final class WanderlyAIService {
 
 // MARK: - Errors
 
-enum WanderlyAIError: LocalizedError {
+enum SaveAIError: LocalizedError {
     case apiKeyMissing
     case apiError(Int)
     case emptyResponse

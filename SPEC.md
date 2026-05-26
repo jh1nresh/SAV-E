@@ -10,7 +10,7 @@ Wanderly/
 ├── Wanderly.xcodeproj/          (or use Swift Package if simpler)
 ├── Wanderly/
 │   ├── App/
-│   │   ├── WanderlyApp.swift       (main app entry)
+│   │   ├── SaveApp.swift       (main app entry)
 │   │   └── ContentView.swift        (tab-based root view)
 │   ├── Views/
 │   │   ├── Map/
@@ -40,7 +40,7 @@ Wanderly/
 │   ├── Services/
 │   │   ├── AIParsingService.swift   (Gemini API integration)
 │   │   ├── GooglePlacesService.swift
-│   │   ├── SupabaseService.swift  # legacy name; calls WANDERLY_API_URL
+│   │   ├── SupabaseService.swift  # legacy name; calls SAVE_API_URL
 │   │   └── PrivyAuthService.swift
 │   ├── ViewModels/
 │   │   ├── MapViewModel.swift
@@ -141,7 +141,7 @@ enum SourcePlatform: String, Codable {
 - Include README with setup instructions
 - Do NOT include actual API keys
 - Make sure it compiles (even if with placeholder data)
-- Push to remote: https://github.com/JhiNResH/wanderly (force push OK, it's a fresh start)
+- Push to remote: https://github.com/JhiNResH/SAV-E (force push OK, it's a fresh start)
 
 When completely finished, run this command to notify me:
-openclaw system event --text "Done: SAV-E iOS Swift project scaffolded with Privy + App Clip + Share Extension. Pushed to github.com/JhiNResH/wanderly" --mode now
+openclaw system event --text "Done: SAV-E iOS Swift project scaffolded with Privy + App Clip + Share Extension. Pushed to github.com/JhiNResH/SAV-E" --mode now

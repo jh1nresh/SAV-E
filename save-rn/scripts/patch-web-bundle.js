@@ -9,12 +9,12 @@ const distDir = path.join(__dirname, "..", "dist", "_expo", "static", "js", "web
 const publicDir = path.join(__dirname, "..", "public");
 const importMetaReplacement = '({ env: { MODE: "production" } })';
 const replacementValues = {
-  "__WANDERLY_API_URL__": process.env.EXPO_PUBLIC_WANDERLY_API_URL ?? "",
-  "__WANDERLY_PRIVY_APP_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_ID ?? "",
-  "__WANDERLY_PRIVY_APP_CLIENT_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_CLIENT_ID ?? "",
+  "__SAVE_API_URL__": process.env.EXPO_PUBLIC_SAVE_API_URL ?? "",
+  "__SAVE_PRIVY_APP_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_ID ?? "",
+  "__SAVE_PRIVY_APP_CLIENT_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_CLIENT_ID ?? "",
 };
 const publicEnvKeys = [
-  "EXPO_PUBLIC_WANDERLY_API_URL",
+  "EXPO_PUBLIC_SAVE_API_URL",
   "EXPO_PUBLIC_PRIVY_APP_ID",
   "EXPO_PUBLIC_PRIVY_APP_CLIENT_ID",
 ];

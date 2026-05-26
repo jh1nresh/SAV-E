@@ -29,7 +29,7 @@ Map Stamp, Review Clue, Passport, and Evidence Receipt.
 
 Files:
 
-- `Wanderly/App/WanderlyApp.swift`
+- `Wanderly/App/SaveApp.swift`
 
 Change:
 

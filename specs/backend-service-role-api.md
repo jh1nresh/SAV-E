@@ -10,7 +10,7 @@ Move SAV-E persistence behind a backend API so the iOS app no longer relies on S
 
 ## Decision
 
-Use a Supabase Edge Function named `wanderly-api` as the database boundary.
+Use a Supabase Edge Function named `save-api` as the database boundary.
 
 The iOS app sends the current Privy access token in:
 
@@ -24,7 +24,7 @@ The client must not send or choose `user_id`.
 
 ## API
 
-All routes are under `/functions/v1/wanderly-api`.
+All routes are under `/functions/v1/save-api`.
 
 - `GET /places`
 - `POST /places`

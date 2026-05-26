@@ -1,4 +1,4 @@
--- Move Wanderly ownership from Supabase Auth UUIDs to verified Privy subject strings.
+-- Move SAV-E ownership from Supabase Auth UUIDs to verified Privy subject strings.
 -- Direct anon-key access remains denied by RLS; the Edge Function uses service role
 -- and enforces ownership in code.
 
@@ -47,5 +47,5 @@ alter table public.ig_bot_links
     add constraint ig_bot_links_user_id_fkey foreign key (user_id) references public.profiles(id) on delete cascade;
 
 comment on table public.profiles is 'Privy-owned profiles. id is the verified Privy access token sub claim.';
-comment on column public.places.user_id is 'Verified Privy access token sub claim. Set only by wanderly-api.';
-comment on column public.trips.user_id is 'Verified Privy access token sub claim. Set only by wanderly-api.';
+comment on column public.places.user_id is 'Verified Privy access token sub claim. Set only by save-api.';
+comment on column public.trips.user_id is 'Verified Privy access token sub claim. Set only by save-api.';
