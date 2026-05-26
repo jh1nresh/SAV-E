@@ -10,11 +10,17 @@ const publicDir = path.join(__dirname, "..", "public");
 const importMetaReplacement = '({ env: { MODE: "production" } })';
 const replacementValues = {
   "__SAVE_API_URL__": process.env.EXPO_PUBLIC_SAVE_API_URL ?? "",
+  "__WANDERLY_API_URL__": process.env.EXPO_PUBLIC_WANDERLY_API_URL ?? "",
+  "__SAVE_SHARE_BASE_URL__": process.env.EXPO_PUBLIC_SAVE_SHARE_BASE_URL ?? "",
+  "__WANDERLY_SHARE_BASE_URL__": process.env.EXPO_PUBLIC_WANDERLY_SHARE_BASE_URL ?? "",
   "__SAVE_PRIVY_APP_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_ID ?? "",
   "__SAVE_PRIVY_APP_CLIENT_ID__": process.env.EXPO_PUBLIC_PRIVY_APP_CLIENT_ID ?? "",
 };
 const publicEnvKeys = [
   "EXPO_PUBLIC_SAVE_API_URL",
+  "EXPO_PUBLIC_WANDERLY_API_URL",
+  "EXPO_PUBLIC_SAVE_SHARE_BASE_URL",
+  "EXPO_PUBLIC_WANDERLY_SHARE_BASE_URL",
   "EXPO_PUBLIC_PRIVY_APP_ID",
   "EXPO_PUBLIC_PRIVY_APP_CLIENT_ID",
 ];

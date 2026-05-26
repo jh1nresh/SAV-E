@@ -48,21 +48,46 @@ final class SupabaseService: SupabaseServiceProtocol {
     private let apiBaseURL: String?
 
     init() {
-        if let explicit = ProcessInfo.processInfo.environment["SAVE_API_URL"]
-            ?? Self.keyFromPlist("SAVE_API_URL") {
-            self.apiBaseURL = explicit
+        if let explicit = Self.configValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) {
+            self.apiBaseURL = Self.removingTrailingSlashes(from: explicit)
         } else {
             self.apiBaseURL = nil
         }
+    }
+
+    private static func configValue(for keys: [String]) -> String? {
+        for key in keys {
+            if let value = normalizedConfigValue(ProcessInfo.processInfo.environment[key]) {
+                return value
+            }
+            if let value = normalizedConfigValue(keyFromPlist(key)) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedConfigValue(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              value != "YOUR_KEY_HERE"
+        else { return nil }
+        return value
+    }
+
+    private static func removingTrailingSlashes(from value: String) -> String {
+        var result = value
+        while result.hasSuffix("/") {
+            result.removeLast()
+        }
+        return result
     }
 
     private static func keyFromPlist(_ key: String) -> String? {
         guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
               let data = try? Data(contentsOf: url),
               let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String],
-              let value = dict[key],
-              value != "YOUR_KEY_HERE",
-              !value.isEmpty else { return nil }
+              let value = dict[key] else { return nil }
         return value
     }
 

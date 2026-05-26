@@ -1,6 +1,12 @@
 import { Buffer } from "buffer";
 import { Place, SharedTripData } from "./models";
 
+const legacyTripBaseUrl = "https://wanderly.app/trip";
+const tripBaseUrl =
+  normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_SHARE_BASE_URL) ??
+  normalizedEnvValue(process.env.EXPO_PUBLIC_WANDERLY_SHARE_BASE_URL) ??
+  legacyTripBaseUrl;
+
 export function buildSharedTripData(
   name: string,
   city: string,
@@ -23,12 +29,28 @@ export function buildSharedTripData(
 
 export function buildTripLink(
   trip: SharedTripData,
-  baseUrl = "https://wanderly.app/trip"
+  baseUrl = tripBaseUrl
 ): string {
   const json = JSON.stringify(trip);
   const base64 = Buffer.from(json, "utf8").toString("base64");
   const encoded = encodeURIComponent(base64);
   return `${baseUrl}?d=${encoded}`;
+}
+
+export function isSaveTripLink(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return [tripBaseUrl, legacyTripBaseUrl].some((candidate) => {
+      const candidateUrl = new URL(candidate);
+      return (
+        url.protocol === candidateUrl.protocol &&
+        url.hostname === candidateUrl.hostname &&
+        url.pathname === candidateUrl.pathname
+      );
+    });
+  } catch {
+    return false;
+  }
 }
 
 export function decodeTripLink(link: string): SharedTripData | null {
@@ -47,4 +69,10 @@ export function buildAppleMapsUrl(place: Place): string {
   const daddr = encodeURIComponent(place.address || `${place.latitude},${place.longitude}`);
   const q = encodeURIComponent(place.name);
   return `https://maps.apple.com/?daddr=${daddr}&q=${q}`;
+}
+
+function normalizedEnvValue(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.startsWith("__")) return undefined;
+  return trimmed.replace(/\/+$/, "");
 }

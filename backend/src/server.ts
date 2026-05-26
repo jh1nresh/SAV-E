@@ -818,7 +818,7 @@ async function resolveUserId(request: IncomingMessage): Promise<string> {
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (token) return verifiedPrivySubject(token);
 
-  const guestId = request.headers["x-save-guest-id"];
+  const guestId = request.headers["x-save-guest-id"] ?? request.headers["x-wanderly-guest-id"];
   const normalizedGuestId = Array.isArray(guestId) ? guestId[0] : guestId;
   if (typeof normalizedGuestId === "string" && /^guest_[0-9a-fA-F-]{36}$/.test(normalizedGuestId)) {
     return normalizedGuestId;
@@ -986,7 +986,7 @@ function assembleRecommendationSets(setRows: JsonBody[], itemRows: JsonBody[]): 
 function sendJson(response: ServerResponse, body: unknown, status = 200): void {
   response.writeHead(status, {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, content-type, x-save-guest-id",
+    "Access-Control-Allow-Headers": "authorization, content-type, x-save-guest-id, x-wanderly-guest-id",
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Content-Type": "application/json",
   });

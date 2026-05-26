@@ -31,6 +31,7 @@ import {
   buildSharedTripData,
   buildTripLink,
   decodeTripLink,
+  isSaveTripLink,
 } from "./src/sharedTrip";
 
 type TabKey = "places" | "trip" | "share";
@@ -46,7 +47,9 @@ const allCategories: Array<PlaceCategory | "all"> = [
 ];
 
 const storageKey = "@save-rn/bookmarks";
+const legacyStorageKey = "@wanderly-rn/bookmarks";
 const guestIdStorageKey = "@save-rn/guest-id";
+const legacyGuestIdStorageKey = "@wanderly-rn/guest-id";
 const seededSamplePlaceIds = new Set(["tartine", "ramen-nagi", "the-interval", "palace-of-fine-arts"]);
 
 export default function App() {
@@ -155,7 +158,7 @@ function SaveApp() {
 
   async function loadLocalBookmarks() {
     try {
-      const raw = await AsyncStorage.getItem(storageKey);
+      const raw = await readMigratedStorageValue(storageKey, legacyStorageKey);
       const loaded = raw ? removeSeededSamplePlaces((JSON.parse(raw) as Place[]) ?? []) : [];
       setBookmarks(loaded);
       syncSelectedIds(loaded);
@@ -217,7 +220,7 @@ function SaveApp() {
   async function ensureGuestId(): Promise<string> {
     if (guestId) return guestId;
 
-    const stored = await AsyncStorage.getItem(guestIdStorageKey);
+    const stored = await readMigratedStorageValue(guestIdStorageKey, legacyGuestIdStorageKey);
     const nextGuestId = stored && stored.startsWith("guest_") ? stored : createGuestId();
     if (nextGuestId !== stored) {
       await AsyncStorage.setItem(guestIdStorageKey, nextGuestId);
@@ -656,17 +659,19 @@ function SaveApp() {
   );
 }
 
-function isSaveTripLink(value: string) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && url.hostname === "wanderly.app" && url.pathname === "/trip";
-  } catch {
-    return false;
-  }
-}
-
 function defaultSelectedIds(places: Place[]) {
   return places.slice(0, 2).map((place) => place.id);
+}
+
+async function readMigratedStorageValue(primaryKey: string, legacyKey: string): Promise<string | null> {
+  const primaryValue = await AsyncStorage.getItem(primaryKey);
+  if (primaryValue) return primaryValue;
+
+  const legacyValue = await AsyncStorage.getItem(legacyKey);
+  if (legacyValue) {
+    await AsyncStorage.setItem(primaryKey, legacyValue);
+  }
+  return legacyValue;
 }
 
 function removeSeededSamplePlaces(places: Place[]) {

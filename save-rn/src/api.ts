@@ -1,6 +1,8 @@
 import { Place, TripRecord } from "./models";
 
-const apiBaseUrl = process.env.EXPO_PUBLIC_SAVE_API_URL?.replace(/\/$/, "");
+const apiBaseUrl =
+  normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_API_URL) ??
+  normalizedEnvValue(process.env.EXPO_PUBLIC_WANDERLY_API_URL);
 
 export type SaveAuth = {
   accessToken?: string;
@@ -50,6 +52,12 @@ function requireApiBaseUrl(): string {
 
 export function hasApiConfig(): boolean {
   return Boolean(apiBaseUrl);
+}
+
+function normalizedEnvValue(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.startsWith("__")) return undefined;
+  return trimmed.replace(/\/+$/, "");
 }
 
 function requestHeaders({ accessToken, guestId }: SaveAuth): HeadersInit {

@@ -33,12 +33,12 @@ struct SharedTripData: Codable {
         return try? JSONDecoder().decode(SharedTripData.self, from: jsonData)
     }
 
-    func toURL(baseURL: String = "https://wanderly.app/trip") -> URL? {
+    func toURL(baseURL: String? = nil) -> URL? {
         guard let jsonData = try? JSONEncoder().encode(self),
               let base64 = jsonData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
-        return URL(string: "\(baseURL)?d=\(base64)")
+        return URL(string: "\(baseURL ?? SaveShareLinkConfig.tripBaseURL)?d=\(base64)")
     }
 
     // MARK: - Convenience Builders
@@ -119,5 +119,48 @@ struct SharedTripData: Codable {
                 )
             ]
         )
+    }
+}
+
+private enum SaveShareLinkConfig {
+    static let tripBaseURL: String = {
+        configValue(for: ["SAVE_SHARE_BASE_URL", "WANDERLY_SHARE_BASE_URL"])
+            ?? "https://wanderly.app/trip"
+    }()
+
+    private static func configValue(for keys: [String]) -> String? {
+        for key in keys {
+            if let value = normalizedConfigValue(ProcessInfo.processInfo.environment[key]) {
+                return removingTrailingSlashes(from: value)
+            }
+            if let value = normalizedConfigValue(keyFromPlist(key)) {
+                return removingTrailingSlashes(from: value)
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedConfigValue(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              value != "YOUR_KEY_HERE"
+        else { return nil }
+        return value
+    }
+
+    private static func keyFromPlist(_ key: String) -> String? {
+        guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
+              let data = try? Data(contentsOf: url),
+              let dict = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
+        else { return nil }
+        return dict[key]
+    }
+
+    private static func removingTrailingSlashes(from value: String) -> String {
+        var result = value
+        while result.hasSuffix("/") {
+            result.removeLast()
+        }
+        return result
     }
 }

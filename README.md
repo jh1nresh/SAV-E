@@ -43,6 +43,7 @@ Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the
    - `GEMINI_API_KEY` — from Google AI Studio
    - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
    - `SAVE_API_URL` — Railway backend service URL
+   - `SAVE_SHARE_BASE_URL` — production share route, currently `https://wanderly.app/trip`
    - `PRIVY_APP_ID` — from Privy Dashboard → App Settings → Basics
    - `PRIVY_APP_CLIENT_ID` — from Privy Dashboard → App Settings → Clients. The iOS app client must allow bundle id `com.wanderly.app` and URL scheme `wanderly`.
    - Keep real values out of commits.
@@ -145,6 +146,7 @@ Before this works for friends without the full app installed:
 - keep `applinks:wanderly.app` and `appclips:wanderly.app` in the app entitlement
 - keep `appclips:wanderly.app` in the App Clip entitlement
 - set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
+- disable bot challenges/WAF rules for `https://wanderly.app/trip*` and `https://wanderly.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
 - create the App Clip Experience in App Store Connect for `https://wanderly.app/trip`
 - wait for Apple's associated-domain CDN to pick up the AASA file
 
