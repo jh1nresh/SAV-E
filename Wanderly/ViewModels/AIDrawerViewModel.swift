@@ -7,6 +7,7 @@ final class AIDrawerViewModel: ObservableObject {
         case idle
         case loading
         case displaying(WanderlyAIResponse)
+        case saveSearchResults(SaveSearchResponse)
         case placeDetail(Place)
         case reviewCandidateDetail(PlaceReviewCandidate)
         case error(String)
@@ -27,18 +28,28 @@ final class AIDrawerViewModel: ObservableObject {
     @Published var places: [Place] = []
 
     private let aiService: WanderlyAIService
+    private let saveSearchController: SaveSearchController
 
     /// Multi-turn conversation context for the current session.
     private var conversationTurns: [ConversationTurn] = []
     private var activeRequestID: UUID?
 
-    init(aiService: WanderlyAIService = .shared) {
+    init(aiService: WanderlyAIService = .shared, saveSearchController: SaveSearchController = SaveSearchController()) {
         self.aiService = aiService
+        self.saveSearchController = saveSearchController
     }
 
     func submit() async {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
+
+        let saveSearchResponse = saveSearchController.search(query: trimmed, places: places, localRecords: [])
+        if saveSearchResponse.hasVisibleResults {
+            drawerState = .saveSearchResults(saveSearchResponse)
+            mapAction = mapAction(for: saveSearchResponse)
+            return
+        }
+
         let requestID = UUID()
         activeRequestID = requestID
         drawerState = .loading
@@ -76,6 +87,13 @@ final class AIDrawerViewModel: ObservableObject {
         drawerState = .placeDetail(place)
         mapAction = MapActionData(type: .focusRegion, placeIds: nil,
                                   lat: place.latitude, lng: place.longitude, span: 0.01)
+    }
+
+    func showSearchResult(_ result: SaveSearchResult) {
+        guard result.objectType == .savedPlace || result.objectType == .triedMemory,
+              let place = place(for: result)
+        else { return }
+        showPlace(place)
     }
 
     func showReviewCandidate(_ candidate: PlaceReviewCandidate) {
@@ -143,5 +161,29 @@ final class AIDrawerViewModel: ObservableObject {
     func resolvePlace(id: String?) -> Place? {
         guard let id, let uuid = UUID(uuidString: id) else { return nil }
         return places.first { $0.id == uuid }
+    }
+
+    private func place(for result: SaveSearchResult) -> Place? {
+        guard result.id.hasPrefix("place-") else { return nil }
+        let rawID = String(result.id.dropFirst("place-".count))
+        guard let uuid = UUID(uuidString: rawID) else { return nil }
+        return places.first { $0.id == uuid }
+    }
+
+    private func mapAction(for response: SaveSearchResponse) -> MapActionData? {
+        let placeIDs = response.fromYourSave.results.compactMap { result -> String? in
+            guard result.objectType == .savedPlace || result.objectType == .triedMemory,
+                  result.id.hasPrefix("place-")
+            else { return nil }
+            return String(result.id.dropFirst("place-".count))
+        }
+        guard !placeIDs.isEmpty else { return nil }
+        return MapActionData(type: .filterPins, placeIds: placeIDs, lat: nil, lng: nil, span: nil)
+    }
+}
+
+private extension SaveSearchResponse {
+    var hasVisibleResults: Bool {
+        !fromYourSave.results.isEmpty || newRecommendations.results.contains { !$0.isRecommendationShell }
     }
 }

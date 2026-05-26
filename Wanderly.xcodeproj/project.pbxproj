@@ -36,6 +36,7 @@
 		46A52BEE4475E8E11DDE344F /* NavigationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368BBF02C223EF46EFCAD0D9 /* NavigationService.swift */; };
 		47655ADFBDE28A5156D9DF2C /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B25737D32F2BF5066893998E /* MapView.swift */; };
 		4A01A5213FE68F91763363A0 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52DB21AFBADBB002A3C38EC5 /* ShareViewController.swift */; };
+		4CA8A6A40C3DCA19526E9CDE /* SaveSearchResultsComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 841331381A0DB92820A4A63C /* SaveSearchResultsComponent.swift */; };
 		52DCC474C35F735154417A8D /* AIResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5555D27FE182EFE3DDC93C /* AIResponse.swift */; };
 		5311E10B19ABE278B394E7C1 /* SavePlanAroundControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97D095BEE47C93C9CB1C90EF /* SavePlanAroundControllerTests.swift */; };
 		55744843693323A5DA49375E /* SaveLocalVaultService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09120C4FFC2D6CA18D10FDF /* SaveLocalVaultService.swift */; };
@@ -198,6 +199,7 @@
 		78DC5686A4E2F5C59A3092CD /* PlaceListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListViewModel.swift; sourceTree = "<group>"; };
 		7D8FDE6E93564AB450C09578 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		7ECDC9A866952173B6DC923C /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		841331381A0DB92820A4A63C /* SaveSearchResultsComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchResultsComponent.swift; sourceTree = "<group>"; };
 		851EFADDC17224C9528169FD /* WanderlyShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = WanderlyShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		88C84F22D63C77B4CAE46817 /* WanderlyTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = WanderlyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8960D65E893E5FDF9FCFF097 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
@@ -406,6 +408,7 @@
 			children = (
 				C6332D88A442A562A21E3D73 /* NavigationCardComponent.swift */,
 				5EFE7E456EC9AE78D349FF1F /* PlaceListComponent.swift */,
+				841331381A0DB92820A4A63C /* SaveSearchResultsComponent.swift */,
 				E90A115430F100F0E9864CF3 /* TripItineraryComponent.swift */,
 			);
 			path = Components;
@@ -846,6 +849,7 @@
 				FA297319976204C74FA73C2C /* SavePlanAroundModels.swift in Sources */,
 				0667C6A359FA21CB8E158876 /* SaveSearchController.swift in Sources */,
 				7D8318FC0730E6A44483A3C9 /* SaveSearchModels.swift in Sources */,
+				4CA8A6A40C3DCA19526E9CDE /* SaveSearchResultsComponent.swift in Sources */,
 				0FEEB8D7A11D001D3AD43F40 /* SharedTripData.swift in Sources */,
 				990CC6A0705CC916C9092CF7 /* SocialLinkReviewCandidateService.swift in Sources */,
 				7C7136D0D553C7A82A8C4102 /* SocialOCRCandidateHeuristics.swift in Sources */,

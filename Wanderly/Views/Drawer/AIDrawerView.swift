@@ -48,6 +48,7 @@ struct AIDrawerView: View {
                 case .error:            drawerDetent = .medium
                 case .placeDetail:      drawerDetent = .medium
                 case .reviewCandidateDetail: drawerDetent = .medium
+                case .saveSearchResults: drawerDetent = .medium
                 case .displaying(let r):
                     drawerDetent = r.componentType == .tripItinerary ? .large : .medium
                 }
@@ -235,6 +236,30 @@ struct AIDrawerView: View {
                 .padding(.vertical, 14)
             }
 
+        case .saveSearchResults(let response):
+            ScrollView {
+                VStack(spacing: 16) {
+                    SaveSearchResultsComponent(response: response) { result in
+                        viewModel.showSearchResult(result)
+                    }
+
+                    AIResultActionBar(
+                        onFollowUp: {
+                            viewModel.query = ""
+                            searchFocused = true
+                            withAnimation { drawerDetent = .medium }
+                        },
+                        onNewQuestion: {
+                            viewModel.startNewConversation()
+                            searchFocused = true
+                            withAnimation { drawerDetent = .medium }
+                        }
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 14)
+            }
+
         case .placeDetail(let place):
             PlaceBottomSheet(place: place) {
                 try await onDeletePlace(place)
@@ -367,7 +392,7 @@ struct AIDrawerView: View {
         switch viewModel.drawerState {
         case .idle:
             return false
-        case .loading, .displaying, .placeDetail, .reviewCandidateDetail, .error:
+        case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .error:
             return true
         }
     }
@@ -380,6 +405,8 @@ struct AIDrawerView: View {
             return languageSettings.text(.thinking)
         case .displaying(let response):
             return response.title ?? languageSettings.text(.answer)
+        case .saveSearchResults:
+            return "SAV-E results"
         case .placeDetail(let place):
             return place.name
         case .reviewCandidateDetail(let candidate):
@@ -397,6 +424,8 @@ struct AIDrawerView: View {
             return languageSettings.text(.loadingSubtitle)
         case .displaying:
             return languageSettings.text(.answerSubtitle)
+        case .saveSearchResults:
+            return "Map Stamps first, unsaved recommendations separate"
         case .placeDetail:
             return languageSettings.text(.placeDetailSubtitle)
         case .reviewCandidateDetail(let candidate):

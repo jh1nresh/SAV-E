@@ -1,0 +1,248 @@
+import SwiftUI
+
+struct SaveSearchResultsComponent: View {
+    let response: SaveSearchResponse
+    var onSelectResult: (SaveSearchResult) -> Void = { _ in }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionView(response.fromYourSave, label: "FROM YOUR SAV-E")
+            sectionView(response.newRecommendations, label: "NEW / UNSAVED")
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: SaveSearchSection, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(label)
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(label == "FROM YOUR SAV-E" ? Color.saveMint.opacity(0.72) : Color.saveSky.opacity(0.72))
+                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .clipShape(Capsule())
+
+                Spacer(minLength: 0)
+
+                Text("\(section.results.count)")
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.saveHoney)
+                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .clipShape(Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(section.title)
+                    .font(.headline.weight(.black))
+                    .foregroundColor(.saveInk)
+                Text(section.subtitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if section.results.isEmpty {
+                Text(section.emptyMessage ?? "No results yet.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveCocoa)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.saveNotebookPage.opacity(0.72))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(section.results) { result in
+                        SaveSearchResultNotebookRow(result: result, onSelectResult: onSelectResult)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct SaveSearchResultNotebookRow: View {
+    let result: SaveSearchResult
+    var onSelectResult: (SaveSearchResult) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Button {
+                onSelectResult(result)
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: iconName)
+                        .font(.subheadline.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(width: 36, height: 36)
+                        .background(iconFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 1.5)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(result.title)
+                            .font(.subheadline.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(result.subtitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveMutedText)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 0)
+                    Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveCocoa.opacity(0.8))
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canOpenDetails)
+
+            HStack(spacing: 6) {
+                SaveSearchStateChip(text: result.objectType.displayName, fill: typeFill)
+                SaveSearchStateChip(text: result.userState.displayName, fill: result.userState == .unsaved ? .saveSky : .saveMint)
+                if let category = result.category {
+                    SaveSearchStateChip(text: category.displayName, fill: .saveSignal)
+                }
+            }
+
+            if !result.evidence.isEmpty || !result.missingInfo.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let firstEvidence = result.evidence.first {
+                        Label(firstEvidence, systemImage: "doc.text.magnifyingglass")
+                            .lineLimit(2)
+                    }
+                    if !result.missingInfo.isEmpty {
+                        Label("Missing: \(result.missingInfo.prefix(2).joined(separator: ", "))", systemImage: "exclamationmark.triangle")
+                            .lineLimit(2)
+                    }
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+            }
+
+            primaryActionLabel
+        }
+        .padding(12)
+        .background(Color.saveCream.opacity(0.72))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var primaryActionLabel: some View {
+        switch result.objectType {
+        case .savedPlace, .triedMemory:
+            Label("Open Map Stamp", systemImage: "map.fill")
+                .saveSearchActionPill(isPrimary: true)
+        case .pendingCandidate:
+            Label("Needs confirmation", systemImage: "checklist.unchecked")
+                .saveSearchActionPill(isPrimary: false)
+        case .sourceOnlyClue:
+            Label("Needs exact place", systemImage: "sparkle.magnifyingglass")
+                .saveSearchActionPill(isPrimary: false)
+        case .mapVisibleUnsavedPlace:
+            Label("Unsaved candidate", systemImage: "bookmark.badge.plus")
+                .saveSearchActionPill(isPrimary: false)
+        case .newRecommendation:
+            Label("Recommendation only", systemImage: "sparkle.magnifyingglass")
+                .saveSearchActionPill(isPrimary: false)
+        case .review:
+            Label("View review evidence", systemImage: "text.bubble")
+                .saveSearchActionPill(isPrimary: false)
+        case .tripStop:
+            Label("Use trip stop", systemImage: "route")
+                .saveSearchActionPill(isPrimary: false)
+        }
+    }
+
+    private var canOpenDetails: Bool {
+        result.objectType == .savedPlace || result.objectType == .triedMemory
+    }
+
+    private var iconName: String {
+        switch result.objectType {
+        case .savedPlace: return "map.fill"
+        case .pendingCandidate: return "checklist.unchecked"
+        case .sourceOnlyClue: return "link"
+        case .triedMemory: return "checkmark.seal.fill"
+        case .review: return "text.bubble.fill"
+        case .tripStop: return "route.fill"
+        case .mapVisibleUnsavedPlace: return "mappin.and.ellipse"
+        case .newRecommendation: return "sparkle.magnifyingglass"
+        }
+    }
+
+    private var iconFill: Color {
+        switch result.objectType {
+        case .savedPlace, .triedMemory: return .saveMint
+        case .pendingCandidate, .sourceOnlyClue: return .saveHoney
+        case .review, .mapVisibleUnsavedPlace: return .saveSignal
+        case .tripStop: return .saveSky
+        case .newRecommendation: return .saveSky.opacity(0.72)
+        }
+    }
+
+    private var typeFill: Color {
+        switch result.objectType {
+        case .savedPlace, .triedMemory: return .saveMint
+        case .pendingCandidate, .sourceOnlyClue: return .saveHoney
+        case .mapVisibleUnsavedPlace, .newRecommendation: return .saveSky
+        case .review, .tripStop: return .saveSignal
+        }
+    }
+}
+
+private struct SaveSearchStateChip: View {
+    let text: String
+    let fill: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.weight(.black))
+            .foregroundColor(.saveInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(fill.opacity(0.82))
+            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .clipShape(Capsule())
+    }
+}
+
+private extension View {
+    func saveSearchActionPill(isPrimary: Bool) -> some View {
+        font(.caption2.weight(.black))
+            .foregroundColor(.saveInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(isPrimary ? Color.saveHoney : Color.saveNotebookPage)
+            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .clipShape(Capsule())
+    }
+}
