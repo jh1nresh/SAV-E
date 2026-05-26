@@ -267,6 +267,9 @@ struct AIDrawerView: View {
                 withAnimation(.spring(duration: 0.3)) {
                     drawerDetent = .height(72)
                 }
+            } onPlanAround: {
+                viewModel.query = "Plan around \(place.name)"
+                Task { await viewModel.submit() }
             }
 
         case .reviewCandidateDetail(let candidate):

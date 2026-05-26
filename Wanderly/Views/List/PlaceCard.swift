@@ -57,7 +57,7 @@ struct PlaceCard: View {
     private var memoryBadge: some View {
         VStack(spacing: 4) {
             SaveMemoryBadge(state: .saved(place.category), size: 44)
-            Text("SAVED")
+            Text(place.status == .visited ? "TRIED" : "STAMP")
                 .font(.system(size: 7, weight: .black))
                 .foregroundColor(.saveCocoa)
         }

@@ -93,9 +93,9 @@ struct PlaceDetailView: View {
                 }
 
                 // Notes
-                if let note = place.note {
+                if let note = cleanUserNote {
                     VStack(alignment: .leading, spacing: 6) {
-                        Label("Notes", systemImage: "note.text")
+                        Label("Why SAV-E saved this", systemImage: "sparkles")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(.saveInk)
@@ -205,9 +205,13 @@ struct PlaceDetailView: View {
                 SaveMemoryBadge(state: .saved(place.category), size: 62)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("SAVED MEMORY CARD")
+                    Text(place.status.memoryCardLabel.uppercased())
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.56))
+                        .clipShape(Capsule())
 
                     Text(place.name)
                         .font(.title2)
@@ -224,16 +228,17 @@ struct PlaceDetailView: View {
 
                     HStack(spacing: 8) {
                         CategoryPill(category: place.category, isSelected: true)
-                        Text(place.status.memoryCardLabel)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.saveCocoa)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.42))
-                            .clipShape(Capsule())
+                        if let priceRange = place.priceRange {
+                            InfoChip(icon: "tag.fill", text: priceRange, color: .saveCocoa)
+                        }
                     }
                 }
             }
+
+            Text(memorySummary)
+                .font(.subheadline)
+                .foregroundColor(.saveInk)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(place.address)
                 .font(.subheadline)
@@ -269,6 +274,35 @@ struct PlaceDetailView: View {
         }
 
         return URL(string: "https://\(raw)")
+    }
+
+    private var areaLabel: String? {
+        let parts = place.address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.count >= 2 { return parts[parts.count - 2] }
+        return parts.first
+    }
+
+    private var memorySummary: String {
+        if let areaLabel, place.sourcePlatform != .other {
+            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched it to \(place.name) in \(areaLabel)."
+        }
+        if place.sourcePlatform != .other {
+            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched the source to this confirmed place."
+        }
+        return "Saved as a confirmed place memory in SAV-E."
+    }
+
+    private var cleanUserNote: String? {
+        guard let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !note.isEmpty,
+              !note.localizedCaseInsensitiveContains("Source URL:"),
+              !note.localizedCaseInsensitiveContains("Analysis pipeline:"),
+              !note.localizedCaseInsensitiveContains("Evidence tier:")
+        else { return nil }
+        return note
     }
 
     private func deletePlace() async {

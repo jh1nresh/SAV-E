@@ -3,6 +3,8 @@ import SwiftUI
 struct PlaceBottomSheet: View {
     let place: Place
     var onDelete: (() async throws -> Void)?
+    var onPlanAround: (() -> Void)?
+    @Environment(\.openURL) private var openURL
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
@@ -13,10 +15,14 @@ struct PlaceBottomSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 SaveMemoryBadge(state: .saved(place.category), size: 52)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("MEMORY CARD")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(place.status.memoryCardLabel.uppercased())
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.64))
+                        .clipShape(Capsule())
 
                     Text(place.name)
                         .font(.title3)
@@ -30,42 +36,48 @@ struct PlaceBottomSheet: View {
 
                 Spacer()
 
-                CategoryPill(category: place.category, isSelected: true)
+                Menu {
+                    if let normalizedSourceURL {
+                        Button {
+                            openURL(normalizedSourceURL)
+                        } label: {
+                            Label("View source", systemImage: "link")
+                        }
+                    }
+
+                    if onDelete != nil {
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.headline.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(width: 36, height: 36)
+                        .background(Color.saveNotebookPage)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.4))
+                }
             }
 
-            Divider()
+            Text(memorySummary)
+                .font(.subheadline)
+                .foregroundColor(.saveInk)
+                .fixedSize(horizontal: false, vertical: true)
 
-            // Info row
-            HStack(spacing: 16) {
+            FlowLayout(spacing: 8) {
+                CategoryPill(category: place.category, isSelected: true)
                 if let rating = place.googleRating {
-                    Label(String(format: "%.1f", rating), systemImage: "star.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.saveCocoa)
+                    PlaceMemoryChip(icon: "star.fill", text: String(format: "%.1f", rating))
                 }
-
                 if let priceRange = place.priceRange {
-                    Text(priceRange)
-                        .font(.subheadline)
-                        .foregroundColor(.saveMutedText)
+                    PlaceMemoryChip(icon: "tag.fill", text: priceRange)
                 }
-
-                HStack(spacing: 4) {
-                    PlatformIcon(platform: place.sourcePlatform, size: 14)
-                    Text(place.sourcePlatform.displayName)
-                        .font(.caption)
-                        .foregroundColor(.saveMutedText)
-                }
-
-                Spacer()
-
-                Text(place.status.memoryCardLabel)
-                    .font(.caption)
-                    .fontWeight(.black)
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(place.status == .visited ? Color.saveMint : Color.saveHoney.opacity(0.64))
-                    .cornerRadius(8)
+                PlaceMemoryChip(icon: "link", text: sourceChipLabel)
+                PlaceMemoryChip(icon: "mappin.and.ellipse", text: "Map confirmed")
             }
 
             // Dishes
@@ -91,15 +103,26 @@ struct PlaceBottomSheet: View {
             }
 
             // Note
-            if let note = place.note {
+            if let note = cleanUserNote {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Note")
+                    Text("Why SAV-E saved this")
                         .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.saveMutedText)
+                        .fontWeight(.black)
+                        .foregroundColor(.saveCocoa)
                     Text(note)
                         .font(.subheadline)
                         .foregroundColor(.saveInk)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Evidence receipt")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                FlowLayout(spacing: 8) {
+                    PlaceMemoryChip(icon: "link", text: sourceChipLabel)
+                    PlaceMemoryChip(icon: "mappin", text: "Address saved")
+                    PlaceMemoryChip(icon: "checkmark.seal.fill", text: "Map ready")
                 }
             }
 
@@ -122,23 +145,41 @@ struct PlaceBottomSheet: View {
                         )
                 }
 
-                Button(role: .destructive) {
-                    showDeleteConfirmation = true
+                Button {
+                    onPlanAround?()
                 } label: {
-                    Label(isDeleting ? "Deleting..." : "Delete", systemImage: "trash")
+                    Label("Plan around this", systemImage: "sparkles")
                         .font(.subheadline)
                         .fontWeight(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(Color.saveNotebookPage)
-                        .foregroundColor(.red)
+                        .foregroundColor(.saveInk)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(Color.saveNotebookLine, lineWidth: 2)
                         )
                 }
-                .disabled(isDeleting || onDelete == nil)
+                .disabled(onPlanAround == nil)
+            }
+
+            if let normalizedSourceURL {
+                Button {
+                    openURL(normalizedSourceURL)
+                } label: {
+                    Label("View source", systemImage: "link")
+                        .font(.caption.weight(.black))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(Color.saveSky.opacity(0.20))
+                        .foregroundColor(.saveInk)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.72), lineWidth: 1.4)
+                        )
+                }
             }
 
             if let deleteError {
@@ -174,6 +215,72 @@ struct PlaceBottomSheet: View {
         } catch {
             deleteError = error.localizedDescription
         }
+    }
+
+    private var sourceChipLabel: String {
+        place.sourcePlatform == .other ? "Source saved" : "\(place.sourcePlatform.displayName) source"
+    }
+
+    private var areaLabel: String? {
+        let parts = place.address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.count >= 2 { return parts[parts.count - 2] }
+        return parts.first
+    }
+
+    private var memorySummary: String {
+        if let areaLabel, place.sourcePlatform != .other {
+            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched it to \(place.name) in \(areaLabel)."
+        }
+        if place.sourcePlatform != .other {
+            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched the source to this confirmed place."
+        }
+        return "Saved as a confirmed place memory in SAV-E."
+    }
+
+    private var cleanUserNote: String? {
+        guard let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !note.isEmpty,
+              !note.localizedCaseInsensitiveContains("Source URL:"),
+              !note.localizedCaseInsensitiveContains("Analysis pipeline:"),
+              !note.localizedCaseInsensitiveContains("Evidence tier:")
+        else { return nil }
+        return note
+    }
+
+    private var normalizedSourceURL: URL? {
+        guard let raw = place.sourceUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty
+        else { return nil }
+
+        if let url = URL(string: raw), url.scheme != nil {
+            return url
+        }
+
+        return URL(string: "https://\(raw)")
+    }
+}
+
+private struct PlaceMemoryChip: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.black))
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundColor(.saveCocoa)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Color.saveNotebookPage)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1))
     }
 }
 
