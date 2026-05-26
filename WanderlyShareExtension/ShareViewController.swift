@@ -456,7 +456,7 @@ struct ShareExtensionView: View {
                             .foregroundColor(SaveTheme.ink)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
-                        Text("Try sharing a map link, a clearer caption, or a frame with the place name 💌")
+                        Text("Try sharing a map link, a clearer caption, or a frame with the place name.")
                             .font(.caption)
                             .foregroundColor(SaveTheme.ink)
                             .multilineTextAlignment(.center)
@@ -542,7 +542,7 @@ struct ShareExtensionView: View {
                     )
                     ShareCheckingStepRow(
                         systemImage: "rectangle.stack.badge.plus",
-                        title: "Review card next",
+                        title: "Review Candidate next",
                         subtitle: "Possible places wait in Review before saving.",
                         fill: SaveTheme.mint
                     )
@@ -566,7 +566,7 @@ struct ShareExtensionView: View {
 
     private var savedConfirmationView: some View {
         VStack(spacing: 14) {
-            ShareStatusPill(text: savedReviewCandidateCount == nil ? "Memory card saved" : "Added to Review")
+            ShareStatusPill(text: savedReviewCandidateCount == nil ? "Map Stamp saved" : "Added to Review")
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
@@ -628,7 +628,7 @@ struct ShareExtensionView: View {
         guard let count = savedReviewCandidateCount else {
             return "Saved to SAV-E"
         }
-        return count == 1 ? "Review card added" : "\(count) review cards added"
+        return count == 1 ? "Review Candidate added" : "\(count) Review Candidates added"
     }
 
     private var savedConfirmationSubtitle: String {
@@ -636,8 +636,8 @@ struct ShareExtensionView: View {
             return "Open the app to see it on your map."
         }
         return count == 1
-            ? "It will wait in SAV-E Review before becoming a saved place."
-            : "They will wait in SAV-E Review before becoming saved places."
+            ? "It will wait in SAV-E Review before becoming a Map Stamp."
+            : "They will wait in SAV-E Review before becoming Map Stamps."
     }
 
     // MARK: - Place Preview
@@ -649,7 +649,7 @@ struct ShareExtensionView: View {
                     .font(.title3.weight(.black))
                     .foregroundColor(SaveTheme.ink)
                 Spacer()
-                ShareStatusPill(text: "Place card ready")
+                ShareStatusPill(text: "Map Stamp ready")
             }
 
             ZStack(alignment: .topTrailing) {
@@ -668,7 +668,7 @@ struct ShareExtensionView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "mappin.and.ellipse")
                                 .font(.caption.weight(.black))
-                            Text("Ready to save as a place card")
+                            Text("Ready to save as a Map Stamp")
                                 .font(.caption.weight(.black))
                         }
                         .foregroundColor(SaveTheme.ink)
@@ -717,7 +717,7 @@ struct ShareExtensionView: View {
                         }
                     }
 
-                    ShareScrapbookButton(title: "Save place card", fill: SaveTheme.yellow, systemImage: "checkmark.seal.fill", action: savePlace)
+                    ShareScrapbookButton(title: "Save Map Stamp", fill: SaveTheme.yellow, systemImage: "checkmark.seal.fill", action: savePlace)
                         .padding(.top, 2)
                 }
                 .padding(18)
@@ -805,7 +805,7 @@ struct ShareExtensionView: View {
                         ShareScrapbookButton(title: "Confirm this place", fill: SaveTheme.yellow, systemImage: "checkmark.seal.fill", action: saveReviewCandidates)
                         ShareScrapbookButton(title: "Find address", fill: SaveTheme.sky, systemImage: "magnifyingglass", action: saveReviewCandidates)
 
-                        Button("Save to Maybe", action: saveReviewCandidates)
+                        Button("Keep as Source Clue", action: saveReviewCandidates)
                             .font(.caption.weight(.black))
                             .foregroundColor(SaveTheme.ink.opacity(0.72))
                             .padding(.top, 2)
@@ -909,7 +909,7 @@ struct ShareExtensionView: View {
 
     private func sourceLine(_ candidate: PendingReviewCandidate) -> String {
         guard let sourceURL = candidate.sourceURL?.lowercased() else { return "Found from shared post" }
-        if sourceURL.contains("instagram.com") { return "Found from Instagram Reel" }
+        if sourceURL.contains("instagram.com") { return "Found from Instagram source" }
         if sourceURL.contains("tiktok.com") { return "Found from TikTok" }
         if sourceURL.contains("pin.it") || sourceURL.contains("pinterest.") { return "Found from Pinterest" }
         return "Found from shared link"
@@ -919,14 +919,14 @@ struct ShareExtensionView: View {
         if candidate.address.isEmpty {
             return "I found the likely place, but I still need the exact address before saving it as a map pin."
         }
-        return "I found a likely place with an address. Confirm it before SAV-E saves it as a place card."
+        return "I found a likely place with an address. Confirm it before SAV-E saves it as a Map Stamp."
     }
 
     private func candidateSubtitle(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
             return "Review each candidate in SAV-E before saving."
         }
-        if candidate.isUnresolvedPlaceCandidate { return "Possible place from Instagram Reel" }
+        if candidate.isUnresolvedPlaceCandidate { return "Review Candidate from shared source" }
         if candidate.isSourceOnly { return "Saved as a source clue, not a map pin yet" }
         if candidate.isPlaceBearingSource { return "Needs exact venue before Map Stamp" }
         return candidate.address.isEmpty ? "Needs address confirmation" : candidate.address
@@ -949,16 +949,16 @@ struct ShareExtensionView: View {
     }
 
     private func candidateActionTitle(_ candidate: PendingReviewCandidate) -> String {
-        if candidate.isSourceOnly { return "Save Source Clue 💌" }
-        if candidate.isUnresolvedPlaceCandidate { return "Add Place Candidate 💌" }
-        return "Add to Review 💌"
+        if candidate.isSourceOnly { return "Save Source Clue" }
+        if candidate.isUnresolvedPlaceCandidate { return "Add Review Candidate" }
+        return "Add to Review"
     }
 
     private func reviewCandidatesHeading(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
             return "Place clues found"
         }
-        if candidate.isUnresolvedPlaceCandidate { return "Possible place found" }
+        if candidate.isUnresolvedPlaceCandidate { return "Review Candidate found" }
         if candidate.isSourceOnly { return "Source clue saved" }
         if candidate.isPlaceBearingSource {
             return candidate.category == "food" || candidate.category == "cafe"

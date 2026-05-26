@@ -1108,7 +1108,7 @@ private struct ReviewCandidateCard: View {
                     SaveMemoryBadge(state: candidate.hasReliableCoordinates ? .ready : .clue, size: 40)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(candidate.hasReliableCoordinates ? "MAP READY" : "POSSIBLE PLACE FOUND")
+                        Text(candidate.hasReliableCoordinates ? "REVIEW CANDIDATE" : "SOURCE CLUE")
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
                             .lineLimit(1)
@@ -1128,7 +1128,7 @@ private struct ReviewCandidateCard: View {
                             if let confidence = candidate.confidence {
                                 StampChip(text: "\(Int(confidence * 100))% confidence", color: .saveCocoa)
                             }
-                            StampChip(text: candidate.hasReliableCoordinates ? "maybe · map ready" : "maybe · 1 clue missing", color: .saveHoney)
+                            StampChip(text: candidate.hasReliableCoordinates ? "map ready" : "1 clue missing", color: .saveHoney)
                         }
                     }
 

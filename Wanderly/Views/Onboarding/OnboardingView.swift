@@ -67,7 +67,7 @@ struct OnboardingView: View {
 
 private enum FirstRunDemoState: String, CaseIterable {
     case clue = "Clue"
-    case candidate = "Candidate"
+    case candidate = "Review Candidate"
     case mapStamp = "Map Stamp"
     case tripPlan = "Trip Plan"
 

@@ -195,7 +195,7 @@ enum SaveText {
         case .signInTagline:
             return localized(english: "Your personal place memory.", traditionalChinese: "你的個人地點記憶庫。", language: language)
         case .signInDescription:
-            return localized(english: "Drop in links, posts, screenshots, notes, or maps. Memo helps SAV-E turn them into reviewable place cards.", traditionalChinese: "丟進連結、貼文、截圖、筆記或地圖，Memo 會幫 SAV-E 轉成可確認的地點卡。", language: language)
+            return localized(english: "Drop in links, posts, screenshots, notes, or maps. Memo helps SAV-E turn them into Review Candidates or Map Stamps.", traditionalChinese: "丟進連結、貼文、截圖、筆記或地圖，Memo 會幫 SAV-E 轉成待確認地點或地圖章。", language: language)
         case .capture:
             return localized(english: "Capture", traditionalChinese: "捕捉", language: language)
         case .captureSubtitle:
