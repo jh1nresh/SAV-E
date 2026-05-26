@@ -5,6 +5,7 @@ import Speech
 
 struct AIDrawerView: View {
     @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: AIDrawerViewModel
     @Binding var drawerDetent: PresentationDetent
     var existingPlacesForImport: [Place] = []
@@ -21,6 +22,7 @@ struct AIDrawerView: View {
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
+    var onOpenPassport: () -> Void = {}
     @FocusState private var searchFocused: Bool
     @StateObject private var voiceQuery = VoiceQueryController()
     @State private var showGoogleTakeoutImport = false
@@ -34,11 +36,11 @@ struct AIDrawerView: View {
         VStack(spacing: 0) {
             searchBar
             if showsContentArea {
-                Divider().opacity(0.35)
+                Divider().opacity(colorScheme == .dark ? 0.18 : 0.28)
                 contentArea
             }
         }
-        .background(SaveDottedBackground())
+        .background(.ultraThinMaterial)
         .sheet(isPresented: $viewModel.showPlaceList) {
             PlaceListView()
         }
@@ -92,20 +94,20 @@ struct AIDrawerView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: commandBarIcon)
-                .foregroundColor(.saveInk)
+                .foregroundColor(commandBarTextColor)
                 .font(.caption.weight(.black))
                 .frame(width: 28, height: 28)
-                .background(Color.saveCream)
+                .background(commandIconFill)
                 .overlay(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        .stroke(commandBarStroke, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .symbolEffect(.pulse, isActive: isLoading)
 
             TextField(languageSettings.text(.askPlaceholder), text: $viewModel.query)
                 .font(.subheadline)
-                .foregroundColor(.saveInk)
+                .foregroundColor(commandBarTextColor)
                 .lineLimit(1)
                 .frame(height: 24)
                 .focused($searchFocused)
@@ -122,7 +124,8 @@ struct AIDrawerView: View {
                     withAnimation { drawerDetent = .medium }
                     searchFocused = false
                 }) {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.saveCocoa.opacity(0.72))
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(commandBarSecondaryText)
                 }
             } else {
                 commandBarTrailingActions
@@ -130,22 +133,42 @@ struct AIDrawerView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 52)
-        .background(Color.saveNotebookPage)
+        .background(commandBarFill)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(commandBarStroke, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(height: 72)
-        .background(Color.saveNotebookPage)
+        .background(.clear)
     }
 
     private var commandBarIcon: String {
         if isLoading { return "hourglass" }
         if voiceQuery.isListening { return "waveform" }
-        return "sparkles"
+        return "magnifyingglass"
+    }
+
+    private var commandBarFill: Color {
+        colorScheme == .dark ? Color.black.opacity(0.52) : Color.white.opacity(0.72)
+    }
+
+    private var commandIconFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.saveCream.opacity(0.92)
+    }
+
+    private var commandBarStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.16) : Color.saveNotebookLine.opacity(0.28)
+    }
+
+    private var commandBarTextColor: Color {
+        colorScheme == .dark ? .white : .saveInk
+    }
+
+    private var commandBarSecondaryText: Color {
+        colorScheme == .dark ? Color.white.opacity(0.66) : Color.saveCocoa.opacity(0.72)
     }
 
     @ViewBuilder
@@ -159,48 +182,39 @@ struct AIDrawerView: View {
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
+                    .foregroundColor(commandBarSecondaryText)
             }
             .accessibilityLabel("Clear command")
 
             Button(action: submitSearchField) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title3.weight(.black))
-                    .foregroundColor(.saveInk)
+                    .foregroundColor(commandBarTextColor)
             }
             .accessibilityLabel("Ask SAV-E")
         } else {
-            if !reviewCandidates.isEmpty {
-                Button(action: openReviewInbox) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checklist.unchecked")
-                        Text("\(reviewCandidates.count)")
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(Color.saveHoney)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.4))
-                    .clipShape(Capsule())
-                }
-                .accessibilityLabel(languageSettings.text(.openReviewCandidates))
-            }
-
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
                     .font(.subheadline.weight(.black))
-                    .foregroundColor(.saveInk)
+                    .foregroundColor(commandBarTextColor)
                     .frame(width: 30, height: 30)
-                    .background(voiceQuery.isListening ? Color.saveSignal.opacity(0.82) : Color.saveCream)
+                    .background(voiceQuery.isListening ? Color.saveSignal.opacity(0.82) : commandIconFill)
                     .overlay(
                         Circle()
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(commandBarStroke, lineWidth: 1)
                     )
                     .clipShape(Circle())
                     .symbolEffect(.pulse, isActive: voiceQuery.isListening)
             }
             .accessibilityLabel(voiceQuery.isListening ? "Stop talking to SAV-E" : "Talk to SAV-E")
+
+            PassportDrawerButton(
+                reviewCount: reviewCandidates.count,
+                fill: commandIconFill,
+                stroke: commandBarStroke,
+                foreground: commandBarTextColor,
+                action: onOpenPassport
+            )
         }
     }
 
@@ -557,46 +571,13 @@ struct AIDrawerView: View {
 
     private var suggestionsView: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 12) {
+                quickActionStrip
                 categoryFilterStrip
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        DrawerActionChip(
-                            title: "Memories",
-                            systemImage: "list.bullet",
-                            count: nil,
-                            fill: Color.saveMint.opacity(0.74),
-                            action: { viewModel.showPlaceList = true }
-                        )
-
-                        DrawerActionChip(
-                            title: "Import",
-                            systemImage: "tray.and.arrow.down",
-                            count: nil,
-                            fill: Color.saveSky.opacity(0.64),
-                            action: { showGoogleTakeoutImport = true }
-                        )
-
-                        DrawerActionChip(
-                            title: "Review",
-                            systemImage: "circle.hexagongrid.fill",
-                            count: reviewCandidates.isEmpty ? nil : reviewCandidates.count,
-                            fill: Color.saveHoney.opacity(0.84),
-                            action: openReviewInbox
-                        )
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 2)
-                }
-                .padding(.top, 10)
-
-                addSpotsHub
 
                 if !viewModel.chatHistory.isEmpty {
                     NotebookBandLabel("Recent")
                         .padding(.horizontal, 16)
-                        .padding(.top, 12)
 
                     ForEach(viewModel.chatHistory.prefix(5)) { entry in
                         Button(action: {
@@ -612,7 +593,6 @@ struct AIDrawerView: View {
 
                 NotebookBandLabel("Try asking")
                     .padding(.horizontal, 16)
-                    .padding(.top, 12)
 
                 ForEach(suggestions, id: \.self) { suggestion in
                     Button(action: {
@@ -624,7 +604,17 @@ struct AIDrawerView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16)
                 }
+
+                if let addSpotStatus {
+                    Text(addSpotStatus)
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                }
             }
+            .padding(.top, 12)
+            .padding(.bottom, 18)
         }
     }
 
@@ -636,9 +626,56 @@ struct AIDrawerView: View {
         "Show waiting clues",
     ]
 
+    private var quickActionStrip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NotebookBandLabel("Quick actions")
+                .padding(.horizontal, 16)
+
+            HStack(spacing: 9) {
+                DrawerActionChip(
+                    title: "Saved",
+                    systemImage: "list.bullet",
+                    count: viewModel.places.isEmpty ? nil : viewModel.places.count,
+                    fill: Color.saveMint.opacity(0.74),
+                    action: { viewModel.showPlaceList = true }
+                )
+
+                DrawerActionChip(
+                    title: "Review",
+                    systemImage: "checklist.unchecked",
+                    count: reviewCandidates.isEmpty ? nil : reviewCandidates.count,
+                    fill: Color.saveHoney.opacity(0.84),
+                    action: openReviewInbox
+                )
+            }
+            .padding(.horizontal, 16)
+
+            HStack(spacing: 9) {
+                DrawerActionChip(
+                    title: "Import",
+                    systemImage: "tray.and.arrow.down",
+                    count: nil,
+                    fill: Color.saveSky.opacity(0.64),
+                    action: { showGoogleTakeoutImport = true }
+                )
+
+                DrawerActionChip(
+                    title: "Plan",
+                    systemImage: "map.fill",
+                    count: nil,
+                    fill: Color.saveSignal.opacity(0.56),
+                    action: {
+                        focusAgentPrompt("Plan a day from my Map Stamps")
+                    }
+                )
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
     private var categoryFilterStrip: some View {
         VStack(alignment: .leading, spacing: 8) {
-            NotebookBandLabel("Map filters")
+            NotebookBandLabel("Filters")
                 .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -655,7 +692,6 @@ struct AIDrawerView: View {
                 .padding(.vertical, 2)
             }
         }
-        .padding(.top, 14)
     }
 
     // MARK: - Add Spots
@@ -1847,6 +1883,46 @@ private struct CandidateActionButton: View {
     }
 }
 
+private struct PassportDrawerButton: View {
+    var reviewCount: Int
+    var fill: Color
+    var stroke: Color
+    var foreground: Color
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title3.weight(.black))
+                    .foregroundColor(foreground)
+
+                if reviewCount > 0 {
+                    Text("\(reviewCount)")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.saveHoney)
+                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1))
+                        .clipShape(Capsule())
+                        .frame(maxWidth: 24)
+                        .offset(x: 12, y: -12)
+                }
+            }
+            .frame(width: 30, height: 30)
+            .background(fill)
+            .overlay(Circle().stroke(stroke, lineWidth: 1))
+            .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open SAV-E Passport")
+        .accessibilityValue(reviewCount > 0 ? "\(reviewCount) waiting clues" : "No waiting clues")
+    }
+}
+
 private struct DrawerActionChip: View {
     var title: String
     var systemImage: String
@@ -1879,6 +1955,7 @@ private struct DrawerActionChip: View {
             }
             .foregroundColor(.saveInk)
             .frame(height: 38)
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .background(fill)
             .overlay(

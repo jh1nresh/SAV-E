@@ -359,8 +359,11 @@ The map is the spatial memory canvas.
 
 Rules:
 
-- Top controls stay minimal: compact SAV-E/Memo identity plus Passport only.
-- Passport opens from the top map chrome.
+- Map top controls stay empty by default.
+- Map mode should not force light or dark. It follows the user's system appearance.
+- Persistent top-left/top-right map chrome should stay empty unless a real contextual
+  signal, such as weather, is wired.
+- Passport opens from the drawer command bar, not from persistent map chrome.
 - Category filters live in the drawer, not as a persistent map rail.
 - Current location remains bottom-right and one-handed.
 - Only reliable states get pins.
@@ -373,11 +376,16 @@ The drawer is SAV-E's command and memory workbench.
 Rules:
 
 - Collapsed drawer is the primary command bar: text input, mic input, and submit.
+- The drawer may use translucent system material in map mode so the map remains the
+  primary visual surface.
 - Mic is push-to-talk dictation into the same command field, not a separate voice
   assistant mode.
 - Required mic states: idle, requesting permission, listening, transcribed,
   loading, permission denied, unavailable, and failed.
 - Filters and quick prompts belong in the drawer so the map remains clean.
+- Idle drawer content should use an Apple Maps-like hierarchy: command bar, quick
+  action rows, filters, recent items, and suggestions. Do not show the full agent
+  command console by default.
 - Separate "From your SAV-E" from "New / Unsaved".
 - Confirmed memory must visually beat recommendations.
 - Empty states need a next action.

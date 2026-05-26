@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var drawerVM = AIDrawerViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var drawerDetent: PresentationDetent = .height(72)
+    @State private var showProfile = false
 
     var body: some View {
         MapView(viewModel: mapVM)
@@ -41,13 +42,20 @@ struct ContentView: View {
                     selectedCategories: mapVM.selectedCategories,
                     onToggleCategory: { category in
                         mapVM.toggleCategory(category)
+                    },
+                    onOpenPassport: {
+                        showProfile = true
                     }
                 )
                     .presentationDetents([.height(72), .medium, .large], selection: $drawerDetent)
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .interactiveDismissDisabled(true)
-                    .presentationBackground(Color.saveNotebookPage)
+                    .presentationBackground(.ultraThinMaterial)
+                    .presentationCornerRadius(32)
+            }
+            .sheet(isPresented: $showProfile) {
+                ProfileView(waitingClues: mapVM.reviewCandidates.count)
             }
             .onChange(of: drawerVM.mapAction) { _, action in
                 if let action { mapVM.apply(action) }
