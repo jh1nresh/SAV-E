@@ -439,6 +439,33 @@ struct SaveMapCandidate: Identifiable, Hashable {
     }
 }
 
+struct SavePlaceDraft: Hashable {
+    var title: String
+    var address: String?
+    var latitude: Double?
+    var longitude: Double?
+    var category: PlaceCategory?
+    var sourceURL: String?
+    var sourcePlatform: SourcePlatform?
+    var evidence: [String]
+    var externalRating: Double?
+    var externalReviewCount: Int?
+}
+
+enum SavePlaceDraftError: LocalizedError {
+    case notSaveableMapCandidate
+    case missingCoordinates
+
+    var errorDescription: String? {
+        switch self {
+        case .notSaveableMapCandidate:
+            return "This result needs a concrete map place before it can be saved."
+        case .missingCoordinates:
+            return "This place needs coordinates before it can be saved as a map memory."
+        }
+    }
+}
+
 enum SaveSearchUserState: String, Codable, CaseIterable, Hashable {
     case wantToGo = "want_to_go"
     case waitingReview = "waiting_review"

@@ -71,7 +71,12 @@ struct PlaceListView: View {
 
                 // List
                 if isSearching {
-                    SaveSearchResultsList(response: viewModel.saveSearchResponse)
+                    SaveSearchResultsList(
+                        response: viewModel.saveSearchResponse,
+                        savingResultID: viewModel.savingResultID
+                    ) { result in
+                        Task { await viewModel.saveMapCandidate(result) }
+                    }
                 } else if viewModel.filteredPlaces.isEmpty {
                     EmptyStateView(
                         icon: "mappin.slash",
@@ -110,6 +115,14 @@ struct PlaceListView: View {
 
                 if let deleteError = viewModel.deleteError {
                     Text(deleteError)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
+
+                if let saveCandidateError = viewModel.saveCandidateError {
+                    Text(saveCandidateError)
                         .font(.caption)
                         .foregroundColor(.red)
                         .padding(.horizontal)
@@ -161,12 +174,22 @@ struct PlaceListView: View {
 
 private struct SaveSearchResultsList: View {
     let response: SaveSearchResponse
+    let savingResultID: String?
+    let onSaveMapCandidate: (SaveSearchResult) -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                SaveSearchSectionView(section: response.fromYourSave)
-                SaveSearchSectionView(section: response.newRecommendations)
+                SaveSearchSectionView(
+                    section: response.fromYourSave,
+                    savingResultID: savingResultID,
+                    onSaveMapCandidate: onSaveMapCandidate
+                )
+                SaveSearchSectionView(
+                    section: response.newRecommendations,
+                    savingResultID: savingResultID,
+                    onSaveMapCandidate: onSaveMapCandidate
+                )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -177,6 +200,8 @@ private struct SaveSearchResultsList: View {
 
 private struct SaveSearchSectionView: View {
     let section: SaveSearchSection
+    let savingResultID: String?
+    let onSaveMapCandidate: (SaveSearchResult) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -198,7 +223,11 @@ private struct SaveSearchSectionView: View {
                     .saveNotebookPage(cornerRadius: 14)
             } else {
                 ForEach(section.results) { result in
-                    SaveSearchResultCard(result: result)
+                    SaveSearchResultCard(
+                        result: result,
+                        isSaving: savingResultID == result.id,
+                        onSaveMapCandidate: onSaveMapCandidate
+                    )
                 }
             }
         }
@@ -207,6 +236,8 @@ private struct SaveSearchSectionView: View {
 
 private struct SaveSearchResultCard: View {
     let result: SaveSearchResult
+    let isSaving: Bool
+    let onSaveMapCandidate: (SaveSearchResult) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -264,7 +295,11 @@ private struct SaveSearchResultCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            SaveAgentActionDrawerPreview(result: result)
+            SaveAgentActionDrawerPreview(
+                result: result,
+                isSaving: isSaving,
+                onSaveMapCandidate: onSaveMapCandidate
+            )
             SaveEvidenceDrawerPreview(model: result.evidenceDrawer)
         }
         .padding(12)
@@ -297,6 +332,8 @@ private struct SaveSearchResultCard: View {
 
 private struct SaveAgentActionDrawerPreview: View {
     let result: SaveSearchResult
+    let isSaving: Bool
+    let onSaveMapCandidate: (SaveSearchResult) -> Void
 
     private var drawer: SaveAgentActionDrawerModel { result.agentDrawer }
 
@@ -333,7 +370,15 @@ private struct SaveAgentActionDrawerPreview: View {
 
     @ViewBuilder
     private func actionView(_ action: SaveAgentDrawerAction, isPrimary: Bool) -> some View {
-        if action.kind == .openSource, let sourceURL = result.sourceURL, let url = URL(string: sourceURL) {
+        if isPrimary, action.kind == .savePlace, result.objectType == .mapVisibleUnsavedPlace {
+            Button {
+                onSaveMapCandidate(result)
+            } label: {
+                actionLabel(action, isPrimary: true)
+            }
+            .buttonStyle(.plain)
+            .disabled(isSaving)
+        } else if action.kind == .openSource, let sourceURL = result.sourceURL, let url = URL(string: sourceURL) {
             Link(destination: url) {
                 actionLabel(action, isPrimary: isPrimary)
             }
@@ -347,7 +392,7 @@ private struct SaveAgentActionDrawerPreview: View {
     }
 
     private func actionLabel(_ action: SaveAgentDrawerAction, isPrimary: Bool) -> some View {
-        Label(action.label, systemImage: action.systemImage)
+        Label(isSaving && action.kind == .savePlace ? "Saving..." : action.label, systemImage: action.systemImage)
             .font(.caption2.weight(.black))
             .foregroundColor(.saveInk)
             .lineLimit(1)

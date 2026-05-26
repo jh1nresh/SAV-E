@@ -69,6 +69,117 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(result.evidence.contains("Visible on map"))
     }
 
+    func testUnsavedMapCandidateMakesSaveDraftWithMapEvidence() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "nearby sushi",
+            places: [],
+            localRecords: [],
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Sushi Gen",
+                    subtitle: "Little Tokyo · Japanese",
+                    latitude: 34.0478,
+                    longitude: -118.2386,
+                    category: .food,
+                    rating: 4.6,
+                    reviewCount: 4100,
+                    sourceURL: "https://maps.google.com/?q=Sushi+Gen",
+                    sourcePlatform: .googleMaps,
+                    evidence: ["Visible on map", "Google rating 4.6"]
+                )
+            ]
+        )
+
+        let result = try XCTUnwrap(response.newRecommendations.results.first)
+        let draft = try XCTUnwrap(controller.makeSaveDraft(from: result))
+
+        XCTAssertEqual(draft.title, "Sushi Gen")
+        XCTAssertEqual(draft.address, "Little Tokyo · Japanese")
+        XCTAssertEqual(draft.latitude, 34.0478)
+        XCTAssertEqual(draft.longitude, -118.2386)
+        XCTAssertEqual(draft.category, .food)
+        XCTAssertEqual(draft.sourceURL, "https://maps.google.com/?q=Sushi+Gen")
+        XCTAssertEqual(draft.sourcePlatform, .googleMaps)
+        XCTAssertEqual(draft.externalRating, 4.6)
+        XCTAssertEqual(draft.externalReviewCount, 4100)
+        XCTAssertTrue(draft.evidence.contains("Visible on map"))
+    }
+
+    func testSourceOnlyClueCannotMakeSaveDraft() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "instagram",
+            places: [],
+            localRecords: [
+                SaveMemoryRecord(
+                    state: .sourceOnly,
+                    sourceURL: "https://www.instagram.com/reel/example/",
+                    title: "Instagram Reel",
+                    evidence: ["Source URL: https://www.instagram.com/reel/example/"]
+                )
+            ]
+        )
+
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+        XCTAssertNil(controller.makeSaveDraft(from: result))
+    }
+
+    func testSaveDraftBecomesPlaceWithoutPrivateRating() async throws {
+        let controller = SaveSearchController()
+        let draft = SavePlaceDraft(
+            title: "Sushi Gen",
+            address: "Little Tokyo · Japanese",
+            latitude: 34.0478,
+            longitude: -118.2386,
+            category: .food,
+            sourceURL: "https://maps.google.com/?q=Sushi+Gen",
+            sourcePlatform: .googleMaps,
+            evidence: ["Visible on map"],
+            externalRating: 4.6,
+            externalReviewCount: 4100
+        )
+
+        let place = try await controller.saveMapCandidate(draft)
+
+        XCTAssertEqual(place.name, "Sushi Gen")
+        XCTAssertEqual(place.address, "Little Tokyo · Japanese")
+        XCTAssertEqual(place.status, .wantToGo)
+        XCTAssertNil(place.rating)
+        XCTAssertEqual(place.googleRating, 4.6)
+        XCTAssertEqual(place.sourceUrl, "https://maps.google.com/?q=Sushi+Gen")
+        XCTAssertEqual(place.sourcePlatform, .googleMaps)
+        XCTAssertTrue(place.note?.contains("Visible on map") == true)
+        XCTAssertTrue(place.note?.contains("External reviews: 4100") == true)
+    }
+
+    func testSavedMapCandidateSearchesFromYourSaveAfterSave() async throws {
+        let controller = SaveSearchController()
+        let draft = SavePlaceDraft(
+            title: "Sushi Gen",
+            address: "Little Tokyo · Japanese",
+            latitude: 34.0478,
+            longitude: -118.2386,
+            category: .food,
+            sourceURL: "https://maps.google.com/?q=Sushi+Gen",
+            sourcePlatform: .googleMaps,
+            evidence: ["Visible on map"],
+            externalRating: 4.6,
+            externalReviewCount: 4100
+        )
+        let place = try await controller.saveMapCandidate(draft)
+
+        let response = controller.search(query: "sushi", places: [place], localRecords: [], mapCandidates: [])
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+
+        XCTAssertEqual(response.newRecommendations.results.count, 0)
+        XCTAssertEqual(result.title, "Sushi Gen")
+        XCTAssertEqual(result.objectType, .savedPlace)
+        XCTAssertEqual(result.userState, .wantToGo)
+        XCTAssertEqual(result.primaryAction, .openSource)
+        XCTAssertEqual(result.rating, 4.6)
+    }
+
     func testSourceOnlyAndReviewRecordsStayReviewScoped() throws {
         let controller = SaveSearchController()
         let response = controller.search(

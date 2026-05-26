@@ -24,6 +24,9 @@ final class PlaceListViewModel: ObservableObject {
     @Published var searchText: String = ""
     @Published var isLoading = false
     @Published var deleteError: String?
+    @Published var saveCandidateError: String?
+    @Published private(set) var savingResultID: String?
+    @Published private(set) var mapCandidates: [SaveMapCandidate] = []
     @Published private(set) var localMemoryRecords: [SaveMemoryRecord] = []
 
     private let supabaseService: SupabaseServiceProtocol
@@ -83,7 +86,12 @@ final class PlaceListViewModel: ObservableObject {
     }
 
     var saveSearchResponse: SaveSearchResponse {
-        searchController.search(query: searchText, places: places, localRecords: localMemoryRecords)
+        searchController.search(
+            query: searchText,
+            places: places,
+            localRecords: localMemoryRecords,
+            mapCandidates: mapCandidates
+        )
     }
 
     func loadPlaces() async {
@@ -205,12 +213,60 @@ final class PlaceListViewModel: ObservableObject {
         }
     }
 
+    func saveMapCandidate(_ result: SaveSearchResult) async {
+        guard let draft = searchController.makeSaveDraft(from: result) else {
+            saveCandidateError = SavePlaceDraftError.notSaveableMapCandidate.localizedDescription
+            return
+        }
+
+        savingResultID = result.id
+        saveCandidateError = nil
+        defer { savingResultID = nil }
+
+        do {
+            let place = try await searchController.saveMapCandidate(draft)
+            var syncError: Error?
+
+            if let userId = authService.currentUserId {
+                do {
+                    try await supabaseService.savePlace(place, userId: userId)
+                } catch {
+                    syncError = error
+                    print("PlaceListViewModel: failed to sync saved map candidate \(place.name): \(error)")
+                }
+            }
+
+            _ = try? saveLocalVaultService.saveConfirmedPlace(place)
+            if !places.contains(where: { $0.matches(place) }) {
+                places = [place] + places
+            }
+            removeMapCandidate(matching: result)
+            loadLocalMemoryRecords()
+
+            if let syncError {
+                saveCandidateError = "Saved locally. Sync failed: \(syncError.localizedDescription)"
+            }
+        } catch {
+            saveCandidateError = error.localizedDescription
+        }
+    }
+
     private func loadLocalMemoryRecords() {
         do {
             localMemoryRecords = try saveLocalVaultService.recentRecords(limit: 100)
         } catch {
             localMemoryRecords = []
             print("PlaceListViewModel: failed to load local memory records: \(error)")
+        }
+    }
+
+    private func removeMapCandidate(matching result: SaveSearchResult) {
+        mapCandidates.removeAll { candidate in
+            "map-candidate-\(candidate.id)" == result.id || (
+                candidate.title == result.title &&
+                candidate.latitude == result.latitude &&
+                candidate.longitude == result.longitude
+            )
         }
     }
 

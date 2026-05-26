@@ -1,6 +1,70 @@
 import Foundation
 
 struct SaveSearchController {
+    func makeSaveDraft(from result: SaveSearchResult) -> SavePlaceDraft? {
+        let title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+            result.objectType == .mapVisibleUnsavedPlace,
+            !title.isEmpty,
+            result.latitude != nil,
+            result.longitude != nil
+        else {
+            return nil
+        }
+
+        return SavePlaceDraft(
+            title: title,
+            address: result.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            latitude: result.latitude,
+            longitude: result.longitude,
+            category: result.category,
+            sourceURL: result.sourceURL,
+            sourcePlatform: result.sourcePlatform,
+            evidence: result.evidence,
+            externalRating: result.rating,
+            externalReviewCount: result.reviewCount
+        )
+    }
+
+    func makeSavedPlace(from draft: SavePlaceDraft, createdAt: Date = Date()) throws -> Place {
+        guard let latitude = draft.latitude, let longitude = draft.longitude else {
+            throw SavePlaceDraftError.missingCoordinates
+        }
+
+        let address = draft.address ?? ""
+        var noteLines = draft.evidence
+        if let externalReviewCount = draft.externalReviewCount {
+            noteLines.append("External reviews: \(externalReviewCount)")
+        }
+
+        return Place(
+            id: UUID(),
+            name: draft.title,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: nil,
+            category: draft.category ?? .inferred(from: "\(draft.title) \(address)"),
+            status: .wantToGo,
+            rating: nil,
+            note: noteLines.isEmpty ? nil : noteLines.joined(separator: "\n"),
+            sourceUrl: draft.sourceURL,
+            sourcePlatform: draft.sourcePlatform ?? .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: draft.externalRating,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: createdAt
+        )
+    }
+
+    func saveMapCandidate(_ draft: SavePlaceDraft) async throws -> Place {
+        try makeSavedPlace(from: draft)
+    }
+
     func search(
         query rawQuery: String,
         places: [Place],
@@ -230,6 +294,11 @@ struct SaveSearchController {
 }
 
 private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     var removingWWWPrefix: String {
         hasPrefix("www.") ? String(dropFirst(4)) : self
     }
