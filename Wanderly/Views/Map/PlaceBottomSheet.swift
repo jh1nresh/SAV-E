@@ -37,7 +37,7 @@ struct PlaceBottomSheet: View {
                 Spacer()
 
                 Menu {
-                    ShareLink(item: place.shareText, subject: Text(place.shareSubject)) {
+                    ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
 
@@ -176,7 +176,7 @@ struct PlaceBottomSheet: View {
                 .disabled(onPlanAround == nil)
             }
 
-            ShareLink(item: place.shareText, subject: Text(place.shareSubject)) {
+            ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                 Label("Share place", systemImage: "square.and.arrow.up")
                     .font(.caption.weight(.black))
                     .frame(maxWidth: .infinity)

@@ -21,7 +21,7 @@ struct ClipContentView: View {
                 }
             }
             .background(ClipDottedBackground())
-            .navigationTitle("Trip Preview")
+            .navigationTitle(tripData?.stops.count == 1 ? "Place Preview" : "Trip Preview")
             .navigationBarTitleDisplayMode(.inline)
         }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
@@ -59,7 +59,7 @@ struct ClipContentView: View {
                         .fontWeight(.bold)
                         .foregroundColor(Color.saveInk)
 
-                    Text("\(trip.stops.count) stops \(trip.city.isEmpty ? "" : "in \(trip.city)")")
+                    Text(summaryLine(for: trip))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -213,6 +213,12 @@ struct ClipContentView: View {
             longitudeDelta: max((maxLng - minLng) * 1.5, 0.01)
         )
         cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+    }
+
+    private func summaryLine(for trip: SharedTripData) -> String {
+        let countLabel = trip.stops.count == 1 ? "1 place" : "\(trip.stops.count) stops"
+        guard !trip.city.isEmpty else { return countLabel }
+        return "\(countLabel) in \(trip.city)"
     }
 
     private func openInFullApp() {

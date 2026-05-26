@@ -61,6 +61,10 @@ struct Place: Identifiable, Codable, Hashable {
         "SAV-E Map Stamp: \(name)"
     }
 
+    var saveShareURL: URL? {
+        SharedTripData.from(place: self).toURL()
+    }
+
     var shareText: String {
         var lines = [
             "SAV-E Map Stamp",
@@ -85,11 +89,31 @@ struct Place: Identifiable, Codable, Hashable {
         if let sourceURL = primarySourceURL {
             lines.append("Source: \(sourceURL.absoluteString)")
         }
+        if let saveShareURL {
+            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+        }
         if let mapsURL = appleMapsURL {
-            lines.append("Map: \(mapsURL.absoluteString)")
+            lines.append("Map fallback: \(mapsURL.absoluteString)")
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    var shareMessage: String {
+        var parts = [address, category.displayName]
+        if let rating = googleRating ?? rating {
+            parts.append(String(format: "%.1f stars", rating))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var shareAreaLabel: String {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.count >= 2 { return parts[parts.count - 2] }
+        return parts.first ?? ""
     }
 
     var appleMapsURL: URL? {

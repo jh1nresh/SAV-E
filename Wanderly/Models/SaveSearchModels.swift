@@ -449,6 +449,10 @@ extension SaveMapCandidate {
         "SAV-E Map Result: \(title)"
     }
 
+    var saveShareURL: URL? {
+        SharedTripData.from(candidate: self).toURL()
+    }
+
     var shareText: String {
         var lines = [
             "SAV-E Map Result",
@@ -468,11 +472,48 @@ extension SaveMapCandidate {
         if let sourceURL, !sourceURL.isEmpty {
             lines.append("Source: \(sourceURL)")
         }
+        if let saveShareURL {
+            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+        }
         if let mapsURL = appleMapsURL {
-            lines.append("Map: \(mapsURL.absoluteString)")
+            lines.append("Map fallback: \(mapsURL.absoluteString)")
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    var shareMessage: String {
+        var parts = [subtitle]
+        if let category {
+            parts.append(category.displayName)
+        }
+        if let rating {
+            parts.append(String(format: "%.1f stars", rating))
+        }
+        if let reviewCount {
+            parts.append("\(reviewCount) reviews")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var shareAreaLabel: String {
+        let parts = subtitle
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.count >= 2 { return parts[parts.count - 2] }
+        return parts.first ?? ""
+    }
+
+    var shareNote: String? {
+        var parts: [String] = []
+        if let rating {
+            parts.append(String(format: "%.1f stars", rating))
+        }
+        if let reviewCount {
+            parts.append("\(reviewCount) reviews")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     var appleMapsURL: URL? {
@@ -642,6 +683,10 @@ extension SaveSearchResult {
         "SAV-E Place: \(title)"
     }
 
+    var saveShareURL: URL? {
+        SharedTripData.from(result: self)?.toURL()
+    }
+
     var shareText: String {
         var lines = [
             "SAV-E Place",
@@ -663,11 +708,39 @@ extension SaveSearchResult {
         if let sourceURL, !sourceURL.isEmpty {
             lines.append("Source: \(sourceURL)")
         }
+        if let saveShareURL {
+            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+        }
         if !missingInfo.isEmpty {
             lines.append("Needs: \(missingInfo.joined(separator: ", "))")
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    var shareMessage: String {
+        var parts = [subtitle]
+        if let category {
+            parts.append(category.displayName)
+        }
+        if let rating {
+            parts.append(String(format: "%.1f stars", rating))
+        }
+        if let reviewCount {
+            parts.append("\(reviewCount) reviews")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var shareNote: String? {
+        var parts: [String] = []
+        if let rating {
+            parts.append(String(format: "%.1f stars", rating))
+        }
+        if let reviewCount {
+            parts.append("\(reviewCount) reviews")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

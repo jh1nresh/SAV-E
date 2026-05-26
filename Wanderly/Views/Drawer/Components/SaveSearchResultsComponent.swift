@@ -152,10 +152,7 @@ private struct SaveSearchResultNotebookRow: View {
             }
 
             primaryActionLabel
-            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .saveSearchActionPill(isPrimary: false)
-            }
+            shareLink
         }
         .padding(12)
         .background(Color.saveCream.opacity(0.72))
@@ -164,6 +161,21 @@ private struct SaveSearchResultNotebookRow: View {
                 .stroke(Color.saveNotebookLine, lineWidth: 1.4)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var shareLink: some View {
+        if let url = result.saveShareURL {
+            ShareLink(item: url, subject: Text(result.shareSubject), message: Text(result.shareText)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .saveSearchActionPill(isPrimary: false)
+            }
+        } else {
+            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+                    .saveSearchActionPill(isPrimary: false)
+            }
+        }
     }
 
     @ViewBuilder

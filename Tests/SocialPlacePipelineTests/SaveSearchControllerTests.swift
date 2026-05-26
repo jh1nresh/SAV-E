@@ -598,7 +598,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Kato"))
         XCTAssertTrue(shareText.contains("777 S Alameda St, Los Angeles, CA"))
         XCTAssertTrue(shareText.contains("Source: https://www.instagram.com/reel/kato/"))
-        XCTAssertTrue(shareText.contains("Map: https://maps.apple.com"))
+        XCTAssertTrue(shareText.contains("Open in SAV-E: https://wanderly.app/trip?d="))
+        XCTAssertTrue(shareText.contains("Map fallback: https://maps.apple.com"))
+        XCTAssertEqual(savedPlace.saveShareURL?.host, "wanderly.app")
+        XCTAssertEqual(savedPlace.saveShareURL?.path, "/trip")
     }
 
     func testUnsavedMapCandidateShareTextIncludesRatingReviewsAndMapLink() throws {
@@ -622,7 +625,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Rating: 4.8"))
         XCTAssertTrue(shareText.contains("Reviews: 1200"))
         XCTAssertTrue(shareText.contains("Source: https://maps.google.com/?q=Bright+Coffee+Bar"))
-        XCTAssertTrue(shareText.contains("Map: https://maps.apple.com"))
+        XCTAssertTrue(shareText.contains("Open in SAV-E: https://wanderly.app/trip?d="))
+        XCTAssertTrue(shareText.contains("Map fallback: https://maps.apple.com"))
+        XCTAssertEqual(candidate.saveShareURL?.host, "wanderly.app")
+        XCTAssertEqual(candidate.saveShareURL?.path, "/trip")
     }
 
     private func place(

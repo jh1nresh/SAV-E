@@ -154,7 +154,7 @@ struct PlaceDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
 
-                    ShareLink(item: place.shareText, subject: Text(place.shareSubject)) {
+                    ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                         Label("Share", systemImage: "square.and.arrow.up")
                             .font(.subheadline)
                             .fontWeight(.black)
@@ -201,7 +201,7 @@ struct PlaceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: place.shareText, subject: Text(place.shareSubject)) {
+                ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                     Image(systemName: "square.and.arrow.up")
                 }
             }

@@ -211,6 +211,7 @@ struct PlaceMapPin: View {
     var body: some View {
         Button(action: onTap) {
             DefaultMapPin(
+                systemImage: place.category.iconName,
                 fill: place.status == .visited ? .saveMint : .saveHoney,
                 isSelected: isSelected
             )
@@ -227,7 +228,7 @@ private struct ReviewCandidateMapPin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultMapPin(fill: .saveSky, isSelected: isSelected)
+            DefaultMapPin(systemImage: "doc.text.magnifyingglass", fill: .saveSky, isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(candidate.name) Review Candidate")
@@ -242,7 +243,11 @@ private struct UnsavedMapCandidatePin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultMapPin(fill: .saveSignal, isSelected: isSelected)
+            DefaultMapPin(
+                systemImage: candidate.category?.iconName ?? "mappin.and.ellipse",
+                fill: .saveSignal,
+                isSelected: isSelected
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(candidate.title) Unsaved Candidate")
@@ -251,23 +256,30 @@ private struct UnsavedMapCandidatePin: View {
 }
 
 private struct DefaultMapPin: View {
+    var systemImage: String
     var fill: Color
     var isSelected: Bool
 
     var body: some View {
         ZStack {
-            Image(systemName: "mappin.circle.fill")
-                .font(.system(size: isSelected ? 34 : 29, weight: .semibold))
-                .foregroundStyle(fill)
-                .shadow(color: Color.saveCocoa.opacity(isSelected ? 0.28 : 0.18), radius: isSelected ? 5 : 3, x: 0, y: isSelected ? 3 : 2)
-
             Circle()
-                .fill(Color.saveNotebookPage)
-                .frame(width: isSelected ? 7 : 6, height: isSelected ? 7 : 6)
-                .offset(y: isSelected ? -5 : -4)
+                .fill(fill)
+                .frame(width: isSelected ? 31 : 24, height: isSelected ? 31 : 24)
+                .overlay(
+                    Circle()
+                        .stroke(Color.saveNotebookPage, lineWidth: isSelected ? 3 : 2)
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.saveNotebookLine.opacity(isSelected ? 0.86 : 0.48), lineWidth: 1)
+                )
+                .shadow(color: Color.saveCocoa.opacity(isSelected ? 0.28 : 0.16), radius: isSelected ? 5 : 3, x: 0, y: isSelected ? 3 : 2)
+
+            Image(systemName: systemImage)
+                .font(.system(size: isSelected ? 13 : 10, weight: .black))
+                .foregroundColor(.saveNotebookPage)
         }
         .frame(width: 36, height: 36)
-        .scaleEffect(isSelected ? 1.08 : 1)
         .contentShape(Rectangle())
     }
 }

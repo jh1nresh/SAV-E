@@ -62,4 +62,62 @@ struct SharedTripData: Codable {
         }
         return SharedTripData(name: title, city: city, stops: stops)
     }
+
+    static func from(place: Place) -> SharedTripData {
+        SharedTripData(
+            name: place.name,
+            city: place.shareAreaLabel,
+            stops: [
+                SharedStop(
+                    id: place.id.uuidString,
+                    name: place.name,
+                    address: place.address,
+                    lat: place.latitude,
+                    lng: place.longitude,
+                    time: nil,
+                    note: place.note
+                )
+            ]
+        )
+    }
+
+    static func from(candidate: SaveMapCandidate) -> SharedTripData {
+        SharedTripData(
+            name: candidate.title,
+            city: candidate.shareAreaLabel,
+            stops: [
+                SharedStop(
+                    id: candidate.id,
+                    name: candidate.title,
+                    address: candidate.subtitle,
+                    lat: candidate.latitude,
+                    lng: candidate.longitude,
+                    time: nil,
+                    note: candidate.shareNote
+                )
+            ]
+        )
+    }
+
+    static func from(result: SaveSearchResult) -> SharedTripData? {
+        guard let latitude = result.latitude,
+              let longitude = result.longitude,
+              latitude != 0 || longitude != 0 else { return nil }
+
+        return SharedTripData(
+            name: result.title,
+            city: result.cityOrArea ?? "",
+            stops: [
+                SharedStop(
+                    id: result.id,
+                    name: result.title,
+                    address: result.subtitle,
+                    lat: latitude,
+                    lng: longitude,
+                    time: nil,
+                    note: result.shareNote
+                )
+            ]
+        )
+    }
 }

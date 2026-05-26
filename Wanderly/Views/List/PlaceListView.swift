@@ -94,7 +94,7 @@ struct PlaceListView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
-                                ShareLink(item: place.shareText, subject: Text(place.shareSubject)) {
+                                ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                                     Label("Share", systemImage: "square.and.arrow.up")
                                 }
                                 .tint(.saveSky)
@@ -318,22 +318,37 @@ private struct SaveSearchResultCard: View {
                 onSaveMapCandidate: onSaveMapCandidate,
                 onPlanAround: onPlanAround
             )
-            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .font(.caption2.weight(.black))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.saveNotebookPage)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
-                    .clipShape(Capsule())
-            }
+            shareLink
             SaveEvidenceDrawerPreview(model: result.evidenceDrawer)
         }
         .padding(12)
         .saveNotebookPage(cornerRadius: 18)
+    }
+
+    @ViewBuilder
+    private var shareLink: some View {
+        if let url = result.saveShareURL {
+            ShareLink(item: url, subject: Text(result.shareSubject), message: Text(result.shareText)) {
+                shareLabel
+            }
+        } else {
+            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
+                shareLabel
+            }
+        }
+    }
+
+    private var shareLabel: some View {
+        Label("Share", systemImage: "square.and.arrow.up")
+            .font(.caption2.weight(.black))
+            .foregroundColor(.saveInk)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.saveNotebookPage)
+            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .clipShape(Capsule())
     }
 
     private var iconName: String {

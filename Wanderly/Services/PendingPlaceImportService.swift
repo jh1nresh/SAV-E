@@ -179,6 +179,26 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         "SAV-E Review Candidate: \(name)"
     }
 
+    var saveShareURL: URL? {
+        guard let latitude, let longitude, latitude != 0 || longitude != 0 else { return nil }
+        let data = SharedTripData(
+            name: name,
+            city: city ?? "",
+            stops: [
+                SharedTripData.SharedStop(
+                    id: id.uuidString,
+                    name: name,
+                    address: address,
+                    lat: latitude,
+                    lng: longitude,
+                    time: nil,
+                    note: confidence.map { "Confidence: \(Int($0 * 100))%" }
+                )
+            ]
+        )
+        return data.toURL()
+    }
+
     var shareText: String {
         var lines = [
             hasReliableCoordinates ? "SAV-E Review Candidate" : "SAV-E Source Clue",
@@ -197,13 +217,25 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         if !missingInfo.isEmpty {
             lines.append("Needs: \(missingInfo.joined(separator: ", "))")
         }
+        if let saveShareURL {
+            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+        }
         if let mapsURL = appleMapsURL {
-            lines.append("Map: \(mapsURL.absoluteString)")
+            lines.append("Map fallback: \(mapsURL.absoluteString)")
         }
         let sourceLines = evidence.filter { $0.localizedCaseInsensitiveContains("source") }.prefix(2)
         lines.append(contentsOf: sourceLines)
 
         return lines.joined(separator: "\n")
+    }
+
+    var shareMessage: String {
+        [address, city]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed?.isEmpty == false ? trimmed : nil
+            }
+            .joined(separator: " · ")
     }
 
     var appleMapsURL: URL? {
