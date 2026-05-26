@@ -76,6 +76,8 @@ struct PlaceListView: View {
                         savingResultID: viewModel.savingResultID
                     ) { result in
                         Task { await viewModel.saveMapCandidate(result) }
+                    } onPlanAround: { result in
+                        viewModel.planAround(result)
                     }
                 } else if viewModel.filteredPlaces.isEmpty {
                     EmptyStateView(
@@ -149,6 +151,10 @@ struct PlaceListView: View {
             loadPlacesTask?.cancel()
             loadPlacesTask = nil
         }
+        .sheet(item: $viewModel.planAroundResult) { result in
+            SavePlanAroundPreviewView(result: result)
+                .presentationDetents([.medium, .large])
+        }
     }
 
     private var isSearching: Bool {
@@ -176,6 +182,7 @@ private struct SaveSearchResultsList: View {
     let response: SaveSearchResponse
     let savingResultID: String?
     let onSaveMapCandidate: (SaveSearchResult) -> Void
+    let onPlanAround: (SaveSearchResult) -> Void
 
     var body: some View {
         ScrollView {
@@ -183,12 +190,14 @@ private struct SaveSearchResultsList: View {
                 SaveSearchSectionView(
                     section: response.fromYourSave,
                     savingResultID: savingResultID,
-                    onSaveMapCandidate: onSaveMapCandidate
+                    onSaveMapCandidate: onSaveMapCandidate,
+                    onPlanAround: onPlanAround
                 )
                 SaveSearchSectionView(
                     section: response.newRecommendations,
                     savingResultID: savingResultID,
-                    onSaveMapCandidate: onSaveMapCandidate
+                    onSaveMapCandidate: onSaveMapCandidate,
+                    onPlanAround: onPlanAround
                 )
             }
             .padding(.horizontal, 16)
@@ -202,6 +211,7 @@ private struct SaveSearchSectionView: View {
     let section: SaveSearchSection
     let savingResultID: String?
     let onSaveMapCandidate: (SaveSearchResult) -> Void
+    let onPlanAround: (SaveSearchResult) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -226,7 +236,8 @@ private struct SaveSearchSectionView: View {
                     SaveSearchResultCard(
                         result: result,
                         isSaving: savingResultID == result.id,
-                        onSaveMapCandidate: onSaveMapCandidate
+                        onSaveMapCandidate: onSaveMapCandidate,
+                        onPlanAround: onPlanAround
                     )
                 }
             }
@@ -238,6 +249,7 @@ private struct SaveSearchResultCard: View {
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
+    let onPlanAround: (SaveSearchResult) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -298,7 +310,8 @@ private struct SaveSearchResultCard: View {
             SaveAgentActionDrawerPreview(
                 result: result,
                 isSaving: isSaving,
-                onSaveMapCandidate: onSaveMapCandidate
+                onSaveMapCandidate: onSaveMapCandidate,
+                onPlanAround: onPlanAround
             )
             SaveEvidenceDrawerPreview(model: result.evidenceDrawer)
         }
@@ -334,6 +347,7 @@ private struct SaveAgentActionDrawerPreview: View {
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
+    let onPlanAround: (SaveSearchResult) -> Void
 
     private var drawer: SaveAgentActionDrawerModel { result.agentDrawer }
 
@@ -378,6 +392,13 @@ private struct SaveAgentActionDrawerPreview: View {
             }
             .buttonStyle(.plain)
             .disabled(isSaving)
+        } else if action.kind == .planAround {
+            Button {
+                onPlanAround(result)
+            } label: {
+                actionLabel(action, isPrimary: isPrimary)
+            }
+            .buttonStyle(.plain)
         } else if action.kind == .openSource, let sourceURL = result.sourceURL, let url = URL(string: sourceURL) {
             Link(destination: url) {
                 actionLabel(action, isPrimary: isPrimary)
@@ -498,6 +519,146 @@ private struct SaveEvidenceDrawerPreview: View {
         case .reviewCount: return "text.bubble"
         case .userNote: return "note.text"
         case .receipt: return "receipt"
+        }
+    }
+}
+
+private struct SavePlanAroundPreviewView: View {
+    let result: SavePlanAroundResult
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    switch result {
+                    case .draft(let draft):
+                        draftView(draft)
+                    case .blocked(let state):
+                        blockedView(state)
+                    }
+                }
+                .padding(16)
+            }
+            .background(SaveDottedBackground())
+            .navigationTitle("Plan around this")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func draftView(_ draft: SavePlanAroundDraft) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SavePlanStopRow(stop: draft.anchor, titlePrefix: "Anchor")
+            Text(draft.explanation)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveMutedText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            planSection(title: "Route draft", stops: draft.routeStops.dropFirst())
+            planSection(title: "From your SAV-E", stops: draft.nearbySaved)
+            planSection(title: "New nearby suggestions", stops: draft.newSuggestions)
+
+            if !draft.routeNotes.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Route notes")
+                        .font(.headline.weight(.black))
+                        .foregroundColor(.saveInk)
+                    ForEach(draft.routeNotes, id: \.self) { note in
+                        Text(note)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveCocoa)
+                    }
+                }
+                .padding(12)
+                .saveNotebookPage(cornerRadius: 16)
+            }
+        }
+    }
+
+    private func blockedView(_ state: SavePlanBlockedState) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(state.title, systemImage: "exclamationmark.triangle")
+                .font(.headline.weight(.black))
+                .foregroundColor(.saveInk)
+            Text(state.message)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.saveMutedText)
+            if !state.missingInfo.isEmpty {
+                Text("Missing: \(state.missingInfo.joined(separator: ", "))")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa)
+            }
+        }
+        .padding(14)
+        .saveNotebookPage(cornerRadius: 18)
+    }
+
+    private func planSection<S: Sequence>(title: String, stops: S) -> some View where S.Element == SavePlanStop {
+        let items = Array(stops)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline.weight(.black))
+                .foregroundColor(.saveInk)
+            if items.isEmpty {
+                Text("No routeable matches yet.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+            } else {
+                ForEach(items) { stop in
+                    SavePlanStopRow(stop: stop)
+                }
+            }
+        }
+        .padding(12)
+        .saveNotebookPage(cornerRadius: 16)
+    }
+}
+
+private struct SavePlanStopRow: View {
+    let stop: SavePlanStop
+    var titlePrefix: String?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: iconName)
+                .font(.caption.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 30, height: 30)
+                .background(Color.saveHoney)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text([titlePrefix, stop.title].compactMap { $0 }.joined(separator: ": "))
+                    .font(.subheadline.weight(.black))
+                    .foregroundColor(.saveInk)
+                if let subtitle = stop.subtitle {
+                    Text(subtitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.saveMutedText)
+                        .lineLimit(2)
+                }
+                Text([stop.distanceLabel, stop.reason].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveCocoa)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var iconName: String {
+        switch stop.source {
+        case .anchor: return "mappin.and.ellipse"
+        case .userSaved: return "map.fill"
+        case .pendingCandidate: return "checklist.unchecked"
+        case .unsavedMapCandidate: return "sparkle.magnifyingglass"
         }
     }
 }

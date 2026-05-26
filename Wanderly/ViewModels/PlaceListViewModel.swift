@@ -25,6 +25,7 @@ final class PlaceListViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var deleteError: String?
     @Published var saveCandidateError: String?
+    @Published var planAroundResult: SavePlanAroundResult?
     @Published private(set) var savingResultID: String?
     @Published private(set) var mapCandidates: [SaveMapCandidate] = []
     @Published private(set) var localMemoryRecords: [SaveMemoryRecord] = []
@@ -35,6 +36,7 @@ final class PlaceListViewModel: ObservableObject {
     private let saveLocalVaultService: SaveLocalVaultService
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private let searchController: SaveSearchController
+    private let planAroundController: SavePlanAroundController
     private var importedPendingKeys: Set<String> = []
 
     init(
@@ -42,7 +44,8 @@ final class PlaceListViewModel: ObservableObject {
         pendingImportService: PendingPlaceImportService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
-        searchController: SaveSearchController = SaveSearchController()
+        searchController: SaveSearchController = SaveSearchController(),
+        planAroundController: SavePlanAroundController = SavePlanAroundController()
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
@@ -50,6 +53,7 @@ final class PlaceListViewModel: ObservableObject {
         self.saveLocalVaultService = saveLocalVaultService
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
         self.searchController = searchController
+        self.planAroundController = planAroundController
     }
 
     var filteredPlaces: [Place] {
@@ -249,6 +253,21 @@ final class PlaceListViewModel: ObservableObject {
         } catch {
             saveCandidateError = error.localizedDescription
         }
+    }
+
+    func planAround(_ result: SaveSearchResult) {
+        let savedResponse = searchController.search(query: "", places: places, localRecords: localMemoryRecords)
+        let request = SavePlanAroundRequest(
+            anchorResultID: result.id,
+            duration: .halfDay,
+            intent: .balanced
+        )
+        planAroundResult = planAroundController.planAround(
+            anchor: result,
+            savedResults: savedResponse.fromYourSave.results,
+            mapCandidates: mapCandidates,
+            request: request
+        )
     }
 
     private func loadLocalMemoryRecords() {
