@@ -21,7 +21,7 @@ struct SavePlaceFromURLIntent: AppIntent {
                 url: url,
                 note: note.trimmingCharacters(in: .whitespacesAndNewlines)
             )
-            return .result(dialog: "Saved \(record.displayTitle) to SAV-E memory as source-only. Open SAV-E to review it.")
+            return .result(dialog: "Saved \(record.displayTitle) as a SAV-E source clue. Open SAV-E to review it.")
         }
 
         var savedCount = 0

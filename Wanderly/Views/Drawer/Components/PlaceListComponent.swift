@@ -9,7 +9,7 @@ struct PlaceListComponent: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("MEMORY MATCHES")
+                    Text("MAP STAMP MATCHES")
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
@@ -45,7 +45,7 @@ struct PlaceListComponent: View {
             }
 
             if places.isEmpty {
-                Text("No matching memory cards yet.")
+                Text("No matching Map Stamps yet.")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.saveInk.opacity(0.72))

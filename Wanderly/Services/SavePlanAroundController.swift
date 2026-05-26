@@ -138,7 +138,7 @@ struct SavePlanAroundController {
 
     private func routeNotes(for stops: [SavePlanStop]) -> [String] {
         guard stops.count > 1 else {
-            return ["Start with the anchor. Add nearby saved places once SAV-E has routeable matches."]
+            return ["Start with the anchor. Add nearby Map Stamps once SAV-E has routeable matches."]
         }
         return stops.dropFirst().map { stop in
             let distance = stop.distanceLabel ?? "nearby"
@@ -153,7 +153,7 @@ struct SavePlanAroundController {
     ) -> String {
         let savedCount = nearbySaved.count
         let suggestionCount = newSuggestions.count
-        return "Built a \(request.duration.displayName.lowercased()) \(request.intent.displayName.lowercased()) draft from \(savedCount) SAV-E memory \(savedCount == 1 ? "card" : "cards") and \(suggestionCount) unsaved nearby \(suggestionCount == 1 ? "suggestion" : "suggestions")."
+        return "Built a \(request.duration.displayName.lowercased()) \(request.intent.displayName.lowercased()) draft from \(savedCount) Map \(savedCount == 1 ? "Stamp" : "Stamps") and \(suggestionCount) unsaved nearby \(suggestionCount == 1 ? "candidate" : "candidates")."
     }
 
     private func isNearEnough(_ stop: SavePlanStop, request: SavePlanAroundRequest) -> Bool {
@@ -189,14 +189,14 @@ struct SavePlanAroundController {
         case .anchor:
             return "Anchor place for this plan."
         case .userSaved:
-            return "Nearby SAV-E memory card."
+            return "Nearby Map Stamp from your spatial memory canvas."
         case .pendingCandidate:
             return "Nearby review clue; confirm before treating it as saved."
         case .unsavedMapCandidate:
             if category == .attraction {
-                return "Adds a non-food stop between saved places."
+                return "Adds a non-food unsaved candidate between Map Stamps."
             }
-            return "Nearby unsaved map suggestion."
+            return "Nearby unsaved candidate; not a saved memory yet."
         }
     }
 

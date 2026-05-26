@@ -73,15 +73,15 @@ struct SaveGuideCustomizationView: View {
     }
 
     private var savedSwapsSection: some View {
-        section(title: "Saved places nearby") {
+        section(title: "Map Stamps nearby") {
             if draft.swapInSavedPlaces.isEmpty {
-                emptyLine("No saved swaps yet.")
+                emptyLine("No Map Stamp swaps yet.")
             } else {
                 ForEach(draft.swapInSavedPlaces) { stop in
                     GuideStopRow(
                         title: stop.title,
                         subtitle: stop.subtitle,
-                        badge: "Saved in SAV-E",
+                        badge: "Map Stamp",
                         systemImage: "map.fill"
                     )
                 }

@@ -51,7 +51,7 @@ struct DeterministicTripPlanner {
             itineraryDays: itineraryDays,
             messageText: nil,
             mapAction: MapActionData(type: .showRoute, placeIds: placeIds, lat: nil, lng: nil, span: nil),
-            aiMessage: "Built a deterministic draft from your saved places, ordered by distance with simple meal and time-slot rules."
+            aiMessage: "Built a deterministic draft from your Map Stamps, ordered by distance with simple meal and time-slot rules."
         )
     }
 

@@ -61,7 +61,7 @@ struct GoogleTakeoutImportView: View {
                 .foregroundColor(.saveCocoa)
 
             VStack(spacing: 8) {
-                Text("Import saved places")
+                Text("Import places")
                     .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundColor(.saveInk)

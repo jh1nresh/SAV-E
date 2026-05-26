@@ -34,7 +34,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.newSuggestions.map(\.title), ["The Geffen Contemporary at MOCA"])
         XCTAssertTrue(draft.routeStops.map(\.title).contains("Maru Coffee"))
         XCTAssertTrue(draft.routeStops.map(\.title).contains("The Geffen Contemporary at MOCA"))
-        XCTAssertTrue(draft.explanation.contains("SAV-E memory"))
+        XCTAssertTrue(draft.explanation.contains("Map Stamp"))
     }
 
     func testAnchorWithoutCoordinatesBlocksPlan() throws {
@@ -137,7 +137,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
             return XCTFail("Expected routeable draft")
         }
         XCTAssertTrue(draft.routeStops.map(\.title).contains("Griffith Observatory"))
-        XCTAssertEqual(draft.newSuggestions.first?.reason, "Adds a non-food stop between saved places.")
+        XCTAssertEqual(draft.newSuggestions.first?.reason, "Adds a non-food unsaved candidate between Map Stamps.")
     }
 
     private func place(

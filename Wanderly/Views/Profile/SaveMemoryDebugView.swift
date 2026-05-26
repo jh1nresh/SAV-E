@@ -16,7 +16,7 @@ struct SaveMemoryDebugView: View {
                 ContentUnavailableView(
                     "No Local Memory Yet",
                     systemImage: "tray",
-                    description: Text("Use Share Sheet or Siri Shortcuts to save a source into SAV-E memory.")
+                    description: Text("Use Share Sheet or Siri Shortcuts to save source clues and Map Stamps.")
                 )
             }
 

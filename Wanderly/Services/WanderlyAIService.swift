@@ -43,7 +43,7 @@ final class WanderlyAIService {
                 navigationPlaceId: nil,
                 transportMode: .walking,
                 itineraryDays: [],
-                messageText: "No saved places are loaded yet. Save or import places first, then ask me to plan.",
+                messageText: "No Map Stamps are loaded yet. Save or import places first, then ask me to plan.",
                 mapAction: nil,
                 aiMessage: nil
             )
@@ -75,7 +75,7 @@ final class WanderlyAIService {
                 )
             ]]
         ])
-        contents.append(["role": "model", "parts": [["text": "Understood. I will respond only with valid JSON using the saved places."]]])
+        contents.append(["role": "model", "parts": [["text": "Understood. I will respond only with valid JSON using the user's Map Stamps."]]])
 
         // Previous conversation turns
         for turn in conversationHistory {
@@ -236,7 +236,7 @@ final class WanderlyAIService {
             DETERMINISTIC PLANNER DRAFT:
             \(deterministicDraftJSON)
 
-            Use this draft as a safe baseline built from saved places and distance/time-slot rules.
+            Use this draft as a safe baseline built from Map Stamps and distance/time-slot rules.
             You may improve the day grouping, stop order, times, title, aiMessage, and notes when it makes the itinerary more useful.
             Keep every place ID valid and do not introduce unknown place IDs or claim live travel times.
             """
@@ -245,20 +245,20 @@ final class WanderlyAIService {
         }
 
         return """
-        You are SAV-E's AI assistant. You help users explore their saved places and plan trips.
+        You are SAV-E's AI assistant. The map is a spatial memory canvas, and the drawer is the intent and recommendation layer. You help users explore confirmed Map Stamps and plan trips from them.
 
-        USER'S SAVED PLACES:
+        USER'S MAP STAMPS:
         [\(placesJSON)]
         \(deterministicDraftSection)
 
         CRITICAL: Respond ONLY with a valid JSON object. No markdown. No text outside the JSON.
 
         BEHAVIOR:
-        - On the FIRST request, take action immediately. Generate itineraries, lists, or navigation using the saved places. Do NOT ask clarifying questions on the first message.
+        - On the FIRST request, take action immediately. Generate itineraries, lists, recommendations, or navigation using the Map Stamps. Do NOT ask clarifying questions on the first message.
         - On FOLLOW-UP messages, refine the previous result. For example: "add more food spots", "swap day 1 and 2", "make it 3 days instead". Build on the previous JSON response.
         - When refining, output the COMPLETE updated JSON (not just the diff).
-        - Do NOT assume the user is in San Francisco or any default city. Infer the trip region only from the user's message plus saved place names, addresses, latitudes, and longitudes.
-        - Saved places may be in any city. Disneyland, Universal Studios, Los Angeles, Anaheim, Tokyo, or any other region are valid planning targets if they appear in SAVED PLACES.
+        - Do NOT assume the user is in San Francisco or any default city. Infer the trip region only from the user's message plus Map Stamp names, addresses, latitudes, and longitudes.
+        - Map Stamps may be in any city. Disneyland, Universal Studios, Los Angeles, Anaheim, Tokyo, or any other region are valid planning targets if they appear in USER'S MAP STAMPS.
 
         RESPONSE SCHEMA:
         {
@@ -286,15 +286,15 @@ final class WanderlyAIService {
         }
 
         RULES:
-        - For itinerary requests: use saved places to build a realistic schedule with smart times and geographic order.
-        - If a DETERMINISTIC PLANNER DRAFT is provided, use it as a safe baseline. You may improve grouping, order, times, title, aiMessage, and stop notes, but every place ID must come from SAVED PLACES.
-        - For destination-specific requests, choose saved places whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.
-        - If the saved places are far apart, still plan them honestly with realistic travel notes instead of rejecting them as "not in San Francisco".
+        - For itinerary requests: use Map Stamps to build a realistic schedule with smart times and geographic order.
+        - If a DETERMINISTIC PLANNER DRAFT is provided, use it as a safe baseline. You may improve grouping, order, times, title, aiMessage, and stop notes, but every place ID must come from USER'S MAP STAMPS.
+        - For destination-specific requests, choose Map Stamps whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.
+        - If the Map Stamps are far apart, still plan them honestly with realistic travel notes instead of rejecting them as "not in San Francisco".
         - placeList: set placeIds + mapAction.filterPins with same ids
         - navigationCard: set navigationPlaceId + transportMode + mapAction.focusRegion to that place's lat/lng
         - tripItinerary: set itineraryDays + placeIds (all stop ids) + mapAction.showRoute
         - message: set messageText only, no mapAction. Only use for greetings or when there are truly zero relevant places.
-        - Only reference places from the SAVED PLACES list above using their exact "id" values
+        - Only reference places from USER'S MAP STAMPS above using their exact "id" values
         """
     }
 

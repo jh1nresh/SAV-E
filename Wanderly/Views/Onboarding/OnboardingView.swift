@@ -103,7 +103,7 @@ private enum FirstRunDemoState: String, CaseIterable {
         case .clue: return "food + neighborhood hint"
         case .candidate: return "source text + map name + neighborhood"
         case .mapStamp: return "confirmed place identity"
-        case .tripPlan: return "1 anchor + 2 nearby saved places"
+        case .tripPlan: return "1 anchor + 2 nearby Map Stamps"
         }
     }
 

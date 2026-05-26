@@ -13,7 +13,7 @@ struct TripPlannerView: View {
                     EmptyStateView(
                         icon: "map.fill",
                         title: "No Plans Yet",
-                        subtitle: "Ask SAV-E to turn verified memory cards into a practical day plan.",
+                        subtitle: "Ask SAV-E to turn confirmed Map Stamps into a practical day plan.",
                         actionTitle: "Create Plan",
                         action: { showNewTrip = true }
                     )
@@ -107,7 +107,7 @@ struct TripCard: View {
                     .font(.caption)
                     .foregroundColor(.saveMutedText)
 
-                Label("\(trip.places.count) memory stops", systemImage: "mappin")
+                Label("\(trip.places.count) Map Stamp stops", systemImage: "mappin")
                     .font(.caption)
                     .foregroundColor(.saveMutedText)
             }

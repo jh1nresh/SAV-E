@@ -100,17 +100,17 @@ struct SaveSearchController {
             query: rawQuery,
             fromYourSave: SaveSearchSection(
                 id: "from-your-save",
-                title: "From your SAV-E",
-                subtitle: "Map Stamps, Review Candidates, source clues, and tried memories.",
+                title: "Spatial memory canvas",
+                subtitle: "Map Stamps are confirmed saved memories. Review Candidates and clues stay labeled separately.",
                 results: localResults,
                 emptyMessage: "No matching Map Stamp yet. Try a city, category, source, or place name."
             ),
             newRecommendations: SaveSearchSection(
                 id: "new-recommendations",
-                title: "New recommendations",
-                subtitle: "Unsaved suggestions stay separate until you choose one.",
+                title: "Recommendations",
+                subtitle: "Contextual answers from SAV-E. Unsaved candidates stay separate from Map Stamps.",
                 results: recommendationResults,
-                emptyMessage: "Type “recommend new cafe in LA” to search outside your SAV-E."
+                emptyMessage: "Type “recommend new cafe in LA” to ask the drawer for a contextual answer."
             )
         )
     }
@@ -123,7 +123,7 @@ struct SaveSearchController {
             userState: isVisited ? .visited : .wantToGo,
             title: place.name,
             subtitle: place.address,
-            statusLabel: isVisited ? "Tried memory" : place.status.memoryCardLabel,
+            statusLabel: isVisited ? "Visited Map Stamp" : place.status.memoryCardLabel,
             sourceURL: place.sourceUrl,
             sourcePlatform: place.sourcePlatform,
             category: place.category,
@@ -195,8 +195,8 @@ struct SaveSearchController {
             objectType: .newRecommendation,
             userState: .unsaved,
             title: "Search new places for “\(query.rawValue)”",
-            subtitle: "SAV-E will keep recommendations separate from your Map Stamps.",
-            statusLabel: "New recommendation · unsaved",
+            subtitle: "SAV-E will keep recommendations separate from confirmed Map Stamps.",
+            statusLabel: "Recommendation · unsaved",
             sourceURL: nil,
             sourcePlatform: nil,
             category: query.categories.first,
@@ -206,8 +206,8 @@ struct SaveSearchController {
             rating: nil,
             reviewCount: nil,
             confidence: nil,
-            missingInfo: ["Choose a result before it becomes a Review Candidate or Map Stamp"],
-            evidence: ["Recommendation shell only; no map pin or saved place was created"],
+            missingInfo: ["Choose a concrete place before it becomes a Review Candidate or Map Stamp"],
+            evidence: ["Recommendation only; no map pin or saved memory was created"],
             recoveryQueries: [],
             createdAt: Date(),
             canRunRecovery: false,
@@ -223,7 +223,7 @@ struct SaveSearchController {
             userState: .unsaved,
             title: candidate.title,
             subtitle: candidate.subtitle,
-            statusLabel: "Unsaved Map Candidate",
+            statusLabel: "Unsaved Candidate · not memory",
             sourceURL: candidate.sourceURL,
             sourcePlatform: candidate.sourcePlatform,
             category: candidate.category,
@@ -234,7 +234,7 @@ struct SaveSearchController {
             reviewCount: candidate.reviewCount,
             confidence: nil,
             missingInfo: [],
-            evidence: candidate.evidence.isEmpty ? ["Visible on map; not saved yet"] : candidate.evidence,
+            evidence: candidate.evidence.isEmpty ? ["Visible on map; not a Map Stamp yet"] : candidate.evidence,
             recoveryQueries: [],
             createdAt: candidate.createdAt,
             canRunRecovery: false,

@@ -30,7 +30,7 @@ struct TripItineraryComponent: View {
                             .foregroundColor(.saveInk.opacity(0.78))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("Built from verified memory cards.")
+                    Text("Built from confirmed Map Stamps.")
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.saveMutedText)
                 }

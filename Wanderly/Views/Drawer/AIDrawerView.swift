@@ -599,12 +599,12 @@ struct AIDrawerView: View {
                 AgentCommandRow(
                     icon: "map.fill",
                     title: "Plan around Map Stamps",
-                    subtitle: "Build a route from confirmed saved places.",
-                    commandLabel: "uses saved spots",
+                    subtitle: "Build a route from the spatial memory canvas.",
+                    commandLabel: "uses Map Stamps",
                     tone: .sky
                 ) {
                     focusAgentPrompt("""
-                    Help me organize my saved places into a practical plan.
+                    Help me organize my Map Stamps into a practical plan.
 
                     Use only Map Stamps unless I explicitly ask you to investigate new candidates. Start with:
                     """)

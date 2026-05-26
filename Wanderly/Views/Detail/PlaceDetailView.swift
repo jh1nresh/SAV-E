@@ -195,7 +195,7 @@ struct PlaceDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the saved place from SAV-E.")
+            Text("This removes the Map Stamp from SAV-E.")
         }
     }
 

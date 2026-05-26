@@ -82,8 +82,8 @@ struct PlaceListView: View {
                 } else if viewModel.filteredPlaces.isEmpty {
                     EmptyStateView(
                         icon: "mappin.slash",
-                        title: "No Memory Cards Found",
-                        subtitle: "Try adjusting filters or save a Review clue as a memory card."
+                        title: "No Map Stamps Yet",
+                        subtitle: "Confirm a Review Candidate to save it on your spatial memory canvas."
                     )
                 } else {
                     List {
@@ -132,8 +132,8 @@ struct PlaceListView: View {
                 }
             }
             .background(SaveDottedBackground())
-            .navigationTitle("Memory Cards")
-            .searchable(text: $viewModel.searchText, prompt: "Search memory cards...")
+            .navigationTitle("Map Stamps")
+            .searchable(text: $viewModel.searchText, prompt: "Search Map Stamps, clues, or recommendations...")
             .navigationDestination(for: Place.self) { place in
                 PlaceDetailView(place: place) {
                     try await viewModel.deletePlace(place)
@@ -167,7 +167,7 @@ struct PlaceListView: View {
             let count = response.fromYourSave.results.count + response.newRecommendations.results.count
             return "\(count) \(count == 1 ? "result" : "results")"
         }
-        return "\(viewModel.filteredPlaces.count) memory cards"
+        return "\(viewModel.filteredPlaces.count) Map Stamps"
     }
 
     private func startLoadPlacesTask() {
@@ -559,8 +559,8 @@ private struct SavePlanAroundPreviewView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             planSection(title: "Route draft", stops: draft.routeStops.dropFirst())
-            planSection(title: "From your SAV-E", stops: draft.nearbySaved)
-            planSection(title: "New nearby suggestions", stops: draft.newSuggestions)
+            planSection(title: "From Map Stamps", stops: draft.nearbySaved)
+            planSection(title: "Unsaved nearby candidates", stops: draft.newSuggestions)
 
             if !draft.routeNotes.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {

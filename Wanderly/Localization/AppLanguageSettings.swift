@@ -49,9 +49,9 @@ final class AppLanguageSettings: ObservableObject {
     func savedCountText(_ count: Int) -> String {
         switch language {
         case .english:
-            return "\(count) saved"
+            return "\(count) Map Stamps"
         case .traditionalChinese:
-            return "已存 \(count) 個"
+            return "\(count) 個地圖章"
         }
     }
 
@@ -207,7 +207,7 @@ enum SaveText {
         case .save:
             return localized(english: "Save", traditionalChinese: "儲存", language: language)
         case .saveSubtitle:
-            return localized(english: "memory cards", traditionalChinese: "記憶卡片", language: language)
+            return localized(english: "Map Stamps", traditionalChinese: "地圖章", language: language)
         case .profileTitle:
             return localized(english: "SAV-E Passport", traditionalChinese: "SAV-E 護照", language: language)
         case .edit:

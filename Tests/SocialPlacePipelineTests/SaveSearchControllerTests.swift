@@ -313,9 +313,9 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(savedPlace.agentDrawer.secondaryActions.map(\.kind).contains(.addToTrip))
 
         let unsavedMapPlace = try XCTUnwrap(response.newRecommendations.results.first { $0.objectType == .mapVisibleUnsavedPlace })
-        XCTAssertEqual(unsavedMapPlace.objectType.displayName, "Map Candidate")
+        XCTAssertEqual(unsavedMapPlace.objectType.displayName, "Unsaved Candidate")
         XCTAssertEqual(unsavedMapPlace.agentDrawer.primaryAction.kind, .savePlace)
-        XCTAssertEqual(unsavedMapPlace.agentDrawer.heading, "Save Map Candidate")
+        XCTAssertEqual(unsavedMapPlace.agentDrawer.heading, "Save unsaved candidate")
         XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.planAround))
         XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
     }
@@ -349,7 +349,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(drawer.sourcePlatform, .instagram)
         XCTAssertEqual(drawer.missingFields, ["exact venue", "address", "coordinates"])
         XCTAssertEqual(drawer.recoveryQueries, ["best pasta LA instagram reel"])
-        XCTAssertTrue(drawer.candidateExplanation?.contains("without creating a saved place") == true)
+        XCTAssertTrue(drawer.candidateExplanation?.contains("without creating a Map Stamp") == true)
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value.contains("best pasta in LA") })
     }
 
@@ -383,8 +383,8 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .rating && $0.value == "4.6" })
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .reviewCount && $0.value == "4100" })
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .coordinates && $0.value == "present" })
-        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Unsaved in SAV-E" })
-        XCTAssertEqual(drawer.candidateExplanation, "This is a map result, not a SAV-E memory yet.")
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Unsaved; not a Map Stamp" })
+        XCTAssertEqual(drawer.candidateExplanation, "This is an unsaved candidate, not a Map Stamp yet.")
     }
 
     func testSavedPlaceEvidenceDrawerIncludesSourcePlatformAndAddress() throws {
@@ -409,7 +409,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(drawer.sourcePlatform, .instagram)
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.label == "Platform" && $0.value == "Instagram" })
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .address && $0.value == "777 S Alameda St, Los Angeles, CA" })
-        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Saved in SAV-E" })
+        XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Saved Map Stamp" })
     }
 
     func testEvidenceDrawerDoesNotTrustLookalikeSourceHost() throws {
