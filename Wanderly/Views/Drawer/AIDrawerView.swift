@@ -914,7 +914,7 @@ struct AIDrawerView: View {
             .padding(.horizontal, 16)
 
             if socialPlaces.isEmpty {
-                Text("Follow friends or open a referral link to seed this map.")
+                Text(socialSignalEmptyMessage)
                     .font(.caption)
                     .foregroundColor(.saveCocoa.opacity(0.72))
                     .padding(.horizontal, 16)
@@ -926,6 +926,17 @@ struct AIDrawerView: View {
                     .padding(.horizontal, 16)
                 }
             }
+        }
+    }
+
+    private var socialSignalEmptyMessage: String {
+        switch socialLens {
+        case .forYou:
+            return "Follow friends or open a referral link. SAV-E will only show real shared places here."
+        case .friends:
+            return "No friend places yet. Friend signals appear after a real follow or referral handoff."
+        case .trending:
+            return "Trending stays empty until enough public Map Stamps exist for this area and category."
         }
     }
 
