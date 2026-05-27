@@ -734,7 +734,7 @@ struct AIDrawerView: View {
 
             HStack(spacing: 9) {
                 DrawerActionChip(
-                    title: "Import",
+                    title: "Takeout",
                     systemImage: "tray.and.arrow.down",
                     count: nil,
                     fill: Color.saveSky.opacity(0.64),

@@ -1,5 +1,6 @@
 import XCTest
 import CoreLocation
+import ZIPFoundation
 @testable import Wanderly
 
 private final class StubPublicSourceSearchService: PublicSourceSearchServiceProtocol {
@@ -105,6 +106,104 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.first?.latitude, 34.0779)
         XCTAssertEqual(candidates.first?.longitude, -118.2543)
         XCTAssertFalse(candidates.contains { $0.name == "CA Foodie · Jerry Chen" })
+        XCTAssertTrue(GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
+            sourceURL: "https://www.google.com/maps/placelists/list/CA-Foodie",
+            title: "CA Foodie · Jerry Chen",
+            text: nil,
+            metadataTitle: "CA Foodie · Jerry Chen - Google Maps",
+            metadataDescription: nil
+        ))
+    }
+
+    func testGoogleTakeoutImportParsesBulkFileFormatsSeparatelyFromSavedListLinks() async throws {
+        let json = """
+        [
+          {
+            "name": "Known Cafe",
+            "address": "123 Known Street",
+            "latitude": 24.2,
+            "longitude": 120.7,
+            "url": "https://www.google.com/maps/place/Known+Cafe"
+          },
+          {
+            "name": "Review Tea House",
+            "address": "No coordinates in export"
+          }
+        ]
+        """
+        let geojson = """
+        {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {
+                "name": "Geo Noodles",
+                "address": "1 Geo Road",
+                "url": "https://www.google.com/maps/place/Geo+Noodles"
+              },
+              "geometry": {
+                "type": "Point",
+                "coordinates": [-118.2543, 34.0779]
+              }
+            }
+          ]
+        }
+        """
+        let kml = """
+        <kml><Document><Placemark>
+          <name>KML Bakery</name>
+          <description>1 KML Street https://www.google.com/maps/place/KML+Bakery</description>
+          <Point><coordinates>-118.3,34.1,0</coordinates></Point>
+        </Placemark></Document></kml>
+        """
+
+        let jsonResult = try await parseTakeoutFixture(json, fileExtension: "json")
+        let geojsonResult = try await parseTakeoutFixture(geojson, fileExtension: "geojson")
+        let kmlResult = try await parseTakeoutFixture(kml, fileExtension: "kml")
+        let zipResult = try await parseTakeoutZipFixture(entryName: "Takeout/Maps/Saved Places.json", contents: json)
+
+        XCTAssertEqual(jsonResult.readyDrafts.map(\.name), ["Known Cafe"])
+        XCTAssertEqual(jsonResult.reviewDrafts.map(\.name), ["Review Tea House"])
+        XCTAssertEqual(geojsonResult.readyDrafts.map(\.name), ["Geo Noodles"])
+        XCTAssertEqual(kmlResult.readyDrafts.map(\.name), ["KML Bakery"])
+        XCTAssertEqual(zipResult.readyDrafts.map(\.name), ["Known Cafe"])
+        XCTAssertFalse(GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
+            sourceURL: "file:///Takeout/Maps/Saved Places.json",
+            title: "Google Takeout export",
+            text: json,
+            metadataTitle: nil,
+            metadataDescription: nil
+        ))
+    }
+
+    private func parseTakeoutFixture(_ contents: String, fileExtension: String) async throws -> GoogleTakeoutImportResult {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(fileExtension)
+        let data = try XCTUnwrap(contents.data(using: .utf8))
+        try data.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try await GoogleTakeoutImportService().parse(fileAt: url)
+    }
+
+    private func parseTakeoutZipFixture(entryName: String, contents: String) async throws -> GoogleTakeoutImportResult {
+        let data = try XCTUnwrap(contents.data(using: .utf8))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("zip")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        guard let archive = Archive(url: url, accessMode: .create) else {
+            XCTFail("Could not create ZIP archive")
+            throw GoogleTakeoutImportError.unreadableFile
+        }
+
+        try archive.addEntry(with: entryName, type: .file, uncompressedSize: Int64(data.count)) { position, size in
+            data.subdata(in: Int(position)..<Int(position) + size)
+        }
+
+        return try await GoogleTakeoutImportService().parse(fileAt: url)
     }
 
     private var douyinFoodListFixture: String {

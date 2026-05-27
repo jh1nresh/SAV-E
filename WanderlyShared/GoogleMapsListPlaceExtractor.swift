@@ -8,6 +8,8 @@ struct GoogleMapsListPlaceCandidate: Equatable {
     var evidence: [String]
 }
 
+/// Share-sheet parser for public Google Maps saved-list links.
+/// Keep this path separate from Google Takeout bulk file parsing.
 enum GoogleMapsListPlaceExtractor {
     static func looksLikeGoogleMapsList(sourceURL: String, title: String?, text: String?, metadataTitle: String?, metadataDescription: String?) -> Bool {
         let combined = [sourceURL, title, text, metadataTitle, metadataDescription]

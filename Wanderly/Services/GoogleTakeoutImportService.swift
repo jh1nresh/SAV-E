@@ -18,6 +18,8 @@ enum GoogleTakeoutImportError: LocalizedError {
     }
 }
 
+/// Bulk importer for user-selected Google Takeout exports.
+/// Do not route Google Maps saved-list share links through this service.
 final class GoogleTakeoutImportService {
     static let shared = GoogleTakeoutImportService()
 

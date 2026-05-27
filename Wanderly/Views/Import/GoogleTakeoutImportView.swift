@@ -61,12 +61,12 @@ struct GoogleTakeoutImportView: View {
                 .foregroundColor(.saveCocoa)
 
             VStack(spacing: 8) {
-                Text("Import places")
+                Text("Import Google Takeout")
                     .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundColor(.saveInk)
 
-                Text("Choose a Google Takeout export. SAV-E previews everything first and only saves places with real coordinates.")
+                Text("Choose a historical Takeout export. Saved-list links still go through Share Sheet or clipboard review.")
                     .font(.subheadline)
                     .foregroundColor(.saveMutedText)
                     .multilineTextAlignment(.center)
