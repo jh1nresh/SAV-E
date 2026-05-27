@@ -161,20 +161,22 @@ Avoid these in user-facing UI:
 
 Use current SwiftUI tokens from `Wanderly/Extensions/Color+Theme.swift`.
 
-| Role | Token | Hex | Use |
-| --- | --- | --- | --- |
-| Notebook background | `saveNotebookBackground` | `#FFF5E7` | Full-screen app canvas |
-| Cream surface | `saveCream` | `#FFF5E7` | Warm field notebook base |
-| Notebook page | `saveNotebookPage` | `#FFF0DC` | Cards, sheets, drawer panels |
-| Ink | `saveInk` | `#3A2415` | Primary text and outlines |
-| Cocoa | `saveCocoa` | `#3A2415` | Dark secondary ink |
-| Muted text | `saveMutedText` | `#7A5D45` | Supporting labels |
-| Honey | `saveHoney` | `#FFD66B` | Primary action, Map Stamp emphasis |
-| Sky | `saveSky` | `#8FCAEA` | Review, search, secondary context |
-| Mint | `saveMint` | `#C8EBCF` | Confirmed, saved, success |
-| Signal/coral | `saveSignal` / `saveCoral` | `#EE9C78` | Waiting, attention, review |
-| Pink | `savePink` | `#F6C1CB` | Friendly accent, trip support |
-| Disabled | `saveDisabled` | `#D7C0A6` | Disabled controls |
+| Role | Token | Light | Dark | Use |
+| --- | --- | --- | --- | --- |
+| Notebook background | `saveNotebookBackground` | `#FFF5E7` | `#101419` | Full-screen app canvas |
+| Cream surface | `saveCream` | `#FFF5E7` | `#15191F` | Warm field notebook base |
+| Notebook page | `saveNotebookPage` | `#FFF0DC` | `#1B2027` | Cards, sheets, drawer panels |
+| Ink | `saveInk` | `#3A2415` | `#FFF8ED` | Primary text and outlines |
+| Cocoa | `saveCocoa` | `#3A2415` | `#F7EFE5` | Dark secondary ink |
+| Muted text | `saveMutedText` | `#7A5D45` | `#CFC4B8` | Supporting labels |
+| Honey | `saveHoney` | `#FFD66B` | `#986724` | Primary action, Map Stamp emphasis |
+| Sky | `saveSky` | `#8FCAEA` | `#3F7F97` | Review, search, secondary context |
+| Mint | `saveMint` | `#C8EBCF` | `#4F7D5D` | Confirmed, saved, success |
+| Signal/coral | `saveSignal` / `saveCoral` | `#EE9C78` | `#9F523F` | Waiting, attention, review |
+| Pink | `savePink` | `#F6C1CB` | `#96586B` | Friendly accent, trip support |
+| Disabled | `saveDisabled` | `#D7C0A6` | `#4E4842` | Disabled controls |
+| Notebook line | `saveNotebookLine` | `#3A2415` | `#6E6257` | Strokes, dividers, notebook grid |
+| Notebook spine | `saveNotebookSpine` | `#F6C181` | `#7A5533` | Passport and notebook binding |
 
 Palette rules:
 
@@ -185,6 +187,8 @@ Palette rules:
 - Signal means attention, waiting, or risk.
 - Ink outlines should stay visible. If a surface cannot handle a 1.4 to 2 pt ink
   stroke, the surface is probably too small or too decorative.
+- Dark mode keeps the same nouns, but uses charcoal surfaces and muted accents.
+  Do not reuse fixed light pastels for dark fills.
 
 ## Typography
 

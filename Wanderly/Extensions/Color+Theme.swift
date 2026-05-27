@@ -4,23 +4,23 @@ import UIKit
 extension Color {
     // MARK: - SAV-E Memo Scrapbook Theme
     static let saveCream = Color(light: "FFF5E7", dark: "15191F")
-    static let saveMint = Color(hex: "C8EBCF")
+    static let saveMint = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCocoa = Color(light: "3A2415", dark: "F7EFE5")
-    static let saveHoney = Color(hex: "FFD66B")
-    static let saveSky = Color(hex: "8FCAEA")
+    static let saveHoney = Color(light: "FFD66B", dark: "986724")
+    static let saveSky = Color(light: "8FCAEA", dark: "3F7F97")
     static let saveInk = Color(light: "3A2415", dark: "FFF8ED")
     static let saveMutedText = Color(light: "7A5D45", dark: "CFC4B8")
-    static let saveDisabled = Color(hex: "D7C0A6")
+    static let saveDisabled = Color(light: "D7C0A6", dark: "4E4842")
     static let savePaper = Color(light: "FFF0DC", dark: "1B2027")
     static let saveLedger = Color(light: "FFF5E7", dark: "15191F")
-    static let saveSignal = Color(hex: "EE9C78")
-    static let saveSuccess = Color(hex: "C8EBCF")
-    static let saveCoral = Color(hex: "EE9C78")
-    static let savePink = Color(hex: "F6C1CB")
+    static let saveSignal = Color(light: "EE9C78", dark: "9F523F")
+    static let saveSuccess = Color(light: "C8EBCF", dark: "4F7D5D")
+    static let saveCoral = Color(light: "EE9C78", dark: "9F523F")
+    static let savePink = Color(light: "F6C1CB", dark: "96586B")
     static let saveNotebookBackground = Color(light: "FFF5E7", dark: "101419")
     static let saveNotebookPage = Color(light: "FFF0DC", dark: "1B2027")
-    static let saveNotebookSpine = Color(hex: "F6C181")
-    static let saveNotebookLine = Color(light: "3A2415", dark: "6FFFFFFF")
+    static let saveNotebookSpine = Color(light: "F6C181", dark: "7A5533")
+    static let saveNotebookLine = Color(light: "3A2415", dark: "6E6257")
 
     // MARK: - Category Colors
     static func categoryColor(for category: PlaceCategory) -> Color {
