@@ -91,9 +91,6 @@ struct AIDrawerView: View {
                 }
             }
         }
-        .sheet(isPresented: $viewModel.showPlaceList) {
-            PlaceListView()
-        }
         .sheet(isPresented: $showGoogleTakeoutImport) {
             GoogleTakeoutImportView(
                 existingPlaces: existingPlacesForImport,
@@ -357,7 +354,7 @@ struct AIDrawerView: View {
             if showLists {
                 collaborativeListsView
             } else if showSavedCategories {
-                savedCategoriesView
+                savedPlacesView
             } else if showReviewInbox {
                 reviewInboxView
             } else {
@@ -810,19 +807,11 @@ struct AIDrawerView: View {
 
             HStack(spacing: 9) {
                 DrawerActionChip(
-                    title: "Full list",
+                    title: "Saved",
                     systemImage: "list.bullet.rectangle",
                     count: viewModel.places.isEmpty ? nil : viewModel.places.count,
                     fill: Color.saveMint.opacity(0.36),
-                    action: openFullList
-                )
-
-                DrawerActionChip(
-                    title: "Saved",
-                    systemImage: "square.grid.2x2",
-                    count: viewModel.places.isEmpty ? nil : viewModel.places.count,
-                    fill: Color.saveSky.opacity(0.28),
-                    action: openSavedCategories
+                    action: openSavedPlaces
                 )
 
                 DrawerActionChip(
@@ -943,33 +932,38 @@ struct AIDrawerView: View {
         }
     }
 
-    private var savedCategoriesView: some View {
+    private var savedPlacesView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    NotebookBandLabel("Saved categories")
+                    NotebookBandLabel("Saved")
 
                     if viewModel.places.isEmpty {
-                        Text("No saved Map Stamps yet. Confirm Review Candidates or save map results to build your categories.")
+                        Text("No saved Map Stamps loaded for this account yet. If this looks wrong, check that you are signed in and refresh SAV-E.")
                             .font(.caption)
                             .foregroundColor(.saveCocoa.opacity(0.76))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text(savedCategorySubtitle)
+                        Text(savedPlacesSubtitle)
                             .font(.caption)
                             .foregroundColor(.saveCocoa.opacity(0.72))
 
-                        VStack(spacing: 8) {
-                            ForEach(savedCategoryCounts, id: \.category) { bucket in
-                                SavedCategoryLensRow(
-                                    category: bucket.category,
-                                    count: bucket.count,
-                                    isSelected: selectedCategories.contains(bucket.category)
-                                ) {
-                                    onToggleCategory(bucket.category)
+                        if !savedCategoryCounts.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(savedCategoryCounts, id: \.category) { bucket in
+                                        SavedCategoryLensRow(
+                                            category: bucket.category,
+                                            count: bucket.count,
+                                            isSelected: selectedCategories.contains(bucket.category)
+                                        ) {
+                                            onToggleCategory(bucket.category)
+                                        }
+                                    }
                                 }
+                                .padding(.vertical, 2)
                             }
                         }
                     }
@@ -978,7 +972,18 @@ struct AIDrawerView: View {
                 .saveNotebookSurface(cornerRadius: 16, fill: .saveNotebookPage, opacity: colorScheme == .dark ? 0.72 : 0.66, strokeOpacity: 0.36, lineWidth: 1)
                 .overlay(savedPanelTint)
 
-                HStack(spacing: 9) {
+                if !savedPlacesForDrawer.isEmpty {
+                    VStack(spacing: 10) {
+                        ForEach(savedPlacesForDrawer) { place in
+                            PlaceCard(place: place)
+                                .onTapGesture {
+                                    openSavedPlace(place)
+                                }
+                        }
+                    }
+                }
+
+                if !selectedCategories.isEmpty {
                     Button {
                         Array(selectedCategories).forEach { onToggleCategory($0) }
                     } label: {
@@ -988,21 +993,6 @@ struct AIDrawerView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                             .background(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(selectedCategories.isEmpty)
-                    .opacity(selectedCategories.isEmpty ? 0.52 : 1)
-
-                    Button {
-                        viewModel.showPlaceList = true
-                    } label: {
-                        Label("Full list", systemImage: "list.bullet.rectangle")
-                            .font(.caption.weight(.black))
-                            .foregroundColor(commandBarTextColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.saveHoney.opacity(0.42))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -1028,12 +1018,20 @@ struct AIDrawerView: View {
         }
     }
 
-    private var savedCategorySubtitle: String {
+    private var savedPlacesForDrawer: [Place] {
+        var places = viewModel.places
+        if !selectedCategories.isEmpty {
+            places = places.filter { selectedCategories.contains($0.category) }
+        }
+        return places.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var savedPlacesSubtitle: String {
         if selectedCategories.isEmpty {
-            return "Tap a category to filter the map without leaving the drawer."
+            return "\(viewModel.places.count) saved Map Stamps. Categories filter this list and the map together."
         }
         let names = selectedCategories.map(\.displayName).sorted().joined(separator: ", ")
-        return "Map filtered to \(names). Tap again to remove."
+        return "\(savedPlacesForDrawer.count) saved in \(names)."
     }
 
     private var savedPanelTint: Color {
@@ -1421,22 +1419,13 @@ struct AIDrawerView: View {
         withAnimation { drawerDetent = .large }
     }
 
-    private func openSavedCategories() {
+    private func openSavedPlaces() {
         viewModel.returnToCommands()
         showSavedCategories = true
         showReviewInbox = false
         showLists = false
         searchFocused = false
         withAnimation { drawerDetent = .medium }
-    }
-
-    private func openFullList() {
-        viewModel.returnToCommands()
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
-        searchFocused = false
-        viewModel.showPlaceList = true
     }
 
     private func openCollaborativeLists() {
@@ -1446,6 +1435,15 @@ struct AIDrawerView: View {
         showLists = true
         searchFocused = false
         withAnimation { drawerDetent = .large }
+    }
+
+    private func openSavedPlace(_ place: Place) {
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        viewModel.showPlace(place)
+        withAnimation { drawerDetent = .medium }
     }
 
     private func openReviewCandidateDetail(_ candidate: PlaceReviewCandidate) {

@@ -18,7 +18,6 @@ final class AIDrawerViewModel: ObservableObject {
     @Published var query = ""
     @Published var mapAction: MapActionData?
     @Published var chatHistory: [ChatEntry] = []
-    @Published var showPlaceList = false
 
     struct ChatEntry: Identifiable, Equatable {
         let id = UUID()

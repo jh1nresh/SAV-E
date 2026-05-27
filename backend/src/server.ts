@@ -217,14 +217,7 @@ async function handlePlaces(
   userId: string,
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
-    const { rows } = await pool.query(
-      `select p.*, pv.visibility
-       from places p
-       left join place_visibility pv on pv.place_id = p.id
-       where p.user_id = $1
-       order by p.created_at desc`,
-      [userId],
-    );
+    const rows = await fetchPlacesWithOptionalVisibility(userId);
     return sendJson(response, rows.map(formatPlace));
   }
 
@@ -259,6 +252,32 @@ async function handlePlaces(
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+async function fetchPlacesWithOptionalVisibility(userId: string): Promise<JsonBody[]> {
+  try {
+    const { rows } = await pool.query(
+      `select p.*, pv.visibility
+       from places p
+       left join place_visibility pv on pv.place_id = p.id
+       where p.user_id = $1
+       order by p.created_at desc`,
+      [userId],
+    );
+    return rows;
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+
+    console.warn("place_visibility table is missing; returning places with private visibility fallback.");
+    const { rows } = await pool.query(
+      `select p.*, 'private' as visibility
+       from places p
+       where p.user_id = $1
+       order by p.created_at desc`,
+      [userId],
+    );
+    return rows;
+  }
 }
 
 async function handleTrips(
@@ -445,11 +464,19 @@ async function handleSocialSignals(
   const limit = clampLimit(url.searchParams.get("limit"));
   const signals: JsonBody[] = [];
 
-  if (lens === "forYou" || lens === "friends") {
-    signals.push(...await friendSignalPlaces(userId, limit));
-  }
-  if (lens === "forYou" || lens === "trending") {
-    signals.push(...await trendingSignalPlaces(userId, limit));
+  try {
+    if (lens === "forYou" || lens === "friends") {
+      signals.push(...await friendSignalPlaces(userId, limit));
+    }
+    if (lens === "forYou" || lens === "trending") {
+      signals.push(...await trendingSignalPlaces(userId, limit));
+    }
+  } catch (error) {
+    if (isMissingRelationError(error)) {
+      console.warn("Social signal schema is missing; returning empty signals until migrations run.");
+      return sendJson(response, []);
+    }
+    throw error;
   }
 
   return sendJson(response, signals.slice(0, limit));
@@ -1044,6 +1071,13 @@ function clampLimit(value: string | null): number {
   const parsed = value ? Number(value) : 40;
   if (!Number.isFinite(parsed)) return 40;
   return Math.max(1, Math.min(100, Math.trunc(parsed)));
+}
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const value = error as { code?: unknown; message?: unknown };
+  return value.code === "42P01" ||
+    (typeof value.message === "string" && value.message.includes("does not exist"));
 }
 
 async function existingCandidateKeys(captureId: string): Promise<Set<string>> {
