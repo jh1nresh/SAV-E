@@ -248,6 +248,7 @@ final class MapViewModel: ObservableObject {
     @Published var selectedMapCandidate: SaveMapCandidate?
     @Published var selectedMapFeature: MapFeature?
     @Published var isLoadingMapCandidates = false
+    @Published var collaborativeLists: [SaveCollaborativeList] = []
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
@@ -258,6 +259,7 @@ final class MapViewModel: ObservableObject {
     private let saveLocalVaultService: SaveLocalVaultService
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let saveSearchController: SaveSearchController
+    private let collaborativeListStore: SaveCollaborativeListStore
     private var importedPendingKeys: Set<String> = []
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
@@ -271,7 +273,8 @@ final class MapViewModel: ObservableObject {
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
-        saveSearchController: SaveSearchController = SaveSearchController()
+        saveSearchController: SaveSearchController = SaveSearchController(),
+        collaborativeListStore: SaveCollaborativeListStore = .shared
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
@@ -282,6 +285,8 @@ final class MapViewModel: ObservableObject {
         self.saveLocalVaultService = saveLocalVaultService
         self.mapCandidateSearchService = mapCandidateSearchService
         self.saveSearchController = saveSearchController
+        self.collaborativeListStore = collaborativeListStore
+        self.collaborativeLists = collaborativeListStore.load()
     }
 
     // MARK: - Computed
@@ -559,6 +564,91 @@ final class MapViewModel: ObservableObject {
         revealImportedPlaces([place])
     }
 
+    @discardableResult
+    func createCollaborativeList(title: String, note: String?) -> SaveCollaborativeList {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let list = SaveCollaborativeList(
+            title: trimmedTitle.isEmpty ? "Untitled SAV-E list" : trimmedTitle,
+            note: note?.trimmingCharacters(in: .whitespacesAndNewlines).trimmedForDraft
+        )
+        collaborativeLists.insert(list, at: 0)
+        persistCollaborativeLists()
+        return list
+    }
+
+    func addPlace(_ place: Place, toListID listID: UUID) throws {
+        try updateCollaborativeList(listID) { list in
+            list.add(.from(place: place))
+        }
+    }
+
+    func addMapCandidate(_ candidate: SaveMapCandidate, toListID listID: UUID) throws {
+        try updateCollaborativeList(listID) { list in
+            list.add(.from(candidate: candidate))
+        }
+    }
+
+    func shareURL(for list: SaveCollaborativeList, role: SaveListRole) -> URL? {
+        collaborativeLists.first(where: { $0.id == list.id })?.shareURL(role: role) ?? list.shareURL(role: role)
+    }
+
+    @discardableResult
+    func joinCollaborativeList(from url: URL) throws -> SaveCollaborativeList {
+        let list = try collaborativeListStore.join(from: url)
+        reloadCollaborativeLists()
+        return list
+    }
+
+    func reloadCollaborativeLists() {
+        collaborativeLists = collaborativeListStore.load()
+    }
+
+    @discardableResult
+    func saveListItemAsPlace(_ item: SaveListItem) async throws -> Place {
+        if let existing = places.first(where: { place in
+            place.matchesMapFeature(title: item.title, coordinate: item.coordinate) ||
+                place.name.localizedCaseInsensitiveCompare(item.title) == .orderedSame
+        }) {
+            selectPlace(existing)
+            return existing
+        }
+
+        let place = item.asPlace()
+        if let userId = authService.currentUserId {
+            do {
+                try await supabaseService.savePlace(place, userId: userId)
+            } catch {
+                print("MapViewModel: failed to sync list item \(place.name): \(error)")
+            }
+        }
+
+        mirrorToLocalVault(place)
+        places = [place] + places
+        revealImportedPlaces([place])
+        return place
+    }
+
+    func planCollaborativeList(_ list: SaveCollaborativeList) async {
+        let routePlaces = list.items
+            .filter(\.isMappable)
+            .map { $0.asPlace(createdAt: $0.addedAt) }
+        guard !routePlaces.isEmpty else { return }
+
+        routeCoordinates = routePlaces.map(\.coordinate)
+        calculatedRoute = nil
+
+        let savedIDs = list.items.compactMap { item -> UUID? in
+            guard item.source == .savedPlace else { return nil }
+            return UUID(uuidString: item.sourceID)
+        }
+        activeFilter = savedIDs.isEmpty ? nil : Set(savedIDs)
+
+        if let region = regionContaining(routePlaces) {
+            cameraPosition = .region(region)
+        }
+        await calculateRoute(for: routePlaces)
+    }
+
     private func refinedMatchIfNeeded(for candidate: PlaceReviewCandidate) async throws -> GooglePlaceMatch? {
         guard !candidate.hasReliableCoordinates else { return nil }
 
@@ -603,6 +693,25 @@ final class MapViewModel: ObservableObject {
         } catch {
             print("MapViewModel: failed to mirror confirmed place to local vault: \(error)")
         }
+    }
+
+    private func updateCollaborativeList(
+        _ listID: UUID,
+        update: (inout SaveCollaborativeList) -> Void
+    ) throws {
+        guard let index = collaborativeLists.firstIndex(where: { $0.id == listID }) else {
+            throw SaveCollaborativeListError.listNotFound
+        }
+        guard collaborativeLists[index].canEdit else {
+            throw SaveCollaborativeListError.viewerCannotEdit
+        }
+        update(&collaborativeLists[index])
+        collaborativeLists.sort { $0.updatedAt > $1.updatedAt }
+        persistCollaborativeLists()
+    }
+
+    private func persistCollaborativeLists() {
+        collaborativeListStore.save(collaborativeLists)
     }
 
     private func revealImportedPlaces(_ importedPlaces: [Place]) {

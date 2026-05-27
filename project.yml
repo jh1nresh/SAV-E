@@ -74,6 +74,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         NSLocationWhenInUseUsageDescription: "SAV-E needs your location to show nearby places on the map."
+        NSMicrophoneUsageDescription: "SAV-E uses the microphone when you talk to the command drawer."
+        NSSpeechRecognitionUsageDescription: "SAV-E uses speech recognition to turn your voice into a place search or planning command."
         LSApplicationQueriesSchemes:
           - comgooglemaps
         CFBundleURLTypes:

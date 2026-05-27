@@ -38,6 +38,25 @@ struct ContentView: View {
                     onPrepareMapSearch: { query in
                         await mapVM.prepareMapCandidatesForDrawerQuery(query)
                     },
+                    collaborativeLists: mapVM.collaborativeLists,
+                    onCreateList: { title, note in
+                        mapVM.createCollaborativeList(title: title, note: note)
+                    },
+                    onAddPlaceToList: { place, listID in
+                        try mapVM.addPlace(place, toListID: listID)
+                    },
+                    onAddMapCandidateToList: { candidate, listID in
+                        try mapVM.addMapCandidate(candidate, toListID: listID)
+                    },
+                    onShareListURL: { list, role in
+                        mapVM.shareURL(for: list, role: role)
+                    },
+                    onSaveListItem: { item in
+                        _ = try await mapVM.saveListItemAsPlace(item)
+                    },
+                    onPlanList: { list in
+                        await mapVM.planCollaborativeList(list)
+                    },
                     selectedCategories: mapVM.selectedCategories,
                     onToggleCategory: { category in
                         mapVM.toggleCategory(category)
@@ -67,6 +86,9 @@ struct ContentView: View {
             }
             .onChange(of: mapVM.mapCandidates) { _, candidates in
                 drawerVM.mapCandidates = candidates
+            }
+            .onReceive(NotificationCenter.default.publisher(for: SaveCollaborativeListNotification.didJoin)) { _ in
+                mapVM.reloadCollaborativeLists()
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }

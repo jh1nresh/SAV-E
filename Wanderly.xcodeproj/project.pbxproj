@@ -91,6 +91,8 @@
 		E0A8D7C78588C7A73600E0BC /* SaveSearchControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F18BDD0A8864346CFD0FFDE /* SaveSearchControllerTests.swift */; };
 		E0EF8B3281AF0AE07B3CA461 /* PlaceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D14373C25E6C1A46308955A /* PlaceListView.swift */; };
 		E1E3F7D9319056F541095254 /* PlaceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */; };
+		E411DF8BC2148506E8B77499 /* SaveCollaborativeList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200567418360A1F751356BAB /* SaveCollaborativeList.swift */; };
+		E5E0874E59C798EA906F22F8 /* SaveCollaborativeListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1C9A28EAC731B9683EAF78 /* SaveCollaborativeListTests.swift */; };
 		E7B4FE596AB72D438E1B8A83 /* GoogleTakeoutImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD6620A9DEB09C15873615BC /* GoogleTakeoutImportService.swift */; };
 		E8880348DF753D6DB2CA3B6C /* AIDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5210F08F016F1E68361D82DB /* AIDrawerView.swift */; };
 		EBD63B83A0C3291020E38823 /* MemoMascotMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E57195540863CB1F729752C /* MemoMascotMark.swift */; };
@@ -157,6 +159,7 @@
 		03F5131B731E843E34F950AF /* GoogleMapsListPlaceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleMapsListPlaceExtractor.swift; sourceTree = "<group>"; };
 		05191C82E70D6C2149B74EB7 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		077202B483361C14C41E6962 /* Place.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Place.swift; sourceTree = "<group>"; };
+		0C1C9A28EAC731B9683EAF78 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		0CFEFFE39C4FB79943231A84 /* SaveMemoryDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryDebugView.swift; sourceTree = "<group>"; };
 		0DC77D2FDA5C5A3F29AF777C /* SavePlanAroundController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAroundController.swift; sourceTree = "<group>"; };
 		106F7D6E4F33469C21E9E520 /* SocialPlacePipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlacePipelineTests.swift; sourceTree = "<group>"; };
@@ -166,6 +169,7 @@
 		1CAC45BB8058CD2642E2A578 /* SaveMemoryRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryRecord.swift; sourceTree = "<group>"; };
 		1D14373C25E6C1A46308955A /* PlaceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListView.swift; sourceTree = "<group>"; };
 		1DC8F70BFBB3AC56AADC443E /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
+		200567418360A1F751356BAB /* SaveCollaborativeList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeList.swift; sourceTree = "<group>"; };
 		2625D969793980008BF421A8 /* DeterministicTripPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTripPlanner.swift; sourceTree = "<group>"; };
 		28F79CFB6481B8E108DCAF01 /* PlaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCard.swift; sourceTree = "<group>"; };
 		2C84D6BD6DD536720150C020 /* SaveGuideCustomizationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveGuideCustomizationController.swift; sourceTree = "<group>"; };
@@ -376,6 +380,7 @@
 			isa = PBXGroup;
 			children = (
 				78862C7E3B43A03A62C3FD83 /* DeterministicTripPlannerTests.swift */,
+				0C1C9A28EAC731B9683EAF78 /* SaveCollaborativeListTests.swift */,
 				E7E2C87559EA7F49DCDC7C49 /* SaveGuideCustomizationControllerTests.swift */,
 				F09E8F1EE4BB5B8A6D02452A /* SaveLocationIntentRecommendationServiceTests.swift */,
 				97D095BEE47C93C9CB1C90EF /* SavePlanAroundControllerTests.swift */,
@@ -461,6 +466,7 @@
 				3AB949B14D33E31CD3A280BB /* GoogleTakeoutImport.swift */,
 				077202B483361C14C41E6962 /* Place.swift */,
 				8C694C07E0D956CCE9D0C60C /* SaveCard.swift */,
+				200567418360A1F751356BAB /* SaveCollaborativeList.swift */,
 				BF95EF074593EBC8FFA2BFD4 /* SaveGuideModels.swift */,
 				1CAC45BB8058CD2642E2A578 /* SaveMemoryRecord.swift */,
 				3E4590D96689E07CCDFA4DAE /* SavePlanAroundModels.swift */,
@@ -780,6 +786,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1367485F39F748ADEF65ECA9 /* DeterministicTripPlannerTests.swift in Sources */,
+				E5E0874E59C798EA906F22F8 /* SaveCollaborativeListTests.swift in Sources */,
 				8B64FBB07EF964C18C4417E1 /* SaveGuideCustomizationControllerTests.swift in Sources */,
 				7F11336837B0EC2EE5801AB8 /* SaveLocationIntentRecommendationServiceTests.swift in Sources */,
 				5311E10B19ABE278B394E7C1 /* SavePlanAroundControllerTests.swift in Sources */,
@@ -855,6 +862,7 @@
 				D959880C059D9507CE921C78 /* SaveAIService.swift in Sources */,
 				C18CC419260236D9CCD2DDB6 /* SaveApp.swift in Sources */,
 				F125C9CB78ECB1B234AA5520 /* SaveCard.swift in Sources */,
+				E411DF8BC2148506E8B77499 /* SaveCollaborativeList.swift in Sources */,
 				26F656E5350968392F99B0BC /* SaveGuideCustomizationController.swift in Sources */,
 				8D206706A2CD2C076B2A1934 /* SaveGuideCustomizationView.swift in Sources */,
 				BA42999D1529BF71718E3B02 /* SaveGuideModels.swift in Sources */,
@@ -1130,7 +1138,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1211,7 +1219,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (

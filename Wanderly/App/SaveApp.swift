@@ -6,6 +6,7 @@ struct SaveApp: App {
     @StateObject private var languageSettings = AppLanguageSettings()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var openedTrip: SharedTripData?
+    @State private var openedList: SaveCollaborativeList?
 
     var body: some Scene {
         WindowGroup {
@@ -33,13 +34,23 @@ struct SaveApp: App {
                 guard let url = activity.webpageURL else { return }
                 handleIncomingURL(url)
             }
-            .alert(languageSettings.text(.tripLinkReady), isPresented: Binding(
-                get: { openedTrip != nil },
-                set: { if !$0 { openedTrip = nil } }
+            .alert(linkAlertTitle, isPresented: Binding(
+                get: { openedTrip != nil || openedList != nil },
+                set: {
+                    if !$0 {
+                        openedTrip = nil
+                        openedList = nil
+                    }
+                }
             )) {
-                Button(languageSettings.text(.ok)) { openedTrip = nil }
+                Button(languageSettings.text(.ok)) {
+                    openedTrip = nil
+                    openedList = nil
+                }
             } message: {
-                if let openedTrip {
+                if let openedList {
+                    Text("\(openedList.title) joined as \(openedList.viewerRole.displayName.lowercased()). \(openedList.items.count) places are ready in Lists.")
+                } else if let openedTrip {
                     Text(String(
                         format: languageSettings.text(.tripLinkMessage),
                         openedTrip.name,
@@ -51,11 +62,24 @@ struct SaveApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        guard isTripLink(url),
-              let trip = SharedTripData.from(url: url) else {
+        if isTripLink(url), let trip = SharedTripData.from(url: url) {
+            openedTrip = trip
             return
         }
-        openedTrip = trip
+
+        guard SaveSharedListPayload.isListLink(url) else {
+            return
+        }
+
+        do {
+            openedList = try SaveCollaborativeListStore.shared.join(from: url)
+        } catch {
+            openedList = SaveCollaborativeList(title: "Could not open list", note: error.localizedDescription, viewerRole: .viewer)
+        }
+    }
+
+    private var linkAlertTitle: String {
+        openedList == nil ? languageSettings.text(.tripLinkReady) : "SAV-E list ready"
     }
 
     private func isTripLink(_ url: URL) -> Bool {

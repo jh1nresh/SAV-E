@@ -20,6 +20,15 @@ struct AIDrawerView: View {
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onImportURLAsReviewCandidates: (URL) async throws -> Int = { _ in 0 }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
+    var collaborativeLists: [SaveCollaborativeList] = []
+    var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
+        SaveCollaborativeList(title: title, note: note)
+    }
+    var onAddPlaceToList: (Place, UUID) throws -> Void = { _, _ in }
+    var onAddMapCandidateToList: (SaveMapCandidate, UUID) throws -> Void = { _, _ in }
+    var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
+    var onSaveListItem: (SaveListItem) async throws -> Void = { _ in }
+    var onPlanList: (SaveCollaborativeList) async -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
@@ -32,6 +41,10 @@ struct AIDrawerView: View {
     @State private var showReviewInbox = false
     @State private var isImportingURL = false
     @State private var showProfile = false
+    @State private var showLists = false
+    @State private var selectedListID: UUID?
+    @State private var newListTitle = ""
+    @State private var newListNote = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -242,7 +255,9 @@ struct AIDrawerView: View {
     private var contentBody: some View {
         switch viewModel.drawerState {
         case .idle:
-            if showReviewInbox {
+            if showLists {
+                collaborativeListsView
+            } else if showReviewInbox {
                 reviewInboxView
             } else {
                 suggestionsView
@@ -354,15 +369,31 @@ struct AIDrawerView: View {
 
         case .placeDetail(let place):
             ScrollView {
-                PlaceBottomSheet(place: place) {
-                    try await onDeletePlace(place)
-                    viewModel.removePlace(place)
-                    withAnimation(.spring(duration: 0.3)) {
-                        drawerDetent = .height(72)
+                VStack(spacing: 12) {
+                    PlaceBottomSheet(place: place) {
+                        try await onDeletePlace(place)
+                        viewModel.removePlace(place)
+                        withAnimation(.spring(duration: 0.3)) {
+                            drawerDetent = .height(72)
+                        }
+                    } onPlanAround: {
+                        viewModel.query = "Plan around \(place.name)"
+                        Task { await viewModel.submit() }
                     }
-                } onPlanAround: {
-                    viewModel.query = "Plan around \(place.name)"
-                    Task { await viewModel.submit() }
+
+                    AddToListPanel(
+                        title: "Add this Map Stamp to a list",
+                        lists: collaborativeLists.filter(\.canEdit),
+                        onCreateList: createListForPicker,
+                        onAddToList: { listID in
+                            do {
+                                try onAddPlaceToList(place, listID)
+                                addSpotStatus = "Added \(place.name) to list."
+                            } catch {
+                                addSpotStatus = error.localizedDescription
+                            }
+                        }
+                    )
                 }
                 .padding(14)
             }
@@ -397,17 +428,33 @@ struct AIDrawerView: View {
 
         case .mapCandidateDetail(let candidate):
             ScrollView {
-                UnsavedMapCandidateCard(
-                    candidate: candidate,
-                    isWorking: mapCandidateActionInFlight == candidate.id,
-                    onSave: {
-                        performMapCandidateAction(candidate) {
-                            try await onSaveMapCandidate(candidate)
-                            viewModel.returnToCommands()
-                            showReviewInbox = false
+                VStack(spacing: 12) {
+                    UnsavedMapCandidateCard(
+                        candidate: candidate,
+                        isWorking: mapCandidateActionInFlight == candidate.id,
+                        onSave: {
+                            performMapCandidateAction(candidate) {
+                                try await onSaveMapCandidate(candidate)
+                                viewModel.returnToCommands()
+                                showReviewInbox = false
+                            }
                         }
-                    }
-                )
+                    )
+
+                    AddToListPanel(
+                        title: "Add this map result to a list",
+                        lists: collaborativeLists.filter(\.canEdit),
+                        onCreateList: createListForPicker,
+                        onAddToList: { listID in
+                            do {
+                                try onAddMapCandidateToList(candidate, listID)
+                                addSpotStatus = "Added \(candidate.title) to list without saving it."
+                            } catch {
+                                addSpotStatus = error.localizedDescription
+                            }
+                        }
+                    )
+                }
                 .padding(14)
             }
 
@@ -581,14 +628,14 @@ struct AIDrawerView: View {
     }
 
     private var showsContentArea: Bool {
-        if case .idle = viewModel.drawerState, drawerDetent == .height(72), !showReviewInbox { return false }
+        if case .idle = viewModel.drawerState, drawerDetent == .height(72), !showReviewInbox, !showLists { return false }
         return true
     }
 
     private var hasActiveDrawerContent: Bool {
         switch viewModel.drawerState {
         case .idle:
-            return showReviewInbox
+            return showReviewInbox || showLists
         case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .mapCandidateDetail, .error:
             return true
         }
@@ -673,6 +720,14 @@ struct AIDrawerView: View {
                     count: reviewCandidates.isEmpty ? nil : reviewCandidates.count,
                     fill: Color.saveHoney.opacity(0.84),
                     action: openReviewInbox
+                )
+
+                DrawerActionChip(
+                    title: "Lists",
+                    systemImage: "person.2.wave.2.fill",
+                    count: collaborativeLists.isEmpty ? nil : collaborativeLists.count,
+                    fill: Color.savePink.opacity(0.72),
+                    action: openCollaborativeLists
                 )
             }
             .padding(.horizontal, 16)
@@ -884,6 +939,95 @@ struct AIDrawerView: View {
         }
     }
 
+    private var collaborativeListsView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+
+                VStack(alignment: .leading, spacing: 9) {
+                    NotebookBandLabel("Create list")
+                    TextField("Tokyo cafes, OC weekend, NYC food", text: $newListTitle)
+                        .textFieldStyle(.plain)
+                        .font(.subheadline)
+                        .foregroundColor(.saveInk)
+                        .padding(10)
+                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1.2)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                    TextField("Optional note", text: $newListNote)
+                        .textFieldStyle(.plain)
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa)
+                        .padding(10)
+                        .background(Color.saveNotebookPage.opacity(0.54))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                    Button(action: createCollaborativeList) {
+                        Label("Create list", systemImage: "plus")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.saveHoney.opacity(0.88))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .background(Color.saveCream.opacity(0.32))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                if collaborativeLists.isEmpty {
+                    Text("Create a list, then add saved Map Stamps or unsaved map results from their detail cards.")
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(collaborativeLists) { list in
+                        CollaborativeListCard(
+                            list: list,
+                            isSelected: selectedListID == list.id,
+                            existingPlaces: viewModel.places,
+                            viewerURL: onShareListURL(list, .viewer),
+                            editorURL: onShareListURL(list, .editor),
+                            onSelect: {
+                                selectedListID = selectedListID == list.id ? nil : list.id
+                            },
+                            onSaveItem: { item in
+                                saveListItem(item)
+                            },
+                            onPlan: {
+                                planCollaborativeList(list)
+                            }
+                        )
+                    }
+                }
+
+                if let addSpotStatus {
+                    Text(addSpotStatus)
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+        }
+    }
+
     private func focusSocialInvestigationPrompt() {
         showReviewInbox = false
         if let clipboardText = UIPasteboard.general.string,
@@ -993,6 +1137,15 @@ struct AIDrawerView: View {
     private func openReviewInbox() {
         viewModel.returnToCommands()
         showReviewInbox = true
+        showLists = false
+        searchFocused = false
+        withAnimation { drawerDetent = .large }
+    }
+
+    private func openCollaborativeLists() {
+        viewModel.returnToCommands()
+        showReviewInbox = false
+        showLists = true
         searchFocused = false
         withAnimation { drawerDetent = .large }
     }
@@ -1050,6 +1203,7 @@ struct AIDrawerView: View {
         voiceQuery.stop()
         viewModel.reset()
         showReviewInbox = false
+        showLists = false
         searchFocused = false
         withAnimation { drawerDetent = .height(72) }
     }
@@ -1081,6 +1235,45 @@ struct AIDrawerView: View {
     private func saveFeedback(for candidate: PlaceReviewCandidate) -> String {
         let category = PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
         return "Map Stamp saved · +1 \(category.displayName.lowercased()) place"
+    }
+
+    private func createCollaborativeList() {
+        let list = onCreateList(newListTitle, newListNote)
+        selectedListID = list.id
+        newListTitle = ""
+        newListNote = ""
+        addSpotStatus = "Created \(list.title)."
+    }
+
+    private func createListForPicker() -> SaveCollaborativeList {
+        let title = newListTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Trip ideas"
+            : newListTitle
+        let list = onCreateList(title, newListNote)
+        selectedListID = list.id
+        newListTitle = ""
+        newListNote = ""
+        return list
+    }
+
+    private func saveListItem(_ item: SaveListItem) {
+        Task {
+            do {
+                try await onSaveListItem(item)
+                addSpotStatus = "Saved \(item.title) to your SAV-E."
+            } catch {
+                addSpotStatus = error.localizedDescription
+            }
+        }
+    }
+
+    private func planCollaborativeList(_ list: SaveCollaborativeList) {
+        Task {
+            await onPlanList(list)
+            viewModel.showCollaborativeListPlan(list)
+            showLists = false
+            withAnimation { drawerDetent = .large }
+        }
     }
 }
 
@@ -1120,6 +1313,235 @@ private struct DrawerGlassBackground: View {
 
     private var topStroke: Color {
         colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.58)
+    }
+}
+
+private struct AddToListPanel: View {
+    let title: String
+    let lists: [SaveCollaborativeList]
+    let onCreateList: () -> SaveCollaborativeList
+    let onAddToList: (UUID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(title, systemImage: "person.2.wave.2.fill")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                Spacer()
+            }
+
+            if lists.isEmpty {
+                Button(action: {
+                    let list = onCreateList()
+                    onAddToList(list.id)
+                }) {
+                    Label("Create list and add", systemImage: "plus")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.savePink.opacity(0.72))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Menu {
+                    ForEach(lists) { list in
+                        Button(list.title) {
+                            onAddToList(list.id)
+                        }
+                    }
+                    Divider()
+                    Button("New list") {
+                        let list = onCreateList()
+                        onAddToList(list.id)
+                    }
+                } label: {
+                    Label("Choose list", systemImage: "list.bullet.rectangle")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.savePink.opacity(0.72))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.saveCream.opacity(0.32))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.26), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct CollaborativeListCard: View {
+    let list: SaveCollaborativeList
+    let isSelected: Bool
+    let existingPlaces: [Place]
+    let viewerURL: URL?
+    let editorURL: URL?
+    let onSelect: () -> Void
+    let onSaveItem: (SaveListItem) -> Void
+    let onPlan: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button(action: onSelect) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "list.bullet.rectangle.portrait.fill")
+                        .font(.title3)
+                        .foregroundColor(.saveInk)
+                        .frame(width: 32, height: 32)
+                        .background(Color.savePink.opacity(0.76))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(list.title)
+                            .font(.subheadline.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .lineLimit(2)
+                        Text("\(list.placeCountLabel) · \(list.viewerRole.displayName)")
+                            .font(.caption)
+                            .foregroundColor(.saveCocoa.opacity(0.72))
+                        if let note = list.note, !note.isEmpty {
+                            Text(note)
+                                .font(.caption2)
+                                .foregroundColor(.saveCocoa.opacity(0.68))
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Spacer()
+                    Image(systemName: isSelected ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.saveCocoa.opacity(0.64))
+                }
+            }
+            .buttonStyle(.plain)
+
+            if isSelected {
+                listActions
+                listItems
+            }
+        }
+        .padding(12)
+        .background(Color.saveNotebookPage.opacity(0.62))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var listActions: some View {
+        HStack(spacing: 8) {
+            Button(action: onPlan) {
+                Label("Plan", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color.saveSignal.opacity(0.56))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(list.items.isEmpty)
+
+            if let viewerURL {
+                ShareLink(item: viewerURL) {
+                    Label("Viewer", systemImage: "square.and.arrow.up")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.saveHoney.opacity(0.72))
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+            }
+
+            if list.canEdit, let editorURL {
+                ShareLink(item: editorURL) {
+                    Label("Editor", systemImage: "person.badge.plus")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.saveMint.opacity(0.72))
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private var listItems: some View {
+        VStack(spacing: 8) {
+            if list.items.isEmpty {
+                Text("Open a place or map result, then add it to this list.")
+                    .font(.caption)
+                    .foregroundColor(.saveCocoa.opacity(0.72))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(list.items) { item in
+                    HStack(alignment: .top, spacing: 10) {
+                        AsyncImage(url: item.photoURLs.first.flatMap(URL.init(string:))) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Image(systemName: item.source == .savedPlace ? "mappin.circle.fill" : "map")
+                                .font(.subheadline)
+                                .foregroundColor(.saveCocoa)
+                        }
+                        .frame(width: 42, height: 42)
+                        .background(Color.saveCream.opacity(0.8))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.title)
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.saveInk)
+                                .lineLimit(2)
+                            Text(item.subtitle)
+                                .font(.caption2)
+                                .foregroundColor(.saveCocoa.opacity(0.72))
+                                .lineLimit(2)
+                            Text(item.source.label)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(item.source == .savedPlace ? .saveCocoa : .saveCoral)
+                        }
+
+                        Spacer()
+
+                        if item.alreadySaved(in: existingPlaces) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.subheadline)
+                                .foregroundColor(.saveSignal)
+                                .accessibilityLabel("Already saved")
+                        } else {
+                            Button(action: { onSaveItem(item) }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.saveInk)
+                            }
+                            .accessibilityLabel("Save to my SAV-E")
+                        }
+                    }
+                    .padding(9)
+                    .background(Color.saveCream.opacity(0.34))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+        }
     }
 }
 

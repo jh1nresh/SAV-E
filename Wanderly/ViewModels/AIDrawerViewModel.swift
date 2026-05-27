@@ -194,6 +194,10 @@ final class AIDrawerViewModel: ObservableObject {
         ))
     }
 
+    func showCollaborativeListPlan(_ list: SaveCollaborativeList) {
+        drawerState = .displaying(list.itineraryResponse())
+    }
+
     func resolvePlaces(from ids: [String]) -> [Place] {
         let uuids = Set(ids.compactMap { UUID(uuidString: $0) })
         return places.filter { uuids.contains($0.id) }
