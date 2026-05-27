@@ -75,7 +75,7 @@ struct ContentView: View {
                         mapVM.clearSelectedMapObject()
                     }
                 )
-                    .presentationDetents([.height(72), .fraction(0.34), .medium, .large], selection: $drawerDetent)
+                    .presentationDetents([.height(72), .height(88), .fraction(0.34), .fraction(0.38), .medium, .large], selection: $drawerDetent)
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .interactiveDismissDisabled(true)
@@ -90,7 +90,7 @@ struct ContentView: View {
                 drawerVM.returnToCommands()
                 mapDetailDrawerItem = .savedPlace(place)
                 withAnimation(.spring(duration: 0.3)) {
-                    drawerDetent = .height(72)
+                    drawerDetent = .height(88)
                 }
             }
             .onChange(of: mapVM.selectedReviewCandidate) { _, candidate in
@@ -98,7 +98,7 @@ struct ContentView: View {
                 drawerVM.returnToCommands()
                 mapDetailDrawerItem = .reviewCandidate(candidate)
                 withAnimation(.spring(duration: 0.3)) {
-                    drawerDetent = .height(72)
+                    drawerDetent = .height(88)
                 }
             }
             .onChange(of: mapVM.selectedMapCandidate) { _, candidate in
@@ -106,7 +106,7 @@ struct ContentView: View {
                 drawerVM.returnToCommands()
                 mapDetailDrawerItem = .unsavedCandidate(candidate)
                 withAnimation(.spring(duration: 0.3)) {
-                    drawerDetent = .height(72)
+                    drawerDetent = .height(88)
                 }
             }
             .onChange(of: mapVM.selectedSocialPlace) { _, place in
@@ -114,7 +114,7 @@ struct ContentView: View {
                 drawerVM.returnToCommands()
                 mapDetailDrawerItem = .socialPlace(place)
                 withAnimation(.spring(duration: 0.3)) {
-                    drawerDetent = .height(72)
+                    drawerDetent = .height(88)
                 }
             }
             .onChange(of: mapVM.places) { _, places in

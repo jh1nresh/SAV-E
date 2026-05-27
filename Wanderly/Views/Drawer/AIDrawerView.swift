@@ -72,20 +72,23 @@ struct AIDrawerView: View {
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
     @State private var newListNote = ""
-    @State private var mapDetailDetent: PresentationDetent = .height(88)
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(spacing: 0) {
-                searchBar
-                if showsContentArea(for: proxy.size.height) {
-                    Divider().opacity(colorScheme == .dark ? 0.18 : 0.28)
-                    contentArea
+            if let mapDetailDrawerItem {
+                mapDetailDrawer(for: mapDetailDrawerItem)
+            } else {
+                VStack(spacing: 0) {
+                    searchBar
+                    if showsContentArea(for: proxy.size.height) {
+                        Divider().opacity(colorScheme == .dark ? 0.18 : 0.28)
+                        contentArea
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background {
-                DrawerGlassBackground(colorScheme: colorScheme)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background {
+                    DrawerGlassBackground(colorScheme: colorScheme)
+                }
             }
         }
         .sheet(isPresented: $viewModel.showPlaceList) {
@@ -100,66 +103,8 @@ struct AIDrawerView: View {
         .sheet(isPresented: $showProfile) {
             ProfileView(waitingClues: reviewCandidates.count)
         }
-        .sheet(item: $mapDetailDrawerItem, onDismiss: {
-            mapDetailDetent = .height(88)
-            onDismissMapDetail()
-        }) { item in
-            MapDetailDrawerView(
-                item: item,
-                detent: $mapDetailDetent,
-                editableLists: collaborativeLists.filter(\.canEdit),
-                isWorkingReviewCandidateID: candidateActionInFlight,
-                isWorkingMapCandidateID: mapCandidateActionInFlight,
-                onClose: {
-                    mapDetailDrawerItem = nil
-                },
-                onDeletePlace: { place in
-                    try await onDeletePlace(place)
-                    viewModel.removePlace(place)
-                    mapDetailDrawerItem = nil
-                },
-                onPlanAroundPlace: { place in
-                    mapDetailDrawerItem = nil
-                    viewModel.query = "Plan around \(place.name)"
-                    Task { await viewModel.submit() }
-                },
-                onConfirmCandidate: { candidate in
-                    performCandidateAction(candidate, successMessage: "Marked as confirmed. Save it as a Map Stamp when ready.") {
-                        try await onConfirmCandidate(candidate)
-                    }
-                },
-                onRejectCandidate: { candidate in
-                    performCandidateAction(candidate, successMessage: "Removed from Review.") {
-                        try await onRejectCandidate(candidate)
-                        mapDetailDrawerItem = nil
-                    }
-                },
-                onSaveCandidate: { candidate in
-                    performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
-                        try await onSaveCandidate(candidate)
-                        mapDetailDrawerItem = nil
-                    }
-                },
-                onSaveMapCandidate: { candidate in
-                    performMapCandidateAction(candidate) {
-                        try await onSaveMapCandidate(candidate)
-                        mapDetailDrawerItem = nil
-                    }
-                },
-                onSaveSocialPlace: { place in
-                    Task { await saveSocialPlace(place) }
-                },
-                onCreateList: createListForPicker,
-                onAddPlaceToList: onAddPlaceToList,
-                onAddMapCandidateToList: onAddMapCandidateToList
-            )
-            .presentationDetents([.height(88), .fraction(0.38), .large], selection: $mapDetailDetent)
-            .presentationDragIndicator(.visible)
-            .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.38)))
-            .presentationBackground(.ultraThinMaterial)
-            .presentationCornerRadius(30)
-        }
         .onChange(of: viewModel.drawerState) { _, state in
+            guard mapDetailDrawerItem == nil else { return }
             withAnimation(.spring(duration: 0.3)) {
                 switch state {
                 case .idle:             drawerDetent = .height(72)
@@ -190,6 +135,56 @@ struct AIDrawerView: View {
                 break
             }
         }
+    }
+
+    private func mapDetailDrawer(for item: MapDetailDrawerItem) -> some View {
+        MapDetailDrawerView(
+            item: item,
+            detent: $drawerDetent,
+            editableLists: collaborativeLists.filter(\.canEdit),
+            isWorkingReviewCandidateID: candidateActionInFlight,
+            isWorkingMapCandidateID: mapCandidateActionInFlight,
+            onClose: closeMapDetail,
+            onDeletePlace: { place in
+                try await onDeletePlace(place)
+                viewModel.removePlace(place)
+                closeMapDetail()
+            },
+            onPlanAroundPlace: { place in
+                closeMapDetail()
+                viewModel.query = "Plan around \(place.name)"
+                Task { await viewModel.submit() }
+            },
+            onConfirmCandidate: { candidate in
+                performCandidateAction(candidate, successMessage: "Marked as confirmed. Save it as a Map Stamp when ready.") {
+                    try await onConfirmCandidate(candidate)
+                }
+            },
+            onRejectCandidate: { candidate in
+                performCandidateAction(candidate, successMessage: "Removed from Review.") {
+                    try await onRejectCandidate(candidate)
+                    closeMapDetail()
+                }
+            },
+            onSaveCandidate: { candidate in
+                performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
+                    try await onSaveCandidate(candidate)
+                    closeMapDetail()
+                }
+            },
+            onSaveMapCandidate: { candidate in
+                performMapCandidateAction(candidate) {
+                    try await onSaveMapCandidate(candidate)
+                    closeMapDetail()
+                }
+            },
+            onSaveSocialPlace: { place in
+                Task { await saveSocialPlace(place) }
+            },
+            onCreateList: createListForPicker,
+            onAddPlaceToList: onAddPlaceToList,
+            onAddMapCandidateToList: onAddMapCandidateToList
+        )
     }
 
     // MARK: - Search Bar
@@ -1375,7 +1370,7 @@ struct AIDrawerView: View {
         do {
             try await onSaveSocialPlace(place)
             addSpotStatus = "Saved \(place.name) to your SAV-E."
-            mapDetailDrawerItem = nil
+            closeMapDetail()
         } catch {
             addSpotStatus = error.localizedDescription
         }
@@ -1502,6 +1497,14 @@ struct AIDrawerView: View {
         showLists = false
         searchFocused = false
         withAnimation { drawerDetent = .height(72) }
+    }
+
+    private func closeMapDetail() {
+        mapDetailDrawerItem = nil
+        onDismissMapDetail()
+        withAnimation(.spring(duration: 0.28)) {
+            drawerDetent = .height(72)
+        }
     }
 
     private func importURLToReviewCandidates(_ url: URL) {
@@ -1636,19 +1639,27 @@ private struct MapDetailDrawerView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(spacing: 0) {
-                compactHeader
-
-                if proxy.size.height > 132 {
+            if proxy.size.height <= 132 {
+                SelectedPlaceCapsule(
+                    item: item,
+                    onExpand: expandDetail,
+                    onClose: onClose
+                )
+                .padding(.horizontal, 18)
+                .padding(.top, 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                VStack(spacing: 0) {
+                    compactHeader
                     Divider()
                         .opacity(colorScheme == .dark ? 0.18 : 0.24)
                         .padding(.horizontal, 18)
                     expandedContent
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background {
-                MapDetailDrawerBackground(colorScheme: colorScheme)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background {
+                    MapDetailDrawerBackground(colorScheme: colorScheme)
+                }
             }
         }
     }
@@ -1660,12 +1671,12 @@ private struct MapDetailDrawerView: View {
             SaveMemoryBadge(state: badgeState, size: 42)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(item.title)
                     .font(.subheadline.weight(.black))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
 
-                Text(categoryLabel)
+                Text(item.subtitle)
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveCocoa.opacity(0.76))
                     .lineLimit(1)
@@ -1687,6 +1698,12 @@ private struct MapDetailDrawerView: View {
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 12)
+    }
+
+    private func expandDetail() {
+        withAnimation(.spring(duration: 0.28)) {
+            detent = .fraction(0.38)
+        }
     }
 
     private var expandedContent: some View {
@@ -1766,8 +1783,105 @@ private struct MapDetailDrawerView: View {
         }
     }
 
-    private var title: String {
+    private var badgeState: SaveMemoryBadge.State {
         switch item {
+        case .savedPlace(let place):
+            return .saved(place.category)
+        case .reviewCandidate(let candidate):
+            return candidate.hasReliableCoordinates ? .ready : .clue
+        case .unsavedCandidate:
+            return .ready
+        case .socialPlace:
+            return .ready
+        }
+    }
+}
+
+private struct SelectedPlaceCapsule: View {
+    let item: MapDetailDrawerItem
+    let onExpand: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            shareAction
+                .frame(width: 44, height: 44)
+
+            Button(action: onExpand) {
+                VStack(spacing: 4) {
+                    Text(item.title)
+                        .font(.subheadline.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .frame(maxWidth: .infinity)
+
+                    Text(item.subtitle)
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.saveCocoa.opacity(0.72))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .frame(maxWidth: .infinity)
+                }
+                .multilineTextAlignment(.center)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open \(item.title) details")
+            .accessibilityHint("Expands the selected place drawer")
+
+            Button(action: onClose) {
+                SelectedPlaceCapsuleIcon(systemImage: "xmark")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close selected place")
+            .frame(width: 44, height: 44)
+        }
+        .padding(.horizontal, 2)
+        .frame(height: 74)
+        .gesture(
+            DragGesture(minimumDistance: 8)
+                .onEnded { value in
+                    if value.translation.height < -12 {
+                        onExpand()
+                    }
+                }
+        )
+    }
+
+    @ViewBuilder
+    private var shareAction: some View {
+        if let url = item.shareURL {
+            ShareLink(item: url, subject: Text(item.shareSubject), message: Text(item.shareText)) {
+                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share \(item.title)")
+        } else {
+            ShareLink(item: item.shareText, subject: Text(item.shareSubject)) {
+                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share \(item.title)")
+        }
+    }
+}
+
+private struct SelectedPlaceCapsuleIcon: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 15, weight: .black))
+            .foregroundColor(.saveInk)
+            .frame(width: 38, height: 38)
+            .background(Color.saveNotebookPage.opacity(0.34))
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.30), lineWidth: 1))
+    }
+}
+
+private extension MapDetailDrawerItem {
+    var title: String {
+        switch self {
         case .savedPlace(let place):
             return place.name
         case .reviewCandidate(let candidate):
@@ -1779,8 +1893,8 @@ private struct MapDetailDrawerView: View {
         }
     }
 
-    private var categoryLabel: String {
-        switch item {
+    var subtitle: String {
+        switch self {
         case .savedPlace(let place):
             return "\(place.category.displayName) · Map Stamp"
         case .reviewCandidate(let candidate):
@@ -1792,16 +1906,36 @@ private struct MapDetailDrawerView: View {
         }
     }
 
-    private var badgeState: SaveMemoryBadge.State {
-        switch item {
-        case .savedPlace(let place):
-            return .saved(place.category)
+    var shareSubject: String {
+        switch self {
+        case .savedPlace(let place), .socialPlace(let place):
+            return place.shareSubject
         case .reviewCandidate(let candidate):
-            return candidate.hasReliableCoordinates ? .ready : .clue
-        case .unsavedCandidate:
-            return .ready
-        case .socialPlace:
-            return .ready
+            return candidate.shareSubject
+        case .unsavedCandidate(let candidate):
+            return candidate.shareSubject
+        }
+    }
+
+    var shareURL: URL? {
+        switch self {
+        case .savedPlace(let place), .socialPlace(let place):
+            return place.saveShareURL
+        case .reviewCandidate(let candidate):
+            return candidate.saveShareURL
+        case .unsavedCandidate(let candidate):
+            return candidate.saveShareURL
+        }
+    }
+
+    var shareText: String {
+        switch self {
+        case .savedPlace(let place), .socialPlace(let place):
+            return place.shareText
+        case .reviewCandidate(let candidate):
+            return candidate.shareText
+        case .unsavedCandidate(let candidate):
+            return candidate.shareText
         }
     }
 }
