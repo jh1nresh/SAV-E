@@ -1,6 +1,6 @@
 # SAV-E Design System
 
-> Last updated: 2026-05-26
+> Last updated: 2026-05-27
 > Status: source of truth for native iOS design work
 
 ## Product Frame
@@ -34,6 +34,22 @@ Memo elephant -> cream notebook -> source clue -> review candidate -> map stamp 
 
 Every screen should make one of those states obvious. If a user cannot tell whether
 an item is a clue, a candidate, or a saved place in five seconds, the UI failed.
+
+## Platform Boundary
+
+Borrow Apple Maps for spatial navigation. Own SAV-E semantics for memory, source
+evidence, saved state, review candidates, lists, and AI actions.
+
+Apple Maps is the reference for map literacy, not the product identity. SAV-E can
+reuse platform-native patterns such as map gestures, current-location placement,
+bottom drawer mechanics, selected-place focus, and compact place information because
+those reduce learning cost on iOS.
+
+SAV-E must diverge wherever the user is deciding what a place means in their own
+memory. The drawer, detail actions, social/referral surfaces, review queue, and AI
+recommendations should make saved memory, unsaved candidates, source evidence,
+lists, and planning actions explicit. The map shell may feel familiar; the memory
+layer must feel like SAV-E.
 
 ## Core Metaphors
 
