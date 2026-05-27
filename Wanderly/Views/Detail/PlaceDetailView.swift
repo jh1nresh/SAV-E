@@ -24,22 +24,11 @@ struct PlaceDetailView: View {
                 PlaceBusinessPhotoCarousel(imageURLs: detailPlace.businessPhotoURLStrings)
                     .padding(.horizontal)
 
-                PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
-                    .padding(.horizontal)
-
                 PlaceBasicInfoPanel(place: detailPlace)
                     .padding(.horizontal)
 
-                if !detailPlace.sourceEvidence.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Evidence receipt", systemImage: "doc.text.magnifyingglass")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.saveInk)
-                        EvidenceLinkList(evidence: detailPlace.sourceEvidence, maxItems: 4)
-                    }
+                PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
                     .padding(.horizontal)
-                }
 
                 // Notes
                 if let note = cleanUserNote {
@@ -62,6 +51,9 @@ struct PlaceDetailView: View {
                     }
                     .padding(.horizontal)
                 }
+
+                PlaceEvidenceReceiptPanel(place: detailPlace)
+                    .padding(.horizontal)
 
                 // Mini map
                 Map(position: .constant(.region(MKCoordinateRegion(
@@ -160,15 +152,15 @@ struct PlaceDetailView: View {
 
                     HStack(spacing: 6) {
                         PlatformIcon(platform: detailPlace.sourcePlatform, size: 14)
-                        Text("Saved from \(detailPlace.sourcePlatform.displayName)")
+                        Text(detailPlace.sourceConfirmationLabel)
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.saveCocoa)
                     }
 
-                    HStack(spacing: 8) {
+                    FlowLayout(spacing: 8) {
                         CategoryPill(category: detailPlace.category, isSelected: true)
-                        if let priceRange = detailPlace.priceRange {
-                            InfoChip(icon: "tag.fill", text: priceRange, color: .saveCocoa)
+                        ForEach(detailPlace.verificationChips(), id: \.text) { chip in
+                            InfoChip(icon: chip.icon, text: chip.text, color: .saveCocoa)
                         }
                     }
                 }
@@ -213,23 +205,14 @@ struct PlaceDetailView: View {
     }
 
     private var memorySummary: String {
-        if let areaLabel, detailPlace.sourcePlatform != .other {
-            return "Saved from \(detailPlace.sourcePlatform.displayName). SAV-E matched it to \(detailPlace.name) in \(areaLabel)."
+        if let areaLabel {
+            return "Map verified for \(detailPlace.name) in \(areaLabel). Address confirmed for this SAV-E memory."
         }
-        if detailPlace.sourcePlatform != .other {
-            return "Saved from \(detailPlace.sourcePlatform.displayName). SAV-E matched the source to this confirmed place."
-        }
-        return "Saved as a confirmed place memory in SAV-E."
+        return "Map verified and address confirmed for this SAV-E memory."
     }
 
     private var cleanUserNote: String? {
-        guard let note = detailPlace.note?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !note.isEmpty,
-              !note.localizedCaseInsensitiveContains("Source URL:"),
-              !note.localizedCaseInsensitiveContains("Analysis pipeline:"),
-              !note.localizedCaseInsensitiveContains("Evidence tier:")
-        else { return nil }
-        return note
+        detailPlace.cleanMemoryNote
     }
 
     private func enrichBusinessDetails() async {

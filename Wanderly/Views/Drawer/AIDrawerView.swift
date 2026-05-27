@@ -1745,7 +1745,7 @@ private struct UnsavedMapCandidateCard: View {
                     SaveMemoryBadge(state: .ready, size: 40)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("UNSAVED MAP PLACE")
+                        Text("UNSAVED CANDIDATE")
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
                             .lineLimit(1)
@@ -1770,7 +1770,7 @@ private struct UnsavedMapCandidateCard: View {
                     Spacer(minLength: 0)
                 }
 
-                Text("This is a visible map result from nearby search. Save it only after it looks like the place you want.")
+                Text("This is a map result, not one of your SAV-E memories yet. Save it only after it looks like the place you want.")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.82))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1779,29 +1779,32 @@ private struct UnsavedMapCandidateCard: View {
 
                 UnsavedMapCandidateBasicInfo(candidate: candidate)
 
-                if !candidate.evidence.isEmpty {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .font(.caption2.weight(.bold))
-                            Text("Map clue")
-                                .font(.caption2.weight(.black))
-                            Spacer()
-                        }
-                        .foregroundColor(.saveCocoa)
-
-                        EvidenceLinkList(evidence: candidate.evidence, maxItems: 4)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.caption2.weight(.bold))
+                        Text("Map clue")
+                            .font(.caption2.weight(.black))
+                        Spacer()
                     }
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.saveSky.opacity(0.16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                            )
-                    )
+                    .foregroundColor(.saveCocoa)
+
+                    Text("Map clue means this came from a map search result. It is not a Map Stamp or memory until you save it.")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.saveCocoa.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    EvidenceLinkList(evidence: mapClueEvidence, maxItems: 4)
                 }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.saveSky.opacity(0.16))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.saveNotebookLine, style: StrokeStyle(lineWidth: 1, dash: [4]))
+                        )
+                )
 
                 HStack(spacing: 8) {
                     CandidateActionButton(
@@ -1837,6 +1840,15 @@ private struct UnsavedMapCandidateCard: View {
         .opacity(isWorking ? 0.65 : 1)
     }
 
+    private var mapClueEvidence: [String] {
+        let fallback = [
+            "Visible map result; not a SAV-E memory",
+            "State: unsaved candidate",
+            "Source: Maps result"
+        ]
+        return candidate.evidence.isEmpty ? fallback : candidate.evidence
+    }
+
 }
 
 private struct UnsavedMapCandidateBasicInfo: View {
@@ -1860,7 +1872,7 @@ private struct UnsavedMapCandidateBasicInfo: View {
                 }
                 UnsavedMapCandidateInfoRow(icon: candidate.category?.iconName ?? "mappin.and.ellipse", title: "Category", value: candidate.category?.displayName ?? "Place")
                 UnsavedMapCandidateInfoRow(icon: "mappin.and.ellipse", title: "Address", value: candidate.subtitle)
-                UnsavedMapCandidateInfoRow(icon: "map.fill", title: "Source", value: "Maps result")
+                UnsavedMapCandidateInfoRow(icon: "map.fill", title: "Source", value: "Map clue")
             }
         }
         .padding(10)

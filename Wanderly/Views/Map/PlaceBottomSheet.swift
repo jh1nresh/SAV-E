@@ -69,8 +69,8 @@ struct PlaceBottomSheet: View {
 
             PlaceBusinessPhotoCarousel(imageURLs: place.businessPhotoURLStrings)
 
-            PlaceInsightSummaryPanel(place: place, fallbackSummary: memorySummary)
             PlaceBasicInfoPanel(place: place)
+            PlaceInsightSummaryPanel(place: place, fallbackSummary: memorySummary)
 
             FlowLayout(spacing: 8) {
                 CategoryPill(category: place.category, isSelected: true)
@@ -80,8 +80,9 @@ struct PlaceBottomSheet: View {
                 if let priceRange = place.priceRange {
                     PlaceMemoryChip(icon: "tag.fill", text: priceRange)
                 }
-                PlaceMemoryChip(icon: "link", text: sourceChipLabel)
-                PlaceMemoryChip(icon: "mappin.and.ellipse", text: "Map confirmed")
+                ForEach(verificationChips, id: \.text) { chip in
+                    PlaceMemoryChip(icon: chip.icon, text: chip.text)
+                }
             }
 
             // Dishes
@@ -119,20 +120,7 @@ struct PlaceBottomSheet: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Evidence receipt")
-                    .font(.caption.weight(.black))
-                    .foregroundColor(.saveCocoa)
-                if !place.sourceEvidence.isEmpty {
-                    EvidenceLinkList(evidence: place.sourceEvidence, maxItems: 4)
-                } else {
-                    FlowLayout(spacing: 8) {
-                        PlaceMemoryChip(icon: "link", text: sourceChipLabel)
-                        PlaceMemoryChip(icon: "mappin", text: "Address saved")
-                        PlaceMemoryChip(icon: "checkmark.seal.fill", text: "Map ready")
-                    }
-                }
-            }
+            PlaceEvidenceReceiptPanel(place: place)
 
             HStack(spacing: 8) {
                 Button {
@@ -197,8 +185,12 @@ struct PlaceBottomSheet: View {
         }
     }
 
-    private var sourceChipLabel: String {
-        place.sourcePlatform == .other ? "Source saved" : "\(place.sourcePlatform.displayName) source"
+    private var sourceConfirmationLabel: String {
+        place.sourceConfirmationLabel
+    }
+
+    private var verificationChips: [PlaceVerificationChip] {
+        place.verificationChips(sourceLabel: sourceConfirmationLabel)
     }
 
     private var areaLabel: String? {
@@ -211,23 +203,14 @@ struct PlaceBottomSheet: View {
     }
 
     private var memorySummary: String {
-        if let areaLabel, place.sourcePlatform != .other {
-            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched it to \(place.name) in \(areaLabel)."
+        if let areaLabel {
+            return "Map verified for \(place.name) in \(areaLabel). Address confirmed for this SAV-E memory."
         }
-        if place.sourcePlatform != .other {
-            return "Saved from \(place.sourcePlatform.displayName). SAV-E matched the source to this confirmed place."
-        }
-        return "Saved as a confirmed place memory in SAV-E."
+        return "Map verified and address confirmed for this SAV-E memory."
     }
 
     private var cleanUserNote: String? {
-        guard let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !note.isEmpty,
-              !note.localizedCaseInsensitiveContains("Source URL:"),
-              !note.localizedCaseInsensitiveContains("Analysis pipeline:"),
-              !note.localizedCaseInsensitiveContains("Evidence tier:")
-        else { return nil }
-        return note
+        place.cleanMemoryNote
     }
 
 }
@@ -253,6 +236,7 @@ struct PlaceBasicInfoPanel: View {
                 }
                 PlaceInfoRow(icon: place.category.iconName, title: "Category", value: place.category.displayName)
                 PlaceInfoRow(icon: "mappin.and.ellipse", title: "Address", value: place.address.isEmpty ? "No address saved" : place.address)
+                PlaceInfoRow(icon: "link", title: "Source", value: place.sourceConfirmationLabel)
                 if let priceRange = place.priceRange {
                     PlaceInfoRow(icon: "tag.fill", title: "Price", value: priceRange)
                 }
@@ -288,6 +272,47 @@ struct PlaceBasicInfoPanel: View {
             return "\(value) reviews"
         }
         return nil
+    }
+}
+
+struct PlaceEvidenceReceiptPanel: View {
+    let place: Place
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                if !place.sourceEvidence.isEmpty {
+                    EvidenceLinkList(evidence: place.sourceEvidence, maxItems: 8)
+                } else {
+                    FlowLayout(spacing: 8) {
+                        PlaceMemoryChip(icon: "checkmark.seal.fill", text: "Map verified")
+                        PlaceMemoryChip(icon: "mappin", text: "Address confirmed")
+                        PlaceMemoryChip(icon: "link", text: place.sourceConfirmationLabel)
+                    }
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .font(.caption.weight(.black))
+                Text("Evidence receipt")
+                    .font(.caption.weight(.black))
+                Spacer()
+                Text(isExpanded ? "Raw" : "Raw evidence")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveCocoa.opacity(0.72))
+            }
+            .foregroundColor(.saveCocoa)
+        }
+        .padding(10)
+        .background(Color.saveNotebookPage.opacity(0.72))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -337,6 +362,67 @@ private struct PlaceMemoryChip: View {
         .background(Color.saveNotebookPage)
         .clipShape(Capsule())
         .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1))
+    }
+}
+
+struct PlaceVerificationChip: Hashable {
+    let icon: String
+    let text: String
+}
+
+extension Place {
+    var sourceConfirmationLabel: String {
+        if primarySourceURL?.host(percentEncoded: false)?.localizedCaseInsensitiveContains("maps.apple.com") == true {
+            return "Found on Apple Maps"
+        }
+        if primarySourceURL?.host(percentEncoded: false)?.localizedCaseInsensitiveContains("google") == true ||
+            sourcePlatform == .googleMaps {
+            return googlePlaceId == nil ? "Found on Google Maps" : "Google Places details"
+        }
+        if sourcePlatform != .other {
+            return "Found on \(sourcePlatform.displayName)"
+        }
+        if googlePlaceId != nil {
+            return "Google Places details"
+        }
+        return "Source saved"
+    }
+
+    var cleanMemoryNote: String? {
+        guard let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+            return nil
+        }
+        let cleanedLines = note
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { line in
+                !line.localizedCaseInsensitiveContains("Source URL:") &&
+                !line.localizedCaseInsensitiveContains("Analysis pipeline:") &&
+                !line.localizedCaseInsensitiveContains("Evidence tier:") &&
+                !line.localizedCaseInsensitiveContains("Apple Maps POI") &&
+                !line.localizedCaseInsensitiveContains("Apple Maps result") &&
+                !line.localizedCaseInsensitiveContains("POI:") &&
+                !line.localizedCaseInsensitiveContains("MKPOICategory") &&
+                !line.localizedCaseInsensitiveContains("Business photo: Google Places") &&
+                !line.localizedCaseInsensitiveContains("External reviews:")
+            }
+        guard !cleanedLines.isEmpty else { return nil }
+        return cleanedLines.joined(separator: "\n")
+    }
+
+    func verificationChips(sourceLabel: String? = nil) -> [PlaceVerificationChip] {
+        var chips = [
+            PlaceVerificationChip(icon: "checkmark.seal.fill", text: "Map verified")
+        ]
+        if !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            chips.append(PlaceVerificationChip(icon: "mappin.and.ellipse", text: "Address confirmed"))
+        }
+        chips.append(PlaceVerificationChip(icon: "link", text: sourceLabel ?? sourceConfirmationLabel))
+        if googlePlaceId != nil || googleRating != nil || googlePriceLevel != nil || openingHours != nil {
+            chips.append(PlaceVerificationChip(icon: "building.2.fill", text: "Google Places details"))
+        }
+        return chips
     }
 }
 
