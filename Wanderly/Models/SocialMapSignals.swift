@@ -15,6 +15,42 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         case .publicGuide: return "Public guide"
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .privateMemory: return "lock.fill"
+        case .friends: return "person.2.fill"
+        case .publicLink: return "link"
+        case .publicGuide: return "globe.americas.fill"
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .privateMemory:
+            return "Only you can see this memory."
+        case .friends:
+            return "Followers can see this as a friend signal."
+        case .publicLink:
+            return "Shareable by link, but not used for trending."
+        case .publicGuide:
+            return "Can appear in public guide and trending surfaces."
+        }
+    }
+
+    var allowsFriendSignal: Bool {
+        self != .privateMemory
+    }
+
+    var allowsTrendingSignal: Bool {
+        self == .publicGuide
+    }
+}
+
+enum SaveFollowSource: String, Codable, Hashable {
+    case manual
+    case referral
+    case appClipHandoff = "app_clip_handoff"
 }
 
 enum SaveSocialLens: String, Codable, CaseIterable, Hashable {

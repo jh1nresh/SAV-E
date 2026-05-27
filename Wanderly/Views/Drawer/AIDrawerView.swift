@@ -39,6 +39,7 @@ struct AIDrawerView: View {
     var onRejectCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
+    var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onImportURLAsReviewCandidates: (URL) async throws -> Int = { _ in 0 }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var collaborativeLists: [SaveCollaborativeList] = []
@@ -101,7 +102,13 @@ struct AIDrawerView: View {
             )
         }
         .sheet(isPresented: $showProfile) {
-            ProfileView(savedPlaces: viewModel.places, waitingClues: reviewCandidates.count)
+            ProfileView(
+                savedPlaces: viewModel.places,
+                waitingClues: reviewCandidates.count,
+                onUpdatePlaceVisibility: { place, visibility in
+                    try await onUpdatePlaceVisibility(place, visibility)
+                }
+            )
         }
         .onChange(of: viewModel.drawerState) { _, state in
             guard mapDetailDrawerItem == nil else { return }
@@ -180,6 +187,9 @@ struct AIDrawerView: View {
             },
             onSaveSocialPlace: { place in
                 Task { await saveSocialPlace(place) }
+            },
+            onUpdatePlaceVisibility: { place, visibility in
+                try await onUpdatePlaceVisibility(place, visibility)
             },
             onCreateList: createListForPicker,
             onAddPlaceToList: onAddPlaceToList,
@@ -472,6 +482,8 @@ struct AIDrawerView: View {
                     } onPlanAround: {
                         viewModel.query = "Plan around \(place.name)"
                         Task { await viewModel.submit() }
+                    } onUpdateVisibility: { visibility in
+                        try await onUpdatePlaceVisibility(place, visibility)
                     }
 
                     AddToListPanel(
@@ -1641,6 +1653,7 @@ private struct MapDetailDrawerView: View {
     let onSaveCandidate: (PlaceReviewCandidate) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
+    let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
     let onCreateList: () -> SaveCollaborativeList
     let onAddPlaceToList: (Place, UUID) throws -> Void
     let onAddMapCandidateToList: (SaveMapCandidate, UUID) throws -> Void
@@ -1727,6 +1740,9 @@ private struct MapDetailDrawerView: View {
                         onPlanAroundPlace: { onPlanAroundPlace(place) },
                         onDeletePlace: {
                             try await onDeletePlace(place)
+                        },
+                        onUpdateVisibility: { visibility in
+                            try await onUpdatePlaceVisibility(place, visibility)
                         }
                     )
 
@@ -2044,6 +2060,7 @@ private struct SavedMapDetailDrawerContent: View {
     let place: Place
     let onPlanAroundPlace: () -> Void
     let onDeletePlace: () async throws -> Void
+    let onUpdateVisibility: (PlaceVisibility) async throws -> Void
     @Environment(\.openURL) private var openURL
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -2068,6 +2085,10 @@ private struct SavedMapDetailDrawerContent: View {
 
             PlaceBasicInfoPanel(place: place)
             PlaceInsightSummaryPanel(place: place, fallbackSummary: memorySummary)
+            PlaceVisibilityControl(
+                visibility: place.effectiveVisibility,
+                onChange: onUpdateVisibility
+            )
 
             HStack(spacing: 8) {
                 Button {

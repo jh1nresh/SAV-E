@@ -390,7 +390,7 @@ final class MapViewModel: ObservableObject {
     var visibleSocialPlaces: [Place] {
         var result = socialPlaces.filter { place in
             guard let signal = place.socialSignal else { return false }
-            return signal.lens == socialLens || (socialLens == .forYou && signal.lens != .trending)
+            return socialLens == .forYou || signal.lens == socialLens
         }
         if !selectedCategories.isEmpty {
             result = result.filter { selectedCategories.contains($0.category) }
@@ -415,12 +415,13 @@ final class MapViewModel: ObservableObject {
         guard let userId = authService.currentUserId else {
             importPendingPlacesForLocalUse()
             reviewCandidates = []
-            refreshSocialSignals()
+            socialPlaces = []
             return
         }
 
         do {
             places = try await supabaseService.fetchPlaces(for: userId)
+            await completeReferralHandoffIfNeeded()
             try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
             do {
                 try await refreshReviewCandidates()
@@ -428,11 +429,11 @@ final class MapViewModel: ObservableObject {
                 print("MapViewModel: failed to fetch review candidates: \(error)")
             }
             try await importPendingPlaces(for: userId)
-            refreshSocialSignals()
+            await refreshSocialSignals()
         } catch {
             print("MapViewModel: failed to load places: \(error)")
             importPendingPlacesForLocalUse()
-            refreshSocialSignals()
+            await refreshSocialSignals()
         }
     }
 
@@ -445,7 +446,7 @@ final class MapViewModel: ObservableObject {
 
         guard let userId = authService.currentUserId else {
             importPendingPlacesForLocalUse()
-            refreshSocialSignals()
+            socialPlaces = []
             return
         }
 
@@ -453,10 +454,11 @@ final class MapViewModel: ObservableObject {
         defer { isLoadingPlaces = false }
 
         do {
+            await completeReferralHandoffIfNeeded()
             try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
             try await importPendingPlaces(for: userId)
             try await refreshReviewCandidates()
-            refreshSocialSignals()
+            await refreshSocialSignals()
         } catch {
             print("MapViewModel: failed to process scene activation imports: \(error)")
         }
@@ -741,6 +743,7 @@ final class MapViewModel: ObservableObject {
         if selectedSocialPlace?.socialSignal?.lens != lens {
             selectedSocialPlace = nil
         }
+        Task { await refreshSocialSignals() }
     }
 
     @discardableResult
@@ -869,12 +872,45 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    private func refreshSocialSignals() {
-        let seeds = Place.socialSignalSeeds(near: places)
-        socialPlaces = seeds.filter { seed in
-            !places.contains { saved in
-                saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
-                    saved.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame
+    private func completeReferralHandoffIfNeeded() async {
+        guard let handoff = SaveReferralHandoffStore.shared.load(),
+              authService.currentUserId != nil
+        else { return }
+
+        do {
+            try await supabaseService.followProfile(
+                referralCode: handoff.referralCode,
+                lens: handoff.lens,
+                source: .appClipHandoff
+            )
+            SaveReferralHandoffStore.shared.clear()
+            socialLens = handoff.lens
+        } catch {
+            print("MapViewModel: failed to complete referral follow: \(error)")
+        }
+    }
+
+    private func refreshSocialSignals() async {
+        guard authService.currentUserId != nil else {
+            socialPlaces = []
+            return
+        }
+
+        do {
+            let signals = try await supabaseService.fetchSocialSignals(lens: socialLens)
+            socialPlaces = signals.filter { seed in
+                !places.contains { saved in
+                    saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
+                        saved.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame
+                }
+            }
+        } catch {
+            print("MapViewModel: failed to refresh social signals: \(error)")
+            socialPlaces = socialPlaces.filter { seed in
+                !places.contains { saved in
+                    saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
+                        saved.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame
+                }
             }
         }
     }
@@ -1139,6 +1175,27 @@ final class MapViewModel: ObservableObject {
         } catch {
             places = previousPlaces
             selectedPlace = place
+            throw error
+        }
+    }
+
+    func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
+        guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
+        let previousPlace = places[index]
+
+        places[index].visibility = visibility
+        if selectedPlace?.id == place.id {
+            selectedPlace = places[index]
+        }
+
+        do {
+            try await supabaseService.updatePlaceVisibility(visibility, for: place.id)
+            await refreshSocialSignals()
+        } catch {
+            places[index] = previousPlace
+            if selectedPlace?.id == place.id {
+                selectedPlace = previousPlace
+            }
             throw error
         }
     }

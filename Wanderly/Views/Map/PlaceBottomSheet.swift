@@ -4,6 +4,7 @@ struct PlaceBottomSheet: View {
     let place: Place
     var onDelete: (() async throws -> Void)?
     var onPlanAround: (() -> Void)?
+    var onUpdateVisibility: ((PlaceVisibility) async throws -> Void)?
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
     @State private var showDeleteConfirmation = false
@@ -73,6 +74,10 @@ struct PlaceBottomSheet: View {
 
             PlaceBasicInfoPanel(place: place)
             PlaceInsightSummaryPanel(place: place, fallbackSummary: memorySummary)
+            PlaceVisibilityControl(
+                visibility: place.effectiveVisibility,
+                onChange: onUpdateVisibility
+            )
 
             FlowLayout(spacing: 8) {
                 CategoryPill(category: place.category, isSelected: true)
@@ -184,6 +189,106 @@ struct PlaceBottomSheet: View {
         place.memorySummary
     }
 
+}
+
+struct PlaceVisibilityControl: View {
+    let visibility: PlaceVisibility
+    var onChange: ((PlaceVisibility) async throws -> Void)?
+    @State private var selectedVisibility: PlaceVisibility
+    @State private var isUpdating = false
+    @State private var errorMessage: String?
+
+    init(
+        visibility: PlaceVisibility,
+        onChange: ((PlaceVisibility) async throws -> Void)? = nil
+    ) {
+        self.visibility = visibility
+        self.onChange = onChange
+        _selectedVisibility = State(initialValue: visibility)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "person.2.wave.2.fill")
+                    .font(.caption.weight(.black))
+                Text("Social visibility")
+                    .font(.caption.weight(.black))
+                Spacer()
+                if isUpdating {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            }
+            .foregroundColor(.saveCocoa)
+
+            VStack(spacing: 7) {
+                ForEach(PlaceVisibility.allCases, id: \.self) { option in
+                    Button {
+                        Task { await update(option) }
+                    } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: option.systemImage)
+                                .font(.caption.weight(.black))
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.displayName)
+                                    .font(.caption.weight(.black))
+                                Text(option.detailText)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(.saveCocoa.opacity(0.72))
+                                    .lineLimit(2)
+                            }
+                            Spacer()
+                            if selectedVisibility == option {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.saveSignal)
+                            }
+                        }
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .background(selectedVisibility == option ? Color.saveHoney.opacity(0.34) : Color.saveNotebookPage.opacity(0.44))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(selectedVisibility == option ? 0.62 : 0.28), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(onChange == nil || isUpdating)
+                    .opacity(onChange == nil ? 0.62 : 1)
+                }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(10)
+        .saveNotebookSurface(cornerRadius: 12, fill: .saveNotebookPage, opacity: 0.64)
+        .onChange(of: visibility) { _, value in
+            selectedVisibility = value
+        }
+    }
+
+    private func update(_ option: PlaceVisibility) async {
+        guard option != selectedVisibility, let onChange else { return }
+        let previous = selectedVisibility
+        selectedVisibility = option
+        isUpdating = true
+        errorMessage = nil
+        defer { isUpdating = false }
+
+        do {
+            try await onChange(option)
+        } catch {
+            selectedVisibility = previous
+            errorMessage = error.localizedDescription
+        }
+    }
 }
 
 private struct PlaceDetailGlassBackground: View {

@@ -218,7 +218,11 @@ async function handlePlaces(
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
     const { rows } = await pool.query(
-      "select * from places where user_id = $1 order by created_at desc",
+      `select p.*, pv.visibility
+       from places p
+       left join place_visibility pv on pv.place_id = p.id
+       where p.user_id = $1
+       order by p.created_at desc`,
       [userId],
     );
     return sendJson(response, rows.map(formatPlace));

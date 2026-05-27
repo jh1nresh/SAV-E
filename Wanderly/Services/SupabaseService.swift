@@ -18,6 +18,9 @@ protocol SupabaseServiceProtocol {
     func deleteTrip(_ tripId: UUID) async throws
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
+    func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place]
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws
 }
 
 // MARK: - Errors
@@ -134,6 +137,17 @@ final class SupabaseService: SupabaseServiceProtocol {
     func deletePlace(_ placeId: UUID) async throws {
         guard isConfigured else { return }
         try await request(path: "/places/\(placeId)", method: "DELETE")
+    }
+
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
+        guard isConfigured else { return }
+
+        let body = try Self.jsonBody([
+            "visibility": visibility.rawValue,
+            "allow_friend_signal": visibility.allowsFriendSignal,
+            "allow_trending_signal": visibility.allowsTrendingSignal,
+        ])
+        try await request(path: "/places/\(placeId)/visibility", method: "PATCH", body: body)
     }
 
     // MARK: - Memory Candidates
@@ -262,6 +276,27 @@ final class SupabaseService: SupabaseServiceProtocol {
         try await request(path: "/profile", method: "PATCH", body: body)
     }
 
+    // MARK: - Social Graph
+
+    func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {
+        guard isConfigured else { return }
+
+        let body = try Self.jsonBody([
+            "referral_code": referralCode,
+            "lens": lens.rawValue,
+            "source": source.rawValue,
+        ])
+        try await request(path: "/follows", method: "POST", body: body)
+    }
+
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/social/signals?lens=\(lens.rawValue)&limit=60")
+        let rows = try JSONDecoder.supabase.decode([PlaceRow].self, from: data)
+        return rows.map { $0.toPlace() }
+    }
+
     // MARK: - HTTP
 
     @discardableResult
@@ -328,6 +363,8 @@ private struct PlaceRow: Codable {
     let google_price_level: Int?
     let opening_hours: String?
     let created_at: String
+    let visibility: String?
+    let social_signal: PlaceSocialSignalRow?
 
     func toPlace() -> Place {
         Place(
@@ -350,7 +387,9 @@ private struct PlaceRow: Codable {
             googleRating: google_rating,
             googlePriceLevel: google_price_level,
             openingHours: opening_hours,
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
+            socialSignal: social_signal?.toSignal()
         )
     }
 
@@ -376,7 +415,37 @@ private struct PlaceRow: Codable {
             google_rating: place.googleRating,
             google_price_level: place.googlePriceLevel,
             opening_hours: place.openingHours,
-            created_at: ISO8601DateFormatter().string(from: place.createdAt)
+            created_at: ISO8601DateFormatter().string(from: place.createdAt),
+            visibility: place.visibility?.rawValue,
+            social_signal: nil
+        )
+    }
+}
+
+private struct PlaceSocialSignalRow: Codable {
+    let kind: String
+    let lens: String
+    let friendNames: [String]?
+    let friendCount: Int?
+    let saveCount: Int?
+    let trendingRank: Int?
+    let categoryRank: Int?
+    let sourceLabel: String?
+    let referrerId: String?
+    let referralCode: String?
+
+    func toSignal() -> PlaceSocialSignal {
+        PlaceSocialSignal(
+            kind: PlaceSocialSignalKind(rawValue: kind) ?? .friendSaved,
+            lens: SaveSocialLens(rawValue: lens) ?? .friends,
+            friendNames: friendNames ?? [],
+            friendCount: friendCount ?? 0,
+            saveCount: saveCount ?? 0,
+            trendingRank: trendingRank,
+            categoryRank: categoryRank,
+            sourceLabel: sourceLabel ?? "SAV-E",
+            referrerId: referrerId,
+            referralCode: referralCode
         )
     }
 }

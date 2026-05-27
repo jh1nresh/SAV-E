@@ -4,16 +4,21 @@ import MapKit
 struct PlaceDetailView: View {
     let place: Place
     var onDelete: (() async throws -> Void)?
+    var onUpdateVisibility: ((PlaceVisibility) async throws -> Void)?
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var enrichedPlace: Place?
+    @State private var localVisibility: PlaceVisibility?
 
     private var detailPlace: Place {
-        guard enrichedPlace?.id == place.id else { return place }
-        return enrichedPlace ?? place
+        var value = enrichedPlace?.id == place.id ? enrichedPlace ?? place : place
+        if let localVisibility {
+            value.visibility = localVisibility
+        }
+        return value
     }
 
     var body: some View {
@@ -29,6 +34,12 @@ struct PlaceDetailView: View {
 
                 PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
                     .padding(.horizontal)
+
+                PlaceVisibilityControl(
+                    visibility: detailPlace.effectiveVisibility,
+                    onChange: onUpdateVisibility == nil ? nil : updateVisibility
+                )
+                .padding(.horizontal)
 
                 // Mini map
                 Map(position: .constant(.region(MKCoordinateRegion(
@@ -168,6 +179,11 @@ struct PlaceDetailView: View {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: detailPlace.coordinate))
         mapItem.name = detailPlace.name
         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+    }
+
+    private func updateVisibility(_ visibility: PlaceVisibility) async throws {
+        try await onUpdateVisibility?(visibility)
+        localVisibility = visibility
     }
 
     private var memorySummary: String {

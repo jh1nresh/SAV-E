@@ -142,6 +142,8 @@ struct PlaceListView: View {
             .navigationDestination(for: Place.self) { place in
                 PlaceDetailView(place: place) {
                     try await viewModel.deletePlace(place)
+                } onUpdateVisibility: { visibility in
+                    try await viewModel.updatePlaceVisibility(place, visibility: visibility)
                 }
             }
         }

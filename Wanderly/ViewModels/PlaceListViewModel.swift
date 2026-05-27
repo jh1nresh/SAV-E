@@ -217,6 +217,19 @@ final class PlaceListViewModel: ObservableObject {
         }
     }
 
+    func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
+        guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
+        let previousPlace = places[index]
+        places[index].visibility = visibility
+
+        do {
+            try await supabaseService.updatePlaceVisibility(visibility, for: place.id)
+        } catch {
+            places[index] = previousPlace
+            throw error
+        }
+    }
+
     func saveMapCandidate(_ result: SaveSearchResult) async {
         guard let draft = searchController.makeSaveDraft(from: result) else {
             saveCandidateError = SavePlaceDraftError.notSaveableMapCandidate.localizedDescription

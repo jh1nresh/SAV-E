@@ -34,6 +34,9 @@ struct ContentView: View {
                     onSaveMapCandidate: { candidate in
                         try await mapVM.saveMapCandidateAsPlace(candidate)
                     },
+                    onUpdatePlaceVisibility: { place, visibility in
+                        try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+                    },
                     onImportURLAsReviewCandidates: { url in
                         try await mapVM.importURLAsReviewCandidates(url)
                     },

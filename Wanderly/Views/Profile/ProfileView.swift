@@ -10,11 +10,17 @@ struct ProfileView: View {
     @State private var showLanguageSettings = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
+    @State private var localSavedPlaces: [Place] = []
     var savedPlaces: [Place] = []
     var waitingClues: Int = 0
+    var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
 
     private var passportStats: PassportStats {
-        PassportStats(profile: viewModel.profile, savedPlaces: savedPlaces, waitingClues: waitingClues)
+        PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
+    }
+
+    private var passportPlaces: [Place] {
+        localSavedPlaces
     }
 
     var body: some View {
@@ -57,6 +63,10 @@ struct ProfileView: View {
 
                     PassportStampSection(profile: viewModel.profile, stats: passportStats)
                     PassportCountingRulesPanel(stats: passportStats)
+                    PassportVisibilityPanel(
+                        places: passportPlaces,
+                        onUpdate: updatePlaceVisibility
+                    )
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(languageSettings.text(.passportControls))
@@ -99,7 +109,11 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
+            localSavedPlaces = savedPlaces
             await viewModel.loadProfile()
+        }
+        .onChange(of: savedPlaces) { _, places in
+            localSavedPlaces = places
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
@@ -131,6 +145,13 @@ struct ProfileView: View {
         switch languageSettings.language {
         case .english: return "Captured clue inbox"
         case .traditionalChinese: return "已捕捉線索的收件匣"
+        }
+    }
+
+    private func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
+        try await onUpdatePlaceVisibility(place, visibility)
+        if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
+            localSavedPlaces[index].visibility = visibility
         }
     }
 }
@@ -739,6 +760,157 @@ private struct PassportCountingRulesPanel: View {
         switch languageSettings.language {
         case .english: return "Real-world proof will need receipt, photo, or location evidence; the current count stays self-marked."
         case .traditionalChinese: return "真實到訪驗證需要收據、照片或定位證據；目前計數仍是你自己標記。"
+        }
+    }
+}
+
+private struct PassportVisibilityPanel: View {
+    let places: [Place]
+    let onUpdate: (Place, PlaceVisibility) async throws -> Void
+
+    private var counts: [PlaceVisibility: Int] {
+        Dictionary(grouping: places, by: \.effectiveVisibility).mapValues(\.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "person.2.wave.2.fill")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                Text("Social visibility")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                Spacer()
+            }
+
+            FlowLayout(spacing: 7) {
+                ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
+                    PassportVisibilityChip(
+                        visibility: visibility,
+                        count: counts[visibility, default: 0]
+                    )
+                }
+            }
+
+            if places.isEmpty {
+                Text("Save places first, then choose what can become friend or public guide signals.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveCocoa.opacity(0.72))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(places.prefix(4)) { place in
+                        PassportVisibilityRow(place: place, onUpdate: onUpdate)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.saveNotebookPage.opacity(0.78))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal)
+    }
+}
+
+private struct PassportVisibilityChip: View {
+    let visibility: PlaceVisibility
+    let count: Int
+
+    var body: some View {
+        Label("\(visibility.displayName) \(count)", systemImage: visibility.systemImage)
+            .font(.caption2.weight(.black))
+            .foregroundColor(.saveInk)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.saveHoney.opacity(visibility == .privateMemory ? 0.18 : 0.36))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1))
+    }
+}
+
+private struct PassportVisibilityRow: View {
+    let place: Place
+    let onUpdate: (Place, PlaceVisibility) async throws -> Void
+    @State private var selectedVisibility: PlaceVisibility
+    @State private var isUpdating = false
+    @State private var errorMessage: String?
+
+    init(place: Place, onUpdate: @escaping (Place, PlaceVisibility) async throws -> Void) {
+        self.place = place
+        self.onUpdate = onUpdate
+        _selectedVisibility = State(initialValue: place.effectiveVisibility)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SaveMemoryBadge(state: .saved(place.category), size: 34)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(place.name)
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(1)
+                Text(errorMessage ?? selectedVisibility.detailText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(errorMessage == nil ? .saveCocoa.opacity(0.72) : .red)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Menu {
+                ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
+                    Button {
+                        Task { await update(visibility) }
+                    } label: {
+                        Label(visibility.displayName, systemImage: visibility.systemImage)
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    if isUpdating {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: selectedVisibility.systemImage)
+                    }
+                    Text(selectedVisibility.displayName)
+                }
+                .font(.caption2.weight(.black))
+                .foregroundColor(.saveInk)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Color.saveNotebookPage.opacity(0.58))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
+            }
+            .disabled(isUpdating)
+        }
+        .padding(8)
+        .background(Color.saveCream.opacity(0.38))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onChange(of: place.effectiveVisibility) { _, visibility in
+            selectedVisibility = visibility
+        }
+    }
+
+    private func update(_ visibility: PlaceVisibility) async {
+        guard visibility != selectedVisibility else { return }
+        let previous = selectedVisibility
+        selectedVisibility = visibility
+        isUpdating = true
+        errorMessage = nil
+        defer { isUpdating = false }
+
+        do {
+            try await onUpdate(place, visibility)
+        } catch {
+            selectedVisibility = previous
+            errorMessage = error.localizedDescription
         }
     }
 }
