@@ -119,6 +119,7 @@ struct ContentView: View {
             }
             .onChange(of: mapVM.places) { _, places in
                 drawerVM.places = places
+                refreshSelectedMapDetailPlace(from: places)
             }
             .onChange(of: mapVM.mapCandidates) { _, candidates in
                 drawerVM.mapCandidates = candidates
@@ -135,6 +136,15 @@ struct ContentView: View {
                 drawerVM.mapCandidates = mapVM.mapCandidates
                 await mapVM.loadPlaces()
             }
+    }
+
+    private func refreshSelectedMapDetailPlace(from places: [Place]) {
+        guard case .savedPlace(let selectedPlace) = mapDetailDrawerItem,
+              let updatedPlace = places.first(where: { $0.id == selectedPlace.id }),
+              updatedPlace != selectedPlace
+        else { return }
+
+        mapDetailDrawerItem = .savedPlace(updatedPlace)
     }
 }
 

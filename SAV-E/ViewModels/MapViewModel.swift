@@ -947,6 +947,10 @@ final class MapViewModel: ObservableObject {
             searchCenter = nil
         }
         let categories = saveSearchController.mapCandidateCategories(for: query)
+        if !categories.isEmpty {
+            selectedCategories = categories
+            activeFilter = nil
+        }
         await refreshMapCandidates(
             near: searchCenter,
             span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
@@ -1047,22 +1051,42 @@ final class MapViewModel: ObservableObject {
     }
 
     private func bestGoogleMatch(for place: Place) async -> GooglePlaceMatch? {
-        do {
-            let matches = try await googlePlacesService.searchPlace(
-                query: "\(place.name) \(place.address)",
-                near: place.coordinate
-            )
-            let placeLocation = CLLocation(latitude: place.latitude, longitude: place.longitude)
-            return matches.first { match in
-                let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                let sameArea = placeLocation.distance(from: matchLocation) < 250
-                let sameName = match.name.localizedCaseInsensitiveContains(place.name) ||
-                    place.name.localizedCaseInsensitiveContains(match.name)
-                return sameArea || sameName
+        for query in googleMatchQueries(for: place) {
+            do {
+                let matches = try await googlePlacesService.searchPlace(
+                    query: query,
+                    near: place.coordinate
+                )
+                let placeLocation = CLLocation(latitude: place.latitude, longitude: place.longitude)
+                if let match = matches.first(where: { match in
+                    let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
+                    let sameArea = placeLocation.distance(from: matchLocation) < 250
+                    let sameName = match.name.localizedCaseInsensitiveContains(place.name) ||
+                        place.name.localizedCaseInsensitiveContains(match.name) ||
+                        match.name.localizedCaseInsensitiveContains(place.businessLookupName) ||
+                        place.businessLookupName.localizedCaseInsensitiveContains(match.name)
+                    return sameArea || sameName
+                }) {
+                    return match
+                }
+            } catch {
+                continue
             }
-        } catch {
-            return nil
         }
+        return nil
+    }
+
+    private func googleMatchQueries(for place: Place) -> [String] {
+        var seen: Set<String> = []
+        return [
+            "\(place.name) \(place.address)",
+            "\(place.businessLookupName) \(place.address)",
+            place.businessLookupName,
+            place.address,
+        ]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .filter { seen.insert($0).inserted }
     }
 
     func selectReviewCandidate(_ candidate: PlaceReviewCandidate) {
@@ -1083,6 +1107,7 @@ final class MapViewModel: ObservableObject {
             center: CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude),
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         ))
+        enrichSelectedMapCandidateAfterSelection(candidate)
     }
 
     func selectSocialPlace(_ place: Place) {
@@ -1154,10 +1179,7 @@ final class MapViewModel: ObservableObject {
         selectedPlace = nil
         selectedReviewCandidate = nil
 
-        Task {
-            await hydrateSelectedMapCandidateDistance(selectedCandidate)
-            await enrichSelectedMapCandidate(selectedCandidate)
-        }
+        enrichSelectedMapCandidateAfterSelection(selectedCandidate)
     }
 
     func deletePlace(_ place: Place) async throws {
@@ -1227,6 +1249,13 @@ final class MapViewModel: ObservableObject {
         return "\(Int(meters.rounded())) m away"
     }
 
+    private func enrichSelectedMapCandidateAfterSelection(_ candidate: SaveMapCandidate) {
+        Task {
+            await hydrateSelectedMapCandidateDistance(candidate)
+            await enrichSelectedMapCandidate(candidate)
+        }
+    }
+
     private func enrichSelectedMapCandidate(_ candidate: SaveMapCandidate) async {
         guard let update = await businessDetails(for: candidate) else { return }
         guard selectedMapCandidate?.id == candidate.id else { return }
@@ -1242,10 +1271,12 @@ final class MapViewModel: ObservableObject {
         if let category = update.category {
             updatedCandidate.category = category
         }
-        if let priceRange = update.priceRange {
+        if let priceRange = update.priceRange,
+           !updatedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Price:") }) {
             updatedCandidate.evidence.append("Price: \(priceRange)")
         }
-        if let openingHours = update.openingHours {
+        if let openingHours = update.openingHours,
+           !updatedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Hours:") }) {
             updatedCandidate.evidence.append("Hours: \(openingHours)")
         }
 
@@ -1379,11 +1410,7 @@ final class MapViewModel: ObservableObject {
             guard let lat = action.lat, let lng = action.lng else { return }
             let span = action.span ?? 0.03
             if let candidate = mapCandidate(nearLatitude: lat, longitude: lng) {
-                selectedMapCandidate = candidate
-                selectedPlace = nil
-                selectedReviewCandidate = nil
-                selectedSocialPlace = nil
-                selectedMapFeature = nil
+                selectMapCandidate(candidate)
             }
             cameraPosition = .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: lat, longitude: lng),

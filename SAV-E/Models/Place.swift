@@ -150,6 +150,12 @@ struct Place: Identifiable, Codable, Hashable {
             .removingDuplicates()
     }
 
+    var businessLookupName: String {
+        name
+            .replacingOccurrences(of: #"[（(].*?[）)]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func normalizedSourceURL(from rawValue: String?) -> URL? {
         guard let raw = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
               !raw.isEmpty

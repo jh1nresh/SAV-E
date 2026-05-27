@@ -1493,6 +1493,13 @@ struct AIDrawerView: View {
                 addSpotStatus = "Found \(candidates.count) nearby unsaved candidates. Save only the ones that look right."
             }
             await viewModel.submit()
+            if !candidates.isEmpty {
+                viewModel.returnToCommands()
+                addSpotStatus = nil
+                withAnimation(.spring(duration: 0.3)) {
+                    drawerDetent = .height(72)
+                }
+            }
         }
     }
 
@@ -2773,37 +2780,60 @@ private struct NotebookBandLabel: View {
 }
 
 private struct ReviewCandidatesSection: View {
+    @Environment(\.colorScheme) private var colorScheme
     var candidates: [PlaceReviewCandidate]
     var limit: Int? = 4
     var onSelect: (PlaceReviewCandidate) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                NotebookBandLabel("Review")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text("\(candidates.count)")
-                    .font(.caption.monospacedDigit().weight(.black))
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(candidates.isEmpty ? Color.saveNotebookPage : Color.saveMint)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.2))
-                    .clipShape(Capsule())
-            }
+            reviewHeader
 
             if candidates.isEmpty {
                 ReviewCandidatesEmptyState()
             } else {
-                ForEach(displayedCandidates) { candidate in
-                    Button(action: { onSelect(candidate) }) {
-                        ReviewCandidatePlaceRow(candidate: candidate)
+                VStack(spacing: 0) {
+                    ForEach(Array(displayedCandidates.enumerated()), id: \.element.id) { index, candidate in
+                        ReviewCandidatePlaceRow(candidate: candidate) {
+                            onSelect(candidate)
+                        }
+
+                        if index < displayedCandidates.count - 1 {
+                            Divider()
+                                .padding(.leading, 64)
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+                .background(groupFill)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.10), lineWidth: 1)
+                )
             }
         }
+    }
+
+    private var reviewHeader: some View {
+        HStack(spacing: 5) {
+            Text("Review")
+                .font(.title3.weight(.bold))
+                .foregroundColor(.saveInk)
+            Image(systemName: "chevron.right")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.saveCocoa.opacity(0.55))
+
+            Spacer()
+
+            Text("\(candidates.count)")
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundColor(.saveCocoa.opacity(0.78))
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var groupFill: Color {
+        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.82) : Color.white.opacity(0.86)
     }
 
     private var displayedCandidates: [PlaceReviewCandidate] {
@@ -2814,6 +2844,7 @@ private struct ReviewCandidatesSection: View {
 
 private struct ReviewCandidatePlaceRow: View {
     var candidate: PlaceReviewCandidate
+    var onSelect: () -> Void
 
     private var inferredCategory: PlaceCategory {
         PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
@@ -2829,83 +2860,54 @@ private struct ReviewCandidatePlaceRow: View {
         candidate.hasReliableCoordinates ? "Ready to review" : "Needs info"
     }
 
-    private var statusIcon: String {
-        candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "questionmark.folder.fill"
-    }
-
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(spacing: 4) {
-                SaveMemoryBadge(state: candidate.hasReliableCoordinates ? .ready : .clue, size: 44)
-                Text(candidate.hasReliableCoordinates ? "PLACE" : "CLUE")
-                    .font(.system(size: 7, weight: .black))
-                    .foregroundColor(.saveCocoa)
-            }
-            .frame(width: 54)
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: inferredCategory.iconName)
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 42, height: 42)
+                    .background(iconFill)
+                    .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(candidate.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.body.weight(.semibold))
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
 
-                    Spacer(minLength: 0)
-
-                    statusBadge
-                }
-
-                Text(addressText)
-                    .font(.caption)
-                    .foregroundColor(.saveMutedText)
-                    .lineLimit(1)
-
-                HStack(spacing: 8) {
-                    Label(inferredCategory.displayName, systemImage: inferredCategory.iconName)
-                        .font(.caption2)
+                    Text(addressText)
+                        .font(.subheadline)
                         .foregroundColor(.saveMutedText)
                         .lineLimit(1)
-
-                    if let confidence = candidate.confidence {
-                        Text("\(Int(confidence * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundColor(.saveMutedText)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.48))
                 }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "ellipsis")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 34, height: 34)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
         }
-        .padding(12)
-        .saveNotebookPage(cornerRadius: 16)
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(candidate.name), \(statusText)")
         .accessibilityHint("Open review details before saving")
     }
 
-    private var statusBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: statusIcon)
-                .font(.caption2.weight(.black))
-            Text(statusText)
-                .font(.caption2.weight(.semibold))
-                .lineLimit(1)
-        }
-        .foregroundColor(.saveCocoa)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Color.saveNotebookPage)
-        .overlay(
-            Capsule()
-                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+    private var iconFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.saveStampColor(for: inferredCategory),
+                Color.saveSignal.opacity(candidate.hasReliableCoordinates ? 0.90 : 0.58)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
-        .clipShape(Capsule())
     }
 }
 
