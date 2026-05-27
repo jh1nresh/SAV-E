@@ -86,6 +86,7 @@ final class AppLanguageSettings: ObservableObject {
 enum SaveTextKey {
     case appName
     case opening
+    case openingHint
     case tripLinkReady
     case tripLinkMessage
     case ok
@@ -160,6 +161,8 @@ enum SaveText {
             return "SAV-E"
         case .opening:
             return localized(english: "Opening SAV-E", traditionalChinese: "正在開啟 SAV-E", language: language)
+        case .openingHint:
+            return localized(english: "Saving your place memory", traditionalChinese: "整理你的地點記憶", language: language)
         case .tripLinkReady:
             return localized(english: "Trip Link Ready", traditionalChinese: "行程連結已準備好", language: language)
         case .tripLinkMessage:

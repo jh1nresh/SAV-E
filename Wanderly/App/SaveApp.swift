@@ -129,21 +129,186 @@ struct SaveApp: App {
 
 struct AuthLoadingView: View {
     @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isBreathing = false
+    @State private var activeStep = 0
+
+    private let loadingSteps: [SaveOpeningStep] = [
+        SaveOpeningStep(icon: "link", label: "Clues", tint: .saveSky),
+        SaveOpeningStep(icon: "checklist", label: "Review", tint: .saveHoney),
+        SaveOpeningStep(icon: "mappin.and.ellipse", label: "Map", tint: .saveMint)
+    ]
 
     var body: some View {
         ZStack {
             SaveDottedBackground()
                 .ignoresSafeArea()
 
-            VStack(spacing: 14) {
-                ProgressView()
-                    .tint(.saveInk)
-                Text(languageSettings.text(.opening))
-                    .font(.headline)
-                    .foregroundColor(.saveInk)
+            VStack(spacing: 24) {
+                SaveOpeningLogoMark(isBreathing: isBreathing, reduceMotion: reduceMotion)
+
+                VStack(spacing: 12) {
+                    Text(languageSettings.text(.opening))
+                        .font(.title3.weight(.black))
+                        .foregroundColor(.saveInk)
+
+                    SaveOpeningStepRail(steps: loadingSteps, activeStep: activeStep)
+                }
+
+                SaveOpeningHintPill(text: languageSettings.text(.openingHint))
             }
+            .padding(.horizontal, 32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                isBreathing = true
+            }
+        }
+        .task {
+            guard !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 650_000_000)
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.76)) {
+                    activeStep = (activeStep + 1) % loadingSteps.count
+                }
+            }
+        }
+    }
+}
+
+private struct SaveOpeningStep: Identifiable {
+    let id = UUID()
+    let icon: String
+    let label: String
+    let tint: Color
+}
+
+private struct SaveOpeningLogoMark: View {
+    var isBreathing: Bool
+    var reduceMotion: Bool
+
+    var body: some View {
+        ZStack {
+            SaveOpeningScrapbookCard(fill: .saveSky, rotation: -10, offset: CGSize(width: -42, height: 28))
+            SaveOpeningScrapbookCard(fill: .saveHoney, rotation: 9, offset: CGSize(width: 38, height: 18))
+            SaveOpeningScrapbookCard(fill: .savePink, rotation: 3, offset: CGSize(width: 8, height: 42))
+
+            Circle()
+                .stroke(Color.saveHoney.opacity(0.42), lineWidth: 9)
+                .frame(width: 156, height: 156)
+                .scaleEffect(isBreathing && !reduceMotion ? 1.08 : 0.96)
+                .opacity(isBreathing && !reduceMotion ? 0.18 : 0.42)
+
+            MemoMascotMark(size: 126, framed: false)
+                .scaleEffect(isBreathing && !reduceMotion ? 1.035 : 0.985)
+                .offset(y: isBreathing && !reduceMotion ? -5 : 2)
+                .shadow(color: Color.saveInk.opacity(0.16), radius: 0, x: 0, y: 7)
+
+            SaveOpeningSpark(systemImage: "sparkles", fill: .saveHoney, offset: CGSize(width: 72, height: -54))
+            SaveOpeningSpark(systemImage: "link", fill: .saveSky, offset: CGSize(width: -76, height: -34))
+            SaveOpeningSpark(systemImage: "heart.fill", fill: .savePink, offset: CGSize(width: 76, height: 50))
+        }
+        .frame(width: 210, height: 190)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct SaveOpeningScrapbookCard: View {
+    var fill: Color
+    var rotation: Double
+    var offset: CGSize
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(fill.opacity(0.92))
+            .frame(width: 76, height: 54)
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+            )
+            .rotationEffect(.degrees(rotation))
+            .offset(offset)
+            .shadow(color: Color.saveInk.opacity(0.10), radius: 0, x: 3, y: 4)
+    }
+}
+
+private struct SaveOpeningSpark: View {
+    var systemImage: String
+    var fill: Color
+    var offset: CGSize
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.caption.weight(.black))
+            .foregroundColor(.saveInk)
+            .frame(width: 34, height: 34)
+            .background(fill)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.3))
+            .offset(offset)
+    }
+}
+
+private struct SaveOpeningStepRail: View {
+    var steps: [SaveOpeningStep]
+    var activeStep: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                SaveOpeningStepChip(step: step, isActive: index == activeStep)
+            }
+        }
+        .padding(8)
+        .background(Color.saveNotebookPage.opacity(0.88))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.4))
+    }
+}
+
+private struct SaveOpeningStepChip: View {
+    var step: SaveOpeningStep
+    var isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: step.icon)
+                .font(.caption.weight(.black))
+            Text(step.label)
+                .font(.caption.weight(.black))
+        }
+        .foregroundColor(.saveInk)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(isActive ? step.tint : Color.saveCream.opacity(0.55))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(isActive ? 1 : 0.35), lineWidth: 1))
+        .scaleEffect(isActive ? 1.03 : 0.96)
+    }
+}
+
+private struct SaveOpeningHintPill: View {
+    var text: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.saveCoral)
+                .frame(width: 7, height: 7)
+                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 0.8))
+
+            Text(text)
+                .font(.caption.weight(.bold))
+                .foregroundColor(.saveMutedText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, 9)
+        .background(Color.saveNotebookPage.opacity(0.72))
+        .clipShape(Capsule())
     }
 }
 
