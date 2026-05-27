@@ -108,21 +108,6 @@ struct PlaceBottomSheet: View {
                 }
             }
 
-            // Note
-            if let note = cleanUserNote {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Why SAV-E saved this")
-                        .font(.caption)
-                        .fontWeight(.black)
-                        .foregroundColor(.saveCocoa)
-                    Text(note)
-                        .font(.subheadline)
-                        .foregroundColor(.saveInk)
-                }
-            }
-
-            PlaceEvidenceReceiptPanel(place: place)
-
             HStack(spacing: 8) {
                 Button {
                     NavigationService.navigate(to: place.coordinate, name: place.name)
@@ -210,10 +195,6 @@ struct PlaceBottomSheet: View {
         return "Map verified and address confirmed for this SAV-E memory."
     }
 
-    private var cleanUserNote: String? {
-        place.cleanMemoryNote
-    }
-
 }
 
 private struct PlaceDetailGlassBackground: View {
@@ -260,7 +241,7 @@ struct PlaceBasicInfoPanel: View {
             }
         }
         .padding(10)
-        .background(Color.saveSky.opacity(0.14))
+        .background(Color.saveSky.opacity(0.10))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1)
@@ -286,47 +267,6 @@ struct PlaceBasicInfoPanel: View {
             return "\(value) reviews"
         }
         return nil
-    }
-}
-
-struct PlaceEvidenceReceiptPanel: View {
-    let place: Place
-    @State private var isExpanded = false
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 8) {
-                if !place.sourceEvidence.isEmpty {
-                    EvidenceLinkList(evidence: place.sourceEvidence, maxItems: 8)
-                } else {
-                    FlowLayout(spacing: 8) {
-                        PlaceMemoryChip(icon: "checkmark.seal.fill", text: "Map verified")
-                        PlaceMemoryChip(icon: "mappin", text: "Address confirmed")
-                        PlaceMemoryChip(icon: "link", text: place.sourceConfirmationLabel)
-                    }
-                }
-            }
-            .padding(.top, 8)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.caption.weight(.black))
-                Text("Evidence receipt")
-                    .font(.caption.weight(.black))
-                Spacer()
-                Text(isExpanded ? "Raw" : "Raw evidence")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-            }
-            .foregroundColor(.saveCocoa)
-        }
-        .padding(10)
-        .background(Color.saveNotebookPage.opacity(0.72))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -373,7 +313,7 @@ private struct PlaceMemoryChip: View {
         .foregroundColor(.saveCocoa)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(Color.saveNotebookPage)
+        .background(Color.saveNotebookPage.opacity(0.50))
         .clipShape(Capsule())
         .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1))
     }
@@ -525,7 +465,7 @@ struct PlaceInsightSummaryPanel: View {
             }
         }
         .padding(12)
-        .background(Color.saveNotebookPage)
+        .background(Color.saveNotebookPage.opacity(0.50))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -667,7 +607,7 @@ struct PlaceBusinessPhotoCarousel: View {
             .foregroundColor(.saveInk)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.saveNotebookPage.opacity(0.9))
+            .background(Color.saveNotebookPage.opacity(0.66))
             .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
             .clipShape(Capsule())
             .padding(8)
@@ -689,7 +629,7 @@ struct PlaceBusinessPhotoCarousel: View {
 
     private var fallbackVisual: some View {
         Rectangle()
-            .fill(Color.saveNotebookPage)
+            .fill(Color.saveNotebookPage.opacity(0.72))
             .overlay {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.title2.weight(.semibold))

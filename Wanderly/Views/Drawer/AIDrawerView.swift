@@ -64,7 +64,7 @@ struct AIDrawerView: View {
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
     @State private var newListNote = ""
-    @State private var mapDetailDetent: PresentationDetent = .height(104)
+    @State private var mapDetailDetent: PresentationDetent = .height(88)
 
     var body: some View {
         GeometryReader { proxy in
@@ -93,7 +93,7 @@ struct AIDrawerView: View {
             ProfileView(waitingClues: reviewCandidates.count)
         }
         .sheet(item: $mapDetailDrawerItem, onDismiss: {
-            mapDetailDetent = .height(104)
+            mapDetailDetent = .height(88)
             onDismissMapDetail()
         }) { item in
             MapDetailDrawerView(
@@ -142,11 +142,11 @@ struct AIDrawerView: View {
                 onAddPlaceToList: onAddPlaceToList,
                 onAddMapCandidateToList: onAddMapCandidateToList
             )
-            .presentationDetents([.height(104), .fraction(0.38), .large], selection: $mapDetailDetent)
+            .presentationDetents([.height(88), .fraction(0.38), .large], selection: $mapDetailDetent)
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.38)))
-            .presentationBackground(.clear)
-            .presentationCornerRadius(28)
+            .presentationBackground(.ultraThinMaterial)
+            .presentationCornerRadius(30)
         }
         .onChange(of: viewModel.drawerState) { _, state in
             withAnimation(.spring(duration: 0.3)) {
@@ -1368,7 +1368,7 @@ private struct DrawerGlassBackground: View {
 
     var body: some View {
         Rectangle()
-            .fill(.ultraThinMaterial)
+            .fill(Color.clear)
             .overlay {
                 LinearGradient(
                     colors: tintStops,
@@ -1422,16 +1422,19 @@ private struct MapDetailDrawerView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            Group {
-                if proxy.size.height <= 132 {
-                    compactHeader
-                } else {
+            VStack(spacing: 0) {
+                compactHeader
+
+                if proxy.size.height > 132 {
+                    Divider()
+                        .opacity(colorScheme == .dark ? 0.18 : 0.24)
+                        .padding(.horizontal, 18)
                     expandedContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background {
-                DrawerGlassBackground(colorScheme: colorScheme)
+                MapDetailDrawerBackground(colorScheme: colorScheme)
             }
         }
     }
@@ -1467,8 +1470,9 @@ private struct MapDetailDrawerView: View {
             }
             .accessibilityLabel("Close place detail")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
     }
 
     private var expandedContent: some View {
@@ -1476,11 +1480,13 @@ private struct MapDetailDrawerView: View {
             VStack(spacing: 12) {
                 switch item {
                 case .savedPlace(let place):
-                    PlaceBottomSheet(place: place) {
-                        try await onDeletePlace(place)
-                    } onPlanAround: {
-                        onPlanAroundPlace(place)
-                    }
+                    SavedMapDetailDrawerContent(
+                        place: place,
+                        onPlanAroundPlace: { onPlanAroundPlace(place) },
+                        onDeletePlace: {
+                            try await onDeletePlace(place)
+                        }
+                    )
 
                     AddToListPanel(
                         title: "Add this Map Stamp to a list",
@@ -1572,6 +1578,180 @@ private struct MapDetailDrawerView: View {
         case .unsavedCandidate:
             return .ready
         }
+    }
+}
+
+private struct MapDetailDrawerBackground: View {
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay {
+                LinearGradient(
+                    colors: tintStops,
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.68))
+                    .frame(height: 1)
+            }
+            .ignoresSafeArea()
+    }
+
+    private var tintStops: [Color] {
+        if colorScheme == .dark {
+            return [
+                Color.black.opacity(0.04),
+                Color.black.opacity(0.12)
+            ]
+        }
+        return [
+            Color.white.opacity(0.04),
+            Color.saveCream.opacity(0.08)
+        ]
+    }
+}
+
+private struct SavedMapDetailDrawerContent: View {
+    let place: Place
+    let onPlanAroundPlace: () -> Void
+    let onDeletePlace: () async throws -> Void
+    @Environment(\.openURL) private var openURL
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var deleteError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PlaceBusinessPhotoCarousel(imageURLs: place.businessPhotoURLStrings)
+
+            FlowLayout(spacing: 8) {
+                CategoryPill(category: place.category, isSelected: true)
+                if let rating = place.googleRating ?? place.rating {
+                    MapDetailChip(icon: "star.fill", text: String(format: "%.1f", rating))
+                }
+                if let priceRange = place.priceRange {
+                    MapDetailChip(icon: "tag.fill", text: priceRange)
+                }
+                ForEach(place.verificationChips(sourceLabel: place.sourceConfirmationLabel), id: \.text) { chip in
+                    MapDetailChip(icon: chip.icon, text: chip.text)
+                }
+            }
+
+            PlaceBasicInfoPanel(place: place)
+            PlaceInsightSummaryPanel(place: place, fallbackSummary: memorySummary)
+
+            HStack(spacing: 8) {
+                Button {
+                    NavigationService.navigate(to: place.coordinate, name: place.name)
+                } label: {
+                    PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: .saveHoney.opacity(0.78))
+                }
+
+                ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
+                    PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveMint.opacity(0.32))
+                }
+
+                if let sourceURL = place.primarySourceURL {
+                    Button {
+                        openURL(sourceURL)
+                    } label: {
+                        PlaceDetailActionLabel(title: "Source", systemImage: "link", fill: Color.saveSky.opacity(0.20))
+                    }
+                } else {
+                    Button(action: onPlanAroundPlace) {
+                        PlaceDetailActionLabel(title: "Plan", systemImage: "sparkles", fill: Color.saveNotebookPage.opacity(0.42))
+                    }
+                }
+            }
+
+            Menu {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(Color.saveNotebookPage.opacity(0.24))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
+            if let deleteError {
+                Text(deleteError)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.red)
+            }
+        }
+        .confirmationDialog(
+            "Delete \(place.name)?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Place", role: .destructive) {
+                Task { await deletePlace() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the Map Stamp from SAV-E.")
+        }
+    }
+
+    private var memorySummary: String {
+        let parts = place.address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.count >= 2 {
+            return "Map verified for \(place.name) in \(parts[parts.count - 2]). Address confirmed for this SAV-E memory."
+        }
+        return "Map verified and address confirmed for this SAV-E memory."
+    }
+
+    private func deletePlace() async {
+        guard !isDeleting else { return }
+        isDeleting = true
+        deleteError = nil
+        defer { isDeleting = false }
+
+        do {
+            try await onDeletePlace()
+        } catch {
+            deleteError = error.localizedDescription
+        }
+    }
+}
+
+private struct MapDetailChip: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.black))
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundColor(.saveCocoa)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(Color.saveNotebookPage.opacity(0.38))
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.30), lineWidth: 1))
     }
 }
 
@@ -2313,30 +2493,6 @@ private struct ReviewCandidateDetailCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.82))
                     .fixedSize(horizontal: false, vertical: true)
-
-                if !candidate.evidence.isEmpty {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "doc.text.magnifyingglass")
-                                .font(.caption2.weight(.bold))
-                            Text("Evidence receipt")
-                                .font(.caption2.weight(.black))
-                            Spacer()
-                        }
-                        .foregroundColor(.saveCocoa)
-
-                        EvidenceLinkList(evidence: candidate.evidence, maxItems: 3)
-                    }
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.saveHoney.opacity(0.16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                            )
-                    )
-                }
 
                 if !candidate.hasReliableCoordinates {
                     HStack(spacing: 6) {
