@@ -826,10 +826,18 @@ struct AIDrawerView: View {
 
             HStack(spacing: 9) {
                 DrawerActionChip(
-                    title: "Saved",
-                    systemImage: "list.bullet",
+                    title: "Full list",
+                    systemImage: "list.bullet.rectangle",
                     count: viewModel.places.isEmpty ? nil : viewModel.places.count,
                     fill: Color.saveMint.opacity(0.36),
+                    action: openFullList
+                )
+
+                DrawerActionChip(
+                    title: "Saved",
+                    systemImage: "square.grid.2x2",
+                    count: viewModel.places.isEmpty ? nil : viewModel.places.count,
+                    fill: Color.saveSky.opacity(0.28),
                     action: openSavedCategories
                 )
 
@@ -1436,6 +1444,15 @@ struct AIDrawerView: View {
         showLists = false
         searchFocused = false
         withAnimation { drawerDetent = .medium }
+    }
+
+    private func openFullList() {
+        viewModel.returnToCommands()
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        viewModel.showPlaceList = true
     }
 
     private func openCollaborativeLists() {
