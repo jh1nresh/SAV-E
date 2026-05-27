@@ -1,4 +1,5 @@
 import Foundation
+import MapKit
 
 enum WanderlySharedStorage {
     static let appGroupSuiteName = "group.com.wanderly.app"
@@ -363,7 +364,8 @@ extension Place {
             latitude: refinedMatch?.latitude ?? candidate.latitude ?? 0,
             longitude: refinedMatch?.longitude ?? candidate.longitude ?? 0,
             googlePlaceId: refinedMatch?.id,
-            category: PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
+            category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ??
+                PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,
             note: candidate.evidence.joined(separator: "\n"),
@@ -405,6 +407,29 @@ extension Place {
 }
 
 extension PlaceCategory {
+    static func from(pointOfInterestCategory category: MKPointOfInterestCategory?) -> PlaceCategory? {
+        guard let category else { return nil }
+        return fromPOIText(category.rawValue)
+    }
+
+    static func from(googleTypes types: [String]) -> PlaceCategory? {
+        fromPOIText(types.joined(separator: " "))
+    }
+
+    static func poiFirst(
+        pointOfInterestCategory: MKPointOfInterestCategory?,
+        googleTypes: [String] = [],
+        fallbackText: String
+    ) -> PlaceCategory {
+        if let category = from(pointOfInterestCategory: pointOfInterestCategory) {
+            return category
+        }
+        if let category = from(googleTypes: googleTypes) {
+            return category
+        }
+        return inferred(from: fallbackText)
+    }
+
     static func inferred(from content: String, fallback: PlaceCategory = .food) -> PlaceCategory {
         let lowercased = content
             .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
@@ -442,29 +467,40 @@ extension PlaceCategory {
             .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
             .lowercased() ?? ""
 
-        if matches(poi, #"restaurant|foodtruck"#) {
-            return .food
-        }
-        if matches(poi, #"cafe|bakery"#) {
-            return .cafe
-        }
-        if matches(poi, #"brewery|winery|nightlife"#) {
-            return .bar
-        }
-        if matches(poi, #"hotel"#) {
-            return .stay
-        }
-        if matches(poi, #"store|market|pharmacy|spa|fitness|beauty|bank|atm|laundry"#) {
-            return .shopping
-        }
-        if matches(poi, #"museum|park|theater|movie|stadium|zoo|aquarium|beach|landmark|nationalpark|amusementpark|fairground|conventioncenter|musicvenue|airport|school|university|library|hospital|evcharger|parking|publictransport"#) {
-            return .attraction
-        }
+        if let category = fromPOIText(poi) { return category }
 
         return inferred(
             from: "\(title) \(subtitle) \(pointOfInterestCategory ?? "")",
             fallback: fallback
         )
+    }
+
+    private static func fromPOIText(_ value: String) -> PlaceCategory? {
+        let normalized = value
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+        guard !normalized.isEmpty else { return nil }
+
+        if matches(normalized, #"cafe|coffee|bakery|tea|dessert|patisserie"#) {
+            return .cafe
+        }
+        if matches(normalized, #"restaurant|meal|food|foodtruck"#) {
+            return .food
+        }
+        if matches(normalized, #"bar|nightlife|brewery|winery|liquor|pub"#) {
+            return .bar
+        }
+        if matches(normalized, #"lodging|hotel|motel|resort|campground"#) {
+            return .stay
+        }
+        if matches(normalized, #"store|shop|mall|market|pharmacy|supermarket|spa|fitness|beauty|salon|massage|gym|bank|atm|laundry"#) {
+            return .shopping
+        }
+        if matches(normalized, #"museum|park|tourist|attraction|gallery|zoo|aquarium|theater|theatre|cinema|movie|stadium|airport|school|university|library|hospital|doctor|dentist|parking|station|transit|charger|evcharger|gas|post|courthouse|government|cityhall|police|fire|religious|church|worship|nationalpark|amusementpark|fairground|conventioncenter|musicvenue|publictransport|landmark|beach"#) {
+            return .attraction
+        }
+
+        return nil
     }
 
     private static func matches(_ value: String, _ pattern: String) -> Bool {

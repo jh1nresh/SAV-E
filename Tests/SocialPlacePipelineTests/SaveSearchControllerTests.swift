@@ -1,4 +1,5 @@
 import XCTest
+import MapKit
 import CoreLocation
 @testable import Wanderly
 
@@ -694,6 +695,56 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Map fallback: https://maps.apple.com"))
         XCTAssertEqual(candidate.saveShareURL?.host, "wanderly.app")
         XCTAssertEqual(candidate.saveShareURL?.path, "/trip")
+    }
+
+    func testPOICategoryWinsOverTextFallback() {
+        XCTAssertEqual(
+            PlaceCategory.poiFirst(
+                pointOfInterestCategory: .restaurant,
+                fallbackText: "Coffee Lab"
+            ),
+            .food
+        )
+        XCTAssertEqual(
+            PlaceCategory.poiFirst(
+                pointOfInterestCategory: .cafe,
+                fallbackText: "Dinner Bar"
+            ),
+            .cafe
+        )
+        XCTAssertEqual(PlaceCategory.from(googleTypes: ["tourist_attraction"]), .attraction)
+        XCTAssertEqual(PlaceCategory.from(googleTypes: ["school", "point_of_interest"]), .attraction)
+    }
+
+    func testGooglePlaceTypesDriveSavedReviewCandidateCategory() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Bright Coffee Bar",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.7,
+            longitude: -117.8,
+            evidence: ["Google Places match"],
+            confidence: 0.91,
+            missingInfo: [],
+            status: "confirmed",
+            createdAt: Date()
+        )
+        let match = GooglePlaceMatch(
+            id: "bright-coffee-bar",
+            name: "Bright Coffee Bar",
+            address: "123 Main St",
+            latitude: 33.7,
+            longitude: -117.8,
+            rating: 4.8,
+            priceLevel: 2,
+            types: ["cafe", "food", "point_of_interest"]
+        )
+
+        let place = Place.from(candidate, refinedMatch: match)
+
+        XCTAssertEqual(place.category, .cafe)
     }
 
     private func place(

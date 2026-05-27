@@ -21,6 +21,7 @@ struct GooglePlaceMatch: Identifiable, Codable {
     var reviewCount: Int? = nil
     var priceLevel: Int?
     var photoReference: String? = nil
+    var types: [String] = []
 }
 
 struct GooglePlaceDetails: Codable {
@@ -35,6 +36,7 @@ struct GooglePlaceDetails: Codable {
     var phoneNumber: String?
     var websiteUrl: String?
     var photoReferences: [String]?
+    var types: [String] = []
 }
 
 // MARK: - Errors
@@ -137,7 +139,8 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
                 rating: result["rating"] as? Double,
                 reviewCount: result["user_ratings_total"] as? Int,
                 priceLevel: result["price_level"] as? Int,
-                photoReference: (result["photos"] as? [[String: Any]])?.first?["photo_reference"] as? String
+                photoReference: (result["photos"] as? [[String: Any]])?.first?["photo_reference"] as? String,
+                types: result["types"] as? [String] ?? []
             )
         }
     }
@@ -149,7 +152,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.apiKeyMissing
         }
 
-        let fields = "place_id,name,formatted_address,geometry,rating,price_level,opening_hours,formatted_phone_number,website,photos"
+        let fields = "place_id,name,formatted_address,geometry,rating,price_level,opening_hours,formatted_phone_number,website,photos,types"
         let urlString = "https://maps.googleapis.com/maps/api/place/details/json?place_id=\(placeId)&fields=\(fields)&key=\(apiKey)"
 
         guard let url = URL(string: urlString) else {
@@ -182,7 +185,8 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             openingHours: openingHours?["weekday_text"] as? [String],
             phoneNumber: result["formatted_phone_number"] as? String,
             websiteUrl: result["website"] as? String,
-            photoReferences: photos?.compactMap { $0["photo_reference"] as? String }
+            photoReferences: photos?.compactMap { $0["photo_reference"] as? String },
+            types: result["types"] as? [String] ?? []
         )
     }
 

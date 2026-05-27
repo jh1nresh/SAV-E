@@ -138,6 +138,9 @@ struct MapCandidateSearchService: MapCandidateSearchServiceProtocol {
             enrichedCandidate.businessPhotoURLs = urls
             enrichedCandidate.evidence.append(photoURLs.count > 1 ? "Business photos: Google Places" : "Business photo: Google Places")
         }
+        if let category = PlaceCategory.from(googleTypes: details?.types ?? match.types) {
+            enrichedCandidate.category = category
+        }
         enrichedCandidate.rating = enrichedCandidate.rating ?? details?.rating ?? match.rating
         enrichedCandidate.reviewCount = enrichedCandidate.reviewCount ?? match.reviewCount
         return enrichedCandidate
@@ -836,6 +839,9 @@ final class MapViewModel: ObservableObject {
         }
         updatedCandidate.rating = updatedCandidate.rating ?? update.rating
         updatedCandidate.reviewCount = updatedCandidate.reviewCount ?? update.reviewCount
+        if let category = update.category {
+            updatedCandidate.category = category
+        }
         if let priceRange = update.priceRange {
             updatedCandidate.evidence.append("Price: \(priceRange)")
         }
@@ -849,7 +855,7 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    private func businessDetails(for candidate: SaveMapCandidate) async -> (photoURLs: [URL], rating: Double?, reviewCount: Int?, priceRange: String?, openingHours: String?)? {
+    private func businessDetails(for candidate: SaveMapCandidate) async -> (photoURLs: [URL], rating: Double?, reviewCount: Int?, priceRange: String?, openingHours: String?, category: PlaceCategory?)? {
         do {
             let coordinate = CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude)
             let matches = try await googlePlacesService.searchPlace(query: "\(candidate.title) \(candidate.subtitle)", near: coordinate)
@@ -878,7 +884,8 @@ final class MapViewModel: ObservableObject {
                 details?.rating ?? match.rating,
                 match.reviewCount,
                 priceLevel.map { String(repeating: "$", count: max(1, $0)) },
-                details?.openingHours?.first
+                details?.openingHours?.first,
+                PlaceCategory.from(googleTypes: details?.types ?? match.types)
             )
         } catch {
             return nil
