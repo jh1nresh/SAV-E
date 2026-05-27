@@ -717,12 +717,6 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    func addMapCandidate(_ candidate: SaveMapCandidate, toListID listID: UUID) throws {
-        try updateCollaborativeList(listID) { list in
-            list.add(.from(candidate: candidate))
-        }
-    }
-
     func shareURL(for list: SaveCollaborativeList, role: SaveListRole) -> URL? {
         collaborativeLists.first(where: { $0.id == list.id })?.shareURL(role: role) ?? list.shareURL(role: role)
     }
@@ -1161,6 +1155,7 @@ final class MapViewModel: ObservableObject {
         selectedReviewCandidate = nil
 
         Task {
+            await hydrateSelectedMapCandidateDistance(selectedCandidate)
             await enrichSelectedMapCandidate(selectedCandidate)
         }
     }
@@ -1205,11 +1200,38 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+    private func hydrateSelectedMapCandidateDistance(_ candidate: SaveMapCandidate) async {
+        guard candidate.distanceMeters == nil else { return }
+        guard selectedMapCandidate?.id == candidate.id else { return }
+        guard let center = await currentLocationSearchCenter() else { return }
+
+        var updatedCandidate = selectedMapCandidate ?? candidate
+        let coordinate = CLLocationCoordinate2D(latitude: updatedCandidate.latitude, longitude: updatedCandidate.longitude)
+        let distance = CLLocation(latitude: center.latitude, longitude: center.longitude)
+            .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+        updatedCandidate.distanceMeters = distance
+        if !updatedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Distance:") }) {
+            updatedCandidate.evidence.append("Distance: \(mapCandidateDistanceLabel(distance))")
+        }
+
+        selectedMapCandidate = updatedCandidate
+        if let index = mapCandidates.firstIndex(where: { $0.id == updatedCandidate.id }) {
+            mapCandidates[index] = updatedCandidate
+        }
+    }
+
+    private func mapCandidateDistanceLabel(_ meters: Double) -> String {
+        if meters >= 1_000 {
+            return String(format: "%.1f km away", meters / 1_000)
+        }
+        return "\(Int(meters.rounded())) m away"
+    }
+
     private func enrichSelectedMapCandidate(_ candidate: SaveMapCandidate) async {
         guard let update = await businessDetails(for: candidate) else { return }
         guard selectedMapCandidate?.id == candidate.id else { return }
 
-        var updatedCandidate = candidate
+        var updatedCandidate = selectedMapCandidate ?? candidate
         if !update.photoURLs.isEmpty {
             let urls = update.photoURLs.map(\.absoluteString)
             updatedCandidate.photoURL = updatedCandidate.photoURL ?? urls.first

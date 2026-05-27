@@ -50,9 +50,6 @@ struct ContentView: View {
                     onAddPlaceToList: { place, listID in
                         try mapVM.addPlace(place, toListID: listID)
                     },
-                    onAddMapCandidateToList: { candidate, listID in
-                        try mapVM.addMapCandidate(candidate, toListID: listID)
-                    },
                     onShareListURL: { list, role in
                         mapVM.shareURL(for: list, role: role)
                     },

@@ -47,7 +47,6 @@ struct AIDrawerView: View {
         SaveCollaborativeList(title: title, note: note)
     }
     var onAddPlaceToList: (Place, UUID) throws -> Void = { _, _ in }
-    var onAddMapCandidateToList: (SaveMapCandidate, UUID) throws -> Void = { _, _ in }
     var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
     var onSaveListItem: (SaveListItem) async throws -> Void = { _ in }
     var onPlanList: (SaveCollaborativeList) async -> Void = { _ in }
@@ -192,8 +191,7 @@ struct AIDrawerView: View {
                 try await onUpdatePlaceVisibility(place, visibility)
             },
             onCreateList: createListForPicker,
-            onAddPlaceToList: onAddPlaceToList,
-            onAddMapCandidateToList: onAddMapCandidateToList
+            onAddPlaceToList: onAddPlaceToList
         )
     }
 
@@ -548,20 +546,6 @@ struct AIDrawerView: View {
                                 showSavedCategories = false
                                 showReviewInbox = false
                                 showLists = false
-                            }
-                        }
-                    )
-
-                    AddToListPanel(
-                        title: "Add this map result to a list",
-                        lists: collaborativeLists.filter(\.canEdit),
-                        onCreateList: createListForPicker,
-                        onAddToList: { listID in
-                            do {
-                                try onAddMapCandidateToList(candidate, listID)
-                                addSpotStatus = "Added \(candidate.title) to list without saving it."
-                            } catch {
-                                addSpotStatus = error.localizedDescription
                             }
                         }
                     )
@@ -1673,7 +1657,6 @@ private struct MapDetailDrawerView: View {
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
     let onCreateList: () -> SaveCollaborativeList
     let onAddPlaceToList: (Place, UUID) throws -> Void
-    let onAddMapCandidateToList: (SaveMapCandidate, UUID) throws -> Void
     @State private var statusMessage: String?
 
     var body: some View {
@@ -1707,7 +1690,8 @@ private struct MapDetailDrawerView: View {
 
     private var compactHeader: some View {
         HStack(spacing: 12) {
-            SaveMemoryBadge(state: badgeState, size: 42)
+            shareAction
+                .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
@@ -1724,21 +1708,30 @@ private struct MapDetailDrawerView: View {
             Spacer(minLength: 0)
 
             Button(action: onClose) {
-                SaveIconTile(
-                    systemName: "xmark",
-                    size: 30,
-                    iconSize: 11,
-                    fill: Color.saveNotebookPage.opacity(0.72),
-                    foreground: Color.saveCocoa.opacity(0.78),
-                    strokeOpacity: 0.54,
-                    cornerRadius: 9
-                )
+                SelectedPlaceCapsuleIcon(systemImage: "xmark")
             }
+            .buttonStyle(.plain)
             .accessibilityLabel("Close place detail")
+            .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 12)
+    }
+
+    @ViewBuilder
+    private var shareAction: some View {
+        if let url = item.shareURL {
+            ShareLink(item: url, subject: Text(item.shareSubject), message: Text(item.shareText)) {
+                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share \(item.title)")
+        } else {
+            ShareLink(item: item.shareText, subject: Text(item.shareSubject)) {
+                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share \(item.title)")
+        }
     }
 
     private func expandDetail() {
@@ -1792,20 +1785,6 @@ private struct MapDetailDrawerView: View {
                         isWorking: isWorkingMapCandidateID == candidate.id,
                         onSave: { onSaveMapCandidate(candidate) }
                     )
-
-                    AddToListPanel(
-                        title: "Add this map result to a list",
-                        lists: editableLists,
-                        onCreateList: onCreateList,
-                        onAddToList: { listID in
-                            do {
-                                try onAddMapCandidateToList(candidate, listID)
-                                statusMessage = "Added \(candidate.title) to list without saving it."
-                            } catch {
-                                statusMessage = error.localizedDescription
-                            }
-                        }
-                    )
                 case .socialPlace(let place):
                     SocialPlaceDetailCard(
                         place: place,
@@ -1827,18 +1806,6 @@ private struct MapDetailDrawerView: View {
         }
     }
 
-    private var badgeState: SaveMemoryBadge.State {
-        switch item {
-        case .savedPlace(let place):
-            return .saved(place.category)
-        case .reviewCandidate(let candidate):
-            return candidate.hasReliableCoordinates ? .ready : .clue
-        case .unsavedCandidate:
-            return .ready
-        case .socialPlace:
-            return .ready
-        }
-    }
 }
 
 private struct SelectedPlaceCapsule: View {
@@ -3116,184 +3083,77 @@ private struct UnsavedMapCandidateCard: View {
     var onSave: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            NotebookSpine(color: .saveSignal)
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 11) {
-                    SaveMemoryBadge(state: .ready, size: 40)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("UNSAVED CANDIDATE")
-                            .font(.caption2.weight(.black))
-                            .foregroundColor(.saveCocoa)
-                            .lineLimit(1)
-
-                        Text(candidate.title)
-                            .font(.headline)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-                            .lineLimit(2)
-
-                        Text(candidate.subtitle)
-                            .font(.caption)
-                            .foregroundColor(.saveCocoa.opacity(0.74))
-                            .lineLimit(3)
-
-                        HStack(spacing: 6) {
-                            StampChip(text: candidate.category?.displayName ?? "Place", color: .saveHoney)
-                            StampChip(text: "not saved", color: .saveSky)
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                Text("This is a map result, not one of your SAV-E memories yet. Save it only after it looks like the place you want.")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                UnsavedMapCandidateVisualPreview(candidate: candidate)
-
-                UnsavedMapCandidateBasicInfo(candidate: candidate)
-                UnsavedMapCandidateSummaryPanel(candidate: candidate)
-
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.caption2.weight(.bold))
-                        Text("Source")
-                            .font(.caption2.weight(.black))
-                        Spacer()
-                    }
-                    .foregroundColor(.saveCocoa)
-
-                    Text("Found from map search. It is not a Map Stamp or memory until you save it.")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.saveCocoa.opacity(0.78))
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    EvidenceLinkList(evidence: sourceEvidence, maxItems: 4)
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.saveSky.opacity(0.16))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.saveNotebookLine, style: StrokeStyle(lineWidth: 1, dash: [4]))
-                        )
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                CandidateActionButton(
+                    title: isWorking ? "Saving" : "Save",
+                    systemImage: "bookmark.badge.plus",
+                    fill: .saveHoney,
+                    disabled: isWorking,
+                    action: onSave
                 )
 
-                HStack(spacing: 8) {
-                    CandidateActionButton(
-                        title: isWorking ? "Saving" : "Save",
-                        systemImage: "bookmark.badge.plus",
-                        fill: .saveHoney,
-                        disabled: isWorking,
-                        action: onSave
-                    )
-
-                    ShareLink(item: candidate.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(candidate.shareSubject), message: Text(candidate.shareText)) {
+                if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
+                    Link(destination: url) {
                         CandidateActionLabel(
-                            title: "Share",
-                            systemImage: "square.and.arrow.up",
+                            title: "Maps",
+                            systemImage: "map",
                             fill: .saveNotebookPage
                         )
                     }
-
-                    if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
-                        Link(destination: url) {
-                            CandidateActionLabel(
-                                title: "Maps",
-                                systemImage: "map",
-                                fill: .saveNotebookPage
-                            )
-                        }
-                    }
                 }
             }
-            .padding(12)
+
+            HStack(alignment: .top, spacing: 8) {
+                UnsavedCandidateFact(title: "Rating", value: ratingText)
+                UnsavedCandidateFact(title: "Reviews", value: reviewText ?? "—")
+                UnsavedCandidateFact(title: "Distance", value: candidate.distanceLabel ?? "On map", valueColor: candidate.distanceLabel == nil ? .saveCocoa.opacity(0.68) : .saveInk)
+            }
+            .padding(.vertical, 2)
+
+            PlaceBusinessPhotoCarousel(imageURLs: candidate.businessPhotoURLStrings)
+
+            UnsavedCandidateGlassSection(title: "Basic info", systemImage: "info.circle.fill") {
+                VStack(spacing: 8) {
+                    UnsavedCandidateInfoRow(title: "Rating", value: ratingText)
+                    if let reviewText {
+                        UnsavedCandidateInfoRow(title: "Reviews", value: "\(reviewText) reviews")
+                    }
+                    if let hoursText {
+                        UnsavedCandidateInfoRow(title: "Hours", value: hoursText)
+                    }
+                    if let distanceLabel = candidate.distanceLabel {
+                        UnsavedCandidateInfoRow(title: "Distance", value: distanceLabel)
+                    }
+                    UnsavedCandidateInfoRow(title: "Category", value: candidate.category?.displayName ?? "Place")
+                    UnsavedCandidateInfoRow(title: "Address", value: candidate.subtitle)
+                    UnsavedCandidateInfoRow(title: "Source", value: sourceSummary)
+                }
+            }
+
+            UnsavedCandidateGlassSection(title: "Quick take", systemImage: "text.alignleft") {
+                VStack(alignment: .leading, spacing: 8) {
+                    UnsavedCandidateQuickLine(text: quickTakeSummary)
+                    if let ratingSummary {
+                        UnsavedCandidateQuickLine(text: ratingSummary)
+                    }
+                    UnsavedCandidateQuickLine(text: "Not saved yet. Save only after the photo, address, and map pin match.")
+                }
+            }
         }
-        .saveNotebookPage(cornerRadius: 16)
+        .padding(.horizontal, 2)
         .opacity(isWorking ? 0.65 : 1)
     }
 
-    private var sourceEvidence: [String] {
-        let fallback = [
-            "Found in map search",
-            "Unsaved until you tap Save",
-            "Source: Apple Maps"
-        ]
-        let cleaned = candidate.evidence.compactMap(cleanMapEvidenceLine)
-        return cleaned.isEmpty ? fallback : cleaned
-    }
-
-    private func cleanMapEvidenceLine(_ line: String) -> String? {
-        let value = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return nil }
-        if value.localizedCaseInsensitiveCompare("Apple Maps POI") == .orderedSame {
-            return "Selected from Apple Maps"
-        }
-        if value.localizedCaseInsensitiveCompare("Apple Maps result") == .orderedSame {
-            return "Found in Apple Maps nearby search"
-        }
-        if value.localizedCaseInsensitiveContains("POI:") ||
-            value.localizedCaseInsensitiveContains("MKPOICategory") {
-            return nil
-        }
-        return value
-    }
-
-}
-
-private struct UnsavedMapCandidateBasicInfo: View {
-    var candidate: SaveMapCandidate
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle.fill")
-                    .font(.caption.weight(.black))
-                Text("Basic info")
-                    .font(.caption.weight(.black))
-                Spacer()
-            }
-            .foregroundColor(.saveCocoa)
-
-            VStack(spacing: 7) {
-                UnsavedMapCandidateInfoRow(icon: "star", title: "Rating", value: ratingText)
-                if let reviewText {
-                    UnsavedMapCandidateInfoRow(icon: "text.bubble", title: "Reviews", value: reviewText)
-                }
-                if let hoursText {
-                    UnsavedMapCandidateInfoRow(icon: "clock", title: "Hours", value: hoursText)
-                }
-                if let distanceText = candidate.distanceLabel {
-                    UnsavedMapCandidateInfoRow(icon: "location", title: "Distance", value: distanceText)
-                }
-                UnsavedMapCandidateInfoRow(icon: candidate.category?.outlineIconName ?? "mappin", title: "Category", value: candidate.category?.displayName ?? "Place")
-                UnsavedMapCandidateInfoRow(icon: "mappin", title: "Address", value: candidate.subtitle)
-                UnsavedMapCandidateInfoRow(icon: "map", title: "Source", value: "Map search")
-            }
-        }
-        .padding(10)
-        .background(Color.saveSky.opacity(0.14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
     private var ratingText: String {
-        guard let rating = candidate.rating else { return "No rating yet" }
+        guard let rating = candidate.rating else { return "—" }
         return String(format: "%.1f", rating)
     }
 
     private var reviewText: String? {
-        candidate.reviewCount.map { "\($0) reviews" }
+        candidate.reviewCount.map {
+            NumberFormatter.localizedString(from: NSNumber(value: $0), number: .decimal)
+        }
     }
 
     private var hoursText: String? {
@@ -3303,161 +3163,139 @@ private struct UnsavedMapCandidateBasicInfo: View {
             return value.isEmpty ? nil : value
         }.first
     }
-}
 
-private struct UnsavedMapCandidateSummaryPanel: View {
-    var candidate: SaveMapCandidate
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "text.alignleft")
-                    .font(.caption.weight(.black))
-                Text("Quick take")
-                    .font(.caption.weight(.black))
-                Spacer()
-            }
-            .foregroundColor(.saveCocoa)
-
-            VStack(alignment: .leading, spacing: 7) {
-                UnsavedMapCandidateSummaryLine(icon: candidate.category?.outlineIconName ?? "mappin", text: candidateSummary)
-                if let distanceSummary {
-                    UnsavedMapCandidateSummaryLine(icon: "location", text: distanceSummary)
-                }
-                if let reviewSummary {
-                    UnsavedMapCandidateSummaryLine(icon: "star", text: reviewSummary)
-                }
-                if let practicalInfo {
-                    UnsavedMapCandidateSummaryLine(icon: "mappin", text: practicalInfo)
-                }
-                UnsavedMapCandidateSummaryLine(icon: "bookmark", text: saveReminder)
-            }
+    private var quickTakeSummary: String {
+        var parts = [candidate.category?.displayName ?? "Place", "unsaved map result"]
+        if let distanceLabel = candidate.distanceLabel {
+            parts.append(distanceLabel)
         }
-        .padding(10)
-        .background(Color.saveNotebookPage.opacity(0.62))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        return parts.joined(separator: " · ")
     }
 
-    private var candidateSummary: String {
-        let category = candidate.category?.displayName.lowercased() ?? "place"
-        if let searchQuery {
-            return "\(candidate.title) matches your \(searchQuery) search as an unsaved \(category)."
-        }
-        if !candidate.shareAreaLabel.isEmpty {
-            return "\(candidate.title) is an unsaved \(category) in \(candidate.shareAreaLabel)."
-        }
-        return "\(candidate.title) is an unsaved \(category) selected from the map."
-    }
-
-    private var distanceSummary: String? {
-        candidate.distanceLabel.map { "About \($0) from your search area." }
-    }
-
-    private var practicalInfo: String? {
-        let address = candidate.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !address.isEmpty, address != "Nearby unsaved place", address != "Selected on map" else {
-            return nil
-        }
-        return address
-    }
-
-    private var reviewSummary: String? {
+    private var ratingSummary: String? {
+        guard ratingText != "—" || reviewText != nil else { return nil }
         var parts: [String] = []
-        if let rating = candidate.rating {
-            parts.append(String(format: "%.1f", rating))
+        if ratingText != "—" {
+            parts.append("Rating \(ratingText)")
         }
-        if let reviewCount = candidate.reviewCount {
-            parts.append("\(reviewCount) reviews")
+        if let reviewText {
+            parts.append("\(reviewText) reviews")
         }
-        return parts.isEmpty ? nil : "Public rating \(parts.joined(separator: " · "))."
+        return parts.joined(separator: " · ")
     }
 
-    private var saveReminder: String {
-        "Save only after the photo, address, and map pin match the place you want."
-    }
-
-    private var searchQuery: String? {
-        candidate.evidence.compactMap { line -> String? in
+    private var sourceSummary: String {
+        if candidate.evidence.contains(where: { $0.localizedCaseInsensitiveCompare("Apple Maps POI") == .orderedSame }) {
+            return "Selected from Apple Maps · Map search"
+        }
+        if let searchQuery = candidate.evidence.compactMap({ line -> String? in
             guard let range = line.range(of: "Search:", options: [.caseInsensitive]) else {
                 return nil
             }
             let value = line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? nil : value
-        }.first
-    }
-}
-
-private struct UnsavedMapCandidateSummaryLine: View {
-    let icon: String
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            UnsavedMapCandidateRowIcon(icon: icon, fill: Color.saveNotebookPage.opacity(0.72))
-                .padding(.top, 1)
-
-            Text(text)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.saveInk)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
+        }).first {
+            return "Map search · \(searchQuery)"
         }
+        return "Map search"
     }
 }
 
-private struct UnsavedMapCandidateInfoRow: View {
-    let icon: String
-    let title: String
-    let value: String
+private struct UnsavedCandidateGlassSection<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var title: String
+    var systemImage: String
+    @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            UnsavedMapCandidateRowIcon(icon: icon, fill: Color.saveCream.opacity(0.74))
-                .padding(.top, 1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .font(.caption.weight(.black))
+                Text(title)
+                    .font(.caption.weight(.black))
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(.saveCocoa.opacity(0.86))
 
+            content()
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(sectionTint)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.22), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var sectionTint: Color {
+        colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.18)
+    }
+}
+
+private struct UnsavedCandidateInfoRow: View {
+    var title: String
+    var value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
                 .font(.caption2.weight(.black))
-                .foregroundColor(.saveCocoa)
+                .foregroundColor(.saveCocoa.opacity(0.72))
                 .frame(width: 58, alignment: .leading)
 
             Text(value)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
+                .lineLimit(2)
+                .minimumScaleFactor(0.78)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct UnsavedMapCandidateRowIcon: View {
-    let icon: String
-    var fill: Color
+private struct UnsavedCandidateQuickLine: View {
+    var text: String
 
     var body: some View {
-        Image(systemName: icon)
-            .font(.caption2.weight(.bold))
-            .foregroundColor(.saveCocoa)
-            .frame(width: 22, height: 22)
-            .background(fill)
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.54), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(Color.saveCocoa.opacity(0.64))
+                .frame(width: 4, height: 4)
+                .padding(.top, 7)
+
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
-private struct UnsavedMapCandidateVisualPreview: View {
-    var candidate: SaveMapCandidate
+private struct UnsavedCandidateFact: View {
+    var title: String
+    var value: String
+    var valueColor: Color = .saveInk
 
     var body: some View {
-        PlaceBusinessPhotoCarousel(imageURLs: candidate.businessPhotoURLStrings)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.saveCocoa.opacity(0.70))
+                .lineLimit(1)
+
+            Text(value)
+                .font(.caption.weight(.black))
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.70)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
