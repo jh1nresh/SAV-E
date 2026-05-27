@@ -27,7 +27,7 @@ struct SharedPlaceData: Codable {
         ShareRouteCodec.decode(SharedPlaceData.self, from: url, route: "p")
     }
 
-    func toURL(baseURL: String = "https://sav-e.app/p") -> URL? {
+    func toURL(baseURL: String = "https://sav-e-app.vercel.app/p") -> URL? {
         ShareRouteCodec.url(for: self, baseURL: baseURL)
     }
 }
@@ -61,7 +61,7 @@ struct SharedTripData: Codable {
     }
 
     /// Encode to a shareable URL.
-    func toURL(baseURL: String = "https://sav-e.app/trip") -> URL? {
+    func toURL(baseURL: String = "https://sav-e-app.vercel.app/trip") -> URL? {
         ShareRouteCodec.url(for: self, baseURL: baseURL)
     }
 
@@ -147,7 +147,7 @@ struct SharedListPayload: Codable {
             return true
         }
         return url.scheme == "https" &&
-            url.host == "wanderly.app" &&
+            (url.host == "sav-e-app.vercel.app" || url.host == "wanderly.app") &&
             url.path == "/list"
     }
 }
@@ -219,7 +219,7 @@ struct SharedReferralProfile: Codable, Hashable {
 
     static func isReferralLink(_ url: URL) -> Bool {
         url.scheme == "https" &&
-            url.host == "sav-e.app" &&
+            url.host == "sav-e-app.vercel.app" &&
             (url.path.hasPrefix("/r/") || url.path.hasPrefix("/u/"))
     }
 

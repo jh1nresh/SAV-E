@@ -544,7 +544,7 @@ struct ClipContentView: View {
             return true
         }
         guard url.scheme == "https",
-              ["sav-e.app", "wanderly.app"].contains(url.host ?? "") else {
+              ["sav-e-app.vercel.app", "wanderly.app"].contains(url.host ?? "") else {
             return false
         }
         return url.path.split(separator: "/").first.map(String.init) == "p"
@@ -555,7 +555,7 @@ struct ClipContentView: View {
             return true
         }
         guard url.scheme == "https",
-              ["sav-e.app", "wanderly.app"].contains(url.host ?? "") else {
+              ["sav-e-app.vercel.app", "wanderly.app"].contains(url.host ?? "") else {
             return false
         }
 

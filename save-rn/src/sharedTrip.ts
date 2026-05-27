@@ -5,7 +5,7 @@ const legacyTripBaseUrl = "https://wanderly.app/trip";
 const tripBaseUrl =
   normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_SHARE_BASE_URL) ??
   normalizedEnvValue(process.env.EXPO_PUBLIC_WANDERLY_SHARE_BASE_URL) ??
-  "https://sav-e.app/trip";
+  "https://sav-e-app.vercel.app/trip";
 
 export function buildSharedTripData(
   name: string,

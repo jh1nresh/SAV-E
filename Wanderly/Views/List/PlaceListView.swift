@@ -94,7 +94,7 @@ struct PlaceListView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
-                                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
+                                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                                     Label("Share", systemImage: "square.and.arrow.up")
                                 }
                                 .tint(.saveSky)

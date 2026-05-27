@@ -8,9 +8,8 @@
 	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>appclips:sav-e.app</string>
+		<string>appclips:sav-e-app.vercel.app</string>
 		<string>appclips:wanderly.app</string>
-		<string>appclips:sav-e.app</string>
 	</array>
 </dict>
 </plist>

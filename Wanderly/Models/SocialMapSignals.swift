@@ -103,7 +103,7 @@ struct SaveReferralProfile: Codable, Hashable {
     var featuredPlaces: [Place]
 
     var referralURL: URL? {
-        URL(string: "https://sav-e.app/u/\(handle)?ref=\(referralCode)")
+        URL(string: "https://sav-e-app.vercel.app/u/\(handle)?ref=\(referralCode)")
     }
 
     static func preview(handle: String?, code: String?, lens: SaveSocialLens = .friends) -> SaveReferralProfile {
@@ -173,7 +173,7 @@ enum SaveReferralLink {
 
     static func isReferralLink(_ url: URL) -> Bool {
         if url.scheme == "wanderly", url.host == "referral" { return true }
-        guard url.scheme == "https", url.host == "sav-e.app" else { return false }
+        guard url.scheme == "https", url.host == "sav-e-app.vercel.app" else { return false }
         return url.path.hasPrefix("/r/") || url.path.hasPrefix("/u/")
     }
 }

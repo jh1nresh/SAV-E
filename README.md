@@ -13,7 +13,7 @@ Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the
 - **Profile** — Stats, world map visualization, collections, subscription management
 - **Onboarding** — 3-step carousel
 - **Place Detail** — Photo carousel, info grid, notes, navigate button, source link
-- **App Clip** — Lightweight SAV-E previews for place links (`https://sav-e.app/p/:id`) and trip links (`https://sav-e.app/trip/:id`)
+- **App Clip** — Lightweight SAV-E previews for place links (`https://sav-e-app.vercel.app/p/:id`) and trip links (`https://sav-e-app.vercel.app/trip/:id`)
 
 ## Tech Stack
 
@@ -43,9 +43,10 @@ Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the
    - `GEMINI_API_KEY` — from Google AI Studio
    - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
    - `SAVE_API_URL` — Railway backend service URL
-   - `SAVE_PLACE_SHARE_BASE_URL` — production place share route, currently `https://sav-e.app/p`
-   - `SAVE_TRIP_SHARE_BASE_URL` — production trip share route, currently `https://sav-e.app/trip`
-   - `SAVE_SHARE_BASE_URL` — legacy trip share route fallback, currently `https://sav-e.app/trip`
+   - `SAVE_PLACE_SHARE_BASE_URL` — production place share route, currently `https://sav-e-app.vercel.app/p`
+   - `SAVE_TRIP_SHARE_BASE_URL` — production trip share route, currently `https://sav-e-app.vercel.app/trip`
+   - `SAVE_SHARE_BASE_URL` — legacy trip share route fallback, currently `https://sav-e-app.vercel.app/trip`
+   - `SAVE_LIST_SHARE_BASE_URL` — production collaborative list share route, currently `https://sav-e-app.vercel.app/list`
    - `PRIVY_APP_ID` — from Privy Dashboard → App Settings → Basics
    - `PRIVY_APP_CLIENT_ID` — from Privy Dashboard → App Settings → Clients. The iOS app client must allow bundle id `com.wanderly.app` and URL scheme `wanderly`.
    - Keep real values out of commits.
@@ -130,7 +131,7 @@ Before uploading a build:
 - configure signing team/profiles in Xcode or release xcconfig
 - confirm the App Store icon and privacy manifest are included
 - keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
-- create App Clip Experiences in App Store Connect for `https://sav-e.app/p` and `https://sav-e.app/trip`
+- create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, and `https://sav-e-app.vercel.app/u`
 
 ## App Clip Share Routes
 
@@ -142,25 +143,33 @@ SAV-E separates share actions from map actions:
 SAV-E place links use this shape:
 
 ```text
-https://sav-e.app/p/<base64-url-encoded SharedPlaceData JSON>
+https://sav-e-app.vercel.app/p/<base64-url-encoded SharedPlaceData JSON>
 ```
 
 SAV-E trip links use this shape:
 
 ```text
-https://sav-e.app/trip/<base64-url-encoded SharedTripData JSON>
+https://sav-e-app.vercel.app/trip/<base64-url-encoded SharedTripData JSON>
 ```
 
-The App Clip target can preview place payloads with photo, rating, hours, address, source, and save/open actions. It can preview trip payloads with stops, route summary, copy summary, and import/open actions. The full app handles the same `https://sav-e.app/p/...` and `https://sav-e.app/trip/...` universal links when installed. Legacy `https://wanderly.app/trip?d=...` links remain readable during migration.
+SAV-E collaborative list and referral links use these shapes:
+
+```text
+https://sav-e-app.vercel.app/list?d=<base64 SharedListPayload JSON>&r=<viewer|editor>
+https://sav-e-app.vercel.app/r/<code>
+https://sav-e-app.vercel.app/u/<handle>?ref=<code>
+```
+
+The App Clip target can preview place payloads with photo, rating, hours, address, source, and save/open actions. It can preview trip payloads with stops, route summary, copy summary, and import/open actions. The full app handles the same `https://sav-e-app.vercel.app/p/...` and `https://sav-e-app.vercel.app/trip/...` universal links when installed. Legacy `https://wanderly.app/trip?d=...` links remain readable during migration.
 
 Before this works for friends without the full app installed:
 
 - enable Associated Domains on `com.wanderly.app` and `com.wanderly.app.Clip` in Apple Developer
-- keep `applinks:sav-e.app` and `appclips:sav-e.app` in the app entitlement
-- keep `appclips:sav-e.app` in the App Clip entitlement
+- keep `applinks:sav-e-app.vercel.app` and `appclips:sav-e-app.vercel.app` in the app entitlement
+- keep `appclips:sav-e-app.vercel.app` in the App Clip entitlement
 - set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
-- disable bot challenges/WAF rules for `https://sav-e.app/p*`, `https://sav-e.app/trip*`, and `https://sav-e.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
-- create App Clip Experiences in App Store Connect for `https://sav-e.app/p` and `https://sav-e.app/trip`
+- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/trip*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
+- create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, and `https://sav-e-app.vercel.app/u`
 - wait for Apple's associated-domain CDN to pick up the AASA file
 
 Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip. If `APPLE_TEAM_ID` is missing, the web build writes a disabled AASA placeholder with no app IDs so Vercel does not serve the SPA shell as Apple association data.
@@ -170,13 +179,13 @@ Without those Apple/domain steps, the same URL still opens the web app, but iOS 
 SAV-E referral links use these shapes:
 
 ```text
-https://sav-e.app/r/<code>
-https://sav-e.app/u/<handle>?ref=<code>
+https://sav-e-app.vercel.app/r/<code>
+https://sav-e-app.vercel.app/u/<handle>?ref=<code>
 ```
 
 The App Clip preview shows the referrer's profile, a starter map pack, and a follow CTA. The handoff opens the full app through `wanderly://referral?code=<code>&handle=<handle>&lens=friends`, where the full app stores the referrer and intended follow lens before completing follow after install/open.
 
-Before production referral App Clips work, `sav-e.app` needs the same Apple associated-domain and App Clip Experience setup as `wanderly.app`.
+Before production referral App Clips work, `sav-e-app.vercel.app` needs the same Apple associated-domain and App Clip Experience setup as `wanderly.app`.
 
 ## Project Structure
 

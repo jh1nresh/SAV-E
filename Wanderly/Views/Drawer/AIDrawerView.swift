@@ -1937,7 +1937,7 @@ private struct SavedMapDetailDrawerContent: View {
                     PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: .saveHoney.opacity(0.78))
                 }
 
-                ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://wanderly.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
+                ShareLink(item: place.saveShareURL ?? place.appleMapsURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                     PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveMint.opacity(0.32))
                 }
 
@@ -3001,7 +3001,7 @@ private struct UnsavedMapCandidateCard: View {
                         action: onSave
                     )
 
-                    ShareLink(item: candidate.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(candidate.shareSubject), message: Text(candidate.shareText)) {
+                    ShareLink(item: candidate.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(candidate.shareSubject), message: Text(candidate.shareText)) {
                         CandidateActionLabel(
                             title: "Share",
                             systemImage: "square.and.arrow.up",

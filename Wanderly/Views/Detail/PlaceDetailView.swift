@@ -47,7 +47,7 @@ struct PlaceDetailView: View {
                         PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: .saveHoney)
                     }
 
-                    ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
+                    ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
                         PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveMint.opacity(0.36))
                     }
 
@@ -75,7 +75,7 @@ struct PlaceDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
+                ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
                     Image(systemName: "square.and.arrow.up")
                 }
             }

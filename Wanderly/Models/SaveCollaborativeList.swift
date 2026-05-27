@@ -262,7 +262,7 @@ struct SaveSharedListPayload: Codable, Hashable {
             return true
         }
         return url.scheme == "https" &&
-            url.host == "wanderly.app" &&
+            (url.host == "sav-e-app.vercel.app" || url.host == "wanderly.app") &&
             url.path == "/list"
     }
 }
@@ -332,7 +332,7 @@ enum SaveCollaborativeListError: LocalizedError {
 private enum SaveCollaborativeListLinkConfig {
     static let listBaseURL: String = {
         configValue(for: ["SAVE_LIST_SHARE_BASE_URL", "SAVE_SHARE_LIST_BASE_URL"])
-            ?? "https://wanderly.app/list"
+            ?? "https://sav-e-app.vercel.app/list"
     }()
 
     private static func configValue(for keys: [String]) -> String? {

@@ -3,7 +3,7 @@ const path = require("node:path");
 
 const appBundleId = "com.wanderly.app";
 const appClipBundleId = "com.wanderly.app.Clip";
-const associatedDomain = "sav-e.app";
+const associatedDomain = "sav-e-app.vercel.app";
 const distRoot = path.join(__dirname, "..", "dist");
 const distDir = path.join(__dirname, "..", "dist", "_expo", "static", "js", "web");
 const publicDir = path.join(__dirname, "..", "public");
@@ -72,7 +72,7 @@ function writeShareRouteFallbacks() {
   const indexPath = path.join(distRoot, "index.html");
   if (!fs.existsSync(indexPath)) return;
 
-  for (const route of ["p", "trip"]) {
+  for (const route of ["p", "trip", "list", "r", "u"]) {
     const routeDir = path.join(distRoot, route);
     fs.mkdirSync(routeDir, { recursive: true });
     fs.copyFileSync(indexPath, path.join(routeDir, "index.html"));
@@ -137,6 +137,18 @@ function buildEnabledAssociation(teamId) {
             {
               "/": "/trip",
               comment: "Legacy SAV-E shared trip query links",
+            },
+            {
+              "/": "/list",
+              comment: "SAV-E collaborative list preview links",
+            },
+            {
+              "/": "/r/*",
+              comment: "SAV-E referral code preview links",
+            },
+            {
+              "/": "/u/*",
+              comment: "SAV-E referral profile preview links",
             },
           ],
         },

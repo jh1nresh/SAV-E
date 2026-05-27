@@ -38,7 +38,7 @@ struct PlaceBottomSheet: View {
                 Spacer()
 
                 Menu {
-                    ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
+                    ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
 
@@ -115,7 +115,7 @@ struct PlaceBottomSheet: View {
                     PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: .saveHoney)
                 }
 
-                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
+                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
                     PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveMint.opacity(0.36))
                 }
 

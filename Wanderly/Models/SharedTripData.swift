@@ -236,12 +236,12 @@ enum ShareRouteCodec {
 enum SaveShareLinkConfig {
     static let placeBaseURL: String = {
         configValue(for: ["SAVE_PLACE_SHARE_BASE_URL", "SAVE_SHARE_PLACE_BASE_URL"])
-            ?? "https://sav-e.app/p"
+            ?? "https://sav-e-app.vercel.app/p"
     }()
 
     static let tripBaseURL: String = {
         configValue(for: ["SAVE_TRIP_SHARE_BASE_URL", "SAVE_SHARE_BASE_URL", "WANDERLY_SHARE_BASE_URL"])
-            ?? "https://sav-e.app/trip"
+            ?? "https://sav-e-app.vercel.app/trip"
     }()
 
     private static func configValue(for keys: [String]) -> String? {
