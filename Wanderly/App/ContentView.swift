@@ -47,7 +47,7 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .interactiveDismissDisabled(true)
-                    .presentationBackground(.ultraThinMaterial)
+                    .presentationBackground(.clear)
                     .presentationCornerRadius(32)
             }
             .onChange(of: drawerVM.mapAction) { _, action in

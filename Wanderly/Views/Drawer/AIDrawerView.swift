@@ -41,7 +41,9 @@ struct AIDrawerView: View {
                 contentArea
             }
         }
-        .background(.ultraThinMaterial)
+        .background {
+            DrawerGlassBackground(colorScheme: colorScheme)
+        }
         .sheet(isPresented: $viewModel.showPlaceList) {
             PlaceListView()
         }
@@ -150,15 +152,15 @@ struct AIDrawerView: View {
     }
 
     private var commandBarFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.52) : Color.white.opacity(0.72)
+        colorScheme == .dark ? Color.black.opacity(0.34) : Color.white.opacity(0.44)
     }
 
     private var commandIconFill: Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.saveCream.opacity(0.92)
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.48)
     }
 
     private var commandBarStroke: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.saveNotebookLine.opacity(0.28)
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.saveNotebookLine.opacity(0.18)
     }
 
     private var commandBarTextColor: Color {
@@ -493,12 +495,20 @@ struct AIDrawerView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.saveNotebookPage.opacity(0.96))
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(navigationHeaderTint)
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(Color.saveNotebookLine)
-                .frame(height: 2)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.13) : Color.saveNotebookLine.opacity(0.18))
+                .frame(height: 1)
         }
+    }
+
+    private var navigationHeaderTint: Color {
+        colorScheme == .dark ? Color.black.opacity(0.26) : Color.saveCream.opacity(0.18)
     }
 
     private var showsNavigationHeader: Bool {
@@ -1095,6 +1105,45 @@ struct AIDrawerView: View {
     private func saveFeedback(for candidate: PlaceReviewCandidate) -> String {
         let category = PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
         return "Map Stamp saved · +1 \(category.displayName.lowercased()) place"
+    }
+}
+
+private struct DrawerGlassBackground: View {
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay {
+                LinearGradient(
+                    colors: tintStops,
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(topStroke)
+                    .frame(height: 1)
+            }
+            .ignoresSafeArea()
+    }
+
+    private var tintStops: [Color] {
+        if colorScheme == .dark {
+            return [
+                Color.black.opacity(0.20),
+                Color.black.opacity(0.32)
+            ]
+        }
+        return [
+            Color.white.opacity(0.16),
+            Color.saveCream.opacity(0.26)
+        ]
+    }
+
+    private var topStroke: Color {
+        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.58)
     }
 }
 
