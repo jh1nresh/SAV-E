@@ -58,6 +58,7 @@ struct AIDrawerView: View {
     @State private var candidateActionInFlight: UUID?
     @State private var mapCandidateActionInFlight: String?
     @State private var showReviewInbox = false
+    @State private var showSavedCategories = false
     @State private var isImportingURL = false
     @State private var showProfile = false
     @State private var showLists = false
@@ -225,7 +226,11 @@ struct AIDrawerView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 52)
-        .background(commandBarFill)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(commandBarFill)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(commandBarStroke, lineWidth: 1)
@@ -244,11 +249,11 @@ struct AIDrawerView: View {
     }
 
     private var commandBarFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.24) : Color.white.opacity(0.34)
+        colorScheme == .dark ? Color.black.opacity(0.12) : Color.white.opacity(0.18)
     }
 
     private var commandIconFill: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.white.opacity(0.38)
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.28)
     }
 
     private var commandBarStroke: Color {
@@ -275,7 +280,9 @@ struct AIDrawerView: View {
         } else if !viewModel.query.isEmpty {
             Button(action: {
                 viewModel.returnToCommands()
+                showSavedCategories = false
                 showReviewInbox = false
+                showLists = false
                 searchFocused = true
                 withAnimation { drawerDetent = .medium }
             }) {
@@ -336,6 +343,8 @@ struct AIDrawerView: View {
         case .idle:
             if showLists {
                 collaborativeListsView
+            } else if showSavedCategories {
+                savedCategoriesView
             } else if showReviewInbox {
                 reviewInboxView
             } else {
@@ -491,14 +500,18 @@ struct AIDrawerView: View {
                         performCandidateAction(candidate, successMessage: "Removed from Review.") {
                             try await onRejectCandidate(candidate)
                             viewModel.returnToCommands()
+                            showSavedCategories = false
                             showReviewInbox = true
+                            showLists = false
                         }
                     },
                     onSave: {
                         performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
                             try await onSaveCandidate(candidate)
                             viewModel.returnToCommands()
+                            showSavedCategories = false
                             showReviewInbox = false
+                            showLists = false
                         }
                     }
                 )
@@ -515,7 +528,9 @@ struct AIDrawerView: View {
                             performMapCandidateAction(candidate) {
                                 try await onSaveMapCandidate(candidate)
                                 viewModel.returnToCommands()
+                                showSavedCategories = false
                                 showReviewInbox = false
+                                showLists = false
                             }
                         }
                     )
@@ -547,6 +562,9 @@ struct AIDrawerView: View {
                 HStack(spacing: 12) {
                     Button(languageSettings.text(.back)) {
                         viewModel.returnToCommands()
+                        showSavedCategories = false
+                        showReviewInbox = false
+                        showLists = false
                         withAnimation { drawerDetent = .medium }
                     }
                     .font(.caption)
@@ -568,7 +586,9 @@ struct AIDrawerView: View {
         HStack(spacing: 10) {
             Button(action: {
                 viewModel.returnToCommands()
+                showSavedCategories = false
                 showReviewInbox = false
+                showLists = false
                 searchFocused = false
                 withAnimation { drawerDetent = .medium }
             }) {
@@ -601,7 +621,9 @@ struct AIDrawerView: View {
 
             Button(action: {
                 viewModel.reset()
+                showSavedCategories = false
                 showReviewInbox = false
+                showLists = false
                 searchFocused = false
                 withAnimation { drawerDetent = .height(72) }
             }) {
@@ -633,7 +655,7 @@ struct AIDrawerView: View {
     }
 
     private var navigationHeaderTint: Color {
-        colorScheme == .dark ? Color.black.opacity(0.26) : Color.saveCream.opacity(0.18)
+        colorScheme == .dark ? Color.black.opacity(0.10) : Color.white.opacity(0.12)
     }
 
     private var showsNavigationHeader: Bool {
@@ -708,14 +730,14 @@ struct AIDrawerView: View {
 
     private func showsContentArea(for drawerHeight: CGFloat) -> Bool {
         let isCollapsed = drawerHeight <= 96
-        if case .idle = viewModel.drawerState, isCollapsed, !showReviewInbox, !showLists { return false }
+        if case .idle = viewModel.drawerState, isCollapsed, !showReviewInbox, !showSavedCategories, !showLists { return false }
         return true
     }
 
     private var hasActiveDrawerContent: Bool {
         switch viewModel.drawerState {
         case .idle:
-            return showReviewInbox || showLists
+            return showReviewInbox || showSavedCategories || showLists
         case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .mapCandidateDetail, .error:
             return true
         }
@@ -790,15 +812,15 @@ struct AIDrawerView: View {
                     title: "Saved",
                     systemImage: "list.bullet",
                     count: viewModel.places.isEmpty ? nil : viewModel.places.count,
-                    fill: Color.saveMint.opacity(0.74),
-                    action: { viewModel.showPlaceList = true }
+                    fill: Color.saveMint.opacity(0.36),
+                    action: openSavedCategories
                 )
 
                 DrawerActionChip(
                     title: "Review",
                     systemImage: "checklist.unchecked",
                     count: reviewCandidates.isEmpty ? nil : reviewCandidates.count,
-                    fill: Color.saveHoney.opacity(0.84),
+                    fill: Color.saveHoney.opacity(0.42),
                     action: openReviewInbox
                 )
 
@@ -806,7 +828,7 @@ struct AIDrawerView: View {
                     title: "Lists",
                     systemImage: "person.2.wave.2.fill",
                     count: collaborativeLists.isEmpty ? nil : collaborativeLists.count,
-                    fill: Color.savePink.opacity(0.72),
+                    fill: Color.savePink.opacity(0.36),
                     action: openCollaborativeLists
                 )
             }
@@ -817,7 +839,7 @@ struct AIDrawerView: View {
                     title: "Takeout",
                     systemImage: "tray.and.arrow.down",
                     count: nil,
-                    fill: Color.saveSky.opacity(0.64),
+                    fill: Color.saveSky.opacity(0.34),
                     action: { showGoogleTakeoutImport = true }
                 )
 
@@ -825,7 +847,7 @@ struct AIDrawerView: View {
                     title: "Plan",
                     systemImage: "map.fill",
                     count: nil,
-                    fill: Color.saveSignal.opacity(0.56),
+                    fill: Color.saveSignal.opacity(0.30),
                     action: {
                         focusAgentPrompt("Plan a day from my Map Stamps")
                     }
@@ -854,6 +876,110 @@ struct AIDrawerView: View {
                 .padding(.vertical, 2)
             }
         }
+    }
+
+    private var savedCategoriesView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    NotebookBandLabel("Saved categories")
+
+                    if viewModel.places.isEmpty {
+                        Text("No saved Map Stamps yet. Confirm Review Candidates or save map results to build your categories.")
+                            .font(.caption)
+                            .foregroundColor(.saveCocoa.opacity(0.76))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(savedCategorySubtitle)
+                            .font(.caption)
+                            .foregroundColor(.saveCocoa.opacity(0.72))
+
+                        VStack(spacing: 8) {
+                            ForEach(savedCategoryCounts, id: \.category) { bucket in
+                                SavedCategoryLensRow(
+                                    category: bucket.category,
+                                    count: bucket.count,
+                                    isSelected: selectedCategories.contains(bucket.category)
+                                ) {
+                                    onToggleCategory(bucket.category)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(savedPanelTint)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(colorScheme == .dark ? 0.20 : 0.14), lineWidth: 1)
+                )
+
+                HStack(spacing: 9) {
+                    Button {
+                        Array(selectedCategories).forEach { onToggleCategory($0) }
+                    } label: {
+                        Label("Clear filters", systemImage: "line.3.horizontal.decrease.circle")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(commandBarTextColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedCategories.isEmpty)
+                    .opacity(selectedCategories.isEmpty ? 0.52 : 1)
+
+                    Button {
+                        viewModel.showPlaceList = true
+                    } label: {
+                        Label("Full list", systemImage: "list.bullet.rectangle")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(commandBarTextColor)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.saveHoney.opacity(0.42))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let addSpotStatus {
+                    Text(addSpotStatus)
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private var savedCategoryCounts: [(category: PlaceCategory, count: Int)] {
+        PlaceCategory.allCases.compactMap { category in
+            let count = viewModel.places.filter { $0.category == category }.count
+            return count > 0 ? (category, count) : nil
+        }
+    }
+
+    private var savedCategorySubtitle: String {
+        if selectedCategories.isEmpty {
+            return "Tap a category to filter the map without leaving the drawer."
+        }
+        let names = selectedCategories.map(\.displayName).sorted().joined(separator: ", ")
+        return "Map filtered to \(names). Tap again to remove."
+    }
+
+    private var savedPanelTint: Color {
+        colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.18)
     }
 
     // MARK: - Add Spots
@@ -981,7 +1107,9 @@ struct AIDrawerView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
                     Button(action: {
+                        showSavedCategories = false
                         showReviewInbox = false
+                        showLists = false
                         withAnimation { drawerDetent = .medium }
                     }) {
                         Label("Commands", systemImage: "terminal")
@@ -1188,7 +1316,9 @@ struct AIDrawerView: View {
     }
 
     private func focusAgentPrompt(_ prompt: String) {
+        showSavedCategories = false
         showReviewInbox = false
+        showLists = false
         viewModel.startNewConversation()
         viewModel.query = singleLinePrompt(prompt)
         withAnimation { drawerDetent = .medium }
@@ -1216,14 +1346,25 @@ struct AIDrawerView: View {
 
     private func openReviewInbox() {
         viewModel.returnToCommands()
+        showSavedCategories = false
         showReviewInbox = true
         showLists = false
         searchFocused = false
         withAnimation { drawerDetent = .large }
     }
 
+    private func openSavedCategories() {
+        viewModel.returnToCommands()
+        showSavedCategories = true
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        withAnimation { drawerDetent = .medium }
+    }
+
     private func openCollaborativeLists() {
         viewModel.returnToCommands()
+        showSavedCategories = false
         showReviewInbox = false
         showLists = true
         searchFocused = false
@@ -1231,7 +1372,9 @@ struct AIDrawerView: View {
     }
 
     private func openReviewCandidateDetail(_ candidate: PlaceReviewCandidate) {
+        showSavedCategories = false
         showReviewInbox = false
+        showLists = false
         searchFocused = false
         viewModel.showReviewCandidate(candidate)
         withAnimation { drawerDetent = .medium }
@@ -1288,6 +1431,7 @@ struct AIDrawerView: View {
     private func closeDrawerContent() {
         voiceQuery.stop()
         viewModel.reset()
+        showSavedCategories = false
         showReviewInbox = false
         showLists = false
         searchFocused = false
@@ -1296,7 +1440,9 @@ struct AIDrawerView: View {
 
     private func importURLToReviewCandidates(_ url: URL) {
         guard !isImportingURL else { return }
+        showSavedCategories = false
         showReviewInbox = false
+        showLists = false
         searchFocused = false
         isImportingURL = true
         addSpotStatus = "Checking the link and saving possible places to Review..."
@@ -1357,6 +1503,7 @@ struct AIDrawerView: View {
         Task {
             await onPlanList(list)
             viewModel.showCollaborativeListPlan(list)
+            showSavedCategories = false
             showLists = false
             withAnimation { drawerDetent = .large }
         }
@@ -1387,18 +1534,18 @@ private struct DrawerGlassBackground: View {
     private var tintStops: [Color] {
         if colorScheme == .dark {
             return [
-                Color.black.opacity(0.08),
-                Color.black.opacity(0.20)
+                Color.black.opacity(0.03),
+                Color.black.opacity(0.10)
             ]
         }
         return [
-            Color.white.opacity(0.08),
-            Color.saveCream.opacity(0.14)
+            Color.white.opacity(0.02),
+            Color.saveCream.opacity(0.05)
         ]
     }
 
     private var topStroke: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.58)
+        colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.62)
     }
 }
 
@@ -2935,6 +3082,7 @@ private struct PassportDrawerButton: View {
 }
 
 private struct DrawerActionChip: View {
+    @Environment(\.colorScheme) private var colorScheme
     var title: String
     var systemImage: String
     var count: Int?
@@ -2964,14 +3112,18 @@ private struct DrawerActionChip: View {
                         .clipShape(Capsule())
                 }
             }
-            .foregroundColor(.saveInk)
+            .foregroundColor(colorScheme == .dark ? .white : .saveInk)
             .frame(height: 38)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
-            .background(fill)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(fill)
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                    .stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1.1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
@@ -2980,7 +3132,71 @@ private struct DrawerActionChip: View {
     }
 }
 
+private struct SavedCategoryLensRow: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let category: PlaceCategory
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 11) {
+                Image(systemName: category.iconName)
+                    .font(.subheadline.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 34, height: 34)
+                    .background(Color.saveStampColor(for: category).opacity(isSelected ? 0.82 : 0.42))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(category.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(primaryText)
+                    Text(isSelected ? "Showing on map" : "Tap to filter map")
+                        .font(.caption2)
+                        .foregroundColor(secondaryText)
+                }
+
+                Spacer()
+
+                Text("\(count)")
+                    .font(.caption.monospacedDigit().weight(.black))
+                    .foregroundColor(primaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.white.opacity(0.24))
+                    .clipShape(Capsule())
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(isSelected ? primaryText : secondaryText.opacity(0.68))
+            }
+            .padding(10)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(isSelected ? Color.saveHoney.opacity(0.26) : Color.white.opacity(0.10))
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 0.36 : 0.16), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .saveInk
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark ? Color.white.opacity(0.68) : Color.saveCocoa.opacity(0.70)
+    }
+}
+
 private struct DrawerSuggestionRow: View {
+    @Environment(\.colorScheme) private var colorScheme
     var icon: String
     var text: String
 
@@ -3000,7 +3216,7 @@ private struct DrawerSuggestionRow: View {
             Text(text)
                 .font(.subheadline)
                 .fontWeight(.semibold)
-                .foregroundColor(.saveInk)
+                .foregroundColor(colorScheme == .dark ? .white : .saveInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
 
@@ -3012,10 +3228,14 @@ private struct DrawerSuggestionRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.saveNotebookPage.opacity(0.92))
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(Color.white.opacity(0.16))
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+                .stroke(Color.saveNotebookLine.opacity(0.18), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
