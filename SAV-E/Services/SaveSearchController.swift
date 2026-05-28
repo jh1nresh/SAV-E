@@ -81,12 +81,14 @@ struct SaveSearchController {
         query rawQuery: String,
         places: [Place],
         localRecords: [SaveMemoryRecord],
+        reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = []
     ) -> SaveSearchResponse {
         let query = SaveSearchQuery(rawValue: rawQuery)
         let placeResults = places.map(makePlaceResult)
         let recordResults = localRecords.map(makeRecordResult)
-        let localResults = (placeResults + recordResults)
+        let reviewResults = reviewCandidates.map(makeReviewCandidateResult)
+        let localResults = (placeResults + recordResults + reviewResults)
             .filter { query.matches($0) }
             .sorted { lhs, rhs in
                 let lhsScore = query.score(lhs)
@@ -120,6 +122,12 @@ struct SaveSearchController {
 
         return SaveSearchResponse(
             query: rawQuery,
+            assistantMessage: assistantMessage(
+                for: query,
+                savedCount: localResults.filter { $0.objectType == .savedPlace || $0.objectType == .triedMemory }.count,
+                reviewCount: localResults.filter { $0.objectType == .pendingCandidate || $0.objectType == .sourceOnlyClue }.count,
+                unsavedCount: mapRecommendationResults.count
+            ),
             fromYourSave: SaveSearchSection(
                 id: "from-your-save",
                 title: "Spatial memory canvas",
@@ -209,6 +217,59 @@ struct SaveSearchController {
             isRecommendationShell: false,
             primaryAction: record.state == .sourceOnly ? .runRecovery : .openSource
         )
+    }
+
+    private func makeReviewCandidateResult(_ candidate: PlaceReviewCandidate) -> SaveSearchResult {
+        let category = PlaceCategory.inferred(from: ([candidate.name, candidate.address, candidate.city ?? ""] + candidate.evidence).joined(separator: " "))
+        let isMapReady = candidate.hasReliableCoordinates
+        return SaveSearchResult(
+            id: "review-candidate-\(candidate.id.uuidString)",
+            objectType: isMapReady ? .pendingCandidate : .sourceOnlyClue,
+            userState: isMapReady ? .waitingReview : .sourceOnly,
+            title: candidate.name,
+            subtitle: candidate.address.isEmpty ? (candidate.city ?? "Needs address confirmation") : candidate.address,
+            statusLabel: isMapReady ? "Review Candidate" : "Clue · needs exact place",
+            sourceURL: nil,
+            sourcePlatform: nil,
+            category: category,
+            cityOrArea: candidate.city,
+            latitude: candidate.latitude,
+            longitude: candidate.longitude,
+            rating: nil,
+            reviewCount: nil,
+            confidence: candidate.confidence,
+            missingInfo: candidate.missingInfo,
+            evidence: candidate.evidence.isEmpty ? ["Waiting in Review"] : candidate.evidence,
+            recoveryQueries: isMapReady ? [] : [candidate.refinementQuery].filter { !$0.isEmpty },
+            createdAt: candidate.createdAt,
+            canRunRecovery: !isMapReady,
+            isRecommendationShell: false,
+            primaryAction: isMapReady ? .savePlace : .runRecovery
+        )
+    }
+
+    private func assistantMessage(
+        for query: SaveSearchQuery,
+        savedCount: Int,
+        reviewCount: Int,
+        unsavedCount: Int
+    ) -> String? {
+        guard query.wantsNewRecommendations || query.wantsMapCandidatePreparation else { return nil }
+        let category = query.categories.first?.displayName.lowercased() ?? "places"
+        var parts: [String] = []
+        if savedCount > 0 {
+            parts.append("\(savedCount) saved Map Stamp\(savedCount == 1 ? "" : "s")")
+        }
+        if reviewCount > 0 {
+            parts.append("\(reviewCount) Review candidate\(reviewCount == 1 ? "" : "s")")
+        }
+        if unsavedCount > 0 {
+            parts.append("\(unsavedCount) nearby unsaved option\(unsavedCount == 1 ? "" : "s")")
+        }
+        if parts.isEmpty {
+            return "I checked your SAV-E first for \(category). I can also search nearby unsaved places and keep them separate before you save anything."
+        }
+        return "I checked your SAV-E first for \(category): \(parts.joined(separator: ", ")). Unsaved map results stay separate until you choose one."
     }
 
     private func makeRecommendationShell(for query: SaveSearchQuery) -> SaveSearchResult {

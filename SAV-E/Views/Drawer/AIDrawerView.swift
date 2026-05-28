@@ -472,7 +472,11 @@ struct AIDrawerView: View {
                     SaveSearchResultsComponent(
                         response: response,
                         onSelectResult: { result in
-                            viewModel.showSearchResult(result)
+                            if let candidate = reviewCandidate(for: result) {
+                                openReviewCandidateDetail(candidate)
+                            } else {
+                                viewModel.showSearchResult(result)
+                            }
                         },
                         onSearchNearby: {
                             searchNearbyUnsavedCandidates(for: response.query)
@@ -1571,6 +1575,13 @@ struct AIDrawerView: View {
         withAnimation { drawerDetent = .medium }
     }
 
+    private func reviewCandidate(for result: SaveSearchResult) -> PlaceReviewCandidate? {
+        guard result.id.hasPrefix("review-candidate-") else { return nil }
+        let rawID = String(result.id.dropFirst("review-candidate-".count))
+        guard let id = UUID(uuidString: rawID) else { return nil }
+        return reviewCandidates.first { $0.id == id }
+    }
+
     private func submitSearchField() {
         voiceQuery.stop()
         searchFocused = false
@@ -1581,8 +1592,9 @@ struct AIDrawerView: View {
         } else {
             let submittedQuery = viewModel.query
             Task {
-                await viewModel.submit()
-                if viewModel.shouldAutoSearchNearbyUnsavedCandidates() {
+                await viewModel.submit(reviewCandidates: reviewCandidates)
+                if viewModel.shouldAutoSearchNearbyUnsavedCandidates() ||
+                    viewModel.shouldPrepareNearbyCandidatesAfterAnswer(for: submittedQuery) {
                     searchNearbyUnsavedCandidates(for: submittedQuery)
                 }
             }
@@ -1595,7 +1607,7 @@ struct AIDrawerView: View {
         let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed)
             ? trimmed
             : "search nearby unsaved candidates for \(trimmed)"
-        viewModel.query = fallbackQuery
+        viewModel.query = trimmed
         addSpotStatus = "Looking for nearby unsaved candidates. Your SAV-E results stay separate."
         withAnimation { drawerDetent = .medium }
 
@@ -1604,11 +1616,11 @@ struct AIDrawerView: View {
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
                 addSpotStatus = "No nearby unsaved candidates found yet. Try a more specific place type or city."
-                await viewModel.submit()
+                await viewModel.submit(reviewCandidates: reviewCandidates)
             } else {
                 viewModel.mapCandidates = candidates
                 addSpotStatus = nil
-                await viewModel.submit()
+                await viewModel.submit(reviewCandidates: reviewCandidates)
                 withAnimation {
                     drawerDetent = .medium
                 }

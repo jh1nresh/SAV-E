@@ -7,6 +7,11 @@ struct SaveSearchResultsComponent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let assistantMessage = response.assistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !assistantMessage.isEmpty {
+                SaveSearchAssistantMessage(text: assistantMessage)
+            }
+
             ForEach(renderedSections) { section in
                 sectionView(section)
             }
@@ -89,6 +94,35 @@ struct SaveSearchResultsComponent: View {
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct SaveSearchAssistantMessage: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.subheadline.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 34, height: 34)
+                .background(Color.saveMint.opacity(0.82))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.saveNotebookPage.opacity(0.72))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.9), lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }

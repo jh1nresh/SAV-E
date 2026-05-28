@@ -432,6 +432,37 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.first?.userState, .unsaved)
     }
 
+    func testRecommendationSearchIncludesReviewCandidatesAndAssistantMessage() throws {
+        let controller = SaveSearchController()
+        let reviewRestaurant = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Ramen",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.6851,
+            longitude: -117.8264,
+            evidence: ["Caption says restaurant near Irvine"],
+            confidence: 0.78,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+
+        let response = controller.search(
+            query: "推薦餐廳",
+            places: [],
+            localRecords: [],
+            reviewCandidates: [reviewRestaurant]
+        )
+
+        let result = try XCTUnwrap(response.fromYourSave.results.first)
+        XCTAssertEqual(result.title, "Review Ramen")
+        XCTAssertEqual(result.objectType, .pendingCandidate)
+        XCTAssertEqual(result.userState, .waitingReview)
+        XCTAssertTrue(response.assistantMessage?.contains("Review") == true)
+    }
+
     func testReviewCandidateMilkTeaMatchStaysReviewScoped() throws {
         let controller = SaveSearchController()
         let response = controller.search(

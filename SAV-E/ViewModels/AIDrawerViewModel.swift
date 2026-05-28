@@ -49,7 +49,7 @@ final class AIDrawerViewModel: ObservableObject {
         self.locationService = locationService ?? .shared
     }
 
-    func submit() async {
+    func submit(reviewCandidates: [PlaceReviewCandidate] = []) async {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
@@ -62,6 +62,8 @@ final class AIDrawerViewModel: ObservableObject {
            let gatedResponse = locationIntentRecommendationService.recommendationSearchResponse(
             for: trimmed,
             places: places,
+            reviewCandidates: reviewCandidates,
+            mapCandidates: mapCandidates,
             currentLocation: currentLocation
         ) {
             drawerState = .saveSearchResults(gatedResponse)
@@ -73,6 +75,7 @@ final class AIDrawerViewModel: ObservableObject {
             query: trimmed,
             places: places,
             localRecords: [],
+            reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates
         )
         if saveSearchResponse.hasVisibleResults {
@@ -199,6 +202,10 @@ final class AIDrawerViewModel: ObservableObject {
 
     func shouldSearchNearbyUnsavedCandidates(for query: String) -> Bool {
         saveSearchController.shouldSearchNearbyUnsavedCandidatesImmediately(for: query)
+    }
+
+    func shouldPrepareNearbyCandidatesAfterAnswer(for query: String) -> Bool {
+        mapCandidates.isEmpty && saveSearchController.shouldPrepareMapCandidates(for: query)
     }
 
     func shouldAutoSearchNearbyUnsavedCandidates() -> Bool {

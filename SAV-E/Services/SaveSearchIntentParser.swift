@@ -46,7 +46,7 @@ struct SaveSearchIntentParser {
         let normalized = Self.normalize(trimmed)
         let categoryMatch = Self.categoryMatch(in: normalized)
         let unsupportedCategory = Self.unsupportedCategory(in: normalized)
-        let locationMode = Self.locationMode(in: normalized)
+        let locationMode = Self.locationMode(in: normalized, categoryMatch: categoryMatch)
         let mustMatchLocation = {
             if case .currentLocation = locationMode { return true }
             return false
@@ -96,7 +96,10 @@ struct SaveSearchIntentParser {
             .lowercased()
     }
 
-    private static func locationMode(in normalized: String) -> SaveSearchIntent.LocationMode {
+    private static func locationMode(
+        in normalized: String,
+        categoryMatch: (category: PlaceCategory, needles: [String])?
+    ) -> SaveSearchIntent.LocationMode {
         if containsAny(normalized, keywords: ["walking", "walkable", "走路", "步行"]) {
             return .currentLocation(radiusMeters: 1_000)
         }
@@ -106,8 +109,12 @@ struct SaveSearchIntentParser {
         if let namedArea = namedArea(in: normalized) {
             return .namedArea(namedArea)
         }
-        if categoryMatch(in: normalized) != nil,
+        if categoryMatch != nil,
            containsAny(normalized, keywords: ["find", "search", "looking for", "找", "搜尋", "搜索"]) {
+            return .currentLocation(radiusMeters: 2_000)
+        }
+        if categoryMatch != nil,
+           containsAny(normalized, keywords: ["recommend", "suggest", "推薦"]) {
             return .currentLocation(radiusMeters: 2_000)
         }
         if containsAny(normalized, keywords: ["today", "tonight", "now", "right now", "今天", "今晚", "現在", "现在"]) {

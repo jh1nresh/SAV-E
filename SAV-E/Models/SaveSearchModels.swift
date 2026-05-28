@@ -1013,17 +1013,20 @@ struct SaveSearchSection: Identifiable, Hashable {
 
 struct SaveSearchResponse: Equatable {
     var query: String
+    var assistantMessage: String?
     var fromYourSave: SaveSearchSection
     var additionalSections: [SaveSearchSection]
     var newRecommendations: SaveSearchSection
 
     init(
         query: String,
+        assistantMessage: String? = nil,
         fromYourSave: SaveSearchSection,
         additionalSections: [SaveSearchSection] = [],
         newRecommendations: SaveSearchSection
     ) {
         self.query = query
+        self.assistantMessage = assistantMessage
         self.fromYourSave = fromYourSave
         self.additionalSections = additionalSections
         self.newRecommendations = newRecommendations

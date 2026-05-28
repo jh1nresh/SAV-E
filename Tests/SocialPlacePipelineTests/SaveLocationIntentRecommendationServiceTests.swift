@@ -180,6 +180,59 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.shouldAutoSearchNearbyUnsavedCandidates)
     }
 
+    func testRestaurantRecommendationUsesCurrentLocationAndIncludesReviewCandidates() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let savedRestaurant = place(
+            name: "HiroNori Craft Ramen",
+            category: .food,
+            latitude: 33.6849,
+            longitude: -117.8262
+        )
+        let reviewRestaurant = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Ramen",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.6851,
+            longitude: -117.8264,
+            evidence: ["TikTok caption says restaurant near Irvine"],
+            confidence: 0.78,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+        let unsavedRestaurant = SaveMapCandidate(
+            title: "Unsaved Ramen",
+            subtitle: "Irvine, CA",
+            latitude: 33.6848,
+            longitude: -117.8266,
+            category: .food,
+            rating: 4.7,
+            reviewCount: 220,
+            distanceMeters: 320,
+            evidence: ["Apple Maps result"]
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我餐廳",
+            places: [savedRestaurant],
+            reviewCandidates: [reviewRestaurant],
+            mapCandidates: [unsavedRestaurant],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["HiroNori Craft Ramen"])
+        XCTAssertEqual(response.additionalSections.first?.id, "review-candidates")
+        XCTAssertEqual(response.additionalSections.first?.results.map(\.title), ["Review Ramen"])
+        XCTAssertEqual(response.additionalSections.first?.results.first?.objectType, .pendingCandidate)
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Unsaved Ramen"])
+        XCTAssertEqual(response.newRecommendations.results.first?.objectType, .mapVisibleUnsavedPlace)
+        XCTAssertTrue(response.assistantMessage?.contains("Review") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("unsaved") == true)
+    }
+
     func testUnsupportedGymQueryDoesNotMapToFoodOrCafe() throws {
         let service = SaveLocationIntentRecommendationService()
 
@@ -211,6 +264,11 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(restaurantSearch.requiredCategories, [.food])
         XCTAssertTrue(restaurantSearch.mustMatchLocation)
         XCTAssertEqual(restaurantSearch.locationMode, .currentLocation(radiusMeters: 2_000))
+
+        let restaurantRecommendation = try XCTUnwrap(parser.parse("推薦我餐廳"))
+        XCTAssertEqual(restaurantRecommendation.requiredCategories, [.food])
+        XCTAssertTrue(restaurantRecommendation.mustMatchLocation)
+        XCTAssertEqual(restaurantRecommendation.locationMode, .currentLocation(radiusMeters: 2_000))
     }
 
     func testDeterministicParserHandlesMilkTeaWithoutLocationAndNamedArea() throws {
