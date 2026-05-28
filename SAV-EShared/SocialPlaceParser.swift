@@ -41,6 +41,77 @@ struct SocialPlaceSourceEvidence {
     }
 }
 
+struct TikTokSourceAdapterInput: Codable, Hashable {
+    var sourceURL: String
+    var caption: String
+    var hashtags: [String]
+    var coverOcr: [String]
+
+    init(
+        sourceURL: String,
+        caption: String,
+        hashtags: [String] = [],
+        coverOcr: [String] = []
+    ) {
+        self.sourceURL = sourceURL
+        self.caption = caption
+        self.hashtags = hashtags
+        self.coverOcr = coverOcr
+    }
+}
+
+struct TikTokSourceAdapterResult: Codable, Hashable {
+    var sourceIntent: SocialPlaceSourceIntent
+    var region: String?
+    var topic: String?
+    var placesFound: Int
+    var needsRecovery: Bool
+    var resolverDecision: SocialPlaceResolverDecisionKind
+    var recoveryStrategies: [SocialPlaceRecoveryStrategy]
+}
+
+struct TikTokSourceAdapter {
+    private let parser: SocialPlaceParser
+
+    init(parser: SocialPlaceParser = SocialPlaceParser()) {
+        self.parser = parser
+    }
+
+    func analyze(_ input: TikTokSourceAdapterInput) -> TikTokSourceAdapterResult {
+        let analysis = parser.analyze(evidence: evidence(from: input))
+        return TikTokSourceAdapterResult(
+            sourceIntent: analysis.sourceIntent,
+            region: analysis.regionClues.first,
+            topic: analysis.topic,
+            placesFound: analysis.placesFound.count,
+            needsRecovery: analysis.resolverDecision.kind == .pendingCandidate ||
+                analysis.resolverDecision.kind == .multiPlaceList,
+            resolverDecision: analysis.resolverDecision.kind,
+            recoveryStrategies: analysis.recoveryStrategies
+        )
+    }
+
+    func evidence(from input: TikTokSourceAdapterInput) -> SocialPlaceSourceEvidence {
+        let hashtagText = input.hashtags
+            .map { $0.hasPrefix("#") ? $0 : "#\($0)" }
+            .joined(separator: " ")
+        let sharedText = [input.caption, hashtagText]
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        return SocialPlaceSourceEvidence(
+            sourceURL: input.sourceURL,
+            resolvedURL: nil,
+            sharedTitle: nil,
+            sharedText: sharedText.isEmpty ? nil : sharedText,
+            metadataTitle: nil,
+            metadataDescription: nil,
+            ocrLines: input.coverOcr
+        )
+    }
+}
+
 struct SocialEvidenceAtom {
     var source: SocialEvidenceSource
     var role: SocialEvidenceRole
@@ -1914,8 +1985,8 @@ struct SocialPlaceParser {
             #"(?:🇺🇸)?\s*(LA必吃美食)"#,
             #"(洛杉[矶磯]美食)"#,
             #"(?i)\b(?:the\s+)?(coffee shops?\s+in\s+Los Angeles County)\b"#,
-            #"((?:台南|台北|臺北|台中|臺中|高雄|新北|桃園)[^\n\r]{0,20}(?:冰店|冰品|剉冰|刨冰|小吃|美食|餐廳|餐厅|甜點|甜品|咖啡廳))"#,
             #"((?:推薦|精選|必吃|必去|收藏)\s*(?:\d{1,2}|[０-９]{1,2}|[一二三四五六七八九十]{1,3})\s*(?:間|家|個)?\s*(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡|咖啡廳|餐廳|餐厅|小吃|美食|店))"#,
+            #"((?:台南|台北|臺北|台中|臺中|高雄|新北|桃園)[^\n\r]{0,20}(?:冰店|冰品|剉冰|刨冰|小吃|美食|餐廳|餐厅|甜點|甜品|咖啡廳))"#,
             #"(?i)\b(?:favorite|favourite|best|top|must-try|must try|hidden gems?)?[^\n\r]{0,30}\b((?:coffee shops?|restaurants?|cafes?|bars?|bakeries|dessert shops?)\s+in\s+(?:LA|OC|[A-Z][A-Za-z .'-]{2,60}))\b"#,
             #"(?i)\b((?:LA|Los Angeles|Orange County|OC|Tokyo|Taipei|Seoul|Paris|London|New York)\s+(?:coffee shops?|restaurants?|cafes?|bars?|bakeries|dessert shops?))\b"#
         ]

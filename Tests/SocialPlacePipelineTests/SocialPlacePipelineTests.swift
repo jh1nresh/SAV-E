@@ -87,6 +87,20 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
 }
 
 final class SocialPlacePipelineTests: XCTestCase {
+    private struct TikTokSourceFixture: Decodable {
+        struct Expected: Decodable {
+            var sourceIntent: SocialPlaceSourceIntent
+            var region: String
+            var topic: String
+            var placesFound: Int
+            var needsRecovery: Bool
+            var resolverDecision: SocialPlaceResolverDecisionKind
+        }
+
+        var input: TikTokSourceAdapterInput
+        var expected: Expected
+    }
+
     func testGoogleMapsSavedListExtractsEmbeddedPlaceLinks() {
         let html = """
         <a href=\"https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z\">Quarter Sheets Pizza Club</a>
@@ -278,6 +292,18 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
 
         return try await GoogleTakeoutImportService().parse(fileAt: url)
+    }
+
+    private func loadTikTokSourceFixture(_ name: String) throws -> TikTokSourceFixture {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot
+            .appendingPathComponent("fixtures/social-source", isDirectory: true)
+            .appendingPathComponent(name)
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(TikTokSourceFixture.self, from: data)
     }
 
     private var douyinFoodListFixture: String {
@@ -718,6 +744,21 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "MY FAVORITE" })
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "Teresa" })
         XCTAssertTrue(analysis.nextBestAction.contains("enrich selected venue clues"))
+    }
+
+    func testTikTokSourceAdapterTreatsListOcrAsBoundedRecoveryContract() throws {
+        let fixture = try loadTikTokSourceFixture("tiktok-tainan-ice-list.json")
+        let result = TikTokSourceAdapter().analyze(fixture.input)
+
+        XCTAssertEqual(result.sourceIntent, fixture.expected.sourceIntent)
+        XCTAssertEqual(result.region, fixture.expected.region)
+        XCTAssertEqual(result.topic, fixture.expected.topic)
+        XCTAssertEqual(result.placesFound, fixture.expected.placesFound)
+        XCTAssertEqual(result.needsRecovery, fixture.expected.needsRecovery)
+        XCTAssertEqual(result.resolverDecision, fixture.expected.resolverDecision)
+        XCTAssertTrue(result.recoveryStrategies.contains(.listMode))
+        XCTAssertTrue(result.recoveryStrategies.contains(.ocrExtraction))
+        XCTAssertTrue(result.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
     func testDouyinFoodListProducesMultiPlaceSourceUnderstanding() {

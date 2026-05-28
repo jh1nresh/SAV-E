@@ -1,0 +1,16 @@
+{
+  "input": {
+    "sourceURL": "https://www.tiktok.com/@savefood/video/7370000000000000000",
+    "caption": "台南夏天吃什麼？收藏這支，推薦4間冰店。",
+    "hashtags": ["台南美食", "冰品"],
+    "coverOcr": ["台南夏天吃什麼", "推薦4間冰店"]
+  },
+  "expected": {
+    "sourceIntent": "multiPlaceList",
+    "region": "台南",
+    "topic": "推薦4間冰店",
+    "placesFound": 0,
+    "needsRecovery": true,
+    "resolverDecision": "multiPlaceList"
+  }
+}
