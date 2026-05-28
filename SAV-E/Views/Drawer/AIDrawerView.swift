@@ -1751,7 +1751,7 @@ private struct DrawerGlassBackground: View {
 
     var body: some View {
         Rectangle()
-            .fill(Color.clear)
+            .fill(baseFill)
             .overlay {
                 LinearGradient(
                     colors: tintStops,
@@ -1770,14 +1770,18 @@ private struct DrawerGlassBackground: View {
     private var tintStops: [Color] {
         if colorScheme == .dark {
             return [
-                Color.black.opacity(0.03),
-                Color.black.opacity(0.10)
+                Color.black.opacity(0.06),
+                Color.black.opacity(0.14)
             ]
         }
         return [
-            Color.white.opacity(0.02),
-            Color.saveCream.opacity(0.05)
+            Color.white.opacity(0.10),
+            Color.saveCream.opacity(0.18)
         ]
+    }
+
+    private var baseFill: Color {
+        colorScheme == .dark ? Color.saveNotebookBackground.opacity(0.96) : Color.saveNotebookPage.opacity(0.96)
     }
 
     private var topStroke: Color {
@@ -2173,7 +2177,7 @@ private struct MapDetailDrawerBackground: View {
 
     var body: some View {
         Rectangle()
-            .fill(Color.clear)
+            .fill(baseFill)
             .overlay {
                 LinearGradient(
                     colors: tintStops,
@@ -2200,6 +2204,10 @@ private struct MapDetailDrawerBackground: View {
             Color.white.opacity(0.08),
             Color.saveCream.opacity(0.14)
         ]
+    }
+
+    private var baseFill: Color {
+        colorScheme == .dark ? Color.saveNotebookBackground.opacity(0.96) : Color.saveNotebookPage.opacity(0.96)
     }
 }
 
