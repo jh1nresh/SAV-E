@@ -62,8 +62,8 @@ struct MapView: View {
                     }
                 }
                 .mapStyle(.standard)
-                .mapFeatureSelectionDisabled { feature in
-                    feature.kind != .pointOfInterest
+                .mapFeatureSelectionDisabled { _ in
+                    true
                 }
                 .mapControls {
                     MapCompass()
@@ -204,22 +204,16 @@ private struct UnsavedMapCandidatePin: View {
 
     var body: some View {
         Button(action: onTap) {
-            Group {
-                if isSelected, candidate.usesNativePOISelectionStyle {
-                    NativePOISelectionMarker(fill: candidate.category?.poiFill ?? .saveSignal, isSelected: isSelected)
-                } else {
-                    VStack(spacing: 3) {
-                        if isSelected {
-                            UnsavedPOILabel(candidate: candidate)
-                        }
-
-                        UnsavedPOIBadge(
-                            systemImage: candidate.category?.poiSymbolName ?? "mappin",
-                            fill: candidate.category?.poiFill ?? .saveSignal,
-                            isSelected: isSelected
-                        )
-                    }
+            VStack(spacing: 3) {
+                if isSelected {
+                    UnsavedPOILabel(candidate: candidate)
                 }
+
+                UnsavedPOIBadge(
+                    systemImage: candidate.category?.poiSymbolName ?? "mappin",
+                    fill: candidate.category?.poiFill ?? .saveSignal,
+                    isSelected: isSelected
+                )
             }
             .offset(y: isSelected ? -3 : 0)
             .rotationEffect(.degrees(isWiggling ? -3 : 0))
@@ -248,29 +242,6 @@ private struct UnsavedMapCandidatePin: View {
             isWiggling = false
             try? await Task.sleep(nanoseconds: 80_000_000)
         }
-    }
-}
-
-private struct NativePOISelectionMarker: View {
-    var fill: Color
-    var isSelected: Bool
-
-    var body: some View {
-        ZStack {
-            if isSelected {
-                Circle()
-                    .stroke(fill.opacity(0.55), lineWidth: 2)
-                    .frame(width: 24, height: 24)
-
-                Circle()
-                    .fill(Color.white.opacity(0.88))
-                    .frame(width: 7, height: 7)
-                    .overlay(Circle().stroke(fill.opacity(0.72), lineWidth: 1.2))
-                    .shadow(color: Color.black.opacity(0.18), radius: 2, x: 0, y: 1)
-            }
-        }
-        .frame(width: isSelected ? 28 : 1, height: isSelected ? 28 : 1)
-        .contentShape(Rectangle())
     }
 }
 
@@ -433,9 +404,5 @@ private extension PlaceReviewCandidate {
 private extension SaveMapCandidate {
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    var usesNativePOISelectionStyle: Bool {
-        evidence.contains { $0.localizedCaseInsensitiveCompare("Apple Maps POI") == .orderedSame }
     }
 }

@@ -1154,55 +1154,8 @@ final class MapViewModel: ObservableObject {
     }
 
     func selectMapFeature(_ feature: MapFeature?) {
-        guard let feature else { return }
-        guard feature.kind == .pointOfInterest else { return }
-        let title = (feature.title ?? "Map place").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else { return }
-
-        if let savedPlace = places.first(where: { $0.matchesMapFeature(title: title, coordinate: feature.coordinate) }) {
-            selectPlace(savedPlace)
-            selectedMapFeature = nil
-            return
-        }
-
-        var evidence = ["Apple Maps POI"]
-        if let category = feature.pointOfInterestCategory?.rawValue {
-            evidence.append("POI: \(category)")
-        }
-
-        let candidate = SaveMapCandidate(
-            title: title,
-            subtitle: "Selected on map",
-            latitude: feature.coordinate.latitude,
-            longitude: feature.coordinate.longitude,
-            category: PlaceCategory.inferredMapCategory(
-                title: title,
-                subtitle: "Selected on map",
-                pointOfInterestCategory: feature.pointOfInterestCategory?.rawValue,
-                fallback: .attraction
-            ),
-            sourceURL: appleMapsURL(title: title, coordinate: feature.coordinate),
-            sourcePlatform: .other,
-            evidence: evidence
-        )
-        let selectedCandidate: SaveMapCandidate
-        if let existingCandidate = mapCandidates.first(where: { $0.id == candidate.id || $0.matches(candidate) }) {
-            var nativeSelectedCandidate = existingCandidate
-            if !nativeSelectedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveCompare("Apple Maps POI") == .orderedSame }) {
-                nativeSelectedCandidate.evidence.insert("Apple Maps POI", at: 0)
-            }
-            mapCandidates = mapCandidates.map { $0.id == nativeSelectedCandidate.id ? nativeSelectedCandidate : $0 }
-            selectedCandidate = nativeSelectedCandidate
-        } else {
-            mapCandidates = [candidate] + mapCandidates
-            selectedCandidate = candidate
-        }
-
-        selectedMapCandidate = selectedCandidate
-        selectedPlace = nil
-        selectedReviewCandidate = nil
-
-        enrichSelectedMapCandidateAfterSelection(selectedCandidate)
+        // Background map features stay passive; SAV-E only opens its own annotations.
+        selectedMapFeature = nil
     }
 
     func deletePlace(_ place: Place) async throws {
