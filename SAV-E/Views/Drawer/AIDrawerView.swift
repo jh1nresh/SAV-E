@@ -1115,51 +1115,29 @@ struct AIDrawerView: View {
             VStack(alignment: .leading, spacing: 14) {
                 FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    NotebookBandLabel("Saved")
-
-                    if viewModel.places.isEmpty {
-                        Text("No saved Map Stamps loaded for this account yet. If this looks wrong, check that you are signed in and refresh SAV-E.")
-                            .font(.caption)
-                            .foregroundColor(.saveCocoa.opacity(0.76))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text(savedPlacesSubtitle)
-                            .font(.caption)
-                            .foregroundColor(.saveCocoa.opacity(0.72))
-
-                        if !selectedCategories.isEmpty, !savedCategoryCounts.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(savedCategoryCounts, id: \.category) { bucket in
-                                        SavedCategoryLensRow(
-                                            category: bucket.category,
-                                            count: bucket.count,
-                                            isSelected: selectedCategories.contains(bucket.category)
-                                        ) {
-                                            onToggleCategory(bucket.category)
-                                        }
-                                    }
+                if !selectedCategories.isEmpty, !savedCategoryCounts.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(savedCategoryCounts, id: \.category) { bucket in
+                                SavedCategoryLensRow(
+                                    category: bucket.category,
+                                    count: bucket.count,
+                                    isSelected: selectedCategories.contains(bucket.category)
+                                ) {
+                                    onToggleCategory(bucket.category)
                                 }
-                                .padding(.vertical, 2)
                             }
                         }
+                        .padding(.vertical, 2)
                     }
                 }
-                .padding(12)
-                .saveNotebookSurface(cornerRadius: 16, fill: .saveNotebookPage, opacity: colorScheme == .dark ? 0.72 : 0.66, strokeOpacity: 0.36, lineWidth: 1)
-                .overlay(savedPanelTint)
 
-                if !savedPlacesForDrawer.isEmpty {
-                    VStack(spacing: 10) {
-                        ForEach(savedPlacesForDrawer) { place in
-                            PlaceCard(place: place)
-                                .onTapGesture {
-                                    openSavedPlace(place)
-                                }
-                        }
-                    }
-                }
+                SavedPlacesSection(
+                    places: savedPlacesForDrawer,
+                    totalCount: viewModel.places.count,
+                    isFiltered: !selectedCategories.isEmpty,
+                    onSelect: openSavedPlace
+                )
 
                 if !selectedCategories.isEmpty {
                     Button {
@@ -1202,18 +1180,6 @@ struct AIDrawerView: View {
             places = places.filter { selectedCategories.contains($0.category) }
         }
         return places.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var savedPlacesSubtitle: String {
-        if selectedCategories.isEmpty {
-            return "\(viewModel.places.count) saved Map Stamps."
-        }
-        let names = selectedCategories.map(\.displayName).sorted().joined(separator: ", ")
-        return "\(savedPlacesForDrawer.count) saved in \(names)."
-    }
-
-    private var savedPanelTint: Color {
-        colorScheme == .dark ? Color.black.opacity(0.08) : Color.white.opacity(0.18)
     }
 
     // MARK: - Add Spots
@@ -3026,6 +2992,163 @@ private struct NotebookBandLabel: View {
                 .frame(height: 1)
         }
         .padding(.top, 2)
+    }
+}
+
+private struct SavedPlacesSection: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var places: [Place]
+    var totalCount: Int
+    var isFiltered: Bool
+    var onSelect: (Place) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            savedHeader
+
+            if places.isEmpty {
+                SavedPlacesEmptyState(isFiltered: isFiltered)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(places.enumerated()), id: \.element.id) { index, place in
+                        SavedPlaceRow(place: place) {
+                            onSelect(place)
+                        }
+
+                        if index < places.count - 1 {
+                            Divider()
+                                .padding(.leading, 64)
+                        }
+                    }
+                }
+                .background(groupFill)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.10), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private var savedHeader: some View {
+        HStack(spacing: 5) {
+            Text("Saved")
+                .font(.title3.weight(.bold))
+                .foregroundColor(.saveInk)
+            Image(systemName: "chevron.right")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.saveCocoa.opacity(0.55))
+
+            Spacer()
+
+            Text("\(isFiltered ? places.count : totalCount)")
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundColor(.saveCocoa.opacity(0.78))
+        }
+        .padding(.horizontal, 2)
+    }
+
+    private var groupFill: Color {
+        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.82) : Color.white.opacity(0.86)
+    }
+}
+
+private struct SavedPlaceRow: View {
+    var place: Place
+    var onSelect: () -> Void
+
+    private var addressText: String {
+        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? "Selected on map" : address
+    }
+
+    private var statusText: String {
+        place.status == .visited ? "Tried Map Stamp" : "Saved Map Stamp"
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                Image(systemName: place.category.iconName)
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 42, height: 42)
+                    .background(iconFill)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(place.name)
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(1)
+
+                    Text(addressText)
+                        .font(.subheadline)
+                        .foregroundColor(.saveMutedText)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "ellipsis")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 34, height: 34)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(place.name), \(statusText)")
+        .accessibilityHint("Open Map Stamp details")
+    }
+
+    private var iconFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.saveStampColor(for: place.category),
+                Color.saveSignal.opacity(place.status == .visited ? 0.90 : 0.64)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
+private struct SavedPlacesEmptyState: View {
+    var isFiltered: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isFiltered ? "line.3.horizontal.decrease.circle" : "mappin.slash")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.saveCocoa)
+                .frame(width: 38, height: 38)
+                .background(Color.saveHoney.opacity(0.34))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(isFiltered ? "No matching Map Stamps" : "No saved Map Stamps")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.saveInk)
+
+                Text(isFiltered ? "Clear filters to show every saved place." : "Sign in and refresh SAV-E if this account should already have saved places.")
+                    .font(.caption)
+                    .foregroundColor(.saveMutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.saveNotebookPage.opacity(0.82))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.12), lineWidth: 1)
+        )
     }
 }
 
