@@ -198,7 +198,7 @@ final class AIDrawerViewModel: ObservableObject {
     }
 
     func shouldSearchNearbyUnsavedCandidates(for query: String) -> Bool {
-        saveSearchController.shouldPrepareMapCandidates(for: query)
+        saveSearchController.shouldSearchNearbyUnsavedCandidatesImmediately(for: query)
     }
 
     func shouldAutoSearchNearbyUnsavedCandidates() -> Bool {

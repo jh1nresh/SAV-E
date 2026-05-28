@@ -253,6 +253,17 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(controller.mapCandidateCategories(for: "search nearby unsaved candidates for 我今天想喝咖啡推薦一家"), [.cafe])
     }
 
+    func testNearbyCafeRecommendationIsSavedFirstBeforeUnsavedSearch() {
+        let controller = SaveSearchController()
+
+        XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "推薦我附近咖啡"))
+        XCTAssertFalse(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "推薦我附近咖啡"))
+        XCTAssertFalse(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "附近咖啡廳"))
+
+        XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "search nearby unsaved cafes"))
+        XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "找附近新的咖啡廳"))
+    }
+
     func testPlainCafeSearchReturnsSavedAndUnsavedCandidatesWhenPrepared() throws {
         let controller = SaveSearchController()
         let response = controller.search(

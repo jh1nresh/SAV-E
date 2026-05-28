@@ -1641,10 +1641,10 @@ struct AIDrawerView: View {
                 await viewModel.submit()
             } else {
                 viewModel.mapCandidates = candidates
-                viewModel.returnToCommands()
                 addSpotStatus = nil
-                withAnimation(.spring(duration: 0.3)) {
-                    drawerDetent = .height(72)
+                await viewModel.submit()
+                withAnimation {
+                    drawerDetent = .medium
                 }
             }
         }

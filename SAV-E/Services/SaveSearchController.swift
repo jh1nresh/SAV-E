@@ -5,6 +5,10 @@ struct SaveSearchController {
         SaveSearchQuery(rawValue: rawQuery).wantsMapCandidatePreparation
     }
 
+    func shouldSearchNearbyUnsavedCandidatesImmediately(for rawQuery: String) -> Bool {
+        SaveSearchQuery(rawValue: rawQuery).wantsPublicDiscovery
+    }
+
     func mapCandidateCategories(for rawQuery: String) -> Set<PlaceCategory> {
         SaveSearchQuery(rawValue: rawQuery).categories
     }

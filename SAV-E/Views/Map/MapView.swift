@@ -414,7 +414,7 @@ private extension PlaceCategory {
     var poiFill: Color {
         switch self {
         case .food: return .saveHoney
-        case .cafe: return .saveCocoa
+        case .cafe: return Color(light: "3A2415", dark: "6B452E")
         case .bar: return .savePink
         case .attraction: return .saveSky
         case .stay: return .saveMint
