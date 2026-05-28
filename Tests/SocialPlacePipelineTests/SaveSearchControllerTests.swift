@@ -292,6 +292,58 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(SharedPlaceData.from(result: try XCTUnwrap(response.newRecommendations.results.first))?.photoURLs, ["https://example.com/coffee.jpg"])
     }
 
+    @MainActor
+    func testDrawerResetClearsPreparedMapCandidates() {
+        let drawer = AIDrawerViewModel()
+        drawer.query = "咖啡廳"
+        drawer.mapCandidates = [
+            SaveMapCandidate(
+                title: "Unsaved Coffee",
+                subtitle: "Irvine, CA",
+                latitude: 33.6846,
+                longitude: -117.8265,
+                category: .cafe
+            )
+        ]
+
+        drawer.reset()
+
+        XCTAssertEqual(drawer.drawerState, .idle)
+        XCTAssertEqual(drawer.query, "")
+        XCTAssertTrue(drawer.mapCandidates.isEmpty)
+    }
+
+    @MainActor
+    func testMapSearchClearRemovesUnsavedPinsAndCategoryFilter() {
+        let map = MapViewModel()
+        let candidate = SaveMapCandidate(
+            title: "Unsaved Coffee",
+            subtitle: "Irvine, CA",
+            latitude: 33.6846,
+            longitude: -117.8265,
+            category: .cafe
+        )
+        var route = [
+            CLLocationCoordinate2D(latitude: 33.6846, longitude: -117.8265),
+            CLLocationCoordinate2D(latitude: 33.6850, longitude: -117.8270)
+        ]
+        map.mapCandidates = [candidate]
+        map.selectedMapCandidate = candidate
+        map.selectedCategories = [.cafe]
+        map.activeFilter = [UUID()]
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+
+        map.clearMapSearchResults()
+
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+        XCTAssertNil(map.selectedMapCandidate)
+        XCTAssertTrue(map.selectedCategories.isEmpty)
+        XCTAssertNil(map.activeFilter)
+        XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+    }
+
     func testUnsavedMapCandidatesSortByDistanceWhenScoresTie() throws {
         let controller = SaveSearchController()
         let response = controller.search(

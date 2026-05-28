@@ -159,6 +159,7 @@ final class AIDrawerViewModel: ObservableObject {
         activeRequestID = nil
         drawerState = .idle
         query = ""
+        mapCandidates = []
         conversationTurns = []
         mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }

@@ -68,6 +68,7 @@ struct AIDrawerView: View {
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onImportURLAsReviewCandidates: (URL) async throws -> Int = { _ in 0 }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
+    var onClearMapSearchResults: () -> Void = {}
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
         SaveCollaborativeList(title: title, note: note)
@@ -318,6 +319,13 @@ struct AIDrawerView: View {
                     .foregroundColor(commandBarSecondaryText)
             }
             .accessibilityLabel(languageSettings.text(.closeDrawerContent))
+        } else if hasVisibleMapSearchResults {
+            Button(action: closeMapSearchResults) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(commandBarSecondaryText)
+            }
+            .accessibilityLabel("Clear map search results")
         } else if !viewModel.query.isEmpty {
             Button(action: {
                 viewModel.returnToCommands()
@@ -759,6 +767,10 @@ struct AIDrawerView: View {
         case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .mapCandidateDetail, .error:
             return true
         }
+    }
+
+    private var hasVisibleMapSearchResults: Bool {
+        !viewModel.mapCandidates.isEmpty
     }
 
     // MARK: - Idle suggestions
@@ -1653,11 +1665,27 @@ struct AIDrawerView: View {
 
     private func closeDrawerContent() {
         voiceQuery.stop()
+        let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
+        if shouldClearMapSearch {
+            onClearMapSearchResults()
+        }
         showSavedCategories = false
         showReviewInbox = false
         showLists = false
         searchFocused = false
+        withAnimation { drawerDetent = .height(72) }
+    }
+
+    private func closeMapSearchResults() {
+        voiceQuery.stop()
+        viewModel.reset()
+        onClearMapSearchResults()
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        addSpotStatus = nil
         withAnimation { drawerDetent = .height(72) }
     }
 

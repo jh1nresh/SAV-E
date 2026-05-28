@@ -43,6 +43,9 @@ struct ContentView: View {
                     onPrepareMapSearch: { query in
                         await mapVM.prepareMapCandidatesForDrawerQuery(query)
                     },
+                    onClearMapSearchResults: {
+                        mapVM.clearMapSearchResults()
+                    },
                     collaborativeLists: mapVM.collaborativeLists,
                     onCreateList: { title, note in
                         mapVM.createCollaborativeList(title: title, note: note)

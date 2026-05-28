@@ -1143,6 +1143,16 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
     }
 
+    func clearMapSearchResults() {
+        mapCandidates = []
+        selectedMapCandidate = nil
+        selectedMapFeature = nil
+        selectedCategories = []
+        activeFilter = nil
+        routeCoordinates = []
+        calculatedRoute = nil
+    }
+
     func selectMapFeature(_ feature: MapFeature?) {
         guard let feature else { return }
         guard feature.kind == .pointOfInterest else { return }
