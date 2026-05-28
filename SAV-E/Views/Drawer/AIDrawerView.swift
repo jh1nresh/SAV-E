@@ -1488,12 +1488,9 @@ struct AIDrawerView: View {
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
                 addSpotStatus = "No nearby unsaved candidates found yet. Try a more specific place type or city."
+                await viewModel.submit()
             } else {
                 viewModel.mapCandidates = candidates
-                addSpotStatus = "Found \(candidates.count) nearby unsaved candidates. Save only the ones that look right."
-            }
-            await viewModel.submit()
-            if !candidates.isEmpty {
                 viewModel.returnToCommands()
                 addSpotStatus = nil
                 withAnimation(.spring(duration: 0.3)) {
