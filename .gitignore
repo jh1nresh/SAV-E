@@ -24,6 +24,7 @@ Package.resolved
 *.xcodeproj
 !SAV-E.xcodeproj/
 !SAV-E.xcodeproj/**
+!Wanderly.xcodeproj
 SAV-E.xcodeproj/**/xcuserdata/
 SAV-E.xcodeproj/**/*.xcuserstate
 SAV-E.xcodeproj/**/xcdebugger/
