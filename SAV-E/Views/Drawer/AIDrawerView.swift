@@ -55,6 +55,7 @@ struct AIDrawerView: View {
     var socialPlaces: [Place] = []
     var onSelectSocialLens: (SaveSocialLens) -> Void = { _ in }
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
+    var onFollowReferral: (String) async throws -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
@@ -73,6 +74,9 @@ struct AIDrawerView: View {
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
     @State private var newListNote = ""
+    @State private var followReferralInput = ""
+    @State private var isFollowingReferral = false
+    @State private var followReferralMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -907,10 +911,7 @@ struct AIDrawerView: View {
             .padding(.horizontal, 16)
 
             if socialPlaces.isEmpty {
-                Text(socialSignalEmptyMessage)
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-                    .padding(.horizontal, 16)
+                followFriendEmptyState
             } else {
                 ForEach(socialPlaces.prefix(3)) { place in
                     SocialPlaceRow(place: place) {
@@ -922,12 +923,88 @@ struct AIDrawerView: View {
         }
     }
 
+    private var followFriendEmptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(socialSignalEmptyMessage)
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                TextField("Paste referral code or link", text: $followReferralInput)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 38)
+                    .background(Color.saveNotebookPage.opacity(0.58))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+                    )
+
+                Button {
+                    Task { await followFriend() }
+                } label: {
+                    if isFollowingReferral {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .frame(width: 74, height: 38)
+                    } else {
+                        Text("Follow")
+                            .font(.caption.weight(.black))
+                            .frame(width: 74, height: 38)
+                    }
+                }
+                .foregroundColor(.saveInk)
+                .background(Color.saveHoney.opacity(canFollowReferral ? 0.78 : 0.28))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1)
+                )
+                .disabled(!canFollowReferral || isFollowingReferral)
+                .buttonStyle(.plain)
+            }
+
+            if let followReferralMessage {
+                Text(followReferralMessage)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(followReferralMessage.localizedCaseInsensitiveContains("followed") ? .saveSignal : .saveCocoa.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private var canFollowReferral: Bool {
+        !followReferralInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func followFriend() async {
+        guard canFollowReferral, !isFollowingReferral else { return }
+        isFollowingReferral = true
+        followReferralMessage = nil
+        defer { isFollowingReferral = false }
+
+        do {
+            try await onFollowReferral(followReferralInput)
+            followReferralInput = ""
+            followReferralMessage = "Followed. Friends' saved places will appear here when shared."
+            onSelectSocialLens(.friends)
+            withAnimation { drawerDetent = .medium }
+        } catch {
+            followReferralMessage = "Could not follow that code or link."
+        }
+    }
+
     private var socialSignalEmptyMessage: String {
         switch socialLens {
         case .forYou:
-            return "Follow friends or open a referral link. SAV-E will only show real shared places here."
+            return "Friends' saved places will appear here after you follow someone."
         case .friends:
-            return "No friend places yet. Friend signals appear after a real follow or referral handoff."
+            return "No shared friend places yet. SAV-E only shows places friends chose to share."
         case .trending:
             return "Trending stays empty until enough public Map Stamps exist for this area and category."
         }

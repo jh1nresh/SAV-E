@@ -11,6 +11,7 @@ struct SaveApp: App {
     @State private var openedReferral: SaveReferralProfile?
     @State private var minimumOpeningAnimationCompleted = false
 
+    private let supabaseService = SupabaseService.shared
     private let minimumOpeningAnimationDuration: UInt64 = 1_800_000_000
 
     var body: some Scene {
@@ -92,9 +93,8 @@ struct SaveApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        if let profile = SaveReferralLink.profile(from: url) {
-            SaveReferralHandoffStore.shared.save(profile)
-            openedReferral = profile
+        if let target = SaveReferralLink.target(from: url) {
+            Task { await handleReferralTarget(target) }
             return
         }
 
@@ -117,6 +117,18 @@ struct SaveApp: App {
         } catch {
             openedList = SaveCollaborativeList(title: "Could not open list", note: error.localizedDescription, viewerRole: .viewer)
         }
+    }
+
+    @MainActor
+    private func handleReferralTarget(_ target: SaveReferralTarget) async {
+        let profile: SaveReferralProfile
+        do {
+            profile = try await supabaseService.fetchReferralProfile(target: target)
+        } catch {
+            profile = target.previewProfile
+        }
+        SaveReferralHandoffStore.shared.save(profile)
+        openedReferral = profile
     }
 
     private var linkAlertTitle: String {

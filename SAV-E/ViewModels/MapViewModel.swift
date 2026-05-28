@@ -884,6 +884,19 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+    func followReferral(_ rawValue: String) async throws {
+        guard authService.currentUserId != nil else {
+            throw SupabaseError.notAuthenticated
+        }
+        guard let target = SaveReferralLink.target(from: rawValue), target.isValid else {
+            throw SupabaseError.recordNotFound
+        }
+
+        try await supabaseService.followProfile(target: target, source: .manual)
+        socialLens = target.lens
+        await refreshSocialSignals()
+    }
+
     private func refreshSocialSignals() async {
         guard authService.currentUserId != nil else {
             socialPlaces = []

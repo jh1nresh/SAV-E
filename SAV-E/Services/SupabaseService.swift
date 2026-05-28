@@ -19,6 +19,8 @@ protocol SupabaseServiceProtocol {
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
+    func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws
+    func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place]
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws
 }
@@ -279,14 +281,41 @@ final class SupabaseService: SupabaseServiceProtocol {
     // MARK: - Social Graph
 
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {
+        try await followProfile(
+            target: SaveReferralTarget(referralCode: referralCode, handle: nil, lens: lens),
+            source: source
+        )
+    }
+
+    func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws {
         guard isConfigured else { return }
+        guard target.isValid else { throw SupabaseError.recordNotFound }
 
         let body = try Self.jsonBody([
-            "referral_code": referralCode,
-            "lens": lens.rawValue,
+            "referral_code": target.referralCode,
+            "handle": target.handle,
+            "lens": target.lens.rawValue,
             "source": source.rawValue,
         ])
         try await request(path: "/follows", method: "POST", body: body)
+    }
+
+    func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        guard target.isValid else { throw SupabaseError.recordNotFound }
+
+        let path: String
+        if let code = target.referralCode?.urlPathEncoded {
+            path = "/referrals/\(code)"
+        } else if let handle = target.handle?.urlQueryEncoded {
+            path = "/referrals?handle=\(handle)"
+        } else {
+            throw SupabaseError.recordNotFound
+        }
+
+        let data = try await request(path: path, requiresAuth: false)
+        let row = try JSONDecoder.supabase.decode(ReferralProfileRow.self, from: data)
+        return row.toProfile()
     }
 
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] {
@@ -303,7 +332,8 @@ final class SupabaseService: SupabaseServiceProtocol {
     private func request(
         path: String,
         method: String = "GET",
-        body: Data? = nil
+        body: Data? = nil,
+        requiresAuth: Bool = true
     ) async throws -> Data {
         guard let apiBaseURL else { throw SupabaseError.notConfigured }
 
@@ -314,7 +344,9 @@ final class SupabaseService: SupabaseServiceProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(try await privyAccessToken())", forHTTPHeaderField: "Authorization")
+        if requiresAuth {
+            request.setValue("Bearer \(try await privyAccessToken())", forHTTPHeaderField: "Authorization")
+        }
 
         if let body { request.httpBody = body }
 
@@ -449,6 +481,26 @@ private struct PlaceSocialSignalRow: Codable {
             sourceLabel: sourceLabel ?? "SAV-E",
             referrerId: referrerId,
             referralCode: referralCode
+        )
+    }
+}
+
+private struct ReferralProfileRow: Codable {
+    let referrerId: String
+    let handle: String
+    let displayName: String
+    let referralCode: String
+    let lens: String
+    let featuredPlaces: [PlaceRow]
+
+    func toProfile() -> SaveReferralProfile {
+        SaveReferralProfile(
+            referrerId: referrerId,
+            handle: handle,
+            displayName: displayName,
+            referralCode: referralCode,
+            lens: SaveSocialLens(rawValue: lens) ?? .friends,
+            featuredPlaces: featuredPlaces.map { $0.toPlace() }
         )
     }
 }
@@ -622,4 +674,14 @@ extension JSONEncoder {
         let e = JSONEncoder()
         return e
     }()
+}
+
+private extension String {
+    var urlPathEncoded: String? {
+        addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+    }
+
+    var urlQueryEncoded: String? {
+        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+    }
 }

@@ -67,6 +67,9 @@ struct ContentView: View {
                     onSaveSocialPlace: { place in
                         _ = try await mapVM.saveSocialPlaceToMySave(place)
                     },
+                    onFollowReferral: { value in
+                        try await mapVM.followReferral(value)
+                    },
                     selectedCategories: mapVM.selectedCategories,
                     onToggleCategory: { category in
                         mapVM.toggleCategory(category)

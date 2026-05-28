@@ -161,6 +161,20 @@ struct SaveReferralProfile: Codable, Hashable {
     }
 }
 
+struct SaveReferralTarget: Hashable {
+    var referralCode: String?
+    var handle: String?
+    var lens: SaveSocialLens
+
+    var isValid: Bool {
+        referralCode?.isEmpty == false || handle?.isEmpty == false
+    }
+
+    var previewProfile: SaveReferralProfile {
+        SaveReferralProfile.preview(handle: handle, code: referralCode, lens: lens)
+    }
+}
+
 struct SaveReferralHandoff: Codable, Hashable {
     var referrerId: String
     var handle: String?
@@ -174,25 +188,49 @@ struct SaveReferralHandoff: Codable, Hashable {
 }
 
 enum SaveReferralLink {
-    static func profile(from url: URL) -> SaveReferralProfile? {
+    static func target(from rawValue: String) -> SaveReferralTarget? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let url = URL(string: trimmed), let target = target(from: url) {
+            return target
+        }
+        if !trimmed.contains("://"),
+           let url = URL(string: "https://\(trimmed)"),
+           let target = target(from: url) {
+            return target
+        }
+
+        let code = trimmed
+            .replacingOccurrences(of: "^@", with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r/"))
+        guard !code.isEmpty else { return nil }
+        return SaveReferralTarget(referralCode: code, handle: nil, lens: .friends)
+    }
+
+    static func target(from url: URL) -> SaveReferralTarget? {
         guard isReferralLink(url) else { return nil }
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let pathParts = url.path.split(separator: "/").map(String.init)
         let ref = components?.queryItems?.first(where: { $0.name == "ref" })?.value
+        let code = components?.queryItems?.first(where: { $0.name == "code" })?.value ?? ref
         let lens = components?.queryItems?.first(where: { $0.name == "lens" })?.value.flatMap(SaveSocialLens.init(rawValue:)) ?? .friends
 
-        if pathParts.first == "r", let code = pathParts.dropFirst().first {
-            return .preview(handle: nil, code: code, lens: lens)
+        if pathParts.first == "r", let pathCode = pathParts.dropFirst().first {
+            return SaveReferralTarget(referralCode: pathCode, handle: nil, lens: lens)
         }
         if pathParts.first == "u", let handle = pathParts.dropFirst().first {
-            return .preview(handle: handle, code: ref, lens: lens)
+            return SaveReferralTarget(referralCode: code, handle: handle, lens: lens)
         }
         if url.scheme == "wanderly", url.host == "referral" {
-            let code = components?.queryItems?.first(where: { $0.name == "code" })?.value ?? ref
             let handle = components?.queryItems?.first(where: { $0.name == "handle" })?.value
-            return .preview(handle: handle, code: code, lens: lens)
+            return SaveReferralTarget(referralCode: code, handle: handle, lens: lens)
         }
         return nil
+    }
+
+    static func profile(from url: URL) -> SaveReferralProfile? {
+        target(from: url)?.previewProfile
     }
 
     static func handoffURL(for profile: SaveReferralProfile) -> URL? {
