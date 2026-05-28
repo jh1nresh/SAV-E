@@ -176,6 +176,8 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         ))
 
         XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Bright Coffee Bar"])
+        XCTAssertEqual(response.fromYourSave.results.first?.userState.displayName, "Saved")
+        XCTAssertTrue(response.assistantMessage?.contains("Saved") == true)
         XCTAssertFalse(response.newRecommendations.showsNearbySearchAction)
         XCTAssertFalse(response.shouldAutoSearchNearbyUnsavedCandidates)
     }
@@ -229,6 +231,8 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.additionalSections.first?.results.first?.objectType, .pendingCandidate)
         XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Unsaved Ramen"])
         XCTAssertEqual(response.newRecommendations.results.first?.objectType, .mapVisibleUnsavedPlace)
+        XCTAssertEqual(response.fromYourSave.results.first?.userState.displayName, "Saved")
+        XCTAssertTrue(response.assistantMessage?.contains("Saved") == true)
         XCTAssertTrue(response.assistantMessage?.contains("Review") == true)
         XCTAssertTrue(response.assistantMessage?.contains("unsaved") == true)
     }

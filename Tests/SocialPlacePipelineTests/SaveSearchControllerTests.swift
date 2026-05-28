@@ -295,11 +295,14 @@ final class SaveSearchControllerTests: XCTestCase {
         )
 
         XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Saved Coffee"])
+        XCTAssertEqual(response.fromYourSave.results.first?.userState.displayName, "Saved")
         XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Unsaved Coffee"])
         XCTAssertEqual(response.newRecommendations.results.first?.objectType, .mapVisibleUnsavedPlace)
         XCTAssertEqual(response.newRecommendations.results.first?.userState, .unsaved)
         XCTAssertEqual(response.newRecommendations.results.first?.photoURL, "https://example.com/coffee.jpg")
         XCTAssertEqual(response.newRecommendations.results.first?.distanceLabel, "350 m away")
+        XCTAssertTrue(response.assistantMessage?.contains("Saved") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("unsaved") == true)
         XCTAssertEqual(SharedPlaceData.from(result: try XCTUnwrap(response.newRecommendations.results.first))?.photoURLs, ["https://example.com/coffee.jpg"])
     }
 
@@ -685,6 +688,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.title, "Sushi Gen")
         XCTAssertEqual(result.objectType, .savedPlace)
         XCTAssertEqual(result.userState, .wantToGo)
+        XCTAssertEqual(result.userState.displayName, "Saved")
         XCTAssertEqual(result.primaryAction, .openSource)
         XCTAssertEqual(result.rating, 4.6)
     }

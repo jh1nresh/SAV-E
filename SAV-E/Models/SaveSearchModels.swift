@@ -777,7 +777,7 @@ enum SaveSearchUserState: String, Codable, CaseIterable, Hashable {
 
     var displayName: String {
         switch self {
-        case .wantToGo: return "Want to go"
+        case .wantToGo: return "Saved"
         case .waitingReview: return "Needs review"
         case .sourceOnly: return "Needs one more clue"
         case .visited: return "Visited"

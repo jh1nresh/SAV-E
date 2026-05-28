@@ -267,9 +267,12 @@ struct SaveSearchController {
             parts.append("\(unsavedCount) nearby unsaved option\(unsavedCount == 1 ? "" : "s")")
         }
         if parts.isEmpty {
-            return "I checked your SAV-E first for \(category). I can also search nearby unsaved places and keep them separate before you save anything."
+            return "I do not see a Saved \(category) match yet. I can show nearby unsaved options, and they stay unsaved until you save one."
         }
-        return "I checked your SAV-E first for \(category): \(parts.joined(separator: ", ")). Unsaved map results stay separate until you choose one."
+        if savedCount > 0 {
+            return "I found \(parts.joined(separator: ", ")). Start with the rows labeled Saved; Review and unsaved options stay separate until you choose one."
+        }
+        return "I found \(parts.joined(separator: ", ")). Review and unsaved options are listed separately so you can decide what becomes Saved."
     }
 
     private func makeRecommendationShell(for query: SaveSearchQuery) -> SaveSearchResult {

@@ -443,10 +443,13 @@ struct SaveLocationIntentRecommendationService {
         }
         if parts.isEmpty {
             return fallbackAvailable
-                ? "I checked your saved and Review queues for nearby \(categoryLabel). I can search nearby unsaved places next and keep them separate."
-                : "I checked your saved and Review queues for nearby \(categoryLabel)."
+                ? "I do not see a Saved nearby \(categoryLabel) yet. I can search nearby unsaved places next, and they stay unsaved until you save one."
+                : "I do not see a Saved nearby \(categoryLabel) yet."
         }
-        return "I checked your SAV-E first for nearby \(categoryLabel): \(parts.joined(separator: ", ")). I can include unsaved nearby options separately."
+        if savedCount > 0 {
+            return "I'd start with the Saved nearby \(categoryLabel) below. I found \(parts.joined(separator: ", ")); Review and unsaved options stay labeled separately."
+        }
+        return "I did not find a Saved nearby \(categoryLabel) yet. I found \(parts.joined(separator: ", ")); Review and unsaved options stay separate so you can choose what to save."
     }
 
     private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool) -> [String] {

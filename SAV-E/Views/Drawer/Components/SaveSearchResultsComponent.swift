@@ -112,11 +112,18 @@ private struct SaveSearchAssistantMessage: View {
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.1))
 
-            Text(text)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.saveInk)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SAV-E answer")
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveCocoa)
+                    .textCase(.uppercase)
+
+                Text(text)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.saveInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(12)
         .background(Color.saveNotebookPage.opacity(0.72))
