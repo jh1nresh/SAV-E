@@ -978,8 +978,9 @@ struct SocialPlaceParser {
             !SocialPlaceEvidenceScorer.looksLikeMarketingLine(line) &&
             !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(line) {
             let priorLines = Array(lines.prefix(index))
-            for priorLine in priorLines {
-                guard let name = candidateNameFromCaptionLine(priorLine) else { continue }
+            let candidateLines = priorLines.reversed() + priorLines
+            for priorLine in candidateLines {
+                guard let name = candidateNameFromCaptionLine(priorLine) ?? standaloneVenueNameBeforeAddress(priorLine) else { continue }
                 let address = firstLocationClue(in: line) ?? cleanLocationMarker(from: line)
                 let bookingLinks = bookingLinks(in: fullText)
                 var atoms = [
@@ -1006,6 +1007,18 @@ struct SocialPlaceParser {
             }
         }
         return result
+    }
+
+    private func standaloneVenueNameBeforeAddress(_ line: String) -> String? {
+        let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(line)
+        guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned),
+              !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(cleaned),
+              !SocialPlaceEvidenceScorer.looksLikeMarketingLine(cleaned),
+              cleaned.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil,
+              cleaned.range(of: #"^[A-Z][A-Za-z0-9 &'._-]{1,50}(?:\s+[A-Z][A-Za-z0-9 &'._-]{1,50}){0,4}$"#, options: .regularExpression) != nil else {
+            return nil
+        }
+        return cleaned
     }
 
     private func chineseVenueCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
@@ -1394,7 +1407,7 @@ struct SocialPlaceParser {
         for pattern in explicitLocationPatterns {
             guard let value = firstCapture(in: text, pattern: pattern) else { continue }
             let cleaned = SocialPlaceEvidenceScorer.cleanText(value)
-                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，"))
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，:："))
             if !cleaned.isEmpty { return cleaned }
         }
 

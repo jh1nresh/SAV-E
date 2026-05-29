@@ -137,10 +137,11 @@ enum SocialPlaceEvidenceScorer {
 
     static func looksLikeMenuOrPriceLine(_ value: String) -> Bool {
         value.range(
-            of: #"(?i)(以下餐點及價位|以下餐点及价位|餐點及價位|餐点及价位|menu|price)"#,
+            of: #"(?i)(以下餐點及價位|以下餐点及价位|餐點及價位|餐点及价位|用餐餐點|用餐餐点|menu|price)"#,
             options: [.regularExpression]
         ) != nil ||
-        value.range(of: #"(?:[$＄]|NT\$?|TWD|¥|￥)\s*\d{2,6}|\d{2,6}\s*(?:元|円|日圓|日圆)"#, options: [.regularExpression, .caseInsensitive]) != nil
+        value.range(of: #"(?:[$＄]|NT\$?|TWD|¥|￥)\s*\d{2,6}|\d{2,6}\s*(?:元|円|日圓|日圆)"#, options: [.regularExpression, .caseInsensitive]) != nil ||
+        value.range(of: #"^[📌•\-*\s]*(?:[\u4e00-\u9fffA-Za-z]{1,16})\s*[｜|]\s*(?:[\u4e00-\u9fffA-Za-z]{1,24})(?:\s*[｜|]\s*[\u4e00-\u9fffA-Za-z]{1,24})*$"#, options: [.regularExpression]) != nil
     }
 
     static func looksLikeMarketingLine(_ value: String) -> Bool {

@@ -426,6 +426,35 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "MEDITERRANEAN" })
     }
 
+    func testInstagramMenuItemPinLineDoesNotOutrankVenueNamedBeforeAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            俊²的美食日記 📙台北美食 on Instagram: "大安📍IG很少人介紹過的正統義大利餐廳
+            這間位於通化夜市巷弄裡低調的十年老店
+            「Divino Taipei」我已經回訪三次了
+            不但由待過米其林二星的義大利人老闆掌廚
+
+            用餐餐點：
+
+            📌炙烤牛舌｜甜玉米
+            📌豬頰肉｜佩可利諾起司｜水管麵
+            📌紅蝦塔塔｜濃蝦醬｜粗直麵
+
+            Divino Taipei
+            📍：台北大安區安和路二段71巷15號
+            🕒：18:00-21:30 （週日、一公休）
+            ☎️：02-2732-2552
+            #台北美食 #義式餐廳 #台北餐廳 #義大利麵 #大安區美食"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DWQp2adE9rB/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "Divino Taipei")
+        XCTAssertEqual(candidates.first?.address, "台北大安區安和路二段71巷15號")
+        XCTAssertFalse(candidates.contains { $0.candidateName == "炙烤牛舌｜甜玉米" })
+    }
+
     func testInstagramLocatedHandleBeatsGenericOCRTitle() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(

@@ -1397,6 +1397,7 @@ final class SocialLinkReviewCandidateService {
         for pattern in patterns {
             if let match = firstCapture(in: text, pattern: pattern) {
                 let cleaned = cleanHTMLText(match)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: " ：:"))
                 if !cleaned.isEmpty { return cleaned }
             }
         }
