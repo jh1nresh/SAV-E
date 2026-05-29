@@ -270,7 +270,11 @@ struct AIDrawerView: View {
         .frame(height: 52)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(colorScheme == .dark ? Color.saveNotebookPage.opacity(0.90) : Color.saveNotebookPage.opacity(0.86))
+                .fill(.thinMaterial)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(colorScheme == .dark ? Color.black.opacity(0.20) : Color.white.opacity(0.36))
+                )
                 .overlay(commandBarFill)
         }
         .overlay(
@@ -291,7 +295,7 @@ struct AIDrawerView: View {
     }
 
     private var commandBarFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.12) : Color.white.opacity(0.18)
+        colorScheme == .dark ? Color.black.opacity(0.12) : Color.saveCream.opacity(0.16)
     }
 
     private var commandIconFill: Color {
@@ -1751,7 +1755,8 @@ private struct DrawerGlassBackground: View {
 
     var body: some View {
         Rectangle()
-            .fill(baseFill)
+            .fill(colorScheme == .dark ? .regularMaterial : .ultraThinMaterial)
+            .background(baseTint)
             .overlay {
                 LinearGradient(
                     colors: tintStops,
@@ -1771,21 +1776,36 @@ private struct DrawerGlassBackground: View {
         if colorScheme == .dark {
             return [
                 Color.black.opacity(0.06),
-                Color.black.opacity(0.14)
+                Color.black.opacity(0.18)
             ]
         }
         return [
-            Color.white.opacity(0.10),
-            Color.saveCream.opacity(0.18)
+            Color.white.opacity(0.18),
+            Color.saveCream.opacity(0.20)
         ]
     }
 
-    private var baseFill: Color {
-        colorScheme == .dark ? Color.saveNotebookBackground.opacity(0.96) : Color.saveNotebookPage.opacity(0.96)
+    private var baseTint: Color {
+        colorScheme == .dark ? Color.saveNotebookBackground.opacity(0.48) : Color.white.opacity(0.18)
     }
 
     private var topStroke: Color {
         colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.62)
+    }
+}
+
+private extension PlaceCategory {
+    var drawerAccent: Color {
+        switch self {
+        case .food, .cafe, .bar:
+            return .saveSignal
+        case .attraction:
+            return .saveSky
+        case .stay:
+            return .saveMint
+        case .shopping:
+            return .saveHoney
+        }
     }
 }
 
@@ -2873,6 +2893,7 @@ extension VoiceQueryController: SFSpeechRecognizerDelegate {
 }
 
 private struct FieldNotebookHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
     var memoryCount: Int
     var clueCount: Int
 
@@ -2929,7 +2950,20 @@ private struct FieldNotebookHeader: View {
             }
             .padding(14)
         }
-        .saveNotebookPage(cornerRadius: 18)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay(
+                    colorScheme == .dark
+                        ? Color.saveNotebookPage.opacity(0.50)
+                        : Color.saveCream.opacity(0.34)
+                )
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.68), lineWidth: 1.6)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -2948,7 +2982,7 @@ private struct NotebookSpine: View {
         }
         .frame(width: 24)
         .padding(.top, 18)
-        .background(color.opacity(0.86))
+        .background(color.opacity(0.58))
     }
 }
 
@@ -2974,7 +3008,11 @@ private struct FieldNotebookStat: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 9)
         .padding(.vertical, 7)
-        .background(Color.saveNotebookPage.opacity(0.92))
+        .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.thinMaterial)
+                .overlay(Color.saveNotebookPage.opacity(0.44))
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.saveNotebookLine, lineWidth: 1.1)
@@ -3041,11 +3079,15 @@ private struct SavedPlacesSection: View {
                         }
                     }
                 }
-                .background(groupFill)
+                .background {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(.regularMaterial)
+                        .overlay(groupTint)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.10), lineWidth: 1)
+                        .stroke(Color.saveNotebookLine.opacity(0.12), lineWidth: 1)
                 )
             }
         }
@@ -3069,8 +3111,8 @@ private struct SavedPlacesSection: View {
         .padding(.horizontal, 2)
     }
 
-    private var groupFill: Color {
-        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.82) : Color.white.opacity(0.86)
+    private var groupTint: Color {
+        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.58) : Color.white.opacity(0.30)
     }
 }
 
@@ -3129,8 +3171,8 @@ private struct SavedPlaceRow: View {
     private var iconFill: LinearGradient {
         LinearGradient(
             colors: [
-                Color.saveStampColor(for: place.category),
-                Color.saveSignal.opacity(place.status == .visited ? 0.90 : 0.64)
+                place.category.drawerAccent.opacity(0.92),
+                place.category.drawerAccent.opacity(place.status == .visited ? 0.68 : 0.52)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -3197,11 +3239,15 @@ private struct ReviewCandidatesSection: View {
                         }
                     }
                 }
-                .background(groupFill)
+                .background {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(.regularMaterial)
+                        .overlay(groupTint)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.10), lineWidth: 1)
+                        .stroke(Color.saveNotebookLine.opacity(0.12), lineWidth: 1)
                 )
             }
         }
@@ -3225,8 +3271,8 @@ private struct ReviewCandidatesSection: View {
         .padding(.horizontal, 2)
     }
 
-    private var groupFill: Color {
-        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.82) : Color.white.opacity(0.86)
+    private var groupTint: Color {
+        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.58) : Color.white.opacity(0.30)
     }
 
     private var displayedCandidates: [PlaceReviewCandidate] {
@@ -3295,8 +3341,8 @@ private struct ReviewCandidatePlaceRow: View {
     private var iconFill: LinearGradient {
         LinearGradient(
             colors: [
-                Color.saveStampColor(for: inferredCategory),
-                Color.saveSignal.opacity(candidate.hasReliableCoordinates ? 0.90 : 0.58)
+                inferredCategory.drawerAccent.opacity(0.92),
+                inferredCategory.drawerAccent.opacity(candidate.hasReliableCoordinates ? 0.68 : 0.46)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
