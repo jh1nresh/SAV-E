@@ -149,12 +149,7 @@ struct PlaceMapPin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultMapPin(
-                systemImage: place.category.iconName,
-                fill: place.socialSignal?.pinFill ?? (place.status == .visited ? .saveMint : .saveHoney),
-                sourceImage: place.socialSignal?.kind.pinSystemImage,
-                isSelected: isSelected
-            )
+            DefaultPOIMarker(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(place.name) Map Stamp")
@@ -168,12 +163,7 @@ private struct SocialPlaceMapPin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultMapPin(
-                systemImage: place.category.iconName,
-                fill: place.socialSignal?.pinFill ?? .saveSignal,
-                sourceImage: place.socialSignal?.kind.pinSystemImage,
-                isSelected: isSelected
-            )
+            DefaultPOIMarker(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(place.name) social place")
@@ -188,7 +178,7 @@ private struct ReviewCandidateMapPin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultMapPin(systemImage: "doc.text.magnifyingglass", fill: .saveSky, isSelected: isSelected)
+            DefaultPOIMarker(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(candidate.name) Review Candidate")
@@ -200,197 +190,29 @@ private struct UnsavedMapCandidatePin: View {
     let candidate: SaveMapCandidate
     var isSelected = false
     let onTap: () -> Void
-    @State private var isWiggling = false
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 3) {
-                if isSelected {
-                    UnsavedPOILabel(candidate: candidate)
-                }
-
-                UnsavedPOIBadge(
-                    systemImage: candidate.category?.poiSymbolName ?? "mappin",
-                    fill: candidate.category?.poiFill ?? .saveSignal,
-                    isSelected: isSelected
-                )
-            }
-            .offset(y: isSelected ? -3 : 0)
-            .rotationEffect(.degrees(isWiggling ? -3 : 0))
-            .animation(.easeInOut(duration: 0.08), value: isWiggling)
+            DefaultPOIMarker(isSelected: isSelected)
         }
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
-        .task(id: isSelected) {
-            guard isSelected else {
-                isWiggling = false
-                return
-            }
-            await runSelectionWiggle()
-        }
         .accessibilityLabel("\(candidate.title) Unsaved Candidate")
         .accessibilityHint("Opens this visible map place before saving it as a Map Stamp")
     }
-
-    @MainActor
-    private func runSelectionWiggle() async {
-        isWiggling = false
-        try? await Task.sleep(nanoseconds: 70_000_000)
-        for _ in 0..<2 {
-            isWiggling = true
-            try? await Task.sleep(nanoseconds: 80_000_000)
-            isWiggling = false
-            try? await Task.sleep(nanoseconds: 80_000_000)
-        }
-    }
 }
 
-private struct UnsavedPOILabel: View {
-    let candidate: SaveMapCandidate
-
-    var body: some View {
-        VStack(spacing: 1) {
-            Text(candidate.title)
-                .font(.caption2.weight(.black))
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-            if let distanceLabel = candidate.distanceLabel {
-                Text(distanceLabel)
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.saveCocoa)
-                    .lineLimit(1)
-            }
-        }
-        .foregroundColor(.saveInk)
-        .frame(maxWidth: 132)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(Color.saveNotebookPage.opacity(0.90))
-        .overlay(Capsule().stroke(candidate.category?.poiFill ?? .saveSignal, lineWidth: 1))
-        .clipShape(Capsule())
-        .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
-    }
-}
-
-private struct UnsavedPOIBadge: View {
-    var systemImage: String
-    var fill: Color
+private struct DefaultPOIMarker: View {
     var isSelected: Bool
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(fill.opacity(isSelected ? 1 : 0.94))
-                .frame(width: isSelected ? 30 : 24, height: isSelected ? 30 : 24)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(isSelected ? 0.84 : 0.68), lineWidth: isSelected ? 1.4 : 1)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.black.opacity(0.13), lineWidth: 0.6)
-                )
-                .shadow(color: Color.black.opacity(isSelected ? 0.18 : 0.12), radius: isSelected ? 4 : 2, x: 0, y: isSelected ? 2 : 1)
-
-            Image(systemName: systemImage)
-                .font(.system(size: isSelected ? 13 : 10, weight: .black))
-                .foregroundColor(.white)
-        }
-        .overlay {
-            if isSelected {
-                Circle()
-                    .stroke(fill.opacity(0.18), lineWidth: 2)
-                    .frame(width: 36, height: 36)
-            }
-        }
-        .frame(width: isSelected ? 40 : 32, height: isSelected ? 40 : 32)
-        .contentShape(Rectangle())
-    }
-}
-
-private struct DefaultMapPin: View {
-    var systemImage: String
-    var fill: Color
-    var sourceImage: String? = nil
-    var isSelected: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(fill.opacity(isSelected ? 1 : 0.92))
-                .frame(width: isSelected ? 28 : 20, height: isSelected ? 28 : 20)
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(isSelected ? 0.82 : 0.35), lineWidth: isSelected ? 1.6 : 1)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.black.opacity(0.10), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(isSelected ? 0.20 : 0.10), radius: isSelected ? 4 : 2, x: 0, y: isSelected ? 2 : 1)
-
-            Image(systemName: systemImage)
-                .font(.system(size: isSelected ? 12 : 8, weight: .black))
-                .foregroundColor(.white)
-
-            if let sourceImage {
-                Image(systemName: sourceImage)
-                    .font(.system(size: 6, weight: .black))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 12, height: 12)
-                    .background(Color.white.opacity(0.92))
-                    .clipShape(Circle())
-                    .offset(x: 11, y: -10)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.black.opacity(0.12), lineWidth: 0.5)
-                            .offset(x: 11, y: -10)
-                    )
-            }
-        }
-        .overlay {
-            if isSelected {
-                Circle()
-                    .stroke(fill.opacity(0.22), lineWidth: 3)
-                    .frame(width: 38, height: 38)
-            }
-        }
-        .frame(width: isSelected ? 44 : 32, height: isSelected ? 44 : 32)
-        .contentShape(Rectangle())
-    }
-}
-
-private extension PlaceSocialSignal {
-    var pinFill: Color {
-        switch kind {
-        case .friendSaved: return .saveSky
-        case .trending: return .saveSignal
-        case .referralGuide: return .savePink
-        }
-    }
-}
-
-private extension PlaceCategory {
-    var poiSymbolName: String {
-        switch self {
-        case .food: return "fork.knife"
-        case .cafe: return "cup.and.saucer.fill"
-        case .bar: return "wineglass.fill"
-        case .attraction: return "star.fill"
-        case .stay: return "bed.double.fill"
-        case .shopping: return "bag.fill"
-        }
-    }
-
-    var poiFill: Color {
-        switch self {
-        case .food: return .saveHoney
-        case .cafe: return Color(light: "3A2415", dark: "6B452E")
-        case .bar: return .savePink
-        case .attraction: return .saveSky
-        case .stay: return .saveMint
-        case .shopping: return .saveSignal
-        }
+        Image(systemName: "mappin.circle.fill")
+            .font(.system(size: isSelected ? 26 : 22, weight: .semibold))
+            .foregroundStyle(.red)
+            .shadow(color: Color.black.opacity(0.16), radius: isSelected ? 3 : 1, x: 0, y: 1)
+            .scaleEffect(isSelected ? 1.04 : 1)
+            .animation(.easeInOut(duration: 0.12), value: isSelected)
+            .contentShape(Rectangle())
     }
 }
 

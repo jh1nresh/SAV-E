@@ -640,7 +640,7 @@ struct PlaceInsightSummaryPanel: View {
             .foregroundColor(.saveCocoa)
 
             VStack(alignment: .leading, spacing: 7) {
-                PlaceSummaryLine(icon: "sparkles", text: fallbackSummary)
+                PlaceSummaryLine(icon: "sparkles", text: condensedSummary)
             }
         }
         .padding(12)
@@ -650,6 +650,16 @@ struct PlaceInsightSummaryPanel: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1.2)
         )
+    }
+
+    private var condensedSummary: String {
+        let firstLine = fallbackSummary
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? fallbackSummary
+        let value = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count > 120 else { return value }
+        return String(value.prefix(117)) + "..."
     }
 
     private var practicalInfo: String? {
@@ -723,6 +733,7 @@ private struct PlaceSummaryLine: View {
             Text(text)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

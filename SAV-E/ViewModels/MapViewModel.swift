@@ -1261,6 +1261,27 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+    func updatePlace(_ place: Place) async throws {
+        guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
+        let previousPlace = places[index]
+
+        places[index] = place
+        if selectedPlace?.id == place.id {
+            selectedPlace = place
+        }
+
+        do {
+            try await supabaseService.updatePlace(place)
+            mirrorToLocalVault(place)
+        } catch {
+            places[index] = previousPlace
+            if selectedPlace?.id == place.id {
+                selectedPlace = previousPlace
+            }
+            throw error
+        }
+    }
+
     private func hydrateSelectedMapCandidateDistance(_ candidate: SaveMapCandidate) async {
         guard candidate.distanceMeters == nil else { return }
         guard selectedMapCandidate?.id == candidate.id else { return }

@@ -380,6 +380,7 @@ final class SocialLinkReviewCandidateService {
     private func rankedCandidates(_ candidates: [PendingReviewCandidate]) -> [PendingReviewCandidate] {
         var seenKeys = Set<String>()
         return candidates
+            .filter { !isTransitAccessCandidate($0) }
             .sorted { lhs, rhs in
                 socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
             }
@@ -389,6 +390,19 @@ final class SocialLinkReviewCandidateService {
                 seenKeys.insert(key)
                 return true
             }
+    }
+
+    private func isTransitAccessCandidate(_ candidate: PendingReviewCandidate) -> Bool {
+        let name = candidate.candidateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if SocialPlaceEvidenceScorer.looksLikeTransitAccessLine(name) {
+            return true
+        }
+        if SocialPlaceEvidenceScorer.looksLikeTransitAccessLine(address) {
+            return true
+        }
+        return name == "Address-only place clue" &&
+            (address.contains("出口") || address.localizedCaseInsensitiveContains("exit"))
     }
 
     private func socialAnalysisScore(_ candidate: PendingReviewCandidate) -> Double {
