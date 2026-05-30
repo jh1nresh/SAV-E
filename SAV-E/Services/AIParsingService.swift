@@ -64,10 +64,12 @@ final class AIParsingService: AIParsingServiceProtocol {
         let metadata = await fetchOpenGraphMetadata(from: url)
 
         // Step 2: Send metadata + URL to Gemini for parsing
+        let displayURL = metadata.finalURL?.absoluteString ?? url.absoluteString
         let prompt = """
         Extract place information from this shared content.
 
-        URL: \(url.absoluteString)
+        Original URL: \(url.absoluteString)
+        Final URL: \(displayURL)
         Page title: \(metadata.title ?? "unknown")
         Page description: \(metadata.description ?? "unknown")
         Site name: \(metadata.siteName ?? "unknown")
@@ -220,26 +222,55 @@ final class AIParsingService: AIParsingServiceProtocol {
         var title: String?
         var description: String?
         var siteName: String?
+        var finalURL: URL?
     }
 
     private func fetchOpenGraphMetadata(from url: URL) async -> OGMetadata {
         var metadata = OGMetadata()
+        metadata.finalURL = url
 
         do {
+            // Configuration for realistic browser simulation
+            let config = URLSessionConfiguration.default
+            // We use a custom delegate to track redirects if needed, 
+            // but for simplicity here we'll use the default redirect behavior 
+            // and focus on high-quality headers.
+            let session = URLSession(configuration: config)
+            
             var request = URLRequest(url: url)
-            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
-            request.timeoutInterval = 5
+            request.timeoutInterval = 8
+            
+            // Set robust headers to bypass basic bot detection
+            let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+            request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+            request.setValue("none", forHTTPHeaderField: "X-Requested-With")
+            
+            // If it's a known short link, set a realistic referer
+            if url.host?.contains("xhslink") == true {
+                request.setValue("https://www.xiaohongshu.com/", forHTTPHeaderField: "Referer")
+            }
 
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                metadata.finalURL = httpResponse.url
+            }
+            
             guard let html = String(data: data, encoding: .utf8) else { return metadata }
 
+            // Extract metadata
             metadata.title = extractMeta(from: html, property: "og:title")
                 ?? extractTag(from: html, tag: "title")
             metadata.description = extractMeta(from: html, property: "og:description")
                 ?? extractMeta(from: html, name: "description")
             metadata.siteName = extractMeta(from: html, property: "og:site_name")
+            
+            // If title is just "小红书" or "Xiaohongshu", it's likely we hit a wall, 
+            // but we still pass the HTML snippet to Gemini to see if it can find clues.
         } catch {
-            // Silently fail — Gemini can still work with just the URL
+            print("Metadata fetch error: \(error.localizedDescription)")
         }
 
         return metadata
