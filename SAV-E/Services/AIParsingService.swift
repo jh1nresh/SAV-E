@@ -101,7 +101,7 @@ final class AIParsingService: AIParsingServiceProtocol {
 
         let base64 = imageData.base64EncodedString()
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -146,7 +146,7 @@ final class AIParsingService: AIParsingServiceProtocol {
     private func callGemini(prompt: String) async throws -> ParsedPlaceResult {
         guard let apiKey else { throw AIParsingError.apiKeyMissing }
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
