@@ -66,6 +66,7 @@ struct AIDrawerView: View {
     var onSaveCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
+    var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onImportURLAsReviewCandidates: (URL) async throws -> Int = { _ in 0 }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var onClearMapSearchResults: () -> Void = {}
@@ -218,6 +219,9 @@ struct AIDrawerView: View {
             },
             onUpdatePlaceVisibility: { place, visibility in
                 try await onUpdatePlaceVisibility(place, visibility)
+            },
+            onUpdatePlace: { place in
+                try await onUpdatePlace(place)
             },
             onCreateList: createListForPicker,
             onAddPlaceToList: onAddPlaceToList
@@ -1564,7 +1568,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .savedPlace(place)
         withAnimation(.spring(duration: 0.28)) {
-            drawerDetent = .height(88)
+            drawerDetent = .fraction(0.34)
         }
     }
 
@@ -1574,7 +1578,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .reviewCandidate(candidate)
         withAnimation(.spring(duration: 0.28)) {
-            drawerDetent = .height(88)
+            drawerDetent = .fraction(0.34)
         }
     }
 
@@ -1584,7 +1588,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .unsavedCandidate(candidate)
         withAnimation(.spring(duration: 0.28)) {
-            drawerDetent = .height(88)
+            drawerDetent = .fraction(0.34)
         }
     }
 
@@ -1841,21 +1845,6 @@ private struct DrawerGlassBackground: View {
     }
 }
 
-private extension PlaceCategory {
-    var drawerAccent: Color {
-        switch self {
-        case .food, .cafe, .bar:
-            return .saveSignal
-        case .attraction:
-            return .saveSky
-        case .stay:
-            return .saveMint
-        case .shopping:
-            return .saveHoney
-        }
-    }
-}
-
 private struct MapDetailDrawerView: View {
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
@@ -1871,6 +1860,7 @@ private struct MapDetailDrawerView: View {
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
+    let onUpdatePlace: (Place) async throws -> Void
     let onCreateList: () -> SaveCollaborativeList
     let onAddPlaceToList: (Place, UUID) throws -> Void
     @State private var statusMessage: String?
@@ -1971,6 +1961,9 @@ private struct MapDetailDrawerView: View {
                         },
                         onUpdateVisibility: { visibility in
                             try await onUpdatePlaceVisibility(place, visibility)
+                        },
+                        onUpdatePlace: { updatedPlace in
+                            try await onUpdatePlace(updatedPlace)
                         }
                     )
 
@@ -2283,11 +2276,17 @@ private struct SavedMapDetailDrawerContent: View {
     let onPlanAroundPlace: () -> Void
     let onDeletePlace: () async throws -> Void
     let onUpdateVisibility: (PlaceVisibility) async throws -> Void
+    let onUpdatePlace: (Place) async throws -> Void
     @Environment(\.openURL) private var openURL
     @State private var enrichedPlace: Place?
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var deleteError: String?
+    @State private var isEditingPlace = false
+    @State private var isSavingPlaceEdit = false
+    @State private var editName = ""
+    @State private var editAddress = ""
+    @State private var editError: String?
 
     private var detailPlace: Place {
         if let enrichedPlace, enrichedPlace.id == place.id {
@@ -2319,6 +2318,9 @@ private struct SavedMapDetailDrawerContent: View {
                 visibility: detailPlace.effectiveVisibility,
                 onChange: onUpdateVisibility
             )
+            if isEditingPlace {
+                placeEditor
+            }
 
             HStack(spacing: 8) {
                 Button(action: onPlanAroundPlace) {
@@ -2339,6 +2341,11 @@ private struct SavedMapDetailDrawerContent: View {
                     }
                 }
             }
+
+            Button(action: beginPlaceEdit) {
+                PlaceDetailActionLabel(title: isEditingPlace ? "Editing" : "Edit", systemImage: "pencil", fill: Color.saveNotebookPage)
+            }
+            .disabled(isSavingPlaceEdit)
 
             Menu {
                 Button(role: .destructive) {
@@ -2362,6 +2369,11 @@ private struct SavedMapDetailDrawerContent: View {
 
             if let deleteError {
                 Text(deleteError)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.red)
+            }
+            if let editError {
+                Text(editError)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.red)
             }
@@ -2461,6 +2473,93 @@ private struct SavedMapDetailDrawerContent: View {
             }
         } catch {
             return nil
+        }
+    }
+
+    private var placeEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Place name", text: $editName)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.saveNotebookPage.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            TextField("Address", text: $editAddress)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.saveNotebookPage.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            HStack(spacing: 8) {
+                Button {
+                    isEditingPlace = false
+                    editError = nil
+                } label: {
+                    PlaceDetailActionLabel(title: "Cancel", systemImage: "xmark", fill: Color.saveNotebookPage)
+                }
+                .disabled(isSavingPlaceEdit)
+
+                Button {
+                    savePlaceEdit()
+                } label: {
+                    PlaceDetailActionLabel(
+                        title: isSavingPlaceEdit ? "Saving" : "Save",
+                        systemImage: "checkmark",
+                        fill: .saveHoney.opacity(0.8)
+                    )
+                }
+                .disabled(isSavingPlaceEdit)
+            }
+        }
+        .padding(10)
+        .background(Color.saveNotebookPage.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private func beginPlaceEdit() {
+        editName = detailPlace.name
+        editAddress = detailPlace.address
+        editError = nil
+        isEditingPlace = true
+    }
+
+    private func savePlaceEdit() {
+        let trimmedName = editName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedAddress = editAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            editError = "Place name cannot be empty."
+            return
+        }
+
+        isSavingPlaceEdit = true
+        editError = nil
+
+        var updatedPlace = detailPlace
+        updatedPlace.name = trimmedName
+        updatedPlace.address = trimmedAddress.isEmpty ? detailPlace.address : trimmedAddress
+
+        Task {
+            do {
+                try await onUpdatePlace(updatedPlace)
+                await MainActor.run {
+                    enrichedPlace = updatedPlace
+                    isEditingPlace = false
+                    isSavingPlaceEdit = false
+                }
+            } catch {
+                await MainActor.run {
+                    editError = error.localizedDescription
+                    isSavingPlaceEdit = false
+                }
+            }
         }
     }
 
@@ -3179,12 +3278,10 @@ private struct SavedPlaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                Image(systemName: place.category.iconName)
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.white)
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.red)
                     .frame(width: 42, height: 42)
-                    .background(iconFill)
-                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
@@ -3215,16 +3312,6 @@ private struct SavedPlaceRow: View {
         .accessibilityHint("Open Map Stamp details")
     }
 
-    private var iconFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                place.category.drawerAccent.opacity(0.92),
-                place.category.drawerAccent.opacity(place.status == .visited ? 0.68 : 0.52)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 }
 
 private struct SavedPlacesEmptyState: View {
@@ -3332,10 +3419,6 @@ private struct ReviewCandidatePlaceRow: View {
     var candidate: PlaceReviewCandidate
     var onSelect: () -> Void
 
-    private var inferredCategory: PlaceCategory {
-        PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
-    }
-
     private var addressText: String {
         if !candidate.address.isEmpty { return candidate.address }
         if let city = candidate.city, !city.isEmpty { return city }
@@ -3349,12 +3432,10 @@ private struct ReviewCandidatePlaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                Image(systemName: inferredCategory.iconName)
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.white)
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.red)
                     .frame(width: 42, height: 42)
-                    .background(iconFill)
-                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(candidate.name)
@@ -3385,16 +3466,6 @@ private struct ReviewCandidatePlaceRow: View {
         .accessibilityHint("Open review details before saving")
     }
 
-    private var iconFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                inferredCategory.drawerAccent.opacity(0.92),
-                inferredCategory.drawerAccent.opacity(candidate.hasReliableCoordinates ? 0.68 : 0.46)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
 }
 
 private struct ReviewCandidatesEmptyState: View {
@@ -3570,33 +3641,12 @@ private struct ReviewCandidateDetailCard: View {
 private struct ReviewCandidateDetailIcon: View {
     var candidate: PlaceReviewCandidate
 
-    private var category: PlaceCategory {
-        PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
-    }
-
     var body: some View {
-        Image(systemName: candidate.hasReliableCoordinates ? category.iconName : "link")
-            .font(.headline.weight(.semibold))
-            .foregroundColor(.white)
+        Image(systemName: "mappin.circle.fill")
+            .font(.system(size: 30, weight: .semibold))
+            .foregroundStyle(.red)
             .frame(width: 40, height: 40)
-            .background(iconFill)
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color.white.opacity(0.54), lineWidth: 1)
-            )
             .accessibilityHidden(true)
-    }
-
-    private var iconFill: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color.saveStampColor(for: category),
-                Color.saveSignal.opacity(candidate.hasReliableCoordinates ? 0.90 : 0.58)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 }
 
@@ -3673,7 +3723,7 @@ private struct ReviewCandidateSourcePanel: View {
     }
 
     private var sourceURL: URL? {
-        candidate.evidence.compactMap(Self.firstURL(in:)).first
+        return candidate.evidence.compactMap(Self.firstURL(in:)).first
     }
 
     private static func firstURL(in line: String) -> URL? {
@@ -3681,8 +3731,17 @@ private struct ReviewCandidateSourcePanel: View {
             .split(whereSeparator: \.isWhitespace)
             .compactMap { rawToken -> URL? in
                 let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "<>()[]{}.,;\"'"))
-                guard token.hasPrefix("http://") || token.hasPrefix("https://") else { return nil }
-                return URL(string: token)
+                if token.hasPrefix("http://") || token.hasPrefix("https://") {
+                    return URL(string: token)
+                }
+                if token.contains("."),
+                   !token.contains(" "),
+                   !token.contains("@"),
+                   !token.hasPrefix("#"),
+                   let normalized = URL(string: "https://\(token)") {
+                    return normalized
+                }
+                return nil
             }
             .first
     }
@@ -3749,7 +3808,6 @@ private struct UnsavedMapCandidateCard: View {
                     if let ratingSummary {
                         UnsavedCandidateQuickLine(text: ratingSummary)
                     }
-                    UnsavedCandidateQuickLine(text: presentation.trustLine)
                 }
             }
         }
