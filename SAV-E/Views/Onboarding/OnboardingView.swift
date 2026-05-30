@@ -16,13 +16,13 @@ struct OnboardingView: View {
                     MemoMascotMark(size: 92, framed: false)
 
                     VStack(spacing: 8) {
-                        Text("Drop a messy place link")
+                        Text("Capture intent now. Use it when deciding.")
                             .font(.title2)
                             .fontWeight(.black)
                             .foregroundColor(.saveInk)
                             .multilineTextAlignment(.center)
 
-                        Text("SAV-E reads the source, shows what it knows, and keeps uncertain places in Review.")
+                        Text("Save the place today, let SAV-E wake it up for date night, nearby coffee, or Tokyo next month.")
                             .font(.subheadline)
                             .lineSpacing(3)
                             .foregroundColor(.saveMutedText)
@@ -35,7 +35,7 @@ struct OnboardingView: View {
                     FirstRunPlaceDemoCard(state: selectedState)
 
                     Button(action: onComplete) {
-                        Text("Paste your first place")
+                        Text("Add Spots")
                             .font(.headline)
                             .fontWeight(.black)
                             .foregroundColor(.saveInk)
@@ -66,17 +66,17 @@ struct OnboardingView: View {
 // MARK: - First Run Demo
 
 private enum FirstRunDemoState: String, CaseIterable {
-    case clue = "Clue"
+    case clue = "Source Clue"
     case candidate = "Review Candidate"
     case mapStamp = "Map Stamp"
-    case tripPlan = "Trip Plan"
+    case tripPlan = "Ask / Plan"
 
     var title: String {
         switch self {
-        case .clue: return "Found a place clue"
-        case .candidate: return "Possible match"
-        case .mapStamp: return "Saved as Map Stamp"
-        case .tripPlan: return "Trip shell ready"
+        case .clue: return "Import a place you saved"
+        case .candidate: return "Review before saving"
+        case .mapStamp: return "Confirm into Map Stamp"
+        case .tripPlan: return "Ask when deciding"
         }
     }
 
@@ -91,19 +91,19 @@ private enum FirstRunDemoState: String, CaseIterable {
 
     var input: String {
         switch self {
-        case .clue: return "instagram.com/reel/..."
-        case .candidate: return "Speranza dinner clip"
+        case .clue: return "friend's Reel, map list, or link"
+        case .candidate: return "one Review Candidate"
         case .mapStamp: return "Speranza · Silver Lake"
-        case .tripPlan: return "Weekend around Silver Lake"
+        case .tripPlan: return "date night near my saved spots"
         }
     }
 
     var known: String {
         switch self {
-        case .clue: return "food + neighborhood hint"
+        case .clue: return "source + why it caught your eye"
         case .candidate: return "source text + map name + neighborhood"
         case .mapStamp: return "confirmed place identity"
-        case .tripPlan: return "1 anchor + 2 nearby Map Stamps"
+        case .tripPlan: return "memory first, public second"
         }
     }
 
@@ -112,7 +112,7 @@ private enum FirstRunDemoState: String, CaseIterable {
         case .clue: return "exact map place"
         case .candidate: return "your confirmation"
         case .mapStamp: return "nothing before saving"
-        case .tripPlan: return "final route review"
+        case .tripPlan: return "public discovery if needed"
         }
     }
 
@@ -120,8 +120,8 @@ private enum FirstRunDemoState: String, CaseIterable {
         switch self {
         case .clue: return "Find exact place"
         case .candidate: return "Confirm candidate"
-        case .mapStamp: return "Plan around this"
-        case .tripPlan: return "Review plan"
+        case .mapStamp: return "Ask around this"
+        case .tripPlan: return "Open suggestions"
         }
     }
 
@@ -191,7 +191,7 @@ private struct FirstRunPlaceDemoCard: View {
                         .fontWeight(.black)
                         .foregroundColor(.saveInk)
 
-                    Text("Clue -> Candidate -> Map Stamp -> Trip Plan")
+                    Text("Source Clue -> Review Candidate -> Map Stamp -> Ask / Plan")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.saveMutedText)

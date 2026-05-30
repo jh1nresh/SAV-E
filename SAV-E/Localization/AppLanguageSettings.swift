@@ -40,9 +40,9 @@ final class AppLanguageSettings: ObservableObject {
     func memoWaitingText(_ count: Int) -> String {
         switch language {
         case .english:
-            return count == 1 ? "Memo has 1 clue waiting" : "Memo has \(count) clues waiting"
+            return count == 1 ? "SAV-E has 1 clue waiting" : "SAV-E has \(count) clues waiting"
         case .traditionalChinese:
-            return count == 1 ? "Memo 有 1 個線索待確認" : "Memo 有 \(count) 個線索待確認"
+            return count == 1 ? "SAV-E 有 1 個線索待確認" : "SAV-E 有 \(count) 個線索待確認"
         }
     }
 
@@ -172,7 +172,7 @@ enum SaveText {
         case .opening:
             return localized(english: "Opening SAV-E", traditionalChinese: "正在開啟 SAV-E", language: language)
         case .openingHint:
-            return localized(english: "Saving your place memory", traditionalChinese: "整理你的地點記憶", language: language)
+            return localized(english: "Waking up your place memory", traditionalChinese: "喚醒你的地點記憶", language: language)
         case .tripLinkReady:
             return localized(english: "Trip Link Ready", traditionalChinese: "行程連結已準備好", language: language)
         case .tripLinkMessage:
@@ -206,9 +206,9 @@ enum SaveText {
         case .verify:
             return localized(english: "Verify", traditionalChinese: "驗證", language: language)
         case .signInTagline:
-            return localized(english: "Your personal place memory.", traditionalChinese: "你的個人地點記憶庫。", language: language)
+            return localized(english: "Your private place memory.", traditionalChinese: "你的私人地點記憶。", language: language)
         case .signInDescription:
-            return localized(english: "Drop in links, posts, screenshots, notes, or maps. Memo helps SAV-E turn them into Review Candidates or Map Stamps.", traditionalChinese: "丟進連結、貼文、截圖、筆記或地圖，Memo 會幫 SAV-E 轉成待確認地點或地圖章。", language: language)
+            return localized(english: "Add links, posts, screenshots, notes, or maps. SAV-E captures why you saved them, keeps uncertain places in Review, and wakes them up when you need a decision.", traditionalChinese: "加入連結、貼文、截圖、筆記或地圖。SAV-E 會保留你為什麼存、不確定的先放進 Review，等你要決定時再喚醒。", language: language)
         case .capture:
             return localized(english: "Capture", traditionalChinese: "捕捉", language: language)
         case .captureSubtitle:
@@ -274,11 +274,11 @@ enum SaveText {
         case .signOut:
             return localized(english: "Sign Out", traditionalChinese: "登出", language: language)
         case .askPlaceholder:
-            return localized(english: "Ask or search your SAV-E...", traditionalChinese: "搜尋或詢問你的 SAV-E...", language: language)
+            return localized(english: "Ask saved places or paste a spot...", traditionalChinese: "問已存地點或貼上新地點...", language: language)
         case .openReviewCandidates:
             return localized(english: "Open review candidates", traditionalChinese: "開啟待確認地點", language: language)
         case .memoSorting:
-            return localized(english: "Memo is sorting the clues...", traditionalChinese: "Memo 正在整理線索...", language: language)
+            return localized(english: "SAV-E is sorting the clues...", traditionalChinese: "SAV-E 正在整理線索...", language: language)
         case .cancel:
             return localized(english: "Cancel", traditionalChinese: "取消", language: language)
         case .back:

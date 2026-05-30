@@ -241,8 +241,8 @@ struct SaveLocationIntentRecommendationService {
         if !reviewResults.isEmpty {
             additional.append(SaveSearchSection(
                 id: "review-candidates",
-                label: "REVIEW",
-                title: "Waiting in Review",
+                label: "REVIEW CANDIDATES",
+                title: "Waiting in Review Nest",
                 subtitle: "Possible matches from your Review queue. Confirm one before it becomes a Map Stamp.",
                 results: reviewResults,
                 emptyMessage: nil
@@ -273,11 +273,11 @@ struct SaveLocationIntentRecommendationService {
             additionalSections: additional,
             newRecommendations: SaveSearchSection(
                 id: "nearby-unsaved-candidates",
-                label: "NEW / UNSAVED",
-                title: "Nearby unsaved candidates",
-                subtitle: "Public map results stay separate until you explicitly save one.",
+                label: "PUBLIC DISCOVERY",
+                title: "Public nearby options",
+                subtitle: "Public discovery stays separate until you explicitly save one.",
                 results: mapResults,
-                emptyMessage: canSearchNearby ? "Search public nearby candidates only if you want places outside your SAV-E." : nil,
+                emptyMessage: canSearchNearby ? "Search public nearby options only if you want places outside your SAV-E memory." : nil,
                 showsNearbySearchAction: canSearchNearby
             )
         )
@@ -297,11 +297,11 @@ struct SaveLocationIntentRecommendationService {
             ),
             newRecommendations: SaveSearchSection(
                 id: "nearby-unsaved-candidates",
-                label: "NEW / UNSAVED",
-                title: "Nearby unsaved candidates",
-                subtitle: "Public results are explicit fallback only.",
+                label: "PUBLIC DISCOVERY",
+                title: "Public nearby options",
+                subtitle: "Public discovery is explicit fallback only.",
                 results: [],
-                emptyMessage: showFallbackAction ? "Search public nearby candidates only if you want places outside your SAV-E." : nil,
+                emptyMessage: showFallbackAction ? "Search public nearby options only if you want places outside your SAV-E memory." : nil,
                 showsNearbySearchAction: showFallbackAction
             )
         )
@@ -443,13 +443,13 @@ struct SaveLocationIntentRecommendationService {
         }
         if parts.isEmpty {
             return fallbackAvailable
-                ? "I do not see a Saved nearby \(categoryLabel) yet. I can search nearby unsaved places next, and they stay unsaved until you save one."
+                ? "I do not see a saved nearby \(categoryLabel) in your memory yet. I can search public discovery next, and those places stay unsaved until you choose one."
                 : "I do not see a Saved nearby \(categoryLabel) yet."
         }
         if savedCount > 0 {
-            return "I'd start with the Saved nearby \(categoryLabel) below. I found \(parts.joined(separator: ", ")); Review and unsaved options stay labeled separately."
+            return "Memory first: I'd start with the saved nearby \(categoryLabel) below. I found \(parts.joined(separator: ", ")); Review candidates and public discovery stay labeled separately."
         }
-        return "I did not find a Saved nearby \(categoryLabel) yet. I found \(parts.joined(separator: ", ")); Review and unsaved options stay separate so you can choose what to save."
+        return "I did not find a saved nearby \(categoryLabel) in your memory yet. I found \(parts.joined(separator: ", ")); Review candidates and public discovery stay separate so you can choose what to save."
     }
 
     private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool) -> [String] {

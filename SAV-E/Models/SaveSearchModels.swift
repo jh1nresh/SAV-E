@@ -282,11 +282,11 @@ struct SavePlaceDrawerPresentation: Equatable {
     static func unsavedMapCandidate(
         title: String,
         contextLine: String,
-        trustLine: String = "Map-visible result, not one of your SAV-E memories yet."
+        trustLine: String = "Public discovery result, not one of your SAV-E memories yet."
     ) -> SavePlaceDrawerPresentation {
         SavePlaceDrawerPresentation(
             state: .unsavedMapCandidate,
-            eyebrow: "Not saved yet",
+            eyebrow: "Public discovery · Not saved yet",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
@@ -299,7 +299,7 @@ struct SavePlaceDrawerPresentation: Equatable {
     static func mapStamp(
         title: String,
         contextLine: String,
-        trustLine: String = "Confirmed saved place from your SAV-E."
+        trustLine: String = "Confirmed saved place from your SAV-E. Memory first."
     ) -> SavePlaceDrawerPresentation {
         SavePlaceDrawerPresentation(
             state: .mapStamp,

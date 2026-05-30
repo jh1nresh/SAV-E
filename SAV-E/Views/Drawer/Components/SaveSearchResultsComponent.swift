@@ -25,7 +25,7 @@ struct SaveSearchResultsComponent: View {
 
     @ViewBuilder
     private func sectionView(_ section: SaveSearchSection) -> some View {
-        let label = section.label ?? (section.id == "from-your-save" ? "FROM YOUR SAV-E" : "NEW / UNSAVED")
+        let label = section.label ?? (section.id == "from-your-save" ? "FROM YOUR SAV-E" : "PUBLIC DISCOVERY")
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
@@ -33,7 +33,7 @@ struct SaveSearchResultsComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(label.contains("UNSAVED") ? Color.saveSky.opacity(0.72) : Color.saveMint.opacity(0.72))
+                    .background(label.contains("PUBLIC") ? Color.saveSky.opacity(0.72) : Color.saveMint.opacity(0.72))
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                     .clipShape(Capsule())
 
