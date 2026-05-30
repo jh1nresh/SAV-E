@@ -17,6 +17,15 @@ private final class StubPublicSourceSearchService: PublicSourceSearchServiceProt
                 )
             ]
         }
+        if query.contains("DVqC21VkxPv") || query.contains("關西壽喜燒") {
+            return [
+                PublicSourceSearchResult(
+                    title: "士林日本人老闆開業8年的關西壽喜燒 - Instagram mirror",
+                    url: "https://example.com/ig/DVqC21VkxPv",
+                    snippet: "俊²分享士林日本人老闆開業8年的關西壽喜燒。店名：牛喜壽喜燒，地址：台北市士林區忠誠路二段200號3樓。"
+                )
+            ]
+        }
         return []
     }
 }
@@ -84,6 +93,19 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
                     longitude: -117.2089,
                     rating: 4.9,
                     priceLevel: nil
+                )
+            ]
+        }
+        if query.contains("牛喜壽喜燒") {
+            return [
+                GooglePlaceMatch(
+                    id: "niu-xi-sukiyaki",
+                    name: "牛喜壽喜燒",
+                    address: "台北市士林區忠誠路二段200號3樓",
+                    latitude: 25.1164,
+                    longitude: 121.5319,
+                    rating: 4.5,
+                    priceLevel: 2
                 )
             ]
         }
@@ -362,6 +384,59 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidence.contains { $0.contains("Public web search result") && $0.contains("Quarter Sheets Pizza Club") })
         XCTAssertTrue(candidate.evidenceDiagnostic?.canSaveAsMapStamp == true)
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains { $0.contains("Recovered venue candidate: Quarter Sheets Pizza Club") } == true)
+    }
+
+    func testInstagramShilinSukiyakiCaptionStaysRecoveryScopedInsteadOfCreatorOnly() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/DVqC21VkxPv/",
+                resolvedURL: "https://www.instagram.com/jim.foodie.tw/reel/DVqC21VkxPv/",
+                sharedTitle: nil,
+                sharedText: """
+                俊²的美食日記 📙台北美食 (@jim.foodie.tw) • Instagram Reel
+                俊²的美食日記 📙台北美食在 Instagram: "士林📍日本人老闆開業8年的關西壽喜燒
+                #台北美食 #台北餐廳 #士林美食 #壽喜燒 #漢堡排"
+                """,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.sourceIntent, .restaurantRecommendation)
+        XCTAssertTrue(analysis.isPlaceBearing)
+        XCTAssertTrue(analysis.placesFound.isEmpty)
+        XCTAssertTrue(analysis.regionClues.contains("士林"))
+        XCTAssertTrue(analysis.recoveryHints.contains { $0.queryFragment.contains("士林 日本人老闆開業8年的關西壽喜燒") })
+        XCTAssertEqual(analysis.resolverDecision.kind, .pendingCandidate)
+    }
+
+    func testInstagramShilinSukiyakiCaptionRunsPublicRecoveryAndPlacesMatch() async throws {
+        let places = StubGooglePlacesService()
+        let search = StubPublicSourceSearchService()
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: places,
+            publicSourceSearchService: search
+        )
+
+        let candidates = try await service.recoverReviewCandidates(
+            fromEvidenceText: """
+            俊²的美食日記 📙台北美食 (@jim.foodie.tw) • Instagram Reel
+            俊²的美食日記 📙台北美食在 Instagram: "士林📍日本人老闆開業8年的關西壽喜燒
+            #台北美食 #台北餐廳 #士林美食 #壽喜燒 #漢堡排"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DVqC21VkxPv/?igsh=tracking"
+        )
+
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.candidateName, "牛喜壽喜燒")
+        XCTAssertEqual(candidate.address, "台北市士林區忠誠路二段200號3樓")
+        XCTAssertEqual(candidate.reviewState, "map_match_ready")
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertTrue(search.queries.contains { $0.contains("DVqC21VkxPv") })
+        XCTAssertTrue(search.queries.contains { $0.contains("士林") && $0.contains("關西壽喜燒") })
+        XCTAssertTrue(places.queries.contains { $0.contains("牛喜壽喜燒") && $0.contains("士林") })
+        XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains { $0.contains("Recovered venue candidate: 牛喜壽喜燒") } == true)
     }
 
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {

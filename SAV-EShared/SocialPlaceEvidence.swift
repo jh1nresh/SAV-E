@@ -170,7 +170,8 @@ enum SocialPlaceEvidenceScorer {
             #"(?i)\b(?:wildlife|animal\s+encounter|sanctuary|tour|experience)\b[^\n\r]{0,80}\b(?:near|in)\s+(?:San Diego|Bonsall|LA|Los Angeles|OC|Orange County)\b"#,
             #"(?i)\b(?:most\s+iconic|iconic\s+(?:restaurant|dinner|spot)|dinner\s+spot\s+by\s+the\s+beach)\b"#,
             #"(?i)\b(?:unique\s+coffee\s+experiences|best\s+for\s+coffee\s+quality|atmosphere\s*&\s*aesthetic|desserts?\s+worth\s+it)\b"#,
-            #"(?i)^(?:my\s+favorite|my\s+favourite|favorite|favourite|which\s+one\s+would\s+you\s+go\s+to\s+first)\b"#
+            #"(?i)^(?:my\s+favorite|my\s+favourite|favorite|favourite|which\s+one\s+would\s+you\s+go\s+to\s+first)\b"#,
+            #"(?:日本人老闆|日本老闆|開業\s*\d+\s*年|開業\s*[一二三四五六七八九十]+\s*年)[^\n\r]{0,40}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食)"#
         ]
         return patterns.contains { pattern in
             value.range(of: pattern, options: [.regularExpression]) != nil

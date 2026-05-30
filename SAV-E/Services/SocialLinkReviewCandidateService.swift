@@ -254,7 +254,8 @@ final class SocialLinkReviewCandidateService {
         let patterns = [
             #"(?i)favorite restaurants? in [A-Za-z .'-]{2,40}\s+is\s+([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#,
             #"(?i)favorite restaurants? in [A-Za-z .'-]{2,40}\s*[:\-–—]\s*([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#,
-            #"(?i)(?:at|try|visit|saved?|spot is|restaurant is|cafe is)\s+([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#
+            #"(?i)(?:at|try|visit|saved?|spot is|restaurant is|cafe is)\s+([A-Z][A-Za-z0-9 &'’'\-.]{2,70})"#,
+            #"(?:店名|餐廳|餐厅|餐館|餐馆)\s*[：:]\s*([^\n\r，,。]{2,50})"#
         ]
         for pattern in patterns {
             if let match = firstCapture(in: text, pattern: pattern) {
@@ -1018,10 +1019,11 @@ final class SocialLinkReviewCandidateService {
                 if let region {
                     queries.append("\"\(reelID)\" \(keyword) \(region)")
                 }
+                if let phrase {
+                    queries.append("\"\(reelID)\" \"\(phrase)\"")
+                }
                 if let topic {
                     queries.append("\"\(reelID)\" \"\(topic)\"")
-                } else if let phrase {
-                    queries.append("\"\(reelID)\" \"\(phrase)\"")
                 }
                 queries.append("site:instagram.com/reel/\(reelID) \(keyword)")
             } else if let url, !host.isEmpty {
@@ -1129,6 +1131,9 @@ final class SocialLinkReviewCandidateService {
 
         let lowered = candidate.lowercased()
         if ["la", "oc", "nyc", "sf", "taipei", "tokyo"].contains(lowered) { return nil }
+        if ["士林", "西門", "大安", "信義", "萬華", "中山", "松山", "內湖", "板橋", "新莊", "蘆洲", "台北", "臺北"].contains(candidate) {
+            return nil
+        }
         let genericValues = [
             "instagram",
             "social link",
@@ -1221,7 +1226,8 @@ final class SocialLinkReviewCandidateService {
     private func meaningfulPlacePhrase(from evidenceText: String) -> String? {
         let patterns = [
             #"(?i)\b((?:favorite|favourite|best|top|must-try|must try|iconic|hidden gems?|where to eat)[^.\n\r]{0,90})"#,
-            #"(?i)\b((?:restaurants?|cafes?|coffee shops?|hotels?|resorts?|things to do|places to visit)\s+in\s+(?:LA|Los Angeles|OC|Orange County|Tokyo|Taipei|Seoul|Paris|London|New York|[A-Z][A-Za-z .'-]{2,60}))\b"#
+            #"(?i)\b((?:restaurants?|cafes?|coffee shops?|hotels?|resorts?|things to do|places to visit)\s+in\s+(?:LA|Los Angeles|OC|Orange County|Tokyo|Taipei|Seoul|Paris|London|New York|[A-Z][A-Za-z .'-]{2,60}))\b"#,
+            #"((?:士林|西門|大安|信義|萬華|中山|松山|內湖|板橋|新莊|蘆洲)[^\n\r]{0,60}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食))"#
         ]
         for pattern in patterns {
             guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
@@ -1230,6 +1236,7 @@ final class SocialLinkReviewCandidateService {
                   match.numberOfRanges > 1,
                   let captureRange = Range(match.range(at: 1), in: evidenceText) else { continue }
             let cleaned = cleanHTMLText(String(evidenceText[captureRange]))
+                .replacingOccurrences(of: #"[📍👣🗺]+"#, with: " ", options: .regularExpression)
                 .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
                 .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，\"'“”"))
             if cleaned.count >= 8, cleaned.count <= 120 {

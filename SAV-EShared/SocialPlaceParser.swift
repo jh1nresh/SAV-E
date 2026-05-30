@@ -1974,6 +1974,7 @@ struct SocialPlaceParser {
             #"\b(?:where to eat|wheretoeat|places to eat|food spots?|dinner spots?|brunch spots?)\b"#,
             #"\b(?:restaurants?|food spots?|places to eat)\s+in\s+(?:la|los angeles|oc|orange county|tokyo|taipei|seoul|paris|london|new york|[a-z][a-z .'-]{2,60})\b"#,
             #"(?:台南|台北|臺北|台中|臺中|高雄|新北|桃園|東京|大阪|首爾|서울)?[^\n\r]{0,20}(?:推薦|必吃|想衝去吃|吃什麼)[^\n\r]{0,40}(?:刨冰|剉冰|冰品|冰店|芒果冰|粉粿冰|八寶冰|布丁冰|小吃|美食|餐廳|餐厅)"#,
+            #"(?:士林|西門|大安|信義|萬華|中山|松山|內湖|板橋|新莊|蘆洲|台北|臺北)[📍\s·・:：-]{0,4}[^\n\r]{0,50}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食)"#,
             #"(?:刨冰|剉冰|冰品|冰店|芒果冰|粉粿冰|八寶冰|布丁冰|小吃|美食)[^\n\r]{0,30}(?:推薦|必吃|店)"#
         ]
         return patterns.contains { text.range(of: $0, options: .regularExpression) != nil }
@@ -2008,7 +2009,7 @@ struct SocialPlaceParser {
 
     private func hasPlaceCategorySignal(_ text: String) -> Bool {
         text.range(
-            of: #"\b(?:restaurants?|cafes?|coffee shops?|bars?|bakeries|dessert shops?|hotels?|resorts?|places to eat|things to do|hidden gems?|wildlife|animal\s+encounters?|sanctuar(?:y|ies)|tours?|experiences?)\b|(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡廳|餐廳|餐厅|小吃|美食|店)"#,
+            of: #"\b(?:restaurants?|cafes?|coffee shops?|bars?|bakeries|dessert shops?|hotels?|resorts?|places to eat|things to do|hidden gems?|wildlife|animal\s+encounters?|sanctuar(?:y|ies)|tours?|experiences?)\b|(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡廳|餐廳|餐厅|小吃|美食|店|壽喜燒|寿喜烧|漢堡排|日本料理|日式料理)"#,
             options: .regularExpression
         ) != nil
     }
@@ -2047,12 +2048,15 @@ struct SocialPlaceParser {
         let patterns = [
             #"(?i)\b((?:favorite|favourite|best|top|must-try|must try|iconic|hidden gems?|where to eat)[^.\n\r]{0,90})"#,
             #"(?i)\b((?:restaurants?|cafes?|coffee shops?|hotels?|resorts?|things to do|places to visit)\s+in\s+(?:LA|Los Angeles|OC|Orange County|Tokyo|Taipei|Seoul|Paris|London|New York|[A-Z][A-Za-z .'-]{2,60}))\b"#,
+            #"((?:士林|西門|大安|信義|萬華|中山|松山|內湖|板橋|新莊|蘆洲)[^\n\r]{0,60}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食))"#,
             #"((?:台南|台北|臺北|台中|臺中|高雄|新北|桃園|東京|大阪|首爾|서울)[^\n\r]{0,30}(?:推薦|必吃|吃什麼|冰店|冰品|剉冰|刨冰|小吃|美食|餐廳|餐厅))"#,
             #"((?:推薦|精選|必吃|必去|收藏)\s*(?:\d{1,2}|[０-９]{1,2}|[一二三四五六七八九十]{1,3})\s*(?:間|家|個)?\s*(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡|咖啡廳|餐廳|餐厅|小吃|美食|店))"#
         ]
         for pattern in patterns {
             guard let phrase = firstCapture(in: text, pattern: pattern) else { continue }
             let cleaned = SocialPlaceEvidenceScorer.cleanText(phrase)
+                .replacingOccurrences(of: #"[📍👣🗺]+"#, with: " ", options: .regularExpression)
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
                 .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，\"'“”"))
             if cleaned.count >= 8, cleaned.count <= 120 {
                 return cleaned
@@ -2095,6 +2099,7 @@ struct SocialPlaceParser {
             #"(?i)\bOrange County\b"#,
             #"(?i)\bOC\b"#,
             #"(?i)#(losangeles|lacoffee|orangecounty|ocfood|tokyo|taipei|seoul|paris|london|newyork)\b"#,
+            #"(士林|西門|大安|信義|萬華|中山|松山|內湖|板橋|新莊|蘆洲)(?=[📍\s·・:：-]{0,4}[^\n\r]{0,40}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食|咖啡|甜點|甜品|小吃))"#,
             #"(台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)(?=[^\n\r]{0,12}(?:冰店|冰品|剉冰|刨冰|小吃|美食|餐廳|餐厅|甜點|甜品|咖啡廳|推薦|必吃|吃什麼))"#,
             #"#(台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)(?:小吃|美食|冰品|冰店|甜點|甜品)?"#
         ]
