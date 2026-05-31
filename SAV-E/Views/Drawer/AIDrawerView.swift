@@ -824,7 +824,6 @@ struct AIDrawerView: View {
                     showAddSpotsHub = false
                     showLists = false
                     searchFocused = false
-                    withAnimation { drawerDetent = .medium }
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: tab.systemImage)
