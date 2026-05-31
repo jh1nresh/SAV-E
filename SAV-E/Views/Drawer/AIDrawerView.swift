@@ -3043,136 +3043,152 @@ private struct SpotDrawerCTA: View {
     var onAddSpots: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 6) {
-                Text("All your spots in one place")
-                    .font(.title3.weight(.black))
-                    .foregroundColor(.saveInk)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
+        HStack(spacing: 0) {
+            NotebookSpine(color: .saveNotebookSpine)
 
-                Text("Save anything worth remembering.")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.64))
-                    .multilineTextAlignment(.center)
-            }
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("ADD SPOTS")
+                            .font(.caption2.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Color.saveHoney.opacity(0.64))
+                            .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1))
+                            .clipShape(Capsule())
 
-            SpotDrawerScene()
-                .frame(maxWidth: .infinity)
+                        Text("All your spots in one place")
+                            .font(.title3.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.82)
 
-            Button(action: onAddSpots) {
-                HStack(spacing: 10) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(Color.saveSky)
+                        Text("Links, maps, screenshots, and notes stay in Review until they are ready to save.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveCocoa.opacity(0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-                    Text("Add Spots")
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.84))
+                    Spacer(minLength: 0)
+
+                    SpotDrawerScene()
+                        .frame(width: 94, height: 78)
                 }
-                .padding(.horizontal, 22)
-                .frame(height: 52)
-                .background {
-                    Capsule()
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.92))
-                        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.12), radius: 14, y: 8)
+
+                HStack(spacing: 8) {
+                    SpotSourceChip(systemName: "link", title: "Links", color: .saveSignal)
+                    SpotSourceChip(systemName: "map.fill", title: "Maps", color: .saveSky)
+                    SpotSourceChip(systemName: "photo", title: "Media", color: .saveHoney)
                 }
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.18), lineWidth: 1))
+
+                Button(action: onAddSpots) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(Color.saveSky)
+
+                        Text("Add Spots")
+                            .font(.subheadline.weight(.black))
+                            .foregroundColor(.saveInk)
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "arrow.up.left")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveCocoa.opacity(0.74))
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 42)
+                    .background(Color.saveHoney.opacity(colorScheme == .dark ? 0.42 : 0.52))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.50), lineWidth: 1.1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add Spots")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add Spots")
+            .padding(14)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 22)
-        .padding(.bottom, 18)
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.thinMaterial)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.regularMaterial)
                 .overlay(
                     colorScheme == .dark
-                        ? Color.saveNotebookPage.opacity(0.62)
-                        : Color.white.opacity(0.84)
+                        ? Color.saveNotebookPage.opacity(0.50)
+                        : Color.saveCream.opacity(0.34)
                 )
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(colorScheme == .dark ? 0.24 : 0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.68), lineWidth: 1.6)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
 private struct SpotDrawerScene: View {
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Rectangle()
-                .fill(Color.saveNotebookSpine.opacity(0.34))
-                .frame(height: 18)
-                .overlay(alignment: .top) {
-                    Rectangle()
-                        .fill(Color.saveHoney.opacity(0.20))
-                        .frame(height: 2)
-                }
-
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(spacing: 6) {
-                    spotToken(systemName: "photo", tint: .saveHoney)
-                    spotToken(systemName: "cup.and.saucer.fill", tint: .saveCocoa)
-                }
-
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.white.opacity(0.84))
-                        .frame(width: 164, height: 82)
-                        .shadow(color: Color.black.opacity(0.07), radius: 8, y: 4)
-                        .rotationEffect(.degrees(-2))
-
-                    HStack(spacing: 0) {
-                        mapPanel(fill: Color.saveCream.opacity(0.95), line: Color.saveHoney.opacity(0.48))
-                        mapPanel(fill: Color.white.opacity(0.88), line: Color.saveSky.opacity(0.38))
-                        mapPanel(fill: Color.saveCream.opacity(0.90), line: Color.saveSignal.opacity(0.34))
-                    }
-                    .rotationEffect(.degrees(-2))
-
-                    Image(systemName: "fork.knife.circle.fill")
-                        .font(.system(size: 22, weight: .black))
-                        .foregroundStyle(Color.saveSignal.opacity(0.82))
-                        .offset(x: 26, y: -8)
-                }
-
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 34, weight: .bold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-                    .frame(width: 60, height: 52)
-                    .background(Color.saveHoney.opacity(0.22))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-        }
-        .frame(height: 104)
-    }
-
-    private func mapPanel(fill: Color, line: Color) -> some View {
         ZStack {
-            Rectangle()
-                .fill(fill)
-                .frame(width: 54, height: 78)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.saveNotebookPage.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1)
+                )
 
-            VStack(spacing: 10) {
-                Rectangle().fill(Color.saveNotebookLine.opacity(0.14)).frame(width: 42, height: 2)
-                Rectangle().fill(line).frame(width: 46, height: 3)
-                Rectangle().fill(Color.saveNotebookLine.opacity(0.14)).frame(width: 32, height: 2)
+            VStack(spacing: 5) {
+                HStack(spacing: 5) {
+                    miniStamp(systemName: "fork.knife", tint: .saveSignal)
+                    miniStamp(systemName: "cup.and.saucer.fill", tint: .saveCocoa)
+                }
+
+                HStack(spacing: 5) {
+                    miniStamp(systemName: "map.fill", tint: .saveSky)
+                    miniStamp(systemName: "photo", tint: .saveHoney)
+                }
             }
         }
     }
 
-    private func spotToken(systemName: String, tint: Color) -> some View {
+    private func miniStamp(systemName: String, tint: Color) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 16, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 38, height: 38)
-            .background(tint.opacity(0.78))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .font(.system(size: 12, weight: .black))
+            .foregroundColor(tint)
+            .frame(width: 30, height: 30)
+            .background(Color.saveCream.opacity(0.56))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+private struct SpotSourceChip: View {
+    var systemName: String
+    var title: String
+    var color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemName)
+                .font(.caption2.weight(.black))
+            Text(title)
+                .font(.caption2.weight(.black))
+                .lineLimit(1)
+        }
+        .foregroundColor(.saveInk)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
