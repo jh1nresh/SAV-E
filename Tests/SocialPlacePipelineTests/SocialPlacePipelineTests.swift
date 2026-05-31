@@ -1495,6 +1495,71 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(record.evidenceDiagnostic?.canSaveAsMapStamp, false)
     }
 
+    func testSaveLocalVaultRestoresConfirmedPlaceWithMapMetadata() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("save-memory-records.json")
+        let service = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let place = Place(
+            id: UUID(),
+            name: "Utopia Euro Caffe",
+            address: "2489 Park Ave, Tustin, CA",
+            latitude: 33.7032,
+            longitude: -117.8271,
+            googlePlaceId: nil,
+            category: .cafe,
+            status: .wantToGo,
+            rating: 4.7,
+            note: "Saved before backend sync finished.",
+            sourceUrl: "https://maps.app.goo.gl/example",
+            sourcePlatform: .googleMaps,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        _ = try service.saveConfirmedPlace(place)
+        let restored = try service.confirmedPlaces()
+
+        XCTAssertEqual(restored.count, 1)
+        XCTAssertEqual(restored.first?.name, "Utopia Euro Caffe")
+        XCTAssertEqual(restored.first?.category, .cafe)
+        XCTAssertEqual(restored.first?.latitude, 33.7032)
+        XCTAssertEqual(restored.first?.longitude, -117.8271)
+        XCTAssertEqual(restored.first?.rating, 4.7)
+    }
+
+    func testSaveLocalVaultIgnoresLegacyConfirmedRecordsWithoutCoordinates() throws {
+        let vaultDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
+        let vaultURL = vaultDirectory.appendingPathComponent("save-memory-records.json")
+        let legacyJSON = """
+        [{
+          "id": "00000000-0000-0000-0000-000000000001",
+          "state": "confirmed_place",
+          "title": "Legacy Cafe",
+          "placeName": "Legacy Cafe",
+          "address": "123 Main St",
+          "evidence": [],
+          "placeHighlights": [],
+          "recommendedItems": [],
+          "vibeTags": [],
+          "accessNotes": [],
+          "createdAt": "2026-05-31T00:00:00Z"
+        }]
+        """.data(using: .utf8)!
+        try legacyJSON.write(to: vaultURL)
+        let service = SaveLocalVaultService(overrideVaultURL: vaultURL)
+
+        XCTAssertEqual(try service.recentRecords().count, 1)
+        XCTAssertEqual(try service.confirmedPlaces(), [])
+    }
+
     func testEvidenceDiagnosticPromotesToMapMatchReadyAfterRefinement() async {
         let google = StubGooglePlacesService()
         let service = SocialLinkReviewCandidateService(googlePlacesService: google)

@@ -29,6 +29,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var vibeTags: [String]
     var accessNotes: [String]
     var sourceHandle: String?
+    var latitude: Double?
+    var longitude: Double?
+    var category: PlaceCategory?
+    var status: PlaceStatus?
+    var rating: Double?
     var createdAt: Date
 
     init(
@@ -46,6 +51,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         vibeTags: [String] = [],
         accessNotes: [String] = [],
         sourceHandle: String? = nil,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        category: PlaceCategory? = nil,
+        status: PlaceStatus? = nil,
+        rating: Double? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -63,6 +73,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
         self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+        self.latitude = latitude
+        self.longitude = longitude
+        self.category = category
+        self.status = status
+        self.rating = rating
         self.createdAt = createdAt
     }
 
@@ -87,6 +102,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case vibeTags
         case accessNotes
         case sourceHandle
+        case latitude
+        case longitude
+        case category
+        case status
+        case rating
         case createdAt
     }
 
@@ -107,6 +127,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
         sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
+        status = try container.decodeIfPresent(PlaceStatus.self, forKey: .status)
+        rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }

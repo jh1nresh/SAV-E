@@ -33,6 +33,14 @@ final class SaveLocalVaultService {
         Array(try loadRecords().prefix(limit))
     }
 
+    func confirmedPlaces(limit: Int = 250) throws -> [Place] {
+        Array(
+            try loadRecords()
+                .compactMap(\.confirmedPlace)
+                .prefix(limit)
+        )
+    }
+
     func saveSourceOnly(url: URL, note: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(
@@ -95,6 +103,11 @@ final class SaveLocalVaultService {
             placeName: place.name,
             address: place.address,
             evidence: place.note.map { [$0] } ?? [],
+            latitude: place.latitude,
+            longitude: place.longitude,
+            category: place.category,
+            status: place.status,
+            rating: place.rating ?? place.googleRating,
             createdAt: place.createdAt
         )
         try append(record)
@@ -207,6 +220,40 @@ final class SaveLocalVaultService {
             result.append(value)
         }
         return result
+    }
+}
+
+private extension SaveMemoryRecord {
+    var confirmedPlace: Place? {
+        guard state == .confirmedPlace else { return nil }
+        guard let latitude, let longitude, latitude != 0 || longitude != 0 else { return nil }
+
+        let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+
+        let address = (address ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Place(
+            id: id,
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: nil,
+            category: category ?? PlaceCategory.inferred(from: "\(name) \(address)"),
+            status: status ?? .wantToGo,
+            rating: rating,
+            note: sourceText,
+            sourceUrl: sourceURL,
+            sourcePlatform: SourcePlatform.from(urlString: sourceURL),
+            sourceImageUrl: nil,
+            extractedDishes: recommendedItems.map(\.name),
+            priceRange: nil,
+            recommender: sourceHandle,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: createdAt
+        )
     }
 }
 

@@ -413,6 +413,7 @@ final class MapViewModel: ObservableObject {
         }
 
         guard let userId = authService.currentUserId else {
+            places = mergeRemotePlaces([], withLocalPlaces: localConfirmedPlaces())
             importPendingPlacesForLocalUse()
             reviewCandidates = []
             socialPlaces = []
@@ -420,7 +421,8 @@ final class MapViewModel: ObservableObject {
         }
 
         do {
-            places = try await supabaseService.fetchPlaces(for: userId)
+            let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
+            places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
             await completeReferralHandoffIfNeeded()
             try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
             do {
@@ -432,6 +434,9 @@ final class MapViewModel: ObservableObject {
             await refreshSocialSignals()
         } catch {
             print("MapViewModel: failed to load places: \(error)")
+            if places.isEmpty {
+                places = localConfirmedPlaces()
+            }
             importPendingPlacesForLocalUse()
             await refreshSocialSignals()
         }
@@ -484,6 +489,24 @@ final class MapViewModel: ObservableObject {
         }
 
         pendingImportService.restorePendingPlaces(pending)
+    }
+
+    private func localConfirmedPlaces() -> [Place] {
+        do {
+            return try saveLocalVaultService.confirmedPlaces(limit: 500)
+        } catch {
+            print("MapViewModel: failed to load local confirmed places: \(error)")
+            return []
+        }
+    }
+
+    private func mergeRemotePlaces(_ remotePlaces: [Place], withLocalPlaces localPlaces: [Place]) -> [Place] {
+        guard !localPlaces.isEmpty else { return remotePlaces }
+        var merged = remotePlaces
+        for localPlace in localPlaces where !merged.contains(where: { $0.id == localPlace.id || $0.matches(localPlace) }) {
+            merged.append(localPlace)
+        }
+        return merged.sorted { $0.createdAt > $1.createdAt }
     }
 
     private func importPendingPlaces(for userId: String) async throws {
