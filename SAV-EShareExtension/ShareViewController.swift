@@ -1183,7 +1183,7 @@ struct ShareExtensionView: View {
             throw NSError(domain: "save", code: 1, userInfo: [NSLocalizedDescriptionKey: "GEMINI_API_KEY not configured"])
         }
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=\(apiKey)")!
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
