@@ -13,8 +13,7 @@ struct MapView: View {
                     ForEach(viewModel.filteredPlaces) { place in
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(
-                                place: place,
-                                isSelected: viewModel.selectedPlace?.id == place.id
+                                place: place
                             ) {
                                 viewModel.selectPlace(place)
                             }
@@ -25,8 +24,7 @@ struct MapView: View {
                         if let coordinate = candidate.coordinate {
                             Annotation("", coordinate: coordinate) {
                                 ReviewCandidateMapPin(
-                                    candidate: candidate,
-                                    isSelected: viewModel.selectedReviewCandidate?.id == candidate.id
+                                    candidate: candidate
                                 ) {
                                     viewModel.selectReviewCandidate(candidate)
                                 }
@@ -48,8 +46,7 @@ struct MapView: View {
                     ForEach(viewModel.visibleSocialPlaces) { place in
                         Annotation("", coordinate: place.coordinate) {
                             SocialPlaceMapPin(
-                                place: place,
-                                isSelected: viewModel.selectedSocialPlace?.id == place.id
+                                place: place
                             ) {
                                 viewModel.selectSocialPlace(place)
                             }
@@ -144,12 +141,15 @@ private struct CurrentLocationButton: View {
 
 struct PlaceMapPin: View {
     let place: Place
-    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            DefaultPOIMarker(isSelected: isSelected)
+            DefaultPOIMarker(
+                systemName: place.category.iconName,
+                tint: place.category.mapMarkerTint,
+                state: .saved
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(place.name) Map Stamp")
@@ -158,12 +158,15 @@ struct PlaceMapPin: View {
 
 private struct SocialPlaceMapPin: View {
     let place: Place
-    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            DefaultPOIMarker(isSelected: isSelected)
+            DefaultPOIMarker(
+                systemName: place.category.iconName,
+                tint: place.category.mapMarkerTint,
+                state: .shared
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(place.name) social place")
@@ -173,12 +176,15 @@ private struct SocialPlaceMapPin: View {
 
 private struct ReviewCandidateMapPin: View {
     let candidate: PlaceReviewCandidate
-    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
         Button(action: onTap) {
-            DefaultPOIMarker(isSelected: isSelected)
+            DefaultPOIMarker(
+                systemName: candidate.inferredCategory.iconName,
+                tint: .saveHoney,
+                state: .review
+            )
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(candidate.name) Review Candidate")
@@ -193,7 +199,11 @@ private struct UnsavedMapCandidatePin: View {
 
     var body: some View {
         Button(action: onTap) {
-            DefaultPOIMarker(isSelected: isSelected)
+            DefaultPOIMarker(
+                systemName: candidate.category?.iconName ?? "mappin.circle.fill",
+                tint: candidate.category?.mapMarkerTint ?? .saveSky,
+                state: .publicResult
+            )
         }
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
@@ -203,20 +213,97 @@ private struct UnsavedMapCandidatePin: View {
 }
 
 private struct DefaultPOIMarker: View {
-    var isSelected: Bool
+    var systemName: String
+    var tint: Color
+    var state: MapMarkerState
 
     var body: some View {
-        Image(systemName: "mappin.circle.fill")
-            .font(.system(size: isSelected ? 26 : 22, weight: .semibold))
-            .foregroundStyle(.red)
-            .shadow(color: Color.black.opacity(0.16), radius: isSelected ? 3 : 1, x: 0, y: 1)
-            .scaleEffect(isSelected ? 1.04 : 1)
-            .animation(.easeInOut(duration: 0.12), value: isSelected)
-            .contentShape(Rectangle())
+        ZStack {
+            Circle()
+                .fill(.regularMaterial)
+                .overlay(Circle().fill(tint.opacity(0.18)))
+                .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
+                .frame(width: 30, height: 30)
+
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(tint)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let badgeSystemName = state.badgeSystemName {
+                Image(systemName: badgeSystemName)
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundStyle(state.badgeColor)
+                    .background(Circle().fill(Color.white.opacity(0.94)))
+                    .offset(x: 2, y: 2)
+            }
+        }
+        .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
+        .contentShape(Rectangle())
+    }
+}
+
+private enum MapMarkerState {
+    case saved
+    case shared
+    case review
+    case publicResult
+
+    var strokeColor: Color {
+        switch self {
+        case .saved:
+            return .saveSignal.opacity(0.74)
+        case .shared:
+            return .saveMint.opacity(0.74)
+        case .review:
+            return .saveHoney.opacity(0.80)
+        case .publicResult:
+            return Color.white.opacity(0.86)
+        }
+    }
+
+    var strokeWidth: CGFloat {
+        switch self {
+        case .saved, .shared: return 2
+        case .review, .publicResult: return 1.6
+        }
+    }
+
+    var badgeSystemName: String? {
+        switch self {
+        case .saved: return "checkmark.circle.fill"
+        case .shared: return "person.2.circle.fill"
+        case .review, .publicResult: return nil
+        }
+    }
+
+    var badgeColor: Color {
+        switch self {
+        case .saved: return .saveSignal
+        case .shared: return .saveMint
+        case .review, .publicResult: return .clear
+        }
+    }
+}
+
+private extension PlaceCategory {
+    var mapMarkerTint: Color {
+        switch self {
+        case .food: return .saveSignal
+        case .cafe: return .saveCocoa
+        case .bar: return .savePink
+        case .attraction: return .saveHoney
+        case .stay: return .saveSky
+        case .shopping: return .saveMint
+        }
     }
 }
 
 private extension PlaceReviewCandidate {
+    var inferredCategory: PlaceCategory {
+        PlaceCategory.inferred(from: ([name, address, city ?? ""] + evidence).joined(separator: " "))
+    }
+
     var coordinate: CLLocationCoordinate2D? {
         guard hasReliableCoordinates, let latitude, let longitude else { return nil }
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
