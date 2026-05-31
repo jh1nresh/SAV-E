@@ -1130,21 +1130,13 @@ struct AIDrawerView: View {
             VStack(alignment: .leading, spacing: 14) {
                 SpotDrawerCTA(onAddSpots: openAddSpotsHub)
 
-                if !selectedCategories.isEmpty, !savedCategoryCounts.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(savedCategoryCounts, id: \.category) { bucket in
-                                SavedCategoryLensRow(
-                                    category: bucket.category,
-                                    count: bucket.count,
-                                    isSelected: selectedCategories.contains(bucket.category)
-                                ) {
-                                    onToggleCategory(bucket.category)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
+                if !savedCategoryCounts.isEmpty {
+                    SavedCategoryGrid(
+                        categories: savedCategoryCounts,
+                        selectedCategories: selectedCategories,
+                        onToggle: onToggleCategory,
+                        onClear: clearSelectedCategories
+                    )
                 }
 
                 SavedPlacesSection(
@@ -1153,21 +1145,6 @@ struct AIDrawerView: View {
                     isFiltered: !selectedCategories.isEmpty,
                     onSelect: openSavedPlace
                 )
-
-                if !selectedCategories.isEmpty {
-                    Button {
-                        Array(selectedCategories).forEach { onToggleCategory($0) }
-                    } label: {
-                        Label("Clear filters", systemImage: "line.3.horizontal.decrease.circle")
-                            .font(.caption.weight(.black))
-                            .foregroundColor(commandBarTextColor)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
 
                 if let addSpotStatus {
                     Text(addSpotStatus)
@@ -1180,6 +1157,10 @@ struct AIDrawerView: View {
             .padding(.top, 14)
             .padding(.bottom, 24)
         }
+    }
+
+    private func clearSelectedCategories() {
+        Array(selectedCategories).forEach { onToggleCategory($0) }
     }
 
     private var savedCategoryCounts: [(category: PlaceCategory, count: Int)] {
@@ -4366,66 +4347,94 @@ private struct DrawerActionChip: View {
     }
 }
 
-private struct SavedCategoryLensRow: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let category: PlaceCategory
-    let count: Int
-    let isSelected: Bool
-    let action: () -> Void
+private struct SavedCategoryGrid: View {
+    let categories: [(category: PlaceCategory, count: Int)]
+    let selectedCategories: Set<PlaceCategory>
+    let onToggle: (PlaceCategory) -> Void
+    let onClear: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 11) {
-                Image(systemName: category.iconName)
-                    .font(.subheadline.weight(.black))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 34, height: 34)
-                    .background(Color.saveStampColor(for: category).opacity(isSelected ? 0.82 : 0.42))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(primaryText)
-                    Text(isSelected ? "Showing on map" : "Tap to filter map")
-                        .font(.caption2)
-                        .foregroundColor(secondaryText)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Categories")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveCocoa.opacity(0.72))
 
                 Spacer()
 
-                Text("\(count)")
-                    .font(.caption.monospacedDigit().weight(.black))
-                    .foregroundColor(primaryText)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.white.opacity(0.24))
-                    .clipShape(Capsule())
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(isSelected ? primaryText : secondaryText.opacity(0.68))
+                if !selectedCategories.isEmpty {
+                    Button(action: onClear) {
+                        Text("All")
+                            .font(.caption2.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.saveHoney.opacity(0.56))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show all saved categories")
+                }
             }
-            .padding(10)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(categories, id: \.category) { bucket in
+                    SavedCategoryGridButton(
+                        category: bucket.category,
+                        count: bucket.count,
+                        isSelected: selectedCategories.contains(bucket.category)
+                    ) {
+                        onToggle(bucket.category)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct SavedCategoryGridButton: View {
+    var category: PlaceCategory
+    var count: Int
+    var isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: category.iconName)
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(category.poiIconColor.opacity(isSelected ? 1 : 0.72))
+                    .clipShape(Circle())
+
+                Text(category.displayName)
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+
+                Spacer(minLength: 4)
+
+                Text("\(count)")
+                    .font(.caption2.monospacedDigit().weight(.black))
+                    .foregroundColor(.saveCocoa.opacity(0.74))
+            }
+            .frame(height: 38)
+            .padding(.horizontal, 9)
             .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(isSelected ? Color.saveHoney.opacity(0.26) : Color.white.opacity(0.10))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? Color.saveHoney.opacity(0.42) : Color.saveNotebookPage.opacity(0.72))
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 0.36 : 0.16), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 0.50 : 0.20), lineWidth: 1)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-
-    private var primaryText: Color {
-        colorScheme == .dark ? .white : .saveInk
-    }
-
-    private var secondaryText: Color {
-        colorScheme == .dark ? Color.white.opacity(0.68) : Color.saveCocoa.opacity(0.70)
+        .accessibilityLabel("\(category.displayName), \(count) saved")
     }
 }
 
