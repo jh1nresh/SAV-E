@@ -841,7 +841,7 @@ struct AIDrawerView: View {
     private var socialMapTabView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+                SpotDrawerCTA(onAddSpots: focusSocialInvestigationPrompt)
                 socialSignalSection
                 if let addSpotStatus {
                     Text(addSpotStatus)
@@ -1122,7 +1122,7 @@ struct AIDrawerView: View {
     private var savedPlacesView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+                SpotDrawerCTA(onAddSpots: focusSocialInvestigationPrompt)
 
                 if !selectedCategories.isEmpty, !savedCategoryCounts.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -1195,7 +1195,7 @@ struct AIDrawerView: View {
 
     private var addSpotsHub: some View {
         VStack(alignment: .leading, spacing: 14) {
-            FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+            SpotDrawerCTA(onAddSpots: focusSocialInvestigationPrompt)
 
             VStack(alignment: .leading, spacing: 9) {
                 NotebookBandLabel("Add Spots")
@@ -1313,7 +1313,7 @@ struct AIDrawerView: View {
     private var reviewInboxView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+                SpotDrawerCTA(onAddSpots: focusSocialInvestigationPrompt)
 
                 ReviewCandidatesSection(
                     candidates: reviewCandidates,
@@ -1337,7 +1337,7 @@ struct AIDrawerView: View {
     private var collaborativeListsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                FieldNotebookHeader(memoryCount: viewModel.places.count, clueCount: reviewCandidates.count)
+                SpotDrawerCTA(onAddSpots: focusSocialInvestigationPrompt)
 
                 VStack(alignment: .leading, spacing: 9) {
                     NotebookBandLabel("Create list")
@@ -3038,61 +3038,77 @@ extension VoiceQueryController: SFSpeechRecognizerDelegate {
     }
 }
 
-private struct FieldNotebookHeader: View {
+private struct SpotDrawerCTA: View {
     @Environment(\.colorScheme) private var colorScheme
-    var memoryCount: Int
-    var clueCount: Int
-
-    private var statusText: String {
-        if clueCount > 0 {
-            return "\(clueCount) review clues waiting"
-        }
-        if memoryCount > 0 {
-            return "\(memoryCount) Map Stamps ready to ask"
-        }
-        return "Add spots from links, maps, screenshots, or notes"
-    }
+    var onAddSpots: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             NotebookSpine(color: .saveNotebookSpine)
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
-                    MemoMascotMark(size: 52)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Private Place Memory")
-                            .font(.title3)
-                            .fontWeight(.black)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("ADD SPOTS")
+                            .font(.caption2.weight(.black))
                             .foregroundColor(.saveInk)
-                            .lineLimit(1)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(Color.saveHoney.opacity(0.64))
+                            .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1))
+                            .clipShape(Capsule())
+
+                        Text("All your spots in one place")
+                            .font(.title3.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .lineLimit(2)
                             .minimumScaleFactor(0.82)
 
-                        Text(statusText)
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.saveCocoa.opacity(0.82))
+                        Text("Links, maps, screenshots, and notes stay in Review until they are ready to save.")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.saveCocoa.opacity(0.78))
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 0)
 
-                    Text("SAV-E")
-                        .font(.caption2.weight(.black))
-                        .foregroundColor(.saveInk)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(Color.saveSky.opacity(0.58))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.2))
-                        .clipShape(Capsule())
+                    SpotDrawerScene()
+                        .frame(width: 94, height: 78)
                 }
 
                 HStack(spacing: 8) {
-                    FieldNotebookStat(title: "MAP STAMPS", value: "\(memoryCount)", color: .saveCocoa)
-                    FieldNotebookStat(title: "REVIEW", value: "\(clueCount)", color: .saveHoney)
-                    FieldNotebookStat(title: "ASK", value: "READY", color: .saveSky)
+                    SpotSourceChip(systemName: "link", title: "Links", color: .saveSignal)
+                    SpotSourceChip(systemName: "map.fill", title: "Maps", color: .saveSky)
+                    SpotSourceChip(systemName: "photo", title: "Media", color: .saveHoney)
                 }
+
+                Button(action: onAddSpots) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(Color.saveSky)
+
+                        Text("Add Spots")
+                            .font(.subheadline.weight(.black))
+                            .foregroundColor(.saveInk)
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "arrow.up.left")
+                            .font(.caption.weight(.black))
+                            .foregroundColor(.saveCocoa.opacity(0.74))
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 42)
+                    .background(Color.saveHoney.opacity(colorScheme == .dark ? 0.42 : 0.52))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.50), lineWidth: 1.1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add Spots")
             }
             .padding(14)
         }
@@ -3113,6 +3129,69 @@ private struct FieldNotebookHeader: View {
     }
 }
 
+private struct SpotDrawerScene: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.saveNotebookPage.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1)
+                )
+
+            VStack(spacing: 5) {
+                HStack(spacing: 5) {
+                    miniStamp(systemName: "fork.knife", tint: .saveSignal)
+                    miniStamp(systemName: "cup.and.saucer.fill", tint: .saveCocoa)
+                }
+
+                HStack(spacing: 5) {
+                    miniStamp(systemName: "map.fill", tint: .saveSky)
+                    miniStamp(systemName: "photo", tint: .saveHoney)
+                }
+            }
+        }
+    }
+
+    private func miniStamp(systemName: String, tint: Color) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .black))
+            .foregroundColor(tint)
+            .frame(width: 30, height: 30)
+            .background(Color.saveCream.opacity(0.56))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+private struct SpotSourceChip: View {
+    var systemName: String
+    var title: String
+    var color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemName)
+                .font(.caption2.weight(.black))
+            Text(title)
+                .font(.caption2.weight(.black))
+                .lineLimit(1)
+        }
+        .foregroundColor(.saveInk)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 private struct NotebookSpine: View {
     var color: Color
 
@@ -3129,48 +3208,6 @@ private struct NotebookSpine: View {
         .frame(width: 24)
         .padding(.top, 18)
         .background(color.opacity(0.58))
-    }
-}
-
-private struct FieldNotebookStat: View {
-    var title: String
-    var value: String
-    var color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.weight(.black))
-                .foregroundColor(.saveCocoa.opacity(0.74))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-
-            Text(value)
-                .font(.caption.monospacedDigit().weight(.black))
-                .foregroundColor(.saveInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 7)
-        .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.thinMaterial)
-                .overlay(Color.saveNotebookPage.opacity(0.44))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.1)
-        )
-        .overlay(alignment: .topLeading) {
-            Rectangle()
-                .fill(color.opacity(0.72))
-                .frame(width: 28, height: 4)
-                .clipShape(Capsule())
-                .padding(.leading, 9)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
