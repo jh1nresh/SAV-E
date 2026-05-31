@@ -57,6 +57,11 @@ final class SaveLocalVaultService {
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
             evidenceDiagnostic: candidate.evidenceDiagnostic,
+            placeHighlights: candidate.placeHighlights,
+            recommendedItems: candidate.recommendedItems,
+            vibeTags: candidate.vibeTags,
+            accessNotes: candidate.accessNotes,
+            sourceHandle: candidate.sourceHandle,
             createdAt: candidate.savedAt
         )
         try append(record)
@@ -70,6 +75,11 @@ final class SaveLocalVaultService {
             placeName: candidate.name,
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
+            placeHighlights: candidate.placeHighlights,
+            recommendedItems: candidate.recommendedItems,
+            vibeTags: candidate.vibeTags,
+            accessNotes: candidate.accessNotes,
+            sourceHandle: candidate.sourceHandle,
             createdAt: candidate.createdAt
         )
         try append(record)

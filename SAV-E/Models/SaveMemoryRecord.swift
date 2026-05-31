@@ -24,6 +24,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var address: String?
     var evidence: [String]
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic?
+    var placeHighlights: [String]
+    var recommendedItems: [RecommendedItem]
+    var vibeTags: [String]
+    var accessNotes: [String]
+    var sourceHandle: String?
     var createdAt: Date
 
     init(
@@ -36,6 +41,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         address: String? = nil,
         evidence: [String] = [],
         evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil,
+        placeHighlights: [String] = [],
+        recommendedItems: [RecommendedItem] = [],
+        vibeTags: [String] = [],
+        accessNotes: [String] = [],
+        sourceHandle: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -47,6 +57,12 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.address = address
         self.evidence = evidence
         self.evidenceDiagnostic = evidenceDiagnostic
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence, sourceURL: sourceURL)
+        self.placeHighlights = placeHighlights.isEmpty ? extracted.placeHighlights : placeHighlights
+        self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
+        self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
+        self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
+        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
         self.createdAt = createdAt
     }
 
@@ -54,5 +70,43 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         if let placeName, !placeName.isEmpty { return placeName }
         if !title.isEmpty { return title }
         return sourceURL ?? "Untitled source"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case state
+        case sourceURL
+        case sourceText
+        case title
+        case placeName
+        case address
+        case evidence
+        case evidenceDiagnostic
+        case placeHighlights
+        case recommendedItems
+        case vibeTags
+        case accessNotes
+        case sourceHandle
+        case createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        state = try container.decode(SaveMemoryState.self, forKey: .state)
+        sourceURL = try container.decodeIfPresent(String.self, forKey: .sourceURL)
+        sourceText = try container.decodeIfPresent(String.self, forKey: .sourceText)
+        title = try container.decode(String.self, forKey: .title)
+        placeName = try container.decodeIfPresent(String.self, forKey: .placeName)
+        address = try container.decodeIfPresent(String.self, forKey: .address)
+        evidence = try container.decodeIfPresent([String].self, forKey: .evidence) ?? []
+        evidenceDiagnostic = try container.decodeIfPresent(SocialPlaceEvidenceDiagnostic.self, forKey: .evidenceDiagnostic)
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence + [sourceText ?? ""], sourceURL: sourceURL)
+        placeHighlights = try container.decodeIfPresent([String].self, forKey: .placeHighlights) ?? extracted.placeHighlights
+        recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
+        vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
+        accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
+        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
     }
 }

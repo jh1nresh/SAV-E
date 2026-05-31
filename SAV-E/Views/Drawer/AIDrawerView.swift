@@ -3653,6 +3653,8 @@ private struct ReviewCandidateDetailCard: View {
                     .foregroundColor(.saveCocoa)
                 }
 
+                ReviewCandidateMemoryPanel(candidate: candidate)
+
                 ReviewCandidateSourcePanel(candidate: candidate)
 
                 HStack(spacing: 8) {
@@ -3741,6 +3743,70 @@ private struct ReviewCandidateDetailIcon: View {
             .foregroundStyle(.red)
             .frame(width: 40, height: 40)
             .accessibilityHidden(true)
+    }
+}
+
+private struct ReviewCandidateMemoryPanel: View {
+    var candidate: PlaceReviewCandidate
+
+    var body: some View {
+        if hasContent {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 7) {
+                    Image(systemName: "sparkles")
+                        .font(.caption.weight(.black))
+                    Text("Place memory")
+                        .font(.caption.weight(.black))
+                    Spacer(minLength: 0)
+                }
+                .foregroundColor(.saveInk)
+
+                if !candidate.placeHighlights.isEmpty {
+                    memoryGroup(title: "Why saved", values: Array(candidate.placeHighlights.prefix(3)))
+                }
+                if !candidate.recommendedItems.isEmpty {
+                    memoryGroup(title: "Recommended dishes", values: candidate.recommendedItems.prefix(3).map(\.displayText))
+                }
+                if !candidate.vibeTags.isEmpty {
+                    memoryGroup(title: "Vibe", values: Array(candidate.vibeTags.prefix(4)))
+                }
+                if !candidate.accessNotes.isEmpty {
+                    memoryGroup(title: "Transit", values: Array(candidate.accessNotes.prefix(2)))
+                }
+                if let sourceHandle = candidate.sourceHandle, !sourceHandle.isEmpty {
+                    memoryGroup(title: "Source", values: ["@\(sourceHandle)"])
+                }
+            }
+            .padding(10)
+            .background(Color.saveNotebookPage.opacity(0.42))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
+            )
+        }
+    }
+
+    private var hasContent: Bool {
+        !candidate.placeHighlights.isEmpty ||
+            !candidate.recommendedItems.isEmpty ||
+            !candidate.vibeTags.isEmpty ||
+            !candidate.accessNotes.isEmpty ||
+            candidate.sourceHandle?.isEmpty == false
+    }
+
+    private func memoryGroup(title: String, values: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2.weight(.black))
+                .foregroundColor(.saveCocoa.opacity(0.72))
+            ForEach(values, id: \.self) { value in
+                Text("• \(value)")
+                    .font(.caption)
+                    .foregroundColor(.saveCocoa.opacity(0.84))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 

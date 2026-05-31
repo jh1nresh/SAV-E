@@ -59,6 +59,47 @@ struct SaveCardPlace: Codable, Hashable {
     var proofLevel: SaveCardProofLevel
     var evidence: [String]
     var missingInfo: [String]
+    var placeHighlights: [String] = []
+    var recommendedItems: [RecommendedItem] = []
+    var vibeTags: [String] = []
+    var accessNotes: [String] = []
+    var sourceHandle: String? = nil
+}
+
+extension SaveCardPlace {
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case address
+        case geo
+        case status
+        case confidence
+        case proofLevel
+        case evidence
+        case missingInfo
+        case placeHighlights
+        case recommendedItems
+        case vibeTags
+        case accessNotes
+        case sourceHandle
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        address = try container.decode(String.self, forKey: .address)
+        geo = try container.decodeIfPresent(SaveCardGeo.self, forKey: .geo)
+        status = try container.decode(SaveCardPlaceStatus.self, forKey: .status)
+        confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        proofLevel = try container.decode(SaveCardProofLevel.self, forKey: .proofLevel)
+        evidence = try container.decode([String].self, forKey: .evidence)
+        missingInfo = try container.decode([String].self, forKey: .missingInfo)
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence)
+        placeHighlights = try container.decodeIfPresent([String].self, forKey: .placeHighlights) ?? extracted.placeHighlights
+        recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
+        vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
+        accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
+        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+    }
 }
 
 struct SaveCardGeo: Codable, Hashable {

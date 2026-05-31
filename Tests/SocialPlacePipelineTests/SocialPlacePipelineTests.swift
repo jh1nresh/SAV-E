@@ -271,6 +271,17 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.placesFound.first?.evidenceChips.contains("Highlight: Recommended item: 煙花女麵 $350") == true)
         XCTAssertTrue(analysis.placesFound.first?.evidenceChips.contains { $0.contains("份量很大的深夜咖啡廳") } == true)
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "Address-only place clue" })
+
+        let candidate = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+            .reviewCandidates(fromEvidenceText: metadata, sourceURL: "https://www.instagram.com/reel/DXzKpnKSfV9/")
+            .first
+        XCTAssertEqual(candidate?.placeHighlights.first, "在台北發現一間超怕你餓到，份量很大的深夜咖啡廳，兼小餐館")
+        XCTAssertEqual(candidate?.recommendedItems.first?.name, "煙花女麵")
+        XCTAssertEqual(candidate?.recommendedItems.first?.price, "$350")
+        XCTAssertTrue(candidate?.vibeTags.contains("Large portions") == true)
+        XCTAssertTrue(candidate?.vibeTags.contains("Cozy") == true)
+        XCTAssertEqual(candidate?.accessNotes.first, "🚇捷運中正紀念堂站，步行約18分鐘")
+        XCTAssertEqual(candidate?.sourceHandle, "among_nimbo")
     }
 
     func testGoogleTakeoutImportParsesBulkFileFormatsSeparatelyFromSavedListLinks() async throws {
@@ -1421,6 +1432,29 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(decoded.evidenceDiagnostic?.found.first, diagnostic.found.first)
         XCTAssertEqual(decoded.evidenceDiagnostic?.missingFields, diagnostic.missingFields)
         XCTAssertEqual(decoded.evidenceDiagnostic?.nextBestClue, diagnostic.nextBestClue)
+    }
+
+    func testSaveCardPlaceDecodesOldRecordsWithoutStructuredHighlights() throws {
+        let json = """
+        {
+          "name": "Garden Table Cafe",
+          "address": "Taipei",
+          "status": "review_candidate",
+          "confidence": 0.7,
+          "proofLevel": "source_link",
+          "evidence": ["Source URL: https://www.instagram.com/reel/old/"],
+          "missingInfo": ["Confirm coordinates"]
+        }
+        """.data(using: .utf8)!
+
+        let place = try JSONDecoder().decode(SaveCardPlace.self, from: json)
+
+        XCTAssertEqual(place.name, "Garden Table Cafe")
+        XCTAssertTrue(place.placeHighlights.isEmpty)
+        XCTAssertTrue(place.recommendedItems.isEmpty)
+        XCTAssertTrue(place.vibeTags.isEmpty)
+        XCTAssertTrue(place.accessNotes.isEmpty)
+        XCTAssertNil(place.sourceHandle)
     }
 
     func testEvidenceDiagnosticDecodesOldRecordsWithoutSearchQueries() throws {

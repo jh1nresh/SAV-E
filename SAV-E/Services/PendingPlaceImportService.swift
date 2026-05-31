@@ -14,6 +14,110 @@ struct PendingSharedPlace: Codable {
     var savedAt: Date
 }
 
+struct RecommendedItem: Codable, Hashable {
+    var name: String
+    var price: String?
+
+    var displayText: String {
+        guard let price, !price.isEmpty else { return name }
+        return "\(name) \(price)"
+    }
+}
+
+struct SocialPlaceStructuredHighlights: Codable, Hashable {
+    var placeHighlights: [String] = []
+    var recommendedItems: [RecommendedItem] = []
+    var vibeTags: [String] = []
+    var accessNotes: [String] = []
+    var sourceHandle: String? = nil
+
+    static let empty = SocialPlaceStructuredHighlights()
+
+    static func extracted(from evidence: [String], sourceURL: String? = nil) -> SocialPlaceStructuredHighlights {
+        var result = SocialPlaceStructuredHighlights(sourceHandle: sourceHandle(from: evidence, sourceURL: sourceURL))
+        for rawLine in evidence {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+
+            if let item = recommendedItem(from: line) {
+                result.recommendedItems.append(item)
+                continue
+            }
+            if let highlight = highlight(from: line) {
+                result.placeHighlights.append(highlight)
+                result.vibeTags.append(contentsOf: vibeTags(from: highlight))
+                result.accessNotes.append(contentsOf: accessNotes(from: highlight))
+            }
+        }
+        result.placeHighlights = unique(result.placeHighlights)
+        result.recommendedItems = uniqueItems(result.recommendedItems)
+        result.vibeTags = unique(result.vibeTags)
+        result.accessNotes = unique(result.accessNotes)
+        return result
+    }
+
+    private static func recommendedItem(from line: String) -> RecommendedItem? {
+        let prefix = "Highlight: Recommended item:"
+        guard line.localizedCaseInsensitiveContains(prefix) else { return nil }
+        let value = line.replacingOccurrences(of: prefix, with: "", options: [.caseInsensitive]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if let range = value.range(of: #"[$＄]\s*\d+(?:[,，]?\d+)*(?:\.\d+)?"#, options: .regularExpression) {
+            let name = value[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+            let price = String(value[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return RecommendedItem(name: name.isEmpty ? value : name, price: price)
+        }
+        return RecommendedItem(name: value, price: nil)
+    }
+
+    private static func highlight(from line: String) -> String? {
+        let prefix = "Highlight:"
+        guard line.localizedCaseInsensitiveContains(prefix) else { return nil }
+        let value = line.replacingOccurrences(of: prefix, with: "", options: [.caseInsensitive]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !value.localizedCaseInsensitiveContains("Recommended item:") else { return nil }
+        return value
+    }
+
+    private static func vibeTags(from highlight: String) -> [String] {
+        let pairs: [(String, String)] = [
+            ("深夜", "Late night"), ("咖啡", "Cafe"), ("小餐館", "Bistro"), ("舒適", "Cozy"),
+            ("暖色", "Warm interior"), ("開放式廚房", "Open kitchen"), ("份量", "Large portions"),
+            ("好吃", "Recommended"), ("大推", "Highly recommended"), ("甜點", "Dessert")
+        ]
+        return pairs.compactMap { highlight.localizedCaseInsensitiveContains($0.0) ? $0.1 : nil }
+    }
+
+    private static func accessNotes(from highlight: String) -> [String] {
+        let keywords = ["捷運", "步行", "station", "metro", "mrt", "transit"]
+        guard keywords.contains(where: { highlight.localizedCaseInsensitiveContains($0) }) else { return [] }
+        return [highlight]
+    }
+
+    private static func sourceHandle(from evidence: [String], sourceURL: String?) -> String? {
+        for line in evidence {
+            if let range = line.range(of: #"@([A-Za-z0-9_.]{2,40})"#, options: .regularExpression) {
+                return String(line[range]).trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+            }
+        }
+        if let sourceURL, let components = URLComponents(string: sourceURL), components.host?.contains("instagram") == true {
+            let parts = components.path.split(separator: "/")
+            if let first = parts.first, first != "reel", first != "p" {
+                return String(first)
+            }
+        }
+        return nil
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
+    private static func uniqueItems(_ values: [RecommendedItem]) -> [RecommendedItem] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0.displayText).inserted }
+    }
+}
+
 struct SocialPlaceEvidenceDiagnostic: Codable, Hashable {
     var found: [String]
     var attempts: [String]
@@ -64,6 +168,11 @@ struct PendingReviewCandidate: Codable {
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil
     var isSourceOnly: Bool = false
     var reviewState: String? = nil
+    var placeHighlights: [String] = []
+    var recommendedItems: [RecommendedItem] = []
+    var vibeTags: [String] = []
+    var accessNotes: [String] = []
+    var sourceHandle: String? = nil
 
     init(
         candidateName: String,
@@ -79,7 +188,12 @@ struct PendingReviewCandidate: Codable {
         savedAt: Date,
         evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil,
         isSourceOnly: Bool = false,
-        reviewState: String? = nil
+        reviewState: String? = nil,
+        placeHighlights: [String] = [],
+        recommendedItems: [RecommendedItem] = [],
+        vibeTags: [String] = [],
+        accessNotes: [String] = [],
+        sourceHandle: String? = nil
     ) {
         self.candidateName = candidateName
         self.address = address
@@ -95,6 +209,12 @@ struct PendingReviewCandidate: Codable {
         self.evidenceDiagnostic = evidenceDiagnostic
         self.isSourceOnly = isSourceOnly
         self.reviewState = reviewState
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence + [sourceText ?? ""], sourceURL: sourceURL)
+        self.placeHighlights = placeHighlights.isEmpty ? extracted.placeHighlights : placeHighlights
+        self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
+        self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
+        self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
+        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -112,6 +232,11 @@ struct PendingReviewCandidate: Codable {
         case evidenceDiagnostic
         case isSourceOnly
         case reviewState
+        case placeHighlights
+        case recommendedItems
+        case vibeTags
+        case accessNotes
+        case sourceHandle
     }
 
     init(from decoder: Decoder) throws {
@@ -130,6 +255,12 @@ struct PendingReviewCandidate: Codable {
         evidenceDiagnostic = try container.decodeIfPresent(SocialPlaceEvidenceDiagnostic.self, forKey: .evidenceDiagnostic)
         isSourceOnly = try container.decodeIfPresent(Bool.self, forKey: .isSourceOnly) ?? false
         reviewState = try container.decodeIfPresent(String.self, forKey: .reviewState)
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence + [sourceText ?? ""], sourceURL: sourceURL)
+        placeHighlights = try container.decodeIfPresent([String].self, forKey: .placeHighlights) ?? extracted.placeHighlights
+        recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
+        vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
+        accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
+        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
     }
 
     var hasReliableCoordinates: Bool {
@@ -155,6 +286,92 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var missingInfo: [String]
     var status: String
     var createdAt: Date
+    var placeHighlights: [String]
+    var recommendedItems: [RecommendedItem]
+    var vibeTags: [String]
+    var accessNotes: [String]
+    var sourceHandle: String?
+
+    init(
+        id: UUID,
+        captureId: UUID?,
+        name: String,
+        address: String,
+        city: String?,
+        latitude: Double?,
+        longitude: Double?,
+        evidence: [String],
+        confidence: Double?,
+        missingInfo: [String],
+        status: String,
+        createdAt: Date,
+        placeHighlights: [String] = [],
+        recommendedItems: [RecommendedItem] = [],
+        vibeTags: [String] = [],
+        accessNotes: [String] = [],
+        sourceHandle: String? = nil
+    ) {
+        self.id = id
+        self.captureId = captureId
+        self.name = name
+        self.address = address
+        self.city = city
+        self.latitude = latitude
+        self.longitude = longitude
+        self.evidence = evidence
+        self.confidence = confidence
+        self.missingInfo = missingInfo
+        self.status = status
+        self.createdAt = createdAt
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence)
+        self.placeHighlights = placeHighlights.isEmpty ? extracted.placeHighlights : placeHighlights
+        self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
+        self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
+        self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
+        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case captureId
+        case name
+        case address
+        case city
+        case latitude
+        case longitude
+        case evidence
+        case confidence
+        case missingInfo
+        case status
+        case createdAt
+        case placeHighlights
+        case recommendedItems
+        case vibeTags
+        case accessNotes
+        case sourceHandle
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
+        name = try container.decode(String.self, forKey: .name)
+        address = try container.decode(String.self, forKey: .address)
+        city = try container.decodeIfPresent(String.self, forKey: .city)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        evidence = try container.decode([String].self, forKey: .evidence)
+        confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+        missingInfo = try container.decode([String].self, forKey: .missingInfo)
+        status = try container.decode(String.self, forKey: .status)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        let extracted = SocialPlaceStructuredHighlights.extracted(from: evidence)
+        placeHighlights = try container.decodeIfPresent([String].self, forKey: .placeHighlights) ?? extracted.placeHighlights
+        recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
+        vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
+        accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
+        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+    }
 
     var hasReliableCoordinates: Bool {
         guard let latitude, let longitude else { return false }
