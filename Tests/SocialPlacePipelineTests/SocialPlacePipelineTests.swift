@@ -238,6 +238,41 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(analysis.placesFound.first?.locationClues.first, "臺北市信義區松壽路11號B2F")
     }
 
+    func testInstagramTaiwanCaptionExtractsChineseAngleBracketVenueAndAddress() {
+        let metadata = """
+        <阿夢> 📍中正紀念堂
+        *煙花女麵 $350
+        *蘋果香酥配冰淇淋 $200
+        在台北發現一間超怕你餓到，份量很大的深夜咖啡廳，兼小餐館
+        大推煙花女麵，海鮮搭配蕃茄吃起來帶點酸，很夠味超好吃
+        甜點選了蘋果香酥配冰淇淋，整體環境是暖色調很舒適
+        🏠依店家公告 @among_nimbo
+        🚇捷運中正紀念堂站，步行約18分鐘
+        📍臺北市中正區寧波西街155號
+        #台北美食 #中正紀念堂美食 #深夜咖啡廳
+        """
+
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/reel/DXzKpnKSfV9/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: metadata,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.placesFound.count, 1)
+        XCTAssertEqual(analysis.placesFound.first?.displayName, "阿夢")
+        XCTAssertEqual(analysis.placesFound.first?.locationClues.first, "臺北市中正區寧波西街155號")
+        XCTAssertTrue(analysis.placesFound.first?.locationClues.contains("中正紀念堂") == true)
+        XCTAssertTrue(analysis.placesFound.first?.evidenceChips.contains("Highlight: Recommended item: 煙花女麵 $350") == true)
+        XCTAssertTrue(analysis.placesFound.first?.evidenceChips.contains { $0.contains("份量很大的深夜咖啡廳") } == true)
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "Address-only place clue" })
+    }
+
     func testGoogleTakeoutImportParsesBulkFileFormatsSeparatelyFromSavedListLinks() async throws {
         let json = """
         [

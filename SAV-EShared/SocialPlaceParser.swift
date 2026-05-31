@@ -10,6 +10,7 @@ enum SocialEvidenceRole: String, Codable {
     case marketingText
     case sourceAccount
     case categoryClue
+    case placeHighlight
 }
 
 enum SocialEvidenceSource: String, Codable {
@@ -142,6 +143,8 @@ struct SocialEvidenceAtom {
             return "Source account: @\(value)"
         case .categoryClue:
             return "Category clue: \(value)"
+        case .placeHighlight:
+            return "Highlight: \(value)"
         }
     }
 }
@@ -904,7 +907,7 @@ struct SocialPlaceParser {
 
     private func bracketedCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
         let patterns = [
-            #"<\s*([A-Za-z0-9][A-Za-z0-9 &'._\-\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]{1,80})\s*>"#,
+            #"<\s*([A-Za-z0-9\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af][A-Za-z0-9 &'._\-\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]{1,80})\s*>"#,
             #"[\[【]\s*([^\]】]{2,80})\s*[\]】]"#,
             #"(?i)\b(?:at|spot|place)\s+([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n)"#,
             #"(?i)\b(?:new\s+)?(?:brunch\s+)?(?:spot|place|restaurant|cafe)\s*:\s*([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n|$)"#
@@ -1186,6 +1189,56 @@ struct SocialPlaceParser {
 
     // MARK: - Draft assembly
 
+    private func strictAddressLike(_ value: String) -> Bool {
+        value.rangeOfCharacter(from: .decimalDigits) != nil &&
+            value.range(of: #"[縣市區路街巷弄號]"#, options: .regularExpression) != nil
+    }
+
+    private func orderedLocationClues(_ values: [String]) -> [String] {
+        uniqueStrings(values).sorted { lhs, rhs in
+            let lhsStrict = strictAddressLike(lhs)
+            let rhsStrict = strictAddressLike(rhs)
+            if lhsStrict != rhsStrict { return lhsStrict && !rhsStrict }
+            return false
+        }
+    }
+
+    private func highlightAtoms(from fullText: String, excluding name: String) -> [SocialEvidenceAtom] {
+        let lines = fullText
+            .components(separatedBy: .newlines)
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { !$0.isEmpty }
+
+        let itemPattern = #"^[*•\-]?\s*([^$＄\n]{2,24})\s*[$＄]\s*\d+"#
+        let featureKeywords = [
+            "深夜", "咖啡廳", "小餐館", "份量", "大推", "好吃", "舒適", "暖色", "開放式廚房",
+            "推薦", "必點", "招牌", "步行", "捷運", "環境", "氛圍", "甜點", "海鮮"
+        ]
+
+        var atoms: [SocialEvidenceAtom] = []
+        for line in lines {
+            if line.contains(name) || line.hasPrefix("#") || SocialPlaceEvidenceScorer.looksLikeAddressLine(line) {
+                continue
+            }
+
+            if let match = line.range(of: itemPattern, options: .regularExpression) {
+                let matched = String(line[match])
+                    .replacingOccurrences(of: #"^[*•\-]\s*"#, with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !matched.isEmpty {
+                    atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .placeHighlight, value: "Recommended item: \(matched)", line: line, confidence: 0.52))
+                }
+                continue
+            }
+
+            let hasFeature = featureKeywords.contains { line.localizedCaseInsensitiveContains($0) }
+            if hasFeature, line.count <= 90, !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(line) {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .placeHighlight, value: line, line: line, confidence: 0.42))
+            }
+        }
+        return Array(appendUniqueAtoms(atoms).prefix(8))
+    }
+
     private func draft(
         name: String,
         category: String,
@@ -1205,7 +1258,8 @@ struct SocialPlaceParser {
         let hasAddress = !locationClues.isEmpty
         let sourceAtom = SocialEvidenceAtom(source: .metadataDescription, role: .sourceAccount, value: sourceURL, line: sourceURL, confidence: 0.2)
         let tierAtom = SocialEvidenceAtom(source: .metadataDescription, role: .categoryClue, value: "Evidence tier: \(tier.rawValue)", line: fullText, confidence: 0.2)
-        let allAtoms = appendUniqueAtoms(atoms + [sourceAtom, tierAtom])
+        let highlightAtoms = highlightAtoms(from: fullText, excluding: displayName)
+        let allAtoms = appendUniqueAtoms(atoms + highlightAtoms + [sourceAtom, tierAtom])
         let missing = SocialPlaceEvidenceScorer.missingInfo(tier: tier, hasAddress: hasAddress) + extraMissingInfo
 
         return SocialPlaceCandidateDraft(
@@ -1215,7 +1269,7 @@ struct SocialPlaceParser {
             handles: uniqueStrings(handles),
             creatorHandles: uniqueStrings(creatorHandles),
             venueHandles: uniqueStrings(venueHandles),
-            locationClues: uniqueStrings(locationClues),
+            locationClues: orderedLocationClues(locationClues),
             bookingLinks: uniqueStrings(bookingLinks),
             evidence: allAtoms,
             confidence: confidence,
@@ -1234,7 +1288,7 @@ struct SocialPlaceParser {
                 existing.handles = uniqueStrings(existing.handles + candidate.handles)
                 existing.creatorHandles = uniqueStrings(existing.creatorHandles + candidate.creatorHandles)
                 existing.venueHandles = uniqueStrings(existing.venueHandles + candidate.venueHandles)
-                existing.locationClues = uniqueStrings(existing.locationClues + candidate.locationClues)
+                existing.locationClues = orderedLocationClues(existing.locationClues + candidate.locationClues)
                 existing.bookingLinks = uniqueStrings(existing.bookingLinks + candidate.bookingLinks)
                 existing.evidence = appendUniqueAtoms(existing.evidence + candidate.evidence)
                 existing.confidence = max(existing.confidence, candidate.confidence)
@@ -1264,6 +1318,18 @@ struct SocialPlaceParser {
     private func prioritizeParsedCandidates(_ candidates: [SocialPlaceCandidateDraft]) -> [SocialPlaceCandidateDraft] {
         let namedCandidates = candidates.filter { $0.displayName != "Address-only place clue" }
         let addressOnlyCandidates = candidates.filter { $0.displayName == "Address-only place clue" }
+        if namedCandidates.count == 1, addressOnlyCandidates.count == 1, var named = namedCandidates.first, let addressOnly = addressOnlyCandidates.first {
+            let addressClues = addressOnly.locationClues.filter(strictAddressLike)
+            if !addressClues.isEmpty {
+                named.locationClues = orderedLocationClues(addressClues + named.locationClues)
+                named.evidence = appendUniqueAtoms(named.evidence + addressOnly.evidence)
+                named.confidence = max(named.confidence, 0.68)
+                named.missingInfo = uniqueStrings(named.missingInfo + addressOnly.missingInfo)
+                    .filter { $0 != "Address-only clue; enrich with Google Places before saving" }
+                    .sorted()
+                return [named]
+            }
+        }
         return namedCandidates + addressOnlyCandidates
     }
 
