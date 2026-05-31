@@ -22,12 +22,6 @@ struct ContentView: View {
                     onDeletePlace: { place in
                         try await mapVM.deletePlace(place)
                     },
-                    onConfirmCandidate: { candidate in
-                        try await mapVM.confirmReviewCandidate(candidate)
-                    },
-                    onRejectCandidate: { candidate in
-                        try await mapVM.rejectReviewCandidate(candidate)
-                    },
                     onSaveCandidate: { candidate in
                         try await mapVM.saveReviewCandidateAsPlace(candidate)
                     },

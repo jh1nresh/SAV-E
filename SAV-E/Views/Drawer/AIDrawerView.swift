@@ -60,8 +60,6 @@ struct AIDrawerView: View {
         GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
     }
     var onDeletePlace: (Place) async throws -> Void = { _ in }
-    var onConfirmCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
-    var onRejectCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
@@ -190,16 +188,8 @@ struct AIDrawerView: View {
                 viewModel.query = "What should I order at \(place.name)?"
                 Task { await viewModel.submit() }
             },
-            onConfirmCandidate: { candidate in
-                performCandidateAction(candidate, successMessage: "Marked as confirmed. Save it as a Map Stamp when ready.") {
-                    try await onConfirmCandidate(candidate)
-                }
-            },
-            onRejectCandidate: { candidate in
-                performCandidateAction(candidate, successMessage: "Removed from Review.") {
-                    try await onRejectCandidate(candidate)
-                    closeMapDetail()
-                }
+            onAddMoreClueCandidate: { candidate in
+                addMoreClue(for: candidate)
             },
             onSaveCandidate: { candidate in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
@@ -543,17 +533,8 @@ struct AIDrawerView: View {
                 ReviewCandidateDetailCard(
                     candidate: candidate,
                     isWorking: candidateActionInFlight == candidate.id,
-                    onConfirm: {
-                        performCandidateAction(candidate, successMessage: "Marked as confirmed. Save it as a Map Stamp when ready.") {
-                            try await onConfirmCandidate(candidate)
-                        }
-                    },
-                    onReject: {
-                        performCandidateAction(candidate, successMessage: "Removed from Review.") {
-                            try await onRejectCandidate(candidate)
-                            viewModel.returnToCommands()
-                            activeCommandTab = .review
-                        }
+                    onAddMoreClue: {
+                        addMoreClue(for: candidate)
                     },
                     onSave: {
                         performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
@@ -1520,6 +1501,19 @@ struct AIDrawerView: View {
         return "Map Stamp saved · +1 \(category.displayName.lowercased()) place"
     }
 
+    private func addMoreClue(for candidate: PlaceReviewCandidate) {
+        mapDetailDrawerItem = nil
+        viewModel.returnToCommands()
+        activeCommandTab = .review
+        showSavedCategories = false
+        showReviewInbox = true
+        showLists = false
+        viewModel.query = "Add more clue for \(candidate.name): "
+        addSpotStatus = "Paste a caption, address, map link, or visible OCR text. SAV-E will keep it in Review until the exact place is clear."
+        searchFocused = true
+        withAnimation { drawerDetent = .medium }
+    }
+
     private func createCollaborativeList() {
         let list = onCreateList(newListTitle, newListNote)
         selectedListID = list.id
@@ -1618,8 +1612,7 @@ private struct MapDetailDrawerView: View {
     let onClose: () -> Void
     let onDeletePlace: (Place) async throws -> Void
     let onPlanAroundPlace: (Place) -> Void
-    let onConfirmCandidate: (PlaceReviewCandidate) -> Void
-    let onRejectCandidate: (PlaceReviewCandidate) -> Void
+    let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidate: (PlaceReviewCandidate) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
@@ -1749,8 +1742,7 @@ private struct MapDetailDrawerView: View {
                     ReviewCandidateDetailCard(
                         candidate: candidate,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
-                        onConfirm: { onConfirmCandidate(candidate) },
-                        onReject: { onRejectCandidate(candidate) },
+                        onAddMoreClue: { onAddMoreClueCandidate(candidate) },
                         onSave: { onSaveCandidate(candidate) }
                     )
 
@@ -3215,8 +3207,7 @@ private struct ReviewCandidatesEmptyState: View {
 private struct ReviewCandidateDetailCard: View {
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
-    var onConfirm: () -> Void
-    var onReject: () -> Void
+    var onAddMoreClue: () -> Void
     var onSave: () -> Void
 
     var body: some View {
@@ -3248,7 +3239,7 @@ private struct ReviewCandidateDetailCard: View {
                             if let confidence = candidate.confidence {
                                 StampChip(text: "\(Int(confidence * 100))% confidence", color: .saveCocoa)
                             }
-                            StampChip(text: candidate.hasReliableCoordinates ? "map ready" : "1 clue missing", color: .saveHoney)
+                            StampChip(text: candidate.hasReliableCoordinates ? "map ready" : "needs exact place", color: .saveHoney)
                         }
                     }
 
@@ -3260,56 +3251,24 @@ private struct ReviewCandidateDetailCard: View {
                     .foregroundColor(.saveCocoa.opacity(0.82))
                     .fixedSize(horizontal: false, vertical: true)
 
-                if !candidate.hasReliableCoordinates {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                        Text("Needs Google Places refinement or a map link before this can be saved.")
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .foregroundColor(.saveCocoa)
-                }
-
-                ReviewCandidateMemoryPanel(candidate: candidate)
-
-                ReviewCandidateSourcePanel(candidate: candidate)
+                ReviewCandidateProofPanel(candidate: candidate)
 
                 HStack(spacing: 8) {
-                    if candidate.hasReliableCoordinates {
-                        CandidateActionButton(
-                            title: presentation.primaryActionTitle,
-                            systemImage: presentation.primaryActionSystemImage,
-                            fill: .saveHoney,
-                            disabled: isWorking,
-                            action: onConfirm
-                        )
-                        CandidateActionButton(
-                            title: "Save",
-                            systemImage: "seal",
-                            fill: .saveNotebookPage,
-                            disabled: isWorking,
-                            action: onSave
-                        )
-                    } else {
-                        CandidateActionButton(
-                            title: presentation.primaryActionTitle,
-                            systemImage: presentation.primaryActionSystemImage,
-                            fill: .saveHoney,
-                            disabled: isWorking,
-                            action: onSave
-                        )
-                    }
                     CandidateActionButton(
-                        title: "Not this",
-                        systemImage: "xmark",
-                        fill: .saveNotebookPage,
-                        foreground: .saveSignal,
+                        title: primaryActionTitle,
+                        systemImage: primaryActionSystemImage,
+                        fill: .saveHoney,
                         disabled: isWorking,
-                        action: onReject
+                        action: onSave
+                    )
+                    CandidateActionButton(
+                        title: "Add more clue",
+                        systemImage: "plus.bubble",
+                        fill: .saveNotebookPage,
+                        disabled: isWorking,
+                        action: onAddMoreClue
                     )
                 }
-
-                reviewCandidateShareLink
             }
             .padding(12)
         }
@@ -3317,37 +3276,16 @@ private struct ReviewCandidateDetailCard: View {
         .opacity(isWorking ? 0.65 : 1)
     }
 
-    @ViewBuilder
-    private var reviewCandidateShareLink: some View {
-        if let url = candidate.saveShareURL {
-            ShareLink(item: url, subject: Text(candidate.shareSubject), message: Text(candidate.shareText)) {
-                reviewCandidateShareLabel
-            }
-        } else {
-            ShareLink(item: candidate.shareText, subject: Text(candidate.shareSubject)) {
-                reviewCandidateShareLabel
-            }
-        }
-    }
-
-    private var reviewCandidateShareLabel: some View {
-        Label("Share candidate", systemImage: "square.and.arrow.up")
-            .font(.caption.weight(.black))
-            .foregroundColor(.saveInk)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 9)
-            .background(Color.saveNotebookPage)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
     private var presentation: SavePlaceDrawerPresentation {
         SavePlaceDrawerPresentation(reviewCandidate: candidate)
+    }
+
+    private var primaryActionTitle: String {
+        candidate.hasReliableCoordinates ? "Confirm Map Stamp" : "Find exact place"
+    }
+
+    private var primaryActionSystemImage: String {
+        candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass"
     }
 }
 
@@ -3363,92 +3301,28 @@ private struct ReviewCandidateDetailIcon: View {
     }
 }
 
-private struct ReviewCandidateMemoryPanel: View {
-    var candidate: PlaceReviewCandidate
-
-    var body: some View {
-        if hasContent {
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 7) {
-                    Image(systemName: "sparkles")
-                        .font(.caption.weight(.black))
-                    Text("Place memory")
-                        .font(.caption.weight(.black))
-                    Spacer(minLength: 0)
-                }
-                .foregroundColor(.saveInk)
-
-                if !candidate.placeHighlights.isEmpty {
-                    memoryGroup(title: "Why saved", values: Array(candidate.placeHighlights.prefix(3)))
-                }
-                if !candidate.recommendedItems.isEmpty {
-                    memoryGroup(title: "Recommended dishes", values: candidate.recommendedItems.prefix(3).map(\.displayText))
-                }
-                if !candidate.vibeTags.isEmpty {
-                    memoryGroup(title: "Vibe", values: Array(candidate.vibeTags.prefix(4)))
-                }
-                if !candidate.accessNotes.isEmpty {
-                    memoryGroup(title: "Transit", values: Array(candidate.accessNotes.prefix(2)))
-                }
-                if let sourceHandle = candidate.sourceHandle, !sourceHandle.isEmpty {
-                    memoryGroup(title: "Source", values: ["@\(sourceHandle)"])
-                }
-            }
-            .padding(10)
-            .background(Color.saveNotebookPage.opacity(0.42))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
-            )
-        }
-    }
-
-    private var hasContent: Bool {
-        !candidate.placeHighlights.isEmpty ||
-            !candidate.recommendedItems.isEmpty ||
-            !candidate.vibeTags.isEmpty ||
-            !candidate.accessNotes.isEmpty ||
-            candidate.sourceHandle?.isEmpty == false
-    }
-
-    private func memoryGroup(title: String, values: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.black))
-                .foregroundColor(.saveCocoa.opacity(0.72))
-            ForEach(values, id: \.self) { value in
-                Text("• \(value)")
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.84))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-private struct ReviewCandidateSourcePanel: View {
+private struct ReviewCandidateProofPanel: View {
     var candidate: PlaceReviewCandidate
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
-                Image(systemName: "link")
+                Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass")
                     .font(.caption.weight(.black))
-                Text("Source")
+                Text(candidate.hasReliableCoordinates ? "Ready to review" : "Needs one more clue")
                     .font(.caption.weight(.black))
-                Spacer()
+                Spacer(minLength: 0)
                 if let sourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        Text("Open")
+                        Text("Open source")
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.saveHoney.opacity(0.74))
+                            .background(Color.saveHoney.opacity(0.72))
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -3457,15 +3331,10 @@ private struct ReviewCandidateSourcePanel: View {
             }
             .foregroundColor(.saveInk)
 
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(sourceLines, id: \.self) { line in
-                    Text(line)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.78))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            proofSection(title: "Found", systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
+            proofSection(title: "Missing", systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveHoney)
+            proofSection(title: "Tried", systemImage: "text.magnifyingglass", items: triedItems, tone: .saveSky)
+            nextActionRow
         }
         .padding(10)
         .background(Color.saveNotebookPage.opacity(0.42))
@@ -3476,31 +3345,132 @@ private struct ReviewCandidateSourcePanel: View {
         )
     }
 
-    private var sourceLines: [String] {
-        let sourceLike = candidate.evidence
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .filter { line in
-                let lowered = line.lowercased()
-                return lowered.contains("source") ||
-                    lowered.contains("http") ||
-                    lowered.contains("instagram") ||
-                    lowered.contains("google") ||
-                    lowered.contains("maps")
+    private func proofSection(title: String, systemImage: String, items: [String], tone: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 18, height: 18)
+                    .background(tone.opacity(0.64))
+                    .clipShape(Circle())
+                Text(title)
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveCocoa.opacity(0.72))
             }
 
-        let lines = sourceLike.isEmpty
-            ? candidate.evidence
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            : sourceLike
+            ForEach(items.prefix(3), id: \.self) { item in
+                Text(item)
+                    .font(.caption)
+                    .foregroundColor(.saveCocoa.opacity(0.84))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 
-        let visibleLines = Array(lines.prefix(3))
-        return visibleLines.isEmpty ? ["Review evidence saved"] : visibleLines
+    private var nextActionRow: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass")
+                .font(.caption.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 22, height: 22)
+                .background(Color.savePink.opacity(0.72))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Next action")
+                    .font(.caption2.weight(.black))
+                    .foregroundColor(.saveCocoa.opacity(0.72))
+                Text(nextActionText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveCocoa.opacity(0.86))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var foundItems: [String] {
+        var items: [String] = []
+        items.append("Candidate: \(candidate.name)")
+        if !candidate.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            items.append("Address: \(candidate.address)")
+        } else if let city = candidate.city, !city.isEmpty {
+            items.append("Area: \(city)")
+        }
+        if candidate.hasReliableCoordinates {
+            items.append("Coordinates verified")
+        }
+        if let sourceHandle = candidate.sourceHandle, !sourceHandle.isEmpty {
+            items.append("Source handle: @\(sourceHandle)")
+        }
+        if items.count < 3 {
+            items.append(contentsOf: cleanEvidenceLines(excluding: ["missing", "checked", "prepared", "next best clue"]))
+        }
+        return Array(unique(items).prefix(3))
+    }
+
+    private var missingItems: [String] {
+        var items = candidate.missingInfo
+            .map(cleanEvidenceLine)
+            .filter { !$0.isEmpty }
+        if !candidate.hasReliableCoordinates {
+            if candidate.address.isEmpty { items.append("Exact address") }
+            items.append("Verified coordinates")
+        }
+        if items.isEmpty {
+            items.append("Nothing obvious; check the place before confirming")
+        }
+        return Array(unique(items).prefix(3))
+    }
+
+    private var triedItems: [String] {
+        let tried = cleanEvidenceLines(including: ["checked", "prepared", "google places", "public search", "ocr", "metadata", "caption"])
+        if !tried.isEmpty { return Array(tried.prefix(3)) }
+        if sourceURL != nil { return ["Checked shared source"] }
+        return ["Saved source evidence for review"]
+    }
+
+    private var nextActionText: String {
+        if candidate.hasReliableCoordinates {
+            return "Confirm Map Stamp after checking the name and address."
+        }
+        return "Find exact place, or add more clue if SAV-E still needs address or coordinates."
     }
 
     private var sourceURL: URL? {
-        return candidate.evidence.compactMap(Self.firstURL(in:)).first
+        candidate.evidence.compactMap(Self.firstURL(in:)).first
+    }
+
+    private func cleanEvidenceLines(including keywords: [String]) -> [String] {
+        cleanEvidenceLines { line in
+            let lowered = line.lowercased()
+            return keywords.contains { lowered.contains($0) }
+        }
+    }
+
+    private func cleanEvidenceLines(excluding keywords: [String]) -> [String] {
+        cleanEvidenceLines { line in
+            let lowered = line.lowercased()
+            return !keywords.contains { lowered.contains($0) }
+        }
+    }
+
+    private func cleanEvidenceLines(where predicate: (String) -> Bool) -> [String] {
+        candidate.evidence
+            .map(cleanEvidenceLine)
+            .filter { !$0.isEmpty && predicate($0) }
+    }
+
+    private func cleanEvidenceLine(_ line: String) -> String {
+        line
+            .replacingOccurrences(of: "Evidence tier:", with: "")
+            .replacingOccurrences(of: "Next best clue:", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func unique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
     }
 
     private static func firstURL(in line: String) -> URL? {
