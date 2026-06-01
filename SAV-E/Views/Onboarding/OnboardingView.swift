@@ -9,15 +9,17 @@ struct OnboardingView: View {
             SaveDottedBackground()
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    Spacer(minLength: 28)
+            VStack(spacing: 0) {
+                TabView(selection: $selectedState) {
+                    ForEach(FirstRunDemoState.allCases, id: \.self) { state in
+                        FirstRunMascotPage(state: state)
+                            .tag(state)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
 
-                    FirstRunMascotHero()
-
-                    FirstRunProgressionChips(selectedState: $selectedState)
-
-                    FirstRunPlaceDemoCard(state: selectedState)
+                VStack(spacing: 12) {
+                    FirstRunPageDots(selectedState: selectedState)
 
                     FirstRunTrustNote()
 
@@ -43,81 +45,96 @@ struct OnboardingView: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.saveMutedText)
-                    .padding(.bottom, 24)
                 }
+                .padding(.bottom, 22)
             }
         }
+    }
+}
+
+private struct FirstRunPageDots: View {
+    let selectedState: FirstRunDemoState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(FirstRunDemoState.allCases, id: \.self) { state in
+                Capsule()
+                    .fill(state == selectedState ? Color.saveInk : Color.saveNotebookLine.opacity(0.45))
+                    .frame(width: state == selectedState ? 22 : 7, height: 7)
+                    .animation(.easeInOut(duration: 0.18), value: selectedState)
+            }
+        }
+        .accessibilityLabel("Onboarding page \(selectedState.pageNumber) of \(FirstRunDemoState.allCases.count)")
     }
 }
 
 // MARK: - First Run Demo
 
 private enum FirstRunDemoState: String, CaseIterable {
-    case clue = "Source Clue"
-    case candidate = "Review Candidate"
-    case mapStamp = "Map Stamp"
-    case tripPlan = "Ask / Plan"
+    case clue
+    case candidate
+    case mapStamp
+    case tripPlan
 
-    var title: String {
+    var pageHeadline: String {
         switch self {
-        case .clue: return "Import a place you already saved"
-        case .candidate: return "No more fake pins"
-        case .mapStamp: return "Know what is confirmed"
-        case .tripPlan: return "Ask saved places first"
+        case .clue: return "Save places from anywhere."
+        case .candidate: return "Review uncertain finds."
+        case .mapStamp: return "Build your private map."
+        case .tripPlan: return "Ask before you decide."
         }
     }
 
-    var mascotLine: String {
+    var pageSubtitle: String {
         switch self {
-        case .clue: return "Memo caught the clue. Now it needs the real place."
-        case .candidate: return "Memo found a likely match. You decide before it saves."
-        case .mapStamp: return "Memo stamps only places you confirm."
-        case .tripPlan: return "Memo answers from your Map Stamps before looking outside."
+        case .clue:
+            return "Links, screenshots, notes, and map shares all start as one clean place memory."
+        case .candidate:
+            return "SAV-E keeps guesses out of your map until you confirm the real spot."
+        case .mapStamp:
+            return "Confirmed places become Map Stamps with why you saved them."
+        case .tripPlan:
+            return "Plan from the places you already cared about, not a generic list."
+        }
+    }
+
+    var pageNumber: Int {
+        Self.allCases.firstIndex(of: self)! + 1
+    }
+
+    var visualTitle: String {
+        switch self {
+        case .clue: return "From a post"
+        case .candidate: return "Needs review"
+        case .mapStamp: return "Map Stamp saved"
+        case .tripPlan: return "Date night?"
+        }
+    }
+
+    var visualSubtitle: String {
+        switch self {
+        case .clue: return "Memo catches the place clue."
+        case .candidate: return "Confirm before it hits your map."
+        case .mapStamp: return "Saved with source and reason."
+        case .tripPlan: return "Built from your Map Stamps."
         }
     }
 
     var icon: String {
         switch self {
-        case .clue: return "magnifyingglass"
-        case .candidate: return "checklist"
+        case .clue: return "square.and.arrow.down"
+        case .candidate: return "checkmark.seal"
         case .mapStamp: return "mappin.and.ellipse"
         case .tripPlan: return "sparkles"
         }
     }
 
-    var input: String {
+    var detailText: String {
         switch self {
-        case .clue: return "friend's Reel, map link, screenshot, or note"
-        case .candidate: return "one Review Candidate with evidence"
-        case .mapStamp: return "Speranza · Silver Lake"
-        case .tripPlan: return "date night near saved places"
-        }
-    }
-
-    var known: String {
-        switch self {
-        case .clue: return "source + why it looked worth saving"
-        case .candidate: return "source text + likely place match"
-        case .mapStamp: return "confirmed identity, category, map location"
-        case .tripPlan: return "your Map Stamps before public discovery"
-        }
-    }
-
-    var missing: String {
-        switch self {
-        case .clue: return "exact map place"
-        case .candidate: return "your confirmation"
-        case .mapStamp: return "nothing before it enters memory"
-        case .tripPlan: return "outside picks only when needed"
-        }
-    }
-
-    var primaryAction: String {
-        switch self {
-        case .clue: return "Find exact place"
-        case .candidate: return "Confirm or reject"
-        case .mapStamp: return "Ask around this"
-        case .tripPlan: return "Plan from memory"
+        case .clue: return "Tucked away from IG"
+        case .candidate: return "No fake pins"
+        case .mapStamp: return "Private food + travel"
+        case .tripPlan: return "3 saved spots nearby"
         }
     }
 
@@ -131,142 +148,189 @@ private enum FirstRunDemoState: String, CaseIterable {
     }
 }
 
-private struct FirstRunMascotHero: View {
+private struct FirstRunMascotPage: View {
+    let state: FirstRunDemoState
+
     var body: some View {
-        VStack(spacing: 14) {
-            MemoMascotMark(size: 132, framed: false)
+        VStack(spacing: 22) {
+            Spacer(minLength: 10)
+
+            MemoMascotMark(size: 72, framed: false)
+
+            FirstRunVisualCard(state: state)
 
             VStack(spacing: 8) {
-                Text("Memo keeps your place clues safe.")
-                    .font(.caption)
-                    .fontWeight(.black)
-                    .foregroundColor(.saveCocoa)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(Color.saveHoney.opacity(0.72))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
-                    .clipShape(Capsule())
-
-                Text("Save spots while you scroll.")
+                Text(state.pageHeadline)
                     .font(.title2)
                     .fontWeight(.black)
                     .foregroundColor(.saveInk)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Text("Share an IG post, map link, screenshot, or note. Memo keeps uncertain places in Review until you confirm the real Map Stamp.")
+                Text(state.pageSubtitle)
                     .font(.subheadline)
                     .lineSpacing(3)
                     .foregroundColor(.saveMutedText)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(18)
-            .background(Color.saveNotebookPage.opacity(0.72))
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.34), lineWidth: 1.2)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(.horizontal, 30)
+
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
     }
 }
 
-private struct FirstRunProgressionChips: View {
-    @Binding var selectedState: FirstRunDemoState
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(FirstRunDemoState.allCases, id: \.self) { state in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            selectedState = state
-                        }
-                    } label: {
-                        Text(state.rawValue)
-                            .font(.caption)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .background(selectedState == state ? state.tint : Color.saveNotebookPage)
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.saveNotebookLine, lineWidth: selectedState == state ? 1.8 : 1.1)
-                            )
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 24)
-        }
-    }
-}
-
-private struct FirstRunPlaceDemoCard: View {
+private struct FirstRunVisualCard: View {
     let state: FirstRunDemoState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack(alignment: .bottomTrailing) {
-                    MemoMascotMark(size: 48)
+        GeometryReader { geometry in
+            ZStack {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(Color.saveNotebookPage.opacity(0.98))
+                    .shadow(color: Color.saveInk.opacity(0.08), radius: 16, x: 0, y: 10)
 
-                    Image(systemName: state.icon)
-                        .font(.caption.weight(.black))
-                        .foregroundColor(.saveInk)
-                        .frame(width: 22, height: 22)
-                        .background(state.tint)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
-                }
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 2)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(state.title)
-                        .font(.headline)
+                VStack(spacing: 18) {
+                    HStack {
+                        Circle()
+                            .fill(Color.saveInk)
+                            .frame(width: 8, height: 8)
+
+                        Spacer()
+
+                        Text("SAV-E")
+                            .font(.caption)
+                            .fontWeight(.black)
+                            .foregroundColor(.saveInk)
+
+                        Spacer()
+
+                        Circle()
+                            .fill(state.tint)
+                            .frame(width: 8, height: 8)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(state.tint.opacity(0.4))
+                            .frame(height: 148)
+
+                        Image(systemName: state.icon)
+                            .font(.system(size: 54, weight: .black))
+                            .foregroundColor(.saveInk)
+
+                        visualAccent
+                    }
+                    .padding(.horizontal, 18)
+
+                    VStack(spacing: 6) {
+                        Text(state.visualTitle)
+                            .font(.title3)
+                            .fontWeight(.black)
+                            .foregroundColor(.saveInk)
+                            .multilineTextAlignment(.center)
+
+                        Text(state.visualSubtitle)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.saveMutedText)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 22)
+
+                    Text(state.detailText)
+                        .font(.caption)
                         .fontWeight(.black)
                         .foregroundColor(.saveInk)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.saveNotebookPage)
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
 
-                    Text(state.mascotLine)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.saveCocoa)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("Source Clue -> Review Candidate -> Map Stamp -> Ask saved first")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.saveMutedText)
+                    Spacer(minLength: 10)
                 }
             }
-
-            VStack(alignment: .leading, spacing: 10) {
-                FirstRunEvidenceRow(label: "Input", value: state.input)
-                FirstRunEvidenceRow(label: "Known", value: state.known)
-                FirstRunEvidenceRow(label: "Missing", value: state.missing)
-            }
-
-            Text("Next: \(state.primaryAction)")
-                .font(.subheadline)
-                .fontWeight(.black)
-                .foregroundColor(.saveInk)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color.saveNotebookPage)
-                .overlay(
-                    Capsule()
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
-                )
+            .frame(width: min(264, max(0, geometry.size.width - 48)), height: 326)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(18)
-        .background(Color.saveNotebookPage.opacity(0.96))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .padding(.horizontal, 24)
+        .frame(height: 326)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        "\(state.visualTitle). \(state.visualSubtitle). \(state.detailText)."
+    }
+
+    @ViewBuilder
+    private var visualAccent: some View {
+        switch state {
+        case .clue:
+            VStack {
+                HStack {
+                    Text("@friend")
+                    Spacer()
+                }
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("save this")
+                }
+            }
+            .font(.caption2.weight(.black))
+            .foregroundColor(.saveCocoa)
+            .padding(18)
+        case .candidate:
+            VStack {
+                Spacer()
+                HStack(spacing: 10) {
+                    pill("Reject", tint: .saveNotebookPage)
+                    pill("Confirm", tint: .saveHoney)
+                }
+            }
+            .padding(.bottom, 16)
+        case .mapStamp:
+            ZStack {
+                ForEach(0..<3) { index in
+                    Circle()
+                        .fill(index == 1 ? Color.saveHoney : Color.saveNotebookPage)
+                        .frame(width: 28, height: 28)
+                        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .offset(x: CGFloat(index - 1) * 44, y: index == 1 ? -28 : 26)
+                }
+            }
+        case .tripPlan:
+            VStack(alignment: .leading, spacing: 8) {
+                pill("Speranza", tint: .saveHoney)
+                pill("Alma", tint: .saveMint)
+                pill("Dessert nearby", tint: .savePink)
+            }
+            .offset(y: 46)
+        }
+    }
+
+    private func pill(_ text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.black)
+            .foregroundColor(.saveInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.9))
+            .overlay(
+                Capsule()
+                    .stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1)
+            )
+            .clipShape(Capsule())
     }
 }
 
@@ -293,29 +357,6 @@ private struct FirstRunTrustNote: View {
         )
         .clipShape(Capsule())
         .padding(.horizontal, 24)
-    }
-}
-
-private struct FirstRunEvidenceRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(label.uppercased())
-                .font(.caption2)
-                .fontWeight(.black)
-                .foregroundColor(.saveCocoa)
-                .frame(width: 54, alignment: .leading)
-
-            Text(value)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.saveInk)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
-        }
     }
 }
 
