@@ -918,7 +918,8 @@ final class SocialLinkReviewCandidateService {
 
     private func sourceOnlyCandidate(evidenceText: String, sourceURL: String) -> PendingReviewCandidate {
         let diagnostic = sourceOnlyDiagnostic(evidenceText: evidenceText, sourceURL: sourceURL)
-        if let candidateName = unresolvedPlaceCandidateName(from: diagnostic.suggestedSearchQueries ?? []),
+        if xiaohongshuLinkContext(sourceURL: sourceURL)?.isShortLink != true,
+           let candidateName = unresolvedPlaceCandidateName(from: diagnostic.suggestedSearchQueries ?? []),
            candidateName != socialPostDescriptor(in: URL(string: sourceURL))?.id {
             let upgradedDiagnostic = unresolvedPlaceDiagnostic(from: diagnostic, candidateName: candidateName)
             return PendingReviewCandidate(
@@ -1059,11 +1060,11 @@ final class SocialLinkReviewCandidateService {
 
         if let xhs = xiaohongshuLinkContext(sourceURL: sourceURL) {
             found = appendUnique(found, [
-                "Xiaohongshu note id: \(xhs.noteID)",
-                "Canonical Xiaohongshu URL: \(xhs.canonicalURL)"
+                xhs.identifierEvidence,
+                xhs.urlEvidence
             ])
             attempts = appendUnique(attempts, [
-                "Resolved Xiaohongshu short/canonical URL and extracted the note id",
+                xhs.resolutionAttempt,
                 "Detected blocked or generic Xiaohongshu metadata shell instead of usable caption text"
             ])
             missingFields = appendUnique(missingFields, [
@@ -1354,8 +1355,23 @@ final class SocialLinkReviewCandidateService {
     }
 
     private struct XiaohongshuLinkContext {
-        var noteID: String
+        var identifier: String
         var canonicalURL: String
+        var isShortLink: Bool
+
+        var identifierEvidence: String {
+            isShortLink ? "Xiaohongshu short link code: \(identifier)" : "Xiaohongshu note id: \(identifier)"
+        }
+
+        var urlEvidence: String {
+            isShortLink ? "Original Xiaohongshu short URL: \(canonicalURL)" : "Canonical Xiaohongshu URL: \(canonicalURL)"
+        }
+
+        var resolutionAttempt: String {
+            isShortLink
+                ? "Detected Xiaohongshu short link but public redirect did not expose a canonical note id"
+                : "Resolved canonical Xiaohongshu URL and extracted the note id"
+        }
     }
 
     private func xiaohongshuLinkContext(sourceURL: String) -> XiaohongshuLinkContext? {
@@ -1364,8 +1380,9 @@ final class SocialLinkReviewCandidateService {
         guard host.matchesSocialDomain("xiaohongshu.com") || host.matchesSocialDomain("xhslink.com") else { return nil }
         guard let descriptor = socialPostDescriptor(in: url) else { return nil }
         return XiaohongshuLinkContext(
-            noteID: descriptor.id,
-            canonicalURL: canonicalSearchURL(from: url) ?? sourceURL
+            identifier: descriptor.id,
+            canonicalURL: canonicalSearchURL(from: url) ?? sourceURL,
+            isShortLink: host.matchesSocialDomain("xhslink.com")
         )
     }
 
@@ -1382,6 +1399,9 @@ final class SocialLinkReviewCandidateService {
         if host.matchesSocialDomain("xiaohongshu.com") || host.matchesSocialDomain("xhslink.com") {
             guard let id = components.reversed().first(where: { $0.count >= 4 && $0 != "/" })?.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")),
                   !id.isEmpty else { return nil }
+            if host.matchesSocialDomain("xhslink.com") {
+                return SocialPostDescriptor(platformName: "xiaohongshu short link", id: id, siteQuery: "\"\(canonicalSearchURL(from: url) ?? url.absoluteString)\"")
+            }
             return SocialPostDescriptor(platformName: "xiaohongshu", id: id, siteQuery: "site:xiaohongshu.com \(id)")
         }
         if host.matchesSocialDomain("douyin.com") || host.matchesSocialDomain("iesdouyin.com") {
@@ -1408,8 +1428,8 @@ final class SocialLinkReviewCandidateService {
         ]
         if let xhs = xiaohongshuLinkContext(sourceURL: sourceURL) {
             found = appendUnique(found, [
-                "Xiaohongshu note id: \(xhs.noteID)",
-                "Canonical Xiaohongshu URL: \(xhs.canonicalURL)"
+                xhs.identifierEvidence,
+                xhs.urlEvidence
             ])
         }
         if !candidate.address.isEmpty {
@@ -1429,9 +1449,9 @@ final class SocialLinkReviewCandidateService {
             "Kept plausible venue evidence in Review instead of inventing map coordinates",
             "Did not use logged-in social scraping"
         ]
-        if xiaohongshuLinkContext(sourceURL: sourceURL) != nil {
+        if let xhs = xiaohongshuLinkContext(sourceURL: sourceURL) {
             attempts = appendUnique(attempts, [
-                "Resolved Xiaohongshu short/canonical URL and extracted the note id",
+                xhs.resolutionAttempt,
                 "Used readable Xiaohongshu caption/metadata as place evidence"
             ])
         }

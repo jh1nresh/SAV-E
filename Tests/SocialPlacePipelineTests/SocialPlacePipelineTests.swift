@@ -649,12 +649,33 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.isSourceOnly)
         XCTAssertTrue(diagnostic.found.contains("Xiaohongshu note id: 65abc123"))
         XCTAssertTrue(diagnostic.found.contains("Canonical Xiaohongshu URL: https://www.xiaohongshu.com/explore/65abc123"))
-        XCTAssertTrue(diagnostic.attempts.contains("Resolved Xiaohongshu short/canonical URL and extracted the note id"))
+        XCTAssertTrue(diagnostic.attempts.contains("Resolved canonical Xiaohongshu URL and extracted the note id"))
         XCTAssertTrue(diagnostic.attempts.contains("Detected blocked or generic Xiaohongshu metadata shell instead of usable caption text"))
         XCTAssertTrue(diagnostic.missingFields.contains("Readable Xiaohongshu caption or screenshot OCR"))
         XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.")
         XCTAssertEqual(diagnostic.suggestedSearchQueries?.first, "xiaohongshu 65abc123 place")
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"https://www.xiaohongshu.com/explore/65abc123\"") == true)
+    }
+
+    func testXiaohongshuShortLinkDoesNotPretendSlugIsNoteID() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "http://xhslink.com/o/3zvbJIowbqS"
+        ).first)
+        let diagnostic = try XCTUnwrap(candidate.evidenceDiagnostic)
+
+        XCTAssertEqual(candidate.candidateName, "Xiaohongshu link")
+        XCTAssertTrue(candidate.isSourceOnly)
+        XCTAssertTrue(diagnostic.found.contains("Xiaohongshu short link code: 3zvbJIowbqS"))
+        XCTAssertTrue(diagnostic.found.contains("Original Xiaohongshu short URL: http://xhslink.com/o/3zvbJIowbqS"))
+        XCTAssertFalse(diagnostic.found.contains("Xiaohongshu note id: 3zvbJIowbqS"))
+        XCTAssertTrue(diagnostic.attempts.contains("Detected Xiaohongshu short link but public redirect did not expose a canonical note id"))
+        XCTAssertTrue(diagnostic.missingFields.contains("Readable Xiaohongshu caption or screenshot OCR"))
+        XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.")
+        XCTAssertEqual(diagnostic.suggestedSearchQueries?.first, "xiaohongshu short link 3zvbJIowbqS place")
+        XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"http://xhslink.com/o/3zvbJIowbqS\"") == true)
     }
 
     func testXiaohongshuCaptionMetadataCanBecomeReviewCandidate() throws {
