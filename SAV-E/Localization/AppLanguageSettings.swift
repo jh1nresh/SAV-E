@@ -42,7 +42,7 @@ final class AppLanguageSettings: ObservableObject {
         case .english:
             return count == 1 ? "SAV-E has 1 clue waiting" : "SAV-E has \(count) clues waiting"
         case .traditionalChinese:
-            return count == 1 ? "SAV-E 有 1 個線索待確認" : "SAV-E 有 \(count) 個線索待確認"
+            return count == 1 ? "SAV-E 有 1 個線索等你確認" : "SAV-E 有 \(count) 個線索等你確認"
         }
     }
 
@@ -170,13 +170,13 @@ enum SaveText {
         case .appName:
             return "SAV-E"
         case .opening:
-            return localized(english: "Opening SAV-E", traditionalChinese: "正在開啟 SAV-E", language: language)
+            return localized(english: "Opening SAV-E", traditionalChinese: "正在打開 SAV-E", language: language)
         case .openingHint:
-            return localized(english: "Waking up your place memory", traditionalChinese: "喚醒你的地點記憶", language: language)
+            return localized(english: "Waking up your place memory", traditionalChinese: "整理你的地點記憶", language: language)
         case .tripLinkReady:
-            return localized(english: "Trip Link Ready", traditionalChinese: "行程連結已準備好", language: language)
+            return localized(english: "Trip Link Ready", traditionalChinese: "行程連結準備好了", language: language)
         case .tripLinkMessage:
-            return localized(english: "%@ has %d stops. Full trip import is coming next.", traditionalChinese: "%@ 有 %d 個停靠點。完整行程匯入會在下一版補上。", language: language)
+            return localized(english: "%@ has %d stops. Full trip import is coming next.", traditionalChinese: "%@ 有 %d 個地點。完整行程匯入會在下一版補上。", language: language)
         case .ok:
             return localized(english: "OK", traditionalChinese: "好", language: language)
         case .cantSignIn:
@@ -184,7 +184,7 @@ enum SaveText {
         case .googleNotEnabled:
             return localized(english: "Google Isn't Enabled", traditionalChinese: "Google 登入尚未啟用", language: language)
         case .googleNotEnabledMessage:
-            return localized(english: "Turn on Google in Privy, or use email sign-in for now.", traditionalChinese: "請在 Privy 啟用 Google，或先使用 Email 登入。", language: language)
+            return localized(english: "Turn on Google in Privy, or use email sign-in for now.", traditionalChinese: "請在 Privy 啟用 Google，或先用電子信箱登入。", language: language)
         case .appNotAllowed:
             return localized(english: "App Not Allowed", traditionalChinese: "App 尚未允許", language: language)
         case .appNotAllowedMessage:
@@ -192,15 +192,15 @@ enum SaveText {
         case .authSetupNeeded:
             return localized(english: "Auth Setup Needed", traditionalChinese: "需要設定登入", language: language)
         case .genericSignInError:
-            return localized(english: "Something went wrong. Try again in a moment.", traditionalChinese: "發生錯誤，請稍後再試。", language: language)
+            return localized(english: "Something went wrong. Try again in a moment.", traditionalChinese: "剛剛沒成功，請稍後再試一次。", language: language)
         case .continueWithGoogle:
             return localized(english: "Continue with Google", traditionalChinese: "使用 Google 繼續", language: language)
         case .orUseEmail:
-            return localized(english: "or use email", traditionalChinese: "或使用 Email", language: language)
+            return localized(english: "or use email", traditionalChinese: "或用電子信箱", language: language)
         case .emailAddress:
-            return localized(english: "Email address", traditionalChinese: "Email 地址", language: language)
+            return localized(english: "Email address", traditionalChinese: "電子信箱", language: language)
         case .sendCode:
-            return localized(english: "Send Code", traditionalChinese: "寄送驗證碼", language: language)
+            return localized(english: "Send Code", traditionalChinese: "寄出驗證碼", language: language)
         case .verificationCode:
             return localized(english: "Verification code", traditionalChinese: "驗證碼", language: language)
         case .verify:
@@ -208,19 +208,19 @@ enum SaveText {
         case .signInTagline:
             return localized(english: "Your private place memory.", traditionalChinese: "你的私人地點記憶。", language: language)
         case .signInDescription:
-            return localized(english: "Add links, posts, screenshots, notes, or maps. SAV-E captures why you saved them, keeps uncertain places in Review, and wakes them up when you need a decision.", traditionalChinese: "加入連結、貼文、截圖、筆記或地圖。SAV-E 會保留你為什麼存、不確定的先放進 Review，等你要決定時再喚醒。", language: language)
+            return localized(english: "Add links, posts, screenshots, notes, or maps. SAV-E captures why you saved them, keeps uncertain places in Review, and wakes them up when you need a decision.", traditionalChinese: "把連結、貼文、截圖、筆記或地圖分享丟進來。SAV-E 會記住你為什麼想存，不確定的地點先放到待確認，等你要做決定時再拿出來。", language: language)
         case .capture:
-            return localized(english: "Capture", traditionalChinese: "捕捉", language: language)
+            return localized(english: "Capture", traditionalChinese: "收進來", language: language)
         case .captureSubtitle:
-            return localized(english: "link or media", traditionalChinese: "連結或媒體", language: language)
+            return localized(english: "link or media", traditionalChinese: "連結、貼文、截圖", language: language)
         case .review:
             return localized(english: "Review", traditionalChinese: "確認", language: language)
         case .reviewSubtitle:
-            return localized(english: "with evidence", traditionalChinese: "保留證據", language: language)
+            return localized(english: "with evidence", traditionalChinese: "看證據再存", language: language)
         case .save:
-            return localized(english: "Save", traditionalChinese: "儲存", language: language)
+            return localized(english: "Save", traditionalChinese: "存下", language: language)
         case .saveSubtitle:
-            return localized(english: "Map Stamps", traditionalChinese: "地圖章", language: language)
+            return localized(english: "Map Stamps", traditionalChinese: "變成地圖章", language: language)
         case .profileTitle:
             return localized(english: "SAV-E Passport", traditionalChinese: "SAV-E 護照", language: language)
         case .edit:
@@ -228,7 +228,7 @@ enum SaveText {
         case .editPassport:
             return localized(english: "Edit Passport", traditionalChinese: "編輯護照", language: language)
         case .editPassportDescription:
-            return localized(english: "This is how SAV-E labels your memory book.", traditionalChinese: "這會顯示在你的 SAV-E 記憶本上。", language: language)
+            return localized(english: "This is how SAV-E labels your memory book.", traditionalChinese: "這個名稱會顯示在你的 SAV-E 記憶本上。", language: language)
         case .saving:
             return localized(english: "Saving...", traditionalChinese: "儲存中...", language: language)
         case .passportName:
@@ -236,9 +236,9 @@ enum SaveText {
         case .name:
             return localized(english: "Name", traditionalChinese: "名稱", language: language)
         case .accountManagedByLogin:
-            return localized(english: "Email and sign-in provider stay managed by your login account.", traditionalChinese: "Email 與登入方式仍由你的登入帳號管理。", language: language)
+            return localized(english: "Email and sign-in provider stay managed by your login account.", traditionalChinese: "電子信箱與登入方式仍由你的登入帳號管理。", language: language)
         case .localMemoHelper:
-            return localized(english: "Local Memo helper", traditionalChinese: "本機 Memo 助手", language: language)
+            return localized(english: "Local Memo helper", traditionalChinese: "本機 Memo 小助手", language: language)
         case .memoHelper:
             return localized(english: "MEMO HELPER", traditionalChinese: "MEMO 助手", language: language)
         case .reviewFirst:
@@ -248,9 +248,9 @@ enum SaveText {
         case .passportStamps:
             return localized(english: "Passport Stamps", traditionalChinese: "護照印章", language: language)
         case .memoBook:
-            return localized(english: "MEMO BOOK", traditionalChinese: "MEMO 本", language: language)
+            return localized(english: "MEMO BOOK", traditionalChinese: "MEMO 記憶本", language: language)
         case .memoryCards:
-            return localized(english: "Memory cards", traditionalChinese: "記憶卡", language: language)
+            return localized(english: "Memory cards", traditionalChinese: "地點記憶", language: language)
         case .visited:
             return localized(english: "Visited", traditionalChinese: "去過", language: language)
         case .proofBacked:
@@ -258,7 +258,7 @@ enum SaveText {
         case .cities:
             return localized(english: "Cities", traditionalChinese: "城市", language: language)
         case .waitingClues:
-            return localized(english: "Waiting clues", traditionalChinese: "待確認線索", language: language)
+            return localized(english: "Waiting clues", traditionalChinese: "等你確認", language: language)
         case .memberSince:
             return localized(english: "Member since", traditionalChinese: "加入時間", language: language)
         case .passportControls:
@@ -270,13 +270,13 @@ enum SaveText {
         case .chooseLanguage:
             return localized(english: "Choose Language", traditionalChinese: "選擇語言", language: language)
         case .languageDescription:
-            return localized(english: "SAV-E will use this language inside the app.", traditionalChinese: "SAV-E 會在 app 內使用這個語言。", language: language)
+            return localized(english: "SAV-E will use this language inside the app.", traditionalChinese: "SAV-E 會在 app 內使用你選的語言。", language: language)
         case .signOut:
             return localized(english: "Sign Out", traditionalChinese: "登出", language: language)
         case .askPlaceholder:
-            return localized(english: "Ask saved places or paste a spot...", traditionalChinese: "問已存地點或貼上新地點...", language: language)
+            return localized(english: "Ask saved places or paste a spot...", traditionalChinese: "問你存過的地點，或貼上一個新地點...", language: language)
         case .openReviewCandidates:
-            return localized(english: "Open review candidates", traditionalChinese: "開啟待確認地點", language: language)
+            return localized(english: "Open review candidates", traditionalChinese: "查看待確認地點", language: language)
         case .memoSorting:
             return localized(english: "SAV-E is sorting the clues...", traditionalChinese: "SAV-E 正在整理線索...", language: language)
         case .cancel:
@@ -288,23 +288,23 @@ enum SaveText {
         case .backToCommands:
             return localized(english: "Back to commands", traditionalChinese: "回到指令", language: language)
         case .closeDrawerContent:
-            return localized(english: "Close drawer content", traditionalChinese: "關閉抽屜內容", language: language)
+            return localized(english: "Close drawer content", traditionalChinese: "關閉抽屜", language: language)
         case .thinking:
             return localized(english: "Thinking", traditionalChinese: "思考中", language: language)
         case .answer:
             return localized(english: "Answer", traditionalChinese: "回答", language: language)
         case .couldntFinish:
-            return localized(english: "Couldn’t finish", traditionalChinese: "尚未完成", language: language)
+            return localized(english: "Couldn’t finish", traditionalChinese: "剛剛沒完成", language: language)
         case .commands:
             return localized(english: "Commands", traditionalChinese: "指令", language: language)
         case .loadingSubtitle:
             return localized(english: "You can cancel and keep using SAV-E.", traditionalChinese: "你可以取消，繼續使用 SAV-E。", language: language)
         case .answerSubtitle:
-            return localized(english: "Back returns to commands.", traditionalChinese: "返回會回到指令。", language: language)
+            return localized(english: "Back returns to commands.", traditionalChinese: "返回會回到指令列表。", language: language)
         case .placeDetailSubtitle:
-            return localized(english: "Back returns to your command drawer.", traditionalChinese: "返回會回到指令抽屜。", language: language)
+            return localized(english: "Back returns to your command drawer.", traditionalChinese: "返回會回到 SAV-E 抽屜。", language: language)
         case .errorSubtitle:
-            return localized(english: "Try again or return to commands.", traditionalChinese: "可以再試一次，或回到指令。", language: language)
+            return localized(english: "Try again or return to commands.", traditionalChinese: "你可以再試一次，或回到指令列表。", language: language)
         }
     }
 

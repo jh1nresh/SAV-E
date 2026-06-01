@@ -438,7 +438,7 @@ private struct PassportHero: View {
     private var visitedBadgeText: String {
         switch languageSettings.language {
         case .english: return "VISITED IS SELF-MARKED"
-        case .traditionalChinese: return "去過由你標記"
+        case .traditionalChinese: return "去過由你自己標記"
         }
     }
 }
@@ -620,35 +620,35 @@ private struct PassportStampSection: View {
     private var mapStampDetail: String {
         switch languageSettings.language {
         case .english: return "Saved places in your SAV-E map."
-        case .traditionalChinese: return "你存在 SAV-E 地圖裡的地點。"
+        case .traditionalChinese: return "你存進 SAV-E 地圖的地點。"
         }
     }
 
     private var visitedDetail: String {
         switch languageSettings.language {
         case .english: return "Places you marked visited in SAV-E."
-        case .traditionalChinese: return "你在 SAV-E 標記為去過的地點。"
+        case .traditionalChinese: return "你自己標記為去過的地點。"
         }
     }
 
     private var proofBackedDetail: String {
         switch languageSettings.language {
         case .english: return "Receipt, original photo, or location proof attached by you. Coming soon."
-        case .traditionalChinese: return "由你附上的收據、原始照片或定位證據。即將推出。"
+        case .traditionalChinese: return "你附上的收據、原始照片或定位證據。即將推出。"
         }
     }
 
     private var citiesDetail: String {
         switch languageSettings.language {
         case .english: return stats.usesSavedPlaces ? "Unique areas parsed from saved place addresses." : "Appears after SAV-E has saved place addresses."
-        case .traditionalChinese: return stats.usesSavedPlaces ? "從已存地點地址推導出的不重複城市/區域。" : "儲存帶地址的地點後會出現。"
+        case .traditionalChinese: return stats.usesSavedPlaces ? "從已存地點地址整理出的城市或區域。" : "存下帶地址的地點後就會出現。"
         }
     }
 
     private var waitingClueDetail: String {
         switch languageSettings.language {
         case .english: return "Source clues that still need a confirmed place."
-        case .traditionalChinese: return "還需要確認成具體地點的來源線索。"
+        case .traditionalChinese: return "還需要你確認成具體地點的來源線索。"
         }
     }
 }
@@ -751,28 +751,28 @@ private struct PassportCountingRulesPanel: View {
     private var title: String {
         switch languageSettings.language {
         case .english: return "How Passport counts stamps"
-        case .traditionalChinese: return "護照印章如何計算"
+        case .traditionalChinese: return "護照印章怎麼計算"
         }
     }
 
     private var cityRule: String {
         switch languageSettings.language {
         case .english: return "Cities come from the city or area in saved place addresses."
-        case .traditionalChinese: return "城市來自已存地點地址中的城市或區域。"
+        case .traditionalChinese: return "城市會從已存地點地址裡的城市或區域整理出來。"
         }
     }
 
     private var visitedRule: String {
         switch languageSettings.language {
         case .english: return "Visited counts places you marked visited in SAV-E."
-        case .traditionalChinese: return "去過數量來自你在 SAV-E 標記為去過的地點。"
+        case .traditionalChinese: return "去過數量只計算你自己標記為去過的地點。"
         }
     }
 
     private var proofRule: String {
         switch languageSettings.language {
         case .english: return "Proof-backed stays 0 until SAV-E supports user-attached receipt, original photo, or location evidence. Public map metadata and friend-saved places do not count."
-        case .traditionalChinese: return "有憑證數量會維持 0，直到 SAV-E 支援由你附上的收據、原始照片或定位證據。公開地圖資料與朋友儲存地點不算。"
+        case .traditionalChinese: return "有憑證會先維持 0，等 SAV-E 支援你附上的收據、原始照片或定位證據後才會計算。公開地圖資料和朋友存的地點不算。"
         }
     }
 }

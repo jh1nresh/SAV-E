@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @State private var selectedState: FirstRunDemoState = .clue
     var onComplete: () -> Void
 
@@ -12,19 +13,19 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 TabView(selection: $selectedState) {
                     ForEach(FirstRunDemoState.allCases, id: \.self) { state in
-                        FirstRunMascotPage(state: state)
+                        FirstRunMascotPage(state: state, language: languageSettings.language)
                             .tag(state)
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
 
                 VStack(spacing: 12) {
-                    FirstRunPageDots(selectedState: selectedState)
+                    FirstRunPageDots(selectedState: selectedState, language: languageSettings.language)
 
-                    FirstRunTrustNote()
+                    FirstRunTrustNote(language: languageSettings.language)
 
                     Button(action: onComplete) {
-                        Text("Add your first spots")
+                        Text(addSpotsTitle)
                             .font(.headline)
                             .fontWeight(.black)
                             .foregroundColor(.saveInk)
@@ -39,7 +40,7 @@ struct OnboardingView: View {
                     }
                     .padding(.horizontal, 24)
 
-                    Button("Skip for now") {
+                    Button(skipTitle) {
                         onComplete()
                     }
                     .font(.subheadline)
@@ -50,10 +51,25 @@ struct OnboardingView: View {
             }
         }
     }
+
+    private var addSpotsTitle: String {
+        switch languageSettings.language {
+        case .english: return "Add your first spots"
+        case .traditionalChinese: return "開始存第一個地點"
+        }
+    }
+
+    private var skipTitle: String {
+        switch languageSettings.language {
+        case .english: return "Skip for now"
+        case .traditionalChinese: return "先跳過"
+        }
+    }
 }
 
 private struct FirstRunPageDots: View {
     let selectedState: FirstRunDemoState
+    let language: AppLanguage
 
     var body: some View {
         HStack(spacing: 8) {
@@ -64,7 +80,16 @@ private struct FirstRunPageDots: View {
                     .animation(.easeInOut(duration: 0.18), value: selectedState)
             }
         }
-        .accessibilityLabel("Onboarding page \(selectedState.pageNumber) of \(FirstRunDemoState.allCases.count)")
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        switch language {
+        case .english:
+            return "Onboarding page \(selectedState.pageNumber) of \(FirstRunDemoState.allCases.count)"
+        case .traditionalChinese:
+            return "新手導覽第 \(selectedState.pageNumber) 頁，共 \(FirstRunDemoState.allCases.count) 頁"
+        }
     }
 }
 
@@ -76,25 +101,37 @@ private enum FirstRunDemoState: String, CaseIterable {
     case mapStamp
     case tripPlan
 
-    var pageHeadline: String {
-        switch self {
-        case .clue: return "Save places from anywhere."
-        case .candidate: return "Review uncertain finds."
-        case .mapStamp: return "Build your private map."
-        case .tripPlan: return "Ask before you decide."
+    func pageHeadline(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english): return "Save places from anywhere."
+        case (.clue, .traditionalChinese): return "從任何地方存地點。"
+        case (.candidate, .english): return "Review uncertain finds."
+        case (.candidate, .traditionalChinese): return "不確定的先確認。"
+        case (.mapStamp, .english): return "Build your private map."
+        case (.mapStamp, .traditionalChinese): return "累積你的私人地圖。"
+        case (.tripPlan, .english): return "Ask before you decide."
+        case (.tripPlan, .traditionalChinese): return "決定前先問 SAV-E。"
         }
     }
 
-    var pageSubtitle: String {
-        switch self {
-        case .clue:
+    func pageSubtitle(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english):
             return "Links, screenshots, notes, and map shares all start as one clean place memory."
-        case .candidate:
+        case (.clue, .traditionalChinese):
+            return "連結、截圖、筆記、地圖分享，都先變成乾淨的地點記憶。"
+        case (.candidate, .english):
             return "SAV-E keeps guesses out of your map until you confirm the real spot."
-        case .mapStamp:
+        case (.candidate, .traditionalChinese):
+            return "SAV-E 不會把猜測直接放進地圖，等你確認才儲存。"
+        case (.mapStamp, .english):
             return "Confirmed places become Map Stamps with why you saved them."
-        case .tripPlan:
+        case (.mapStamp, .traditionalChinese):
+            return "確認後變成地圖章，連同你當初想存的理由一起保留。"
+        case (.tripPlan, .english):
             return "Plan from the places you already cared about, not a generic list."
+        case (.tripPlan, .traditionalChinese):
+            return "用你真的想去過的地方規劃，不是又一份通用清單。"
         }
     }
 
@@ -102,21 +139,29 @@ private enum FirstRunDemoState: String, CaseIterable {
         Self.allCases.firstIndex(of: self)! + 1
     }
 
-    var visualTitle: String {
-        switch self {
-        case .clue: return "From a post"
-        case .candidate: return "Needs review"
-        case .mapStamp: return "Map Stamp saved"
-        case .tripPlan: return "Date night?"
+    func visualTitle(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english): return "From a post"
+        case (.clue, .traditionalChinese): return "從貼文來的線索"
+        case (.candidate, .english): return "Needs review"
+        case (.candidate, .traditionalChinese): return "待確認"
+        case (.mapStamp, .english): return "Map Stamp saved"
+        case (.mapStamp, .traditionalChinese): return "地圖章已儲存"
+        case (.tripPlan, .english): return "Date night?"
+        case (.tripPlan, .traditionalChinese): return "今晚約會？"
         }
     }
 
-    var visualSubtitle: String {
-        switch self {
-        case .clue: return "Memo catches the place clue."
-        case .candidate: return "Confirm before it hits your map."
-        case .mapStamp: return "Saved with source and reason."
-        case .tripPlan: return "Built from your Map Stamps."
+    func visualSubtitle(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english): return "Memo catches the place clue."
+        case (.clue, .traditionalChinese): return "Memo 先抓住地點線索。"
+        case (.candidate, .english): return "Confirm before it hits your map."
+        case (.candidate, .traditionalChinese): return "確認後才進你的地圖。"
+        case (.mapStamp, .english): return "Saved with source and reason."
+        case (.mapStamp, .traditionalChinese): return "來源和理由一起存好。"
+        case (.tripPlan, .english): return "Built from your Map Stamps."
+        case (.tripPlan, .traditionalChinese): return "用你的地圖章組出答案。"
         }
     }
 
@@ -129,12 +174,16 @@ private enum FirstRunDemoState: String, CaseIterable {
         }
     }
 
-    var detailText: String {
-        switch self {
-        case .clue: return "Tucked away from IG"
-        case .candidate: return "No fake pins"
-        case .mapStamp: return "Private food + travel"
-        case .tripPlan: return "3 saved spots nearby"
+    func detailText(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english): return "Tucked away from IG"
+        case (.clue, .traditionalChinese): return "從 IG 收進來"
+        case (.candidate, .english): return "No fake pins"
+        case (.candidate, .traditionalChinese): return "不亂放假地點"
+        case (.mapStamp, .english): return "Private food + travel"
+        case (.mapStamp, .traditionalChinese): return "私人的美食與旅行"
+        case (.tripPlan, .english): return "3 saved spots nearby"
+        case (.tripPlan, .traditionalChinese): return "附近 3 個已存地點"
         }
     }
 
@@ -150,6 +199,7 @@ private enum FirstRunDemoState: String, CaseIterable {
 
 private struct FirstRunMascotPage: View {
     let state: FirstRunDemoState
+    let language: AppLanguage
 
     var body: some View {
         VStack(spacing: 22) {
@@ -157,17 +207,17 @@ private struct FirstRunMascotPage: View {
 
             MemoMascotMark(size: 72, framed: false)
 
-            FirstRunVisualCard(state: state)
+            FirstRunVisualCard(state: state, language: language)
 
             VStack(spacing: 8) {
-                Text(state.pageHeadline)
+                Text(state.pageHeadline(language: language))
                     .font(.title2)
                     .fontWeight(.black)
                     .foregroundColor(.saveInk)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(state.pageSubtitle)
+                Text(state.pageSubtitle(language: language))
                     .font(.subheadline)
                     .lineSpacing(3)
                     .foregroundColor(.saveMutedText)
@@ -184,6 +234,7 @@ private struct FirstRunMascotPage: View {
 
 private struct FirstRunVisualCard: View {
     let state: FirstRunDemoState
+    let language: AppLanguage
 
     var body: some View {
         GeometryReader { geometry in
@@ -231,13 +282,13 @@ private struct FirstRunVisualCard: View {
                     .padding(.horizontal, 18)
 
                     VStack(spacing: 6) {
-                        Text(state.visualTitle)
+                        Text(state.visualTitle(language: language))
                             .font(.title3)
                             .fontWeight(.black)
                             .foregroundColor(.saveInk)
                             .multilineTextAlignment(.center)
 
-                        Text(state.visualSubtitle)
+                        Text(state.visualSubtitle(language: language))
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(.saveMutedText)
@@ -246,7 +297,7 @@ private struct FirstRunVisualCard: View {
                     }
                     .padding(.horizontal, 22)
 
-                    Text(state.detailText)
+                    Text(state.detailText(language: language))
                         .font(.caption)
                         .fontWeight(.black)
                         .foregroundColor(.saveInk)
@@ -268,7 +319,7 @@ private struct FirstRunVisualCard: View {
     }
 
     private var accessibilityDescription: String {
-        "\(state.visualTitle). \(state.visualSubtitle). \(state.detailText)."
+        "\(state.visualTitle(language: language)). \(state.visualSubtitle(language: language)). \(state.detailText(language: language))."
     }
 
     @ViewBuilder
@@ -293,8 +344,8 @@ private struct FirstRunVisualCard: View {
             VStack {
                 Spacer()
                 HStack(spacing: 10) {
-                    pill("Reject", tint: .saveNotebookPage)
-                    pill("Confirm", tint: .saveHoney)
+                    pill(rejectTitle, tint: .saveNotebookPage)
+                    pill(confirmTitle, tint: .saveHoney)
                 }
             }
             .padding(.bottom, 16)
@@ -312,7 +363,7 @@ private struct FirstRunVisualCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 pill("Speranza", tint: .saveHoney)
                 pill("Alma", tint: .saveMint)
-                pill("Dessert nearby", tint: .savePink)
+                pill(dessertTitle, tint: .savePink)
             }
             .offset(y: 46)
         }
@@ -332,16 +383,39 @@ private struct FirstRunVisualCard: View {
             )
             .clipShape(Capsule())
     }
+
+    private var rejectTitle: String {
+        switch language {
+        case .english: return "Reject"
+        case .traditionalChinese: return "略過"
+        }
+    }
+
+    private var confirmTitle: String {
+        switch language {
+        case .english: return "Confirm"
+        case .traditionalChinese: return "確認"
+        }
+    }
+
+    private var dessertTitle: String {
+        switch language {
+        case .english: return "Dessert nearby"
+        case .traditionalChinese: return "附近甜點"
+        }
+    }
 }
 
 private struct FirstRunTrustNote: View {
+    let language: AppLanguage
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
                 .font(.caption.weight(.black))
                 .foregroundColor(.saveInk)
 
-            Text("Private food + travel memory, not public reviews.")
+            Text(text)
                 .font(.footnote)
                 .fontWeight(.bold)
                 .foregroundColor(.saveMutedText)
@@ -358,8 +432,16 @@ private struct FirstRunTrustNote: View {
         .clipShape(Capsule())
         .padding(.horizontal, 24)
     }
+
+    private var text: String {
+        switch language {
+        case .english: return "Private food + travel memory, not public reviews."
+        case .traditionalChinese: return "這是私人的美食與旅行記憶，不是公開評論。"
+        }
+    }
 }
 
 #Preview {
     OnboardingView(onComplete: {})
+        .environmentObject(AppLanguageSettings())
 }

@@ -47,11 +47,11 @@ struct SaveApp: App {
                 }
             } message: {
                 if let openedReferral {
-                    Text("\(openedReferral.displayName)'s starter map pack is ready. SAV-E will finish the follow after install/open and unlock your first AI itinerary from their places.")
+                    Text(referralReadyMessage(openedReferral))
                 } else if let openedPlace {
-                    Text("\(openedPlace.name) is ready. Save it to your SAV-E or open Maps from the place card.")
+                    Text(placeReadyMessage(openedPlace))
                 } else if let openedList {
-                    Text("\(openedList.title) joined as \(openedList.viewerRole.displayName.lowercased()). \(openedList.items.count) places are ready in Lists.")
+                    Text(listReadyMessage(openedList))
                 } else if let openedTrip {
                     Text(String(
                         format: languageSettings.text(.tripLinkMessage),
@@ -159,9 +159,52 @@ struct SaveApp: App {
     }
 
     private var linkAlertTitle: String {
-        if openedReferral != nil { return "Referral ready" }
-        if openedPlace != nil { return "SAV-E place ready" }
-        return openedList == nil ? languageSettings.text(.tripLinkReady) : "SAV-E list ready"
+        if openedReferral != nil {
+            switch languageSettings.language {
+            case .english: return "Referral ready"
+            case .traditionalChinese: return "推薦連結準備好了"
+            }
+        }
+        if openedPlace != nil {
+            switch languageSettings.language {
+            case .english: return "SAV-E place ready"
+            case .traditionalChinese: return "SAV-E 地點準備好了"
+            }
+        }
+        if openedList != nil {
+            switch languageSettings.language {
+            case .english: return "SAV-E list ready"
+            case .traditionalChinese: return "SAV-E 清單準備好了"
+            }
+        }
+        return languageSettings.text(.tripLinkReady)
+    }
+
+    private func referralReadyMessage(_ profile: SaveReferralProfile) -> String {
+        switch languageSettings.language {
+        case .english:
+            return "\(profile.displayName)'s starter map pack is ready. SAV-E will finish the follow after install/open and unlock your first AI itinerary from their places."
+        case .traditionalChinese:
+            return "\(profile.displayName) 的入門地圖包準備好了。安裝或打開後，SAV-E 會完成追蹤，並用這些地點解鎖你的第一份 AI 行程。"
+        }
+    }
+
+    private func placeReadyMessage(_ place: SharedPlaceData) -> String {
+        switch languageSettings.language {
+        case .english:
+            return "\(place.name) is ready. Save it to your SAV-E or open Maps from the place card."
+        case .traditionalChinese:
+            return "\(place.name) 已準備好。你可以存進 SAV-E，或從地點卡打開地圖。"
+        }
+    }
+
+    private func listReadyMessage(_ list: SaveCollaborativeList) -> String {
+        switch languageSettings.language {
+        case .english:
+            return "\(list.title) joined as \(list.viewerRole.displayName.lowercased()). \(list.items.count) places are ready in Lists."
+        case .traditionalChinese:
+            return "你已加入「\(list.title)」，目前角色是 \(list.viewerRole.displayName.lowercased())。清單裡有 \(list.items.count) 個地點。"
+        }
     }
 
     private func isPlaceLink(_ url: URL) -> Bool {
@@ -192,11 +235,13 @@ struct AuthLoadingView: View {
     @State private var isBreathing = false
     @State private var activeStep = 0
 
-    private let loadingSteps: [SaveOpeningStep] = [
-        SaveOpeningStep(icon: "link", label: "Clues", tint: .saveSky),
-        SaveOpeningStep(icon: "checklist", label: "Review", tint: .saveHoney),
-        SaveOpeningStep(icon: "mappin.and.ellipse", label: "Map", tint: .saveMint)
-    ]
+    private var loadingSteps: [SaveOpeningStep] {
+        [
+            SaveOpeningStep(icon: "link", label: openingStepClues, tint: .saveSky),
+            SaveOpeningStep(icon: "checklist", label: languageSettings.text(.review), tint: .saveHoney),
+            SaveOpeningStep(icon: "mappin.and.ellipse", label: openingStepMap, tint: .saveMint)
+        ]
+    }
 
     var body: some View {
         ZStack {
@@ -235,13 +280,28 @@ struct AuthLoadingView: View {
             }
         }
     }
+
+    private var openingStepClues: String {
+        switch languageSettings.language {
+        case .english: return "Clues"
+        case .traditionalChinese: return "線索"
+        }
+    }
+
+    private var openingStepMap: String {
+        switch languageSettings.language {
+        case .english: return "Map"
+        case .traditionalChinese: return "地圖"
+        }
+    }
 }
 
 private struct SaveOpeningStep: Identifiable {
-    let id = UUID()
     let icon: String
     let label: String
     let tint: Color
+
+    var id: String { icon }
 }
 
 private struct SaveOpeningLogoMark: View {
