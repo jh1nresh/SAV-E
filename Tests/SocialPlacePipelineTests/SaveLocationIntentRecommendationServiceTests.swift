@@ -178,6 +178,8 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Bright Coffee Bar"])
         XCTAssertEqual(response.fromYourSave.results.first?.userState.displayName, "Saved")
         XCTAssertTrue(response.assistantMessage?.localizedCaseInsensitiveContains("saved") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("Bright Coffee Bar") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("Next:") == true)
         XCTAssertFalse(response.newRecommendations.showsNearbySearchAction)
         XCTAssertFalse(response.shouldAutoSearchNearbyUnsavedCandidates)
     }

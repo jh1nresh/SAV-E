@@ -235,18 +235,20 @@ struct SaveLocationIntentRecommendationService {
     ) -> SaveSearchResponse {
         let mapResults = searchResults(for: mapCandidates)
         let canSearchNearby = showFallbackAction && mapResults.isEmpty
+        let nearbyResults = searchResults(for: nearby, intent: intent, currentLocation: currentLocation, isNearby: true, tasteProfile: tasteProfile)
+        let reviewResults = searchResults(for: reviewCandidates, currentLocation: currentLocation)
+        let farResults = searchResults(for: Array(far.prefix(5)), intent: intent, currentLocation: currentLocation, isNearby: false, tasteProfile: tasteProfile)
         let nearbySection = SaveSearchSection(
                 id: "from-your-save-nearby",
                 label: "FROM YOUR SAV-E",
                 title: "From your SAV-E nearby",
                 subtitle: message,
-                results: searchResults(for: nearby, intent: intent, currentLocation: currentLocation, isNearby: true, tasteProfile: tasteProfile),
+                results: nearbyResults,
                 emptyMessage: nearby.isEmpty ? message : nil,
                 showsNearbySearchAction: canSearchNearby
         )
 
         var additional: [SaveSearchSection] = []
-        let reviewResults = searchResults(for: reviewCandidates, currentLocation: currentLocation)
         if !reviewResults.isEmpty {
             additional.append(SaveSearchSection(
                 id: "review-candidates",
@@ -264,7 +266,7 @@ struct SaveLocationIntentRecommendationService {
                 label: "SAVED, FAR",
                 title: "Saved but not nearby",
                 subtitle: "Same category, outside the current nearby radius. Not used as a primary recommendation.",
-                results: searchResults(for: Array(far.prefix(5)), intent: intent, currentLocation: currentLocation, isNearby: false, tasteProfile: tasteProfile),
+                results: farResults,
                 emptyMessage: nil
             ))
         }
@@ -273,9 +275,9 @@ struct SaveLocationIntentRecommendationService {
             query: query,
             assistantMessage: assistantMessage(
                 categoryLabel: categoryLabel(for: intent),
-                savedCount: nearby.count,
-                reviewCount: reviewResults.count,
-                unsavedCount: mapResults.count,
+                savedResults: nearbyResults,
+                reviewResults: reviewResults,
+                unsavedResults: mapResults,
                 fallbackAvailable: canSearchNearby
             ),
             fromYourSave: nearbySection,
@@ -436,30 +438,101 @@ struct SaveLocationIntentRecommendationService {
 
     private func assistantMessage(
         categoryLabel: String,
-        savedCount: Int,
-        reviewCount: Int,
-        unsavedCount: Int,
+        savedResults: [SaveSearchResult],
+        reviewResults: [SaveSearchResult],
+        unsavedResults: [SaveSearchResult],
         fallbackAvailable: Bool
     ) -> String {
+        if let top = savedResults.first {
+            return agentAnswer(
+                lead: "我會先推 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "It is already a Saved Map Stamp in your place memory."),
+                caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: unsavedResults))If you want, tell me budget, cuisine, or quick vs sit-down and I’ll narrow it."
+            )
+        }
+
+        if let top = reviewResults.first {
+            return agentAnswer(
+                lead: "我不會直接亂推一個未確認地點；先看 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "It is waiting in Review, so SAV-E has a clue but still needs confirmation."),
+                caveat: "Confirm it into a Map Stamp, or add a clue before trusting it as the recommendation."
+            )
+        }
+
+        if let top = unsavedResults.first {
+            return agentAnswer(
+                lead: "你的 SAV-E memory 裡還沒有 saved nearby \(categoryLabel)，但 public nearby 裡我會先看 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "It is a nearby public result, not saved memory yet."),
+                caveat: "Tell me budget or food mood, or save it first so SAV-E can remember whether you liked it later."
+            )
+        }
+
         var parts: [String] = []
-        if savedCount > 0 {
-            parts.append("\(savedCount) saved Map Stamp\(savedCount == 1 ? "" : "s")")
+        if !savedResults.isEmpty {
+            parts.append("\(savedResults.count) saved Map Stamp\(savedResults.count == 1 ? "" : "s")")
         }
-        if reviewCount > 0 {
-            parts.append("\(reviewCount) Review candidate\(reviewCount == 1 ? "" : "s")")
+        if !reviewResults.isEmpty {
+            parts.append("\(reviewResults.count) Review candidate\(reviewResults.count == 1 ? "" : "s")")
         }
-        if unsavedCount > 0 {
-            parts.append("\(unsavedCount) unsaved nearby option\(unsavedCount == 1 ? "" : "s")")
+        if !unsavedResults.isEmpty {
+            parts.append("\(unsavedResults.count) unsaved nearby option\(unsavedResults.count == 1 ? "" : "s")")
         }
         if parts.isEmpty {
             return fallbackAvailable
                 ? "I do not see a saved nearby \(categoryLabel) in your memory yet. I can search public discovery next, and those places stay unsaved until you choose one."
                 : "I do not see a Saved nearby \(categoryLabel) yet."
         }
-        if savedCount > 0 {
-            return "Memory first: I'd start with the saved nearby \(categoryLabel) below. I found \(parts.joined(separator: ", ")); Review candidates and public discovery stay labeled separately."
-        }
         return "I did not find a saved nearby \(categoryLabel) in your memory yet. I found \(parts.joined(separator: ", ")); Review candidates and public discovery stay separate so you can choose what to save."
+    }
+
+    private func agentAnswer(lead: String, reason: String, caveat: String) -> String {
+        "\(lead)\n\nWhy: \(reason)\n\nNext: \(caveat)"
+    }
+
+    private func supportingSummary(reviewResults: [SaveSearchResult], unsavedResults: [SaveSearchResult]) -> String {
+        var parts: [String] = []
+        if !reviewResults.isEmpty {
+            parts.append("\(reviewResults.count) Review candidate\(reviewResults.count == 1 ? "" : "s")")
+        }
+        if !unsavedResults.isEmpty {
+            parts.append("\(unsavedResults.count) unsaved nearby option\(unsavedResults.count == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? "" : "I also found \(parts.joined(separator: ", ")); they stay separate. "
+    }
+
+    private func reasonLine(for result: SaveSearchResult, fallback: String) -> String {
+        var reasons: [String] = []
+        switch result.objectType {
+        case .savedPlace, .triedMemory:
+            reasons.append("Saved Map Stamp")
+        case .pendingCandidate, .sourceOnlyClue:
+            reasons.append("Review Candidate")
+        case .mapVisibleUnsavedPlace, .newRecommendation:
+            reasons.append("unsaved public result")
+        case .review:
+            reasons.append("private review")
+        case .tripStop:
+            reasons.append("trip stop")
+        }
+        if let distanceLabel = result.distanceLabel {
+            reasons.append(distanceLabel)
+        }
+        if let rating = result.rating {
+            reasons.append(String(format: "%.1f rating", rating))
+        }
+        if let reviewCount = result.reviewCount {
+            reasons.append("\(reviewCount) reviews")
+        }
+        reasons.append(contentsOf: result.evidence.prefix(2))
+        let cleaned = unique(reasons
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty })
+        return cleaned.isEmpty ? fallback : cleaned.joined(separator: " · ")
+    }
+
+    private func unique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
     }
 
     private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool, tasteProfile: SaveTasteProfile) -> [String] {

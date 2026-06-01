@@ -245,7 +245,7 @@ final class SaveAIService {
         CRITICAL: Respond ONLY with a valid JSON object. No markdown. No text outside the JSON.
 
         BEHAVIOR:
-        - On the FIRST request, take action immediately. Generate itineraries, lists, recommendations, or navigation using the Map Stamps. Do NOT ask clarifying questions on the first message.
+        - On the FIRST request, take action immediately. Generate itineraries, lists, recommendations, or navigation using the Map Stamps. For recommendation requests, give one best pick first, explain why, then ask at most one lightweight follow-up such as budget, cuisine, or quick vs sit-down.
         - On FOLLOW-UP messages, refine the previous result. For example: "add more food spots", "swap day 1 and 2", "make it 3 days instead". Build on the previous JSON response.
         - When refining, output the COMPLETE updated JSON (not just the diff).
         - Do NOT assume the user is in San Francisco or any default city. Infer the trip region only from the user's message plus Map Stamp names, addresses, latitudes, and longitudes.
