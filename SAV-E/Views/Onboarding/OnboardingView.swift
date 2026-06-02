@@ -2,8 +2,12 @@ import SwiftUI
 
 struct OnboardingView: View {
     @EnvironmentObject private var languageSettings: AppLanguageSettings
-    @State private var selectedState: FirstRunDemoState = .clue
+    @State private var stage: ProofStage = .clue
+    @State private var clueText = ""
+    @State private var selectedTags: Set<ProofIntentTag> = []
     var onComplete: () -> Void
+
+    private var language: AppLanguage { languageSettings.language }
 
     var body: some View {
         ZStack {
@@ -11,397 +15,613 @@ struct OnboardingView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                TabView(selection: $selectedState) {
-                    ForEach(FirstRunDemoState.allCases, id: \.self) { state in
-                        FirstRunMascotPage(state: state, language: languageSettings.language)
-                            .tag(state)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        header
+                        ProofProgressRail(stage: stage, language: language)
+                        ProofStageCard(
+                            stage: stage,
+                            clueText: $clueText,
+                            selectedTags: $selectedTags,
+                            language: language,
+                            onUseSample: useSampleClue
+                        )
                     }
+                    .padding(.horizontal, 22)
+                    .padding(.top, 28)
+                    .padding(.bottom, 18)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
 
-                VStack(spacing: 12) {
-                    FirstRunPageDots(selectedState: selectedState, language: languageSettings.language)
-
-                    FirstRunTrustNote(language: languageSettings.language)
-
-                    Button(action: onComplete) {
-                        Text(addSpotsTitle)
-                            .font(.headline)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.saveHoney)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    }
-                    .padding(.horizontal, 24)
-
-                    Button(skipTitle) {
-                        onComplete()
-                    }
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.saveMutedText)
-                }
-                .padding(.bottom, 22)
+                bottomActions
             }
         }
     }
 
-    private var addSpotsTitle: String {
-        switch languageSettings.language {
-        case .english: return "Add your first spots"
-        case .traditionalChinese: return "開始存第一個地點"
+    private var header: some View {
+        VStack(spacing: 12) {
+            MemoMascotMark(size: 70, framed: false)
+
+            VStack(spacing: 8) {
+                Text(localized(
+                    english: "Set up your place memory",
+                    traditionalChinese: "設定你的地點記憶"
+                ))
+                .font(.title2)
+                .fontWeight(.black)
+                .foregroundColor(.saveInk)
+                .multilineTextAlignment(.center)
+
+                Text(localized(
+                    english: "Start with one real post, map link, screenshot, or message. SAV-E should prove it can help before asking preferences.",
+                    traditionalChinese: "先用一個真的貼文、地圖連結、截圖或訊息。SAV-E 要先證明有用，再問偏好。"
+                ))
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .lineSpacing(3)
+                .foregroundColor(.saveMutedText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var bottomActions: some View {
+        VStack(spacing: 10) {
+            Button(action: advance) {
+                Text(primaryActionTitle)
+                    .font(.headline)
+                    .fontWeight(.black)
+                    .foregroundColor(.saveInk)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(primaryActionFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.saveNotebookLine, lineWidth: 2)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .disabled(stage == .clue && trimmedClue.isEmpty)
+            .opacity(stage == .clue && trimmedClue.isEmpty ? 0.58 : 1)
+            .padding(.horizontal, 24)
+
+            Button(skipTitle) {
+                onComplete()
+            }
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(.saveMutedText)
+        }
+        .padding(.bottom, 22)
+        .background(Color.saveNotebookPage.opacity(0.72))
+    }
+
+    private var primaryActionTitle: String {
+        switch stage {
+        case .clue:
+            return localized(english: "See what SAV-E finds", traditionalChinese: "看看 SAV-E 找到什麼")
+        case .candidate:
+            return localized(english: "Confirm Map Stamp", traditionalChinese: "確認成地圖章")
+        case .mapStamp:
+            return localized(english: "Ask from this memory", traditionalChinese: "用這個記憶問 SAV-E")
+        case .ask:
+            return localized(english: "Add why I saved it", traditionalChinese: "標記我為什麼想存")
+        case .tag:
+            return localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
+        }
+    }
+
+    private var primaryActionFill: Color {
+        switch stage {
+        case .clue, .candidate: return .saveHoney
+        case .mapStamp: return .saveMint
+        case .ask, .tag: return .saveSky
         }
     }
 
     private var skipTitle: String {
-        switch languageSettings.language {
-        case .english: return "Skip for now"
-        case .traditionalChinese: return "先跳過"
+        localized(english: "Skip for now", traditionalChinese: "先跳過")
+    }
+
+    private var trimmedClue: String {
+        clueText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func advance() {
+        switch stage {
+        case .clue:
+            guard !trimmedClue.isEmpty else { return }
+            stage = .candidate
+        case .candidate:
+            stage = .mapStamp
+        case .mapStamp:
+            stage = .ask
+        case .ask:
+            stage = .tag
+        case .tag:
+            onComplete()
+        }
+    }
+
+    private func useSampleClue() {
+        clueText = localized(
+            english: "Friend sent: try Utopia Euro Caffe near Irvine for a quiet coffee date",
+            traditionalChinese: "朋友傳：Irvine 附近的 Utopia Euro Caffe 很適合安靜咖啡約會"
+        )
+    }
+
+    private func localized(english: String, traditionalChinese: String) -> String {
+        switch language {
+        case .english: return english
+        case .traditionalChinese: return traditionalChinese
         }
     }
 }
 
-private struct FirstRunPageDots: View {
-    let selectedState: FirstRunDemoState
+private enum ProofStage: Int, CaseIterable {
+    case clue
+    case candidate
+    case mapStamp
+    case ask
+    case tag
+
+    func title(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.clue, .english): return "Clue"
+        case (.clue, .traditionalChinese): return "線索"
+        case (.candidate, .english): return "Review"
+        case (.candidate, .traditionalChinese): return "確認"
+        case (.mapStamp, .english): return "Stamp"
+        case (.mapStamp, .traditionalChinese): return "地圖章"
+        case (.ask, .english): return "Ask"
+        case (.ask, .traditionalChinese): return "提問"
+        case (.tag, .english): return "Reason"
+        case (.tag, .traditionalChinese): return "理由"
+        }
+    }
+}
+
+private enum ProofIntentTag: String, CaseIterable {
+    case coffee
+    case dateNight
+    case cheapEats
+    case quiet
+    case travel
+    case friends
+
+    func title(language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.coffee, .english): return "Coffee"
+        case (.coffee, .traditionalChinese): return "咖啡"
+        case (.dateNight, .english): return "Date night"
+        case (.dateNight, .traditionalChinese): return "約會"
+        case (.cheapEats, .english): return "Cheap eats"
+        case (.cheapEats, .traditionalChinese): return "平價美食"
+        case (.quiet, .english): return "Quiet spot"
+        case (.quiet, .traditionalChinese): return "安靜地點"
+        case (.travel, .english): return "Trip idea"
+        case (.travel, .traditionalChinese): return "旅行靈感"
+        case (.friends, .english): return "Friend sent"
+        case (.friends, .traditionalChinese): return "朋友推薦"
+        }
+    }
+}
+
+private struct ProofProgressRail: View {
+    let stage: ProofStage
     let language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(FirstRunDemoState.allCases, id: \.self) { state in
-                Capsule()
-                    .fill(state == selectedState ? Color.saveInk : Color.saveNotebookLine.opacity(0.45))
-                    .frame(width: state == selectedState ? 22 : 7, height: 7)
-                    .animation(.easeInOut(duration: 0.18), value: selectedState)
+        HStack(spacing: 0) {
+            ForEach(ProofStage.allCases, id: \.self) { item in
+                VStack(spacing: 7) {
+                    Circle()
+                        .fill(fill(for: item))
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.saveNotebookLine.opacity(0.72), lineWidth: 1)
+                        )
+                        .overlay {
+                            if item.rawValue < stage.rawValue {
+                                Image(systemName: "checkmark")
+                                    .font(.caption2.weight(.black))
+                                    .foregroundColor(.saveInk)
+                            }
+                        }
+
+                    Text(item.title(language: language))
+                        .font(.caption2)
+                        .fontWeight(.black)
+                        .foregroundColor(item.rawValue <= stage.rawValue ? .saveInk : .saveMutedText.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+
+                if item != ProofStage.allCases.last {
+                    Rectangle()
+                        .fill(item.rawValue < stage.rawValue ? Color.saveHoney : Color.saveNotebookLine.opacity(0.34))
+                        .frame(height: 2)
+                        .padding(.horizontal, 5)
+                        .offset(y: -13)
+                }
             }
         }
+        .padding(.horizontal, 2)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func fill(for item: ProofStage) -> Color {
+        if item.rawValue < stage.rawValue { return .saveHoney }
+        if item == stage { return .saveSky }
+        return .saveNotebookPage
     }
 
     private var accessibilityLabel: String {
         switch language {
         case .english:
-            return "Onboarding page \(selectedState.pageNumber) of \(FirstRunDemoState.allCases.count)"
+            return "Onboarding step \(stage.rawValue + 1) of \(ProofStage.allCases.count)"
         case .traditionalChinese:
-            return "新手導覽第 \(selectedState.pageNumber) 頁，共 \(FirstRunDemoState.allCases.count) 頁"
+            return "新手設定第 \(stage.rawValue + 1) 步，共 \(ProofStage.allCases.count) 步"
         }
     }
 }
 
-// MARK: - First Run Demo
-
-private enum FirstRunDemoState: String, CaseIterable {
-    case clue
-    case candidate
-    case mapStamp
-    case tripPlan
-
-    func pageHeadline(language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.clue, .english): return "Save places from anywhere."
-        case (.clue, .traditionalChinese): return "從任何地方存地點。"
-        case (.candidate, .english): return "Review uncertain finds."
-        case (.candidate, .traditionalChinese): return "不確定的先確認。"
-        case (.mapStamp, .english): return "Build your private map."
-        case (.mapStamp, .traditionalChinese): return "累積你的私人地圖。"
-        case (.tripPlan, .english): return "Ask before you decide."
-        case (.tripPlan, .traditionalChinese): return "決定前先問 SAV-E。"
-        }
-    }
-
-    func pageSubtitle(language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.clue, .english):
-            return "Links, screenshots, notes, and map shares all start as one clean place memory."
-        case (.clue, .traditionalChinese):
-            return "連結、截圖、筆記、地圖分享，都先變成乾淨的地點記憶。"
-        case (.candidate, .english):
-            return "SAV-E keeps guesses out of your map until you confirm the real spot."
-        case (.candidate, .traditionalChinese):
-            return "SAV-E 不會把猜測直接放進地圖，等你確認才儲存。"
-        case (.mapStamp, .english):
-            return "Confirmed places become Map Stamps with why you saved them."
-        case (.mapStamp, .traditionalChinese):
-            return "確認後變成地圖章，連同你當初想存的理由一起保留。"
-        case (.tripPlan, .english):
-            return "Plan from the places you already cared about, not a generic list."
-        case (.tripPlan, .traditionalChinese):
-            return "用你真的想去過的地方規劃，不是又一份通用清單。"
-        }
-    }
-
-    var pageNumber: Int {
-        Self.allCases.firstIndex(of: self)! + 1
-    }
-
-    func visualTitle(language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.clue, .english): return "From a post"
-        case (.clue, .traditionalChinese): return "從貼文來的線索"
-        case (.candidate, .english): return "Needs review"
-        case (.candidate, .traditionalChinese): return "待確認"
-        case (.mapStamp, .english): return "Map Stamp saved"
-        case (.mapStamp, .traditionalChinese): return "地圖章已儲存"
-        case (.tripPlan, .english): return "Date night?"
-        case (.tripPlan, .traditionalChinese): return "今晚約會？"
-        }
-    }
-
-    func visualSubtitle(language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.clue, .english): return "Memo catches the place clue."
-        case (.clue, .traditionalChinese): return "Memo 先抓住地點線索。"
-        case (.candidate, .english): return "Confirm before it hits your map."
-        case (.candidate, .traditionalChinese): return "確認後才進你的地圖。"
-        case (.mapStamp, .english): return "Saved with source and reason."
-        case (.mapStamp, .traditionalChinese): return "來源和理由一起存好。"
-        case (.tripPlan, .english): return "Built from your Map Stamps."
-        case (.tripPlan, .traditionalChinese): return "用你的地圖章組出答案。"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .clue: return "square.and.arrow.down"
-        case .candidate: return "checkmark.seal"
-        case .mapStamp: return "mappin.and.ellipse"
-        case .tripPlan: return "sparkles"
-        }
-    }
-
-    func detailText(language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.clue, .english): return "Tucked away from IG"
-        case (.clue, .traditionalChinese): return "從 IG 收進來"
-        case (.candidate, .english): return "No fake pins"
-        case (.candidate, .traditionalChinese): return "不亂放假地點"
-        case (.mapStamp, .english): return "Private food + travel"
-        case (.mapStamp, .traditionalChinese): return "私人的美食與旅行"
-        case (.tripPlan, .english): return "3 saved spots nearby"
-        case (.tripPlan, .traditionalChinese): return "附近 3 個已存地點"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .clue: return .saveHoney
-        case .candidate: return .saveSky
-        case .mapStamp: return .saveMint
-        case .tripPlan: return .savePink
-        }
-    }
-}
-
-private struct FirstRunMascotPage: View {
-    let state: FirstRunDemoState
+private struct ProofStageCard: View {
+    let stage: ProofStage
+    @Binding var clueText: String
+    @Binding var selectedTags: Set<ProofIntentTag>
     let language: AppLanguage
+    let onUseSample: () -> Void
 
     var body: some View {
-        VStack(spacing: 22) {
-            Spacer(minLength: 10)
+        VStack(alignment: .leading, spacing: 18) {
+            stageHeader
+            stageContent
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.saveNotebookPage.opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .shadow(color: Color.saveInk.opacity(0.08), radius: 16, x: 0, y: 10)
+    }
 
-            MemoMascotMark(size: 72, framed: false)
+    private var stageHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.title2.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 44, height: 44)
+                .background(headerTint.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            FirstRunVisualCard(state: state, language: language)
-
-            VStack(spacing: 8) {
-                Text(state.pageHeadline(language: language))
-                    .font(.title2)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.title3)
                     .fontWeight(.black)
                     .foregroundColor(.saveInk)
-                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text(state.pageSubtitle(language: language))
+                Text(subtitle)
                     .font(.subheadline)
-                    .lineSpacing(3)
+                    .fontWeight(.semibold)
                     .foregroundColor(.saveMutedText)
-                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 30)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct FirstRunVisualCard: View {
-    let state: FirstRunDemoState
-    let language: AppLanguage
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .fill(Color.saveNotebookPage.opacity(0.98))
-                    .shadow(color: Color.saveInk.opacity(0.08), radius: 16, x: 0, y: 10)
-
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-
-                VStack(spacing: 18) {
-                    HStack {
-                        Circle()
-                            .fill(Color.saveInk)
-                            .frame(width: 8, height: 8)
-
-                        Spacer()
-
-                        Text("SAV-E")
-                            .font(.caption)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-
-                        Spacer()
-
-                        Circle()
-                            .fill(state.tint)
-                            .frame(width: 8, height: 8)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
-
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(state.tint.opacity(0.4))
-                            .frame(height: 148)
-
-                        Image(systemName: state.icon)
-                            .font(.system(size: 54, weight: .black))
-                            .foregroundColor(.saveInk)
-
-                        visualAccent
-                    }
-                    .padding(.horizontal, 18)
-
-                    VStack(spacing: 6) {
-                        Text(state.visualTitle(language: language))
-                            .font(.title3)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-                            .multilineTextAlignment(.center)
-
-                        Text(state.visualSubtitle(language: language))
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.saveMutedText)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 22)
-
-                    Text(state.detailText(language: language))
-                        .font(.caption)
-                        .fontWeight(.black)
-                        .foregroundColor(.saveInk)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.saveNotebookPage)
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
-                        .clipShape(Capsule())
-
-                    Spacer(minLength: 10)
-                }
-            }
-            .frame(width: min(264, max(0, geometry.size.width - 48)), height: 326)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(height: 326)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityDescription)
-    }
-
-    private var accessibilityDescription: String {
-        "\(state.visualTitle(language: language)). \(state.visualSubtitle(language: language)). \(state.detailText(language: language))."
     }
 
     @ViewBuilder
-    private var visualAccent: some View {
-        switch state {
+    private var stageContent: some View {
+        switch stage {
         case .clue:
-            VStack {
-                HStack {
-                    Text("@friend")
-                    Spacer()
-                }
-                Spacer()
-                HStack {
-                    Spacer()
-                    Text("save this")
-                }
-            }
-            .font(.caption2.weight(.black))
-            .foregroundColor(.saveCocoa)
-            .padding(18)
+            clueInput
         case .candidate:
-            VStack {
-                Spacer()
-                HStack(spacing: 10) {
-                    pill(rejectTitle, tint: .saveNotebookPage)
-                    pill(confirmTitle, tint: .saveHoney)
-                }
-            }
-            .padding(.bottom, 16)
+            candidateProof
         case .mapStamp:
-            ZStack {
-                ForEach(0..<3) { index in
-                    Circle()
-                        .fill(index == 1 ? Color.saveHoney : Color.saveNotebookPage)
-                        .frame(width: 28, height: 28)
-                        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
-                        .offset(x: CGFloat(index - 1) * 44, y: index == 1 ? -28 : 26)
-                }
-            }
-        case .tripPlan:
-            VStack(alignment: .leading, spacing: 8) {
-                pill("Speranza", tint: .saveHoney)
-                pill("Alma", tint: .saveMint)
-                pill(dessertTitle, tint: .savePink)
-            }
-            .offset(y: 46)
+            mapStampProof
+        case .ask:
+            askProof
+        case .tag:
+            tagProof
         }
     }
 
-    private func pill(_ text: String, tint: Color) -> some View {
+    private var clueInput: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.42))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1)
+                    )
+
+                TextEditor(text: $clueText)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.saveInk)
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .frame(minHeight: 116)
+
+                if clueText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(placeholder)
+                        .font(.body.weight(.semibold))
+                        .foregroundColor(.saveMutedText.opacity(0.72))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 18)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(minHeight: 116)
+
+            Button(action: onUseSample) {
+                Label(sampleTitle, systemImage: "sparkles")
+                    .font(.subheadline.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.saveHoney.opacity(0.48))
+                    .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.58), lineWidth: 1))
+                    .clipShape(Capsule())
+            }
+        }
+    }
+
+    private var candidateProof: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ProofLine(
+                label: localized(english: "Found", traditionalChinese: "找到"),
+                value: localized(english: "Utopia Euro Caffe", traditionalChinese: "Utopia Euro Caffe"),
+                icon: "checkmark.seal.fill",
+                tint: .saveMint
+            )
+            ProofLine(
+                label: localized(english: "Source", traditionalChinese: "來源"),
+                value: sourceSummary,
+                icon: "link",
+                tint: .saveSky
+            )
+            ProofLine(
+                label: localized(english: "Missing", traditionalChinese: "還缺"),
+                value: localized(english: "Exact address and coordinates before it becomes a Map Stamp", traditionalChinese: "變成地圖章前，要確認地址與座標"),
+                icon: "exclamationmark.triangle.fill",
+                tint: .saveHoney
+            )
+
+            Text(localized(
+                english: "This waits in Review. SAV-E should not create fake confirmed pins.",
+                traditionalChinese: "這會先留在 Review。SAV-E 不應該亂產生已確認地點。"
+            ))
+            .font(.footnote)
+            .fontWeight(.bold)
+            .foregroundColor(.saveMutedText)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var mapStampProof: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.title2.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 56, height: 56)
+                    .background(Color.saveMint.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Utopia Euro Caffe")
+                        .font(.headline)
+                        .fontWeight(.black)
+                        .foregroundColor(.saveInk)
+
+                    Text(localized(english: "Map Stamp · Coffee · Friend sent", traditionalChinese: "地圖章 · 咖啡 · 朋友推薦"))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.saveMutedText)
+                }
+            }
+
+            HStack(spacing: 10) {
+                chip(localized(english: "confirmed", traditionalChinese: "已確認"), tint: .saveMint)
+                chip(localized(english: "source kept", traditionalChinese: "保留來源"), tint: .saveSky)
+                chip(localized(english: "private", traditionalChinese: "私人"), tint: .saveHoney)
+            }
+        }
+    }
+
+    private var askProof: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            chatBubble(
+                localized(english: "Recommend nearby coffee from my saved places", traditionalChinese: "從我存過的地方推薦附近咖啡"),
+                isUser: true
+            )
+            chatBubble(
+                localized(
+                    english: "I’d start with Utopia Euro Caffe because it matches your saved coffee clue and looks quiet enough for a date. Public discovery stays separate.",
+                    traditionalChinese: "我會先推薦 Utopia Euro Caffe，因為它符合你剛存的咖啡線索，也偏安靜適合約會。公開搜尋會另外標示。"
+                ),
+                isUser: false
+            )
+        }
+    }
+
+    private var tagProof: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(localized(
+                english: "Now tell SAV-E why this mattered. These tags should come after proof, not before.",
+                traditionalChinese: "現在再告訴 SAV-E 為什麼你想存。這些標籤應該在證明有用後才出現。"
+            ))
+            .font(.subheadline)
+            .fontWeight(.bold)
+            .foregroundColor(.saveMutedText)
+            .fixedSize(horizontal: false, vertical: true)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
+                ForEach(ProofIntentTag.allCases, id: \.self) { tag in
+                    Button {
+                        if selectedTags.contains(tag) {
+                            selectedTags.remove(tag)
+                        } else {
+                            selectedTags.insert(tag)
+                        }
+                    } label: {
+                        Label(tag.title(language: language), systemImage: selectedTags.contains(tag) ? "checkmark.circle.fill" : "circle")
+                            .font(.subheadline.weight(.black))
+                            .foregroundColor(.saveInk)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(selectedTags.contains(tag) ? Color.saveHoney.opacity(0.64) : Color.white.opacity(0.28))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.saveNotebookLine.opacity(0.48), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(_ text: String, tint: Color) -> some View {
         Text(text)
-            .font(.caption2)
+            .font(.caption)
             .fontWeight(.black)
             .foregroundColor(.saveInk)
             .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.9))
-            .overlay(
-                Capsule()
-                    .stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1)
-            )
+            .padding(.vertical, 7)
+            .background(tint.opacity(0.58))
             .clipShape(Capsule())
     }
 
-    private var rejectTitle: String {
-        switch language {
-        case .english: return "Reject"
-        case .traditionalChinese: return "略過"
+    private func chatBubble(_ text: String, isUser: Bool) -> some View {
+        Text(text)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(.saveInk)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+            .background(isUser ? Color.saveHoney.opacity(0.42) : Color.saveMint.opacity(0.42))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var iconName: String {
+        switch stage {
+        case .clue: return "square.and.pencil"
+        case .candidate: return "checklist.unchecked"
+        case .mapStamp: return "mappin.and.ellipse"
+        case .ask: return "sparkles"
+        case .tag: return "tag.fill"
         }
     }
 
-    private var confirmTitle: String {
-        switch language {
-        case .english: return "Confirm"
-        case .traditionalChinese: return "確認"
+    private var headerTint: Color {
+        switch stage {
+        case .clue, .candidate: return .saveHoney
+        case .mapStamp: return .saveMint
+        case .ask: return .saveSky
+        case .tag: return .savePink
         }
     }
 
-    private var dessertTitle: String {
+    private var title: String {
+        switch stage {
+        case .clue:
+            return localized(english: "Paste one messy place clue", traditionalChinese: "貼上一個混亂的地點線索")
+        case .candidate:
+            return localized(english: "SAV-E makes a Review Candidate", traditionalChinese: "SAV-E 先做成待確認地點")
+        case .mapStamp:
+            return localized(english: "Confirm it into a Map Stamp", traditionalChinese: "確認成你的地圖章")
+        case .ask:
+            return localized(english: "Ask from memory first", traditionalChinese: "先問你的地點記憶")
+        case .tag:
+            return localized(english: "Configure your scout from proof", traditionalChinese: "從真實記憶設定你的 scout")
+        }
+    }
+
+    private var subtitle: String {
+        switch stage {
+        case .clue:
+            return localized(english: "Use a Reel caption, Google Maps link, screenshot text, or friend message.", traditionalChinese: "可以用 Reels 文案、Google Maps 連結、截圖文字或朋友訊息。")
+        case .candidate:
+            return localized(english: "A candidate shows evidence and missing info before anything is saved.", traditionalChinese: "候選地點會先顯示證據和缺什麼，不會直接存成已確認。")
+        case .mapStamp:
+            return localized(english: "Only confirmed places become private map memory.", traditionalChinese: "只有確認後，才會變成你的私人地圖記憶。")
+        case .ask:
+            return localized(english: "SAV-E should answer from places you saved before public discovery.", traditionalChinese: "SAV-E 應該先用你存過的地方回答，再分開標示公開搜尋。")
+        case .tag:
+            return localized(english: "Tags help later recommendations learn why you saved it.", traditionalChinese: "標籤會幫之後的推薦理解你為什麼想存。")
+        }
+    }
+
+    private var placeholder: String {
+        localized(
+            english: "Example: friend said this cafe is good for a quiet date near Irvine...",
+            traditionalChinese: "例如：朋友說 Irvine 附近這間咖啡很適合安靜約會..."
+        )
+    }
+
+    private var sampleTitle: String {
+        localized(english: "Use sample clue", traditionalChinese: "使用範例線索")
+    }
+
+    private var sourceSummary: String {
+        let trimmed = clueText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return localized(english: "Friend message", traditionalChinese: "朋友訊息")
+        }
+        return String(trimmed.prefix(72))
+    }
+
+    private func localized(english: String, traditionalChinese: String) -> String {
         switch language {
-        case .english: return "Dessert nearby"
-        case .traditionalChinese: return "附近甜點"
+        case .english: return english
+        case .traditionalChinese: return traditionalChinese
+        }
+    }
+}
+
+private struct ProofLine: View {
+    let label: String
+    let value: String
+    let icon: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.64))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label.uppercased())
+                    .font(.caption2)
+                    .fontWeight(.black)
+                    .foregroundColor(.saveMutedText)
+
+                Text(value)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.saveInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
@@ -430,7 +650,6 @@ private struct FirstRunTrustNote: View {
                 .stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1)
         )
         .clipShape(Capsule())
-        .padding(.horizontal, 24)
     }
 
     private var text: String {
