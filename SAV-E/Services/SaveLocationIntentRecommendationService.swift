@@ -20,11 +20,15 @@ struct SaveLocationIntentRecommendationService {
         mapCandidates: [SaveMapCandidate] = [],
         currentLocation: CLLocation?
     ) -> SaveSearchResponse? {
-        guard let intent = parser.parse(query),
+        guard var intent = parser.parse(query),
               intent.kind == .categoryRecommendation || intent.kind == .craving || intent.mustMatchLocation else {
             return nil
         }
         guard intent.sourceScope != .publicOnly else { return nil }
+        let tasteProfile = SaveTasteProfile(places: places)
+        if intent.requiredCategories.isEmpty, let frequentCategory = tasteProfile.mostSavedCategory {
+            intent = intent.withRequiredCategory(frequentCategory)
+        }
 
         if let unsupportedCategoryLabel = intent.unsupportedCategoryLabel {
             return emptyResponse(
@@ -44,7 +48,6 @@ struct SaveLocationIntentRecommendationService {
             )
         }
 
-        let tasteProfile = SaveTasteProfile(places: places)
         let categoryMatches = places.filter { place in
             intent.requiredCategories.contains(place.category)
         }
@@ -104,6 +107,20 @@ struct SaveLocationIntentRecommendationService {
         }
 
         guard !rankedCategoryMatches.isEmpty else {
+            if !reviewMatches.isEmpty || !mapMatches.isEmpty {
+                return sectionedResponse(
+                    query: query,
+                    message: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet. Review candidates and public discovery stay separate until you choose what to save.",
+                    nearby: [],
+                    far: [],
+                    reviewCandidates: reviewMatches,
+                    mapCandidates: mapMatches,
+                    intent: intent,
+                    currentLocation: currentLocation,
+                    tasteProfile: tasteProfile,
+                    showFallbackAction: mapMatches.isEmpty
+                )
+            }
             return emptyResponse(
                 query: query,
                 title: "No saved \(categoryLabel(for: intent))",
@@ -542,8 +559,11 @@ struct SaveLocationIntentRecommendationService {
         }
         if tasteProfile.isPositiveVisited(place) {
             values.append("Visited place you rated well")
-        } else if tasteProfile.score(place) > 0 {
+        } else if tasteProfile.hasVisitedTasteMatch(place) {
             values.append("Taste match from places you visited")
+        }
+        if tasteProfile.isFrequentCategory(place.category) {
+            values.append("Category matches places you often save")
         }
         if let currentLocation {
             let meters = distanceMeters(from: currentLocation, to: place)
@@ -588,27 +608,30 @@ struct SaveLocationIntentRecommendationService {
 private struct SaveTasteProfile {
     private let preferredTerms: Set<String>
     private let preferredPriceRanges: Set<String>
+    private let savedCategoryCounts: [PlaceCategory: Int]
 
     init(places: [Place]) {
         let positiveVisited = places.filter(Self.isPositiveVisitedPlace)
         preferredTerms = Set(positiveVisited.flatMap(Self.tasteTerms))
         preferredPriceRanges = Set(positiveVisited.compactMap { Self.clean($0.priceRange) })
+        savedCategoryCounts = Dictionary(grouping: places, by: \.category)
+            .mapValues { $0.count }
     }
 
     func score(_ place: Place) -> Int {
         var score = 0
         if isPositiveVisited(place) {
             score += 4
-        } else if place.status == .visited {
-            score += 1
         }
 
-        let matchingTerms = Set(Self.tasteTerms(for: place)).intersection(preferredTerms)
+        let matchingTerms = matchingPreferredTerms(for: place)
         score += min(matchingTerms.count, 4)
 
-        if let priceRange = place.priceRange?.trimmingCharacters(in: .whitespacesAndNewlines),
-           preferredPriceRanges.contains(priceRange) {
+        if preferredPriceRangeMatches(place) {
             score += 1
+        }
+        if isFrequentCategory(place.category) {
+            score += min(savedCategoryCounts[place.category] ?? 0, 3)
         }
 
         return score
@@ -616,6 +639,38 @@ private struct SaveTasteProfile {
 
     func isPositiveVisited(_ place: Place) -> Bool {
         Self.isPositiveVisitedPlace(place)
+    }
+
+    func isFrequentCategory(_ category: PlaceCategory) -> Bool {
+        (savedCategoryCounts[category] ?? 0) >= 3
+    }
+
+    func hasVisitedTasteMatch(_ place: Place) -> Bool {
+        isPositiveVisited(place) ||
+            !matchingPreferredTerms(for: place).isEmpty ||
+            preferredPriceRangeMatches(place)
+    }
+
+    var mostSavedCategory: PlaceCategory? {
+        savedCategoryCounts
+            .filter { $0.value >= 2 }
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key.rawValue < rhs.key.rawValue
+            }
+            .first?
+            .key
+    }
+
+    private func matchingPreferredTerms(for place: Place) -> Set<String> {
+        Set(Self.tasteTerms(for: place)).intersection(preferredTerms)
+    }
+
+    private func preferredPriceRangeMatches(_ place: Place) -> Bool {
+        guard let priceRange = place.priceRange?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return false
+        }
+        return preferredPriceRanges.contains(priceRange)
     }
 
     private static func isPositiveVisitedPlace(_ place: Place) -> Bool {
@@ -650,5 +705,24 @@ private struct SaveTasteProfile {
             return nil
         }
         return trimmed
+    }
+}
+
+private extension SaveSearchIntent {
+    func withRequiredCategory(_ category: PlaceCategory) -> SaveSearchIntent {
+        SaveSearchIntent(
+            rawText: rawText,
+            normalizedText: normalizedText,
+            kind: kind,
+            requiredCategories: [category],
+            optionalCategories: optionalCategories,
+            locationMode: locationMode,
+            sourceScope: sourceScope,
+            mustMatchCategory: false,
+            mustMatchLocation: mustMatchLocation,
+            confidence: confidence,
+            unsupportedCategoryLabel: unsupportedCategoryLabel,
+            categoryNeedles: categoryNeedles
+        )
     }
 }

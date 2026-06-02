@@ -81,8 +81,7 @@ final class AIDrawerViewModel: ObservableObject {
             mapCandidates: mapCandidates
         )
         if saveSearchResponse.hasVisibleResults {
-            drawerState = .saveSearchResults(saveSearchResponse)
-            mapAction = mapAction(for: saveSearchResponse)
+            await showGroundedRecommendationResponse(saveSearchResponse, query: trimmed)
             return
         }
 
@@ -288,7 +287,9 @@ final class AIDrawerViewModel: ObservableObject {
 
 private extension SaveSearchResponse {
     var hasVisibleResults: Bool {
-        !fromYourSave.results.isEmpty || !newRecommendations.results.isEmpty
+        !fromYourSave.results.isEmpty ||
+            !additionalSections.flatMap(\.results).isEmpty ||
+            !newRecommendations.results.isEmpty
     }
 
     func withGroundedAnswer(query: String, intent: SaveSearchIntent, client: SaveLLMClient) async -> SaveSearchResponse {
@@ -299,7 +300,7 @@ private extension SaveSearchResponse {
             sections: groundedAnswerSections
         )
 
-        guard !request.allowedPlaceIds.isEmpty else {
+        guard !request.allowedPlaceIds.isEmpty || request.hasGroundingContext else {
             return self
         }
 
@@ -321,5 +322,15 @@ private extension SaveSearchResponse {
 
     private var groundedAnswerResultIDs: [String] {
         groundedAnswerSections.flatMap { $0.results.map(\.id) }
+    }
+}
+
+private extension GroundedAnswerRequest {
+    var hasGroundingContext: Bool {
+        sections.contains { section in
+            !section.results.isEmpty ||
+                section.emptyMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+                section.showsNearbySearchAction
+        }
     }
 }

@@ -112,6 +112,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         - Recommend one best place first.
         - Explain why using saved/visited/review/public labels, distance, rating, review count, and evidence below.
         - Ask at most one lightweight follow-up, such as budget, cuisine, quick vs sit-down, or mood.
+        - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
         - Do not introduce places outside the allowed result IDs.
         - Keep it under 70 words.
         """

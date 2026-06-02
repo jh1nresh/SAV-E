@@ -281,6 +281,89 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results[1].evidence.contains("Taste match from places you visited"))
     }
 
+    func testGenericNearbyRecommendationUsesFrequentlySavedCategory() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let savedCafeA = place(
+            name: "Saved Cafe A",
+            category: .cafe,
+            latitude: 33.6847,
+            longitude: -117.8265
+        )
+        let savedCafeB = place(
+            name: "Saved Cafe B",
+            category: .cafe,
+            latitude: 33.6848,
+            longitude: -117.8265
+        )
+        let savedCafeC = place(
+            name: "Saved Cafe C",
+            category: .cafe,
+            latitude: 33.6849,
+            longitude: -117.8265
+        )
+        let closerRestaurant = place(
+            name: "Closer Restaurant",
+            category: .food,
+            latitude: 33.68461,
+            longitude: -117.8265
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近",
+            places: [closerRestaurant, savedCafeA, savedCafeB, savedCafeC],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(Set(response.fromYourSave.results.map(\.title)), Set(["Saved Cafe A", "Saved Cafe B", "Saved Cafe C"]))
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Closer Restaurant"))
+        XCTAssertTrue(response.fromYourSave.results.first?.evidence.contains("Category matches places you often save") == true)
+    }
+
+    func testLowRatedVisitedPlaceDoesNotSeedVisitedTasteEvidence() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let dislikedRamen = place(
+            name: "Disliked Ramen Memory",
+            category: .food,
+            latitude: 33.6900,
+            longitude: -117.8300,
+            note: "spicy ramen and black garlic broth",
+            extractedDishes: ["black garlic ramen"],
+            status: .visited,
+            rating: 3.0,
+            priceRange: "$$"
+        )
+        let genericNearby = place(
+            name: "Closest Generic Grill",
+            category: .food,
+            latitude: 33.68461,
+            longitude: -117.82651,
+            note: "burgers and fries",
+            priceRange: "$"
+        )
+        let similarRamen = place(
+            name: "Future Ramen Shop",
+            category: .food,
+            latitude: 33.6860,
+            longitude: -117.8272,
+            note: "spicy ramen, black garlic broth",
+            extractedDishes: ["black garlic ramen"],
+            priceRange: "$$"
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近餐廳",
+            places: [genericNearby, similarRamen, dislikedRamen],
+            currentLocation: currentLocation
+        ))
+
+        let similarResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Future Ramen Shop" })
+        XCTAssertFalse(similarResult.evidence.contains("Taste match from places you visited"))
+        let dislikedResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Disliked Ramen Memory" })
+        XCTAssertFalse(dislikedResult.evidence.contains("Visited place you rated well"))
+    }
+
     func testSharedGeminiFallbacksUseGemini3ProOnly() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3-pro"])
     }

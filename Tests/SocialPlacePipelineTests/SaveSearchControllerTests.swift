@@ -343,13 +343,12 @@ final class SaveSearchControllerTests: XCTestCase {
     func testDrawerNearbyRecommendationUsesGroundedAnswerClient() async {
         let client = StubGroundedAnswerClient(answer: "I would pick Saved Coffee because it matches your saved cafe memory. What budget are you thinking?")
         let drawer = AIDrawerViewModel(groundedAnswerClient: client)
-        drawer.places = [
-            place(
-                name: "Saved Coffee",
-                address: "1 Main St, Irvine, CA",
-                category: .cafe
-            )
-        ]
+        let savedPlace = place(
+            name: "Saved Coffee",
+            address: "1 Main St, Irvine, CA",
+            category: .cafe
+        )
+        drawer.places = [savedPlace]
         drawer.query = "coffee"
 
         await drawer.submit()
@@ -359,7 +358,109 @@ final class SaveSearchControllerTests: XCTestCase {
         }
         XCTAssertEqual(response.assistantMessage, client.answer)
         XCTAssertEqual(client.requests.map(\.query), ["coffee"])
-        XCTAssertEqual(client.requests.first?.allowedPlaceIds.count, 1)
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["place-\(savedPlace.id.uuidString)"])
+    }
+
+    @MainActor
+    func testDrawerPreparedPublicDiscoveryUsesGroundedAnswerClient() async {
+        let client = StubGroundedAnswerClient(answer: "I would try Bright Coffee Bar first because it is nearby, highly rated, and still unsaved. Want quiet or quick?")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let candidate = SaveMapCandidate(
+            title: "Bright Coffee Bar",
+            subtitle: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            category: .cafe,
+            rating: 4.8,
+            reviewCount: 1200,
+            distanceMeters: 180,
+            evidence: ["Apple Maps result"]
+        )
+        drawer.mapCandidates = [candidate]
+        drawer.query = "coffee"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertEqual(client.requests.map(\.query), ["coffee"])
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["map-candidate-\(candidate.id)"])
+        XCTAssertEqual(client.requests.first?.sections.flatMap(\.results).map(\.objectType), [.mapVisibleUnsavedPlace])
+    }
+
+    @MainActor
+    func testDrawerPreparedReviewAndPublicResultsUseGroundedAnswerClient() async {
+        let client = StubGroundedAnswerClient(answer: "I would review Review Coffee first, then compare Unsaved Coffee before saving anything. Want a sit-down spot?")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let reviewCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Coffee",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.6851,
+            longitude: -117.8264,
+            evidence: ["Instagram caption mentions coffee"],
+            confidence: 0.78,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+        let mapCandidate = SaveMapCandidate(
+            title: "Unsaved Coffee",
+            subtitle: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            category: .cafe,
+            rating: 4.6,
+            reviewCount: 300,
+            distanceMeters: 240,
+            evidence: ["Apple Maps result"]
+        )
+        drawer.mapCandidates = [mapCandidate]
+        drawer.query = "coffee"
+
+        await drawer.submit(reviewCandidates: [reviewCandidate])
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertEqual(
+            Set(client.requests.first?.allowedPlaceIds ?? []),
+            Set(["review-candidate-\(reviewCandidate.id.uuidString)", "map-candidate-\(mapCandidate.id)"])
+        )
+    }
+
+    @MainActor
+    func testDrawerReviewOnlyResultsUseGroundedAnswerClient() async {
+        let client = StubGroundedAnswerClient(answer: "I found one review candidate: Review Coffee. Confirm the exact place before saving it as a Map Stamp.")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let reviewCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Coffee",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.6851,
+            longitude: -117.8264,
+            evidence: ["Instagram caption mentions coffee"],
+            confidence: 0.78,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+        drawer.query = "coffee"
+
+        await drawer.submit(reviewCandidates: [reviewCandidate])
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["review-candidate-\(reviewCandidate.id.uuidString)"])
     }
 
     @MainActor
