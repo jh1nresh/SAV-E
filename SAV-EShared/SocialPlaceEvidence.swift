@@ -21,7 +21,7 @@ enum SocialPlaceEvidenceScorer {
     static func cleanCandidateName(_ value: String) -> String {
         cleanText(value)
             .replacingOccurrences(of: #"^[\-\–\—]\s*"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "[]【】\"'“”.,:;! "))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]【】《》\"'“”.,:;! "))
             .split(separator: "\n")
             .first
             .map(String.init) ?? ""

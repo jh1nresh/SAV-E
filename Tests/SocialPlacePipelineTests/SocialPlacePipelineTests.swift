@@ -649,8 +649,11 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.isSourceOnly)
         XCTAssertTrue(diagnostic.found.contains("Xiaohongshu note id: 65abc123"))
         XCTAssertTrue(diagnostic.found.contains("Canonical Xiaohongshu URL: https://www.xiaohongshu.com/explore/65abc123"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: classified the shared URL/platform and canonical post id before trusting content"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: inspected readable metadata/caption/OCR for venue anchors, address pins, map links, and social handles"))
         XCTAssertTrue(diagnostic.attempts.contains("Resolved canonical Xiaohongshu URL and extracted the note id"))
         XCTAssertTrue(diagnostic.attempts.contains("Detected blocked or generic Xiaohongshu metadata shell instead of usable caption text"))
+        XCTAssertTrue(diagnostic.found.contains("Readable metadata/caption/OCR: present but no verified address/map link"))
         XCTAssertTrue(diagnostic.missingFields.contains("Readable Xiaohongshu caption or screenshot OCR"))
         XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.")
         XCTAssertEqual(diagnostic.suggestedSearchQueries?.first, "xiaohongshu 65abc123 place")
@@ -747,6 +750,53 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.first?.address, "🏠臺中市西屯區安和東路5號")
         XCTAssertFalse(candidates.contains { $0.candidateName == "吃得懂" })
         XCTAssertFalse(candidates.contains { $0.candidateName == "台中·餐廳" })
+    }
+
+    func testInstagramTraditionalChineseBookTitleVenueBeforePinAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            🌸SaSa. Fingerlicking on Instagram: "🍜天母超浮誇牛肉麵
+            厚切半筋半肉的牛肉塊給的份量超多
+
+            《忠誠牛肉麵》
+            📍台北市士林區德行東路80號
+
+            #天母美食 #台北美食 #士林美食 #排隊美食 #牛肉麵"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DXPR6RfAICu/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "忠誠牛肉麵")
+        XCTAssertEqual(candidates.first?.address, "台北市士林區德行東路80號")
+        XCTAssertFalse(candidates.first?.isSourceOnly == true)
+        XCTAssertFalse(candidates.contains { $0.candidateName == "天母超浮誇牛肉麵" })
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("SaSa") })
+    }
+
+    func testInstagramTraditionalChineseBookTitleDiagnosticExplainsAnalysisMethod() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            🌸SaSa. Fingerlicking on Instagram: "🍜天母超浮誇牛肉麵
+            厚切半筋半肉的牛肉塊給的份量超多
+
+            《忠誠牛肉麵》
+            📍台北市士林區德行東路80號
+
+            #天母美食 #台北美食 #士林美食 #排隊美食 #牛肉麵"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DXPR6RfAICu/"
+        ).first)
+        let diagnostic = try XCTUnwrap(candidate.evidenceDiagnostic)
+
+        XCTAssertEqual(candidate.candidateName, "忠誠牛肉麵")
+        XCTAssertEqual(candidate.address, "台北市士林區德行東路80號")
+        XCTAssertTrue(diagnostic.found.contains("Readable metadata/caption/OCR: present with location clues"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: classified the shared URL/platform and canonical post id before trusting content"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: inspected readable metadata/caption/OCR for venue anchors, address pins, map links, and social handles"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: requires a place name plus address or map-provider match before Map Stamp; otherwise keeps Review/Source Clue"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records missing proof so SAV-E asks for the next clue instead of guessing"))
     }
 
     func testInstagramPinVenueLineUsesNextLineHighwayAddress() async throws {

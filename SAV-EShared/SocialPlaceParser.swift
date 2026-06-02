@@ -908,6 +908,7 @@ struct SocialPlaceParser {
     private func bracketedCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
         let patterns = [
             #"<\s*([A-Za-z0-9\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af][A-Za-z0-9 &'._\-\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]{1,80})\s*>"#,
+            #"[《]\s*([^》\n\r]{2,80})\s*[》]"#,
             #"[\[【]\s*([^\]】]{2,80})\s*[\]】]"#,
             #"(?i)\b(?:at|spot|place)\s+([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n)"#,
             #"(?i)\b(?:new\s+)?(?:brunch\s+)?(?:spot|place|restaurant|cafe)\s*:\s*([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n|$)"#
@@ -1703,7 +1704,7 @@ struct SocialPlaceParser {
         let venueIntroPattern = #"名店|正式插旗|插旗|開幕|新店|店名|from\s+tokyo|來自東京|頂級燒肉"#
         for line in text.components(separatedBy: .newlines)
             where line.range(of: venueIntroPattern, options: [.regularExpression, .caseInsensitive]) != nil {
-            if let quoted = firstCapture(in: line, pattern: #"[「『\"]\s*([^」』\"]{2,80})\s*[」』\"]"#) {
+            if let quoted = firstCapture(in: line, pattern: #"[「『《\"]\s*([^」』》\"]{2,80})\s*[」』》\"]"#) {
                 let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(quoted)
                 if SocialPlaceEvidenceScorer.isUsableCandidateName(cleaned) {
                     return cleaned
@@ -1723,8 +1724,8 @@ struct SocialPlaceParser {
             return nil
         }
         let patterns = [
-            "[「『]\\s*([^」』\\n\\r]{2,40})\\s*[」』]",
-            "[「『]\\s*([^」』\\n\\r]{2,40}(?:店|館|馆|餐廳|餐厅|咖啡|茶|酒吧|烘焙|燒肉|烧肉|火鍋|火锅|壽喜燒|寿喜烧|麵|面|飯|饭|屋|坊|室|湯|汤))",
+            "[「『《]\\s*([^」』》\\n\\r]{2,40})\\s*[」』》]",
+            "[「『《]\\s*([^」』》\\n\\r]{2,40}(?:店|館|馆|餐廳|餐厅|咖啡|茶|酒吧|烘焙|燒肉|烧肉|火鍋|火锅|壽喜燒|寿喜烧|麵|面|飯|饭|屋|坊|室|湯|汤))",
             "[\\\"]\\s*([^\\\"\\n\\r]{2,40})\\s*[\\\"]"
         ]
         for pattern in patterns {
