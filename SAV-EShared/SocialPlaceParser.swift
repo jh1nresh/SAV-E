@@ -1497,8 +1497,8 @@ struct SocialPlaceParser {
         }
 
         let explicitLocationPatterns = [
-            #"[📍👣]\s*([^\n\r\.]+)"#,
-            #"\bLocation:\s*([^\n\r\.]+)"#,
+            #"[📍👣📮]\s*(?:地點|地点|地址|Location|Address)?\s*[:：]?\s*([^\n\r\.]+)"#,
+            #"(?:^|\b)(?:Location|Address|地點|地点|地址)\s*[:：]\s*([^\n\r\.]+)"#,
             #"(?i)\b(?:located|based)\s+in\s+([A-Z][A-Za-z .'-]{2,40})(?:[.!?,\n\r]|$)"#,
             #"\b([A-Z][A-Za-z .'-]{2,40},\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO|Bali|Indonesia|Chongqing|China|California))\b"#
         ]
@@ -1524,8 +1524,8 @@ struct SocialPlaceParser {
 
     private func cleanLocationMarker(from value: String) -> String {
         let cleaned = SocialPlaceEvidenceScorer.cleanText(value)
-            .replacingOccurrences(of: #"^[📍🗺👣🚩]\s*"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?i)^\s*(?:located\s+at|located|address)\s*[:：]?\s*[📍🗺]?\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"^[📍🗺👣🚩📮]\s*(?:地點|地点|地址|Location|Address)?\s*[:：]?\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)^\s*(?:located\s+at|located|address|location|地點|地点|地址)\s*[:：]?\s*[📍🗺📮]?\s*"#, with: "", options: .regularExpression)
         if let streetAddress = firstStreetAddress(in: cleaned) {
             return streetAddress
                 .replacingOccurrences(of: #"(?i)\s+(?:if\s+you|to\s+check|for\s+more).*$"#, with: "", options: .regularExpression)
@@ -1638,13 +1638,14 @@ struct SocialPlaceParser {
             firstScalar == 0x1F4CC ||
             firstScalar == 0x1F4CD ||
             firstScalar == 0x1F6A9 ||
+            firstScalar == 0x1F3E1 ||
             trimmedLine.hasPrefix("店名")
         if hasVenueMarker {
             let markerStripped = trimmedLine
                 .replacingOccurrences(
-                    of: #"^\s*店名\s*[:：\-–—]?\s*"#,
+                    of: #"^\s*(?:[👉➡→➜📌📍🚩🏡]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)\s*[:：\-–—]?\s*"#,
                     with: "",
-                    options: .regularExpression
+                    options: [.regularExpression, .caseInsensitive]
                 )
                 .replacingOccurrences(
                     of: #"^[^A-Za-z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+"#,

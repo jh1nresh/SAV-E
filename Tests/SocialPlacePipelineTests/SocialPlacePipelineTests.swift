@@ -1574,6 +1574,32 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "Bitter Root Pottery" })
     }
 
+    func testInstagramShopAndLocationMarkersCreateReviewCandidate() {
+        let service = SocialLinkReviewCandidateService()
+        let sourceURL = "https://www.instagram.com/reel/DYMZ575zYYQ/"
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            辰辰🌱卉卉🤤台北｜新北｜ 美食分享🍗Jun Chen Ye (@b.p.food_) • Instagram reel
+            b.p.food_ on May 11, 2026: "🔥在台北終於吃到好吃到升天的的雞肉飯了
+            🔸雞肉飯$65 都是用整塊的無骨雞下去製作
+            鮮嫩又多汁一定要半熟蛋
+            🏡店名：上好雞肉
+            📮地點：新北市中和區民治街8巷1號
+            ⏱️時間：11:00-14:00 16:30-18:30（六日公休）"
+            """,
+            sourceURL: sourceURL
+        )
+
+        XCTAssertEqual(candidates.count, 1)
+        let candidate = candidates[0]
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertEqual(candidate.candidateName, "上好雞肉")
+        XCTAssertEqual(candidate.address, "新北市中和區民治街8巷1號")
+        XCTAssertTrue(candidate.evidence.joined(separator: " ").contains("Source URL: \(sourceURL)"))
+        XCTAssertNil(candidate.latitude)
+        XCTAssertNil(candidate.longitude)
+    }
+
     func testURLOnlyInstagramReelProducesSourceOnlyEvidenceDebugCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYsourceOnly/"

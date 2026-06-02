@@ -1650,8 +1650,8 @@ final class SocialLinkReviewCandidateService {
 
     private func firstLocationPin(in text: String) -> String? {
         let patterns = [
-            #"📍\s*([^\n\r\.]+)"#,
-            #"\bLocation:\s*([^\n\r\.]+)"#
+            #"[📍📮]\s*(?:地點|地点|地址|Location|Address)?\s*[:：]?\s*([^\n\r\.]+)"#,
+            #"(?:^|\b)(?:Location|Address|地點|地点|地址)\s*[:：]\s*([^\n\r\.]+)"#
         ]
         for pattern in patterns {
             if let match = firstCapture(in: text, pattern: pattern) {
@@ -1703,7 +1703,15 @@ final class SocialLinkReviewCandidateService {
             .components(separatedBy: .newlines)
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
-        return lines.first(where: looksLikeAddressLine)
+        guard let line = lines.first(where: looksLikeAddressLine) else { return nil }
+        return cleanLocationMarker(from: line)
+    }
+
+    private func cleanLocationMarker(from value: String) -> String {
+        cleanHTMLText(value)
+            .replacingOccurrences(of: #"^[📍🗺👣🚩📮]\s*(?:地點|地点|地址|Location|Address)?\s*[:：]?\s*"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)^\s*(?:located\s+at|located|address|location|地點|地点|地址)\s*[:：]?\s*[📍🗺📮]?\s*"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，:："))
     }
 
     private func looksLikeAddressLine(_ line: String) -> Bool {
@@ -1727,6 +1735,12 @@ final class SocialLinkReviewCandidateService {
         }
 
         let isVenueIntroLine = line.range(of: #"@|名店|插旗|開幕|新店|店名|餐廳|餐厅|restaurant"#, options: [.regularExpression, .caseInsensitive]) != nil
+        if let labeledName = firstCapture(in: line, pattern: #"^\s*(?:[👉➡→➜📌📍🚩🏡]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)\s*[:：\-–—]?\s*([^\n\r]{2,60})"#) {
+            let cleaned = cleanCandidateName(labeledName)
+            if isUsableCandidateName(cleaned), !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
         if isVenueIntroLine,
            let quoted = firstCapture(in: line, pattern: #"[「《\"]\s*([^」》\"]{2,60})\s*[」》\"]"#) {
             let cleaned = cleanCandidateName(quoted)
