@@ -612,13 +612,13 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate) async throws {
+    func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate, nameOverride: String? = nil) async throws {
         guard let userId = authService.currentUserId else {
             throw SupabaseError.notAuthenticated
         }
 
         let refinedMatch = try await refinedMatchIfNeeded(for: candidate)
-        let place = Place.from(candidate, refinedMatch: refinedMatch)
+        let place = Place.from(candidate, refinedMatch: refinedMatch, nameOverride: nameOverride)
 
         guard place.latitude != 0 || place.longitude != 0 else {
             throw ReviewCandidateError.needsReliableCoordinates

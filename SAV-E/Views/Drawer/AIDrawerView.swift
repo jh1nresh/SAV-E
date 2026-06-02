@@ -60,7 +60,7 @@ struct AIDrawerView: View {
         GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
     }
     var onDeletePlace: (Place) async throws -> Void = { _ in }
-    var onSaveCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
+    var onSaveCandidate: (PlaceReviewCandidate, String?) async throws -> Void = { _, _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
@@ -191,9 +191,9 @@ struct AIDrawerView: View {
             onAddMoreClueCandidate: { candidate in
                 addMoreClue(for: candidate)
             },
-            onSaveCandidate: { candidate in
+            onSaveCandidate: { candidate, nameOverride in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
-                    try await onSaveCandidate(candidate)
+                    try await onSaveCandidate(candidate, nameOverride)
                     closeMapDetail()
                 }
             },
@@ -536,9 +536,9 @@ struct AIDrawerView: View {
                     onAddMoreClue: {
                         addMoreClue(for: candidate)
                     },
-                    onSave: {
+                    onSave: { nameOverride in
                         performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
-                            try await onSaveCandidate(candidate)
+                            try await onSaveCandidate(candidate, nameOverride)
                             viewModel.returnToCommands()
                             showSavedCategories = false
                             showReviewInbox = false
@@ -1613,7 +1613,7 @@ private struct MapDetailDrawerView: View {
     let onDeletePlace: (Place) async throws -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
-    let onSaveCandidate: (PlaceReviewCandidate) -> Void
+    let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
@@ -1743,7 +1743,7 @@ private struct MapDetailDrawerView: View {
                         candidate: candidate,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onAddMoreClue: { onAddMoreClueCandidate(candidate) },
-                        onSave: { onSaveCandidate(candidate) }
+                        onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) }
                     )
 
                 case .unsavedCandidate(let candidate):
@@ -3208,7 +3208,21 @@ private struct ReviewCandidateDetailCard: View {
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
     var onAddMoreClue: () -> Void
-    var onSave: () -> Void
+    var onSave: (String?) -> Void
+    @State private var displayNameDraft: String
+
+    init(
+        candidate: PlaceReviewCandidate,
+        isWorking: Bool,
+        onAddMoreClue: @escaping () -> Void,
+        onSave: @escaping (String?) -> Void
+    ) {
+        self.candidate = candidate
+        self.isWorking = isWorking
+        self.onAddMoreClue = onAddMoreClue
+        self.onSave = onSave
+        _displayNameDraft = State(initialValue: candidate.name)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -3235,6 +3249,25 @@ private struct ReviewCandidateDetailCard: View {
                             .foregroundColor(.saveCocoa.opacity(0.74))
                             .lineLimit(2)
 
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Display name")
+                                .font(.caption2.weight(.black))
+                                .foregroundColor(.saveCocoa.opacity(0.72))
+                            TextField("Place name", text: $displayNameDraft)
+                                .textFieldStyle(.plain)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.saveInk)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Color.saveNotebookPage.opacity(0.72))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .accessibilityLabel("Review candidate display name")
+                        }
+
                         HStack(spacing: 6) {
                             if let confidence = candidate.confidence {
                                 StampChip(text: "\(Int(confidence * 100))% confidence", color: .saveCocoa)
@@ -3259,7 +3292,7 @@ private struct ReviewCandidateDetailCard: View {
                         systemImage: primaryActionSystemImage,
                         fill: .saveHoney,
                         disabled: isWorking,
-                        action: onSave
+                        action: { onSave(nameOverride) }
                     )
                     CandidateActionButton(
                         title: "Add more clue",
@@ -3286,6 +3319,13 @@ private struct ReviewCandidateDetailCard: View {
 
     private var primaryActionSystemImage: String {
         candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass"
+    }
+
+    private var nameOverride: String? {
+        let trimmed = displayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let original = candidate.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != original else { return nil }
+        return trimmed
     }
 }
 

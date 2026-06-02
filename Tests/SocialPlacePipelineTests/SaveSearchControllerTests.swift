@@ -1179,6 +1179,70 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.category, .cafe)
     }
 
+    func testReviewCandidateNameOverrideWinsOverRefinedGoogleMatch() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Wrong parsed caption name",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Google Places match"],
+            confidence: 0.91,
+            missingInfo: [],
+            status: "confirmed",
+            createdAt: Date()
+        )
+        let match = GooglePlaceMatch(
+            id: "google-place-id",
+            name: "Google Places Business Name",
+            address: "123 Main St",
+            latitude: 33.7,
+            longitude: -117.8,
+            rating: 4.8,
+            priceLevel: 2,
+            types: ["restaurant", "food", "point_of_interest"]
+        )
+
+        let place = Place.from(candidate, refinedMatch: match, nameOverride: "My corrected display name")
+
+        XCTAssertEqual(place.name, "My corrected display name")
+        XCTAssertEqual(place.googlePlaceId, "google-place-id")
+        XCTAssertEqual(place.address, "123 Main St")
+    }
+
+    func testBlankReviewCandidateNameOverrideFallsBackToRefinedGoogleMatch() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Wrong parsed caption name",
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Google Places match"],
+            confidence: 0.91,
+            missingInfo: [],
+            status: "confirmed",
+            createdAt: Date()
+        )
+        let match = GooglePlaceMatch(
+            id: "google-place-id",
+            name: "Google Places Business Name",
+            address: "123 Main St",
+            latitude: 33.7,
+            longitude: -117.8,
+            rating: 4.8,
+            priceLevel: 2,
+            types: ["restaurant", "food", "point_of_interest"]
+        )
+
+        let place = Place.from(candidate, refinedMatch: match, nameOverride: "   ")
+
+        XCTAssertEqual(place.name, "Google Places Business Name")
+    }
+
     func testPassportStatsDeriveFromSavedPlaces() {
         let profile = UserProfile.empty
         let places = [

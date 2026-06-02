@@ -22,8 +22,8 @@ struct ContentView: View {
                     onDeletePlace: { place in
                         try await mapVM.deletePlace(place)
                     },
-                    onSaveCandidate: { candidate in
-                        try await mapVM.saveReviewCandidateAsPlace(candidate)
+                    onSaveCandidate: { candidate, nameOverride in
+                        try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
                     },
                     onSaveMapCandidate: { candidate in
                         try await mapVM.saveMapCandidateAsPlace(candidate)

@@ -549,10 +549,22 @@ extension Place {
         )
     }
 
-    static func from(_ candidate: PlaceReviewCandidate, refinedMatch: GooglePlaceMatch? = nil) -> Place {
-        Place(
+    static func from(
+        _ candidate: PlaceReviewCandidate,
+        refinedMatch: GooglePlaceMatch? = nil,
+        nameOverride: String? = nil
+    ) -> Place {
+        let trimmedNameOverride = nameOverride?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName: String
+        if let trimmedNameOverride, !trimmedNameOverride.isEmpty {
+            displayName = trimmedNameOverride
+        } else {
+            displayName = refinedMatch?.name ?? candidate.name
+        }
+
+        return Place(
             id: UUID(),
-            name: refinedMatch?.name ?? candidate.name,
+            name: displayName,
             address: refinedMatch?.address ?? candidate.address,
             latitude: refinedMatch?.latitude ?? candidate.latitude ?? 0,
             longitude: refinedMatch?.longitude ?? candidate.longitude ?? 0,
