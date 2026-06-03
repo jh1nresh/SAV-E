@@ -232,23 +232,12 @@ private struct SaveSearchResultNotebookRow: View {
                 }
             }
 
-            if !result.evidence.isEmpty || !result.missingInfo.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(result.evidence.prefix(3)), id: \.self) { evidence in
-                        Label(evidence, systemImage: "doc.text.magnifyingglass")
-                            .lineLimit(2)
-                    }
-                    if !result.missingInfo.isEmpty {
-                        Label("Missing: \(result.missingInfo.prefix(2).joined(separator: ", "))", systemImage: "exclamationmark.triangle")
-                            .lineLimit(2)
-                    }
-                }
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(.saveCocoa)
+            if let compactReason {
+                Label(compactReason, systemImage: compactReasonIcon)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveCocoa)
+                    .lineLimit(1)
             }
-
-            primaryActionLabel
-            shareLink
         }
         .padding(12)
         .background(Color.saveCream.opacity(0.72))
@@ -297,51 +286,36 @@ private struct SaveSearchResultNotebookRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    @ViewBuilder
-    private var shareLink: some View {
-        if let url = result.saveShareURL {
-            ShareLink(item: url, subject: Text(result.shareSubject), message: Text(result.shareText)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .saveSearchActionPill(isPrimary: false)
-            }
-        } else {
-            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .saveSearchActionPill(isPrimary: false)
-            }
+    private var compactReason: String? {
+        if let distanceLabel = result.distanceLabel {
+            return distanceLabel
         }
+        if result.objectType == .pendingCandidate {
+            return "Review before saving"
+        }
+        if result.objectType == .sourceOnlyClue {
+            return "Needs exact place"
+        }
+        if result.objectType == .mapVisibleUnsavedPlace {
+            return "Public result, not saved yet"
+        }
+        return nil
     }
 
-    @ViewBuilder
-    private var primaryActionLabel: some View {
+    private var compactReasonIcon: String {
         switch result.objectType {
-        case .savedPlace, .triedMemory:
-            Label("Open Map Stamp", systemImage: "map.fill")
-                .saveSearchActionPill(isPrimary: true)
-        case .pendingCandidate:
-            Label("Needs confirmation", systemImage: "checklist.unchecked")
-                .saveSearchActionPill(isPrimary: false)
-        case .sourceOnlyClue:
-            Label("Needs exact place", systemImage: "sparkle.magnifyingglass")
-                .saveSearchActionPill(isPrimary: false)
-        case .mapVisibleUnsavedPlace:
-            Label("Unsaved candidate", systemImage: "bookmark.badge.plus")
-                .saveSearchActionPill(isPrimary: false)
-        case .newRecommendation:
-            Label("Recommendation only", systemImage: "sparkle.magnifyingglass")
-                .saveSearchActionPill(isPrimary: false)
-        case .review:
-            Label("View review evidence", systemImage: "text.bubble")
-                .saveSearchActionPill(isPrimary: false)
-        case .tripStop:
-            Label("Use trip stop", systemImage: "route")
-                .saveSearchActionPill(isPrimary: false)
+        case .pendingCandidate: return "checklist.unchecked"
+        case .sourceOnlyClue: return "sparkle.magnifyingglass"
+        case .mapVisibleUnsavedPlace, .newRecommendation: return "location.magnifyingglass"
+        default: return "location"
         }
     }
 
     private var canOpenDetails: Bool {
         result.objectType == .savedPlace ||
             result.objectType == .triedMemory ||
+            result.objectType == .pendingCandidate ||
+            result.objectType == .sourceOnlyClue ||
             result.objectType == .mapVisibleUnsavedPlace
     }
 

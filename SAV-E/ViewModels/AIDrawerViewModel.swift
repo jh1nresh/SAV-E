@@ -1,4 +1,13 @@
+import CoreLocation
 import Foundation
+
+@MainActor
+protocol AIDrawerLocationProviding {
+    var currentLocation: CLLocation? { get }
+    func requestCurrentLocation() async -> CLLocation?
+}
+
+extension LocationService: AIDrawerLocationProviding {}
 
 @MainActor
 final class AIDrawerViewModel: ObservableObject {
@@ -31,7 +40,7 @@ final class AIDrawerViewModel: ObservableObject {
     private let aiService: SaveAIService
     private let saveSearchController: SaveSearchController
     private let locationIntentRecommendationService: SaveLocationIntentRecommendationService
-    private let locationService: LocationService
+    private let locationService: any AIDrawerLocationProviding
     private let groundedAnswerClient: SaveLLMClient?
 
     /// Multi-turn conversation context for the current session.
@@ -42,13 +51,13 @@ final class AIDrawerViewModel: ObservableObject {
         aiService: SaveAIService = .shared,
         saveSearchController: SaveSearchController = SaveSearchController(),
         locationIntentRecommendationService: SaveLocationIntentRecommendationService = SaveLocationIntentRecommendationService(),
-        locationService: LocationService? = nil,
+        locationService: (any AIDrawerLocationProviding)? = nil,
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig()
     ) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
         self.locationIntentRecommendationService = locationIntentRecommendationService
-        self.locationService = locationService ?? .shared
+        self.locationService = locationService ?? LocationService.shared
         self.groundedAnswerClient = groundedAnswerClient
     }
 
@@ -59,10 +68,7 @@ final class AIDrawerViewModel: ObservableObject {
         let currentLocation = locationIntentRecommendationService.requiresCurrentLocation(for: trimmed)
             ? await locationService.requestCurrentLocation()
             : locationService.currentLocation
-        let hasPreparedMapCandidates = !mapCandidates.isEmpty &&
-            saveSearchController.shouldPrepareMapCandidates(for: trimmed)
-        if !hasPreparedMapCandidates,
-           let gatedResponse = locationIntentRecommendationService.recommendationSearchResponse(
+        if let gatedResponse = locationIntentRecommendationService.recommendationSearchResponse(
             for: trimmed,
             places: places,
             reviewCandidates: reviewCandidates,
@@ -132,9 +138,39 @@ final class AIDrawerViewModel: ObservableObject {
         case .mapVisibleUnsavedPlace:
             guard let candidate = mapCandidate(for: result) else { return }
             showMapCandidate(candidate)
+        case .pendingCandidate, .sourceOnlyClue:
+            showSearchResultFallback(result)
         default:
             return
         }
+    }
+
+    private func showSearchResultFallback(_ result: SaveSearchResult) {
+        let missingLine = result.missingInfo.isEmpty
+            ? nil
+            : "Missing: \(result.missingInfo.prefix(3).joined(separator: ", "))"
+        let evidenceLine = result.evidence.first.map { "Evidence: \($0)" }
+        let message = [
+            result.subtitle,
+            evidenceLine,
+            missingLine,
+            result.sourceURL.map { "Source: \($0)" }
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
+        drawerState = .displaying(SaveAIResponse(
+            componentType: .message,
+            title: result.statusLabel,
+            placeIds: [],
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: message.isEmpty ? result.title : message,
+            mapAction: nil,
+            aiMessage: nil
+        ))
     }
 
     func showReviewCandidate(_ candidate: PlaceReviewCandidate) {

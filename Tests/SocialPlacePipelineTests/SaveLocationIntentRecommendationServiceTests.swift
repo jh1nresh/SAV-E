@@ -386,6 +386,58 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.messageText?.contains("won't map this to food or cafe") == true)
     }
 
+    func testNearbyMilkTeaKeepsFarSavedPlacesOutOfPrimaryAnswer() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let nearbyBoba = place(
+            name: "Nearby Boba",
+            category: .cafe,
+            latitude: 33.6848,
+            longitude: -117.8267,
+            note: "Brown sugar boba milk tea",
+            extractedDishes: ["milk tea", "boba"]
+        )
+        let farBoba = place(
+            name: "Tainan Milk Tea",
+            category: .cafe,
+            latitude: 22.9997,
+            longitude: 120.2270,
+            note: "Milk tea memory from Taiwan",
+            extractedDishes: ["milk tea"]
+        )
+        let nearbyRamen = place(
+            name: "Nearby Ramen",
+            category: .food,
+            latitude: 33.6847,
+            longitude: -117.8266
+        )
+        let publicBoba = SaveMapCandidate(
+            title: "Public Boba",
+            subtitle: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8269,
+            category: .cafe,
+            rating: 4.7,
+            reviewCount: 240,
+            distanceMeters: 180,
+            evidence: ["Apple Maps result", "Search: milk tea"]
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我一家附近奶茶",
+            places: [farBoba, nearbyRamen, nearbyBoba],
+            mapCandidates: [publicBoba],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.id, "from-your-save-nearby")
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Nearby Boba"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Tainan Milk Tea"))
+        XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Tainan Milk Tea"])
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Public Boba"])
+        XCTAssertTrue(response.assistantMessage?.contains("Nearby Boba") == true)
+    }
+
     func testDeterministicParserRecognizesNearbyCafeIntent() throws {
         let parser = SaveSearchIntentParser()
         let intent = try XCTUnwrap(parser.parse("附近咖啡廳"))
