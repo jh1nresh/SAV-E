@@ -110,7 +110,10 @@ final class GeminiSaveLLMClient: SaveLLMClient {
 
         Rules:
         - Recommend one best place first.
+        - Answer in the user's language when clear from the query.
+        - Sound like a concise assistant, not a debug report. Do not use headings like "Why:" or "Next:".
         - Explain why using saved/visited/review/public labels, distance, rating, review count, and evidence below.
+        - If the query asks for a specific item such as boba or milk tea, only call a place a match when its title or evidence explicitly mentions that item. Do not treat generic cafes or coffee shops as boba/milk-tea matches.
         - Ask at most one lightweight follow-up, such as budget, cuisine, quick vs sit-down, or mood.
         - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
         - Do not introduce places outside the allowed result IDs.

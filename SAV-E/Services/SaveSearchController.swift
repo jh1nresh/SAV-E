@@ -517,6 +517,9 @@ private struct SaveSearchQuery {
         if !states.isEmpty, !states.contains(result.userState) {
             return false
         }
+        if intent?.requiresSpecificEvidenceMatch == true {
+            return intentMatches
+        }
         guard !terms.isEmpty else {
             return !categories.isEmpty || !platforms.isEmpty || !states.isEmpty || normalizedRaw.isEmpty || intentMatches || intentCategoryMatches
         }
@@ -530,6 +533,7 @@ private struct SaveSearchQuery {
 
     func score(_ result: SaveSearchResult) -> Int {
         let haystack = Self.normalize(result.searchText)
+        let intentMatches = intent?.matches(result) ?? false
         var value = 0
         for term in terms where Self.term(term, matches: haystack) {
             value += result.title.lowercased().contains(term) ? 12 : 5
@@ -538,6 +542,9 @@ private struct SaveSearchQuery {
         if let sourcePlatform = result.sourcePlatform, platforms.contains(sourcePlatform) { value += 6 }
         if states.contains(result.userState) { value += 6 }
         value += intent?.score(result) ?? 0
+        if intent?.requiresSpecificEvidenceMatch == true, !intentMatches {
+            value -= 20
+        }
         if wantsNewRecommendations {
             value += Int((result.rating ?? 0) * 2)
             value += min(result.reviewCount ?? 0, 5_000) / 500
@@ -688,8 +695,12 @@ private struct SaveIntentQuery {
 
     func score(_ result: SaveSearchResult) -> Int {
         if matches(result) { return 40 }
-        if categoryMatches(result) { return 10 }
+        if !requiresSpecificEvidenceMatch, categoryMatches(result) { return 10 }
         return 0
+    }
+
+    var requiresSpecificEvidenceMatch: Bool {
+        id == "milk-tea"
     }
 
     func isIntentToken(_ token: String) -> Bool {

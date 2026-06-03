@@ -74,7 +74,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.placeIds, [])
         XCTAssertNil(response.mapAction)
         XCTAssertTrue(response.messageText?.contains("附近沒有咖啡廳") == true)
-        XCTAssertTrue(response.messageText?.contains("did not recommend other categories") == true)
+        XCTAssertTrue(response.messageText?.contains("did not recommend generic cafes or other categories") == true)
 
         let sectioned = try XCTUnwrap(service.recommendationSearchResponse(
             for: "附近咖啡廳",
@@ -124,7 +124,8 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         ))
 
         XCTAssertEqual(response.componentType, .placeList)
-        XCTAssertEqual(response.placeIds, [bobaCafe.id.uuidString, genericCafe.id.uuidString])
+        XCTAssertEqual(response.placeIds, [bobaCafe.id.uuidString])
+        XCTAssertFalse(response.placeIds.contains(genericCafe.id.uuidString))
         XCTAssertFalse(response.placeIds.contains(dinner.id.uuidString))
     }
 
@@ -179,7 +180,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.fromYourSave.results.first?.userState.displayName, "Saved")
         XCTAssertTrue(response.assistantMessage?.localizedCaseInsensitiveContains("saved") == true)
         XCTAssertTrue(response.assistantMessage?.contains("Bright Coffee Bar") == true)
-        XCTAssertTrue(response.assistantMessage?.contains("Next:") == true)
+        XCTAssertFalse(response.assistantMessage?.contains("Next:") == true)
         XCTAssertFalse(response.newRecommendations.showsNearbySearchAction)
         XCTAssertFalse(response.shouldAutoSearchNearbyUnsavedCandidates)
     }
@@ -423,11 +424,22 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             distanceMeters: 180,
             evidence: ["Apple Maps result", "Search: milk tea"]
         )
+        let genericCafe = SaveMapCandidate(
+            title: "The Lost Bean",
+            subtitle: "1705 Flight Way Suite #1, Tustin, CA",
+            latitude: 33.6849,
+            longitude: -117.8268,
+            category: .cafe,
+            rating: 4.6,
+            reviewCount: 800,
+            distanceMeters: 220,
+            evidence: ["Apple Maps result", "Search: milk tea"]
+        )
 
         let response = try XCTUnwrap(service.recommendationSearchResponse(
             for: "推薦我一家附近奶茶",
             places: [farBoba, nearbyRamen, nearbyBoba],
-            mapCandidates: [publicBoba],
+            mapCandidates: [genericCafe, publicBoba],
             currentLocation: currentLocation
         ))
 
@@ -436,6 +448,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Tainan Milk Tea"))
         XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Tainan Milk Tea"])
         XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Public Boba"])
+        XCTAssertFalse(response.newRecommendations.results.map(\.title).contains("The Lost Bean"))
         XCTAssertTrue(response.assistantMessage?.contains("Nearby Boba") == true)
     }
 

@@ -49,11 +49,13 @@ struct SaveLocationIntentRecommendationService {
         }
 
         let categoryMatches = places.filter { place in
-            intent.requiredCategories.contains(place.category)
+            intent.requiredCategories.contains(place.category) &&
+                (!intent.requiresSpecificEvidenceMatch || intent.matchesSpecificEvidence(in: specificEvidenceText(for: place)))
         }
         let rankedCategoryMatches = rank(categoryMatches, for: intent, currentLocation: currentLocation, tasteProfile: tasteProfile)
         let categoryReviewCandidates = reviewCandidates.filter { candidate in
-            intent.requiredCategories.contains(inferredCategory(for: candidate))
+            intent.requiredCategories.contains(inferredCategory(for: candidate)) &&
+                (!intent.requiresSpecificEvidenceMatch || intent.matchesSpecificEvidence(in: specificEvidenceText(for: candidate)))
         }
         let reviewMatches = rankReviewCandidates(
             categoryReviewCandidates,
@@ -61,7 +63,8 @@ struct SaveLocationIntentRecommendationService {
         )
         let mapMatches = rankMapCandidates(
             mapCandidates.filter { candidate in
-                intent.requiredCategories.contains(inferredCategory(for: candidate))
+                intent.requiredCategories.contains(inferredCategory(for: candidate)) &&
+                    (!intent.requiresSpecificEvidenceMatch || intent.matchesSpecificEvidence(in: specificEvidenceText(for: candidate)))
             }
         )
 
@@ -90,7 +93,7 @@ struct SaveLocationIntentRecommendationService {
                     : " You do have saved \(categoryLabel(for: intent)) places, but the closest one is outside the nearby radius."
                 return sectionedResponse(
                     query: query,
-                    message: "你的 SAV-E 裡附近沒有\(localizedCategoryLabel(for: intent))。I did not recommend other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
+                    message: "你的 SAV-E 裡附近沒有\(localizedCategoryLabel(for: intent))。I did not recommend generic cafes or other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
                     nearby: [],
                     far: far,
                     reviewCandidates: nearbyReviewMatches,
@@ -237,6 +240,30 @@ struct SaveLocationIntentRecommendationService {
         return needles.reduce(0) { score, needle in
             haystack.contains(needle) ? score + 1 : score
         }
+    }
+
+    private func specificEvidenceText(for place: Place) -> String {
+        [
+            place.name,
+            place.note ?? "",
+            place.extractedDishes?.joined(separator: " ") ?? "",
+            place.recommender ?? ""
+        ]
+        .joined(separator: " ")
+    }
+
+    private func specificEvidenceText(for candidate: PlaceReviewCandidate) -> String {
+        ([candidate.name, candidate.address, candidate.city ?? ""] + candidate.evidence)
+            .joined(separator: " ")
+    }
+
+    private func specificEvidenceText(for candidate: SaveMapCandidate) -> String {
+        let evidence = candidate.evidence.filter { line in
+            line.trimmingCharacters(in: .whitespacesAndNewlines)
+                .range(of: "search:", options: [.caseInsensitive, .anchored]) == nil
+        }
+        return ([candidate.title, candidate.subtitle] + evidence)
+            .joined(separator: " ")
     }
 
     private func distanceMeters(from currentLocation: CLLocation, to place: Place) -> CLLocationDistance {
@@ -513,7 +540,7 @@ struct SaveLocationIntentRecommendationService {
     }
 
     private func agentAnswer(lead: String, reason: String, caveat: String) -> String {
-        "\(lead)\n\nWhy: \(reason)\n\nNext: \(caveat)"
+        "\(lead) \(reason). \(caveat)"
     }
 
     private func supportingSummary(reviewResults: [SaveSearchResult], unsavedResults: [SaveSearchResult]) -> String {
@@ -593,20 +620,11 @@ struct SaveLocationIntentRecommendationService {
     }
 
     private func categoryLabel(for intent: SaveSearchIntent) -> String {
-        guard let category = intent.requiredCategories.first else { return "places" }
-        return category.displayName.lowercased()
+        intent.recommendationLabel
     }
 
     private func localizedCategoryLabel(for intent: SaveSearchIntent) -> String {
-        guard let category = intent.requiredCategories.first else { return "地點" }
-        switch category {
-        case .food: return "餐廳"
-        case .cafe: return "咖啡廳"
-        case .bar: return "酒吧"
-        case .attraction: return "景點"
-        case .stay: return "住宿"
-        case .shopping: return "購物地點"
-        }
+        intent.localizedRecommendationLabel
     }
 
     private func rawPlaceId(from resultId: String) -> String? {

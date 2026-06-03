@@ -270,7 +270,7 @@ final class SaveSearchControllerTests: XCTestCase {
             localRecords: []
         )
 
-        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Half and Half Tea Express", "Generic Coffee"])
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Half and Half Tea Express"])
         XCTAssertTrue(response.fromYourSave.results.first?.evidence.contains { $0.contains("milk tea") } == true)
     }
 

@@ -133,7 +133,8 @@ struct SaveSearchIntentParser {
 
     private static func categoryMatch(in normalized: String) -> (category: PlaceCategory, needles: [String])? {
         let specs: [(PlaceCategory, [String])] = [
-            (.cafe, ["milk tea", "boba", "bubble tea", "coffee", "cafe", "coffee shop", "tea shop", "奶茶", "珍奶", "珍珠奶茶", "咖啡", "咖啡廳", "咖啡厅"]),
+            (.cafe, ["milk tea", "boba", "bubble tea", "tea shop", "奶茶", "珍奶", "珍珠奶茶"]),
+            (.cafe, ["coffee", "cafe", "coffee shop", "咖啡", "咖啡廳", "咖啡厅"]),
             (.food, ["food", "restaurant", "restaurants", "dinner", "lunch", "sushi", "ramen", "餐廳", "餐厅", "晚餐", "午餐", "吃飯", "吃饭", "美食"]),
             (.bar, ["bar", "cocktail", "drink", "drinks", "酒吧", "喝酒", "調酒", "调酒"]),
             (.attraction, ["attraction", "museum", "gallery", "exhibition", "spot", "景點", "景点", "展覽", "展览", "美術館", "美术馆", "博物館", "博物馆"]),
@@ -154,6 +155,44 @@ struct SaveSearchIntentParser {
 
     static func containsAny(_ value: String, keywords: [String]) -> Bool {
         keywords.contains { value.contains($0.lowercased()) }
+    }
+}
+
+extension SaveSearchIntent {
+    var requiresSpecificEvidenceMatch: Bool {
+        categoryNeedles.contains { needle in
+            ["milk tea", "boba", "bubble tea", "tea shop", "奶茶", "珍奶", "珍珠奶茶"].contains(needle)
+        }
+    }
+
+    var recommendationLabel: String {
+        if requiresSpecificEvidenceMatch {
+            return "boba / milk tea"
+        }
+        guard let category = requiredCategories.first else { return "places" }
+        return category.displayName.lowercased()
+    }
+
+    var localizedRecommendationLabel: String {
+        if requiresSpecificEvidenceMatch {
+            return "奶茶 / 珍奶"
+        }
+        guard let category = requiredCategories.first else { return "地點" }
+        switch category {
+        case .food: return "餐廳"
+        case .cafe: return "咖啡廳"
+        case .bar: return "酒吧"
+        case .attraction: return "景點"
+        case .stay: return "住宿"
+        case .shopping: return "購物地點"
+        }
+    }
+
+    func matchesSpecificEvidence(in text: String) -> Bool {
+        let normalized = SaveSearchIntentParser.normalize(text)
+        return categoryNeedles.contains { needle in
+            normalized.contains(needle)
+        }
     }
 }
 
