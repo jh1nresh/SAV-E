@@ -174,7 +174,7 @@ struct SaveSearchController {
             createdAt: place.createdAt,
             canRunRecovery: false,
             isRecommendationShell: false,
-            primaryAction: place.sourceUrl == nil ? .planAround : .openSource
+            primaryAction: SavePlaceActionResolution(place: place).kind
         )
     }
 
@@ -198,6 +198,7 @@ struct SaveSearchController {
             statusLabel = "Map Stamp"
         }
 
+        let resolvedPrimaryAction = primaryAction(for: record)
         return SaveSearchResult(
             id: "record-\(record.id.uuidString)",
             objectType: objectType,
@@ -207,20 +208,20 @@ struct SaveSearchController {
             statusLabel: statusLabel,
             sourceURL: record.sourceURL,
             sourcePlatform: sourcePlatform(from: record.sourceURL),
-            category: nil,
+            category: record.category,
             cityOrArea: record.address.flatMap(cityOrArea),
-            latitude: nil,
-            longitude: nil,
-            rating: nil,
+            latitude: record.latitude,
+            longitude: record.longitude,
+            rating: record.rating,
             reviewCount: nil,
             confidence: nil,
             missingInfo: record.evidenceDiagnostic?.missingFields ?? [],
-            evidence: record.evidence,
+            evidence: evidenceWithRecoveryReceipt(record.evidence, diagnostic: record.evidenceDiagnostic),
             recoveryQueries: recoveryQueries(from: record.evidenceDiagnostic),
             createdAt: record.createdAt,
-            canRunRecovery: record.state == .sourceOnly,
+            canRunRecovery: resolvedPrimaryAction == .runRecovery,
             isRecommendationShell: false,
-            primaryAction: record.state == .sourceOnly ? .runRecovery : .openSource
+            primaryAction: resolvedPrimaryAction
         )
     }
 
@@ -249,8 +250,31 @@ struct SaveSearchController {
             createdAt: candidate.createdAt,
             canRunRecovery: !isMapReady,
             isRecommendationShell: false,
-            primaryAction: isMapReady ? .savePlace : .runRecovery
+            primaryAction: isMapReady ? .confirmMapStamp : .runRecovery
         )
+    }
+
+    private func primaryAction(for record: SaveMemoryRecord) -> SaveSearchPrimaryAction {
+        switch record.state {
+        case .sourceOnly:
+            return .runRecovery
+        case .reviewCandidate:
+            return canConfirmMapStamp(record) ? .confirmMapStamp : .runRecovery
+        case .confirmedPlace:
+            return .recommendOrder
+        }
+    }
+
+    private func canConfirmMapStamp(_ record: SaveMemoryRecord) -> Bool {
+        if record.evidenceDiagnostic?.canSaveAsMapStamp == true { return true }
+        guard record.address?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+              record.latitude != nil,
+              record.longitude != nil
+        else {
+            return false
+        }
+        let missing = record.evidenceDiagnostic?.missingFields.map { $0.lowercased() } ?? []
+        return !missing.contains { $0.contains("address") || $0.contains("coordinate") }
     }
 
     private func assistantMessage(
@@ -356,10 +380,29 @@ struct SaveSearchController {
 
     private func recoveryQueries(from diagnostic: SocialPlaceEvidenceDiagnostic?) -> [String] {
         guard let diagnostic else { return [] }
+        if let recoveryPlan = diagnostic.recoveryPlan, !recoveryPlan.queriesToTry.isEmpty {
+            return recoveryPlan.queriesToTry
+        }
         if let suggestedSearchQueries = diagnostic.suggestedSearchQueries, !suggestedSearchQueries.isEmpty {
             return suggestedSearchQueries
         }
         return diagnostic.nextBestClue.isEmpty ? [] : [diagnostic.nextBestClue]
+    }
+
+    private func evidenceWithRecoveryReceipt(_ evidence: [String], diagnostic: SocialPlaceEvidenceDiagnostic?) -> [String] {
+        guard let diagnostic else { return evidence }
+        var receipt = [
+            "Recovery status: \(diagnostic.statusLabel)",
+            "Next action: \(diagnostic.primaryActionLabel)"
+        ]
+        if let recoveryPlan = diagnostic.recoveryPlan {
+            receipt.append("Recovery decision: \(recoveryPlan.decision.rawValue); direct save \(recoveryPlan.allowsDirectSave ? "allowed" : "blocked")")
+            receipt.append(contentsOf: recoveryPlan.requiredEvidence.prefix(3).map { "Required proof: \($0)" })
+            receipt.append(contentsOf: recoveryPlan.blockedResultHints.prefix(2).map { "Rejected clue type: \($0)" })
+        }
+        receipt.append(contentsOf: (diagnostic.rejectedEvidence ?? []).prefix(2).map { "Rejected evidence: \($0.value) — \($0.reason)" })
+        var seen = Set<String>()
+        return (evidence + receipt).filter { seen.insert($0).inserted }
     }
 
     private func sourceSubtitle(from sourceURL: String?) -> String {

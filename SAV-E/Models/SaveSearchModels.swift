@@ -91,6 +91,12 @@ struct SaveAgentDrawerAction: Identifiable, Hashable {
         self.label = label ?? kind.displayName
         self.systemImage = kind.systemImage
     }
+
+    init(resolution: SavePlaceActionResolution) {
+        self.kind = resolution.kind
+        self.label = resolution.title
+        self.systemImage = resolution.systemImage
+    }
 }
 
 struct SaveAgentActionDrawerModel: Hashable {
@@ -104,7 +110,7 @@ struct SaveAgentActionDrawerModel: Hashable {
     init(result: SaveSearchResult) {
         heading = Self.heading(for: result)
         contextLine = Self.contextLine(for: result)
-        primaryAction = SaveAgentDrawerAction(kind: Self.primaryAction(for: result))
+        primaryAction = SaveAgentDrawerAction(resolution: SavePlaceActionResolution(result: result))
         secondaryActions = Self.secondaryActions(for: result, excluding: primaryAction.kind)
         evidenceSummary = Self.evidenceSummary(for: result)
         missingInfo = result.missingInfo
@@ -141,19 +147,6 @@ struct SaveAgentActionDrawerModel: Hashable {
             return "Reuse this stop in a route or guide."
         case .newRecommendation:
             return "Recommendations are contextual answers; choose a place before saving anything."
-        }
-    }
-
-    private static func primaryAction(for result: SaveSearchResult) -> SaveSearchPrimaryAction {
-        switch result.objectType {
-        case .sourceOnlyClue: return .runRecovery
-        case .pendingCandidate: return .confirmMapStamp
-        case .mapVisibleUnsavedPlace: return .savePlace
-        case .savedPlace: return .recommendOrder
-        case .tripStop: return .planAround
-        case .triedMemory: return .addReview
-        case .review: return .addProof
-        case .newRecommendation: return result.primaryAction
         }
     }
 
@@ -221,6 +214,63 @@ struct SaveAgentActionDrawerModel: Hashable {
     }
 }
 
+struct SavePlaceActionResolution: Hashable {
+    var kind: SaveSearchPrimaryAction
+    var title: String
+    var systemImage: String
+
+    init(kind: SaveSearchPrimaryAction) {
+        self.kind = kind
+        title = kind.displayName
+        systemImage = kind.systemImage
+    }
+
+    init(result: SaveSearchResult) {
+        self.init(kind: Self.primaryAction(for: result))
+    }
+
+    init(candidate: PlaceReviewCandidate) {
+        self.init(kind: candidate.hasReliableCoordinates ? .confirmMapStamp : .runRecovery)
+    }
+
+    init(place: Place) {
+        self.init(kind: place.status == .visited ? .addReview : .recommendOrder)
+    }
+
+    init(mapCandidate: SaveMapCandidate) {
+        self.init(kind: .savePlace)
+    }
+
+    var confirmsMapStamp: Bool {
+        kind == .confirmMapStamp
+    }
+
+    private static func primaryAction(for result: SaveSearchResult) -> SaveSearchPrimaryAction {
+        switch result.objectType {
+        case .sourceOnlyClue:
+            return .runRecovery
+        case .pendingCandidate:
+            // Pending candidates stay in recovery unless the service marks them map-ready.
+            if result.primaryAction == .confirmMapStamp {
+                return .confirmMapStamp
+            }
+            return .runRecovery
+        case .mapVisibleUnsavedPlace:
+            return .savePlace
+        case .savedPlace:
+            return .recommendOrder
+        case .tripStop:
+            return .planAround
+        case .triedMemory:
+            return .addReview
+        case .review:
+            return .addProof
+        case .newRecommendation:
+            return result.primaryAction
+        }
+    }
+}
+
 enum SavePlaceMemoryState: Equatable {
     case clue
     case reviewCandidate
@@ -260,19 +310,26 @@ struct SavePlaceDrawerPresentation: Equatable {
         self.secondaryActionTitles = secondaryActionTitles
     }
 
+    private static func primaryActionFields(
+        _ resolution: SavePlaceActionResolution
+    ) -> (title: String, systemImage: String) {
+        (resolution.title, resolution.systemImage)
+    }
+
     static func clue(
         title: String,
         contextLine: String,
         trustLine: String = "SAV-E found a source, but not enough proof for a place yet."
     ) -> SavePlaceDrawerPresentation {
-        SavePlaceDrawerPresentation(
+        let primary = primaryActionFields(SavePlaceActionResolution(kind: .runRecovery))
+        return SavePlaceDrawerPresentation(
             state: .clue,
             eyebrow: "Clue · Needs exact place",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
-            primaryActionTitle: "Find exact place",
-            primaryActionSystemImage: "sparkle.magnifyingglass",
+            primaryActionTitle: primary.title,
+            primaryActionSystemImage: primary.systemImage,
             secondaryActionTitles: ["View source", "Add note", "Save as clue"]
         )
     }
@@ -282,14 +339,15 @@ struct SavePlaceDrawerPresentation: Equatable {
         contextLine: String,
         trustLine: String = "SAV-E found a likely place. Review the evidence before stamping it to your map."
     ) -> SavePlaceDrawerPresentation {
-        SavePlaceDrawerPresentation(
+        let primary = primaryActionFields(SavePlaceActionResolution(kind: .confirmMapStamp))
+        return SavePlaceDrawerPresentation(
             state: .reviewCandidate,
             eyebrow: "Review Candidate · Check before saving",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
-            primaryActionTitle: "Confirm Map Stamp",
-            primaryActionSystemImage: "checkmark.seal",
+            primaryActionTitle: primary.title,
+            primaryActionSystemImage: primary.systemImage,
             secondaryActionTitles: ["Save", "Reject", "View source"]
         )
     }
@@ -299,14 +357,15 @@ struct SavePlaceDrawerPresentation: Equatable {
         contextLine: String,
         trustLine: String = "Public discovery result, not one of your SAV-E memories yet."
     ) -> SavePlaceDrawerPresentation {
-        SavePlaceDrawerPresentation(
+        let primary = primaryActionFields(SavePlaceActionResolution(kind: .savePlace))
+        return SavePlaceDrawerPresentation(
             state: .unsavedMapCandidate,
             eyebrow: "Public discovery · Not saved yet",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
-            primaryActionTitle: "Save this place",
-            primaryActionSystemImage: "bookmark.badge.plus",
+            primaryActionTitle: primary.title,
+            primaryActionSystemImage: primary.systemImage,
             secondaryActionTitles: ["Maps"]
         )
     }
@@ -316,14 +375,15 @@ struct SavePlaceDrawerPresentation: Equatable {
         contextLine: String,
         trustLine: String = "Saved to your place memory."
     ) -> SavePlaceDrawerPresentation {
-        SavePlaceDrawerPresentation(
+        let primary = primaryActionFields(SavePlaceActionResolution(kind: .recommendOrder))
+        return SavePlaceDrawerPresentation(
             state: .mapStamp,
             eyebrow: "Map Stamp · From your SAV-E",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
-            primaryActionTitle: "What should I order?",
-            primaryActionSystemImage: "fork.knife",
+            primaryActionTitle: primary.title,
+            primaryActionSystemImage: primary.systemImage,
             secondaryActionTitles: ["Plan around this", "Add private note", "Share SAV-E Card", "Edit memory"]
         )
     }
@@ -350,14 +410,15 @@ struct SavePlaceDrawerPresentation: Equatable {
         contextLine: String,
         trustLine: String = "Tried memory or proof attached."
     ) -> SavePlaceDrawerPresentation {
-        SavePlaceDrawerPresentation(
+        let primary = primaryActionFields(SavePlaceActionResolution(kind: .addReview))
+        return SavePlaceDrawerPresentation(
             state: .actionReceipt,
             eyebrow: "Action / Receipt · Proof attached",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
-            primaryActionTitle: "Add private review",
-            primaryActionSystemImage: "text.bubble",
+            primaryActionTitle: primary.title,
+            primaryActionSystemImage: primary.systemImage,
             secondaryActionTitles: ["View receipt", "Use again", "More"]
         )
     }

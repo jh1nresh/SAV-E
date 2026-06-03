@@ -366,7 +366,7 @@ struct SaveLocationIntentRecommendationService {
                 createdAt: place.createdAt,
                 canRunRecovery: false,
                 isRecommendationShell: false,
-                primaryAction: place.sourceUrl == nil ? .planAround : .openSource
+                primaryAction: SavePlaceActionResolution(place: place).kind
             )
         }
     }
@@ -399,7 +399,7 @@ struct SaveLocationIntentRecommendationService {
                 createdAt: candidate.createdAt,
                 canRunRecovery: !candidate.hasReliableCoordinates,
                 isRecommendationShell: false,
-                primaryAction: candidate.hasReliableCoordinates ? .savePlace : .runRecovery,
+                primaryAction: candidate.hasReliableCoordinates ? .confirmMapStamp : .runRecovery,
                 distanceMeters: currentLocation.flatMap { distanceMeters(from: $0, to: candidate) }
             )
         }

@@ -4,6 +4,85 @@ import CoreLocation
 @testable import SAVE
 
 final class SaveSearchControllerTests: XCTestCase {
+    func testPlaceActionResolutionIsStateSafe() {
+        let weakCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Unverified brunch reel",
+            address: "",
+            city: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Source clue only"],
+            confidence: 0.42,
+            missingInfo: ["Verified address", "Verified coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let weakAction = SavePlaceActionResolution(candidate: weakCandidate)
+
+        XCTAssertEqual(weakAction.kind, .runRecovery)
+        XCTAssertEqual(weakAction.title, "Find exact place")
+        XCTAssertFalse(weakAction.confirmsMapStamp)
+
+        let staleSavePlaceCandidate = SaveSearchResult(
+            id: UUID().uuidString,
+            objectType: .pendingCandidate,
+            userState: .waitingReview,
+            title: "Unverified brunch reel",
+            subtitle: "Irvine",
+            statusLabel: "Review Candidate",
+            sourceURL: "https://www.instagram.com/reel/example",
+            sourcePlatform: .instagram,
+            category: .cafe,
+            cityOrArea: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            rating: nil,
+            reviewCount: nil,
+            confidence: 0.42,
+            missingInfo: ["Verified address", "Verified coordinates"],
+            evidence: ["Source clue only"],
+            recoveryQueries: ["Unverified brunch reel Irvine"],
+            createdAt: Date(),
+            canRunRecovery: true,
+            isRecommendationShell: false,
+            primaryAction: .savePlace
+        )
+        let staleAction = SavePlaceActionResolution(result: staleSavePlaceCandidate)
+
+        XCTAssertEqual(staleAction.kind, .runRecovery)
+        XCTAssertFalse(staleAction.confirmsMapStamp)
+
+        let mapReadyCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Quarter Sheets",
+            address: "1305 Portia St",
+            city: "Los Angeles",
+            latitude: 34.083,
+            longitude: -118.254,
+            evidence: ["Google Places match", "Verified coordinates"],
+            confidence: 0.86,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+        let mapReadyAction = SavePlaceActionResolution(candidate: mapReadyCandidate)
+
+        XCTAssertEqual(mapReadyAction.kind, .confirmMapStamp)
+        XCTAssertEqual(mapReadyAction.title, "Confirm Map Stamp")
+        XCTAssertTrue(mapReadyAction.confirmsMapStamp)
+
+        let savedPlace = place(
+            name: "Saved Cafe",
+            address: "Irvine, CA",
+            category: .cafe
+        )
+        let savedAction = SavePlaceActionResolution(place: savedPlace)
+        XCTAssertEqual(savedAction.kind, .recommendOrder)
+    }
+
     func testSavePlaceDrawerPresentationMapsCoreStates() {
         let savedPlace = place(
             name: "Bright Coffee Bar",
@@ -762,7 +841,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.title, "Possible Tea Shop")
         XCTAssertEqual(result.objectType, .pendingCandidate)
         XCTAssertEqual(result.userState, .waitingReview)
-        XCTAssertEqual(result.primaryAction, .openSource)
+        XCTAssertEqual(result.primaryAction, .runRecovery)
     }
 
     func testSourceOnlyMilkTeaClueRequiresRecovery() throws {
@@ -779,8 +858,21 @@ final class SaveSearchControllerTests: XCTestCase {
                     evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
                         found: ["Source URL: https://www.instagram.com/reel/boba-source/"],
                         attempts: ["Checked caption text"],
-                        missingFields: ["exact place", "verified address", "coordinates"],
-                        nextBestClue: "Run source recovery search"
+                        missingFields: ["Verified place name", "verified address", "coordinates"],
+                        nextBestClue: "Run source recovery search",
+                        suggestedSearchQueries: ["boba-source Taipei boba"],
+                        recoveryPlan: SocialPlaceEvidenceRecoveryPlan(
+                            sourceURL: "https://www.instagram.com/reel/boba-source/",
+                            evidenceAtoms: ["source_url: https://www.instagram.com/reel/boba-source/"],
+                            queriesToTry: ["boba-source Taipei boba", "Instagram boba-source place"],
+                            blockedResultHints: ["creator profile without venue name/address"],
+                            requiredEvidence: ["Verified address", "Verified coordinates"],
+                            decision: .sourceOnly,
+                            allowsDirectSave: false
+                        ),
+                        rejectedEvidence: [
+                            SocialPlaceRejectedEvidence(value: "creator handle", reason: "not venue proof")
+                        ]
                     )
                 )
             ]
@@ -790,7 +882,12 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.objectType, .sourceOnlyClue)
         XCTAssertEqual(result.userState, .sourceOnly)
         XCTAssertEqual(result.primaryAction, .runRecovery)
-        XCTAssertTrue(result.missingInfo.contains("exact place"))
+        XCTAssertTrue(result.missingInfo.contains("Verified place name"))
+        XCTAssertEqual(result.recoveryQueries, ["boba-source Taipei boba", "Instagram boba-source place"])
+        XCTAssertTrue(result.evidence.contains("Recovery status: Source clue"))
+        XCTAssertTrue(result.evidence.contains("Next action: Add caption / screenshot / map link"))
+        XCTAssertTrue(result.evidence.contains("Recovery decision: sourceOnly; direct save blocked"))
+        XCTAssertTrue(result.evidence.contains("Rejected evidence: creator handle — not venue proof"))
     }
 
     func testSearchPrioritizesSavedPlacesBeforeRecommendationShell() {
@@ -965,7 +1062,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.objectType, .savedPlace)
         XCTAssertEqual(result.userState, .wantToGo)
         XCTAssertEqual(result.userState.displayName, "Saved")
-        XCTAssertEqual(result.primaryAction, .openSource)
+        XCTAssertEqual(result.primaryAction, .recommendOrder)
         XCTAssertEqual(result.rating, 4.6)
     }
 
@@ -1074,6 +1171,22 @@ final class SaveSearchControllerTests: XCTestCase {
                     placeName: "Dayglow Coffee",
                     address: "Los Angeles, CA",
                     evidence: ["Place name detected from caption"]
+                ),
+                SaveMemoryRecord(
+                    state: .reviewCandidate,
+                    sourceURL: "https://maps.google.com/?q=Quarter+Sheets",
+                    title: "Map ready candidate",
+                    placeName: "Quarter Sheets",
+                    address: "1305 Portia St, Los Angeles, CA",
+                    evidence: ["Google Places match", "Verified coordinates"],
+                    evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
+                        found: ["Google Places match", "Verified coordinates"],
+                        attempts: ["Checked Google Places"],
+                        missingFields: [],
+                        nextBestClue: "Confirm map match"
+                    ),
+                    latitude: 34.083,
+                    longitude: -118.254
                 )
             ],
             mapCandidates: [
@@ -1105,10 +1218,15 @@ final class SaveSearchControllerTests: XCTestCase {
         let malformedSource = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Malformed source clue" })
         XCTAssertFalse(malformedSource.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
 
-        let reviewCandidate = try XCTUnwrap(response.fromYourSave.results.first { $0.objectType == .pendingCandidate })
-        XCTAssertEqual(reviewCandidate.agentDrawer.heading, "Review before stamping")
-        XCTAssertEqual(reviewCandidate.agentDrawer.primaryAction.kind, .confirmMapStamp)
-        XCTAssertEqual(reviewCandidate.agentDrawer.primaryAction.label, "Confirm Map Stamp")
+        let weakReviewCandidate = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Dayglow Coffee" })
+        XCTAssertEqual(weakReviewCandidate.agentDrawer.heading, "Review before stamping")
+        XCTAssertEqual(weakReviewCandidate.agentDrawer.primaryAction.kind, .runRecovery)
+        XCTAssertEqual(weakReviewCandidate.agentDrawer.primaryAction.label, "Find exact place")
+
+        let mapReadyCandidate = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Quarter Sheets" })
+        XCTAssertEqual(mapReadyCandidate.agentDrawer.heading, "Review before stamping")
+        XCTAssertEqual(mapReadyCandidate.agentDrawer.primaryAction.kind, .confirmMapStamp)
+        XCTAssertEqual(mapReadyCandidate.agentDrawer.primaryAction.label, "Confirm Map Stamp")
 
         let savedPlace = try XCTUnwrap(response.fromYourSave.results.first { $0.objectType == .savedPlace })
         XCTAssertEqual(savedPlace.objectType.displayName, "Map Stamp")

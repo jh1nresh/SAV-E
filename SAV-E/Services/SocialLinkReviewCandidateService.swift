@@ -1147,7 +1147,14 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func diagnosticSearchEvidence(_ diagnostic: SocialPlaceEvidenceDiagnostic) -> [String] {
-        (diagnostic.suggestedSearchQueries ?? []).map { "Suggested public search: \($0)" }
+        var evidence = (diagnostic.suggestedSearchQueries ?? []).map { "Suggested public search: \($0)" }
+        if let recoveryPlan = diagnostic.recoveryPlan {
+            evidence.append("Recovery decision: \(recoveryPlan.decision.rawValue); direct save \(recoveryPlan.allowsDirectSave ? "allowed" : "blocked")")
+            evidence.append(contentsOf: recoveryPlan.requiredEvidence.prefix(3).map { "Required proof: \($0)" })
+            evidence.append(contentsOf: recoveryPlan.blockedResultHints.prefix(2).map { "Rejected clue type: \($0)" })
+        }
+        evidence.append(contentsOf: (diagnostic.rejectedEvidence ?? []).prefix(2).map { "Rejected evidence: \($0.value) — \($0.reason)" })
+        return appendUnique([], evidence)
     }
 
     private func recoveryPlan(

@@ -3288,11 +3288,11 @@ private struct ReviewCandidateDetailCard: View {
 
                 HStack(spacing: 8) {
                     CandidateActionButton(
-                        title: primaryActionTitle,
-                        systemImage: primaryActionSystemImage,
+                        title: primaryAction.title,
+                        systemImage: primaryAction.systemImage,
                         fill: .saveHoney,
                         disabled: isWorking,
-                        action: { onSave(nameOverride) }
+                        action: performPrimaryAction
                     )
                     CandidateActionButton(
                         title: "Add more clue",
@@ -3313,12 +3313,16 @@ private struct ReviewCandidateDetailCard: View {
         SavePlaceDrawerPresentation(reviewCandidate: candidate)
     }
 
-    private var primaryActionTitle: String {
-        candidate.hasReliableCoordinates ? "Confirm Map Stamp" : "Find exact place"
+    private var primaryAction: SavePlaceActionResolution {
+        SavePlaceActionResolution(candidate: candidate)
     }
 
-    private var primaryActionSystemImage: String {
-        candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass"
+    private func performPrimaryAction() {
+        if primaryAction.confirmsMapStamp {
+            onSave(nameOverride)
+        } else {
+            onAddMoreClue()
+        }
     }
 
     private var nameOverride: String? {
@@ -3458,13 +3462,16 @@ private struct ReviewCandidateProofPanel: View {
             items.append("Verified coordinates")
         }
         if items.isEmpty {
+            items.append(contentsOf: cleanEvidenceLines(including: ["required proof"]))
+        }
+        if items.isEmpty {
             items.append("Nothing obvious; check the place before confirming")
         }
         return Array(unique(items).prefix(3))
     }
 
     private var triedItems: [String] {
-        let tried = cleanEvidenceLines(including: ["checked", "prepared", "google places", "public search", "ocr", "metadata", "caption"])
+        let tried = cleanEvidenceLines(including: ["checked", "prepared", "google places", "public search", "ocr", "metadata", "caption", "recovery decision", "rejected evidence", "rejected clue type"])
         if !tried.isEmpty { return Array(tried.prefix(3)) }
         if sourceURL != nil { return ["Checked shared source"] }
         return ["Saved source evidence for review"]
