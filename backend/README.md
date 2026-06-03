@@ -46,3 +46,9 @@ Persistence routes accept either `Authorization: Bearer <Privy access token>` or
 - `GET /profile`
 - `PATCH /profile`
 - `POST /memory/captures/:id/search-recovery` — runs public search recovery for source-only captures and writes search-derived results back as review-only place candidates.
+- `GET /v0/places/:id/verified-claims` — returns owner-scoped place claims; raw evidence refs are omitted unless `includePrivateEvidence=true`.
+- `POST /v0/places/:id/verified-claims` — attaches an owner-scoped claim with proof level, confidence, visibility, context, ratings, and evidence refs.
+- `GET /v0/places/:id/trust-summary` — returns a compact agent-readable proof summary for a saved place.
+- `POST /v0/places/recommend-by-claims` — ranks owner-scoped saved places by verified claims and returns a retrieval receipt.
+
+Public cards, collections, OpenAPI, `llms.txt`, usage receipts, and reputation weighting are intentionally out of scope for the first verified-claims slice.

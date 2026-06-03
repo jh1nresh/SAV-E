@@ -1,6 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
 import pg from "pg";
+import {
+  buildTrustSummary,
+  formatPlaceClaim,
+  normalizePlaceClaimCreate,
+  normalizeRecommendationRequest,
+  parseProofLevel,
+  proofLevelsAtLeast,
+  recommendPlacesByClaims,
+} from "./placeClaims.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
 import {
   normalizeFollowRequest,
@@ -99,6 +108,26 @@ const placeCandidateFields = [
   "created_at",
 ] as const;
 
+const placeClaimFields = [
+  "id",
+  "place_id",
+  "claim_type",
+  "claim",
+  "agent_usable_summary",
+  "author_type",
+  "author_public_handle",
+  "author_relationship",
+  "proof_level",
+  "evidence_refs",
+  "visibility",
+  "confidence",
+  "context",
+  "ratings",
+  "observed_at",
+  "expires_or_stale_after",
+  "created_at",
+] as const;
+
 const agentDecisionFields = [
   "id",
   "candidate_id",
@@ -163,6 +192,7 @@ const jsonbFields = new Set([
   "input_schema",
   "output",
   "output_schema",
+  "ratings",
 ]);
 
 createServer(async (request, response) => {
@@ -176,7 +206,9 @@ createServer(async (request, response) => {
       return sendJson(response, { ok: true, service: "save-backend" });
     }
 
-    const segments = url.pathname.split("/").filter(Boolean);
+    const rawSegments = url.pathname.split("/").filter(Boolean);
+    const isV0 = rawSegments[0] === "v0";
+    const segments = isV0 ? rawSegments.slice(1) : rawSegments;
     const [resource, id] = segments;
 
     if (request.method === "GET" && resource === "referrals") {
@@ -186,6 +218,15 @@ createServer(async (request, response) => {
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
+    if (isV0 && resource === "places" && id === "recommend-by-claims") {
+      return await handleRecommendByClaims(request, response, userId);
+    }
+    if (isV0 && resource === "places" && id && segments[2] === "verified-claims") {
+      return await handlePlaceVerifiedClaims(request, response, id, url, userId);
+    }
+    if (isV0 && resource === "places" && id && segments[2] === "trust-summary") {
+      return await handlePlaceTrustSummary(request, response, id, userId);
+    }
     if (resource === "places" && id && segments[2] === "visibility") {
       return await handlePlaceVisibility(request, response, id, userId);
     }
@@ -279,6 +320,137 @@ async function fetchPlacesWithOptionalVisibility(userId: string): Promise<JsonBo
     );
     return rows;
   }
+}
+
+async function handlePlaceVerifiedClaims(
+  request: IncomingMessage,
+  response: ServerResponse,
+  placeId: string,
+  url: URL,
+  userId: string,
+): Promise<void> {
+  await ensureOwnedPlaceReference(placeId, userId);
+
+  if (request.method === "GET") {
+    const includePrivateEvidence = url.searchParams.get("includePrivateEvidence") === "true" ||
+      url.searchParams.get("include_private_evidence") === "true";
+    const claims = await placeClaimsForPlace(placeId, userId, {
+      proofLevelMin: url.searchParams.get("proofLevelMin") ?? url.searchParams.get("proof_level_min"),
+      claimType: url.searchParams.get("claimType") ?? url.searchParams.get("claim_type"),
+      visibility: url.searchParams.get("visibility"),
+      relationship: url.searchParams.get("relationship"),
+      freshness: url.searchParams.get("freshness"),
+    });
+
+    return sendJson(response, {
+      place_id: placeId,
+      claims: claims.map((claim) => formatPlaceClaim(formatDates(claim), includePrivateEvidence)),
+    });
+  }
+
+  if (request.method === "POST") {
+    let body: JsonBody;
+    try {
+      body = normalizePlaceClaimCreate(await readJson(request), placeId, userId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid claim";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const insert = buildInsert("place_claims", body, [...placeClaimFields, "user_id"]);
+    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+    return sendJson(response, formatPlaceClaim(formatDates(rows[0]), true), 201);
+  }
+
+  return sendJson(response, { error: "Unsupported verified claims route" }, 405);
+}
+
+async function handlePlaceTrustSummary(
+  request: IncomingMessage,
+  response: ServerResponse,
+  placeId: string,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "GET") return sendJson(response, { error: "Unsupported trust summary route" }, 405);
+
+  await ensureOwnedPlaceReference(placeId, userId);
+  const claims = await placeClaimsForPlace(placeId, userId);
+  return sendJson(response, buildTrustSummary(placeId, claims.map((claim) => formatDates(claim))));
+}
+
+async function handleRecommendByClaims(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "POST") return sendJson(response, { error: "Unsupported recommend-by-claims route" }, 405);
+
+  const recommendationRequest = normalizeRecommendationRequest(await readJson(request));
+  const proofLevels = proofLevelsAtLeast(recommendationRequest.proofLevelMin ?? "user_confirmed_place");
+  const { rows } = await pool.query(
+    `select
+       pc.*,
+       p.name as place_name,
+       p.address as place_address,
+       p.category as place_category,
+       p.status as place_status,
+       p.rating as place_rating,
+       p.google_rating as place_google_rating,
+       p.price_range as place_price_range
+     from place_claims pc
+     join places p on p.id = pc.place_id
+     where pc.user_id = $1
+       and p.user_id = $1
+       and pc.proof_level = any($2::text[])
+     order by pc.created_at desc
+     limit 200`,
+    [userId, proofLevels],
+  );
+
+  return sendJson(response, recommendPlacesByClaims(rows.map((row) => formatDates(row)), recommendationRequest));
+}
+
+async function placeClaimsForPlace(
+  placeId: string,
+  userId: string,
+  filters: {
+    proofLevelMin?: string | null;
+    claimType?: string | null;
+    visibility?: string | null;
+    relationship?: string | null;
+    freshness?: string | null;
+  } = {},
+): Promise<JsonBody[]> {
+  const values: QueryValue[] = [placeId, userId];
+  const where = ["place_id = $1", "user_id = $2"];
+
+  if (filters.proofLevelMin) {
+    values.push(proofLevelsAtLeast(parseProofLevel(filters.proofLevelMin, "source_backed")));
+    where.push(`proof_level = any($${values.length}::text[])`);
+  }
+  if (filters.claimType) {
+    values.push(filters.claimType);
+    where.push(`claim_type = $${values.length}`);
+  }
+  if (filters.visibility) {
+    values.push(filters.visibility);
+    where.push(`visibility = $${values.length}`);
+  }
+  if (filters.relationship) {
+    values.push(filters.relationship);
+    where.push(`author_relationship = $${values.length}`);
+  }
+  if (filters.freshness === "active") {
+    where.push("(expires_or_stale_after is null or expires_or_stale_after >= now())");
+  } else if (filters.freshness === "stale") {
+    where.push("expires_or_stale_after < now()");
+  }
+
+  const { rows } = await pool.query(
+    `select * from place_claims where ${where.join(" and ")} order by created_at desc`,
+    values,
+  );
+  return rows;
 }
 
 async function handleTrips(

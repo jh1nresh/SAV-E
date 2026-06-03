@@ -179,6 +179,48 @@ create table if not exists place_candidates (
 create index if not exists idx_place_candidates_capture_id on place_candidates(capture_id);
 create index if not exists idx_place_candidates_status on place_candidates(status);
 
+create table if not exists place_claims (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    place_id uuid references places(id) on delete cascade not null,
+    claim_type text not null,
+    claim text not null,
+    agent_usable_summary text not null default '',
+    author_type text not null default 'self',
+    author_public_handle text,
+    author_relationship text not null default 'self',
+    proof_level text not null default 'source_backed',
+    evidence_refs text[] not null default '{}',
+    visibility text not null default 'private',
+    confidence double precision not null default 0.5,
+    context jsonb not null default '{}'::jsonb,
+    ratings jsonb not null default '{}'::jsonb,
+    observed_at timestamptz,
+    expires_or_stale_after timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint place_claims_proof_level_check check (
+        proof_level in (
+            'source_backed',
+            'user_confirmed_place',
+            'visited_self_reported',
+            'friend_verified',
+            'receipt_backed',
+            'merchant_confirmed',
+            'network_reputation'
+        )
+    ),
+    constraint place_claims_visibility_check check (
+        visibility in ('private', 'link_shared', 'public', 'permissioned', 'paid')
+    ),
+    constraint place_claims_confidence_check check (confidence >= 0 and confidence <= 1)
+);
+
+create index if not exists idx_place_claims_user_place on place_claims(user_id, place_id, created_at desc);
+create index if not exists idx_place_claims_proof on place_claims(user_id, proof_level);
+create index if not exists idx_place_claims_type on place_claims(user_id, claim_type);
+create index if not exists idx_place_claims_visibility on place_claims(user_id, visibility);
+
 create table if not exists agent_decisions (
     id uuid primary key default gen_random_uuid(),
     candidate_id uuid references place_candidates(id) on delete cascade not null,
@@ -379,6 +421,10 @@ create trigger update_captures_updated_at before update on captures
 
 drop trigger if exists update_place_candidates_updated_at on place_candidates;
 create trigger update_place_candidates_updated_at before update on place_candidates
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_place_claims_updated_at on place_claims;
+create trigger update_place_claims_updated_at before update on place_claims
     for each row execute procedure update_updated_at();
 
 drop trigger if exists update_agent_capabilities_updated_at on agent_capabilities;
