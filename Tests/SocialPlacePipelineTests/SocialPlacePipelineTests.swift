@@ -109,6 +109,19 @@ private final class StubGooglePlacesService: GooglePlacesServiceProtocol {
                 )
             ]
         }
+        if query.localizedCaseInsensitiveContains("A Cheng Goose") {
+            return [
+                GooglePlaceMatch(
+                    id: "a-cheng-goose",
+                    name: "A Cheng Goose",
+                    address: "No. 105, Jilin Rd, Zhongshan District, Taipei City",
+                    latitude: 25.0562,
+                    longitude: 121.5301,
+                    rating: 4.3,
+                    priceLevel: 2
+                )
+            ]
+        }
         return []
     }
 
@@ -1972,6 +1985,27 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(google.queries.contains { $0.localizedCaseInsensitiveContains("elisolanooo") })
         XCTAssertFalse(google.queries.contains { $0.localizedCaseInsensitiveContains("Eli Solanooo") })
         XCTAssertTrue(google.queries.contains { $0.localizedCaseInsensitiveContains("JW Marriott Desert Springs") })
+    }
+
+    func testExactMapCandidateSearchUsesRecoveredPlaceNameAndAddress() async {
+        let google = StubGooglePlacesService()
+        let service = MapCandidateSearchService(googlePlacesService: google)
+
+        let candidates = await service.searchCandidates(
+            matching: "A Cheng Goose No. 105號 Jilin Rd Zhongshan District",
+            near: nil,
+            span: nil,
+            excluding: []
+        )
+
+        XCTAssertEqual(google.queries, ["A Cheng Goose No. 105號 Jilin Rd Zhongshan District"])
+        let result = candidates.first
+        XCTAssertEqual(result?.title, "A Cheng Goose")
+        XCTAssertEqual(result?.subtitle, "No. 105, Jilin Rd, Zhongshan District, Taipei City")
+        XCTAssertEqual(result?.latitude, 25.0562)
+        XCTAssertEqual(result?.longitude, 121.5301)
+        XCTAssertNil(result?.distanceMeters)
+        XCTAssertTrue(result?.evidence.contains("Google Places result") == true)
     }
 
     func testOCRFramePairsBrandWithNearbyDescriptor() {

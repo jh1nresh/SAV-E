@@ -38,6 +38,19 @@ private enum CommandDrawerTab: String, CaseIterable, Hashable {
         }
     }
 
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .saved:
+            return language.localized(english: "Stamps", traditionalChinese: "地圖章")
+        case .review:
+            return language.localized(english: "Review", traditionalChinese: "確認")
+        case .lists:
+            return language.localized(english: "Lists", traditionalChinese: "清單")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .saved: return "list.bullet.rectangle"
@@ -186,10 +199,13 @@ struct AIDrawerView: View {
             onPlanAroundPlace: { place in
                 closeMapDetail()
                 viewModel.query = "What should I order at \(place.name)?"
-                Task { await viewModel.submit() }
+                Task { await submitDrawerQuery() }
             },
             onAddMoreClueCandidate: { candidate in
                 addMoreClue(for: candidate)
+            },
+            onFindExactPlaceCandidate: { candidate in
+                findExactPlace(for: candidate)
             },
             onSaveCandidate: { candidate, nameOverride in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
@@ -323,7 +339,7 @@ struct AIDrawerView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundColor(commandBarSecondaryText)
             }
-            .accessibilityLabel("Clear map search results")
+            .accessibilityLabel(languageSettings.localized(english: "Clear map search results", traditionalChinese: "清除地圖搜尋結果"))
         } else if !viewModel.query.isEmpty {
             Button(action: {
                 viewModel.returnToCommands()
@@ -337,14 +353,14 @@ struct AIDrawerView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(commandBarSecondaryText)
             }
-            .accessibilityLabel("Clear command")
+            .accessibilityLabel(languageSettings.localized(english: "Clear command", traditionalChinese: "清除指令"))
 
             Button(action: submitSearchField) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.title3.weight(.black))
                     .foregroundColor(commandBarTextColor)
             }
-            .accessibilityLabel("Ask SAV-E")
+            .accessibilityLabel(languageSettings.localized(english: "Ask SAV-E", traditionalChinese: "詢問 SAV-E"))
         } else {
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
@@ -506,7 +522,7 @@ struct AIDrawerView: View {
                         }
                     } onPlanAround: {
                         viewModel.query = "What should I order at \(place.name)?"
-                        Task { await viewModel.submit() }
+                        Task { await submitDrawerQuery() }
                     } onUpdateVisibility: { visibility in
                         try await onUpdatePlaceVisibility(place, visibility)
                     }
@@ -533,6 +549,9 @@ struct AIDrawerView: View {
                 ReviewCandidateDetailCard(
                     candidate: candidate,
                     isWorking: candidateActionInFlight == candidate.id,
+                    onFindExactPlace: {
+                        findExactPlace(for: candidate)
+                    },
                     onAddMoreClue: {
                         addMoreClue(for: candidate)
                     },
@@ -588,7 +607,7 @@ struct AIDrawerView: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.saveCocoa.opacity(0.72))
 
-                    Button(languageSettings.text(.tryAgain)) { Task { await viewModel.submit() } }
+                    Button(languageSettings.text(.tryAgain)) { Task { await submitDrawerQuery() } }
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.saveCocoa)
@@ -800,7 +819,7 @@ struct AIDrawerView: View {
                     HStack(spacing: 5) {
                         Image(systemName: tab.systemImage)
                             .font(.caption2.weight(.black))
-                        Text(tab.title)
+                        Text(tab.title(language: languageSettings.language))
                             .font(.caption.weight(.black))
                             .lineLimit(1)
                             .minimumScaleFactor(0.76)
@@ -852,7 +871,7 @@ struct AIDrawerView: View {
                 socialSignalSection
 
                 if !viewModel.chatHistory.isEmpty {
-                    NotebookBandLabel("Recent")
+                    NotebookBandLabel(languageSettings.localized(english: "Recent", traditionalChinese: "最近"))
                         .padding(.horizontal, 16)
 
                     ForEach(viewModel.chatHistory.prefix(5)) { entry in
@@ -867,7 +886,7 @@ struct AIDrawerView: View {
                     }
                 }
 
-                NotebookBandLabel("Try asking")
+                NotebookBandLabel(languageSettings.localized(english: "Try asking", traditionalChinese: "試著問"))
                     .padding(.horizontal, 16)
 
                 ForEach(suggestions, id: \.self) { suggestion in
@@ -894,17 +913,30 @@ struct AIDrawerView: View {
         }
     }
 
-    private let suggestions = [
-        "Date night from my Map Stamps",
-        "Coffee from my saved places first",
-        "Plan Tokyo from my Map Stamps",
-        "What is nearby from my memory?",
-        "Show Review clues",
-    ]
+    private var suggestions: [String] {
+        switch languageSettings.language {
+        case .english:
+            return [
+                "Date night from my Map Stamps",
+                "Coffee from my saved places first",
+                "Plan Tokyo from my Map Stamps",
+                "What is nearby from my memory?",
+                "Show Review clues",
+            ]
+        case .traditionalChinese:
+            return [
+                "用我的地圖章安排約會晚餐",
+                "先從我存過的地方找咖啡",
+                "用我的地圖章規劃東京",
+                "我的記憶裡附近有什麼？",
+                "顯示待確認線索",
+            ]
+        }
+    }
 
     private var categoryFilterStrip: some View {
         VStack(alignment: .leading, spacing: 8) {
-            NotebookBandLabel("Filters")
+            NotebookBandLabel(languageSettings.localized(english: "Filters", traditionalChinese: "篩選"))
                 .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -925,7 +957,7 @@ struct AIDrawerView: View {
 
     private var socialSignalSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            NotebookBandLabel("Friend signal")
+            NotebookBandLabel(languageSettings.localized(english: "Friend signal", traditionalChinese: "朋友訊號"))
                 .padding(.horizontal, 16)
 
             HStack(spacing: 7) {
@@ -937,7 +969,7 @@ struct AIDrawerView: View {
                         HStack(spacing: 5) {
                             Image(systemName: lens.systemImage)
                                 .font(.caption2.weight(.black))
-                            Text(lens.title)
+                            Text(lens.title(language: languageSettings.language))
                                 .font(.caption.weight(.black))
                         }
                         .foregroundColor(socialLens == lens ? .saveInk : .saveCocoa.opacity(0.78))
@@ -973,7 +1005,7 @@ struct AIDrawerView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
-                TextField("Paste referral code or link", text: $followReferralInput)
+                TextField(languageSettings.localized(english: "Paste referral code or link", traditionalChinese: "貼上推薦碼或連結"), text: $followReferralInput)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.caption.weight(.semibold))
@@ -994,7 +1026,7 @@ struct AIDrawerView: View {
                             .controlSize(.mini)
                             .frame(width: 74, height: 38)
                     } else {
-                        Text("Follow")
+                        Text(languageSettings.localized(english: "Follow", traditionalChinese: "追蹤"))
                             .font(.caption.weight(.black))
                             .frame(width: 74, height: 38)
                     }
@@ -1013,7 +1045,7 @@ struct AIDrawerView: View {
             if let followReferralMessage {
                 Text(followReferralMessage)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(followReferralMessage.localizedCaseInsensitiveContains("followed") ? .saveSignal : .saveCocoa.opacity(0.78))
+                    .foregroundColor(isFollowReferralSuccessMessage(followReferralMessage) ? .saveSignal : .saveCocoa.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -1022,6 +1054,10 @@ struct AIDrawerView: View {
 
     private var canFollowReferral: Bool {
         !followReferralInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func isFollowReferralSuccessMessage(_ message: String) -> Bool {
+        message.localizedCaseInsensitiveContains("followed") || message.contains("已追蹤")
     }
 
     private func followFriend() async {
@@ -1033,22 +1069,34 @@ struct AIDrawerView: View {
         do {
             try await onFollowReferral(followReferralInput)
             followReferralInput = ""
-            followReferralMessage = "Followed. Friends' saved places will appear here when shared."
+            followReferralMessage = languageSettings.localized(
+                english: "Followed. Friends' saved places will appear here when shared.",
+                traditionalChinese: "已追蹤。朋友分享已保存地點後，會出現在這裡。"
+            )
             onSelectSocialLens(.friends)
             withAnimation { drawerDetent = .medium }
         } catch {
-            followReferralMessage = "Could not follow that code or link."
+            followReferralMessage = languageSettings.localized(english: "Could not follow that code or link.", traditionalChinese: "無法追蹤這個推薦碼或連結。")
         }
     }
 
     private var socialSignalEmptyMessage: String {
         switch socialLens {
         case .forYou:
-            return "Friend-shared places will appear here when someone shares real saved spots with you."
+            return languageSettings.localized(
+                english: "Friend-shared places will appear here when someone shares real saved spots with you.",
+                traditionalChinese: "當朋友分享真實保存的地點給你時，會出現在這裡。"
+            )
         case .friends:
-            return "No shared friend places yet. SAV-E only shows places friends chose to share."
+            return languageSettings.localized(
+                english: "No shared friend places yet. SAV-E only shows places friends chose to share.",
+                traditionalChinese: "還沒有朋友分享的地點。SAV-E 只會顯示朋友選擇分享的地點。"
+            )
         case .trending:
-            return "Trending stays empty until there is enough real shared place signal for this area and category."
+            return languageSettings.localized(
+                english: "Trending stays empty until there is enough real shared place signal for this area and category.",
+                traditionalChinese: "這個區域與分類累積足夠真實分享訊號後，熱門地點才會出現。"
+            )
         }
     }
 
@@ -1136,8 +1184,8 @@ struct AIDrawerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 9) {
-                    NotebookBandLabel("Create list")
-                    TextField("Tokyo cafes, OC weekend, NYC food", text: $newListTitle)
+                    NotebookBandLabel(languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"))
+                    TextField(languageSettings.localized(english: "Tokyo cafes, OC weekend, NYC food", traditionalChinese: "東京咖啡、OC 週末、紐約美食"), text: $newListTitle)
                         .textFieldStyle(.plain)
                         .font(.subheadline)
                         .foregroundColor(.saveInk)
@@ -1149,7 +1197,7 @@ struct AIDrawerView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
-                    TextField("Optional note", text: $newListNote)
+                    TextField(languageSettings.localized(english: "Optional note", traditionalChinese: "選填備註"), text: $newListNote)
                         .textFieldStyle(.plain)
                         .font(.caption)
                         .foregroundColor(.saveCocoa)
@@ -1162,7 +1210,7 @@ struct AIDrawerView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
                     Button(action: createCollaborativeList) {
-                        Label("Create list", systemImage: "plus")
+                        Label(languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"), systemImage: "plus")
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
                             .frame(maxWidth: .infinity)
@@ -1181,7 +1229,10 @@ struct AIDrawerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 if collaborativeLists.isEmpty {
-                    Text("Create a list, then add saved Map Stamps or unsaved map results from their detail cards.")
+                    Text(languageSettings.localized(
+                        english: "Create a list, then add saved Map Stamps or unsaved map results from their detail cards.",
+                        traditionalChinese: "先建立清單，再從地點詳情卡加入已保存地圖章或未保存的地圖結果。"
+                    ))
                         .font(.caption)
                         .foregroundColor(.saveCocoa.opacity(0.74))
                         .fixedSize(horizontal: false, vertical: true)
@@ -1384,10 +1435,12 @@ struct AIDrawerView: View {
             importURLToReviewCandidates(url)
         } else if viewModel.shouldSearchNearbyUnsavedCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
+        } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
+            searchNearbyUnsavedCandidates(for: viewModel.query)
         } else {
             let submittedQuery = viewModel.query
             Task {
-                await viewModel.submit(reviewCandidates: reviewCandidates)
+                await submitDrawerQuery()
                 if viewModel.shouldAutoSearchNearbyUnsavedCandidates() ||
                     viewModel.shouldPrepareNearbyCandidatesAfterAnswer(for: submittedQuery) {
                     searchNearbyUnsavedCandidates(for: submittedQuery)
@@ -1396,29 +1449,71 @@ struct AIDrawerView: View {
         }
     }
 
+    private func submitDrawerQuery() async {
+        await viewModel.submit(
+            reviewCandidates: reviewCandidates,
+            outputLanguage: languageSettings.language
+        )
+    }
+
     private func searchNearbyUnsavedCandidates(for query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed)
+        let isExactSearch = viewModel.shouldSearchExactMapCandidates(for: trimmed)
+        let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed) || isExactSearch
             ? trimmed
             : "search nearby unsaved candidates for \(trimmed)"
         viewModel.query = trimmed
-        addSpotStatus = "Looking for nearby unsaved candidates. Your SAV-E results stay separate."
+        addSpotStatus = isExactSearch
+            ? "Looking for exact map matches. Review the result before saving."
+            : "Looking for nearby unsaved candidates. Your SAV-E results stay separate."
         withAnimation { drawerDetent = .medium }
 
         Task {
             let candidates = await onPrepareMapSearch(fallbackQuery)
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
-                addSpotStatus = "No nearby unsaved candidates found yet. Try a more specific place type or city."
-                await viewModel.submit(reviewCandidates: reviewCandidates)
+                addSpotStatus = isExactSearch
+                    ? "No exact map match found yet. Try adding a city, address, or map link."
+                    : "No nearby unsaved candidates found yet. Try a more specific place type or city."
+                await submitDrawerQuery()
             } else {
                 viewModel.mapCandidates = candidates
                 addSpotStatus = nil
-                await viewModel.submit(reviewCandidates: reviewCandidates)
+                await submitDrawerQuery()
                 withAnimation {
                     drawerDetent = .medium
                 }
+            }
+        }
+    }
+
+    private func findExactPlace(for candidate: PlaceReviewCandidate) {
+        let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            addMoreClue(for: candidate)
+            return
+        }
+        mapDetailDrawerItem = nil
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        viewModel.query = query
+        addSpotStatus = "Finding exact place for \(candidate.name). Review the map match before saving."
+        withAnimation { drawerDetent = .medium }
+
+        Task {
+            let candidates = await onPrepareMapSearch(query)
+            if candidates.isEmpty {
+                viewModel.mapCandidates = []
+                addSpotStatus = "No exact map match found for \(candidate.name). Add a city, address, or map link as another clue."
+                viewModel.showReviewCandidate(candidate)
+            } else {
+                viewModel.mapCandidates = candidates
+                addSpotStatus = "Found \(candidates.count) possible map match\(candidates.count == 1 ? "" : "es") for \(candidate.name)."
+                await viewModel.submit(reviewCandidates: reviewCandidates)
+                withAnimation { drawerDetent = .medium }
             }
         }
     }
@@ -1604,6 +1699,7 @@ private struct DrawerGlassBackground: View {
 }
 
 private struct MapDetailDrawerView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
     let editableLists: [SaveCollaborativeList]
@@ -1613,6 +1709,7 @@ private struct MapDetailDrawerView: View {
     let onDeletePlace: (Place) async throws -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
+    let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
@@ -1676,7 +1773,7 @@ private struct MapDetailDrawerView: View {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close place detail")
+            .accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
             .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 18)
@@ -1686,17 +1783,10 @@ private struct MapDetailDrawerView: View {
 
     @ViewBuilder
     private var shareAction: some View {
-        if let url = item.shareURL {
-            ShareLink(item: url, subject: Text(item.shareSubject), message: Text(item.shareText)) {
-                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
-            }
-            .accessibilityLabel("Share \(item.presentation.title)")
-        } else {
-            ShareLink(item: item.shareText, subject: Text(item.shareSubject)) {
-                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
-            }
-            .accessibilityLabel("Share \(item.presentation.title)")
+        SavePlaceShareButton(content: item.shareContent) {
+            SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
         }
+        .accessibilityLabel(languageSettings.localized(english: "Share \(item.presentation.title)", traditionalChinese: "分享 \(item.presentation.title)"))
     }
 
     private func expandDetail() {
@@ -1725,13 +1815,13 @@ private struct MapDetailDrawerView: View {
                     )
 
                     AddToListPanel(
-                        title: "Add this Map Stamp to a list",
+                        title: languageSettings.localized(english: "Add this Map Stamp to a list", traditionalChinese: "將這個地圖章加入清單"),
                         lists: editableLists,
                         onCreateList: onCreateList,
                         onAddToList: { listID in
                             do {
                                 try onAddPlaceToList(place, listID)
-                                statusMessage = "Added \(place.name) to list."
+                                statusMessage = languageSettings.localized(english: "Added \(place.name) to list.", traditionalChinese: "已將 \(place.name) 加入清單。")
                             } catch {
                                 statusMessage = error.localizedDescription
                             }
@@ -1742,6 +1832,7 @@ private struct MapDetailDrawerView: View {
                     ReviewCandidateDetailCard(
                         candidate: candidate,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
+                        onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
                         onAddMoreClue: { onAddMoreClueCandidate(candidate) },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) }
                     )
@@ -1776,6 +1867,7 @@ private struct MapDetailDrawerView: View {
 }
 
 private struct SelectedPlaceCapsule: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let item: MapDetailDrawerItem
     let onExpand: () -> Void
     let onClose: () -> Void
@@ -1812,14 +1904,14 @@ private struct SelectedPlaceCapsule: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open \(item.presentation.title) details")
-            .accessibilityHint("Expands the selected place drawer")
+            .accessibilityLabel(languageSettings.localized(english: "Open \(item.presentation.title) details", traditionalChinese: "打開 \(item.presentation.title) 詳情"))
+            .accessibilityHint(languageSettings.localized(english: "Expands the selected place drawer", traditionalChinese: "展開選取的地點抽屜"))
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close selected place")
+            .accessibilityLabel(languageSettings.localized(english: "Close selected place", traditionalChinese: "關閉已選地點"))
             .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 2)
@@ -1836,17 +1928,10 @@ private struct SelectedPlaceCapsule: View {
 
     @ViewBuilder
     private var shareAction: some View {
-        if let url = item.shareURL {
-            ShareLink(item: url, subject: Text(item.shareSubject), message: Text(item.shareText)) {
-                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
-            }
-            .accessibilityLabel("Share \(item.presentation.title)")
-        } else {
-            ShareLink(item: item.shareText, subject: Text(item.shareSubject)) {
-                SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
-            }
-            .accessibilityLabel("Share \(item.presentation.title)")
+        SavePlaceShareButton(content: item.shareContent) {
+            SelectedPlaceCapsuleIcon(systemImage: "square.and.arrow.up")
         }
+        .accessibilityLabel(languageSettings.localized(english: "Share \(item.presentation.title)", traditionalChinese: "分享 \(item.presentation.title)"))
     }
 }
 
@@ -1935,9 +2020,21 @@ private extension MapDetailDrawerItem {
             return candidate.shareText
         }
     }
+
+    var shareContent: SavePlaceShareContent {
+        switch self {
+        case .savedPlace(let place), .socialPlace(let place):
+            return .place(place)
+        case .reviewCandidate(let candidate):
+            return .reviewCandidate(candidate)
+        case .unsavedCandidate(let candidate):
+            return .mapCandidate(candidate)
+        }
+    }
 }
 
 private struct SocialPlaceRow: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onSave: () -> Void
 
@@ -1952,7 +2049,7 @@ private struct SocialPlaceRow: View {
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
                     Spacer(minLength: 8)
-                    Text(place.category.displayName)
+                    Text(place.category.displayName(language: languageSettings.language))
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa.opacity(0.74))
                 }
@@ -1971,7 +2068,7 @@ private struct SocialPlaceRow: View {
             }
 
             Button(action: onSave) {
-                Text("Save")
+                Text(languageSettings.localized(english: "Save", traditionalChinese: "保存"))
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
@@ -1981,7 +2078,7 @@ private struct SocialPlaceRow: View {
                     .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Save \(place.name) to my SAV-E")
+            .accessibilityLabel(languageSettings.localized(english: "Save \(place.name) to my SAV-E", traditionalChinese: "保存 \(place.name) 到我的 SAV-E"))
         }
         .padding(12)
         .saveNotebookSurface(cornerRadius: 14, fill: .saveNotebookPage, opacity: 0.62, strokeOpacity: 0.34, lineWidth: 1)
@@ -2034,6 +2131,7 @@ private struct MapDetailDrawerBackground: View {
 }
 
 private struct SavedMapDetailDrawerContent: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onPlanAroundPlace: () -> Void
     let onDeletePlace: () async throws -> Void
@@ -2069,7 +2167,7 @@ private struct SavedMapDetailDrawerContent: View {
                 if let priceRange = detailPlace.priceRange {
                     MapDetailChip(icon: "tag.fill", text: priceRange)
                 }
-                ForEach(detailPlace.verificationChips(sourceLabel: detailPlace.sourceConfirmationLabel), id: \.text) { chip in
+                ForEach(detailPlace.verificationChips(language: languageSettings.language, sourceLabel: detailPlace.sourceConfirmationLabel(language: languageSettings.language)), id: \.text) { chip in
                     MapDetailChip(icon: chip.icon, text: chip.text)
                 }
             }
@@ -2086,26 +2184,32 @@ private struct SavedMapDetailDrawerContent: View {
 
             HStack(spacing: 8) {
                 Button(action: onPlanAroundPlace) {
-                    PlaceDetailActionLabel(title: "Order?", systemImage: "fork.knife", fill: .saveHoney.opacity(0.78))
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Order?", traditionalChinese: "點餐？"), systemImage: "fork.knife", fill: .saveHoney.opacity(0.78))
                 }
 
                 Button {
                     NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name)
                 } label: {
-                    PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: Color.saveMint.opacity(0.32))
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"), systemImage: "map.fill", fill: Color.saveMint.opacity(0.32))
                 }
 
                 if let sourceURL = detailPlace.primarySourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        PlaceDetailActionLabel(title: "Source", systemImage: "link", fill: Color.saveSky.opacity(0.20))
+                        PlaceDetailActionLabel(title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), systemImage: "link", fill: Color.saveSky.opacity(0.20))
                     }
                 }
             }
 
             Button(action: beginPlaceEdit) {
-                PlaceDetailActionLabel(title: isEditingPlace ? "Editing" : "Edit", systemImage: "pencil", fill: Color.saveNotebookPage)
+                PlaceDetailActionLabel(
+                    title: isEditingPlace
+                        ? languageSettings.localized(english: "Editing", traditionalChinese: "編輯中")
+                        : languageSettings.text(.edit),
+                    systemImage: "pencil",
+                    fill: Color.saveNotebookPage
+                )
             }
             .disabled(isSavingPlaceEdit)
 
@@ -2113,10 +2217,10 @@ private struct SavedMapDetailDrawerContent: View {
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
-                    Label("Delete", systemImage: "trash")
+                    Label(languageSettings.localized(english: "Delete", traditionalChinese: "刪除"), systemImage: "trash")
                 }
             } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                Label(languageSettings.localized(english: "More", traditionalChinese: "更多"), systemImage: "ellipsis.circle")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa)
                     .frame(maxWidth: .infinity)
@@ -2141,16 +2245,16 @@ private struct SavedMapDetailDrawerContent: View {
             }
         }
         .confirmationDialog(
-            "Delete \(place.name)?",
+            languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Place", role: .destructive) {
+            Button(languageSettings.localized(english: "Delete Place", traditionalChinese: "刪除地點"), role: .destructive) {
                 Task { await deletePlace() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(languageSettings.text(.cancel), role: .cancel) {}
         } message: {
-            Text("This removes the Map Stamp from SAV-E.")
+            Text(languageSettings.localized(english: "This removes the Map Stamp from SAV-E.", traditionalChinese: "這會從 SAV-E 移除這個地圖章。"))
         }
         .task(id: place.id) {
             await enrichBusinessDetails()
@@ -2158,7 +2262,7 @@ private struct SavedMapDetailDrawerContent: View {
     }
 
     private var memorySummary: String {
-        detailPlace.memorySummary
+        detailPlace.memorySummary(language: languageSettings.language)
     }
 
     private func enrichBusinessDetails() async {
@@ -2240,7 +2344,7 @@ private struct SavedMapDetailDrawerContent: View {
 
     private var placeEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Place name", text: $editName)
+            TextField(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"), text: $editName)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .padding(.horizontal, 10)
@@ -2248,7 +2352,7 @@ private struct SavedMapDetailDrawerContent: View {
                 .background(Color.saveNotebookPage.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            TextField("Address", text: $editAddress)
+            TextField(languageSettings.localized(english: "Address", traditionalChinese: "地址"), text: $editAddress)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .padding(.horizontal, 10)
@@ -2261,7 +2365,7 @@ private struct SavedMapDetailDrawerContent: View {
                     isEditingPlace = false
                     editError = nil
                 } label: {
-                    PlaceDetailActionLabel(title: "Cancel", systemImage: "xmark", fill: Color.saveNotebookPage)
+                    PlaceDetailActionLabel(title: languageSettings.text(.cancel), systemImage: "xmark", fill: Color.saveNotebookPage)
                 }
                 .disabled(isSavingPlaceEdit)
 
@@ -2269,7 +2373,7 @@ private struct SavedMapDetailDrawerContent: View {
                     savePlaceEdit()
                 } label: {
                     PlaceDetailActionLabel(
-                        title: isSavingPlaceEdit ? "Saving" : "Save",
+                        title: isSavingPlaceEdit ? languageSettings.text(.saving) : languageSettings.text(.save),
                         systemImage: "checkmark",
                         fill: .saveHoney.opacity(0.8)
                     )
@@ -2297,7 +2401,7 @@ private struct SavedMapDetailDrawerContent: View {
         let trimmedName = editName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAddress = editAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            editError = "Place name cannot be empty."
+            editError = languageSettings.localized(english: "Place name cannot be empty.", traditionalChinese: "地點名稱不能空白。")
             return
         }
 
@@ -2340,6 +2444,7 @@ private struct SavedMapDetailDrawerContent: View {
 }
 
 private struct SocialPlaceDetailCard: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onSave: () -> Void
 
@@ -2376,10 +2481,16 @@ private struct SocialPlaceDetailCard: View {
             }
 
             PlaceBasicInfoPanel(place: place)
-            PlaceInsightSummaryPanel(place: place, fallbackSummary: "This is a social map result. Save it to make it part of your own SAV-E memory.")
+            PlaceInsightSummaryPanel(
+                place: place,
+                fallbackSummary: languageSettings.localized(
+                    english: "This is a social map result. Save it to make it part of your own SAV-E memory.",
+                    traditionalChinese: "這是社交地圖結果。保存後才會成為你自己的 SAV-E 記憶。"
+                )
+            )
 
             Button(action: onSave) {
-                Label("Save to my SAV-E", systemImage: "plus.circle.fill")
+                Label(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"), systemImage: "plus.circle.fill")
                     .font(.subheadline.weight(.black))
                     .foregroundColor(.saveInk)
                     .frame(maxWidth: .infinity)
@@ -2425,6 +2536,7 @@ private struct MapDetailChip: View {
 }
 
 private struct AddToListPanel: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let title: String
     let lists: [SaveCollaborativeList]
     let onCreateList: () -> SaveCollaborativeList
@@ -2444,7 +2556,7 @@ private struct AddToListPanel: View {
                     let list = onCreateList()
                     onAddToList(list.id)
                 }) {
-                    Label("Create list and add", systemImage: "plus")
+                    Label(languageSettings.localized(english: "Create list and add", traditionalChinese: "建立清單並加入"), systemImage: "plus")
                         .font(.caption.weight(.black))
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
@@ -2465,12 +2577,12 @@ private struct AddToListPanel: View {
                         }
                     }
                     Divider()
-                    Button("New list") {
+                    Button(languageSettings.localized(english: "New list", traditionalChinese: "新清單")) {
                         let list = onCreateList()
                         onAddToList(list.id)
                     }
                 } label: {
-                    Label("Choose list", systemImage: "list.bullet.rectangle")
+                    Label(languageSettings.localized(english: "Choose list", traditionalChinese: "選擇清單"), systemImage: "list.bullet.rectangle")
                         .font(.caption.weight(.black))
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
@@ -2495,6 +2607,7 @@ private struct AddToListPanel: View {
 }
 
 private struct CollaborativeListCard: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let list: SaveCollaborativeList
     let isSelected: Bool
     let existingPlaces: [Place]
@@ -2556,7 +2669,7 @@ private struct CollaborativeListCard: View {
     private var listActions: some View {
         HStack(spacing: 8) {
             Button(action: onPlan) {
-                Label("Plan", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                Label(languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
@@ -2569,7 +2682,7 @@ private struct CollaborativeListCard: View {
 
             if let viewerURL {
                 ShareLink(item: viewerURL) {
-                    Label("Viewer", systemImage: "square.and.arrow.up")
+                    Label(languageSettings.localized(english: "Viewer", traditionalChinese: "檢視者"), systemImage: "square.and.arrow.up")
                         .font(.caption.weight(.black))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
@@ -2581,7 +2694,7 @@ private struct CollaborativeListCard: View {
 
             if list.canEdit, let editorURL {
                 ShareLink(item: editorURL) {
-                    Label("Editor", systemImage: "person.badge.plus")
+                    Label(languageSettings.localized(english: "Editor", traditionalChinese: "編輯者"), systemImage: "person.badge.plus")
                         .font(.caption.weight(.black))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
@@ -2596,7 +2709,10 @@ private struct CollaborativeListCard: View {
     private var listItems: some View {
         VStack(spacing: 8) {
             if list.items.isEmpty {
-                Text("Open a place or map result, then add it to this list.")
+                Text(languageSettings.localized(
+                    english: "Open a place or map result, then add it to this list.",
+                    traditionalChinese: "打開地點或地圖結果後，就能加入這個清單。"
+                ))
                     .font(.caption)
                     .foregroundColor(.saveCocoa.opacity(0.72))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2634,14 +2750,14 @@ private struct CollaborativeListCard: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.subheadline)
                                 .foregroundColor(.saveSignal)
-                                .accessibilityLabel("Already saved")
+                                .accessibilityLabel(languageSettings.localized(english: "Already saved", traditionalChinese: "已保存"))
                         } else {
                             Button(action: { onSaveItem(item) }) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.title3)
                                     .foregroundColor(.saveInk)
                             }
-                            .accessibilityLabel("Save to my SAV-E")
+                            .accessibilityLabel(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"))
                         }
                     }
                     .padding(9)
@@ -2846,6 +2962,7 @@ private struct NotebookBandLabel: View {
 }
 
 private struct SavedPlacesSection: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.colorScheme) private var colorScheme
     var places: [Place]
     var totalCount: Int
@@ -2902,7 +3019,7 @@ private struct SavedPlacesSection: View {
 
     private var savedHeader: some View {
         HStack(spacing: 5) {
-            Text("Saved")
+            Text(languageSettings.localized(english: "Saved", traditionalChinese: "已保存"))
                 .font(.title3.weight(.bold))
                 .foregroundColor(.saveInk)
             Image(systemName: "chevron.right")
@@ -2924,6 +3041,7 @@ private struct SavedPlacesSection: View {
 }
 
 private struct SavedCategorySectionHeader: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var category: PlaceCategory
     var count: Int
 
@@ -2936,7 +3054,7 @@ private struct SavedCategorySectionHeader: View {
                 .background(category.poiIconColor)
                 .clipShape(Circle())
 
-            Text(category.displayName)
+            Text(category.displayName(language: languageSettings.language))
                 .font(.caption.weight(.black))
                 .foregroundColor(.saveInk)
 
@@ -2951,16 +3069,19 @@ private struct SavedCategorySectionHeader: View {
 }
 
 private struct SavedPlaceRow: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var place: Place
     var onSelect: () -> Void
 
     private var addressText: String {
         let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        return address.isEmpty ? "Selected on map" : address
+        return address.isEmpty ? languageSettings.localized(english: "Selected on map", traditionalChinese: "從地圖選取") : address
     }
 
     private var statusText: String {
-        place.status == .visited ? "Tried Map Stamp" : "Saved Map Stamp"
+        place.status == .visited
+            ? languageSettings.localized(english: "Tried Map Stamp", traditionalChinese: "去過的地圖章")
+            : languageSettings.localized(english: "Saved Map Stamp", traditionalChinese: "已保存地圖章")
     }
 
     var body: some View {
@@ -2999,7 +3120,7 @@ private struct SavedPlaceRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(place.name), \(statusText)")
-        .accessibilityHint("Open Map Stamp details")
+        .accessibilityHint(languageSettings.localized(english: "Open Map Stamp details", traditionalChinese: "打開地圖章詳情"))
     }
 
 }
@@ -3018,6 +3139,7 @@ private extension PlaceCategory {
 }
 
 private struct SavedPlacesEmptyState: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var isFiltered: Bool
 
     var body: some View {
@@ -3030,11 +3152,15 @@ private struct SavedPlacesEmptyState: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(isFiltered ? "No matching Map Stamps" : "No saved Map Stamps")
+                Text(isFiltered
+                     ? languageSettings.localized(english: "No matching Map Stamps", traditionalChinese: "沒有符合條件的地圖章")
+                     : languageSettings.localized(english: "No saved Map Stamps", traditionalChinese: "還沒有保存的地圖章"))
                     .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveInk)
 
-                Text(isFiltered ? "Clear filters to show every saved place." : "Sign in and refresh SAV-E if this account should already have saved places.")
+                Text(isFiltered
+                     ? languageSettings.localized(english: "Clear filters to show every saved place.", traditionalChinese: "清除篩選即可顯示所有已保存地點。")
+                     : languageSettings.localized(english: "Sign in and refresh SAV-E if this account should already have saved places.", traditionalChinese: "如果這個帳號應該已有保存地點，請登入後重新整理 SAV-E。"))
                     .font(.caption)
                     .foregroundColor(.saveMutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3052,6 +3178,7 @@ private struct SavedPlacesEmptyState: View {
 }
 
 private struct ReviewCandidatesSection: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.colorScheme) private var colorScheme
     var candidates: [PlaceReviewCandidate]
     var limit: Int? = 4
@@ -3092,7 +3219,7 @@ private struct ReviewCandidatesSection: View {
 
     private var reviewHeader: some View {
         HStack(spacing: 5) {
-            Text("Review")
+            Text(languageSettings.localized(english: "Review", traditionalChinese: "待確認"))
                 .font(.title3.weight(.bold))
                 .foregroundColor(.saveInk)
             Image(systemName: "chevron.right")
@@ -3119,17 +3246,20 @@ private struct ReviewCandidatesSection: View {
 }
 
 private struct ReviewCandidatePlaceRow: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var candidate: PlaceReviewCandidate
     var onSelect: () -> Void
 
     private var addressText: String {
         if !candidate.address.isEmpty { return candidate.address }
         if let city = candidate.city, !city.isEmpty { return city }
-        return "Needs address confirmation"
+        return languageSettings.localized(english: "Needs address confirmation", traditionalChinese: "需要確認地址")
     }
 
     private var statusText: String {
-        candidate.hasReliableCoordinates ? "Ready to review" : "Needs info"
+        candidate.hasReliableCoordinates
+            ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
+            : languageSettings.localized(english: "Needs info", traditionalChinese: "需要更多資訊")
     }
 
     var body: some View {
@@ -3166,12 +3296,14 @@ private struct ReviewCandidatePlaceRow: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(candidate.name), \(statusText)")
-        .accessibilityHint("Open review details before saving")
+        .accessibilityHint(languageSettings.localized(english: "Open review details before saving", traditionalChinese: "保存前先打開確認詳情"))
     }
 
 }
 
 private struct ReviewCandidatesEmptyState: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "doc.text.magnifyingglass")
@@ -3186,12 +3318,15 @@ private struct ReviewCandidatesEmptyState: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("No clues waiting")
+                Text(languageSettings.localized(english: "No clues waiting", traditionalChinese: "沒有等待確認的線索"))
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.saveInk)
 
-                Text("Share a post, screenshot, or map link for SAV-E to investigate. Uncertain places wait here as Review Candidates until you save them as Map Stamps.")
+                Text(languageSettings.localized(
+                    english: "Share a post, screenshot, or map link for SAV-E to investigate. Uncertain places wait here as Review Candidates until you save them as Map Stamps.",
+                    traditionalChinese: "分享貼文、截圖或地圖連結給 SAV-E 調查。不確定的地點會先留在待確認，直到你保存成地圖章。"
+                ))
                     .font(.caption)
                     .foregroundColor(.saveCocoa.opacity(0.74))
                     .fixedSize(horizontal: false, vertical: true)
@@ -3205,8 +3340,10 @@ private struct ReviewCandidatesEmptyState: View {
 }
 
 private struct ReviewCandidateDetailCard: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
+    var onFindExactPlace: () -> Void
     var onAddMoreClue: () -> Void
     var onSave: (String?) -> Void
     @State private var displayNameDraft: String
@@ -3214,11 +3351,13 @@ private struct ReviewCandidateDetailCard: View {
     init(
         candidate: PlaceReviewCandidate,
         isWorking: Bool,
+        onFindExactPlace: @escaping () -> Void,
         onAddMoreClue: @escaping () -> Void,
         onSave: @escaping (String?) -> Void
     ) {
         self.candidate = candidate
         self.isWorking = isWorking
+        self.onFindExactPlace = onFindExactPlace
         self.onAddMoreClue = onAddMoreClue
         self.onSave = onSave
         _displayNameDraft = State(initialValue: candidate.name)
@@ -3250,10 +3389,10 @@ private struct ReviewCandidateDetailCard: View {
                             .lineLimit(2)
 
                         VStack(alignment: .leading, spacing: 5) {
-                            Text("Display name")
+                            Text(languageSettings.localized(english: "Display name", traditionalChinese: "顯示名稱"))
                                 .font(.caption2.weight(.black))
                                 .foregroundColor(.saveCocoa.opacity(0.72))
-                            TextField("Place name", text: $displayNameDraft)
+                            TextField(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"), text: $displayNameDraft)
                                 .textFieldStyle(.plain)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.saveInk)
@@ -3265,14 +3404,25 @@ private struct ReviewCandidateDetailCard: View {
                                         .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1)
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                .accessibilityLabel("Review candidate display name")
+                                .accessibilityLabel(languageSettings.localized(english: "Review candidate display name", traditionalChinese: "待確認地點顯示名稱"))
                         }
 
                         HStack(spacing: 6) {
                             if let confidence = candidate.confidence {
-                                StampChip(text: "\(Int(confidence * 100))% confidence", color: .saveCocoa)
+                                StampChip(
+                                    text: languageSettings.localized(
+                                        english: "\(Int(confidence * 100))% confidence",
+                                        traditionalChinese: "\(Int(confidence * 100))% 信心"
+                                    ),
+                                    color: .saveCocoa
+                                )
                             }
-                            StampChip(text: candidate.hasReliableCoordinates ? "map ready" : "needs exact place", color: .saveHoney)
+                            StampChip(
+                                text: candidate.hasReliableCoordinates
+                                    ? languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
+                                    : languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點"),
+                                color: .saveHoney
+                            )
                         }
                     }
 
@@ -3295,7 +3445,7 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     CandidateActionButton(
-                        title: "Add more clue",
+                        title: languageSettings.localized(english: "Add more clue", traditionalChinese: "補更多線索"),
                         systemImage: "plus.bubble",
                         fill: .saveNotebookPage,
                         disabled: isWorking,
@@ -3321,7 +3471,7 @@ private struct ReviewCandidateDetailCard: View {
         if primaryAction.confirmsMapStamp {
             onSave(nameOverride)
         } else {
-            onAddMoreClue()
+            onFindExactPlace()
         }
     }
 
@@ -3346,6 +3496,7 @@ private struct ReviewCandidateDetailIcon: View {
 }
 
 private struct ReviewCandidateProofPanel: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var candidate: PlaceReviewCandidate
     @Environment(\.openURL) private var openURL
 
@@ -3354,14 +3505,16 @@ private struct ReviewCandidateProofPanel: View {
             HStack(spacing: 7) {
                 Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass")
                     .font(.caption.weight(.black))
-                Text(candidate.hasReliableCoordinates ? "Ready to review" : "Needs one more clue")
+                Text(candidate.hasReliableCoordinates
+                     ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
+                     : languageSettings.localized(english: "Needs one more clue", traditionalChinese: "還需要一個線索"))
                     .font(.caption.weight(.black))
                 Spacer(minLength: 0)
                 if let sourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        Text("Open source")
+                        Text(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"))
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 8)
@@ -3370,14 +3523,14 @@ private struct ReviewCandidateProofPanel: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Open review candidate source")
+                    .accessibilityLabel(languageSettings.localized(english: "Open review candidate source", traditionalChinese: "打開待確認地點來源"))
                 }
             }
             .foregroundColor(.saveInk)
 
-            proofSection(title: "Found", systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
-            proofSection(title: "Missing", systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveHoney)
-            proofSection(title: "Tried", systemImage: "text.magnifyingglass", items: triedItems, tone: .saveSky)
+            proofSection(title: languageSettings.localized(english: "Found", traditionalChinese: "找到"), systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
+            proofSection(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveHoney)
+            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: .saveSky)
             nextActionRow
         }
         .padding(10)
@@ -3422,7 +3575,7 @@ private struct ReviewCandidateProofPanel: View {
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Next action")
+                Text(languageSettings.localized(english: "Next action", traditionalChinese: "下一步"))
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveCocoa.opacity(0.72))
                 Text(nextActionText)
@@ -3843,6 +3996,7 @@ private struct CandidateActionLabel: View {
 }
 
 private struct PassportDrawerButton: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var fill: Color
     var stroke: Color
     var foreground: Color
@@ -3859,11 +4013,12 @@ private struct PassportDrawerButton: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open SAV-E Passport")
+        .accessibilityLabel(languageSettings.localized(english: "Open SAV-E Passport", traditionalChinese: "打開 SAV-E 護照"))
     }
 }
 
 private struct MemoryFlowCTA: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.colorScheme) private var colorScheme
     var reviewCount: Int
     var stampCount: Int
@@ -3873,7 +4028,7 @@ private struct MemoryFlowCTA: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("PLACE MEMORY")
+                Text(languageSettings.localized(english: "PLACE MEMORY", traditionalChinese: "地點記憶"))
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 9)
@@ -3882,21 +4037,27 @@ private struct MemoryFlowCTA: View {
                     .clipShape(Capsule())
                     .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1))
 
-                Text("Save what friends send. Ask when it matters.")
+                Text(languageSettings.localized(
+                    english: "Save what friends send. Ask when it matters.",
+                    traditionalChinese: "存下朋友傳來的地點，需要時再問。"
+                ))
                     .font(.headline.weight(.black))
                     .foregroundColor(.saveInk)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("New places wait in Review first. Confirm them into Map Stamps, then SAV-E answers from what you saved.")
+                Text(languageSettings.localized(
+                    english: "New places wait in Review first. Confirm them into Map Stamps, then SAV-E answers from what you saved.",
+                    traditionalChinese: "新地點會先進待確認。確認成地圖章後，SAV-E 才會用你存過的內容回答。"
+                ))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.74))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(spacing: 8) {
-                flowStep(number: "1", title: "Review", count: reviewCount, tint: .saveHoney)
-                flowStep(number: "2", title: "Stamp", count: stampCount, tint: .saveMint)
-                flowStep(number: "3", title: "Ask", count: nil, tint: .saveSky)
+                flowStep(number: "1", title: languageSettings.localized(english: "Review", traditionalChinese: "確認"), count: reviewCount, tint: .saveHoney)
+                flowStep(number: "2", title: languageSettings.localized(english: "Stamp", traditionalChinese: "地圖章"), count: stampCount, tint: .saveMint)
+                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: .saveSky)
             }
 
             HStack(spacing: 10) {
@@ -3904,7 +4065,7 @@ private struct MemoryFlowCTA: View {
                     HStack(spacing: 7) {
                         Image(systemName: "checklist.unchecked")
                             .font(.caption.weight(.black))
-                        Text(reviewCount > 0 ? "Review \(reviewCount)" : "Open Review")
+                        Text(reviewButtonTitle)
                             .font(.caption.weight(.black))
                     }
                     .foregroundColor(.saveInk)
@@ -3923,7 +4084,7 @@ private struct MemoryFlowCTA: View {
                     HStack(spacing: 7) {
                         Image(systemName: "sparkles")
                             .font(.caption.weight(.black))
-                        Text("Ask saved")
+                        Text(languageSettings.localized(english: "Ask saved", traditionalChinese: "問已保存"))
                             .font(.caption.weight(.black))
                     }
                     .foregroundColor(.saveInk)
@@ -3951,7 +4112,17 @@ private struct MemoryFlowCTA: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Review clues, save Map Stamps, ask your saved memory")
+        .accessibilityLabel(languageSettings.localized(
+            english: "Review clues, save Map Stamps, ask your saved memory",
+            traditionalChinese: "確認線索，保存地圖章，再詢問你的地點記憶"
+        ))
+    }
+
+    private var reviewButtonTitle: String {
+        if reviewCount > 0 {
+            return languageSettings.localized(english: "Review \(reviewCount)", traditionalChinese: "確認 \(reviewCount)")
+        }
+        return languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認")
     }
 
     private func flowStep(number: String, title: String, count: Int?, tint: Color) -> some View {
@@ -3983,6 +4154,7 @@ private struct MemoryFlowCTA: View {
 }
 
 private struct SavedCategoryGrid: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let categories: [(category: PlaceCategory, count: Int)]
     let selectedCategories: Set<PlaceCategory>
     let onToggle: (PlaceCategory) -> Void
@@ -3991,7 +4163,7 @@ private struct SavedCategoryGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Categories")
+                Text(languageSettings.localized(english: "Categories", traditionalChinese: "分類"))
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa.opacity(0.72))
 
@@ -3999,7 +4171,7 @@ private struct SavedCategoryGrid: View {
 
                 if !selectedCategories.isEmpty {
                     Button(action: onClear) {
-                        Text("All")
+                        Text(languageSettings.localized(english: "All", traditionalChinese: "全部"))
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 10)
@@ -4009,7 +4181,7 @@ private struct SavedCategoryGrid: View {
                             .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Show all saved categories")
+                    .accessibilityLabel(languageSettings.localized(english: "Show all saved categories", traditionalChinese: "顯示所有已保存分類"))
                 }
             }
 
@@ -4029,6 +4201,7 @@ private struct SavedCategoryGrid: View {
 }
 
 private struct SavedCategoryGridButton: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var category: PlaceCategory
     var count: Int
     var isSelected: Bool
@@ -4044,7 +4217,7 @@ private struct SavedCategoryGridButton: View {
                     .background(category.poiIconColor.opacity(isSelected ? 1 : 0.72))
                     .clipShape(Circle())
 
-                Text(category.displayName)
+                Text(category.displayName(language: languageSettings.language))
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
@@ -4069,7 +4242,10 @@ private struct SavedCategoryGridButton: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(category.displayName), \(count) saved")
+        .accessibilityLabel(languageSettings.localized(
+            english: "\(category.displayName(language: .english)), \(count) saved",
+            traditionalChinese: "\(category.displayName(language: .traditionalChinese))，已保存 \(count) 個"
+        ))
     }
 }
 
@@ -4120,13 +4296,14 @@ private struct DrawerSuggestionRow: View {
 }
 
 private struct AIResultActionBar: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     var onFollowUp: () -> Void
     var onNewQuestion: () -> Void
 
     var body: some View {
         HStack(spacing: 9) {
             Button(action: onFollowUp) {
-                Label("Follow up", systemImage: "text.bubble")
+                Label(languageSettings.localized(english: "Follow up", traditionalChinese: "追問"), systemImage: "text.bubble")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
@@ -4143,7 +4320,7 @@ private struct AIResultActionBar: View {
             .buttonStyle(.plain)
 
             Button(action: onNewQuestion) {
-                Label("New", systemImage: "plus.bubble")
+                Label(languageSettings.localized(english: "New", traditionalChinese: "新的"), systemImage: "plus.bubble")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)

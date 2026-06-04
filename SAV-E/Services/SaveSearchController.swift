@@ -13,6 +13,10 @@ struct SaveSearchController {
         SaveSearchQuery(rawValue: rawQuery).categories
     }
 
+    func exactMapCandidateQuery(for rawQuery: String) -> String? {
+        SaveSearchQuery(rawValue: rawQuery).exactMapCandidateQuery
+    }
+
     func makeSaveDraft(from result: SaveSearchResult) -> SavePlaceDraft? {
         let title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
@@ -461,6 +465,7 @@ private struct SaveSearchQuery {
     let wantsNewRecommendations: Bool
     let wantsPublicDiscovery: Bool
     let wantsMapCandidatePreparation: Bool
+    let exactMapCandidateQuery: String?
     let stableIDFragment: String
 
     init(rawValue: String) {
@@ -492,11 +497,19 @@ private struct SaveSearchQuery {
             normalizedRaw,
             keywords: ["find", "search", "looking for", "nearby", "nearest", "near me", "around here", "找", "搜尋", "搜索", "附近"]
         )
-        wantsMapCandidatePreparation = wantsPublicDiscovery ||
-            (intent != nil && (containsPlaceSearchLanguage || !categories.isEmpty))
         wantsNewRecommendations = containsRecommendationKeyword || containsCravingIntent
         stableIDFragment = Self.makeStableIDFragment(from: normalizedRaw)
         terms = Self.parseTerms(from: normalizedRaw, intent: intent)
+        exactMapCandidateQuery = Self.exactMapCandidateQuery(
+            rawValue: self.rawValue,
+            normalizedRaw: normalizedRaw,
+            terms: terms,
+            categories: categories,
+            containsPlaceSearchLanguage: containsPlaceSearchLanguage
+        )
+        wantsMapCandidatePreparation = wantsPublicDiscovery ||
+            exactMapCandidateQuery != nil ||
+            (intent != nil && (containsPlaceSearchLanguage || !categories.isEmpty))
     }
 
     func matches(_ result: SaveSearchResult) -> Bool {
@@ -575,6 +588,83 @@ private struct SaveSearchQuery {
                 PlaceCategory.allCases.allSatisfy { $0.rawValue != token && $0.displayName.lowercased() != token } &&
                     SourcePlatform.allCases.allSatisfy { $0.rawValue.lowercased() != token && $0.displayName.lowercased() != token }
             }
+    }
+
+    private static func exactMapCandidateQuery(
+        rawValue: String,
+        normalizedRaw: String,
+        terms: [String],
+        categories: Set<PlaceCategory>,
+        containsPlaceSearchLanguage: Bool
+    ) -> String? {
+        guard categories.isEmpty, !normalizedRaw.isEmpty else { return nil }
+        guard !containsAny(normalizedRaw, keywords: ["http://", "https://"]) else { return nil }
+        guard !containsAny(normalizedRaw, keywords: ["recommend", "recommendation", "date night", "tonight", "推薦", "今晚"]) else {
+            return nil
+        }
+
+        let cleaned = cleanedExactMapQuery(rawValue)
+        guard !cleaned.isEmpty else { return nil }
+
+        if containsPlaceSearchLanguage, !terms.isEmpty {
+            return cleaned
+        }
+        if looksLikeAddressQuery(rawValue: rawValue, normalizedRaw: normalizedRaw) {
+            return cleaned
+        }
+        if looksLikeVenueName(rawValue: rawValue, terms: terms) {
+            return cleaned
+        }
+        return nil
+    }
+
+    private static func cleanedExactMapQuery(_ rawValue: String) -> String {
+        var cleaned = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            "search nearby unsaved candidates for ",
+            "search exact place for ",
+            "find exact place for ",
+            "search place for ",
+            "search ",
+            "find ",
+            "looking for ",
+            "找 ",
+            "搜尋 ",
+            "搜索 "
+        ]
+        var lowered = normalize(cleaned)
+        var didStripPrefix = true
+        while didStripPrefix {
+            didStripPrefix = false
+            for prefix in prefixes where lowered.hasPrefix(prefix) {
+                cleaned = String(cleaned.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                lowered = normalize(cleaned)
+                didStripPrefix = true
+                break
+            }
+        }
+        return cleaned
+    }
+
+    private static func looksLikeAddressQuery(rawValue: String, normalizedRaw: String) -> Bool {
+        let hasNumber = rawValue.rangeOfCharacter(from: .decimalDigits) != nil
+        guard hasNumber else { return false }
+        return containsAny(
+            normalizedRaw,
+            keywords: [" no.", "no ", "號", "号", "路", "街", "rd", "road", "st", "street", "ave", "avenue", "district", "區", "区"]
+        )
+    }
+
+    private static func looksLikeVenueName(rawValue: String, terms: [String]) -> Bool {
+        guard terms.count >= 2 else { return false }
+        let words = rawValue
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+        let titleCasedWords = words.filter { word in
+            guard let first = word.unicodeScalars.first else { return false }
+            return CharacterSet.uppercaseLetters.contains(first)
+        }
+        return words.count >= 3 && titleCasedWords.count >= 2
     }
 
     private static func parseCategories(from value: String) -> Set<PlaceCategory> {

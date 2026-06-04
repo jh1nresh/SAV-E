@@ -306,6 +306,160 @@ create index if not exists idx_agent_tool_calls_user_id on agent_tool_calls(user
 create index if not exists idx_agent_tool_calls_capability_id on agent_tool_calls(capability_id);
 create index if not exists idx_agent_tool_calls_recommendation_set_id on agent_tool_calls(recommendation_set_id);
 
+create table if not exists shared_place_links (
+    id uuid primary key default gen_random_uuid(),
+    code text not null unique,
+    user_id text references profiles(id) on delete cascade not null,
+    source_place_id uuid references places(id) on delete set null,
+    payload jsonb not null,
+    expires_at timestamptz,
+    created_at timestamptz not null default now(),
+    constraint shared_place_links_code_check check (code ~ '^[A-Za-z0-9_-]{6,32}$')
+);
+
+create index if not exists idx_shared_place_links_user_id on shared_place_links(user_id, created_at desc);
+create index if not exists idx_shared_place_links_source_place_id on shared_place_links(source_place_id);
+
+create table if not exists workflow_runs (
+    id uuid primary key default gen_random_uuid(),
+    workflow_id text not null,
+    listing_id text not null,
+    user_id text references profiles(id) on delete cascade not null,
+    source_url text,
+    source_type text not null default 'url',
+    status text not null default 'queued',
+    result_type text,
+    confidence double precision,
+    evidence_tier text not null default 'none',
+    result_evidence_refs text[] not null default '{}',
+    result_candidate_refs text[] not null default '{}',
+    credit_reserved integer not null default 1,
+    credit_settlement text not null default 'pending',
+    receipt_id uuid,
+    created_at timestamptz not null default now(),
+    completed_at timestamptz,
+    updated_at timestamptz not null default now(),
+    constraint workflow_runs_status_check check (status in ('queued', 'running', 'completed', 'failed', 'needs_review')),
+    constraint workflow_runs_result_type_check check (result_type is null or result_type in ('confirmed_map_stamp', 'review_candidate', 'source_only_clue', 'technical_failure')),
+    constraint workflow_runs_evidence_tier_check check (evidence_tier in ('none', 'weak', 'likely', 'confirmed')),
+    constraint workflow_runs_confidence_check check (confidence is null or (confidence >= 0 and confidence <= 1)),
+    constraint workflow_runs_credit_reserved_check check (credit_reserved > 0),
+    constraint workflow_runs_credit_settlement_check check (credit_settlement in ('pending', 'consumed', 'refunded', 'partial'))
+);
+
+create index if not exists idx_workflow_runs_user_id on workflow_runs(user_id, created_at desc);
+create index if not exists idx_workflow_runs_listing on workflow_runs(listing_id, status, created_at desc);
+
+create table if not exists workflow_steps (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete cascade not null,
+    step_key text not null,
+    status text not null default 'queued',
+    input jsonb not null default '{}'::jsonb,
+    output jsonb not null default '{}'::jsonb,
+    error text,
+    created_at timestamptz not null default now(),
+    completed_at timestamptz,
+    constraint workflow_steps_status_check check (status in ('queued', 'running', 'succeeded', 'failed', 'skipped'))
+);
+
+create index if not exists idx_workflow_steps_run_id on workflow_steps(run_id, created_at);
+
+create table if not exists source_artifacts (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete cascade not null,
+    artifact_type text not null,
+    source_url text,
+    storage_ref text,
+    extracted_text text,
+    metadata jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_source_artifacts_run_id on source_artifacts(run_id);
+
+create table if not exists evidence_items (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete cascade not null,
+    artifact_id uuid references source_artifacts(id) on delete set null,
+    evidence_type text not null,
+    summary text not null default '',
+    payload jsonb not null default '{}'::jsonb,
+    confidence double precision not null default 0,
+    created_at timestamptz not null default now(),
+    constraint evidence_items_confidence_check check (confidence >= 0 and confidence <= 1)
+);
+
+create index if not exists idx_evidence_items_run_id on evidence_items(run_id);
+
+alter table place_candidates add column if not exists workflow_run_id uuid references workflow_runs(id) on delete set null;
+create index if not exists idx_place_candidates_workflow_run_id on place_candidates(workflow_run_id);
+
+create table if not exists user_decisions (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete cascade not null,
+    user_id text references profiles(id) on delete cascade not null,
+    action text not null,
+    edited_payload jsonb not null default '{}'::jsonb,
+    reason text,
+    created_at timestamptz not null default now(),
+    constraint user_decisions_action_check check (action in ('confirm', 'edit', 'reject', 'needs_more_evidence'))
+);
+
+create index if not exists idx_user_decisions_run_id on user_decisions(run_id, created_at desc);
+
+create table if not exists workflow_receipts (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete cascade not null,
+    workflow_id text not null,
+    verdict text not null,
+    settlement text not null,
+    evaluator_summary text not null default '',
+    evidence_refs text[] not null default '{}',
+    candidate_refs text[] not null default '{}',
+    receipt_hash text not null,
+    anchor_status text not null default 'offchain',
+    private_url text,
+    created_at timestamptz not null default now(),
+    constraint workflow_receipts_verdict_check check (verdict in ('pass', 'partial', 'fail', 'refund', 'dispute')),
+    constraint workflow_receipts_settlement_check check (settlement in ('credit_consumed', 'credit_refunded', 'partial', 'manual_review')),
+    constraint workflow_receipts_anchor_status_check check (anchor_status in ('offchain', 'batch_anchored', 'onchain'))
+);
+
+create unique index if not exists idx_workflow_receipts_hash on workflow_receipts(receipt_hash);
+create index if not exists idx_workflow_receipts_run_id on workflow_receipts(run_id, created_at desc);
+
+create table if not exists credit_ledger (
+    id uuid primary key default gen_random_uuid(),
+    run_id uuid references workflow_runs(id) on delete set null,
+    user_id text references profiles(id) on delete cascade not null,
+    delta integer not null,
+    reason text not null,
+    settlement text not null default 'pending',
+    created_at timestamptz not null default now(),
+    constraint credit_ledger_settlement_check check (settlement in ('pending', 'consumed', 'refunded', 'partial'))
+);
+
+create index if not exists idx_credit_ledger_user_id on credit_ledger(user_id, created_at desc);
+create index if not exists idx_credit_ledger_run_id on credit_ledger(run_id);
+
+create table if not exists workflow_reputation_snapshots (
+    id uuid primary key default gen_random_uuid(),
+    listing_id text not null,
+    workflow_id text not null,
+    run_count integer not null default 0,
+    pass_count integer not null default 0,
+    partial_count integer not null default 0,
+    fail_count integer not null default 0,
+    refund_count integer not null default 0,
+    confirmed_save_count integer not null default 0,
+    user_rejection_count integer not null default 0,
+    hallucination_report_count integer not null default 0,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_workflow_reputation_listing on workflow_reputation_snapshots(listing_id, created_at desc);
+
 insert into agent_capabilities (id, agent_family, vertical, action, description, risk_level, input_schema, output_schema)
 values
     (
@@ -437,4 +591,8 @@ create trigger update_recommendation_sets_updated_at before update on recommenda
 
 drop trigger if exists update_agent_tool_calls_updated_at on agent_tool_calls;
 create trigger update_agent_tool_calls_updated_at before update on agent_tool_calls
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_workflow_runs_updated_at on workflow_runs;
+create trigger update_workflow_runs_updated_at before update on workflow_runs
     for each row execute procedure update_updated_at();

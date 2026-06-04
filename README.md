@@ -148,6 +148,14 @@ SAV-E separates share actions from map actions:
 SAV-E place links use this shape:
 
 ```text
+https://sav-e-app.vercel.app/p/<shortCode>
+```
+
+New place links should use backend-created short codes. The backend resolver
+returns the public `SharedPlaceData` payload for the App Clip, full app, and web
+preview. Legacy embedded-payload links remain readable:
+
+```text
 https://sav-e-app.vercel.app/p/<base64-url-encoded SharedPlaceData JSON>
 ```
 
@@ -173,6 +181,7 @@ Before this works for friends without the full app installed:
 - keep `applinks:sav-e-app.vercel.app` and `appclips:sav-e-app.vercel.app` in the app entitlement
 - keep `appclips:sav-e-app.vercel.app` in the App Clip entitlement
 - set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
+- keep `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` configured for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
 - disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/trip*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
 - create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, and `https://sav-e-app.vercel.app/u`
 - wait for Apple's associated-domain CDN to pick up the AASA file

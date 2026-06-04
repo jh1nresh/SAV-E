@@ -25,7 +25,12 @@ final class SaveAIService {
         print("[SaveAI] API key resolved: \(resolved != nil ? "yes" : "nil")")
     }
 
-    func query(_ userMessage: String, places: [Place], conversationHistory: [ConversationTurn] = []) async throws -> SaveAIResponse {
+    func query(
+        _ userMessage: String,
+        places: [Place],
+        conversationHistory: [ConversationTurn] = [],
+        outputLanguage: AppLanguage = .english
+    ) async throws -> SaveAIResponse {
         guard !places.isEmpty else {
             return SaveAIResponse(
                 componentType: .message,
@@ -34,13 +39,16 @@ final class SaveAIService {
                 navigationPlaceId: nil,
                 transportMode: .walking,
                 itineraryDays: [],
-                messageText: "No Map Stamps are loaded yet. Save or import places first, then ask me to plan.",
+                messageText: outputLanguage.localized(
+                    english: "No Map Stamps are loaded yet. Save or import places first, then ask me to plan.",
+                    traditionalChinese: "目前還沒有載入地圖章。先保存或匯入地點，再請我幫你規劃。"
+                ),
                 mapAction: nil,
                 aiMessage: nil
             )
         }
 
-        if let localResponse = localIntentResponse(for: userMessage, places: places) {
+        if let localResponse = localIntentResponse(for: userMessage, places: places, outputLanguage: outputLanguage) {
             return localResponse
         }
 
@@ -62,7 +70,8 @@ final class SaveAIService {
             "parts": [[
                 "text": systemPrompt(
                     places: places,
-                    deterministicDraftJSON: deterministicDraft.map { encodeResponse($0) }
+                    deterministicDraftJSON: deterministicDraft.map { encodeResponse($0) },
+                    outputLanguage: outputLanguage
                 )
             ]]
         ])
@@ -165,7 +174,11 @@ final class SaveAIService {
 
     // MARK: - Private
 
-    private func localIntentResponse(for message: String, places: [Place]) -> SaveAIResponse? {
+    private func localIntentResponse(
+        for message: String,
+        places: [Place],
+        outputLanguage: AppLanguage
+    ) -> SaveAIResponse? {
         let normalized = message.lowercased()
         guard normalized.contains("show") || normalized.contains("map") || normalized.contains("spots") || normalized.contains("places") else {
             return nil
@@ -195,7 +208,10 @@ final class SaveAIService {
                 navigationPlaceId: nil,
                 transportMode: .walking,
                 itineraryDays: [],
-                messageText: "No \(category.displayName.lowercased()) places saved yet.",
+                messageText: outputLanguage.localized(
+                    english: "No \(category.displayName(language: .english).lowercased()) places saved yet.",
+                    traditionalChinese: "還沒有保存\(category.displayName(language: .traditionalChinese))地點。"
+                ),
                 mapAction: nil,
                 aiMessage: nil
             )
@@ -204,18 +220,28 @@ final class SaveAIService {
         let ids = filtered.map { $0.id.uuidString }
         return SaveAIResponse(
             componentType: .placeList,
-            title: "\(category.displayName) spots",
+            title: outputLanguage.localized(
+                english: "\(category.displayName(language: .english)) spots",
+                traditionalChinese: "\(category.displayName(language: .traditionalChinese))地點"
+            ),
             placeIds: ids,
             navigationPlaceId: nil,
             transportMode: .walking,
             itineraryDays: [],
             messageText: nil,
             mapAction: MapActionData(type: .filterPins, placeIds: ids, lat: nil, lng: nil, span: nil),
-            aiMessage: "Showing your \(category.displayName.lowercased()) spots."
+            aiMessage: outputLanguage.localized(
+                english: "Showing your \(category.displayName(language: .english).lowercased()) spots.",
+                traditionalChinese: "正在顯示你的\(category.displayName(language: .traditionalChinese))地點。"
+            )
         )
     }
 
-    private func systemPrompt(places: [Place], deterministicDraftJSON: String? = nil) -> String {
+    private func systemPrompt(
+        places: [Place],
+        deterministicDraftJSON: String? = nil,
+        outputLanguage: AppLanguage
+    ) -> String {
         let placesJSON = places.map { p in
             #"{"id":"\#(p.id)","name":"\#(p.name)","address":"\#(p.address)","category":"\#(p.category.rawValue)","status":"\#(p.status.rawValue)","lat":\#(p.latitude),"lng":\#(p.longitude)}"#
         }.joined(separator: ",\n")
@@ -243,6 +269,7 @@ final class SaveAIService {
         \(deterministicDraftSection)
 
         CRITICAL: Respond ONLY with a valid JSON object. No markdown. No text outside the JSON.
+        OUTPUT LANGUAGE: \(outputLanguage.serviceOutputInstruction)
 
         BEHAVIOR:
         - On the FIRST request, take action immediately. Generate itineraries, lists, recommendations, or navigation using the Map Stamps. For recommendation requests, give one best pick first, explain why, then ask at most one lightweight follow-up such as budget, cuisine, or quick vs sit-down.
@@ -277,6 +304,7 @@ final class SaveAIService {
         }
 
         RULES:
+        - Every user-visible string in title, itineraryDays.label, itineraryDays.stops.note, messageText, and aiMessage must use the OUTPUT LANGUAGE exactly.
         - For itinerary requests: use Map Stamps to build a realistic schedule with smart times and geographic order.
         - If a DETERMINISTIC PLANNER DRAFT is provided, use it as a safe baseline. You may improve grouping, order, times, title, aiMessage, and stop notes, but every place ID must come from USER'S MAP STAMPS.
         - If the user asks for trip planning without days or style, still return a usable draft from Map Stamps, then ask exactly one concise follow-up about days or vibe in aiMessage.

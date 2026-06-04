@@ -10,6 +10,7 @@ struct GroundedAnswerRequest: Equatable {
     let intent: SaveSearchIntent
     let allowedPlaceIds: [String]
     let sections: [SaveSearchSection]
+    let outputLanguage: AppLanguage
 }
 
 protocol SaveLLMClient {
@@ -105,12 +106,13 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         \(request.allowedPlaceIds.joined(separator: ", "))
 
         Query: \(request.query)
+        Output language: \(request.outputLanguage.serviceOutputInstruction)
         Sections:
         \(sectionSummary(request.sections))
 
         Rules:
         - Recommend one best place first.
-        - Answer in the user's language when clear from the query.
+        - Answer in the output language exactly, even if the query is written in a different language.
         - Sound like a concise assistant, not a debug report. Do not use headings like "Why:" or "Next:".
         - Explain why using saved/visited/review/public labels, distance, rating, review count, and evidence below.
         - If the query asks for a specific item such as boba or milk tea, only call a place a match when its title or evidence explicitly mentions that item. Do not treat generic cafes or coffee shops as boba/milk-tea matches.

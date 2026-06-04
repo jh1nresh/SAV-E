@@ -508,6 +508,23 @@ struct ClipContentView: View {
                 tripData = nil
                 listData = nil
                 updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
+                isLoading = false
+                return
+            } else if SharedPlaceData.shortCode(from: url) != nil {
+                isLoading = true
+                Task {
+                    let resolved = await SharedPlaceData.resolveShortCode(from: url)
+                    await MainActor.run {
+                        if let data = resolved {
+                            placeData = data
+                            tripData = nil
+                            listData = nil
+                            updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
+                        }
+                        isLoading = false
+                    }
+                }
+                return
             }
             isLoading = false
             return

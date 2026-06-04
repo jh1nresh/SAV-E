@@ -338,6 +338,12 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "我想找餐廳"))
         XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "find restaurants"))
         XCTAssertFalse(controller.shouldPrepareMapCandidates(for: "New York"))
+        XCTAssertFalse(controller.shouldPrepareMapCandidates(for: "date night"))
+        XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "A Cheng Goose"))
+        XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "search A Cheng Goose"))
+        XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "A Cheng Goose No. 105號 Jilin Rd Zhongshan District"))
+        XCTAssertEqual(controller.exactMapCandidateQuery(for: "search A Cheng Goose"), "A Cheng Goose")
+        XCTAssertEqual(controller.exactMapCandidateQuery(for: "A Cheng Goose No. 105號 Jilin Rd Zhongshan District"), "A Cheng Goose No. 105號 Jilin Rd Zhongshan District")
         XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "Search nearby unsaved cafes"))
         XCTAssertTrue(controller.shouldPrepareMapCandidates(for: "找附近新的咖啡廳"))
         XCTAssertEqual(controller.mapCandidateCategories(for: "咖啡廳"), [.cafe])
@@ -565,6 +571,36 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerGroundedAnswerUsesSelectedOutputLanguage() async {
+        let client = StubGroundedAnswerClient(answer: "我會先選 Saved Coffee，因為它符合你的咖啡記憶。")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let savedPlace = place(
+            name: "Saved Coffee",
+            address: "1 Main St, Irvine, CA",
+            category: .cafe
+        )
+        drawer.places = [savedPlace]
+        drawer.query = "coffee"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        XCTAssertEqual(client.requests.first?.query, "coffee")
+        XCTAssertEqual(client.requests.first?.outputLanguage, .traditionalChinese)
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["place-\(savedPlace.id.uuidString)"])
+    }
+
+    func testSaveAIServiceNoPlacesMessageUsesSelectedOutputLanguage() async throws {
+        let service = SaveAIService(apiKey: "")
+        let response = try await service.query(
+            "Plan a day",
+            places: [],
+            outputLanguage: .traditionalChinese
+        )
+
+        XCTAssertEqual(response.messageText, "目前還沒有載入地圖章。先保存或匯入地點，再請我幫你規劃。")
+    }
+
+    @MainActor
     func testDrawerPreparedPublicDiscoveryUsesGroundedAnswerClient() async {
         let client = StubGroundedAnswerClient(answer: "I would try Bright Coffee Bar first because it is nearby, highly rated, and still unsaved. Want quiet or quick?")
         let drawer = AIDrawerViewModel(groundedAnswerClient: client)
@@ -758,6 +794,32 @@ final class SaveSearchControllerTests: XCTestCase {
         }
         XCTAssertEqual(response.assistantMessage, client.answer)
         XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["review-candidate-\(reviewCandidate.id.uuidString)"])
+    }
+
+    @MainActor
+    func testDrawerNoResultRecommendationStillUsesBoundedGroundedAnswerClient() async {
+        let client = StubGroundedAnswerClient(answer: "I do not have a matching nearby Map Stamp yet. Want me to search public coffee spots around you?")
+        let drawer = AIDrawerViewModel(
+            locationService: StubAIDrawerLocationProvider(
+                currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)
+            ),
+            groundedAnswerClient: client
+        )
+        drawer.query = "推薦我附近咖啡"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertTrue(response.fromYourSave.results.isEmpty)
+        XCTAssertTrue(response.newRecommendations.results.isEmpty)
+        XCTAssertTrue(response.newRecommendations.showsNearbySearchAction)
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, [])
+        let fallbackSection = client.requests.first?.sections.first { $0.id == "nearby-unsaved-candidates" }
+        XCTAssertNotNil(fallbackSection)
+        XCTAssertTrue(fallbackSection?.showsNearbySearchAction == true)
     }
 
     @MainActor

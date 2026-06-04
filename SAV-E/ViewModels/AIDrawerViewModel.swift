@@ -61,12 +61,15 @@ final class AIDrawerViewModel: ObservableObject {
         self.groundedAnswerClient = groundedAnswerClient
     }
 
-    func submit(reviewCandidates: [PlaceReviewCandidate] = []) async {
+    func submit(
+        reviewCandidates: [PlaceReviewCandidate] = [],
+        outputLanguage: AppLanguage = .english
+    ) async {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
         if DeterministicTripPlanner().isItineraryRequest(trimmed) {
-            await showTripPlanningResponse(query: trimmed)
+            await showTripPlanningResponse(query: trimmed, outputLanguage: outputLanguage)
             return
         }
 
@@ -93,7 +96,12 @@ final class AIDrawerViewModel: ObservableObject {
             currentLocation: currentLocation
         )
         if let gatedResponse {
-            await showGroundedRecommendationResponse(gatedResponse, query: trimmed, intent: resolvedIntent)
+            await showGroundedRecommendationResponse(
+                gatedResponse,
+                query: trimmed,
+                intent: resolvedIntent,
+                outputLanguage: outputLanguage
+            )
             return
         }
 
@@ -105,7 +113,12 @@ final class AIDrawerViewModel: ObservableObject {
             mapCandidates: mapCandidates
         )
         if saveSearchResponse.hasVisibleResults {
-            await showGroundedRecommendationResponse(saveSearchResponse, query: trimmed, intent: resolvedIntent)
+            await showGroundedRecommendationResponse(
+                saveSearchResponse,
+                query: trimmed,
+                intent: resolvedIntent,
+                outputLanguage: outputLanguage
+            )
             return
         }
 
@@ -121,7 +134,12 @@ final class AIDrawerViewModel: ObservableObject {
         }
 
         do {
-            let response = try await aiService.query(trimmed, places: places, conversationHistory: conversationTurns)
+            let response = try await aiService.query(
+                trimmed,
+                places: places,
+                conversationHistory: conversationTurns,
+                outputLanguage: outputLanguage
+            )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
             drawerState = .displaying(response)
@@ -259,6 +277,10 @@ final class AIDrawerViewModel: ObservableObject {
         saveSearchController.shouldSearchNearbyUnsavedCandidatesImmediately(for: query)
     }
 
+    func shouldSearchExactMapCandidates(for query: String) -> Bool {
+        saveSearchController.exactMapCandidateQuery(for: query) != nil
+    }
+
     func shouldPrepareNearbyCandidatesAfterAnswer(for query: String) -> Bool {
         mapCandidates.isEmpty && saveSearchController.shouldPrepareMapCandidates(for: query)
     }
@@ -306,7 +328,12 @@ final class AIDrawerViewModel: ObservableObject {
         return MapActionData(type: .filterPins, placeIds: placeIDs, lat: nil, lng: nil, span: nil)
     }
 
-    private func showGroundedRecommendationResponse(_ response: SaveSearchResponse, query: String, intent: SaveSearchIntent? = nil) async {
+    private func showGroundedRecommendationResponse(
+        _ response: SaveSearchResponse,
+        query: String,
+        intent: SaveSearchIntent? = nil,
+        outputLanguage: AppLanguage
+    ) async {
         let requestID = UUID()
         activeRequestID = requestID
         drawerState = .loading
@@ -319,6 +346,7 @@ final class AIDrawerViewModel: ObservableObject {
             groundedResponse = await response.withGroundedAnswer(
                 query: query,
                 intent: intent,
+                outputLanguage: outputLanguage,
                 client: groundedAnswerClient
             )
         } else {
@@ -331,7 +359,7 @@ final class AIDrawerViewModel: ObservableObject {
         mapAction = mapAction(for: groundedResponse)
     }
 
-    private func showTripPlanningResponse(query: String) async {
+    private func showTripPlanningResponse(query: String, outputLanguage: AppLanguage) async {
         let requestID = UUID()
         activeRequestID = requestID
         drawerState = .loading
@@ -339,7 +367,12 @@ final class AIDrawerViewModel: ObservableObject {
         rememberQuery(query)
 
         do {
-            let response = try await aiService.query(query, places: places, conversationHistory: conversationTurns)
+            let response = try await aiService.query(
+                query,
+                places: places,
+                conversationHistory: conversationTurns,
+                outputLanguage: outputLanguage
+            )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
             drawerState = .displaying(response)
@@ -354,11 +387,20 @@ final class AIDrawerViewModel: ObservableObject {
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
             let message = places.isEmpty
-                ? "Save or import a few Map Stamps first, then ask SAV-E to plan from them."
-                : "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately."
+                ? outputLanguage.localized(
+                    english: "Save or import a few Map Stamps first, then ask SAV-E to plan from them.",
+                    traditionalChinese: "先保存或匯入幾個地圖章，再請 SAV-E 從你的地點開始規劃。"
+                )
+                : outputLanguage.localized(
+                    english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately.",
+                    traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 SAV-E 搜尋公開探索。"
+                )
             drawerState = .displaying(SaveAIResponse(
                 componentType: .message,
-                title: "Need trip anchors",
+                title: outputLanguage.localized(
+                    english: "Need trip anchors",
+                    traditionalChinese: "需要行程錨點"
+                ),
                 placeIds: [],
                 navigationPlaceId: nil,
                 transportMode: .walking,
@@ -389,13 +431,19 @@ private extension SaveSearchResponse {
             !newRecommendations.results.isEmpty
     }
 
-    func withGroundedAnswer(query: String, intent: SaveSearchIntent, client: SaveLLMClient) async -> SaveSearchResponse {
+    func withGroundedAnswer(
+        query: String,
+        intent: SaveSearchIntent,
+        outputLanguage: AppLanguage,
+        client: SaveLLMClient
+    ) async -> SaveSearchResponse {
         let grounding = groundedAnswerGrounding
         let request = GroundedAnswerRequest(
             query: query,
             intent: intent,
             allowedPlaceIds: grounding.allowedResultIDs,
-            sections: groundedAnswerSections
+            sections: groundedAnswerSections,
+            outputLanguage: outputLanguage
         )
 
         guard grounding.hasContext else {

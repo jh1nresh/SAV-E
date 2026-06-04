@@ -216,6 +216,23 @@ enum PlaceCategory: String, Codable, CaseIterable, Hashable {
         }
     }
 
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .food:
+            return language.localized(english: "Food", traditionalChinese: "美食")
+        case .cafe:
+            return language.localized(english: "Cafe", traditionalChinese: "咖啡")
+        case .bar:
+            return language.localized(english: "Bar", traditionalChinese: "酒吧")
+        case .attraction:
+            return language.localized(english: "Attraction", traditionalChinese: "景點")
+        case .stay:
+            return language.localized(english: "Stay", traditionalChinese: "住宿")
+        case .shopping:
+            return language.localized(english: "Shopping", traditionalChinese: "購物")
+        }
+    }
+
     var iconName: String {
         switch self {
         case .food: return "fork.knife"
@@ -242,6 +259,15 @@ enum PlaceStatus: String, Codable, Hashable {
         switch self {
         case .wantToGo: return "Map Stamp"
         case .visited: return "Visited"
+        }
+    }
+
+    func memoryCardLabel(language: AppLanguage) -> String {
+        switch self {
+        case .wantToGo:
+            return language.localized(english: "Map Stamp", traditionalChinese: "地圖章")
+        case .visited:
+            return language.localized(english: "Visited", traditionalChinese: "去過")
         }
     }
 }

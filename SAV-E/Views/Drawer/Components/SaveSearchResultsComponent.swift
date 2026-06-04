@@ -13,10 +13,10 @@ struct SaveSearchResultsComponent: View {
                 SaveSearchAssistantMessage(text: assistantMessage)
             }
 
-            if leadsWithAgentAnswer {
+            if hasAssistantAnswer {
                 supportingPlacesDisclosure
                 ForEach(separateContextSections) { section in
-                    sectionView(section)
+                    sectionView(section, isVisuallySecondary: true)
                 }
             } else {
                 ForEach(renderedSections) { section in
@@ -41,9 +41,8 @@ struct SaveSearchResultsComponent: View {
             .filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
     }
 
-    private var leadsWithAgentAnswer: Bool {
-        response.fromYourSave.id == "from-your-save-nearby" &&
-            response.assistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    private var hasAssistantAnswer: Bool {
+        response.assistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     @ViewBuilder
@@ -91,7 +90,7 @@ struct SaveSearchResultsComponent: View {
     }
 
     @ViewBuilder
-    private func sectionView(_ section: SaveSearchSection) -> some View {
+    private func sectionView(_ section: SaveSearchSection, isVisuallySecondary: Bool = false) -> some View {
         let label = section.label ?? (section.id == "from-your-save" ? "FROM YOUR SAV-E" : "PUBLIC DISCOVERY")
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -157,10 +156,13 @@ struct SaveSearchResultsComponent: View {
             }
         }
         .padding(14)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(Color.saveNotebookPage.opacity(isVisuallySecondary ? 0.54 : 0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(
+                    Color.saveNotebookLine.opacity(isVisuallySecondary ? 0.78 : 1),
+                    lineWidth: isVisuallySecondary ? 1.4 : 2
+                )
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }

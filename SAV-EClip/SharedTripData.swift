@@ -27,6 +27,26 @@ struct SharedPlaceData: Codable {
         ShareRouteCodec.decode(SharedPlaceData.self, from: url, route: "p")
     }
 
+    static func shortCode(from url: URL) -> String? {
+        ShareRouteCodec.shortCode(from: url, route: "p")
+    }
+
+    static func resolveShortCode(from url: URL, apiBaseURL: String? = nil) async -> SharedPlaceData? {
+        guard let code = shortCode(from: url),
+              let baseURL = apiBaseURL
+                ?? SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+              let requestURL = URL(string: "\(baseURL)/v0/shared-place-links/\(code)")
+        else { return nil }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: requestURL)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(SharedPlaceLinkResponse.self, from: data).payload
+        } catch {
+            return nil
+        }
+    }
+
     func toURL(baseURL: String = "https://sav-e-app.vercel.app/p") -> URL? {
         ShareRouteCodec.url(for: self, baseURL: baseURL)
     }
@@ -84,6 +104,13 @@ enum ShareRouteCodec {
         return try? JSONDecoder().decode(type, from: data)
     }
 
+    static func shortCode(from url: URL, route: String) -> String? {
+        guard let token = token(from: url, route: route),
+              token.range(of: #"^[A-Za-z0-9_-]{6,32}$"#, options: .regularExpression) != nil
+        else { return nil }
+        return token
+    }
+
     private static func token<T: Encodable>(for payload: T) -> String? {
         guard let data = try? JSONEncoder().encode(payload) else { return nil }
         return data.base64EncodedString()
@@ -121,6 +148,10 @@ enum ShareRouteCodec {
             .first(where: { $0.name == "d" })?
             .value
     }
+}
+
+private struct SharedPlaceLinkResponse: Codable {
+    let payload: SharedPlaceData
 }
 
 struct SharedListPayload: Codable {

@@ -50,5 +50,11 @@ Persistence routes accept either `Authorization: Bearer <Privy access token>` or
 - `POST /v0/places/:id/verified-claims` — attaches an owner-scoped claim with proof level, confidence, visibility, context, ratings, and evidence refs.
 - `GET /v0/places/:id/trust-summary` — returns a compact agent-readable proof summary for a saved place.
 - `POST /v0/places/recommend-by-claims` — ranks owner-scoped saved places by verified claims and returns a retrieval receipt.
+- `GET /v0/shared-place-links/:code` — public resolver for `/p/<shortCode>` App Clip/web previews.
+- `POST /v0/shared-place-links` — authenticated creation of a short public place preview link from a sanitized `SharedPlaceData` payload.
+- `GET /v0/workflows/place-recovery/runs` — authenticated list of SAV-E Place Recovery Agent workflow runs.
+- `POST /v0/workflows/place-recovery/runs` — authenticated workflow run creation with internal credit reservation.
+- `POST /v0/workflows/place-recovery/runs/:id/result` — records bounded worker/classifier result type and evidence tier.
+- `POST /v0/workflows/place-recovery/runs/:id/decision` — records user confirm/edit/reject and creates an off-chain workflow receipt with credit settlement.
 
-Public cards, collections, OpenAPI, `llms.txt`, usage receipts, and reputation weighting are intentionally out of scope for the first verified-claims slice.
+Collections, OpenAPI, `llms.txt`, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.

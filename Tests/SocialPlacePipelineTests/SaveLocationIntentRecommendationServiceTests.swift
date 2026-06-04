@@ -366,6 +366,102 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(dislikedResult.evidence.contains("Visited place you rated well"))
     }
 
+    func testHighRatingPriceAndTasteTagsRankAheadOfCloserGenericSavedPlace() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let lovedSushi = place(
+            name: "Loved Sushi Memory",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8266,
+            note: "Omakase counter with uni hand roll",
+            extractedDishes: ["uni hand roll", "omakase"],
+            status: .visited,
+            rating: 4.9,
+            priceRange: "$$$"
+        )
+        let matchingSushi = place(
+            name: "Future Sushi Counter",
+            category: .food,
+            latitude: 33.6860,
+            longitude: -117.8270,
+            note: "Uni hand roll and omakase set",
+            extractedDishes: ["uni hand roll"],
+            rating: 4.6,
+            priceRange: "$$$"
+        )
+        let closerGeneric = place(
+            name: "Closest Generic Grill",
+            category: .food,
+            latitude: 33.68461,
+            longitude: -117.82651,
+            note: "burgers and fries",
+            priceRange: "$"
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近餐廳",
+            places: [closerGeneric, matchingSushi, lovedSushi],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), [
+            "Loved Sushi Memory",
+            "Future Sushi Counter",
+            "Closest Generic Grill"
+        ])
+        let matchingResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Future Sushi Counter" })
+        XCTAssertTrue(matchingResult.evidence.contains("Taste match from places you visited"))
+        XCTAssertTrue(matchingResult.evidence.contains("High rating 4.6"))
+        XCTAssertTrue(matchingResult.evidence.contains("Taste tags match hand / omakase"))
+        XCTAssertTrue(matchingResult.evidence.contains("Price matches places you liked ($$$)"))
+    }
+
+    func testTasteSignalsDoNotCrossCategoryOrLocationGates() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let lovedCafe = place(
+            name: "Loved Cafe Memory",
+            category: .cafe,
+            latitude: 33.6847,
+            longitude: -117.8265,
+            note: "Omakase uni hand roll",
+            extractedDishes: ["uni hand roll"],
+            status: .visited,
+            rating: 5.0,
+            priceRange: "$$$"
+        )
+        let nearbyRestaurant = place(
+            name: "Nearby Restaurant",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8267,
+            note: "simple lunch",
+            priceRange: "$"
+        )
+        let farLovedRestaurant = place(
+            name: "Far Loved Restaurant",
+            category: .food,
+            latitude: 33.7400,
+            longitude: -117.8267,
+            note: "Omakase uni hand roll",
+            extractedDishes: ["uni hand roll"],
+            status: .visited,
+            rating: 4.9,
+            priceRange: "$$$"
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近餐廳",
+            places: [lovedCafe, farLovedRestaurant, nearbyRestaurant],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Nearby Restaurant"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Loved Cafe Memory"))
+        XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Far Loved Restaurant"])
+    }
+
     func testSharedGeminiFallbacksUseGemini3ProOnly() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3-pro"])
     }
@@ -587,6 +683,183 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertThrowsError(try validator.parseIntentJSON(invalidSourceScope, rawText: "附近咖啡廳"))
     }
 
+    func testAskSaveRecommendationQualityRegressionFixtures() throws {
+        struct Fixture {
+            let name: String
+            let query: String
+            let places: [Place]
+            let reviewCandidates: [PlaceReviewCandidate]
+            let mapCandidates: [SaveMapCandidate]
+            let expectedSavedTitles: [String]
+            let expectedReviewTitles: [String]
+            let expectedPublicTitles: [String]
+            let expectedFarSavedTitles: [String]
+            let shouldShowPublicFallback: Bool
+        }
+
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let nearbyBoba = place(
+            name: "Omomo Tea Shoppe",
+            category: .cafe,
+            latitude: 33.6848,
+            longitude: -117.8267,
+            note: "Brown sugar boba and milk tea",
+            extractedDishes: ["boba", "milk tea"]
+        )
+        let nearbyCoffee = place(
+            name: "Bright Coffee Bar",
+            category: .cafe,
+            latitude: 33.6849,
+            longitude: -117.8262,
+            note: "Pour-over coffee and quiet tables",
+            extractedDishes: ["latte", "pour over"]
+        )
+        let nearbyRestaurant = place(
+            name: "HiroNori Craft Ramen",
+            category: .food,
+            latitude: 33.6849,
+            longitude: -117.8262,
+            note: "Tonkotsu ramen and crispy chicken"
+        )
+        let farSavedBoba = place(
+            name: "Tainan Milk Tea",
+            category: .cafe,
+            latitude: 22.9997,
+            longitude: 120.2270,
+            note: "Milk tea memory from Taiwan",
+            extractedDishes: ["milk tea"]
+        )
+        let farSavedCoffee = place(
+            name: "LA Coffee Archive",
+            category: .cafe,
+            latitude: 34.0522,
+            longitude: -118.2437,
+            note: "Saved coffee memory outside today's radius"
+        )
+        let reviewOnlyRestaurant = reviewCandidate(name: "Review Ramen", categoryEvidence: "TikTok caption says restaurant near Irvine")
+        let reviewOnlyCoffee = reviewCandidate(name: "Review Coffee", categoryEvidence: "Instagram caption mentions coffee near Irvine")
+        let publicCoffee = mapCandidate(name: "Public Coffee", category: .cafe)
+        let publicRestaurant = mapCandidate(name: "Public Ramen", category: .food)
+
+        let fixtures: [Fixture] = [
+            Fixture(
+                name: "boba keeps exact nearby saved first and far saved separate",
+                query: "推薦我附近奶茶",
+                places: [farSavedBoba, nearbyRestaurant, nearbyBoba],
+                reviewCandidates: [],
+                mapCandidates: [publicCoffee],
+                expectedSavedTitles: ["Omomo Tea Shoppe"],
+                expectedReviewTitles: [],
+                expectedPublicTitles: [],
+                expectedFarSavedTitles: ["Tainan Milk Tea"],
+                shouldShowPublicFallback: false
+            ),
+            Fixture(
+                name: "coffee returns nearby saved coffee without restaurant bleed",
+                query: "我今天想喝咖啡推薦一家咖啡給我",
+                places: [nearbyRestaurant, nearbyCoffee],
+                reviewCandidates: [],
+                mapCandidates: [publicCoffee],
+                expectedSavedTitles: ["Bright Coffee Bar"],
+                expectedReviewTitles: [],
+                expectedPublicTitles: ["Public Coffee"],
+                expectedFarSavedTitles: [],
+                shouldShowPublicFallback: false
+            ),
+            Fixture(
+                name: "restaurant uses food category and excludes cafes",
+                query: "推薦我附近餐廳",
+                places: [nearbyCoffee, nearbyRestaurant],
+                reviewCandidates: [],
+                mapCandidates: [publicRestaurant],
+                expectedSavedTitles: ["HiroNori Craft Ramen"],
+                expectedReviewTitles: [],
+                expectedPublicTitles: ["Public Ramen"],
+                expectedFarSavedTitles: [],
+                shouldShowPublicFallback: false
+            ),
+            Fixture(
+                name: "nearby generic falls back to dominant saved cafe category",
+                query: "推薦我附近",
+                places: [nearbyRestaurant, nearbyCoffee, nearbyBoba, farSavedCoffee],
+                reviewCandidates: [],
+                mapCandidates: [],
+                expectedSavedTitles: ["Omomo Tea Shoppe", "Bright Coffee Bar"],
+                expectedReviewTitles: [],
+                expectedPublicTitles: [],
+                expectedFarSavedTitles: ["LA Coffee Archive"],
+                shouldShowPublicFallback: false
+            ),
+            Fixture(
+                name: "far saved is context only when no saved place is nearby",
+                query: "推薦我附近咖啡",
+                places: [farSavedCoffee],
+                reviewCandidates: [],
+                mapCandidates: [],
+                expectedSavedTitles: [],
+                expectedReviewTitles: [],
+                expectedPublicTitles: [],
+                expectedFarSavedTitles: ["LA Coffee Archive"],
+                shouldShowPublicFallback: true
+            ),
+            Fixture(
+                name: "review-only candidate is usable but not promoted to saved",
+                query: "推薦我附近餐廳",
+                places: [],
+                reviewCandidates: [reviewOnlyRestaurant],
+                mapCandidates: [],
+                expectedSavedTitles: [],
+                expectedReviewTitles: ["Review Ramen"],
+                expectedPublicTitles: [],
+                expectedFarSavedTitles: [],
+                shouldShowPublicFallback: true
+            ),
+            Fixture(
+                name: "public fallback stays in unsaved section",
+                query: "推薦我附近咖啡",
+                places: [],
+                reviewCandidates: [reviewOnlyCoffee],
+                mapCandidates: [publicCoffee],
+                expectedSavedTitles: [],
+                expectedReviewTitles: ["Review Coffee"],
+                expectedPublicTitles: ["Public Coffee"],
+                expectedFarSavedTitles: [],
+                shouldShowPublicFallback: false
+            )
+        ]
+
+        for fixture in fixtures {
+            let response = try XCTUnwrap(
+                service.recommendationSearchResponse(
+                    for: fixture.query,
+                    places: fixture.places,
+                    reviewCandidates: fixture.reviewCandidates,
+                    mapCandidates: fixture.mapCandidates,
+                    currentLocation: currentLocation
+                ),
+                fixture.name
+            )
+
+            XCTAssertEqual(response.fromYourSave.results.map(\.title), fixture.expectedSavedTitles, fixture.name)
+            XCTAssertEqual(
+                response.additionalSections.first { $0.id == "review-candidates" }?.results.map(\.title) ?? [],
+                fixture.expectedReviewTitles,
+                fixture.name
+            )
+            XCTAssertEqual(response.newRecommendations.results.map(\.title), fixture.expectedPublicTitles, fixture.name)
+            XCTAssertEqual(
+                response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title) ?? [],
+                fixture.expectedFarSavedTitles,
+                fixture.name
+            )
+            XCTAssertEqual(response.newRecommendations.showsNearbySearchAction, fixture.shouldShowPublicFallback, fixture.name)
+            XCTAssertFalse(response.fromYourSave.results.contains { result in
+                fixture.expectedFarSavedTitles.contains(result.title)
+            }, fixture.name)
+        }
+    }
+
     private func place(
         name: String,
         category: PlaceCategory,
@@ -620,6 +893,37 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: Date()
+        )
+    }
+
+    private func reviewCandidate(name: String, categoryEvidence: String) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: name,
+            address: "123 Main St",
+            city: "Irvine",
+            latitude: 33.6851,
+            longitude: -117.8264,
+            evidence: [categoryEvidence],
+            confidence: 0.78,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+    }
+
+    private func mapCandidate(name: String, category: PlaceCategory) -> SaveMapCandidate {
+        SaveMapCandidate(
+            title: name,
+            subtitle: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            category: category,
+            rating: 4.7,
+            reviewCount: 240,
+            distanceMeters: 180,
+            evidence: ["Apple Maps result"]
         )
     }
 }

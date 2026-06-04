@@ -81,9 +81,21 @@ export function decodePlaceLink(link: string): SharedPlaceData | null {
     const url = new URL(link);
     if (!isSavePlaceLink(link)) return null;
     const payload = routeToken(url, "p");
-    if (!payload) return null;
+    if (!payload || !isEmbeddedPlacePayloadToken(payload)) return null;
     const json = Buffer.from(decodePayload(payload), "base64").toString("utf8");
     return JSON.parse(json) as SharedPlaceData;
+  } catch {
+    return null;
+  }
+}
+
+export function sharedPlaceShortCode(link: string): string | null {
+  try {
+    const url = new URL(link);
+    if (!isSavePlaceLink(link)) return null;
+    const token = routeToken(url, "p");
+    if (!token || isEmbeddedPlacePayloadToken(token)) return null;
+    return token;
   } catch {
     return null;
   }
@@ -144,6 +156,17 @@ function decodePayload(value: string): string {
   const base64 = decoded.replaceAll("-", "+").replaceAll("_", "/");
   const padding = base64.length % 4;
   return padding === 0 ? base64 : `${base64}${"=".repeat(4 - padding)}`;
+}
+
+function isEmbeddedPlacePayloadToken(value: string): boolean {
+  if (value.length < 80 || !/^[A-Za-z0-9_-]+$/.test(value)) return false;
+  try {
+    const json = Buffer.from(decodePayload(value), "base64").toString("utf8");
+    const parsed = JSON.parse(json) as Partial<SharedPlaceData>;
+    return Boolean(parsed.name && typeof parsed.lat === "number" && typeof parsed.lng === "number");
+  } catch {
+    return false;
+  }
 }
 
 function routeToken(url: URL, route: string): string | null {

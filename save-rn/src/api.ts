@@ -1,4 +1,4 @@
-import { Place, TripRecord } from "./models";
+import { Place, SharedPlaceData, TripRecord } from "./models";
 
 const apiBaseUrl =
   normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_API_URL) ??
@@ -41,6 +41,15 @@ type BackendTrip = {
   is_optimized: boolean;
   created_at?: string;
   trip_stops: BackendTripStop[];
+};
+
+type SharedPlaceLink = {
+  code: string;
+  url: string;
+  payload: SharedPlaceData;
+  source_place_id?: string | null;
+  expires_at?: string | null;
+  created_at?: string;
 };
 
 function requireApiBaseUrl(): string {
@@ -170,6 +179,34 @@ export async function createTrip(
   );
 
   return mapTrip(trip);
+}
+
+export async function createSharedPlaceLink(
+  auth: SaveAuth,
+  payload: SharedPlaceData,
+  sourcePlaceId?: string
+): Promise<SharedPlaceLink> {
+  return apiRequest<SharedPlaceLink>(
+    "/v0/shared-place-links",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        payload,
+        source_place_id: sourcePlaceId ?? null,
+      }),
+    },
+    auth
+  );
+}
+
+export async function resolveSharedPlaceLink(code: string): Promise<SharedPlaceData> {
+  const response = await fetch(`${requireApiBaseUrl()}/v0/shared-place-links/${encodeURIComponent(code)}`);
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Shared place link failed: ${response.status}`);
+  }
+  const link = (await response.json()) as SharedPlaceLink;
+  return link.payload;
 }
 
 function mapTrip(trip: BackendTrip): TripRecord {
