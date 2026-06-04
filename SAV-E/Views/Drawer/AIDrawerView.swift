@@ -29,6 +29,8 @@ private enum CommandDrawerTab: String, CaseIterable, Hashable {
     case lists
     case friends
 
+    static let publicTestCases: [CommandDrawerTab] = [.saved, .review]
+
     var title: String {
         switch self {
         case .saved: return "Stamps"
@@ -808,7 +810,7 @@ struct AIDrawerView: View {
 
     private var commandTabBar: some View {
         HStack(spacing: 7) {
-            ForEach(CommandDrawerTab.allCases, id: \.self) { tab in
+            ForEach(CommandDrawerTab.publicTestCases, id: \.self) { tab in
                 Button {
                     activeCommandTab = tab
                     showSavedCategories = false

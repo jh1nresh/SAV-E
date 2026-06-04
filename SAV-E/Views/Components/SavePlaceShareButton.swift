@@ -74,7 +74,7 @@ struct SavePlaceShareButton<Label: View>: View {
     init(content: SavePlaceShareContent, @ViewBuilder label: @escaping () -> Label) {
         self.content = content
         self.label = label
-        _shareURL = State(initialValue: content.payload == nil ? content.fallbackURL : nil)
+        _shareURL = State(initialValue: content.fallbackURL)
     }
 
     var body: some View {
@@ -125,7 +125,7 @@ struct SavePlaceShareButton<Label: View>: View {
             await SavePlaceShareLinkCache.shared.set(url, for: content.cacheKey)
             shareURL = url
         } catch {
-            shareURL = nil
+            shareURL = content.fallbackURL
         }
     }
 }
