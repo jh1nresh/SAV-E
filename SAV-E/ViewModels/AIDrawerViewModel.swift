@@ -68,6 +68,11 @@ final class AIDrawerViewModel: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        if DeterministicTripPlanner().isItineraryRequest(trimmed) {
+            await showTripPlanningResponse(query: trimmed, outputLanguage: outputLanguage)
+            return
+        }
+
         let resolvedIntent = await recommendationIntent(for: trimmed)
         let needsCurrentLocation = resolvedIntent?.mustMatchLocation ??
             locationIntentRecommendationService.requiresCurrentLocation(for: trimmed)
@@ -352,6 +357,63 @@ final class AIDrawerViewModel: ObservableObject {
         activeRequestID = nil
         drawerState = .saveSearchResults(groundedResponse)
         mapAction = mapAction(for: groundedResponse)
+    }
+
+    private func showTripPlanningResponse(query: String, outputLanguage: AppLanguage) async {
+        let requestID = UUID()
+        activeRequestID = requestID
+        drawerState = .loading
+        mapAction = nil
+        rememberQuery(query)
+
+        do {
+            let response = try await aiService.query(
+                query,
+                places: places,
+                conversationHistory: conversationTurns,
+                outputLanguage: outputLanguage
+            )
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            drawerState = .displaying(response)
+            mapAction = response.mapAction
+
+            let responseJSON = aiService.encodeResponse(response)
+            conversationTurns.append(ConversationTurn(userMessage: query, assistantResponse: responseJSON))
+            if conversationTurns.count > 5 {
+                conversationTurns.removeFirst()
+            }
+        } catch SaveAIError.apiKeyMissing {
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            let message = places.isEmpty
+                ? outputLanguage.localized(
+                    english: "Save or import a few Map Stamps first, then ask SAV-E to plan from them.",
+                    traditionalChinese: "先保存或匯入幾個地圖章，再請 SAV-E 從你的地點開始規劃。"
+                )
+                : outputLanguage.localized(
+                    english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately.",
+                    traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 SAV-E 搜尋公開探索。"
+                )
+            drawerState = .displaying(SaveAIResponse(
+                componentType: .message,
+                title: outputLanguage.localized(
+                    english: "Need trip anchors",
+                    traditionalChinese: "需要行程錨點"
+                ),
+                placeIds: [],
+                navigationPlaceId: nil,
+                transportMode: .walking,
+                itineraryDays: [],
+                messageText: message,
+                mapAction: nil,
+                aiMessage: message
+            ))
+        } catch {
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            drawerState = .error(error.localizedDescription)
+        }
     }
 
     private func rememberQuery(_ query: String) {

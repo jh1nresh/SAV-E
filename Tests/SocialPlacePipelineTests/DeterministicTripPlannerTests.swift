@@ -66,10 +66,42 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(plannedNames.contains("Irvine Dinner"))
     }
 
+    func testPlannerDoesNotUseWrongCityWhenDestinationHasNoSavedMatches() {
+        let places = [
+            makePlace("Irvine Dinner", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .food),
+            makePlace("Costa Mesa Coffee", address: "Costa Mesa, CA", latitude: 33.6411, longitude: -117.9187, category: .cafe)
+        ]
+
+        let response = DeterministicTripPlanner().plan(for: "Plan a Los Angeles trip", places: places)
+
+        XCTAssertNil(response)
+    }
+
+    func testPlannerAsksForDaysOrStyleWhenTripRequestIsUnderspecified() throws {
+        let places = [
+            makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
+            makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(for: "幫我規劃 LA 行程", places: places))
+
+        XCTAssertTrue(response.aiMessage?.contains("how many days") == true)
+        XCTAssertTrue(response.aiMessage?.contains("food/drink") == true)
+    }
+
     func testPlannerSkipsNonItineraryQueries() {
         let response = DeterministicTripPlanner().plan(
             for: "Show my food spots on the map",
             places: [makePlace("Cafe", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .cafe)]
+        )
+
+        XCTAssertNil(response)
+    }
+
+    func testPlannerDoesNotTreatTodayRecommendationAsTripPlanning() {
+        let response = DeterministicTripPlanner().plan(
+            for: "推薦我今天附近餐廳",
+            places: [makePlace("Irvine Dinner", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .food)]
         )
 
         XCTAssertNil(response)

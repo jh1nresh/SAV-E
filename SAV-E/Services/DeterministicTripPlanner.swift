@@ -51,20 +51,21 @@ struct DeterministicTripPlanner {
             itineraryDays: itineraryDays,
             messageText: nil,
             mapAction: MapActionData(type: .showRoute, placeIds: placeIds, lat: nil, lng: nil, span: nil),
-            aiMessage: "Built a deterministic draft from your Map Stamps, ordered by distance with simple meal and time-slot rules."
+            aiMessage: planningMessage(for: message, selectedPlaces: selectedPlaces)
         )
     }
 
-    // MARK: - Intent
-
-    private func isItineraryRequest(_ message: String) -> Bool {
+    func isItineraryRequest(_ message: String) -> Bool {
         let normalized = message.lowercased()
         let keywords = [
             "plan", "itinerary", "trip", "route", "schedule", "organize",
-            "day", "days", "weekend", "行程", "規劃", "旅程", "路線", "天", "日"
+            "weekend", "行程", "規劃", "规划", "旅程", "路線", "路线", "安排",
+            "怎麼排", "怎么排"
         ]
         return keywords.contains { normalized.contains($0) }
     }
+
+    // MARK: - Intent
 
     private func requestedDayCount(from message: String, placeCount: Int) -> Int {
         let normalized = message.lowercased()
@@ -109,6 +110,9 @@ struct DeterministicTripPlanner {
     private func selectedPlaces(for message: String, places: [Place], days: Int) -> [Place] {
         let candidates = places.map { Candidate(place: $0, score: relevanceScore(for: $0, message: message)) }
         let positive = candidates.filter { $0.score > 0 }
+        if positive.isEmpty, hasSpecificPlanningConstraint(message) {
+            return []
+        }
         let source = positive.isEmpty ? candidates : positive
         let maxStops = max(3, days * 5)
 
@@ -119,6 +123,10 @@ struct DeterministicTripPlanner {
             }
             .prefix(maxStops)
             .map(\.place)
+    }
+
+    private func hasSpecificPlanningConstraint(_ message: String) -> Bool {
+        !tokens(from: normalize(message)).isEmpty
     }
 
     private func relevanceScore(for place: Place, message: String) -> Int {
@@ -293,5 +301,39 @@ struct DeterministicTripPlanner {
             return "SAV-E Day Plan"
         }
         return "SAV-E \(dayCount)-Day Plan"
+    }
+
+    private func planningMessage(for message: String, selectedPlaces: [Place]) -> String {
+        var notes = ["I drafted this from your saved Map Stamps first."]
+        if !hasExplicitDayCount(message) {
+            notes.append("Tell me how many days and your style if you want me to reshape it.")
+        }
+        let categories = Set(selectedPlaces.map(\.category))
+        if categories.isSubset(of: [.food, .cafe, .bar]) {
+            notes.append("You mostly saved food/drink stops, so add public attractions nearby only after you choose the trip vibe.")
+        } else if !categories.contains(.attraction) {
+            notes.append("You do not have saved attractions in this draft yet; public discovery should stay separate until you pick what to add.")
+        }
+        return notes.joined(separator: " ")
+    }
+
+    private func hasExplicitDayCount(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        if normalized.contains("weekend") { return true }
+        let patterns = [
+            #"(\d+)\s*[- ]?\s*days?"#,
+            #"(\d+)\s*[- ]?\s*day"#,
+            #"(\d+)\s*[天日]"#
+        ]
+        if patterns.contains(where: { pattern in
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+            return regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)) != nil
+        }) {
+            return true
+        }
+        return [
+            "一天", "一日", "兩天", "两天", "二天", "二日", "三天", "三日",
+            "四天", "四日", "五天", "五日", "六天", "六日", "七天", "七日"
+        ].contains { normalized.contains($0) }
     }
 }
