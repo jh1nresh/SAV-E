@@ -204,6 +204,9 @@ struct AIDrawerView: View {
             onAddMoreClueCandidate: { candidate in
                 addMoreClue(for: candidate)
             },
+            onFindExactPlaceCandidate: { candidate in
+                findExactPlace(for: candidate)
+            },
             onSaveCandidate: { candidate, nameOverride in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
                     try await onSaveCandidate(candidate, nameOverride)
@@ -546,6 +549,9 @@ struct AIDrawerView: View {
                 ReviewCandidateDetailCard(
                     candidate: candidate,
                     isWorking: candidateActionInFlight == candidate.id,
+                    onFindExactPlace: {
+                        findExactPlace(for: candidate)
+                    },
                     onAddMoreClue: {
                         addMoreClue(for: candidate)
                     },
@@ -1429,6 +1435,8 @@ struct AIDrawerView: View {
             importURLToReviewCandidates(url)
         } else if viewModel.shouldSearchNearbyUnsavedCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
+        } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
+            searchNearbyUnsavedCandidates(for: viewModel.query)
         } else {
             let submittedQuery = viewModel.query
             Task {
@@ -1444,18 +1452,23 @@ struct AIDrawerView: View {
     private func searchNearbyUnsavedCandidates(for query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed)
+        let isExactSearch = viewModel.shouldSearchExactMapCandidates(for: trimmed)
+        let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed) || isExactSearch
             ? trimmed
             : "search nearby unsaved candidates for \(trimmed)"
         viewModel.query = trimmed
-        addSpotStatus = "Looking for nearby unsaved candidates. Your SAV-E results stay separate."
+        addSpotStatus = isExactSearch
+            ? "Looking for exact map matches. Review the result before saving."
+            : "Looking for nearby unsaved candidates. Your SAV-E results stay separate."
         withAnimation { drawerDetent = .medium }
 
         Task {
             let candidates = await onPrepareMapSearch(fallbackQuery)
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
-                addSpotStatus = "No nearby unsaved candidates found yet. Try a more specific place type or city."
+                addSpotStatus = isExactSearch
+                    ? "No exact map match found yet. Try adding a city, address, or map link."
+                    : "No nearby unsaved candidates found yet. Try a more specific place type or city."
                 await viewModel.submit(reviewCandidates: reviewCandidates)
             } else {
                 viewModel.mapCandidates = candidates
@@ -1464,6 +1477,36 @@ struct AIDrawerView: View {
                 withAnimation {
                     drawerDetent = .medium
                 }
+            }
+        }
+    }
+
+    private func findExactPlace(for candidate: PlaceReviewCandidate) {
+        let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            addMoreClue(for: candidate)
+            return
+        }
+        mapDetailDrawerItem = nil
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+        viewModel.query = query
+        addSpotStatus = "Finding exact place for \(candidate.name). Review the map match before saving."
+        withAnimation { drawerDetent = .medium }
+
+        Task {
+            let candidates = await onPrepareMapSearch(query)
+            if candidates.isEmpty {
+                viewModel.mapCandidates = []
+                addSpotStatus = "No exact map match found for \(candidate.name). Add a city, address, or map link as another clue."
+                viewModel.showReviewCandidate(candidate)
+            } else {
+                viewModel.mapCandidates = candidates
+                addSpotStatus = "Found \(candidates.count) possible map match\(candidates.count == 1 ? "" : "es") for \(candidate.name)."
+                await viewModel.submit(reviewCandidates: reviewCandidates)
+                withAnimation { drawerDetent = .medium }
             }
         }
     }
@@ -1659,6 +1702,7 @@ private struct MapDetailDrawerView: View {
     let onDeletePlace: (Place) async throws -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
+    let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
@@ -1781,6 +1825,7 @@ private struct MapDetailDrawerView: View {
                     ReviewCandidateDetailCard(
                         candidate: candidate,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
+                        onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
                         onAddMoreClue: { onAddMoreClueCandidate(candidate) },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) }
                     )
@@ -3291,6 +3336,7 @@ private struct ReviewCandidateDetailCard: View {
     @EnvironmentObject private var languageSettings: AppLanguageSettings
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
+    var onFindExactPlace: () -> Void
     var onAddMoreClue: () -> Void
     var onSave: (String?) -> Void
     @State private var displayNameDraft: String
@@ -3298,11 +3344,13 @@ private struct ReviewCandidateDetailCard: View {
     init(
         candidate: PlaceReviewCandidate,
         isWorking: Bool,
+        onFindExactPlace: @escaping () -> Void,
         onAddMoreClue: @escaping () -> Void,
         onSave: @escaping (String?) -> Void
     ) {
         self.candidate = candidate
         self.isWorking = isWorking
+        self.onFindExactPlace = onFindExactPlace
         self.onAddMoreClue = onAddMoreClue
         self.onSave = onSave
         _displayNameDraft = State(initialValue: candidate.name)
@@ -3416,7 +3464,7 @@ private struct ReviewCandidateDetailCard: View {
         if primaryAction.confirmsMapStamp {
             onSave(nameOverride)
         } else {
-            onAddMoreClue()
+            onFindExactPlace()
         }
     }
 

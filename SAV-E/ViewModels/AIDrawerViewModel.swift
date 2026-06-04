@@ -241,6 +241,10 @@ final class AIDrawerViewModel: ObservableObject {
         saveSearchController.shouldSearchNearbyUnsavedCandidatesImmediately(for: query)
     }
 
+    func shouldSearchExactMapCandidates(for query: String) -> Bool {
+        saveSearchController.exactMapCandidateQuery(for: query) != nil
+    }
+
     func shouldPrepareNearbyCandidatesAfterAnswer(for query: String) -> Bool {
         mapCandidates.isEmpty && saveSearchController.shouldPrepareMapCandidates(for: query)
     }
