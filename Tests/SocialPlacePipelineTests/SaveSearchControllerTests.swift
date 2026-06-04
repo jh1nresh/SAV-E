@@ -707,6 +707,32 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerNoResultRecommendationStillUsesBoundedGroundedAnswerClient() async {
+        let client = StubGroundedAnswerClient(answer: "I do not have a matching nearby Map Stamp yet. Want me to search public coffee spots around you?")
+        let drawer = AIDrawerViewModel(
+            locationService: StubAIDrawerLocationProvider(
+                currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)
+            ),
+            groundedAnswerClient: client
+        )
+        drawer.query = "推薦我附近咖啡"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertTrue(response.fromYourSave.results.isEmpty)
+        XCTAssertTrue(response.newRecommendations.results.isEmpty)
+        XCTAssertTrue(response.newRecommendations.showsNearbySearchAction)
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, [])
+        let fallbackSection = client.requests.first?.sections.first { $0.id == "nearby-unsaved-candidates" }
+        XCTAssertNotNil(fallbackSection)
+        XCTAssertTrue(fallbackSection?.showsNearbySearchAction == true)
+    }
+
+    @MainActor
     func testMapSearchClearRemovesUnsavedPinsAndCategoryFilter() {
         let map = MapViewModel()
         let candidate = SaveMapCandidate(
