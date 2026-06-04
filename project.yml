@@ -53,8 +53,6 @@ targets:
       - package: ZIPFoundation
         product: ZIPFoundation
       - target: SAVEShareExtension
-      - target: SAVEClip
-        embed: true
     info:
       path: SAV-E/Info.plist
       properties:

@@ -59,6 +59,25 @@ enum SaveSearchPrimaryAction: String, Codable, Hashable {
         }
     }
 
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .openSource: return language.localized(english: "Open source", traditionalChinese: "打開來源")
+        case .runRecovery: return language.localized(english: "Find exact place", traditionalChinese: "找出精確地點")
+        case .savePlace: return language.localized(english: "Save this place", traditionalChinese: "保存這個地點")
+        case .confirmMapStamp: return language.localized(english: "Confirm Map Stamp", traditionalChinese: "確認成地圖章")
+        case .planAround: return language.localized(english: "Plan around this", traditionalChinese: "用這裡規劃")
+        case .addToTrip: return language.localized(english: "Add to trip", traditionalChinese: "加入行程")
+        case .markTried: return language.localized(english: "Mark as tried", traditionalChinese: "標記為去過")
+        case .addReview: return language.localized(english: "Add private review", traditionalChinese: "新增私人評論")
+        case .addProof: return language.localized(english: "Add proof", traditionalChinese: "新增憑證")
+        case .showNearby: return language.localized(english: "Show nearby", traditionalChinese: "顯示附近")
+        case .recommendOrder: return language.localized(english: "What should I order?", traditionalChinese: "我該點什麼？")
+        case .addNote: return language.localized(english: "Add note", traditionalChinese: "新增筆記")
+        case .saveClue: return language.localized(english: "Save as clue", traditionalChinese: "保存成線索")
+        case .none: return language.localized(english: "No action", traditionalChinese: "沒有動作")
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .openSource: return "link"

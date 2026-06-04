@@ -71,7 +71,6 @@
 		9BBD5A95B6C4D533DE2AA0A6 /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */; };
 		9F3813BB934F44CF302ACC48 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */; };
 		9FB7081124C31C9CCA80433F /* EvidenceLinkList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */; };
-		A011580AC9A6F3C2A02FE472 /* SAVEClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = A8238D841A80D8B370120F95 /* SAVEClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A0CF383392FBA76C9B676E0F /* AIParsingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53130D5A88AAB65EF3312276 /* AIParsingService.swift */; };
 		A2044F57E65B309A4A9CD9E7 /* AIDrawerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9FCFE1797E4DF4630338E4 /* AIDrawerViewModel.swift */; };
 		A2F1E48BF387C064B3B4F4E6 /* SAVEAppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B7EEB8784FCDCA222073B5 /* SAVEAppShortcuts.swift */; };
@@ -132,13 +131,6 @@
 			remoteGlobalIDString = 9F18DE3C3B83AA483BDE2A71;
 			remoteInfo = SAVE;
 		};
-		DAB4DC3FA7583AE78186D7E4 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BCD0A8DE7E85AFADB1C8514C;
-			remoteInfo = SAVEClip;
-		};
 		FE4831CE911A281224E7B7F7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
@@ -158,17 +150,6 @@
 				67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		3D8AE07A69D4E51CB90C125D /* Embed App Clips */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips";
-			dstSubfolderSpec = 16;
-			files = (
-				A011580AC9A6F3C2A02FE472 /* SAVEClip.app in Embed App Clips */,
-			);
-			name = "Embed App Clips";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -698,13 +679,11 @@
 				6DD38CF456169763BD57F8B1 /* Resources */,
 				6DFB59A5DACC6C13A2CE7794 /* Frameworks */,
 				38E3923233750DB0215AE4B2 /* Embed Foundation Extensions */,
-				3D8AE07A69D4E51CB90C125D /* Embed App Clips */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				D17F672BA48B43380D9F9176 /* PBXTargetDependency */,
-				7ECA88DFC51C5D59D5E1CF00 /* PBXTargetDependency */,
 			);
 			name = SAVE;
 			packageProductDependencies = (
@@ -1025,11 +1004,6 @@
 			isa = PBXTargetDependency;
 			target = 9F18DE3C3B83AA483BDE2A71 /* SAVE */;
 			targetProxy = 05E4C3760FDCA961F77E0A3E /* PBXContainerItemProxy */;
-		};
-		7ECA88DFC51C5D59D5E1CF00 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = BCD0A8DE7E85AFADB1C8514C /* SAVEClip */;
-			targetProxy = DAB4DC3FA7583AE78186D7E4 /* PBXContainerItemProxy */;
 		};
 		BEE514DC854B30D8B37A5BD8 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

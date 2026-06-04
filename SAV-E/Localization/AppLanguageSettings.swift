@@ -200,9 +200,9 @@ enum SaveText {
         case .openingHint:
             return localized(english: "Waking up your place memory", traditionalChinese: "整理你的地點記憶", language: language)
         case .tripLinkReady:
-            return localized(english: "Trip Link Ready", traditionalChinese: "行程連結準備好了", language: language)
+            return localized(english: "Trip Preview Parked", traditionalChinese: "行程預覽暫不開放", language: language)
         case .tripLinkMessage:
-            return localized(english: "%@ has %d stops. Full trip import is coming next.", traditionalChinese: "%@ 有 %d 個地點。完整行程匯入會在下一版補上。", language: language)
+            return localized(english: "%@ has %d stops. Full trip import is outside this public test; save individual places as Map Stamps for now.", traditionalChinese: "「%@」有 %d 個地點。完整行程匯入不在這次 public test 內；目前請先把單一地點保存成地圖章。", language: language)
         case .ok:
             return localized(english: "OK", traditionalChinese: "好", language: language)
         case .cantSignIn:
