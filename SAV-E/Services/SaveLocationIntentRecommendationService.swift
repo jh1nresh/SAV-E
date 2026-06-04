@@ -20,10 +20,31 @@ struct SaveLocationIntentRecommendationService {
         mapCandidates: [SaveMapCandidate] = [],
         currentLocation: CLLocation?
     ) -> SaveSearchResponse? {
-        guard var intent = parser.parse(query),
-              intent.kind == .categoryRecommendation || intent.kind == .craving || intent.mustMatchLocation else {
+        guard let intent = parser.parse(query) else {
             return nil
         }
+        return recommendationSearchResponse(
+            for: query,
+            intent: intent,
+            places: places,
+            reviewCandidates: reviewCandidates,
+            mapCandidates: mapCandidates,
+            currentLocation: currentLocation
+        )
+    }
+
+    func recommendationSearchResponse(
+        for query: String,
+        intent initialIntent: SaveSearchIntent,
+        places: [Place],
+        reviewCandidates: [PlaceReviewCandidate] = [],
+        mapCandidates: [SaveMapCandidate] = [],
+        currentLocation: CLLocation?
+    ) -> SaveSearchResponse? {
+        guard initialIntent.kind == .categoryRecommendation || initialIntent.kind == .craving || initialIntent.mustMatchLocation else {
+            return nil
+        }
+        var intent = initialIntent
         guard intent.sourceScope != .publicOnly else { return nil }
         let tasteProfile = SaveTasteProfile(places: places)
         if intent.requiredCategories.isEmpty, let frequentCategory = tasteProfile.mostSavedCategory {

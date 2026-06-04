@@ -65,17 +65,30 @@ final class AIDrawerViewModel: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
-        let currentLocation = locationIntentRecommendationService.requiresCurrentLocation(for: trimmed)
+        let resolvedIntent = await recommendationIntent(for: trimmed)
+        let needsCurrentLocation = resolvedIntent?.mustMatchLocation ??
+            locationIntentRecommendationService.requiresCurrentLocation(for: trimmed)
+        let currentLocation = needsCurrentLocation
             ? await locationService.requestCurrentLocation()
             : locationService.currentLocation
-        if let gatedResponse = locationIntentRecommendationService.recommendationSearchResponse(
+        let gatedResponse = resolvedIntent.flatMap { intent in
+            locationIntentRecommendationService.recommendationSearchResponse(
+                for: trimmed,
+                intent: intent,
+                places: places,
+                reviewCandidates: reviewCandidates,
+                mapCandidates: mapCandidates,
+                currentLocation: currentLocation
+            )
+        } ?? locationIntentRecommendationService.recommendationSearchResponse(
             for: trimmed,
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
             currentLocation: currentLocation
-        ) {
-            await showGroundedRecommendationResponse(gatedResponse, query: trimmed)
+        )
+        if let gatedResponse {
+            await showGroundedRecommendationResponse(gatedResponse, query: trimmed, intent: resolvedIntent)
             return
         }
 
@@ -87,7 +100,7 @@ final class AIDrawerViewModel: ObservableObject {
             mapCandidates: mapCandidates
         )
         if saveSearchResponse.hasVisibleResults {
-            await showGroundedRecommendationResponse(saveSearchResponse, query: trimmed)
+            await showGroundedRecommendationResponse(saveSearchResponse, query: trimmed, intent: resolvedIntent)
             return
         }
 
@@ -292,7 +305,7 @@ final class AIDrawerViewModel: ObservableObject {
         return MapActionData(type: .filterPins, placeIds: placeIDs, lat: nil, lng: nil, span: nil)
     }
 
-    private func showGroundedRecommendationResponse(_ response: SaveSearchResponse, query: String) async {
+    private func showGroundedRecommendationResponse(_ response: SaveSearchResponse, query: String, intent: SaveSearchIntent? = nil) async {
         let requestID = UUID()
         activeRequestID = requestID
         drawerState = .loading
@@ -301,7 +314,7 @@ final class AIDrawerViewModel: ObservableObject {
 
         let groundedResponse: SaveSearchResponse
         if let groundedAnswerClient,
-           let intent = SaveSearchIntentParser().parse(query) {
+           let intent = intent ?? SaveSearchIntentParser().parse(query) {
             groundedResponse = await response.withGroundedAnswer(
                 query: query,
                 intent: intent,
@@ -355,5 +368,26 @@ private extension SaveSearchResponse {
         } catch {
             return self
         }
+    }
+}
+
+private extension AIDrawerViewModel {
+    func recommendationIntent(for query: String) async -> SaveSearchIntent? {
+        let deterministic = SaveSearchIntentParser().parse(query)
+        if let deterministic,
+           !deterministic.requiredCategories.isEmpty || deterministic.unsupportedCategoryLabel != nil {
+            return deterministic
+        }
+        guard let groundedAnswerClient else {
+            return deterministic
+        }
+        let request = IntentParseRequest(
+            query: query,
+            allowedCategories: PlaceCategory.allCases
+        )
+        guard let llmIntent = try? await groundedAnswerClient.parseIntent(request) else {
+            return deterministic
+        }
+        return llmIntent
     }
 }
