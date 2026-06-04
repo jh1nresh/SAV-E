@@ -1103,9 +1103,47 @@ struct SaveSearchSection: Identifiable, Hashable {
     }
 }
 
+struct SaveAgentGrounding: Equatable {
+    var allowedResultIDs: [String]
+    var sectionIDs: [String]
+    var hasContext: Bool
+
+    init(sections: [SaveSearchSection]) {
+        allowedResultIDs = sections.flatMap { section in
+            section.results.map(\.id)
+        }
+        sectionIDs = sections
+            .filter { section in
+                !section.results.isEmpty ||
+                    section.emptyMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
+                    section.showsNearbySearchAction
+            }
+            .map(\.id)
+        hasContext = !allowedResultIDs.isEmpty || !sectionIDs.isEmpty
+    }
+}
+
+struct SaveAgentAnswer: Equatable {
+    enum Source: String, Equatable {
+        case deterministic
+        case groundedLLM
+    }
+
+    var message: String
+    var source: Source
+    var grounding: SaveAgentGrounding
+
+    init(message: String, source: Source, grounding: SaveAgentGrounding) {
+        self.message = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.source = source
+        self.grounding = grounding
+    }
+}
+
 struct SaveSearchResponse: Equatable {
     var query: String
     var assistantMessage: String?
+    var agentAnswer: SaveAgentAnswer?
     var fromYourSave: SaveSearchSection
     var additionalSections: [SaveSearchSection]
     var newRecommendations: SaveSearchSection
@@ -1113,12 +1151,14 @@ struct SaveSearchResponse: Equatable {
     init(
         query: String,
         assistantMessage: String? = nil,
+        agentAnswer: SaveAgentAnswer? = nil,
         fromYourSave: SaveSearchSection,
         additionalSections: [SaveSearchSection] = [],
         newRecommendations: SaveSearchSection
     ) {
         self.query = query
         self.assistantMessage = assistantMessage
+        self.agentAnswer = agentAnswer
         self.fromYourSave = fromYourSave
         self.additionalSections = additionalSections
         self.newRecommendations = newRecommendations
@@ -1126,6 +1166,35 @@ struct SaveSearchResponse: Equatable {
 }
 
 extension SaveSearchResponse {
+    var resolvedAgentAnswer: SaveAgentAnswer? {
+        if let agentAnswer {
+            return agentAnswer
+        }
+        guard let assistantMessage,
+              !assistantMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        return SaveAgentAnswer(
+            message: assistantMessage,
+            source: .deterministic,
+            grounding: groundedAnswerGrounding
+        )
+    }
+
+    mutating func replaceAgentAnswer(_ message: String, source: SaveAgentAnswer.Source) {
+        assistantMessage = message
+        agentAnswer = SaveAgentAnswer(
+            message: message,
+            source: source,
+            grounding: groundedAnswerGrounding
+        )
+    }
+
+    var groundedAnswerGrounding: SaveAgentGrounding {
+        SaveAgentGrounding(sections: groundedAnswerSections)
+    }
+
     var shouldAutoSearchNearbyUnsavedCandidates: Bool {
         fromYourSave.results.isEmpty &&
             newRecommendations.showsNearbySearchAction &&

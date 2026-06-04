@@ -93,6 +93,7 @@ struct MapView: View {
 }
 
 private struct CurrentLocationButton: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.colorScheme) private var colorScheme
     let isLocating: Bool
     let action: () -> Void
@@ -120,8 +121,8 @@ private struct CurrentLocationButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLocating)
-        .accessibilityLabel("Center map on current location")
-        .accessibilityHint("Moves the map back to where you are now")
+        .accessibilityLabel(languageSettings.localized(english: "Center map on current location", traditionalChinese: "將地圖移到目前位置"))
+        .accessibilityHint(languageSettings.localized(english: "Moves the map back to where you are now", traditionalChinese: "把地圖移回你現在所在的位置"))
     }
 
     private var controlFill: Color {
@@ -140,6 +141,7 @@ private struct CurrentLocationButton: View {
 // MARK: - Map Pin
 
 struct PlaceMapPin: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onTap: () -> Void
 
@@ -152,11 +154,12 @@ struct PlaceMapPin: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(place.name) Map Stamp")
+        .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
     }
 }
 
 private struct SocialPlaceMapPin: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onTap: () -> Void
 
@@ -169,12 +172,13 @@ private struct SocialPlaceMapPin: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(place.name) social place")
-        .accessibilityHint(place.socialSignal?.displayText ?? "Opens a place from your social map")
+        .accessibilityLabel(languageSettings.localized(english: "\(place.name) social place", traditionalChinese: "\(place.name) 社交地點"))
+        .accessibilityHint(place.socialSignal?.displayText ?? languageSettings.localized(english: "Opens a place from your social map", traditionalChinese: "打開社交地圖裡的地點"))
     }
 }
 
 private struct ReviewCandidateMapPin: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let candidate: PlaceReviewCandidate
     let onTap: () -> Void
 
@@ -187,12 +191,13 @@ private struct ReviewCandidateMapPin: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(candidate.name) Review Candidate")
-        .accessibilityHint("Opens the Review Candidate before saving it as a Map Stamp")
+        .accessibilityLabel(languageSettings.localized(english: "\(candidate.name) Review Candidate", traditionalChinese: "\(candidate.name) 待確認地點"))
+        .accessibilityHint(languageSettings.localized(english: "Opens the Review Candidate before saving it as a Map Stamp", traditionalChinese: "先打開待確認地點，再存成地圖章"))
     }
 }
 
 private struct UnsavedMapCandidatePin: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let candidate: SaveMapCandidate
     var isSelected = false
     let onTap: () -> Void
@@ -207,8 +212,8 @@ private struct UnsavedMapCandidatePin: View {
         }
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
-        .accessibilityLabel("\(candidate.title) Unsaved Candidate")
-        .accessibilityHint("Opens this visible map place before saving it as a Map Stamp")
+        .accessibilityLabel(languageSettings.localized(english: "\(candidate.title) Unsaved Candidate", traditionalChinese: "\(candidate.title) 未保存候選地點"))
+        .accessibilityHint(languageSettings.localized(english: "Opens this visible map place before saving it as a Map Stamp", traditionalChinese: "打開這個地圖候選地點，確認後再存成地圖章"))
     }
 }
 

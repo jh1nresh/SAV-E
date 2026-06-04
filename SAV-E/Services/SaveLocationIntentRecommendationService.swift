@@ -192,8 +192,8 @@ struct SaveLocationIntentRecommendationService {
             let rhsNeedleScore = evidenceScore(rhs, needles: intent.categoryNeedles)
             if lhsNeedleScore != rhsNeedleScore { return lhsNeedleScore > rhsNeedleScore }
 
-            let lhsTasteScore = tasteProfile.score(lhs)
-            let rhsTasteScore = tasteProfile.score(rhs)
+            let lhsTasteScore = tasteProfile.rankingSignals(for: lhs).score
+            let rhsTasteScore = tasteProfile.rankingSignals(for: rhs).score
             if lhsTasteScore != rhsTasteScore { return lhsTasteScore > rhsTasteScore }
 
             if let currentLocation {
@@ -591,15 +591,25 @@ struct SaveLocationIntentRecommendationService {
 
     private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool, tasteProfile: SaveTasteProfile) -> [String] {
         var values = ["\(place.category.displayName) Map Stamp"]
+        let signals = tasteProfile.rankingSignals(for: place)
         if !intent.categoryNeedles.isEmpty, evidenceScore(place, needles: intent.categoryNeedles) > 0 {
             values.append("Saved evidence matches \(intent.categoryNeedles.prefix(2).joined(separator: " / "))")
         }
-        if tasteProfile.isPositiveVisited(place) {
+        if signals.isPositiveVisited {
             values.append("Visited place you rated well")
-        } else if tasteProfile.hasVisitedTasteMatch(place) {
+        } else if signals.hasVisitedTasteMatch {
             values.append("Taste match from places you visited")
         }
-        if tasteProfile.isFrequentCategory(place.category) {
+        if let highRating = signals.highRating {
+            values.append(String(format: "High rating %.1f", highRating))
+        }
+        if !signals.matchingPreferredTerms.isEmpty {
+            values.append("Taste tags match \(signals.matchingPreferredTerms.prefix(2).joined(separator: " / "))")
+        }
+        if let priceRange = signals.preferredPriceRange {
+            values.append("Price matches places you liked (\(priceRange))")
+        }
+        if signals.frequentCategoryCount >= SaveTasteProfile.frequentCategoryThreshold {
             values.append("Category matches places you often save")
         }
         if let currentLocation {
@@ -634,49 +644,29 @@ struct SaveLocationIntentRecommendationService {
 }
 
 private struct SaveTasteProfile {
+    static let frequentCategoryThreshold = 3
+
     private let preferredTerms: Set<String>
     private let preferredPriceRanges: Set<String>
     private let savedCategoryCounts: [PlaceCategory: Int]
 
     init(places: [Place]) {
         let positiveVisited = places.filter(Self.isPositiveVisitedPlace)
-        preferredTerms = Set(positiveVisited.flatMap(Self.tasteTerms))
+        preferredTerms = Set(positiveVisited.flatMap(Self.tagLikeTasteTerms))
         preferredPriceRanges = Set(positiveVisited.compactMap { Self.clean($0.priceRange) })
         savedCategoryCounts = Dictionary(grouping: places, by: \.category)
             .mapValues { $0.count }
     }
 
-    func score(_ place: Place) -> Int {
-        var score = 0
-        if isPositiveVisited(place) {
-            score += 4
-        }
-
-        let matchingTerms = matchingPreferredTerms(for: place)
-        score += min(matchingTerms.count, 4)
-
-        if preferredPriceRangeMatches(place) {
-            score += 1
-        }
-        if isFrequentCategory(place.category) {
-            score += min(savedCategoryCounts[place.category] ?? 0, 3)
-        }
-
-        return score
-    }
-
-    func isPositiveVisited(_ place: Place) -> Bool {
-        Self.isPositiveVisitedPlace(place)
-    }
-
-    func isFrequentCategory(_ category: PlaceCategory) -> Bool {
-        (savedCategoryCounts[category] ?? 0) >= 3
-    }
-
-    func hasVisitedTasteMatch(_ place: Place) -> Bool {
-        isPositiveVisited(place) ||
-            !matchingPreferredTerms(for: place).isEmpty ||
-            preferredPriceRangeMatches(place)
+    func rankingSignals(for place: Place) -> SaveTasteRankingSignals {
+        let priceRange = Self.clean(place.priceRange)
+        return SaveTasteRankingSignals(
+            isPositiveVisited: Self.isPositiveVisitedPlace(place),
+            highRating: Self.highRating(for: place),
+            matchingPreferredTerms: matchingPreferredTerms(for: place).sorted(),
+            preferredPriceRange: priceRange.flatMap { preferredPriceRanges.contains($0) ? $0 : nil },
+            frequentCategoryCount: savedCategoryCounts[place.category] ?? 0
+        )
     }
 
     var mostSavedCategory: PlaceCategory? {
@@ -691,14 +681,7 @@ private struct SaveTasteProfile {
     }
 
     private func matchingPreferredTerms(for place: Place) -> Set<String> {
-        Set(Self.tasteTerms(for: place)).intersection(preferredTerms)
-    }
-
-    private func preferredPriceRangeMatches(_ place: Place) -> Bool {
-        guard let priceRange = place.priceRange?.trimmingCharacters(in: .whitespacesAndNewlines) else {
-            return false
-        }
-        return preferredPriceRanges.contains(priceRange)
+        Set(Self.tagLikeTasteTerms(for: place)).intersection(preferredTerms)
     }
 
     private static func isPositiveVisitedPlace(_ place: Place) -> Bool {
@@ -707,13 +690,18 @@ private struct SaveTasteProfile {
         return rating == nil || rating.map { $0 >= 4.0 } == true
     }
 
-    private static func tasteTerms(for place: Place) -> [String] {
+    private static func highRating(for place: Place) -> Double? {
+        guard let rating = place.rating ?? place.googleRating, rating >= 4.0 else {
+            return nil
+        }
+        return rating
+    }
+
+    private static func tagLikeTasteTerms(for place: Place) -> [String] {
         let text = [
-            place.name,
-            place.address,
             place.note ?? "",
             place.extractedDishes?.joined(separator: " ") ?? "",
-            place.priceRange ?? ""
+            place.recommender ?? ""
         ]
         .joined(separator: " ")
 
@@ -725,6 +713,7 @@ private struct SaveTasteProfile {
 
     private static let genericTasteTerms: Set<String> = [
         "restaurant", "restaurants", "food", "cafe", "coffee", "place", "places",
+        "saved", "memory", "liked", "loved", "recommend", "recommended",
         "los", "angeles", "irvine", "california", "taipei", "tokyo"
     ]
 
@@ -733,6 +722,42 @@ private struct SaveTasteProfile {
             return nil
         }
         return trimmed
+    }
+}
+
+private struct SaveTasteRankingSignals {
+    let isPositiveVisited: Bool
+    let highRating: Double?
+    let matchingPreferredTerms: [String]
+    let preferredPriceRange: String?
+    let frequentCategoryCount: Int
+
+    var hasVisitedTasteMatch: Bool {
+        isPositiveVisited || !matchingPreferredTerms.isEmpty || preferredPriceRange != nil
+    }
+
+    var score: Int {
+        var value = 0
+        if isPositiveVisited {
+            value += 6
+        }
+        if let highRating {
+            value += ratingScore(highRating)
+        }
+        value += min(matchingPreferredTerms.count, 4) * 2
+        if preferredPriceRange != nil {
+            value += 2
+        }
+        if frequentCategoryCount >= SaveTasteProfile.frequentCategoryThreshold {
+            value += min(frequentCategoryCount, 3)
+        }
+        return value
+    }
+
+    private func ratingScore(_ rating: Double) -> Int {
+        if rating >= 4.8 { return 4 }
+        if rating >= 4.5 { return 3 }
+        return 2
     }
 }
 

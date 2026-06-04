@@ -366,6 +366,102 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(dislikedResult.evidence.contains("Visited place you rated well"))
     }
 
+    func testHighRatingPriceAndTasteTagsRankAheadOfCloserGenericSavedPlace() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let lovedSushi = place(
+            name: "Loved Sushi Memory",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8266,
+            note: "Omakase counter with uni hand roll",
+            extractedDishes: ["uni hand roll", "omakase"],
+            status: .visited,
+            rating: 4.9,
+            priceRange: "$$$"
+        )
+        let matchingSushi = place(
+            name: "Future Sushi Counter",
+            category: .food,
+            latitude: 33.6860,
+            longitude: -117.8270,
+            note: "Uni hand roll and omakase set",
+            extractedDishes: ["uni hand roll"],
+            rating: 4.6,
+            priceRange: "$$$"
+        )
+        let closerGeneric = place(
+            name: "Closest Generic Grill",
+            category: .food,
+            latitude: 33.68461,
+            longitude: -117.82651,
+            note: "burgers and fries",
+            priceRange: "$"
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近餐廳",
+            places: [closerGeneric, matchingSushi, lovedSushi],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), [
+            "Loved Sushi Memory",
+            "Future Sushi Counter",
+            "Closest Generic Grill"
+        ])
+        let matchingResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Future Sushi Counter" })
+        XCTAssertTrue(matchingResult.evidence.contains("Taste match from places you visited"))
+        XCTAssertTrue(matchingResult.evidence.contains("High rating 4.6"))
+        XCTAssertTrue(matchingResult.evidence.contains("Taste tags match hand / omakase"))
+        XCTAssertTrue(matchingResult.evidence.contains("Price matches places you liked ($$$)"))
+    }
+
+    func testTasteSignalsDoNotCrossCategoryOrLocationGates() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let lovedCafe = place(
+            name: "Loved Cafe Memory",
+            category: .cafe,
+            latitude: 33.6847,
+            longitude: -117.8265,
+            note: "Omakase uni hand roll",
+            extractedDishes: ["uni hand roll"],
+            status: .visited,
+            rating: 5.0,
+            priceRange: "$$$"
+        )
+        let nearbyRestaurant = place(
+            name: "Nearby Restaurant",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8267,
+            note: "simple lunch",
+            priceRange: "$"
+        )
+        let farLovedRestaurant = place(
+            name: "Far Loved Restaurant",
+            category: .food,
+            latitude: 33.7400,
+            longitude: -117.8267,
+            note: "Omakase uni hand roll",
+            extractedDishes: ["uni hand roll"],
+            status: .visited,
+            rating: 4.9,
+            priceRange: "$$$"
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近餐廳",
+            places: [lovedCafe, farLovedRestaurant, nearbyRestaurant],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Nearby Restaurant"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Loved Cafe Memory"))
+        XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Far Loved Restaurant"])
+    }
+
     func testSharedGeminiFallbacksUseGemini3ProOnly() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3-pro"])
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaceBottomSheet: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     var onDelete: (() async throws -> Void)?
     var onPlanAround: (() -> Void)?
@@ -18,7 +19,7 @@ struct PlaceBottomSheet: View {
                 SaveMemoryBadge(state: .saved(place.category), size: 52)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(place.status.memoryCardLabel.uppercased())
+                    Text(place.status.memoryCardLabel(language: languageSettings.language).uppercased())
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa)
                         .padding(.horizontal, 8)
@@ -39,15 +40,15 @@ struct PlaceBottomSheet: View {
                 Spacer()
 
                 Menu {
-                    ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                    SavePlaceShareButton(content: .place(place)) {
+                        Label(languageSettings.localized(english: "Share", traditionalChinese: "分享"), systemImage: "square.and.arrow.up")
                     }
 
                     if let sourceURL = place.primarySourceURL {
                         Button {
                             openURL(sourceURL)
                         } label: {
-                            Label("View source", systemImage: "link")
+                            Label(languageSettings.localized(english: "View source", traditionalChinese: "查看來源"), systemImage: "link")
                         }
                     }
 
@@ -55,7 +56,7 @@ struct PlaceBottomSheet: View {
                         Button(role: .destructive) {
                             showDeleteConfirmation = true
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Label(languageSettings.localized(english: "Delete", traditionalChinese: "刪除"), systemImage: "trash")
                         }
                     }
                 } label: {
@@ -96,7 +97,7 @@ struct PlaceBottomSheet: View {
             // Dishes
             if let dishes = place.extractedDishes, !dishes.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Recommended")
+                    Text(languageSettings.localized(english: "Recommended", traditionalChinese: "推薦"))
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundColor(.saveMutedText)
@@ -119,7 +120,11 @@ struct PlaceBottomSheet: View {
                 Button {
                     onPlanAround?()
                 } label: {
-                    PlaceDetailActionLabel(title: "Order?", systemImage: "fork.knife", fill: .saveHoney)
+                    PlaceDetailActionLabel(
+                        title: languageSettings.localized(english: "Order?", traditionalChinese: "點餐？"),
+                        systemImage: "fork.knife",
+                        fill: .saveHoney
+                    )
                 }
                 .disabled(onPlanAround == nil)
                 .opacity(onPlanAround == nil ? 0.55 : 1)
@@ -127,18 +132,30 @@ struct PlaceBottomSheet: View {
                 Button {
                     NavigationService.navigate(to: place.coordinate, name: place.name)
                 } label: {
-                    PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: Color.saveMint.opacity(0.36))
+                    PlaceDetailActionLabel(
+                        title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
+                        systemImage: "map.fill",
+                        fill: Color.saveMint.opacity(0.36)
+                    )
                 }
 
-                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
-                    PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveNotebookPage)
+                SavePlaceShareButton(content: .place(place)) {
+                    PlaceDetailActionLabel(
+                        title: languageSettings.localized(english: "Share", traditionalChinese: "分享"),
+                        systemImage: "square.and.arrow.up",
+                        fill: Color.saveNotebookPage
+                    )
                 }
 
                 if let sourceURL = place.primarySourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        PlaceDetailActionLabel(title: "Source", systemImage: "link", fill: Color.saveSky.opacity(0.22))
+                        PlaceDetailActionLabel(
+                            title: languageSettings.localized(english: "Source", traditionalChinese: "來源"),
+                            systemImage: "link",
+                            fill: Color.saveSky.opacity(0.22)
+                        )
                     }
                 }
             }
@@ -152,16 +169,16 @@ struct PlaceBottomSheet: View {
         .padding()
         .background(PlaceDetailGlassBackground(colorScheme: colorScheme))
         .confirmationDialog(
-            "Delete \(place.name)?",
+            languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Place", role: .destructive) {
+            Button(languageSettings.localized(english: "Delete Place", traditionalChinese: "刪除地點"), role: .destructive) {
                 Task { await deletePlace() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(languageSettings.text(.cancel), role: .cancel) {}
         } message: {
-            Text("This removes the Map Stamp from SAV-E.")
+            Text(languageSettings.localized(english: "This removes the Map Stamp from SAV-E.", traditionalChinese: "這會從 SAV-E 移除這個地圖章。"))
         }
     }
 
@@ -179,20 +196,21 @@ struct PlaceBottomSheet: View {
     }
 
     private var sourceConfirmationLabel: String {
-        place.sourceConfirmationLabel
+        place.sourceConfirmationLabel(language: languageSettings.language)
     }
 
     private var verificationChips: [PlaceVerificationChip] {
-        place.verificationChips(sourceLabel: sourceConfirmationLabel)
+        place.verificationChips(language: languageSettings.language, sourceLabel: sourceConfirmationLabel)
     }
 
     private var memorySummary: String {
-        place.memorySummary
+        place.memorySummary(language: languageSettings.language)
     }
 
 }
 
 struct PlaceVisibilityControl: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let visibility: PlaceVisibility
     var onChange: ((PlaceVisibility) async throws -> Void)?
     @State private var selectedVisibility: PlaceVisibility
@@ -213,7 +231,7 @@ struct PlaceVisibilityControl: View {
             HStack(spacing: 6) {
                 Image(systemName: "person.2.wave.2.fill")
                     .font(.caption.weight(.black))
-                Text("Social visibility")
+                Text(languageSettings.localized(english: "Social visibility", traditionalChinese: "社交可見度"))
                     .font(.caption.weight(.black))
                 Spacer()
                 if isUpdating {
@@ -233,9 +251,9 @@ struct PlaceVisibilityControl: View {
                                 .font(.caption.weight(.black))
                                 .frame(width: 18)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(option.displayName)
+                                Text(option.displayName(language: languageSettings.language))
                                     .font(.caption.weight(.black))
-                                Text(option.detailText)
+                                Text(option.detailText(language: languageSettings.language))
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.saveCocoa.opacity(0.72))
                                     .lineLimit(2)
@@ -306,6 +324,7 @@ private struct PlaceDetailGlassBackground: View {
 }
 
 struct PlaceBasicInfoPanel: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
 
     var body: some View {
@@ -313,25 +332,25 @@ struct PlaceBasicInfoPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle.fill")
                     .font(.caption.weight(.black))
-                Text("Basic info")
+                Text(languageSettings.localized(english: "Basic info", traditionalChinese: "基本資訊"))
                     .font(.caption.weight(.black))
                 Spacer()
             }
             .foregroundColor(.saveCocoa)
 
             VStack(spacing: 7) {
-                PlaceInfoRow(icon: "star", title: "Rating", value: ratingText)
+                PlaceInfoRow(icon: "star", title: languageSettings.localized(english: "Rating", traditionalChinese: "評分"), value: ratingText)
                 if let reviewCountText {
-                    PlaceInfoRow(icon: "text.bubble", title: "Reviews", value: reviewCountText)
+                    PlaceInfoRow(icon: "text.bubble", title: languageSettings.localized(english: "Reviews", traditionalChinese: "評論"), value: reviewCountText)
                 }
-                PlaceInfoRow(icon: place.category.detailIconName, title: "Category", value: place.category.displayName)
-                PlaceInfoRow(icon: "mappin", title: "Address", value: place.address.isEmpty ? "No address saved" : place.address)
-                PlaceInfoRow(icon: "link", title: "Source", value: place.sourceConfirmationLabel)
+                PlaceInfoRow(icon: place.category.detailIconName, title: languageSettings.localized(english: "Category", traditionalChinese: "分類"), value: place.category.displayName(language: languageSettings.language))
+                PlaceInfoRow(icon: "mappin", title: languageSettings.localized(english: "Address", traditionalChinese: "地址"), value: place.address.isEmpty ? languageSettings.localized(english: "No address saved", traditionalChinese: "尚未保存地址") : place.address)
+                PlaceInfoRow(icon: "link", title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), value: place.sourceConfirmationLabel(language: languageSettings.language))
                 if let priceRange = place.priceRange {
-                    PlaceInfoRow(icon: "tag", title: "Price", value: priceRange)
+                    PlaceInfoRow(icon: "tag", title: languageSettings.localized(english: "Price", traditionalChinese: "價格"), value: priceRange)
                 }
                 if let openingHours = place.openingHours?.trimmingCharacters(in: .whitespacesAndNewlines), !openingHours.isEmpty {
-                    PlaceInfoRow(icon: "clock", title: "Hours", value: openingHours)
+                    PlaceInfoRow(icon: "clock", title: languageSettings.localized(english: "Hours", traditionalChinese: "營業時間"), value: openingHours)
                 }
             }
         }
@@ -343,7 +362,7 @@ struct PlaceBasicInfoPanel: View {
         if let rating = place.googleRating ?? place.rating {
             return String(format: "%.1f", rating)
         }
-        return "No rating yet"
+        return languageSettings.localized(english: "No rating yet", traditionalChinese: "尚無評分")
     }
 
     private var reviewCountText: String? {
@@ -354,7 +373,7 @@ struct PlaceBasicInfoPanel: View {
                 .replacingOccurrences(of: prefix, with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { continue }
-            return "\(value) reviews"
+            return languageSettings.localized(english: "\(value) reviews", traditionalChinese: "\(value) 則評論")
         }
         return nil
     }
@@ -393,24 +412,29 @@ private struct PlaceInfoRow: View {
 }
 
 private struct PlaceProofPlaceholderCard: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
                 Image(systemName: "checkmark.seal")
                     .font(.caption.weight(.black))
-                Text("Real-world proof")
+                Text(languageSettings.localized(english: "Real-world proof", traditionalChinese: "真實憑證"))
                     .font(.caption.weight(.black))
                 Spacer()
             }
             .foregroundColor(.saveCocoa)
 
-            Text("Proof-backed visits will require a receipt, original photo, or location evidence attached by you. Public map details and self-marked Visited status do not count as proof.")
+            Text(languageSettings.localized(
+                english: "Proof-backed visits will require a receipt, original photo, or location evidence attached by you. Public map details and self-marked Visited status do not count as proof.",
+                traditionalChinese: "有憑證的去過紀錄會需要你附上的收據、原始照片或定位證據。公開地圖資料和自行標記的去過不算憑證。"
+            ))
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(.saveCocoa.opacity(0.74))
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {} label: {
-                Label("Add proof", systemImage: "plus.circle")
+                Label(languageSettings.localized(english: "Add proof", traditionalChinese: "新增憑證"), systemImage: "plus.circle")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa.opacity(0.74))
                     .frame(maxWidth: .infinity)
@@ -424,7 +448,7 @@ private struct PlaceProofPlaceholderCard: View {
             }
             .buttonStyle(.plain)
             .disabled(true)
-            .accessibilityHint("Proof attachments are not available yet.")
+            .accessibilityHint(languageSettings.localized(english: "Proof attachments are not available yet.", traditionalChinese: "憑證附件功能尚未開放。"))
         }
         .padding(10)
         .saveNotebookSurface(cornerRadius: 12, fill: .saveNotebookPage, opacity: 0.56)
@@ -488,6 +512,25 @@ extension Place {
         return "Source saved"
     }
 
+    func sourceConfirmationLabel(language: AppLanguage) -> String {
+        if primarySourceURL?.host(percentEncoded: false)?.localizedCaseInsensitiveContains("maps.apple.com") == true {
+            return language.localized(english: "Found on Apple Maps", traditionalChinese: "來自 Apple Maps")
+        }
+        if primarySourceURL?.host(percentEncoded: false)?.localizedCaseInsensitiveContains("google") == true ||
+            sourcePlatform == .googleMaps {
+            return googlePlaceId == nil
+                ? language.localized(english: "Found on Google Maps", traditionalChinese: "來自 Google Maps")
+                : language.localized(english: "Google Places details", traditionalChinese: "Google Places 詳細資料")
+        }
+        if sourcePlatform != .other {
+            return language.localized(english: "Found on \(sourcePlatform.displayName)", traditionalChinese: "來自 \(sourcePlatform.displayName)")
+        }
+        if googlePlaceId != nil {
+            return language.localized(english: "Google Places details", traditionalChinese: "Google Places 詳細資料")
+        }
+        return language.localized(english: "Source saved", traditionalChinese: "已保存來源")
+    }
+
     var cleanMemoryNote: String? {
         guard let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
             return nil
@@ -533,6 +576,24 @@ extension Place {
         return chips
     }
 
+    func verificationChips(language: AppLanguage, sourceLabel: String? = nil) -> [PlaceVerificationChip] {
+        var chips: [PlaceVerificationChip] = []
+        if !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            chips.append(PlaceVerificationChip(
+                icon: "mappin.and.ellipse",
+                text: language.localized(english: "Address saved", traditionalChinese: "已保存地址")
+            ))
+        }
+        chips.append(PlaceVerificationChip(icon: "link", text: sourceLabel ?? sourceConfirmationLabel(language: language)))
+        if googlePlaceId != nil || googleRating != nil || googlePriceLevel != nil || openingHours != nil {
+            chips.append(PlaceVerificationChip(
+                icon: "building.2.fill",
+                text: language.localized(english: "Google Places details", traditionalChinese: "Google Places 詳細資料")
+            ))
+        }
+        return chips
+    }
+
     var memorySummary: String {
         if let note = cleanMemoryNote {
             return note
@@ -549,6 +610,28 @@ extension Place {
             return "Marked visited in SAV-E."
         case .wantToGo:
             return "Saved as a place to try."
+        }
+    }
+
+    func memorySummary(language: AppLanguage) -> String {
+        if let note = cleanMemoryNote {
+            return note
+        }
+        if let dishes = extractedDishes, !dishes.isEmpty {
+            return language.localized(
+                english: "Saved for \(dishes.prefix(3).joined(separator: ", ")).",
+                traditionalChinese: "為了 \(dishes.prefix(3).joined(separator: "、")) 存下。"
+            )
+        }
+        if let recommender = recommender?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !recommender.isEmpty {
+            return language.localized(english: "Recommended by \(recommender).", traditionalChinese: "\(recommender) 推薦。")
+        }
+        switch status {
+        case .visited:
+            return language.localized(english: "Marked visited in SAV-E.", traditionalChinese: "已在 SAV-E 標記為去過。")
+        case .wantToGo:
+            return language.localized(english: "Saved as a place to try.", traditionalChinese: "已存成想找時間去的地點。")
         }
     }
 }
@@ -625,6 +708,7 @@ struct PlaceDetailActionLabel: View {
 }
 
 struct PlaceInsightSummaryPanel: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     var fallbackSummary: String
 
@@ -633,7 +717,7 @@ struct PlaceInsightSummaryPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: "text.badge.checkmark")
                     .font(.caption.weight(.black))
-                Text("Memory summary")
+                Text(languageSettings.localized(english: "Memory summary", traditionalChinese: "記憶摘要"))
                     .font(.caption.weight(.black))
                 Spacer()
             }
@@ -665,14 +749,14 @@ struct PlaceInsightSummaryPanel: View {
     private var practicalInfo: String? {
         var parts: [String] = []
         if let openingHours = cleaned(place.openingHours) {
-            parts.append("Hours: \(openingHours)")
+            parts.append(languageSettings.localized(english: "Hours: \(openingHours)", traditionalChinese: "營業時間：\(openingHours)"))
         }
         if let priceRange = cleaned(place.priceRange) {
-            parts.append("Price: \(priceRange)")
+            parts.append(languageSettings.localized(english: "Price: \(priceRange)", traditionalChinese: "價格：\(priceRange)"))
         }
         let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
         if !address.isEmpty {
-            parts.append("Address: \(address)")
+            parts.append(languageSettings.localized(english: "Address: \(address)", traditionalChinese: "地址：\(address)"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -680,20 +764,24 @@ struct PlaceInsightSummaryPanel: View {
     private var reviewSummary: String? {
         var parts: [String] = []
         if let rating = place.googleRating ?? place.rating {
-            parts.append(String(format: "%.1f stars", rating))
+            let value = String(format: "%.1f", rating)
+            parts.append(languageSettings.localized(english: "\(value) stars", traditionalChinese: "\(value) 星"))
         }
         if let reviewCountText = reviewCountText {
             parts.append(reviewCountText)
         }
-        return parts.isEmpty ? nil : "Reviews: \(parts.joined(separator: " · "))"
+        return parts.isEmpty ? nil : languageSettings.localized(english: "Reviews: \(parts.joined(separator: " · "))", traditionalChinese: "評論：\(parts.joined(separator: " · "))")
     }
 
     private var recommendationSummary: String? {
         if let dishes = place.extractedDishes, !dishes.isEmpty {
-            return "Saved for: \(dishes.prefix(4).joined(separator: ", "))"
+            return languageSettings.localized(
+                english: "Saved for: \(dishes.prefix(4).joined(separator: ", "))",
+                traditionalChinese: "為了這些存下：\(dishes.prefix(4).joined(separator: "、"))"
+            )
         }
         if let recommender = cleaned(place.recommender) {
-            return "Recommended by: \(recommender)"
+            return languageSettings.localized(english: "Recommended by: \(recommender)", traditionalChinese: "推薦人：\(recommender)")
         }
         return nil
     }
@@ -706,7 +794,7 @@ struct PlaceInsightSummaryPanel: View {
                 .replacingOccurrences(of: prefix, with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !value.isEmpty else { continue }
-            return "\(value) reviews"
+            return languageSettings.localized(english: "\(value) reviews", traditionalChinese: "\(value) 則評論")
         }
         return nil
     }
@@ -819,4 +907,5 @@ struct PlaceBusinessPhotoCarousel: View {
 
 #Preview {
     PlaceBottomSheet(place: .mock)
+        .environmentObject(AppLanguageSettings())
 }

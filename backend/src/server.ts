@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes, createHash } from "node:crypto";
 import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
-import pg from "pg";
+import pg, { type PoolClient } from "pg";
 import {
   buildTrustSummary,
   formatPlaceClaim,
@@ -12,10 +13,21 @@ import {
 } from "./placeClaims.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
 import {
+  formatSharedPlaceLink,
+  normalizeSharedPlaceLinkCreate,
+} from "./shareLinks.js";
+import {
   normalizeFollowRequest,
   normalizeVisibilityRequest,
   parseLens,
 } from "./socialContracts.js";
+import {
+  normalizePlaceRecoveryRunCreate,
+  normalizePlaceRecoveryWorkerResult,
+  normalizeUserDecision,
+  placeRecoveryWorkflowId,
+  receiptForResult,
+} from "./workflowContracts.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -185,13 +197,70 @@ const recommendationItemFields = [
   "created_at",
 ] as const;
 
+const sharedPlaceLinkFields = [
+  "code",
+  "user_id",
+  "source_place_id",
+  "payload",
+  "expires_at",
+] as const;
+
+const workflowRunFields = [
+  "workflow_id",
+  "listing_id",
+  "user_id",
+  "source_url",
+  "source_type",
+  "status",
+  "result_type",
+  "confidence",
+  "evidence_tier",
+  "result_evidence_refs",
+  "result_candidate_refs",
+  "credit_reserved",
+  "credit_settlement",
+  "receipt_id",
+  "completed_at",
+] as const;
+
+const userDecisionFields = [
+  "run_id",
+  "user_id",
+  "action",
+  "edited_payload",
+  "reason",
+] as const;
+
+const workflowReceiptFields = [
+  "run_id",
+  "workflow_id",
+  "verdict",
+  "settlement",
+  "evaluator_summary",
+  "evidence_refs",
+  "candidate_refs",
+  "receipt_hash",
+  "anchor_status",
+  "private_url",
+] as const;
+
+const creditLedgerFields = [
+  "run_id",
+  "user_id",
+  "delta",
+  "reason",
+  "settlement",
+] as const;
+
 const jsonbFields = new Set([
   "context",
   "evidence",
+  "edited_payload",
   "input",
   "input_schema",
   "output",
   "output_schema",
+  "payload",
   "ratings",
 ]);
 
@@ -214,6 +283,9 @@ createServer(async (request, response) => {
     if (request.method === "GET" && resource === "referrals") {
       return await handleReferrals(request, response, id, url);
     }
+    if (isV0 && request.method === "GET" && resource === "shared-place-links" && id) {
+      return await handleSharedPlaceLinkPublic(response, id);
+    }
 
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
@@ -234,6 +306,8 @@ createServer(async (request, response) => {
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "follows") return await handleFollows(request, response, userId);
+    if (isV0 && resource === "shared-place-links") return await handleSharedPlaceLinks(request, response, id, userId);
+    if (isV0 && resource === "workflows") return await handleWorkflows(request, response, segments.slice(1), userId);
     if (resource === "social" && id === "signals") return await handleSocialSignals(request, response, url, userId);
     if (resource === "memory") {
       return await handleMemory(request, response, segments.slice(1), url, userId);
@@ -623,6 +697,231 @@ async function handlePlaceVisibility(
   );
 
   return sendJson(response, formatDates(rows[0]));
+}
+
+async function handleSharedPlaceLinkPublic(
+  response: ServerResponse,
+  code: string,
+): Promise<void> {
+  const { rows } = await pool.query(
+    `select *
+     from shared_place_links
+     where code = $1
+       and (expires_at is null or expires_at > now())
+     limit 1`,
+    [code],
+  );
+  if (!rows[0]) return sendJson(response, { error: "Shared place link not found" }, 404);
+  return sendJson(response, formatSharedPlaceLink(formatDates(rows[0])));
+}
+
+async function handleSharedPlaceLinks(
+  request: IncomingMessage,
+  response: ServerResponse,
+  code: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET" && !code) {
+    const { rows } = await pool.query(
+      `select *
+       from shared_place_links
+       where user_id = $1
+       order by created_at desc
+       limit 100`,
+      [userId],
+    );
+    return sendJson(response, rows.map((row) => formatSharedPlaceLink(formatDates(row))));
+  }
+
+  if (request.method === "POST" && !code) {
+    let create;
+    try {
+      create = normalizeSharedPlaceLinkCreate(await readJson(request));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid shared place payload";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    await ensureOwnedPlaceReference(create.sourcePlaceId, userId);
+    const body: JsonBody = {
+      code: await uniqueShareCode(),
+      user_id: userId,
+      source_place_id: create.sourcePlaceId ?? null,
+      payload: create.payload,
+      expires_at: create.expiresAt ?? null,
+    };
+    const insert = buildInsert("shared_place_links", body, sharedPlaceLinkFields);
+    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+    return sendJson(response, formatSharedPlaceLink(formatDates(rows[0])), 201);
+  }
+
+  return sendJson(response, { error: "Unsupported shared place links route" }, 405);
+}
+
+async function handleWorkflows(
+  request: IncomingMessage,
+  response: ServerResponse,
+  segments: string[],
+  userId: string,
+): Promise<void> {
+  if (segments[0] !== "place-recovery" || segments[1] !== "runs") {
+    return sendJson(response, { error: "Unsupported workflows route" }, 405);
+  }
+
+  const runId = segments[2];
+  const action = segments[3];
+
+  if (request.method === "GET" && !runId) {
+    const { rows } = await pool.query(
+      `select *
+       from workflow_runs
+       where user_id = $1 and workflow_id = $2
+       order by created_at desc
+       limit 100`,
+      [userId, placeRecoveryWorkflowId],
+    );
+    return sendJson(response, rows.map((row) => formatDates(row)));
+  }
+
+  if (request.method === "POST" && !runId) {
+    const run = normalizePlaceRecoveryRunCreate(await readJson(request));
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const insert = buildInsert("workflow_runs", {
+        workflow_id: run.workflowId,
+        listing_id: run.listingId,
+        user_id: userId,
+        source_url: run.sourceUrl ?? null,
+        source_type: run.sourceType,
+        status: "queued",
+        credit_reserved: run.creditReserved,
+        credit_settlement: "pending",
+      }, workflowRunFields);
+      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      const created = asObject(rows[0]);
+      await insertCreditLedger(client, {
+        run_id: String(created.id),
+        user_id: userId,
+        delta: -run.creditReserved,
+        reason: "reserve",
+        settlement: "pending",
+      });
+      await client.query("commit");
+      return sendJson(response, formatDates(created), 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  if (!runId) return sendJson(response, { error: "Workflow run is required" }, 400);
+  await ensureWorkflowRunOwner(runId, userId);
+
+  if (request.method === "POST" && action === "result") {
+    const result = normalizePlaceRecoveryWorkerResult(await readJson(request));
+    const status = result.resultType === "technical_failure"
+      ? "failed"
+      : result.resultType === "confirmed_map_stamp"
+        ? "completed"
+        : "needs_review";
+    const { rows } = await pool.query(
+      `update workflow_runs
+       set status = $1,
+           result_type = $2,
+           confidence = $3,
+           evidence_tier = $4,
+           result_evidence_refs = $5,
+           result_candidate_refs = $6,
+           completed_at = case when $1 in ('completed', 'failed') then now() else completed_at end
+       where id = $7 and user_id = $8
+       returning *`,
+      [
+        status,
+        result.resultType,
+        result.confidence,
+        result.evidenceTier,
+        result.evidenceRefs,
+        result.candidateRefs,
+        runId,
+        userId,
+      ],
+    );
+    return sendJson(response, formatDates(rows[0]));
+  }
+
+  if (request.method === "POST" && action === "decision") {
+    const decision = normalizeUserDecision(await readJson(request), runId);
+    const run = await workflowRunForUser(runId, userId);
+    const result = normalizePlaceRecoveryWorkerResult({
+      result_type: run.result_type ?? "source_only_clue",
+      evidence_tier: run.evidence_tier ?? "none",
+      confidence: run.confidence ?? 0,
+      evidence_refs: run.result_evidence_refs ?? [],
+      candidate_refs: run.result_candidate_refs ?? [],
+    });
+    const receipt = receiptForResult(result, decision);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const decisionInsert = buildInsert("user_decisions", {
+        run_id: runId,
+        user_id: userId,
+        action: decision.action,
+        edited_payload: decision.editedPayload,
+        reason: decision.reason ?? null,
+      }, userDecisionFields);
+      await client.query(decisionInsert.sql, decisionInsert.values);
+
+      const receiptBody = {
+        run_id: runId,
+        workflow_id: placeRecoveryWorkflowId,
+        verdict: receipt.verdict,
+        settlement: receipt.settlement,
+        evaluator_summary: receipt.evaluatorSummary,
+        evidence_refs: receipt.evidenceRefs,
+        candidate_refs: receipt.candidateRefs,
+        receipt_hash: receiptHash(runId, receipt),
+        anchor_status: "offchain",
+        private_url: null,
+      };
+      const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
+      const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
+      const receiptRow = asObject(receiptRows[0]);
+
+      await insertCreditLedger(client, {
+        run_id: runId,
+        user_id: userId,
+        delta: settlementDelta(receipt.creditSettlement, Number(run.credit_reserved ?? 1)),
+        reason: receipt.creditSettlement,
+        settlement: receipt.creditSettlement,
+      });
+      const { rows } = await client.query(
+        `update workflow_runs
+         set status = 'completed',
+             credit_settlement = $1,
+             receipt_id = $2,
+             completed_at = coalesce(completed_at, now())
+         where id = $3 and user_id = $4
+         returning *`,
+        [receipt.creditSettlement, receiptRow.id, runId, userId],
+      );
+      await client.query("commit");
+      return sendJson(response, {
+        run: formatDates(rows[0]),
+        receipt: formatDates(receiptRow),
+      }, 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  return sendJson(response, { error: "Unsupported workflow run route" }, 405);
 }
 
 async function handleSocialSignals(
@@ -1341,6 +1640,43 @@ async function ensureOwnedRecommendationSetReference(recommendationSetId: unknow
     userId,
   ]);
   if (!rows[0]) throw new ApiError(404, "Recommendation not found");
+}
+
+async function ensureWorkflowRunOwner(runId: string, userId: string): Promise<void> {
+  const { rows } = await pool.query("select id from workflow_runs where id = $1 and user_id = $2", [runId, userId]);
+  if (!rows[0]) throw new ApiError(404, "Workflow run not found");
+}
+
+async function workflowRunForUser(runId: string, userId: string): Promise<JsonBody> {
+  const { rows } = await pool.query("select * from workflow_runs where id = $1 and user_id = $2", [runId, userId]);
+  if (!rows[0]) throw new ApiError(404, "Workflow run not found");
+  return asObject(rows[0]);
+}
+
+async function uniqueShareCode(): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const code = randomBytes(6).toString("base64url");
+    const { rows } = await pool.query("select code from shared_place_links where code = $1", [code]);
+    if (!rows[0]) return code;
+  }
+  throw new ApiError(500, "Could not allocate share code");
+}
+
+async function insertCreditLedger(client: PoolClient, body: JsonBody): Promise<void> {
+  const insert = buildInsert("credit_ledger", body, creditLedgerFields);
+  await client.query(insert.sql, insert.values);
+}
+
+function receiptHash(runId: string, receipt: unknown): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ runId, receipt }))
+    .digest("hex");
+}
+
+function settlementDelta(settlement: string, creditReserved: number): number {
+  if (settlement === "refunded") return creditReserved;
+  if (settlement === "partial") return Math.ceil(creditReserved / 2);
+  return 0;
 }
 
 async function ensureRecommendationItemReferences(item: JsonBody, userId: string): Promise<void> {

@@ -16,6 +16,19 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         }
     }
 
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .privateMemory:
+            return language.localized(english: "Private", traditionalChinese: "私人")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
+        case .publicLink:
+            return language.localized(english: "Public link", traditionalChinese: "公開連結")
+        case .publicGuide:
+            return language.localized(english: "Public guide", traditionalChinese: "公開指南")
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .privateMemory: return "lock.fill"
@@ -35,6 +48,19 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
             return "Shareable by link, but not used for trending."
         case .publicGuide:
             return "Can appear in public guide and trending surfaces."
+        }
+    }
+
+    func detailText(language: AppLanguage) -> String {
+        switch self {
+        case .privateMemory:
+            return language.localized(english: "Only you can see this memory.", traditionalChinese: "只有你看得到這個記憶。")
+        case .friends:
+            return language.localized(english: "Followers can see this as a friend signal.", traditionalChinese: "追蹤你的朋友可以把它當成朋友推薦訊號。")
+        case .publicLink:
+            return language.localized(english: "Shareable by link, but not used for trending.", traditionalChinese: "可用連結分享，但不會進入熱門訊號。")
+        case .publicGuide:
+            return language.localized(english: "Can appear in public guide and trending surfaces.", traditionalChinese: "可出現在公開指南與熱門地點。")
         }
     }
 
@@ -63,6 +89,17 @@ enum SaveSocialLens: String, Codable, CaseIterable, Hashable {
         case .forYou: return "For You"
         case .friends: return "Friends"
         case .trending: return "Trending"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .forYou:
+            return language.localized(english: "For You", traditionalChinese: "為你")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
+        case .trending:
+            return language.localized(english: "Trending", traditionalChinese: "熱門")
         }
     }
 

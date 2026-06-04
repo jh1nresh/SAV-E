@@ -394,6 +394,11 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.first?.distanceLabel, "350 m away")
         XCTAssertTrue(response.assistantMessage?.contains("Saved") == true)
         XCTAssertTrue(response.assistantMessage?.contains("unsaved") == true)
+        XCTAssertEqual(response.resolvedAgentAnswer?.source, .deterministic)
+        XCTAssertEqual(
+            response.resolvedAgentAnswer?.grounding.allowedResultIDs,
+            response.fromYourSave.results.map(\.id) + response.newRecommendations.results.map(\.id)
+        )
         XCTAssertEqual(SharedPlaceData.from(result: try XCTUnwrap(response.newRecommendations.results.first))?.photoURLs, ["https://example.com/coffee.jpg"])
     }
 
@@ -436,6 +441,9 @@ final class SaveSearchControllerTests: XCTestCase {
             return XCTFail("Expected save search results")
         }
         XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertEqual(response.agentAnswer?.message, client.answer)
+        XCTAssertEqual(response.agentAnswer?.source, .groundedLLM)
+        XCTAssertEqual(response.agentAnswer?.grounding.allowedResultIDs, ["place-\(savedPlace.id.uuidString)"])
         XCTAssertEqual(client.requests.map(\.query), ["coffee"])
         XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["place-\(savedPlace.id.uuidString)"])
     }

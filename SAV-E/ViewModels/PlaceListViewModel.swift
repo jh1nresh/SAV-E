@@ -5,12 +5,34 @@ enum PlaceFilter: String, CaseIterable {
     case all = "All"
     case wantToGo = "Want to Go"
     case visited = "Visited"
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .all:
+            return language.localized(english: "All", traditionalChinese: "全部")
+        case .wantToGo:
+            return language.localized(english: "Want to Go", traditionalChinese: "想去")
+        case .visited:
+            return language.localized(english: "Visited", traditionalChinese: "去過")
+        }
+    }
 }
 
 enum PlaceSort: String, CaseIterable {
     case recent = "Recent"
     case nearest = "Nearest"
     case rating = "Rating"
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .recent:
+            return language.localized(english: "Recent", traditionalChinese: "最近")
+        case .nearest:
+            return language.localized(english: "Nearest", traditionalChinese: "最近距離")
+        case .rating:
+            return language.localized(english: "Rating", traditionalChinese: "評分")
+        }
+    }
 }
 
 @MainActor

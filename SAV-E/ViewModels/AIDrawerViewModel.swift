@@ -329,14 +329,15 @@ private extension SaveSearchResponse {
     }
 
     func withGroundedAnswer(query: String, intent: SaveSearchIntent, client: SaveLLMClient) async -> SaveSearchResponse {
+        let grounding = groundedAnswerGrounding
         let request = GroundedAnswerRequest(
             query: query,
             intent: intent,
-            allowedPlaceIds: groundedAnswerResultIDs,
+            allowedPlaceIds: grounding.allowedResultIDs,
             sections: groundedAnswerSections
         )
 
-        guard !request.allowedPlaceIds.isEmpty || request.hasGroundingContext else {
+        guard grounding.hasContext else {
             return self
         }
 
@@ -345,24 +346,10 @@ private extension SaveSearchResponse {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !answer.isEmpty else { return self }
             var copy = self
-            copy.assistantMessage = answer
+            copy.replaceAgentAnswer(answer, source: .groundedLLM)
             return copy
         } catch {
             return self
-        }
-    }
-
-    private var groundedAnswerResultIDs: [String] {
-        groundedAnswerSections.flatMap { $0.results.map(\.id) }
-    }
-}
-
-private extension GroundedAnswerRequest {
-    var hasGroundingContext: Bool {
-        sections.contains { section in
-            !section.results.isEmpty ||
-                section.emptyMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ||
-                section.showsNearbySearchAction
         }
     }
 }

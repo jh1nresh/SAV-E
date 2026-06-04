@@ -97,6 +97,7 @@ targets:
     platform: iOS
     sources:
       - path: SAV-EClip
+      - path: SAV-EShared/SAVEProductionConfig.swift
       - path: SAV-E/Resources/Assets.xcassets
         buildPhase: resources
     settings:

@@ -3,6 +3,8 @@ const path = require("node:path");
 
 const appBundleId = "com.wanderly.app";
 const appClipBundleId = "com.wanderly.app.Clip";
+const appStoreId = process.env.APPLE_APP_STORE_ID ?? "6769216556";
+const smartBannerAppClipBundleId = process.env.APP_CLIP_BUNDLE_ID ?? appClipBundleId;
 const associatedDomain = "sav-e-app.vercel.app";
 const distRoot = path.join(__dirname, "..", "dist");
 const distDir = path.join(__dirname, "..", "dist", "_expo", "static", "js", "web");
@@ -30,6 +32,7 @@ if (!fs.existsSync(distDir)) {
 }
 
 copyPublicAssets();
+writeAppClipSmartBanner();
 writeShareRouteFallbacks();
 writeAppleAppSiteAssociation();
 
@@ -77,6 +80,21 @@ function writeShareRouteFallbacks() {
     fs.mkdirSync(routeDir, { recursive: true });
     fs.copyFileSync(indexPath, path.join(routeDir, "index.html"));
   }
+}
+
+function writeAppClipSmartBanner() {
+  const indexPath = path.join(distRoot, "index.html");
+  if (!fs.existsSync(indexPath)) return;
+
+  const bannerMeta = `<meta name="apple-itunes-app" content="app-id=${appStoreId}, app-clip-bundle-id=${smartBannerAppClipBundleId}, app-clip-display=card">`;
+  let html = fs.readFileSync(indexPath, "utf8");
+  if (html.includes('name="apple-itunes-app"')) {
+    html = html.replace(/<meta\s+name=["']apple-itunes-app["'][^>]*>/i, bannerMeta);
+  } else {
+    html = html.replace(/<\/head>/i, `    ${bannerMeta}\n  </head>`);
+  }
+  fs.writeFileSync(indexPath, html);
+  console.log("Wrote App Clip Smart App Banner meta");
 }
 
 function writeAppleAppSiteAssociation() {

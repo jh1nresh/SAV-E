@@ -227,7 +227,7 @@ private struct EditProfileSheet: View {
                     )
 
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label("Upload photo", systemImage: "camera.fill")
+                        Label(languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片"), systemImage: "camera.fill")
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 12)
@@ -301,7 +301,7 @@ private struct EditProfileSheet: View {
     private func loadSelectedPhoto(_ item: PhotosPickerItem) async {
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else {
-                photoError = "Couldn’t load that photo."
+                photoError = languageSettings.localized(english: "Couldn’t load that photo.", traditionalChinese: "無法載入這張照片。")
                 return
             }
             selectedAvatarData = data
@@ -778,6 +778,7 @@ private struct PassportCountingRulesPanel: View {
 }
 
 private struct PassportVisibilityPanel: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let places: [Place]
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
 
@@ -791,7 +792,7 @@ private struct PassportVisibilityPanel: View {
                 Image(systemName: "person.2.wave.2.fill")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa)
-                Text("Social visibility")
+                Text(languageSettings.localized(english: "Social visibility", traditionalChinese: "社交可見度"))
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa)
                 Spacer()
@@ -807,7 +808,10 @@ private struct PassportVisibilityPanel: View {
             }
 
             if places.isEmpty {
-                Text("Save places first, then choose what can become friend or public guide signals.")
+                Text(languageSettings.localized(
+                    english: "Save places first, then choose what can become friend or public guide signals.",
+                    traditionalChinese: "先保存地點，再選哪些可以成為朋友或公開指南訊號。"
+                ))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.72))
             } else {
@@ -830,11 +834,12 @@ private struct PassportVisibilityPanel: View {
 }
 
 private struct PassportVisibilityChip: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let visibility: PlaceVisibility
     let count: Int
 
     var body: some View {
-        Label("\(visibility.displayName) \(count)", systemImage: visibility.systemImage)
+        Label("\(visibility.displayName(language: languageSettings.language)) \(count)", systemImage: visibility.systemImage)
             .font(.caption2.weight(.black))
             .foregroundColor(.saveInk)
             .padding(.horizontal, 8)
@@ -846,6 +851,7 @@ private struct PassportVisibilityChip: View {
 }
 
 private struct PassportVisibilityRow: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let place: Place
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
     @State private var selectedVisibility: PlaceVisibility
@@ -867,7 +873,7 @@ private struct PassportVisibilityRow: View {
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
-                Text(errorMessage ?? selectedVisibility.detailText)
+                Text(errorMessage ?? selectedVisibility.detailText(language: languageSettings.language))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(errorMessage == nil ? .saveCocoa.opacity(0.72) : .red)
                     .lineLimit(1)
@@ -880,7 +886,7 @@ private struct PassportVisibilityRow: View {
                     Button {
                         Task { await update(visibility) }
                     } label: {
-                        Label(visibility.displayName, systemImage: visibility.systemImage)
+                        Label(visibility.displayName(language: languageSettings.language), systemImage: visibility.systemImage)
                     }
                 }
             } label: {
@@ -891,7 +897,7 @@ private struct PassportVisibilityRow: View {
                     } else {
                         Image(systemName: selectedVisibility.systemImage)
                     }
-                    Text(selectedVisibility.displayName)
+                    Text(selectedVisibility.displayName(language: languageSettings.language))
                 }
                 .font(.caption2.weight(.black))
                 .foregroundColor(.saveInk)
