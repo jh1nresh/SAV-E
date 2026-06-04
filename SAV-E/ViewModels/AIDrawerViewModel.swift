@@ -65,6 +65,11 @@ final class AIDrawerViewModel: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
+        if DeterministicTripPlanner().isItineraryRequest(trimmed) {
+            await showTripPlanningResponse(query: trimmed)
+            return
+        }
+
         let resolvedIntent = await recommendationIntent(for: trimmed)
         let needsCurrentLocation = resolvedIntent?.mustMatchLocation ??
             locationIntentRecommendationService.requiresCurrentLocation(for: trimmed)
@@ -324,6 +329,49 @@ final class AIDrawerViewModel: ObservableObject {
         activeRequestID = nil
         drawerState = .saveSearchResults(groundedResponse)
         mapAction = mapAction(for: groundedResponse)
+    }
+
+    private func showTripPlanningResponse(query: String) async {
+        let requestID = UUID()
+        activeRequestID = requestID
+        drawerState = .loading
+        mapAction = nil
+        rememberQuery(query)
+
+        do {
+            let response = try await aiService.query(query, places: places, conversationHistory: conversationTurns)
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            drawerState = .displaying(response)
+            mapAction = response.mapAction
+
+            let responseJSON = aiService.encodeResponse(response)
+            conversationTurns.append(ConversationTurn(userMessage: query, assistantResponse: responseJSON))
+            if conversationTurns.count > 5 {
+                conversationTurns.removeFirst()
+            }
+        } catch SaveAIError.apiKeyMissing {
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            let message = places.isEmpty
+                ? "Save or import a few Map Stamps first, then ask SAV-E to plan from them."
+                : "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately."
+            drawerState = .displaying(SaveAIResponse(
+                componentType: .message,
+                title: "Need trip anchors",
+                placeIds: [],
+                navigationPlaceId: nil,
+                transportMode: .walking,
+                itineraryDays: [],
+                messageText: message,
+                mapAction: nil,
+                aiMessage: message
+            ))
+        } catch {
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            drawerState = .error(error.localizedDescription)
+        }
     }
 
     private func rememberQuery(_ query: String) {

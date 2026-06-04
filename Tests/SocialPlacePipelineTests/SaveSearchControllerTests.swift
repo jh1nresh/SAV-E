@@ -505,6 +505,66 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerPlansTripFromSavedMapStampsBeforeSearchResults() async {
+        let drawer = AIDrawerViewModel(
+            aiService: SaveAIService(apiKey: ""),
+            groundedAnswerClient: nil
+        )
+        let taco = place(
+            name: "Los Angeles Taco",
+            address: "Los Angeles, CA",
+            category: .food,
+            latitude: 34.0522,
+            longitude: -118.2437
+        )
+        let coffee = place(
+            name: "LA Coffee",
+            address: "Los Angeles, CA",
+            category: .cafe,
+            latitude: 34.0450,
+            longitude: -118.2500
+        )
+        drawer.places = [taco, coffee]
+        drawer.query = "幫我規劃 LA 兩天行程"
+
+        await drawer.submit()
+
+        guard case .displaying(let response) = drawer.drawerState else {
+            return XCTFail("Expected trip planning response, not search results")
+        }
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertEqual(response.mapAction?.type, .showRoute)
+        XCTAssertEqual(Set(response.placeIds), Set([taco.id.uuidString, coffee.id.uuidString]))
+    }
+
+    @MainActor
+    func testDrawerDoesNotPlanWrongCityWhenTripHasNoMatchingMapStamps() async {
+        let drawer = AIDrawerViewModel(
+            aiService: SaveAIService(apiKey: ""),
+            groundedAnswerClient: nil
+        )
+        drawer.places = [
+            place(
+                name: "Irvine Dinner",
+                address: "Irvine, CA",
+                category: .food,
+                latitude: 33.6846,
+                longitude: -117.8265
+            )
+        ]
+        drawer.query = "Plan a Los Angeles trip"
+
+        await drawer.submit()
+
+        guard case .displaying(let response) = drawer.drawerState else {
+            return XCTFail("Expected bounded message")
+        }
+        XCTAssertEqual(response.componentType, .message)
+        XCTAssertTrue(response.messageText?.contains("matching saved Map Stamps") == true)
+        XCTAssertNil(response.mapAction)
+    }
+
+    @MainActor
     func testDrawerPreparedPublicDiscoveryUsesGroundedAnswerClient() async {
         let client = StubGroundedAnswerClient(answer: "I would try Bright Coffee Bar first because it is nearby, highly rated, and still unsaved. Want quiet or quick?")
         let drawer = AIDrawerViewModel(groundedAnswerClient: client)

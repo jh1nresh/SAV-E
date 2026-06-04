@@ -279,6 +279,8 @@ final class SaveAIService {
         RULES:
         - For itinerary requests: use Map Stamps to build a realistic schedule with smart times and geographic order.
         - If a DETERMINISTIC PLANNER DRAFT is provided, use it as a safe baseline. You may improve grouping, order, times, title, aiMessage, and stop notes, but every place ID must come from USER'S MAP STAMPS.
+        - If the user asks for trip planning without days or style, still return a usable draft from Map Stamps, then ask exactly one concise follow-up about days or vibe in aiMessage.
+        - If the user's saved Map Stamps are mostly food/drink and the trip is missing attractions or activities, do not invent exact public places. Mention the gap and ask whether to search public discovery near the saved anchors.
         - For destination-specific requests, choose Map Stamps whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.
         - If the Map Stamps are far apart, still plan them honestly with realistic travel notes instead of rejecting them as "not in San Francisco".
         - placeList: set placeIds + mapAction.filterPins with same ids
