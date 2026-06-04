@@ -34,4 +34,21 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(decoded.name, "Kato")
         XCTAssertEqual(decoded.address, "777 S Alameda St, Los Angeles, CA")
     }
+
+    func testShareContentMessageUsesResolvedShortURL() throws {
+        let fallbackURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/embeddedPayload"))
+        let shortURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
+        let content = SavePlaceShareContent(
+            subject: "SAV-E Map Stamp: Kato",
+            fallbackURL: fallbackURL,
+            fallbackText: "SAV-E Map Stamp\nKato\nOpen in SAV-E: \(fallbackURL.absoluteString)",
+            payload: nil,
+            sourcePlaceId: nil
+        )
+
+        let message = content.message(for: shortURL)
+
+        XCTAssertTrue(message.contains(shortURL.absoluteString))
+        XCTAssertFalse(message.contains(fallbackURL.absoluteString))
+    }
 }

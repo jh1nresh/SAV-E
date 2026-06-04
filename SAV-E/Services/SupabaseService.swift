@@ -23,6 +23,7 @@ protocol SupabaseServiceProtocol {
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place]
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws
+    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?) async throws -> URL
 }
 
 // MARK: - Errors
@@ -114,6 +115,19 @@ final class SupabaseService: SupabaseServiceProtocol {
             "allow_trending_signal": visibility.allowsTrendingSignal,
         ])
         try await request(path: "/places/\(placeId)/visibility", method: "PATCH", body: body)
+    }
+
+    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?) async throws -> URL {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try JSONEncoder.supabase.encode(SharedPlaceLinkCreateBody(
+            payload: payload,
+            source_place_id: sourcePlaceId?.uuidString
+        ))
+        let data = try await request(path: "/v0/shared-place-links", method: "POST", body: body)
+        let row = try JSONDecoder.supabase.decode(SharedPlaceLinkRow.self, from: data)
+        guard let url = URL(string: row.url) else { throw SupabaseError.recordNotFound }
+        return url
     }
 
     // MARK: - Memory Candidates
@@ -622,6 +636,17 @@ private struct ProfileRow: Codable {
             createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
         )
     }
+}
+
+private struct SharedPlaceLinkCreateBody: Encodable {
+    let payload: SharedPlaceData
+    let source_place_id: String?
+}
+
+private struct SharedPlaceLinkRow: Codable {
+    let code: String
+    let url: String
+    let payload: SharedPlaceData
 }
 
 // MARK: - JSON Coding

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaceListView: View {
     @StateObject private var viewModel = PlaceListViewModel()
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var loadPlacesTask: Task<Void, Never>?
 
@@ -11,7 +12,7 @@ struct PlaceListView: View {
                 HStack(spacing: 7) {
                     ForEach(PlaceFilter.allCases, id: \.self) { filter in
                         FilterNotebookTab(
-                            title: filter.rawValue,
+                            title: filter.title(language: languageSettings.language),
                             isSelected: viewModel.filter == filter
                         ) {
                             viewModel.filter = filter
@@ -53,12 +54,12 @@ struct PlaceListView: View {
                     Menu {
                         ForEach(PlaceSort.allCases, id: \.self) { sort in
                             Button(action: { viewModel.sort = sort }) {
-                                Label(sort.rawValue, systemImage: viewModel.sort == sort ? "checkmark" : "")
+                                Label(sort.title(language: languageSettings.language), systemImage: viewModel.sort == sort ? "checkmark" : "")
                             }
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(viewModel.sort.rawValue)
+                            Text(viewModel.sort.title(language: languageSettings.language))
                                 .font(.caption)
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
@@ -82,8 +83,11 @@ struct PlaceListView: View {
                 } else if viewModel.filteredPlaces.isEmpty {
                     EmptyStateView(
                         icon: "mappin.slash",
-                        title: "No Map Stamps Yet",
-                        subtitle: "Confirm a Review Candidate to save it on your spatial memory canvas."
+                        title: languageSettings.localized(english: "No Map Stamps Yet", traditionalChinese: "還沒有地圖章"),
+                        subtitle: languageSettings.localized(
+                            english: "Confirm a Review Candidate to save it on your spatial memory canvas.",
+                            traditionalChinese: "確認待確認地點後，就會存到你的私人地圖記憶裡。"
+                        )
                     )
                 } else {
                     List {
@@ -94,15 +98,15 @@ struct PlaceListView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .leading) {
-                                ShareLink(item: place.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(place.shareSubject), message: Text(place.shareText)) {
-                                    Label("Share", systemImage: "square.and.arrow.up")
+                                SavePlaceShareButton(content: .place(place)) {
+                                    Label(languageSettings.localized(english: "Share", traditionalChinese: "分享"), systemImage: "square.and.arrow.up")
                                 }
                                 .tint(.saveSky)
 
                                 Button {
                                     Task { await viewModel.markVisited(place) }
                                 } label: {
-                                    Label("Visited", systemImage: "checkmark.circle.fill")
+                                    Label(languageSettings.localized(english: "Visited", traditionalChinese: "去過"), systemImage: "checkmark.circle.fill")
                                 }
                                 .tint(.saveSuccess)
                             }
@@ -110,7 +114,7 @@ struct PlaceListView: View {
                                 Button(role: .destructive) {
                                     Task { try? await viewModel.deletePlace(place) }
                                 } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label(languageSettings.localized(english: "Delete", traditionalChinese: "刪除"), systemImage: "trash")
                                 }
                             }
                         }
@@ -137,8 +141,14 @@ struct PlaceListView: View {
                 }
             }
             .background(SaveDottedBackground())
-            .navigationTitle("Map Stamps")
-            .searchable(text: $viewModel.searchText, prompt: "Search Map Stamps, clues, or recommendations...")
+            .navigationTitle(languageSettings.localized(english: "Map Stamps", traditionalChinese: "地圖章"))
+            .searchable(
+                text: $viewModel.searchText,
+                prompt: languageSettings.localized(
+                    english: "Search Map Stamps, clues, or recommendations...",
+                    traditionalChinese: "搜尋地圖章、線索或推薦..."
+                )
+            )
             .navigationDestination(for: Place.self) { place in
                 PlaceDetailView(place: place) {
                     try await viewModel.deletePlace(place)
@@ -172,9 +182,19 @@ struct PlaceListView: View {
         if isSearching {
             let response = viewModel.saveSearchResponse
             let count = response.fromYourSave.results.count + response.newRecommendations.results.count
-            return "\(count) \(count == 1 ? "result" : "results")"
+            switch languageSettings.language {
+            case .english:
+                return "\(count) \(count == 1 ? "result" : "results")"
+            case .traditionalChinese:
+                return "\(count) 筆結果"
+            }
         }
-        return "\(viewModel.filteredPlaces.count) Map Stamps"
+        switch languageSettings.language {
+        case .english:
+            return "\(viewModel.filteredPlaces.count) Map Stamps"
+        case .traditionalChinese:
+            return "\(viewModel.filteredPlaces.count) 個地圖章"
+        }
     }
 
     private func startLoadPlacesTask() {
@@ -253,6 +273,7 @@ private struct SaveSearchSectionView: View {
 }
 
 private struct SaveSearchResultCard: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
@@ -300,7 +321,7 @@ private struct SaveSearchResultCard: View {
                         Label(String(format: "%.1f", rating), systemImage: "star.fill")
                     }
                     if let reviewCount = result.reviewCount {
-                        Label("\(reviewCount) reviews", systemImage: "text.bubble.fill")
+                        Label(languageSettings.localized(english: "\(reviewCount) reviews", traditionalChinese: "\(reviewCount) 則評論"), systemImage: "text.bubble.fill")
                     }
                 }
                 .font(.caption2.weight(.semibold))
@@ -308,7 +329,10 @@ private struct SaveSearchResultCard: View {
             }
 
             if !result.missingInfo.isEmpty {
-                Text("Missing: \(result.missingInfo.prefix(2).joined(separator: ", "))")
+                Text(languageSettings.localized(
+                    english: "Missing: \(result.missingInfo.prefix(2).joined(separator: ", "))",
+                    traditionalChinese: "還缺：\(result.missingInfo.prefix(2).joined(separator: "、"))"
+                ))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.saveCocoa)
                     .fixedSize(horizontal: false, vertical: true)
@@ -329,19 +353,13 @@ private struct SaveSearchResultCard: View {
 
     @ViewBuilder
     private var shareLink: some View {
-        if let url = result.saveShareURL {
-            ShareLink(item: url, subject: Text(result.shareSubject), message: Text(result.shareText)) {
-                shareLabel
-            }
-        } else {
-            ShareLink(item: result.shareText, subject: Text(result.shareSubject)) {
-                shareLabel
-            }
+        SavePlaceShareButton(content: .searchResult(result)) {
+            shareLabel
         }
     }
 
     private var shareLabel: some View {
-        Label("Share", systemImage: "square.and.arrow.up")
+        Label(languageSettings.localized(english: "Share", traditionalChinese: "分享"), systemImage: "square.and.arrow.up")
             .font(.caption2.weight(.black))
             .foregroundColor(.saveInk)
             .lineLimit(1)
@@ -378,6 +396,7 @@ private struct SaveSearchResultCard: View {
 }
 
 private struct SaveAgentActionDrawerPreview: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
@@ -440,14 +459,14 @@ private struct SaveAgentActionDrawerPreview: View {
         } else if action.kind != .none {
             actionLabel(action, isPrimary: isPrimary)
         } else if result.isRecommendationShell {
-            Label("No place saved yet", systemImage: "sparkle.magnifyingglass")
+            Label(languageSettings.localized(english: "No place saved yet", traditionalChinese: "還沒有保存地點"), systemImage: "sparkle.magnifyingglass")
                 .font(.caption.weight(.black))
                 .foregroundColor(.saveCocoa)
         }
     }
 
     private func actionLabel(_ action: SaveAgentDrawerAction, isPrimary: Bool) -> some View {
-        Label(isSaving && action.kind == .savePlace ? "Saving..." : action.label, systemImage: action.systemImage)
+        Label(isSaving && action.kind == .savePlace ? languageSettings.text(.saving) : action.label, systemImage: action.systemImage)
             .font(.caption2.weight(.black))
             .foregroundColor(.saveInk)
             .lineLimit(1)
@@ -461,13 +480,14 @@ private struct SaveAgentActionDrawerPreview: View {
 }
 
 private struct SaveEvidenceDrawerPreview: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let model: SaveEvidenceDrawerModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "doc.text.magnifyingglass")
-                Text("Evidence")
+                Text(languageSettings.localized(english: "Evidence", traditionalChinese: "證據"))
                 Spacer(minLength: 0)
                 Text(model.confidenceLabel)
                     .font(.caption2.weight(.black))
@@ -505,11 +525,11 @@ private struct SaveEvidenceDrawerPreview: View {
             }
 
             if !model.missingFields.isEmpty {
-                evidenceLine(title: "Missing", value: model.missingFields.prefix(3).joined(separator: ", "))
+                evidenceLine(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), value: model.missingFields.prefix(3).joined(separator: ", "))
             }
 
             if !model.recoveryQueries.isEmpty {
-                evidenceLine(title: "Next recovery", value: model.recoveryQueries.prefix(2).joined(separator: " · "))
+                evidenceLine(title: languageSettings.localized(english: "Next recovery", traditionalChinese: "下一步補線索"), value: model.recoveryQueries.prefix(2).joined(separator: " · "))
             }
 
             if let candidateExplanation = model.candidateExplanation {
@@ -558,6 +578,7 @@ private struct SaveEvidenceDrawerPreview: View {
 }
 
 private struct SavePlanAroundPreviewView: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let result: SavePlanAroundResult
     @Environment(\.dismiss) private var dismiss
 
@@ -575,10 +596,10 @@ private struct SavePlanAroundPreviewView: View {
                 .padding(16)
             }
             .background(SaveDottedBackground())
-            .navigationTitle("Plan around this")
+            .navigationTitle(languageSettings.localized(english: "Plan around this", traditionalChinese: "圍繞這裡規劃"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
                 }
             }
         }
@@ -586,19 +607,19 @@ private struct SavePlanAroundPreviewView: View {
 
     private func draftView(_ draft: SavePlanAroundDraft) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SavePlanStopRow(stop: draft.anchor, titlePrefix: "Anchor")
+            SavePlanStopRow(stop: draft.anchor, titlePrefix: languageSettings.localized(english: "Anchor", traditionalChinese: "起點"))
             Text(draft.explanation)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveMutedText)
                 .fixedSize(horizontal: false, vertical: true)
 
-            planSection(title: "Route draft", stops: draft.routeStops.dropFirst())
-            planSection(title: "From Map Stamps", stops: draft.nearbySaved)
-            planSection(title: "Unsaved nearby candidates", stops: draft.newSuggestions)
+            planSection(title: languageSettings.localized(english: "Route draft", traditionalChinese: "路線草稿"), stops: draft.routeStops.dropFirst())
+            planSection(title: languageSettings.localized(english: "From Map Stamps", traditionalChinese: "來自地圖章"), stops: draft.nearbySaved)
+            planSection(title: languageSettings.localized(english: "Unsaved nearby candidates", traditionalChinese: "附近未保存候選地點"), stops: draft.newSuggestions)
 
             if !draft.routeNotes.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Route notes")
+                    Text(languageSettings.localized(english: "Route notes", traditionalChinese: "路線備註"))
                         .font(.headline.weight(.black))
                         .foregroundColor(.saveInk)
                     ForEach(draft.routeNotes, id: \.self) { note in
@@ -622,7 +643,10 @@ private struct SavePlanAroundPreviewView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.saveMutedText)
             if !state.missingInfo.isEmpty {
-                Text("Missing: \(state.missingInfo.joined(separator: ", "))")
+                Text(languageSettings.localized(
+                    english: "Missing: \(state.missingInfo.joined(separator: ", "))",
+                    traditionalChinese: "還缺：\(state.missingInfo.joined(separator: "、"))"
+                ))
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveCocoa)
             }
@@ -638,7 +662,7 @@ private struct SavePlanAroundPreviewView: View {
                 .font(.headline.weight(.black))
                 .foregroundColor(.saveInk)
             if items.isEmpty {
-                Text("No routeable matches yet.")
+                Text(languageSettings.localized(english: "No routeable matches yet.", traditionalChinese: "還沒有可排入路線的符合地點。"))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveMutedText)
             } else {
@@ -743,4 +767,5 @@ private struct FilterNotebookTab: View {
 
 #Preview {
     PlaceListView()
+        .environmentObject(AppLanguageSettings())
 }

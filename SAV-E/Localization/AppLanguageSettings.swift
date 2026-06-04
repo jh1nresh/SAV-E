@@ -15,6 +15,15 @@ enum AppLanguage: String, CaseIterable, Identifiable {
             return "繁體中文"
         }
     }
+
+    func localized(english: String, traditionalChinese: String) -> String {
+        switch self {
+        case .english:
+            return english
+        case .traditionalChinese:
+            return traditionalChinese
+        }
+    }
 }
 
 final class AppLanguageSettings: ObservableObject {
@@ -39,6 +48,10 @@ final class AppLanguageSettings: ObservableObject {
 
     func text(_ key: SaveTextKey) -> String {
         SaveText.text(key, language: language)
+    }
+
+    func localized(english: String, traditionalChinese: String) -> String {
+        language.localized(english: english, traditionalChinese: traditionalChinese)
     }
 
     func memoWaitingText(_ count: Int) -> String {

@@ -5,6 +5,7 @@ struct PlaceDetailView: View {
     let place: Place
     var onDelete: (() async throws -> Void)?
     var onUpdateVisibility: ((PlaceVisibility) async throws -> Void)?
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirmation = false
@@ -55,16 +56,28 @@ struct PlaceDetailView: View {
 
                 HStack(spacing: 8) {
                     Button(action: { openInMaps() }) {
-                        PlaceDetailActionLabel(title: "Maps", systemImage: "map.fill", fill: .saveHoney)
+                        PlaceDetailActionLabel(
+                            title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
+                            systemImage: "map.fill",
+                            fill: .saveHoney
+                        )
                     }
 
-                    ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
-                        PlaceDetailActionLabel(title: "Share", systemImage: "square.and.arrow.up", fill: Color.saveMint.opacity(0.36))
+                    SavePlaceShareButton(content: .place(detailPlace)) {
+                        PlaceDetailActionLabel(
+                            title: languageSettings.localized(english: "Share", traditionalChinese: "分享"),
+                            systemImage: "square.and.arrow.up",
+                            fill: Color.saveMint.opacity(0.36)
+                        )
                     }
 
                     if let url = detailPlace.primarySourceURL {
                         Button(action: { openURL(url) }) {
-                            PlaceDetailActionLabel(title: "Source", systemImage: "link", fill: Color.saveSky.opacity(0.22))
+                            PlaceDetailActionLabel(
+                                title: languageSettings.localized(english: "Source", traditionalChinese: "來源"),
+                                systemImage: "link",
+                                fill: Color.saveSky.opacity(0.22)
+                            )
                         }
                     }
                 }
@@ -86,7 +99,7 @@ struct PlaceDetailView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: detailPlace.saveShareURL ?? URL(string: "https://sav-e-app.vercel.app")!, subject: Text(detailPlace.shareSubject), message: Text(detailPlace.shareText)) {
+                SavePlaceShareButton(content: .place(detailPlace)) {
                     Image(systemName: "square.and.arrow.up")
                 }
             }
@@ -103,16 +116,16 @@ struct PlaceDetailView: View {
             }
         }
         .confirmationDialog(
-            "Delete \(detailPlace.name)?",
+            languageSettings.localized(english: "Delete \(detailPlace.name)?", traditionalChinese: "刪除「\(detailPlace.name)」？"),
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Place", role: .destructive) {
+            Button(languageSettings.localized(english: "Delete Place", traditionalChinese: "刪除地點"), role: .destructive) {
                 Task { await deletePlace() }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(languageSettings.text(.cancel), role: .cancel) {}
         } message: {
-            Text("This removes the Map Stamp from SAV-E.")
+            Text(languageSettings.localized(english: "This removes the Map Stamp from SAV-E.", traditionalChinese: "這會從 SAV-E 移除這個地圖章。"))
         }
     }
 
@@ -122,7 +135,7 @@ struct PlaceDetailView: View {
                 SaveMemoryBadge(state: .saved(detailPlace.category), size: 62)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(detailPlace.status.memoryCardLabel.uppercased())
+                    Text(detailPlace.status.memoryCardLabel(language: languageSettings.language).uppercased())
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveCocoa)
                         .padding(.horizontal, 8)
@@ -138,14 +151,14 @@ struct PlaceDetailView: View {
 
                     HStack(spacing: 6) {
                         PlatformIcon(platform: detailPlace.sourcePlatform, size: 14)
-                        Text(detailPlace.sourceConfirmationLabel)
+                        Text(detailPlace.sourceConfirmationLabel(language: languageSettings.language))
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.saveCocoa)
                     }
 
                     FlowLayout(spacing: 8) {
                         CategoryPill(category: detailPlace.category, isSelected: true)
-                        ForEach(detailPlace.verificationChips(), id: \.text) { chip in
+                        ForEach(detailPlace.verificationChips(language: languageSettings.language), id: \.text) { chip in
                             InfoChip(icon: chip.icon, text: chip.text, color: .saveCocoa)
                         }
                     }
@@ -187,7 +200,7 @@ struct PlaceDetailView: View {
     }
 
     private var memorySummary: String {
-        detailPlace.memorySummary
+        detailPlace.memorySummary(language: languageSettings.language)
     }
 
     private func enrichBusinessDetails() async {
@@ -311,4 +324,5 @@ struct InfoChip: View {
     NavigationStack {
         PlaceDetailView(place: .mock)
     }
+    .environmentObject(AppLanguageSettings())
 }

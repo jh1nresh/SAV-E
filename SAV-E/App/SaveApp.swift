@@ -152,7 +152,11 @@ struct SaveApp: App {
         do {
             openedList = try SaveCollaborativeListStore.shared.join(from: url)
         } catch {
-            openedList = SaveCollaborativeList(title: "Could not open list", note: error.localizedDescription, viewerRole: .viewer)
+            openedList = SaveCollaborativeList(
+                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
+                note: error.localizedDescription,
+                viewerRole: .viewer
+            )
         }
     }
 
@@ -506,7 +510,10 @@ struct SignInView: View {
             errorMessage = languageSettings.text(.appNotAllowedMessage)
         } else if rawMessage.contains("Invalid app client ID") {
             errorTitle = languageSettings.text(.authSetupNeeded)
-            errorMessage = "Check the iOS client ID in Privy and try again."
+            errorMessage = languageSettings.localized(
+                english: "Check the iOS client ID in Privy and try again.",
+                traditionalChinese: "請檢查 Privy 裡的 iOS client ID，然後再試一次。"
+            )
         } else if rawMessage.contains("Missing Privy config") {
             errorTitle = languageSettings.text(.authSetupNeeded)
             errorMessage = rawMessage
@@ -660,7 +667,10 @@ private struct SignInWorkflowStrip: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Capture links or media, review with evidence, remember confirmed places.")
+        .accessibilityLabel(languageSettings.localized(
+            english: "Capture links or media, review with evidence, remember confirmed places.",
+            traditionalChinese: "收進連結或媒體，看證據確認，再記住已確認地點。"
+        ))
     }
 }
 
