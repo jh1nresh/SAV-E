@@ -9,6 +9,8 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertEqual(SaveSocialLens.trending.title(language: .traditionalChinese), "熱門")
         XCTAssertEqual(PlaceFilter.wantToGo.title(language: .traditionalChinese), "想去")
         XCTAssertEqual(PlaceSort.nearest.title(language: .traditionalChinese), "最近距離")
+        XCTAssertEqual(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: .traditionalChinese), "尚未保存")
+        XCTAssertEqual(SaveSearchUserState.sourceOnly.displayName(language: .traditionalChinese), "還需要線索")
         XCTAssertTrue(AppLanguage.traditionalChinese.serviceOutputInstruction.contains("Map Stamp into natural Traditional Chinese"))
     }
 
@@ -19,5 +21,7 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertEqual(SaveSocialLens.trending.title(language: .english), "Trending")
         XCTAssertEqual(PlaceFilter.wantToGo.title(language: .english), "Want to Go")
         XCTAssertEqual(PlaceSort.nearest.title(language: .english), "Nearest")
+        XCTAssertEqual(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: .english), "Not saved yet")
+        XCTAssertEqual(SaveSearchUserState.sourceOnly.displayName(language: .english), "Needs one more clue")
     }
 }

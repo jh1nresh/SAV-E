@@ -66,6 +66,26 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(plannedNames.contains("Irvine Dinner"))
     }
 
+    func testPlannerUsesSelectedLanguageForChineseTripFallback() throws {
+        let places = [
+            makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
+            makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "幫我規劃 LA 兩天行程",
+            places: places,
+            outputLanguage: .traditionalChinese
+        ))
+
+        XCTAssertEqual(response.title, "SAV-E 2 天行程")
+        XCTAssertEqual(response.itineraryDays.first?.label, "第 1 天")
+        XCTAssertTrue(response.aiMessage?.contains("地圖章") == true)
+        XCTAssertFalse(response.aiMessage?.contains("Map Stamps") == true)
+        let notes = response.itineraryDays.flatMap(\.stops).compactMap(\.note)
+        XCTAssertFalse(notes.contains { $0.contains("Meal slot") || $0.contains("Good morning") })
+    }
+
     func testPlannerDoesNotUseWrongCityWhenDestinationHasNoSavedMatches() {
         let places = [
             makePlace("Irvine Dinner", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .food),
@@ -118,6 +138,25 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.componentType, .tripItinerary)
         XCTAssertEqual(response.itineraryDays.count, 1)
         XCTAssertEqual(response.itineraryDays.first?.stops.map(\.placeName), ["Disneyland Park", "Anaheim Dinner"])
+    }
+
+    func testAIServiceTripFallbackUsesSelectedOutputLanguageWhenGeminiIsMissing() async throws {
+        let places = [
+            makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
+            makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
+        ]
+
+        let response = try await SaveAIService(apiKey: "").query(
+            "幫我規劃 LA 兩天行程",
+            places: places,
+            outputLanguage: .traditionalChinese
+        )
+
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertEqual(response.title, "SAV-E 2 天行程")
+        XCTAssertEqual(response.itineraryDays.first?.label, "第 1 天")
+        XCTAssertTrue(response.aiMessage?.contains("地圖章") == true)
+        XCTAssertFalse(response.aiMessage?.contains("Map Stamps") == true)
     }
 
     private func makePlace(

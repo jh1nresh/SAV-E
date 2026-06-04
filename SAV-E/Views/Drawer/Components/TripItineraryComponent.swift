@@ -5,13 +5,14 @@ struct TripItineraryComponent: View {
     let days: [ItineraryDay]
     let aiMessage: String?
     var places: [Place] = []
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     @State private var showShareSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("PLAN READY")
+                    Text(languageSettings.localized(english: "PLAN DRAFT", traditionalChinese: "行程草稿"))
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
@@ -30,7 +31,10 @@ struct TripItineraryComponent: View {
                             .foregroundColor(.saveInk.opacity(0.78))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("Built from confirmed Map Stamps.")
+                    Text(languageSettings.localized(
+                        english: "Based on your request and confirmed Map Stamps.",
+                        traditionalChinese: "根據你的要求與已確認地圖章安排。"
+                    ))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.saveMutedText)
                 }
@@ -55,7 +59,7 @@ struct TripItineraryComponent: View {
                     }
                 }
 
-                Label("\(days.count) days", systemImage: "calendar")
+                Label(dayCountText, systemImage: "calendar")
                     .font(.caption.weight(.black))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
@@ -87,6 +91,15 @@ struct TripItineraryComponent: View {
         let tripData = SharedTripData.from(title: title, city: "", days: days, places: places)
         return tripData.toURL()
     }
+
+    private var dayCountText: String {
+        switch languageSettings.language {
+        case .english:
+            return days.count == 1 ? "1 day" : "\(days.count) days"
+        case .traditionalChinese:
+            return "\(days.count) 天"
+        }
+    }
 }
 
 // MARK: - ShareSheet
@@ -105,10 +118,11 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 private struct DaySection: View {
     let day: ItineraryDay
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(day.label ?? "Day \(day.dayNumber)")
+            Text(displayLabel)
                 .font(.subheadline)
                 .fontWeight(.black)
                 .foregroundColor(.saveInk)
@@ -158,7 +172,7 @@ private struct DaySection: View {
                             }
                         }
                         if let duration = stop.duration {
-                            Text("\(duration) min")
+                            Text(durationText(duration))
                                 .font(.caption2.weight(.semibold))
                                 .foregroundColor(.saveInk.opacity(0.76))
                         }
@@ -180,5 +194,36 @@ private struct DaySection: View {
                 .stroke(Color.saveNotebookLine, lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var displayLabel: String {
+        if let label = day.label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return localizedKnownDayLabel(label)
+        }
+        return fallbackDayLabel
+    }
+
+    private var fallbackDayLabel: String {
+        languageSettings.localized(
+            english: "Day \(day.dayNumber)",
+            traditionalChinese: "第 \(day.dayNumber) 天"
+        )
+    }
+
+    private func localizedKnownDayLabel(_ label: String) -> String {
+        let englishDay = "Day \(day.dayNumber)"
+        if label == englishDay || label == "List plan" {
+            return fallbackDayLabel
+        }
+        return label
+    }
+
+    private func durationText(_ minutes: Int) -> String {
+        switch languageSettings.language {
+        case .english:
+            return "\(minutes) min"
+        case .traditionalChinese:
+            return "\(minutes) 分鐘"
+        }
     }
 }

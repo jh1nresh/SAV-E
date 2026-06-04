@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SaveSearchResultsComponent: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let response: SaveSearchResponse
     var onSelectResult: (SaveSearchResult) -> Void = { _ in }
     var onSearchNearby: () -> Void = {}
@@ -61,7 +62,7 @@ struct SaveSearchResultsComponent: View {
                 HStack(spacing: 8) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.caption.weight(.black))
-                    Text("Show SAV-E memory used")
+                    Text(languageSettings.localized(english: "Show SAV-E memory used", traditionalChinese: "顯示 SAV-E 使用的記憶"))
                         .font(.caption.weight(.black))
                     Spacer(minLength: 0)
                     Text("\(supportingResultCount)")
@@ -91,7 +92,10 @@ struct SaveSearchResultsComponent: View {
 
     @ViewBuilder
     private func sectionView(_ section: SaveSearchSection, isVisuallySecondary: Bool = false) -> some View {
-        let label = section.label ?? (section.id == "from-your-save" ? "FROM YOUR SAV-E" : "PUBLIC DISCOVERY")
+        let label = sectionLabel(for: section)
+        let isPublicSection = section.id.contains("public") ||
+            section.id.contains("recommendation") ||
+            section.label == "PUBLIC DISCOVERY"
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
@@ -99,7 +103,7 @@ struct SaveSearchResultsComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(label.contains("PUBLIC") ? Color.saveSky.opacity(0.72) : Color.saveMint.opacity(0.72))
+                    .background(isPublicSection ? Color.saveSky.opacity(0.72) : Color.saveMint.opacity(0.72))
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                     .clipShape(Capsule())
 
@@ -127,14 +131,17 @@ struct SaveSearchResultsComponent: View {
 
             if section.results.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
-                    Text(section.emptyMessage ?? "No results yet.")
+                    Text(section.emptyMessage ?? languageSettings.localized(english: "No results yet.", traditionalChinese: "目前沒有結果。"))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.saveCocoa)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
                     if section.showsNearbySearchAction {
                         Button(action: onSearchNearby) {
-                            Label("Search nearby unsaved candidates", systemImage: "location.magnifyingglass")
+                            Label(
+                                languageSettings.localized(english: "Search nearby unsaved candidates", traditionalChinese: "搜尋附近未保存地點"),
+                                systemImage: "location.magnifyingglass"
+                            )
                                 .saveSearchActionPill(isPrimary: true)
                         }
                         .buttonStyle(.plain)
@@ -166,9 +173,28 @@ struct SaveSearchResultsComponent: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
+
+    private func sectionLabel(for section: SaveSearchSection) -> String {
+        if let label = section.label {
+            switch label {
+            case "FROM YOUR SAV-E":
+                return languageSettings.localized(english: label, traditionalChinese: "來自你的 SAV-E")
+            case "PUBLIC DISCOVERY":
+                return languageSettings.localized(english: label, traditionalChinese: "公開探索")
+            default:
+                return label
+            }
+        }
+
+        if section.id == "from-your-save" {
+            return languageSettings.localized(english: "FROM YOUR SAV-E", traditionalChinese: "來自你的 SAV-E")
+        }
+        return languageSettings.localized(english: "PUBLIC DISCOVERY", traditionalChinese: "公開探索")
+    }
 }
 
 private struct SaveSearchAssistantMessage: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let text: String
 
     var body: some View {
@@ -182,7 +208,7 @@ private struct SaveSearchAssistantMessage: View {
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.1))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("SAV-E answer")
+                Text(languageSettings.localized(english: "SAV-E answer", traditionalChinese: "SAV-E 回答"))
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveCocoa)
                     .textCase(.uppercase)
@@ -205,6 +231,7 @@ private struct SaveSearchAssistantMessage: View {
 }
 
 private struct SaveSearchResultNotebookRow: View {
+    @EnvironmentObject private var languageSettings: AppLanguageSettings
     let result: SaveSearchResult
     var onSelectResult: (SaveSearchResult) -> Void
 
@@ -237,10 +264,10 @@ private struct SaveSearchResultNotebookRow: View {
             .disabled(!canOpenDetails)
 
             HStack(spacing: 6) {
-                SaveSearchStateChip(text: result.objectType.displayName, fill: typeFill)
-                SaveSearchStateChip(text: result.userState.displayName, fill: result.userState == .unsaved ? .saveSky : .saveMint)
+                SaveSearchStateChip(text: result.objectType.displayName(language: languageSettings.language), fill: typeFill)
+                SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveSky : .saveMint)
                 if let category = result.category {
-                    SaveSearchStateChip(text: category.displayName, fill: .saveSignal)
+                    SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveSignal)
                 }
                 if let distanceLabel = result.distanceLabel {
                     SaveSearchStateChip(text: distanceLabel, fill: .saveHoney)
@@ -306,13 +333,13 @@ private struct SaveSearchResultNotebookRow: View {
             return distanceLabel
         }
         if result.objectType == .pendingCandidate {
-            return "Review before saving"
+            return languageSettings.localized(english: "Review before saving", traditionalChinese: "保存前請先確認")
         }
         if result.objectType == .sourceOnlyClue {
-            return "Needs exact place"
+            return languageSettings.localized(english: "Needs exact place", traditionalChinese: "需要精確地點")
         }
         if result.objectType == .mapVisibleUnsavedPlace {
-            return "Public result, not saved yet"
+            return languageSettings.localized(english: "Public result, not saved yet", traditionalChinese: "公開結果，尚未保存")
         }
         return nil
     }

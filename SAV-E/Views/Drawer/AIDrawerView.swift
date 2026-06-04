@@ -174,9 +174,15 @@ struct AIDrawerView: View {
         .onChange(of: voiceQuery.state) { _, state in
             switch state {
             case .denied:
-                addSpotStatus = "Microphone or speech permission is off. Enable it in Settings to talk to SAV-E."
+                addSpotStatus = languageSettings.localized(
+                    english: "Microphone or speech permission is off. Enable it in Settings to talk to SAV-E.",
+                    traditionalChinese: "麥克風或語音辨識權限已關閉。請到設定開啟後再和 SAV-E 說話。"
+                )
             case .unavailable:
-                addSpotStatus = "Voice input is not available on this device right now."
+                addSpotStatus = languageSettings.localized(
+                    english: "Voice input is not available on this device right now.",
+                    traditionalChinese: "這台裝置目前無法使用語音輸入。"
+                )
             case .failed(let message):
                 addSpotStatus = message
             default:
@@ -451,12 +457,18 @@ struct AIDrawerView: View {
                         if let place = viewModel.resolvePlace(id: response.navigationPlaceId) {
                             NavigationCardComponent(place: place, mode: response.transportMode)
                         } else {
-                            messageView("Couldn't find that place in your collection.")
+                            messageView(languageSettings.localized(
+                                english: "Couldn't find that place in your collection.",
+                                traditionalChinese: "在你的地點記憶裡找不到這個地點。"
+                            ))
                         }
 
                     case .tripItinerary:
                         TripItineraryComponent(
-                            title: response.title ?? "Your Itinerary",
+                            title: response.title ?? languageSettings.localized(
+                                english: "Your Itinerary",
+                                traditionalChinese: "你的行程"
+                            ),
                             days: response.itineraryDays,
                             aiMessage: response.aiMessage,
                             places: viewModel.places
@@ -1297,7 +1309,12 @@ struct AIDrawerView: View {
         Task {
             do {
                 try await action()
-                addSpotStatus = "Map Stamp saved · +1 \(candidate.category?.displayName.lowercased() ?? "place")"
+                let category = candidate.category?.displayName(language: languageSettings.language) ??
+                    languageSettings.localized(english: "place", traditionalChinese: "地點")
+                addSpotStatus = languageSettings.localized(
+                    english: "Map Stamp saved · +1 \(candidate.category?.displayName.lowercased() ?? "place")",
+                    traditionalChinese: "已保存地圖章 · +1 \(category)"
+                )
             } catch {
                 addSpotStatus = error.localizedDescription
             }
@@ -1308,7 +1325,10 @@ struct AIDrawerView: View {
     private func saveSocialPlace(_ place: Place) async {
         do {
             try await onSaveSocialPlace(place)
-            addSpotStatus = "Saved \(place.name) to your SAV-E."
+            addSpotStatus = languageSettings.localized(
+                english: "Saved \(place.name) to your SAV-E.",
+                traditionalChinese: "已將「\(place.name)」保存到你的 SAV-E。"
+            )
             closeMapDetail()
         } catch {
             addSpotStatus = error.localizedDescription
@@ -1610,7 +1630,10 @@ struct AIDrawerView: View {
 
     private func saveFeedback(for candidate: PlaceReviewCandidate) -> String {
         let category = PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)")
-        return "Map Stamp saved · +1 \(category.displayName.lowercased()) place"
+        return languageSettings.localized(
+            english: "Map Stamp saved · +1 \(category.displayName.lowercased()) place",
+            traditionalChinese: "已保存地圖章 · +1 \(category.displayName(language: languageSettings.language))"
+        )
     }
 
     private func addMoreClue(for candidate: PlaceReviewCandidate) {
@@ -1620,8 +1643,14 @@ struct AIDrawerView: View {
         showSavedCategories = false
         showReviewInbox = true
         showLists = false
-        viewModel.query = "Add more clue for \(candidate.name): "
-        addSpotStatus = "Paste a caption, address, map link, or visible OCR text. SAV-E will keep it in Review until the exact place is clear."
+        viewModel.query = languageSettings.localized(
+            english: "Add more clue for \(candidate.name): ",
+            traditionalChinese: "替「\(candidate.name)」補更多線索："
+        )
+        addSpotStatus = languageSettings.localized(
+            english: "Paste a caption, address, map link, or visible OCR text. SAV-E will keep it in Review until the exact place is clear.",
+            traditionalChinese: "貼上貼文說明、地址、地圖連結或看得到的 OCR 文字。SAV-E 會先把它留在待確認，直到精確地點夠清楚。"
+        )
         searchFocused = true
         withAnimation { drawerDetent = .medium }
     }

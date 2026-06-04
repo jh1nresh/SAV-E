@@ -489,7 +489,7 @@ private struct SaveEvidenceDrawerPreview: View {
                 Image(systemName: "doc.text.magnifyingglass")
                 Text(languageSettings.localized(english: "Evidence", traditionalChinese: "證據"))
                 Spacer(minLength: 0)
-                Text(model.confidenceLabel)
+                Text(localizedEvidenceText(model.confidenceLabel))
                     .font(.caption2.weight(.black))
                     .foregroundColor(.saveCocoa)
                     .lineLimit(1)
@@ -499,7 +499,7 @@ private struct SaveEvidenceDrawerPreview: View {
             .foregroundColor(.saveInk)
 
             if let provenanceLabel = model.provenanceLabel {
-                Text(provenanceLabel)
+                Text(localizedEvidenceText(provenanceLabel))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.saveMutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -512,10 +512,10 @@ private struct SaveEvidenceDrawerPreview: View {
                         .foregroundColor(.saveCocoa)
                         .frame(width: 14)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(atom.label)
+                        Text(localizedEvidenceText(atom.label))
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveInk)
-                        Text(atom.value)
+                        Text(localizedEvidenceValue(atom.value))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(.saveMutedText)
                             .lineLimit(2)
@@ -525,7 +525,10 @@ private struct SaveEvidenceDrawerPreview: View {
             }
 
             if !model.missingFields.isEmpty {
-                evidenceLine(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), value: model.missingFields.prefix(3).joined(separator: ", "))
+                evidenceLine(
+                    title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"),
+                    value: model.missingFields.prefix(3).map(localizedEvidenceText).joined(separator: ", ")
+                )
             }
 
             if !model.recoveryQueries.isEmpty {
@@ -533,7 +536,7 @@ private struct SaveEvidenceDrawerPreview: View {
             }
 
             if let candidateExplanation = model.candidateExplanation {
-                Text(candidateExplanation)
+                Text(localizedEvidenceText(candidateExplanation))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.saveCocoa)
                     .fixedSize(horizontal: false, vertical: true)
@@ -573,6 +576,68 @@ private struct SaveEvidenceDrawerPreview: View {
         case .reviewCount: return "text.bubble"
         case .userNote: return "note.text"
         case .receipt: return "receipt"
+        }
+    }
+
+    private func localizedEvidenceText(_ text: String) -> String {
+        guard languageSettings.language == .traditionalChinese else { return text }
+        if text.hasSuffix("% confidence") {
+            return text.replacingOccurrences(of: "% confidence", with: "% 信心")
+        }
+        switch text {
+        case "Clue from Instagram": return "來自 Instagram 的線索"
+        case "Clue from TikTok": return "來自 TikTok 的線索"
+        case "Clue from Google Maps": return "來自 Google Maps 的線索"
+        case "Source Clue": return "來源線索"
+        case "Review Candidate; confirm before Map Stamp": return "待確認地點；確認後才會成為地圖章"
+        case "Unsaved candidate; not a Map Stamp": return "未保存候選地點；還不是地圖章"
+        case "Map Stamp saved in SAV-E": return "已保存到 SAV-E 的地圖章"
+        case "Visited Map Stamp": return "去過的地圖章"
+        case "Private review": return "私人評論"
+        case "Trip stop": return "行程地點"
+        case "Recommendation; no saved memory": return "推薦；尚未保存到記憶"
+        case "Exact place unconfirmed": return "精確地點尚未確認"
+        case "Candidate needs review": return "候選地點需要確認"
+        case "Map evidence present": return "已有地圖證據"
+        case "Map Stamp": return "地圖章"
+        case "Review evidence": return "評論證據"
+        case "Unsaved recommendation": return "未保存推薦"
+        case "Source": return "來源"
+        case "Platform": return "平台"
+        case "Map label": return "地圖標籤"
+        case "Address": return "地址"
+        case "Coordinates": return "座標"
+        case "Rating": return "評分"
+        case "Reviews": return "評論數"
+        case "State": return "狀態"
+        case "Caption clue": return "文案線索"
+        case "Creator/provenance": return "創作者／來源"
+        case "Venue handle": return "店家帳號"
+        case "Address clue": return "地址線索"
+        case "Review count": return "評論數"
+        case "Receipt": return "收據"
+        case "Evidence": return "證據"
+        case "exact venue", "exact place": return "精確地點"
+        case "address", "verified address": return "已確認地址"
+        case "coordinates": return "座標"
+        case "verified source platform": return "已確認來源平台"
+        case "SAV-E is preserving the source clue without creating a Map Stamp.": return "SAV-E 會先保存來源線索，不會直接做成地圖章。"
+        case "This can become a Map Stamp only after the place evidence is confirmed.": return "地點證據確認後，才會變成地圖章。"
+        case "This is an unsaved candidate, not a Map Stamp yet.": return "這是未保存候選地點，還不是地圖章。"
+        case "This Map Stamp is already saved in SAV-E.": return "這個地圖章已經保存到 SAV-E。"
+        case "This is a recommendation, not a saved memory. Choose a concrete place first.": return "這是推薦，不是已保存記憶。請先選一個明確地點。"
+        default: return text
+        }
+    }
+
+    private func localizedEvidenceValue(_ value: String) -> String {
+        guard languageSettings.language == .traditionalChinese else { return value }
+        switch value {
+        case "Map result": return "地圖結果"
+        case "present": return "已取得"
+        case "Unsaved; not a Map Stamp": return "未保存；還不是地圖章"
+        case "Saved Map Stamp": return "已保存地圖章"
+        default: return value
         }
     }
 }

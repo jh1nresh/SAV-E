@@ -407,7 +407,7 @@ private struct AnimatedProofHero: View {
 
     private var mapStampView: some View {
         ZStack(alignment: .bottomLeading) {
-            SaveMiniMap()
+            SaveMiniMap(language: language)
 
             HStack(spacing: 12) {
                 stageIcon(systemImage: "mappin.and.ellipse", tint: .saveMint)
@@ -606,6 +606,8 @@ private struct ProofHeroLine: View {
 }
 
 private struct SaveMiniMap: View {
+    let language: AppLanguage
+
     var body: some View {
         ZStack {
             Color.saveMint.opacity(0.28)
@@ -631,7 +633,7 @@ private struct SaveMiniMap: View {
                         .clipShape(Circle())
 
                     if pin.isPrimary {
-                        Text("Map Stamp")
+                        Text(language.localized(english: "Map Stamp", traditionalChinese: "地圖章"))
                             .font(.caption2)
                             .fontWeight(.black)
                             .foregroundColor(.saveInk)

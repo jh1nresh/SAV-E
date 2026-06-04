@@ -52,7 +52,11 @@ final class SaveAIService {
             return localResponse
         }
 
-        let deterministicDraft = DeterministicTripPlanner().plan(for: userMessage, places: places)
+        let deterministicDraft = DeterministicTripPlanner().plan(
+            for: userMessage,
+            places: places,
+            outputLanguage: outputLanguage
+        )
 
         guard let apiKey, !apiKey.isEmpty else {
             if let deterministicDraft {
@@ -256,6 +260,7 @@ final class SaveAIService {
             Use this draft as a safe baseline built from Map Stamps and distance/time-slot rules.
             You may improve the day grouping, stop order, times, title, aiMessage, and notes when it makes the itinerary more useful.
             Keep every place ID valid and do not introduce unknown place IDs or claim live travel times.
+            Preserve the requested day count when the user specified one.
             """
         } else {
             deterministicDraftSection = ""
@@ -305,8 +310,9 @@ final class SaveAIService {
 
         RULES:
         - Every user-visible string in title, itineraryDays.label, itineraryDays.stops.note, messageText, and aiMessage must use the OUTPUT LANGUAGE exactly.
-        - For itinerary requests: use Map Stamps to build a realistic schedule with smart times and geographic order.
+        - For itinerary requests: use Map Stamps to build a realistic schedule with smart times, geographic order, and the user's requested destination/day count/style.
         - If a DETERMINISTIC PLANNER DRAFT is provided, use it as a safe baseline. You may improve grouping, order, times, title, aiMessage, and stop notes, but every place ID must come from USER'S MAP STAMPS.
+        - The itinerary should read like an assistant-planned draft, not a debug report. Explain the plan in aiMessage before the stop list.
         - If the user asks for trip planning without days or style, still return a usable draft from Map Stamps, then ask exactly one concise follow-up about days or vibe in aiMessage.
         - If the user's saved Map Stamps are mostly food/drink and the trip is missing attractions or activities, do not invent exact public places. Mention the gap and ask whether to search public discovery near the saved anchors.
         - For destination-specific requests, choose Map Stamps whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.

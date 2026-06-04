@@ -22,6 +22,19 @@ enum SaveSearchObjectType: String, Codable, CaseIterable, Hashable {
         case .newRecommendation: return "Recommendation"
         }
     }
+
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .savedPlace: return language.localized(english: "Map Stamp", traditionalChinese: "地圖章")
+        case .pendingCandidate: return language.localized(english: "Review Candidate", traditionalChinese: "待確認地點")
+        case .sourceOnlyClue: return language.localized(english: "Clue", traditionalChinese: "線索")
+        case .triedMemory: return language.localized(english: "Visited Map Stamp", traditionalChinese: "去過的地圖章")
+        case .review: return language.localized(english: "Private review", traditionalChinese: "私人評論")
+        case .tripStop: return language.localized(english: "Trip stop", traditionalChinese: "行程地點")
+        case .mapVisibleUnsavedPlace: return language.localized(english: "Not saved yet", traditionalChinese: "尚未保存")
+        case .newRecommendation: return language.localized(english: "Recommendation", traditionalChinese: "推薦")
+        }
+    }
 }
 
 enum SaveSearchPrimaryAction: String, Codable, Hashable {
@@ -894,6 +907,17 @@ enum SaveSearchUserState: String, Codable, CaseIterable, Hashable {
         case .visited: return "Visited"
         case .reviewed: return "Reviewed"
         case .unsaved: return "Unsaved"
+        }
+    }
+
+    func displayName(language: AppLanguage) -> String {
+        switch self {
+        case .wantToGo: return language.localized(english: "Saved", traditionalChinese: "已保存")
+        case .waitingReview: return language.localized(english: "Needs review", traditionalChinese: "需要確認")
+        case .sourceOnly: return language.localized(english: "Needs one more clue", traditionalChinese: "還需要線索")
+        case .visited: return language.localized(english: "Visited", traditionalChinese: "去過")
+        case .reviewed: return language.localized(english: "Reviewed", traditionalChinese: "已評論")
+        case .unsaved: return language.localized(english: "Unsaved", traditionalChinese: "未保存")
         }
     }
 }
