@@ -449,6 +449,62 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerUsesLLMParsedIntentWhenDeterministicParserMissesCategory() async {
+        let parsedIntent = SaveSearchIntent(
+            rawText: "where should i go for brunch nearby",
+            normalizedText: "where should i go for brunch nearby",
+            kind: .categoryRecommendation,
+            requiredCategories: [.food],
+            optionalCategories: [],
+            locationMode: .currentLocation(radiusMeters: 2_000),
+            sourceScope: .savedFirstAllowPublicFallback,
+            mustMatchCategory: true,
+            mustMatchLocation: true,
+            confidence: 0.84,
+            unsupportedCategoryLabel: nil,
+            categoryNeedles: ["brunch"]
+        )
+        let client = StubGroundedAnswerClient(
+            answer: "I would pick Saved Brunch because it is nearby and already in your SAV-E memory.",
+            parsedIntent: parsedIntent
+        )
+        let drawer = AIDrawerViewModel(
+            locationService: StubAIDrawerLocationProvider(
+                currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)
+            ),
+            groundedAnswerClient: client
+        )
+        let brunch = place(
+            name: "Saved Brunch",
+            address: "1 Main St, Irvine, CA",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8267
+        )
+        let cafe = place(
+            name: "Saved Coffee",
+            address: "2 Main St, Irvine, CA",
+            category: .cafe,
+            latitude: 33.6847,
+            longitude: -117.8266
+        )
+        drawer.places = [cafe, brunch]
+        drawer.query = "where should i go for brunch nearby"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(client.intentRequests.map(\.query), ["where should i go for brunch nearby"])
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Saved Brunch"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Saved Coffee"))
+        XCTAssertEqual(response.agentAnswer?.source, .groundedLLM)
+        XCTAssertEqual(client.requests.first?.intent.requiredCategories, [.food])
+        XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["place-\(brunch.id.uuidString)"])
+    }
+
+    @MainActor
     func testDrawerPreparedPublicDiscoveryUsesGroundedAnswerClient() async {
         let client = StubGroundedAnswerClient(answer: "I would try Bright Coffee Bar first because it is nearby, highly rated, and still unsaved. Want quiet or quick?")
         let drawer = AIDrawerViewModel(groundedAnswerClient: client)
@@ -1620,14 +1676,21 @@ final class SaveSearchControllerTests: XCTestCase {
 
 private final class StubGroundedAnswerClient: SaveLLMClient {
     let answer: String
+    let parsedIntent: SaveSearchIntent?
     private(set) var requests: [GroundedAnswerRequest] = []
+    private(set) var intentRequests: [IntentParseRequest] = []
 
-    init(answer: String) {
+    init(answer: String, parsedIntent: SaveSearchIntent? = nil) {
         self.answer = answer
+        self.parsedIntent = parsedIntent
     }
 
     func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent {
-        throw SaveSearchIntentValidationError.malformedJSON
+        intentRequests.append(request)
+        guard let parsedIntent else {
+            throw SaveSearchIntentValidationError.malformedJSON
+        }
+        return parsedIntent
     }
 
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
