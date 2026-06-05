@@ -4,7 +4,7 @@ import UIKit
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
@@ -159,7 +159,7 @@ struct ProfileView: View {
 // MARK: - Edit Profile
 
 private struct EditProfileSheet: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Binding var displayName: String
     let avatarURLString: String?
     @Binding var selectedAvatarData: Data?
@@ -315,7 +315,7 @@ private struct EditProfileSheet: View {
 // MARK: - Passport
 
 private struct PassportTopBar: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let waitingClues: Int
     let onClose: () -> Void
     let onEdit: () -> Void
@@ -386,7 +386,7 @@ private struct PassportIconButton: View {
 }
 
 private struct PassportHero: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let profile: UserProfile
 
     var body: some View {
@@ -557,7 +557,7 @@ private struct PassportBadge: View {
 }
 
 private struct PassportStampSection: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let profile: UserProfile
     let stats: PassportStats
 
@@ -717,7 +717,7 @@ private struct PassportCityStrip: View {
 }
 
 private struct PassportCountingRulesPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let stats: PassportStats
 
     var body: some View {
@@ -778,7 +778,7 @@ private struct PassportCountingRulesPanel: View {
 }
 
 private struct PassportVisibilityPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let places: [Place]
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
 
@@ -834,7 +834,7 @@ private struct PassportVisibilityPanel: View {
 }
 
 private struct PassportVisibilityChip: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let visibility: PlaceVisibility
     let count: Int
 
@@ -851,7 +851,7 @@ private struct PassportVisibilityChip: View {
 }
 
 private struct PassportVisibilityRow: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
     @State private var selectedVisibility: PlaceVisibility
@@ -1009,7 +1009,7 @@ struct SettingsRow: View {
 
 private struct LanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         NavigationStack {
@@ -1084,5 +1084,5 @@ private struct LanguageSettingsSheet: View {
 
 #Preview {
     ProfileView()
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlaceBottomSheet: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     var onDelete: (() async throws -> Void)?
     var onPlanAround: (() -> Void)?
@@ -210,7 +210,7 @@ struct PlaceBottomSheet: View {
 }
 
 struct PlaceVisibilityControl: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let visibility: PlaceVisibility
     var onChange: ((PlaceVisibility) async throws -> Void)?
     @State private var selectedVisibility: PlaceVisibility
@@ -324,7 +324,7 @@ private struct PlaceDetailGlassBackground: View {
 }
 
 struct PlaceBasicInfoPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
 
     var body: some View {
@@ -412,7 +412,7 @@ private struct PlaceInfoRow: View {
 }
 
 private struct PlaceProofPlaceholderCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -708,7 +708,7 @@ struct PlaceDetailActionLabel: View {
 }
 
 struct PlaceInsightSummaryPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     var fallbackSummary: String
 
@@ -907,5 +907,5 @@ struct PlaceBusinessPhotoCarousel: View {
 
 #Preview {
     PlaceBottomSheet(place: .mock)
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
 }

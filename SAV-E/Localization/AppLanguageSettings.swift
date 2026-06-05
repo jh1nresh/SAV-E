@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SwiftUI
 
 enum AppLanguage: String, CaseIterable, Identifiable {
     case english = "en"
@@ -115,6 +116,17 @@ final class AppLanguageSettings: ObservableObject {
         case .traditionalChinese:
             return count == 1 ? "1 個待確認地點" : "\(count) 個待確認地點"
         }
+    }
+}
+
+private struct AppLanguageSettingsKey: EnvironmentKey {
+    static let defaultValue = AppLanguageSettings()
+}
+
+extension EnvironmentValues {
+    var appLanguageSettings: AppLanguageSettings {
+        get { self[AppLanguageSettingsKey.self] }
+        set { self[AppLanguageSettingsKey.self] = newValue }
     }
 }
 

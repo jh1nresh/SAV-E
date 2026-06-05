@@ -5,7 +5,7 @@ struct PlaceDetailView: View {
     let place: Place
     var onDelete: (() async throws -> Void)?
     var onUpdateVisibility: ((PlaceVisibility) async throws -> Void)?
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirmation = false
@@ -324,5 +324,5 @@ struct InfoChip: View {
     NavigationStack {
         PlaceDetailView(place: .mock)
     }
-    .environmentObject(AppLanguageSettings())
+    .environment(\.appLanguageSettings, AppLanguageSettings())
 }

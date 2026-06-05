@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CategoryPill: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let category: PlaceCategory
     var isSelected: Bool = false
 
@@ -52,5 +52,5 @@ struct CategoryPill: View {
         }
     }
     .padding()
-    .environmentObject(AppLanguageSettings())
+    .environment(\.appLanguageSettings, AppLanguageSettings())
 }

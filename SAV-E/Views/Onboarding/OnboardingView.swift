@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Namespace private var proofNamespace
     @State private var stage: ProofStage = .language
     @State private var clueText = ""
@@ -1341,5 +1341,5 @@ private struct FirstRunTrustNote: View {
 
 #Preview {
     OnboardingView(onComplete: {})
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
 }

@@ -93,7 +93,7 @@ struct MapView: View {
 }
 
 private struct CurrentLocationButton: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     let isLocating: Bool
     let action: () -> Void
@@ -141,7 +141,7 @@ private struct CurrentLocationButton: View {
 // MARK: - Map Pin
 
 struct PlaceMapPin: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onTap: () -> Void
 
@@ -159,7 +159,7 @@ struct PlaceMapPin: View {
 }
 
 private struct SocialPlaceMapPin: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onTap: () -> Void
 
@@ -178,7 +178,7 @@ private struct SocialPlaceMapPin: View {
 }
 
 private struct ReviewCandidateMapPin: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: PlaceReviewCandidate
     let onTap: () -> Void
 
@@ -197,7 +197,7 @@ private struct ReviewCandidateMapPin: View {
 }
 
 private struct UnsavedMapCandidatePin: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: SaveMapCandidate
     var isSelected = false
     let onTap: () -> Void

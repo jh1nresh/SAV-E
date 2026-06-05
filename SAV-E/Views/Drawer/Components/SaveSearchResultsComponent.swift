@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SaveSearchResultsComponent: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let response: SaveSearchResponse
     var onSelectResult: (SaveSearchResult) -> Void = { _ in }
     var onSearchNearby: () -> Void = {}
@@ -194,7 +194,7 @@ struct SaveSearchResultsComponent: View {
 }
 
 private struct SaveSearchAssistantMessage: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let text: String
 
     var body: some View {
@@ -231,7 +231,7 @@ private struct SaveSearchAssistantMessage: View {
 }
 
 private struct SaveSearchResultNotebookRow: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let result: SaveSearchResult
     var onSelectResult: (SaveSearchResult) -> Void
 

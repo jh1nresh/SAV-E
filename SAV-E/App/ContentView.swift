@@ -3,12 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var mapVM = MapViewModel()
     @StateObject private var drawerVM = AIDrawerViewModel()
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var drawerDetent: PresentationDetent = .fraction(0.34)
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
 
     var body: some View {
         MapView(viewModel: mapVM)
+            .environment(\.appLanguageSettings, languageSettings)
             .sheet(isPresented: .constant(true)) {
                 AIDrawerView(
                     viewModel: drawerVM,
@@ -78,6 +80,7 @@ struct ContentView: View {
                         mapVM.clearSelectedMapObject()
                     }
                 )
+                    .environment(\.appLanguageSettings, languageSettings)
                     .presentationDetents([.height(72), .height(88), .fraction(0.34), .fraction(0.38), .medium, .large], selection: $drawerDetent)
                     .presentationDragIndicator(.visible)
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -153,5 +156,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct StatsView: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let stats: PassportStats
 
     var body: some View {
@@ -63,7 +63,7 @@ struct StatItem: View {
 
 #Preview {
     StatsView(stats: PassportStats(profile: .mock, savedPlaces: Place.mockList, waitingClues: 2))
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
         .padding()
         .background(SaveDottedBackground())
 }

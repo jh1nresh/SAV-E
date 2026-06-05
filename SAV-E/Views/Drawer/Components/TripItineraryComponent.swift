@@ -5,7 +5,7 @@ struct TripItineraryComponent: View {
     let days: [ItineraryDay]
     let aiMessage: String?
     var places: [Place] = []
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showShareSheet = false
 
     var body: some View {
@@ -118,7 +118,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 private struct DaySection: View {
     let day: ItineraryDay
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

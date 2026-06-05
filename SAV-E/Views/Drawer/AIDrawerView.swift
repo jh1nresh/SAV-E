@@ -64,7 +64,7 @@ private enum CommandDrawerTab: String, CaseIterable, Hashable {
 }
 
 struct AIDrawerView: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: AIDrawerViewModel
     @Binding var drawerDetent: PresentationDetent
@@ -1747,7 +1747,7 @@ private struct DrawerGlassBackground: View {
 }
 
 private struct MapDetailDrawerView: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
     let editableLists: [SaveCollaborativeList]
@@ -1919,7 +1919,7 @@ private struct MapDetailDrawerView: View {
 }
 
 private struct SelectedPlaceCapsule: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     let onExpand: () -> Void
     let onClose: () -> Void
@@ -2136,7 +2136,7 @@ private extension MapDetailDrawerItem {
 }
 
 private struct SocialPlaceRow: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onSave: () -> Void
 
@@ -2233,7 +2233,7 @@ private struct MapDetailDrawerBackground: View {
 }
 
 private struct SavedMapDetailDrawerContent: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onPlanAroundPlace: () -> Void
     let onDeletePlace: () async throws -> Void
@@ -2546,7 +2546,7 @@ private struct SavedMapDetailDrawerContent: View {
 }
 
 private struct SocialPlaceDetailCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     let onSave: () -> Void
 
@@ -2638,7 +2638,7 @@ private struct MapDetailChip: View {
 }
 
 private struct AddToListPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let title: String
     let lists: [SaveCollaborativeList]
     let onCreateList: () -> SaveCollaborativeList
@@ -2709,7 +2709,7 @@ private struct AddToListPanel: View {
 }
 
 private struct CollaborativeListCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let list: SaveCollaborativeList
     let isSelected: Bool
     let existingPlaces: [Place]
@@ -3064,7 +3064,7 @@ private struct NotebookBandLabel: View {
 }
 
 private struct SavedPlacesSection: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     var places: [Place]
     var totalCount: Int
@@ -3145,7 +3145,7 @@ private struct SavedPlacesSection: View {
 }
 
 private struct SavedCategorySectionHeader: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var category: PlaceCategory
     var count: Int
 
@@ -3173,7 +3173,7 @@ private struct SavedCategorySectionHeader: View {
 }
 
 private struct SavedPlaceRow: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var place: Place
     var onSelect: () -> Void
 
@@ -3243,7 +3243,7 @@ private extension PlaceCategory {
 }
 
 private struct SavedPlacesEmptyState: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var isFiltered: Bool
     var onReview: () -> Void
     var onAsk: () -> Void
@@ -3311,7 +3311,7 @@ private struct SavedPlacesEmptyState: View {
 }
 
 private struct ReviewCandidatesSection: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     var candidates: [PlaceReviewCandidate]
     var limit: Int? = 4
@@ -3379,7 +3379,7 @@ private struct ReviewCandidatesSection: View {
 }
 
 private struct ReviewCandidatePlaceRow: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: PlaceReviewCandidate
     var onSelect: () -> Void
 
@@ -3435,7 +3435,7 @@ private struct ReviewCandidatePlaceRow: View {
 }
 
 private struct ReviewCandidatesEmptyState: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -3473,7 +3473,7 @@ private struct ReviewCandidatesEmptyState: View {
 }
 
 private struct ReviewCandidateDetailCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
     var onFindExactPlace: () -> Void
@@ -3658,7 +3658,7 @@ private struct ReviewCandidateDetailIcon: View {
 }
 
 private struct ReviewCandidateProofPanel: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: PlaceReviewCandidate
     @Environment(\.openURL) private var openURL
 
@@ -3867,7 +3867,7 @@ private struct ReviewCandidateProofPanel: View {
 }
 
 private struct UnsavedMapCandidateCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: SaveMapCandidate
     var isWorking: Bool
     var onSave: () -> Void
@@ -4189,7 +4189,7 @@ private struct CandidateActionLabel: View {
 }
 
 private struct PassportDrawerButton: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var fill: Color
     var stroke: Color
     var foreground: Color
@@ -4211,7 +4211,7 @@ private struct PassportDrawerButton: View {
 }
 
 private struct MemoryFlowCTA: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     var reviewCount: Int
     var stampCount: Int
@@ -4347,7 +4347,7 @@ private struct MemoryFlowCTA: View {
 }
 
 private struct SavedCategoryGrid: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let categories: [(category: PlaceCategory, count: Int)]
     let selectedCategories: Set<PlaceCategory>
     let onToggle: (PlaceCategory) -> Void
@@ -4394,7 +4394,7 @@ private struct SavedCategoryGrid: View {
 }
 
 private struct SavedCategoryGridButton: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var category: PlaceCategory
     var count: Int
     var isSelected: Bool
@@ -4489,7 +4489,7 @@ private struct DrawerSuggestionRow: View {
 }
 
 private struct AIResultActionBar: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     var onFollowUp: () -> Void
     var onNewQuestion: () -> Void
 

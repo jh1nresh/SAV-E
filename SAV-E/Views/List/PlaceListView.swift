@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PlaceListView: View {
     @StateObject private var viewModel = PlaceListViewModel()
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var loadPlacesTask: Task<Void, Never>?
 
@@ -273,7 +273,7 @@ private struct SaveSearchSectionView: View {
 }
 
 private struct SaveSearchResultCard: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
@@ -396,7 +396,7 @@ private struct SaveSearchResultCard: View {
 }
 
 private struct SaveAgentActionDrawerPreview: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let result: SaveSearchResult
     let isSaving: Bool
     let onSaveMapCandidate: (SaveSearchResult) -> Void
@@ -480,7 +480,7 @@ private struct SaveAgentActionDrawerPreview: View {
 }
 
 private struct SaveEvidenceDrawerPreview: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let model: SaveEvidenceDrawerModel
 
     var body: some View {
@@ -653,7 +653,7 @@ private struct SaveEvidenceDrawerPreview: View {
 }
 
 private struct SavePlanAroundPreviewView: View {
-    @EnvironmentObject private var languageSettings: AppLanguageSettings
+    @Environment(\.appLanguageSettings) private var languageSettings
     let result: SavePlanAroundResult
     @Environment(\.dismiss) private var dismiss
 
@@ -842,5 +842,5 @@ private struct FilterNotebookTab: View {
 
 #Preview {
     PlaceListView()
-        .environmentObject(AppLanguageSettings())
+        .environment(\.appLanguageSettings, AppLanguageSettings())
 }
