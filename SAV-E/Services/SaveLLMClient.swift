@@ -13,6 +13,89 @@ struct GroundedAnswerRequest: Equatable {
     let outputLanguage: AppLanguage
 }
 
+struct SaveAgentPromptPolicy {
+    static let productSoul = """
+    SAV-E is a cute place-memory scout, not a generic travel or map chatbot.
+    SAV-E captures messy place signals into Source Clues and Review Candidates, then helps the user decide from confirmed Map Stamps.
+    Default answer from the user's private place memory first; public discovery second and clearly labeled.
+    """
+
+    static let hardBoundaries = """
+    Hard boundaries:
+    - Use ONLY allowed result IDs. Do not introduce or invent places outside the allowed results.
+    - Keep Saved Map Stamps, Review Candidates, Source-only clues, and Public Discovery separate.
+    - Never treat a Review Candidate, Source-only clue, or Public Discovery result as a confirmed Map Stamp.
+    - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
+    - Evidence lines starting with "Search:" are retrieval context, not proof that the place serves the requested item.
+    """
+
+    static let specialtyEvidenceRules = """
+    Specific item gates:
+    - If the query asks for hot pot, shabu, boba, milk tea, or another specific item, only call a place a match when its title, address, dish clues, note, or non-search evidence explicitly mentions that item.
+    - Do not treat generic restaurants as hot pot matches.
+    - Do not treat generic cafes or coffee shops as boba or milk-tea matches.
+    """
+
+    static let outputContract = """
+    Output contract:
+    - Answer in the requested output language exactly.
+    - Sound like a concise assistant, not a debug report.
+    - Recommend one best place first when a trustworthy allowed result exists.
+    - Explain the reason using state, distance, rating/review count, and evidence.
+    - Ask at most one lightweight follow-up question.
+    - Do not use headings like "Why:" or "Next:".
+    - Keep it under 70 words.
+    """
+
+    func groundedAnswerPrompt(for request: GroundedAnswerRequest) -> String {
+        """
+        \(Self.productSoul)
+
+        Allowed result IDs:
+        \(request.allowedPlaceIds.isEmpty ? "none" : request.allowedPlaceIds.joined(separator: ", "))
+
+        User query:
+        \(request.query)
+
+        Output language:
+        \(request.outputLanguage.serviceOutputInstruction)
+
+        Grounded sections:
+        \(sectionSummary(request.sections))
+
+        \(Self.hardBoundaries)
+
+        \(Self.specialtyEvidenceRules)
+
+        \(Self.outputContract)
+        """
+    }
+
+    func sectionSummary(_ sections: [SaveSearchSection]) -> String {
+        sections.map { section in
+            let rows = section.results.prefix(5).map { result in
+                let evidence = result.evidence.prefix(3).joined(separator: " | ")
+                let facts = [
+                    "id=\(result.id)",
+                    "title=\(result.title)",
+                    "state=\(result.objectType.displayName)/\(result.userState.displayName)",
+                    result.distanceLabel.map { "distance=\($0)" },
+                    result.rating.map { String(format: "rating=%.1f", $0) },
+                    result.reviewCount.map { "reviews=\($0)" },
+                    evidence.isEmpty ? nil : "evidence=\(evidence)"
+                ].compactMap { $0 }
+                return "  - " + facts.joined(separator: "; ")
+            }
+            let empty = section.emptyMessage.map { "empty=\($0)" }
+            let searchAction = section.showsNearbySearchAction ? "action=can_search_public_nearby" : nil
+            let footer = [empty, searchAction].compactMap { $0 }.map { "  - \($0)" }
+            let body = rows.isEmpty && footer.isEmpty ? ["  - none"] : rows + footer
+            return "- \(section.title) [\(section.id)]:\n\(body.joined(separator: "\n"))"
+        }
+        .joined(separator: "\n")
+    }
+}
+
 protocol SaveLLMClient {
     func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String
@@ -47,17 +130,20 @@ final class GeminiSaveLLMClient: SaveLLMClient {
     private let apiKey: String
     private let modelFallbacks: [String]
     private let validator: SaveSearchIntentJSONValidator
+    private let promptPolicy: SaveAgentPromptPolicy
     private let session: URLSession
 
     init(
         apiKey: String,
         modelFallbacks: [String] = SaveAIService.defaultModelFallbacks,
         validator: SaveSearchIntentJSONValidator = SaveSearchIntentJSONValidator(),
+        promptPolicy: SaveAgentPromptPolicy = SaveAgentPromptPolicy(),
         session: URLSession = .shared
     ) {
         self.apiKey = apiKey
         self.modelFallbacks = modelFallbacks
         self.validator = validator
+        self.promptPolicy = promptPolicy
         self.session = session
     }
 
@@ -101,47 +187,8 @@ final class GeminiSaveLLMClient: SaveLLMClient {
     }
 
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
-        let prompt = """
-        Write one short conversational SAV-E drawer answer using ONLY these allowed result IDs:
-        \(request.allowedPlaceIds.joined(separator: ", "))
-
-        Query: \(request.query)
-        Output language: \(request.outputLanguage.serviceOutputInstruction)
-        Sections:
-        \(sectionSummary(request.sections))
-
-        Rules:
-        - Recommend one best place first.
-        - Answer in the output language exactly, even if the query is written in a different language.
-        - Sound like a concise assistant, not a debug report. Do not use headings like "Why:" or "Next:".
-        - Explain why using saved/visited/review/public labels, distance, rating, review count, and evidence below.
-        - If the query asks for a specific item such as boba or milk tea, only call a place a match when its title or evidence explicitly mentions that item. Do not treat generic cafes or coffee shops as boba/milk-tea matches.
-        - Ask at most one lightweight follow-up, such as budget, cuisine, quick vs sit-down, or mood.
-        - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
-        - Do not introduce places outside the allowed result IDs.
-        - Keep it under 70 words.
-        """
+        let prompt = promptPolicy.groundedAnswerPrompt(for: request)
         return try await generateText(prompt: prompt, temperature: 0.2, maxOutputTokens: 384)
-    }
-
-    private func sectionSummary(_ sections: [SaveSearchSection]) -> String {
-        sections.map { section in
-            let rows = section.results.prefix(5).map { result in
-                let evidence = result.evidence.prefix(3).joined(separator: " | ")
-                let facts = [
-                    "id=\(result.id)",
-                    "title=\(result.title)",
-                    "state=\(result.objectType.displayName)/\(result.userState.displayName)",
-                    result.distanceLabel.map { "distance=\($0)" },
-                    result.rating.map { String(format: "rating=%.1f", $0) },
-                    result.reviewCount.map { "reviews=\($0)" },
-                    evidence.isEmpty ? nil : "evidence=\(evidence)"
-                ].compactMap { $0 }
-                return "  - " + facts.joined(separator: "; ")
-            }
-            return "- \(section.title):\n\(rows.isEmpty ? "  - none" : rows.joined(separator: "\n"))"
-        }
-        .joined(separator: "\n")
     }
 
     private func generateText(prompt: String, temperature: Double, maxOutputTokens: Int) async throws -> String {

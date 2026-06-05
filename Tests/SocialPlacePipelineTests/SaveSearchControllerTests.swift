@@ -600,6 +600,94 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.messageText, "目前還沒有載入地圖章。先保存或匯入地點，再請我幫你規劃。")
     }
 
+    func testAgentPromptPolicyCarriesSaveSoulAndBoundaries() {
+        let policy = SaveAgentPromptPolicy()
+        let result = SaveSearchResult(
+            id: "place-saved-hot-pot",
+            objectType: .savedPlace,
+            userState: .wantToGo,
+            title: "Happy Lamb Hot Pot",
+            subtitle: "Irvine, CA",
+            statusLabel: "Map Stamp",
+            sourceURL: nil,
+            sourcePlatform: .googleMaps,
+            category: .food,
+            cityOrArea: "Irvine",
+            latitude: 33.6846,
+            longitude: -117.8265,
+            rating: 4.7,
+            reviewCount: 800,
+            confidence: nil,
+            missingInfo: [],
+            evidence: ["Saved evidence matches hot pot", "Distance: 700 m", "Search: hot pot"],
+            recoveryQueries: [],
+            createdAt: Date(),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .recommendOrder,
+            distanceMeters: 700
+        )
+        let request = GroundedAnswerRequest(
+            query: "推薦我附近火鍋",
+            intent: SaveSearchIntentParser().parse("推薦我附近火鍋")!,
+            allowedPlaceIds: [result.id],
+            sections: [
+                SaveSearchSection(
+                    id: "from-your-save-nearby",
+                    label: "FROM YOUR SAV-E",
+                    title: "From your SAV-E nearby",
+                    subtitle: "Memory first",
+                    results: [result]
+                )
+            ],
+            outputLanguage: .traditionalChinese
+        )
+
+        let prompt = policy.groundedAnswerPrompt(for: request)
+
+        XCTAssertTrue(prompt.contains("cute place-memory scout"))
+        XCTAssertTrue(prompt.contains("private place memory first"))
+        XCTAssertTrue(prompt.contains("public discovery second"))
+        XCTAssertTrue(prompt.contains("Keep Saved Map Stamps, Review Candidates, Source-only clues, and Public Discovery separate."))
+        XCTAssertTrue(prompt.contains("Use ONLY allowed result IDs"))
+        XCTAssertTrue(prompt.contains("Do not introduce or invent places outside the allowed results."))
+        XCTAssertTrue(prompt.contains("Evidence lines starting with \"Search:\" are retrieval context"))
+        XCTAssertTrue(prompt.contains("Do not treat generic restaurants as hot pot matches."))
+        XCTAssertTrue(prompt.contains("Answer in the requested output language exactly."))
+        XCTAssertTrue(prompt.contains("place-saved-hot-pot"))
+        XCTAssertTrue(prompt.contains("Happy Lamb Hot Pot"))
+        XCTAssertTrue(prompt.contains("Search: hot pot"))
+    }
+
+    func testAgentPromptPolicyHandlesNoAllowedResultsAsBoundedFollowUp() {
+        let policy = SaveAgentPromptPolicy()
+        let request = GroundedAnswerRequest(
+            query: "推薦我附近奶茶",
+            intent: SaveSearchIntentParser().parse("推薦我附近奶茶")!,
+            allowedPlaceIds: [],
+            sections: [
+                SaveSearchSection(
+                    id: "nearby-unsaved-candidates",
+                    label: "PUBLIC DISCOVERY",
+                    title: "Public nearby options",
+                    subtitle: "Public discovery is explicit fallback only.",
+                    results: [],
+                    emptyMessage: "Search public nearby options only if you want places outside your SAV-E memory.",
+                    showsNearbySearchAction: true
+                )
+            ],
+            outputLanguage: .traditionalChinese
+        )
+
+        let prompt = policy.groundedAnswerPrompt(for: request)
+
+        XCTAssertTrue(prompt.contains("Allowed result IDs:\nnone"))
+        XCTAssertTrue(prompt.contains("If there are no allowed result IDs, do not name a place."))
+        XCTAssertTrue(prompt.contains("ask one bounded follow-up"))
+        XCTAssertTrue(prompt.contains("action=can_search_public_nearby"))
+        XCTAssertTrue(prompt.contains("Do not treat generic cafes or coffee shops as boba or milk-tea matches."))
+    }
+
     @MainActor
     func testDrawerPreparedPublicDiscoveryUsesGroundedAnswerClient() async {
         let client = StubGroundedAnswerClient(answer: "I would try Bright Coffee Bar first because it is nearby, highly rated, and still unsaved. Want quiet or quick?")
