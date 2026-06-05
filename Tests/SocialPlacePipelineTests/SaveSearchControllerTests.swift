@@ -274,6 +274,58 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results.first?.evidence.contains { $0.contains("milk tea") } == true)
     }
 
+    func testHotPotQueryRequiresSpecificHotPotEvidence() throws {
+        let controller = SaveSearchController()
+        let response = controller.search(
+            query: "推薦我附近火鍋",
+            places: [
+                place(
+                    name: "Generic Dinner",
+                    address: "Irvine, CA",
+                    category: .food,
+                    note: "Modern American dinner"
+                ),
+                place(
+                    name: "Happy Lamb Hot Pot",
+                    address: "Irvine, CA",
+                    category: .food,
+                    note: "Mongolian hot pot"
+                )
+            ],
+            localRecords: [],
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Fonda Moderna",
+                    subtitle: "1705 Flight Way, Tustin, CA",
+                    latitude: 33.6846,
+                    longitude: -117.8265,
+                    category: .food,
+                    rating: 4.4,
+                    reviewCount: 200,
+                    distanceMeters: 520,
+                    evidence: ["Google Places result", "Search: hot pot"]
+                ),
+                SaveMapCandidate(
+                    title: "All That Shabu",
+                    subtitle: "Irvine, CA",
+                    latitude: 33.6848,
+                    longitude: -117.8266,
+                    category: .food,
+                    rating: 4.7,
+                    reviewCount: 800,
+                    distanceMeters: 700,
+                    evidence: ["Google Places result", "Search: hot pot"]
+                )
+            ]
+        )
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Happy Lamb Hot Pot"])
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["All That Shabu"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Generic Dinner"))
+        XCTAssertFalse(response.newRecommendations.results.map(\.title).contains("Fonda Moderna"))
+        XCTAssertEqual(controller.specialtyMapCandidateQuery(for: "推薦我附近火鍋"), "hot pot")
+    }
+
     func testNewRecommendationQueryShowsUnsavedShellWhenNoSavedMatch() throws {
         let controller = SaveSearchController()
         let response = controller.search(query: "推薦新的奶茶店", places: [], localRecords: [])

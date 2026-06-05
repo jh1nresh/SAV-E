@@ -129,6 +129,60 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.placeIds.contains(dinner.id.uuidString))
     }
 
+    func testNearbyHotPotRequiresSpecificEvidenceBeforeGenericFood() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let genericRestaurant = place(
+            name: "Fonda Moderna",
+            category: .food,
+            latitude: 33.6847,
+            longitude: -117.8266,
+            note: "Mexican restaurant"
+        )
+        let hotPot = place(
+            name: "Happy Lamb Hot Pot",
+            category: .food,
+            latitude: 33.6848,
+            longitude: -117.8267,
+            note: "Mongolian hot pot"
+        )
+        let unsavedWrongFood = SaveMapCandidate(
+            title: "Aloha Hawaiian BBQ",
+            subtitle: "Tustin, CA",
+            latitude: 33.6849,
+            longitude: -117.8268,
+            category: .food,
+            rating: 4.4,
+            reviewCount: 300,
+            distanceMeters: 300,
+            evidence: ["Google Places result", "Search: hot pot"]
+        )
+        let unsavedHotPot = SaveMapCandidate(
+            title: "All That Shabu",
+            subtitle: "Irvine, CA",
+            latitude: 33.6850,
+            longitude: -117.8269,
+            category: .food,
+            rating: 4.7,
+            reviewCount: 800,
+            distanceMeters: 350,
+            evidence: ["Google Places result", "Search: hot pot"]
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近火鍋",
+            places: [genericRestaurant, hotPot],
+            mapCandidates: [unsavedWrongFood, unsavedHotPot],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Happy Lamb Hot Pot"])
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["All That Shabu"])
+        XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Fonda Moderna"))
+        XCTAssertFalse(response.newRecommendations.results.map(\.title).contains("Aloha Hawaiian BBQ"))
+        XCTAssertEqual(response.resolvedAgentAnswer?.grounding.allowedResultIDs, ["place-\(hotPot.id.uuidString)"])
+    }
+
     func testCoffeeCravingTodayRequiresCurrentLocation() throws {
         let service = SaveLocationIntentRecommendationService()
 
