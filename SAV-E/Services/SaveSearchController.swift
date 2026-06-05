@@ -17,6 +17,10 @@ struct SaveSearchController {
         SaveSearchQuery(rawValue: rawQuery).exactMapCandidateQuery
     }
 
+    func specialtyMapCandidateQuery(for rawQuery: String) -> String? {
+        SaveSearchQuery(rawValue: rawQuery).specialtyMapCandidateQuery
+    }
+
     func makeSaveDraft(from result: SaveSearchResult) -> SavePlaceDraft? {
         let title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard
@@ -109,7 +113,11 @@ struct SaveSearchController {
             .map(makeMapCandidateResult)
             .filter { result in
                 if !query.categories.isEmpty, let category = result.category {
-                    return query.categories.contains(category)
+                    guard query.categories.contains(category) else { return false }
+                    if query.intent?.requiresSpecificEvidenceMatch == true {
+                        return query.matches(result)
+                    }
+                    return query.terms.isEmpty || query.matches(result)
                 }
                 return query.matches(result) || query.terms.isEmpty
             }
@@ -466,6 +474,7 @@ private struct SaveSearchQuery {
     let wantsPublicDiscovery: Bool
     let wantsMapCandidatePreparation: Bool
     let exactMapCandidateQuery: String?
+    let specialtyMapCandidateQuery: String?
     let stableIDFragment: String
 
     init(rawValue: String) {
@@ -500,6 +509,7 @@ private struct SaveSearchQuery {
         wantsNewRecommendations = containsRecommendationKeyword || containsCravingIntent
         stableIDFragment = Self.makeStableIDFragment(from: normalizedRaw)
         terms = Self.parseTerms(from: normalizedRaw, intent: intent)
+        specialtyMapCandidateQuery = intent?.publicSearchQuery
         exactMapCandidateQuery = Self.exactMapCandidateQuery(
             rawValue: self.rawValue,
             normalizedRaw: normalizedRaw,
@@ -734,13 +744,33 @@ private struct SaveIntentQuery {
     let id: String
     let categories: Set<PlaceCategory>
     let needles: [String]
+    let publicSearchQuery: String?
+
+    init(
+        id: String,
+        categories: Set<PlaceCategory>,
+        needles: [String],
+        publicSearchQuery: String? = nil
+    ) {
+        self.id = id
+        self.categories = categories
+        self.needles = needles
+        self.publicSearchQuery = publicSearchQuery
+    }
 
     static func parse(from normalizedQuery: String) -> SaveIntentQuery? {
         let specs: [SaveIntentQuery] = [
             SaveIntentQuery(
                 id: "milk-tea",
                 categories: [.cafe],
-                needles: ["milk tea", "boba", "bubble tea", "奶茶", "珍奶", "珍珠奶茶"]
+                needles: ["milk tea", "boba", "bubble tea", "奶茶", "珍奶", "珍珠奶茶"],
+                publicSearchQuery: "boba milk tea"
+            ),
+            SaveIntentQuery(
+                id: "hot-pot",
+                categories: [.food],
+                needles: ["hot pot", "hotpot", "shabu", "shabu shabu", "火鍋", "火锅", "涮涮鍋", "涮涮锅"],
+                publicSearchQuery: "hot pot"
             ),
             SaveIntentQuery(
                 id: "coffee",
@@ -774,7 +804,7 @@ private struct SaveIntentQuery {
     }
 
     func matches(_ result: SaveSearchResult) -> Bool {
-        let haystack = SaveSearchQuery.normalize(result.searchText)
+        let haystack = SaveSearchQuery.normalize(requiresSpecificEvidenceMatch ? specificEvidenceText(for: result) : result.searchText)
         return needles.contains { SaveSearchQuery.term($0, matches: haystack) }
     }
 
@@ -790,12 +820,31 @@ private struct SaveIntentQuery {
     }
 
     var requiresSpecificEvidenceMatch: Bool {
-        id == "milk-tea"
+        id == "milk-tea" || id == "hot-pot"
     }
 
     func isIntentToken(_ token: String) -> Bool {
         needles.contains { needle in
             token == needle || token.contains(needle) || needle.contains(token)
         }
+    }
+
+    private func specificEvidenceText(for result: SaveSearchResult) -> String {
+        let evidence = result.evidence.filter { line in
+            line.trimmingCharacters(in: .whitespacesAndNewlines)
+                .range(of: "search:", options: [.caseInsensitive, .anchored]) == nil
+        }
+        return [
+            result.title,
+            result.subtitle,
+            result.statusLabel,
+            result.sourcePlatform?.displayName,
+            result.cityOrArea,
+            result.missingInfo.joined(separator: " "),
+            evidence.joined(separator: " "),
+            result.recoveryQueries.joined(separator: " ")
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
     }
 }

@@ -18,6 +18,15 @@
     }
   },
   {
+    "query": "推薦我附近火鍋",
+    "expected": {
+      "requiredCategories": ["food"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true
+    }
+  },
+  {
     "query": "coffee in LA",
     "expected": {
       "requiredCategories": ["cafe"],

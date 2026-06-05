@@ -1042,6 +1042,17 @@ final class MapViewModel: ObservableObject {
         } else {
             searchCenter = nil
         }
+        if let specialtyQuery = saveSearchController.specialtyMapCandidateQuery(for: query) {
+            let candidates = await mapCandidateSearchService.searchCandidates(
+                matching: specialtyQuery,
+                near: searchCenter,
+                span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+                excluding: places
+            )
+            mapCandidates = candidates
+            selectedMapCandidate = candidates.first
+            return candidates
+        }
         let categories = saveSearchController.mapCandidateCategories(for: query)
         if !categories.isEmpty {
             selectedCategories = categories

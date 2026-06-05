@@ -115,7 +115,8 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         - Answer in the output language exactly, even if the query is written in a different language.
         - Sound like a concise assistant, not a debug report. Do not use headings like "Why:" or "Next:".
         - Explain why using saved/visited/review/public labels, distance, rating, review count, and evidence below.
-        - If the query asks for a specific item such as boba or milk tea, only call a place a match when its title or evidence explicitly mentions that item. Do not treat generic cafes or coffee shops as boba/milk-tea matches.
+        - If the query asks for a specific item such as hot pot, shabu, boba, or milk tea, only call a place a match when its title, address, or non-search evidence explicitly mentions that item. Do not treat generic restaurants, cafes, or coffee shops as specific-item matches.
+        - Evidence lines starting with "Search:" are retrieval context, not proof that the place serves the requested item.
         - Ask at most one lightweight follow-up, such as budget, cuisine, quick vs sit-down, or mood.
         - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
         - Do not introduce places outside the allowed result IDs.
