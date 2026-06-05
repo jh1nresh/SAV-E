@@ -3253,9 +3253,9 @@ private struct SavedPlacesEmptyState: View {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: isFiltered ? "line.3.horizontal.decrease.circle" : "sparkles")
                     .font(.system(size: 18, weight: .black))
-                    .foregroundColor(.black)
+                    .foregroundColor(SaveTheme.Colors.nearBlack)
                     .frame(width: 42, height: 42)
-                    .background(Color.saveCream)
+                    .background(SaveTheme.Colors.cream)
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -3263,14 +3263,14 @@ private struct SavedPlacesEmptyState: View {
                          ? languageSettings.localized(english: "No matching Map Stamps", traditionalChinese: "沒有符合條件的地圖章")
                          : languageSettings.localized(english: "Start your place memory", traditionalChinese: "開始你的地點記憶"))
                         .font(.headline.weight(.black))
-                        .foregroundColor(.saveCream)
+                        .foregroundColor(SaveTheme.Colors.cream)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(isFiltered
                          ? languageSettings.localized(english: "Clear filters to show every saved place.", traditionalChinese: "清除篩選即可顯示所有已保存地點。")
                          : languageSettings.localized(english: "Share a post, map link, screenshot, or message. SAV-E keeps it in Review before saving a Map Stamp.", traditionalChinese: "分享貼文、地圖連結、截圖或訊息。SAV-E 會先放進 Review，再確認成地圖章。"))
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.saveCream.opacity(0.72))
+                        .foregroundColor(SaveTheme.Colors.cream.opacity(0.72))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -3279,26 +3279,20 @@ private struct SavedPlacesEmptyState: View {
                 HStack(spacing: 10) {
                     Button(action: onReview) {
                         Label(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"), systemImage: "checklist.unchecked")
-                            .font(.caption.weight(.black))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 38)
-                            .background(Color.saveCream)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SaveBrandPrimaryButtonStyle())
 
                     Button(action: onAsk) {
                         Label(languageSettings.localized(english: "Ask saved", traditionalChinese: "問已保存"), systemImage: "sparkles")
-                            .font(.caption.weight(.black))
-                            .foregroundColor(.saveCream)
+                            .font(SaveTheme.Typography.cta)
+                            .foregroundColor(SaveTheme.Colors.cream)
                             .frame(maxWidth: .infinity)
                             .frame(height: 38)
                             .background(Color.white.opacity(0.10))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.saveCream.opacity(0.18), lineWidth: 1)
+                                    .stroke(SaveTheme.Colors.cream.opacity(0.18), lineWidth: 1)
                             )
                     }
                     .buttonStyle(.plain)
@@ -3307,11 +3301,11 @@ private struct SavedPlacesEmptyState: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.90))
+        .background(SaveTheme.Colors.nearBlack.opacity(0.90))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.saveCream.opacity(0.16), lineWidth: 1)
+                .stroke(SaveTheme.Colors.cream.opacity(0.16), lineWidth: 1)
         )
     }
 }
