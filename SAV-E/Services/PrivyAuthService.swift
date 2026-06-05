@@ -32,7 +32,7 @@ enum AuthError: LocalizedError {
 final class PrivyAuthService: ObservableObject {
     static let shared = PrivyAuthService()
 
-    let privy: Privy
+    private let privy: Privy?
     @Published var authState: AuthState = .unknown
     private var pendingEmail: String?
     private let appId: String
@@ -54,8 +54,15 @@ final class PrivyAuthService: ObservableObject {
         let clientId = SAVEProductionConfig.configValue(for: ["PRIVY_APP_CLIENT_ID"]) ?? ""
         self.appId = appId
         self.clientId = clientId
-        let config   = PrivyConfig(appId: appId, appClientId: clientId)
-        self.privy   = PrivySdk.initialize(config: config)
+
+        guard !appId.isEmpty, !clientId.isEmpty else {
+            self.privy = nil
+            self.authState = .unauthenticated
+            return
+        }
+
+        let config = PrivyConfig(appId: appId, appClientId: clientId)
+        self.privy = PrivySdk.initialize(config: config)
 
         observeAuthState()
         Task { await restoreSession() }
@@ -68,6 +75,10 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Session Restore
 
     func restoreSession() async {
+        guard let privy else {
+            authState = .unauthenticated
+            return
+        }
         let state = await privy.getAuthState()
         applyPrivyState(state)
     }
@@ -75,7 +86,8 @@ final class PrivyAuthService: ObservableObject {
     private func observeAuthState() {
         authStateTask = Task { [weak self] in
             guard let self else { return }
-            for await state in self.privy.authStateStream {
+            guard let privy = self.privy else { return }
+            for await state in privy.authStateStream {
                 self.applyPrivyState(state)
             }
         }
@@ -84,7 +96,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Apple
 
     func signInWithApple() async throws {
-        try validateConfig()
+        let privy = try validatedPrivy()
         let user = try await privy.oAuth.login(with: .apple)
         authState = .authenticated(userId: user.id)
     }
@@ -92,7 +104,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Google
 
     func signInWithGoogle() async throws {
-        try validateConfig()
+        let privy = try validatedPrivy()
         let user = try await privy.oAuth.login(with: .google)
         authState = .authenticated(userId: user.id)
     }
@@ -100,12 +112,13 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Email OTP
 
     func signInWithEmail(_ email: String) async throws {
-        try validateConfig()
+        let privy = try validatedPrivy()
         pendingEmail = email
         try await privy.email.sendCode(to: email)
     }
 
     func verifyEmailCode(_ code: String) async throws {
+        let privy = try validatedPrivy()
         guard let email = pendingEmail else { throw AuthError.invalidCode }
         let user = try await privy.email.loginWithCode(code, sentTo: email)
         pendingEmail = nil
@@ -115,12 +128,17 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        guard let privy else {
+            authState = .unauthenticated
+            return
+        }
         let user = await privy.getUser()
         await user?.logout()
         authState = .unauthenticated
     }
 
     func accessToken() async throws -> String {
+        let privy = try validatedPrivy()
         guard let user = await privy.getUser() else { throw AuthError.signInFailed("No authenticated user") }
         return try await user.getAccessToken()
     }
@@ -143,6 +161,14 @@ final class PrivyAuthService: ObservableObject {
     private func validateConfig() throws {
         if appId.isEmpty { throw AuthError.missingPrivyConfig("PRIVY_APP_ID") }
         if clientId.isEmpty { throw AuthError.missingPrivyConfig("PRIVY_APP_CLIENT_ID") }
+    }
+
+    private func validatedPrivy() throws -> Privy {
+        try validateConfig()
+        guard let privy else {
+            throw AuthError.missingPrivyConfig("PRIVY_APP_ID / PRIVY_APP_CLIENT_ID")
+        }
+        return privy
     }
 }
 
