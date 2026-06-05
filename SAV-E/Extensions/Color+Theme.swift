@@ -1,6 +1,53 @@
 import SwiftUI
 import UIKit
 
+enum SaveTheme {
+    enum Colors {
+        static let nearBlack = Color(hex: "050403")
+        static let cream = Color(hex: "FFF5E7")
+        static let mint = Color(hex: "C8EBCF")
+        static let amber = Color(hex: "FFD66B")
+    }
+
+    enum Motion {
+        static let breathingDuration: TimeInterval = 2.8
+        static let standardResponse: Double = 0.52
+        static let standardDamping: Double = 0.86
+
+        static var breathing: Animation {
+            .easeInOut(duration: breathingDuration).repeatForever(autoreverses: true)
+        }
+
+        static var standardSpring: Animation {
+            .spring(response: standardResponse, dampingFraction: standardDamping)
+        }
+    }
+
+    enum Typography {
+        static let brandTitle = Font.system(size: 64, weight: .black, design: .rounded)
+        static let entryTitle = Font.title3.weight(.black)
+        static let cta = Font.caption.weight(.black)
+        static let eyebrow = Font.caption2.weight(.black)
+    }
+}
+
+struct SaveBrandPrimaryButtonStyle: ButtonStyle {
+    var fill: Color = SaveTheme.Colors.cream
+    var foreground: Color = SaveTheme.Colors.nearBlack
+    var cornerRadius: CGFloat = 12
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(SaveTheme.Typography.cta)
+            .foregroundColor(foreground)
+            .frame(maxWidth: .infinity)
+            .frame(height: 38)
+            .background(fill.opacity(configuration.isPressed ? 0.82 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .animation(SaveTheme.Motion.standardSpring, value: configuration.isPressed)
+    }
+}
+
 extension Color {
     // MARK: - SAV-E Memo Scrapbook Theme
     static let saveCream = Color(light: "FFF5E7", dark: "15191F")

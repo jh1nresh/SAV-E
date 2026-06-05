@@ -113,7 +113,7 @@ struct OnboardingView: View {
             .disabled(stage == .language)
         }
         .padding(.bottom, 22)
-        .background(isBrandEntryStage ? Color.black.opacity(0.82) : Color.saveNotebookPage.opacity(0.72))
+        .background(isBrandEntryStage ? SaveTheme.Colors.nearBlack.opacity(0.82) : Color.saveNotebookPage.opacity(0.72))
     }
 
     private var primaryActionTitle: String {
@@ -135,7 +135,7 @@ struct OnboardingView: View {
 
     private var primaryActionFill: Color {
         switch stage {
-        case .language: return .saveCream
+        case .language: return SaveTheme.Colors.cream
         case .clue, .candidate: return .saveHoney
         case .mapStamp: return .saveMint
         case .ask, .tag: return .saveSky
@@ -144,7 +144,7 @@ struct OnboardingView: View {
 
     private var primaryActionForeground: Color {
         switch stage {
-        case .language: return .black
+        case .language: return SaveTheme.Colors.nearBlack
         default: return .saveInk
         }
     }
@@ -271,12 +271,12 @@ private enum ProofIntentTag: String, CaseIterable {
 private struct SaveBrandEntryBackground: View {
     var body: some View {
         ZStack {
-            Color.black
+            SaveTheme.Colors.nearBlack
 
             LinearGradient(
                 colors: [
                     Color(red: 0.06, green: 0.05, blue: 0.04),
-                    Color.black,
+                    SaveTheme.Colors.nearBlack,
                     Color(red: 0.02, green: 0.03, blue: 0.025)
                 ],
                 startPoint: .topLeading,
@@ -284,21 +284,21 @@ private struct SaveBrandEntryBackground: View {
             )
 
             RadialGradient(
-                colors: [Color.saveMint.opacity(0.22), .clear],
+                colors: [SaveTheme.Colors.mint.opacity(0.22), .clear],
                 center: .topTrailing,
                 startRadius: 20,
                 endRadius: 360
             )
 
             RadialGradient(
-                colors: [Color.saveHoney.opacity(0.20), .clear],
+                colors: [SaveTheme.Colors.amber.opacity(0.20), .clear],
                 center: .bottomLeading,
                 startRadius: 30,
                 endRadius: 420
             )
 
             Canvas { context, size in
-                let dotColor = Color.saveCream.opacity(0.08)
+                let dotColor = SaveTheme.Colors.cream.opacity(0.08)
                 for row in stride(from: 0, through: size.height, by: 18) {
                     for column in stride(from: 0, through: size.width, by: 18) {
                         let rect = CGRect(x: column, y: row, width: 2, height: 2)
@@ -318,32 +318,32 @@ private struct BrandEntryHero: View {
         VStack(spacing: 18) {
             HStack {
                 Text(localized(english: "PUBLIC iOS BETA", traditionalChinese: "公開 iOS Beta"))
-                    .font(.caption2.weight(.black))
-                    .foregroundColor(.saveCream)
+                    .font(SaveTheme.Typography.eyebrow)
+                    .foregroundColor(SaveTheme.Colors.cream)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Color.white.opacity(0.10))
                     .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.saveCream.opacity(0.16), lineWidth: 1))
+                    .overlay(Capsule().stroke(SaveTheme.Colors.cream.opacity(0.16), lineWidth: 1))
 
                 Spacer()
             }
 
             ZStack {
                 Circle()
-                    .fill(Color.saveCream.opacity(0.08))
+                    .fill(SaveTheme.Colors.cream.opacity(0.08))
                     .frame(width: 138, height: 138)
                     .scaleEffect(isBreathing ? 1.06 : 0.96)
-                    .animation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true), value: isBreathing)
+                    .animation(SaveTheme.Motion.breathing, value: isBreathing)
 
                 MemoMascotMark(size: 96, framed: true)
-                    .shadow(color: Color.saveHoney.opacity(0.30), radius: 26, x: 0, y: 14)
+                    .shadow(color: SaveTheme.Colors.amber.opacity(0.30), radius: 26, x: 0, y: 14)
             }
 
             VStack(spacing: 10) {
                 Text("SAV-E")
-                    .font(.system(size: 64, weight: .black, design: .rounded))
-                    .foregroundColor(.saveCream)
+                    .font(SaveTheme.Typography.brandTitle)
+                    .foregroundColor(SaveTheme.Colors.cream)
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.72)
 
@@ -351,8 +351,8 @@ private struct BrandEntryHero: View {
                     english: "Your private place memory scout.",
                     traditionalChinese: "你的私人地點記憶 scout。"
                 ))
-                .font(.title3.weight(.black))
-                .foregroundColor(.saveCream.opacity(0.92))
+                .font(SaveTheme.Typography.entryTitle)
+                .foregroundColor(SaveTheme.Colors.cream.opacity(0.92))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -362,7 +362,7 @@ private struct BrandEntryHero: View {
                 ))
                 .font(.subheadline.weight(.semibold))
                 .lineSpacing(3)
-                .foregroundColor(.saveCream.opacity(0.68))
+                .foregroundColor(SaveTheme.Colors.cream.opacity(0.68))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -372,7 +372,7 @@ private struct BrandEntryHero: View {
                 Label(localized(english: "Ask saved", traditionalChinese: "問已保存"), systemImage: "sparkles")
             }
             .font(.caption.weight(.black))
-            .foregroundColor(.saveCream.opacity(0.82))
+            .foregroundColor(SaveTheme.Colors.cream.opacity(0.82))
         }
         .padding(.top, 18)
         .padding(.bottom, 6)
