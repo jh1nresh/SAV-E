@@ -263,14 +263,27 @@ private struct SaveSearchResultNotebookRow: View {
             .buttonStyle(.plain)
             .disabled(!canOpenDetails)
 
-            HStack(spacing: 6) {
-                SaveSearchStateChip(text: result.objectType.displayName(language: languageSettings.language), fill: typeFill)
-                SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveSky : .saveMint)
-                if let category = result.category {
-                    SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveSignal)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    SaveSearchStateChip(text: result.objectType.displayName(language: languageSettings.language), fill: typeFill)
+                    SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveSky : .saveMint)
+                    if let category = result.category {
+                        SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveSignal)
+                    }
                 }
-                if let distanceLabel = result.distanceLabel {
-                    SaveSearchStateChip(text: distanceLabel, fill: .saveHoney)
+
+                if hasPlaceMetadata {
+                    HStack(spacing: 6) {
+                        if let ratingLabel {
+                            SaveSearchStateChip(text: ratingLabel, fill: .saveHoney)
+                        }
+                        if let reviewsLabel {
+                            SaveSearchStateChip(text: reviewsLabel, fill: .saveNotebookPage)
+                        }
+                        if let distanceLabel = result.distanceLabel {
+                            SaveSearchStateChip(text: distanceLabel, fill: .saveHoney)
+                        }
+                    }
                 }
             }
 
@@ -329,8 +342,8 @@ private struct SaveSearchResultNotebookRow: View {
     }
 
     private var compactReason: String? {
-        if let distanceLabel = result.distanceLabel {
-            return distanceLabel
+        if let placeMetadataSummary {
+            return placeMetadataSummary
         }
         if result.objectType == .pendingCandidate {
             return languageSettings.localized(english: "Review before saving", traditionalChinese: "保存前請先確認")
@@ -342,6 +355,30 @@ private struct SaveSearchResultNotebookRow: View {
             return languageSettings.localized(english: "Public result, not saved yet", traditionalChinese: "公開結果，尚未保存")
         }
         return nil
+    }
+
+    private var hasPlaceMetadata: Bool {
+        ratingLabel != nil || reviewsLabel != nil || result.distanceLabel != nil
+    }
+
+    private var ratingLabel: String? {
+        result.rating.map { String(format: "★ %.1f", $0) }
+    }
+
+    private var reviewsLabel: String? {
+        guard let reviewCount = result.reviewCount else { return nil }
+        let compactCount = reviewCount >= 1_000
+            ? String(format: "%.1fk", Double(reviewCount) / 1_000)
+            : "\(reviewCount)"
+        return languageSettings.localized(
+            english: "\(compactCount) reviews",
+            traditionalChinese: "\(compactCount) 則評論"
+        )
+    }
+
+    private var placeMetadataSummary: String? {
+        let parts = [ratingLabel, reviewsLabel].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var compactReasonIcon: String {

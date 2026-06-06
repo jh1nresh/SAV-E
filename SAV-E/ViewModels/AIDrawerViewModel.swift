@@ -46,6 +46,7 @@ final class AIDrawerViewModel: ObservableObject {
     /// Multi-turn conversation context for the current session.
     private var conversationTurns: [ConversationTurn] = []
     private var activeRequestID: UUID?
+    private var lastSaveSearchResponse: SaveSearchResponse?
 
     init(
         aiService: SaveAIService = .shared,
@@ -67,6 +68,18 @@ final class AIDrawerViewModel: ObservableObject {
     ) async {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
+
+        if isFollowUpToLastSearch(trimmed),
+           let lastSaveSearchResponse,
+           let groundedAnswerClient {
+            await showSearchFollowUpResponse(
+                lastSaveSearchResponse,
+                query: trimmed,
+                outputLanguage: outputLanguage,
+                client: groundedAnswerClient
+            )
+            return
+        }
 
         if DeterministicTripPlanner().isItineraryRequest(trimmed) {
             await showTripPlanningResponse(query: trimmed, outputLanguage: outputLanguage)
@@ -237,6 +250,7 @@ final class AIDrawerViewModel: ObservableObject {
         query = ""
         mapCandidates = []
         conversationTurns = []
+        lastSaveSearchResponse = nil
         mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }
 
@@ -245,18 +259,21 @@ final class AIDrawerViewModel: ObservableObject {
         drawerState = .idle
         query = ""
         conversationTurns = []
+        lastSaveSearchResponse = nil
     }
 
     func returnToCommands() {
         activeRequestID = nil
         drawerState = .idle
         query = ""
+        lastSaveSearchResponse = nil
     }
 
     func cancelCurrentRequest() {
         activeRequestID = nil
         drawerState = .idle
         query = ""
+        lastSaveSearchResponse = nil
     }
 
     func showMessage(title: String, message: String) {
@@ -356,6 +373,41 @@ final class AIDrawerViewModel: ObservableObject {
         guard activeRequestID == requestID else { return }
         activeRequestID = nil
         drawerState = .saveSearchResults(groundedResponse)
+        lastSaveSearchResponse = groundedResponse
+        mapAction = mapAction(for: groundedResponse)
+    }
+
+    private func showSearchFollowUpResponse(
+        _ previousResponse: SaveSearchResponse,
+        query: String,
+        outputLanguage: AppLanguage,
+        client: SaveLLMClient
+    ) async {
+        let requestID = UUID()
+        activeRequestID = requestID
+        drawerState = .loading
+        mapAction = nil
+        rememberQuery(query)
+
+        let intent = SaveSearchIntentParser().parse(previousResponse.query) ?? SaveSearchIntent.followUpIntent(
+            rawText: previousResponse.query
+        )
+        let followUpQuery = """
+        Follow-up question: \(query)
+        Previous SAV-E query: \(previousResponse.query)
+        Explain or narrow only the previous visible results.
+        """
+        let groundedResponse = await previousResponse.withGroundedAnswer(
+            query: followUpQuery,
+            intent: intent,
+            outputLanguage: outputLanguage,
+            client: client
+        )
+
+        guard activeRequestID == requestID else { return }
+        activeRequestID = nil
+        drawerState = .saveSearchResults(groundedResponse)
+        lastSaveSearchResponse = groundedResponse
         mapAction = mapAction(for: groundedResponse)
     }
 
@@ -421,6 +473,37 @@ final class AIDrawerViewModel: ObservableObject {
             chatHistory.insert(ChatEntry(query: query, timestamp: Date()), at: 0)
             if chatHistory.count > 20 { chatHistory.removeLast() }
         }
+    }
+
+    private func isFollowUpToLastSearch(_ query: String) -> Bool {
+        guard lastSaveSearchResponse?.groundedAnswerGrounding.hasContext == true else { return false }
+        let normalized = SaveSearchIntentParser.normalize(query)
+        let followUpNeedles = [
+            "why", "explain", "reason", "these", "those", "which", "compare", "narrow",
+            "為什麼", "为什么", "推薦這些", "推荐这些", "這些", "这些", "哪個", "哪个",
+            "怎麼選", "怎么选", "原因", "比較", "比较", "不懂", "看不懂"
+        ]
+        return followUpNeedles.contains { normalized.contains($0) }
+    }
+}
+
+private extension SaveSearchIntent {
+    static func followUpIntent(rawText: String) -> SaveSearchIntent {
+        let normalized = SaveSearchIntentParser.normalize(rawText)
+        return SaveSearchIntent(
+            rawText: rawText,
+            normalizedText: normalized,
+            kind: .unknown,
+            requiredCategories: [],
+            optionalCategories: [],
+            locationMode: .unspecified,
+            sourceScope: .savedFirstAllowPublicFallback,
+            mustMatchCategory: false,
+            mustMatchLocation: false,
+            confidence: 0.5,
+            unsupportedCategoryLabel: nil,
+            categoryNeedles: []
+        )
     }
 }
 

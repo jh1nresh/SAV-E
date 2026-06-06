@@ -44,7 +44,7 @@ struct SaveAgentPromptPolicy {
     - Explain the reason using state, distance, rating/review count, and evidence.
     - Ask at most one lightweight follow-up question.
     - Do not use headings like "Why:" or "Next:".
-    - Keep it under 70 words.
+    - Keep it under 90 words and finish the final sentence.
     """
 
     func groundedAnswerPrompt(for request: GroundedAnswerRequest) -> String {
@@ -188,7 +188,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
 
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
         let prompt = promptPolicy.groundedAnswerPrompt(for: request)
-        return try await generateText(prompt: prompt, temperature: 0.2, maxOutputTokens: 384)
+        return try await generateText(prompt: prompt, temperature: 0.2, maxOutputTokens: 768)
     }
 
     private func generateText(prompt: String, temperature: Double, maxOutputTokens: Int) async throws -> String {

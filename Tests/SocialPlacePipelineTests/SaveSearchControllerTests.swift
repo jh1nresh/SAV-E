@@ -770,6 +770,41 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerSearchFollowUpUsesPreviousGroundedResults() async {
+        let client = StubGroundedAnswerClient(answer: "我會先選 Bright Coffee，因為最近、評分高，而且還沒有存進 SAV-E。你想要安靜坐一下還是快速外帶？")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let candidate = SaveMapCandidate(
+            title: "Bright Coffee",
+            subtitle: "Santa Ana, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            category: .cafe,
+            rating: 4.8,
+            reviewCount: 1200,
+            distanceMeters: 180,
+            evidence: ["Apple Maps result", "Title mentions coffee"]
+        )
+        drawer.mapCandidates = [candidate]
+        drawer.query = "coffee"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        drawer.query = "為什麼推薦這些"
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected follow-up save search results")
+        }
+        XCTAssertEqual(response.assistantMessage, client.answer)
+        XCTAssertEqual(client.requests.count, 2)
+        XCTAssertEqual(client.requests.last?.allowedPlaceIds, ["map-candidate-\(candidate.id)"])
+        XCTAssertTrue(client.requests.last?.query.contains("Follow-up question: 為什麼推薦這些") == true)
+        XCTAssertTrue(client.requests.last?.query.contains("Previous SAV-E query: coffee") == true)
+        XCTAssertEqual(client.requests.last?.sections.flatMap(\.results).first?.rating, 4.8)
+        XCTAssertEqual(client.requests.last?.sections.flatMap(\.results).first?.reviewCount, 1200)
+    }
+
+    @MainActor
     func testDrawerPreparedPublicDiscoveryKeepsRecommendationPathBounded() async {
         let client = StubGroundedAnswerClient(answer: "I would start with Saved Coffee, then compare Unsaved Coffee as public discovery.")
         let drawer = AIDrawerViewModel(
