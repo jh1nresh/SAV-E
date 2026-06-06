@@ -1132,7 +1132,7 @@ final class MapViewModel: ObservableObject {
                 excluding: places
             )
             mapCandidates = candidates
-            selectedMapCandidate = candidates.first
+            selectedMapCandidate = nil
             return candidates
         }
 
@@ -1156,7 +1156,7 @@ final class MapViewModel: ObservableObject {
                 excluding: places
             )
             mapCandidates = candidates
-            selectedMapCandidate = candidates.first
+            selectedMapCandidate = nil
             return candidates
         }
         let categories = saveSearchController.mapCandidateCategories(for: query)

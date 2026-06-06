@@ -151,6 +151,8 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         ])
         XCTAssertEqual(response.contextDisplaySections.map(\.id), ["saved-but-not-nearby"])
         XCTAssertTrue(response.assistantMessage?.contains("你的 SAV-E 記憶裡還沒有附近已保存咖啡廳") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("我會先看 Public Coffee") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("原因是") == true)
         XCTAssertFalse(response.assistantMessage?.contains("Public discovery") == true)
         XCTAssertFalse(response.assistantMessage?.contains("Saved Map Stamp") == true)
     }

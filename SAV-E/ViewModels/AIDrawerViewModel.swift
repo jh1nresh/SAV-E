@@ -576,7 +576,7 @@ private extension SaveSearchResponse {
             outputLanguage: outputLanguage
         )
 
-        guard grounding.hasContext else {
+        guard grounding.hasContext, shouldUseGroundedLLMAnswer else {
             return self
         }
 
@@ -590,6 +590,29 @@ private extension SaveSearchResponse {
         } catch {
             return self
         }
+    }
+
+    private var shouldUseGroundedLLMAnswer: Bool {
+        let savedOrReviewContext = saveUsedEvidenceSections.contains { section in
+            section.results.contains { result in
+                switch result.objectType {
+                case .savedPlace, .triedMemory, .pendingCandidate, .sourceOnlyClue:
+                    return true
+                default:
+                    return false
+                }
+            }
+        }
+        if savedOrReviewContext { return true }
+
+        // Public-only nearby discovery needs deterministic copy: first tell the user
+        // SAV-E has no matching memory, then show unsaved public candidates as a list.
+        // Letting Gemini rewrite this case repeatedly caused awkward one-place answers
+        // and made public results feel like SAV-E memories.
+        let publicOnlyResultCount = newRecommendations.results.filter { result in
+            result.objectType == .mapVisibleUnsavedPlace || result.objectType == .newRecommendation
+        }.count
+        return publicOnlyResultCount < 2
     }
 }
 

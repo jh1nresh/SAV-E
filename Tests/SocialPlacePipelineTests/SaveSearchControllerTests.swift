@@ -515,6 +515,91 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerPublicOnlyNearbyRecommendationKeepsDeterministicAnswerAndList() async {
+        let client = StubGroundedAnswerClient(answer: "Bad Gemini one-place answer")
+        let drawer = AIDrawerViewModel(
+            locationService: StubAIDrawerLocationProvider(
+                currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)
+            ),
+            groundedAnswerClient: client
+        )
+        drawer.places = []
+        drawer.mapCandidates = [
+            SaveMapCandidate(
+                title: "Tea Maru - Housemade Boba",
+                subtitle: "Santa Ana, CA",
+                latitude: 33.6900,
+                longitude: -117.8200,
+                category: .cafe,
+                rating: 3.6,
+                reviewCount: 37,
+                distanceMeters: 1_100,
+                evidence: ["Google Places result", "Search: boba milk tea"]
+            ),
+            SaveMapCandidate(
+                title: "Omomo Tea Shoppe",
+                subtitle: "Irvine, CA",
+                latitude: 33.6920,
+                longitude: -117.8190,
+                category: .cafe,
+                rating: 4.5,
+                reviewCount: 1_200,
+                distanceMeters: 1_800,
+                evidence: ["Google Places result", "boba milk tea"]
+            )
+        ]
+        drawer.query = "推薦我附近奶茶"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertTrue(client.requests.isEmpty)
+        XCTAssertEqual(response.resolvedAgentAnswer?.source, .deterministic)
+        XCTAssertTrue(response.assistantMessage?.contains("下面找到 2 個附近公開選項") == true)
+        XCTAssertFalse(response.assistantMessage?.contains("Tea Maru") == true)
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Omomo Tea Shoppe", "Tea Maru - Housemade Boba"])
+    }
+
+    func testPublicDiscoveryRankingPrefersQualityBeforeRawDistance() {
+        let service = SaveLocationIntentRecommendationService()
+        let response = service.recommendationSearchResponse(
+            for: "推薦我附近奶茶",
+            places: [],
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Near Low Rated Boba",
+                    subtitle: "Santa Ana, CA",
+                    latitude: 33.6900,
+                    longitude: -117.8200,
+                    category: .cafe,
+                    rating: 3.6,
+                    reviewCount: 37,
+                    distanceMeters: 500,
+                    evidence: ["boba milk tea"]
+                ),
+                SaveMapCandidate(
+                    title: "Better Boba",
+                    subtitle: "Irvine, CA",
+                    latitude: 33.6920,
+                    longitude: -117.8190,
+                    category: .cafe,
+                    rating: 4.5,
+                    reviewCount: 1_200,
+                    distanceMeters: 1_800,
+                    evidence: ["boba milk tea"]
+                )
+            ],
+            currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265),
+            outputLanguage: .traditionalChinese
+        )
+
+        XCTAssertEqual(response?.newRecommendations.results.map(\.title), ["Better Boba", "Near Low Rated Boba"])
+        XCTAssertTrue(response?.assistantMessage?.contains("下面找到 2 個附近公開選項") == true)
+    }
+
+    @MainActor
     func testDrawerUsesLLMParsedIntentWhenDeterministicParserMissesCategory() async {
         let parsedIntent = SaveSearchIntent(
             rawText: "where should i go for brunch nearby",
