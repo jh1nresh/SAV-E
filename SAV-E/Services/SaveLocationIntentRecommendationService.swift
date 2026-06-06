@@ -357,7 +357,7 @@ struct SaveLocationIntentRecommendationService {
                 subtitle: message,
                 results: nearbyResults,
                 emptyMessage: nearby.isEmpty ? message : nil,
-                showsNearbySearchAction: canSearchNearby
+                showsNearbySearchAction: false
         )
 
         var additional: [SaveSearchSection] = []
@@ -590,7 +590,7 @@ struct SaveLocationIntentRecommendationService {
         }
         if let top = savedResults.first {
             return agentAnswer(
-                lead: "我會先推 \(top.title)。",
+                lead: "I’d start with \(top.title).",
                 reason: reasonLine(for: top, fallback: "It is already a Saved Map Stamp in your place memory.", outputLanguage: outputLanguage),
                 caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: [], outputLanguage: outputLanguage))Public discovery stays separate below. If you want, tell me budget, cuisine, or quick vs sit-down and I’ll narrow it."
             )
@@ -598,7 +598,7 @@ struct SaveLocationIntentRecommendationService {
 
         if let top = reviewResults.first {
             return agentAnswer(
-                lead: "我不會直接亂推一個未確認地點；先看 \(top.title)。",
+                lead: "I would not promote an unconfirmed place as a saved recommendation; start by reviewing \(top.title).",
                 reason: reasonLine(for: top, fallback: "It is waiting in Review, so SAV-E has a clue but still needs confirmation.", outputLanguage: outputLanguage),
                 caveat: "Confirm it into a Map Stamp, or add a clue before trusting it as the recommendation."
             )
@@ -606,7 +606,7 @@ struct SaveLocationIntentRecommendationService {
 
         if let top = unsavedResults.first {
             return agentAnswer(
-                lead: "你的 SAV-E memory 裡還沒有 saved nearby \(categoryLabel)，但 public nearby 裡我會先看 \(top.title)。",
+                lead: "Your SAV-E memory does not have a saved nearby \(categoryLabel) yet, but I’d start with \(top.title) from public nearby options.",
                 reason: reasonLine(for: top, fallback: "It is a nearby public result, not saved memory yet.", outputLanguage: outputLanguage),
                 caveat: "Tell me budget or food mood, or save it first so SAV-E can remember whether you liked it later."
             )

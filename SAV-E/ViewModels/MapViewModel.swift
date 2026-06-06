@@ -604,13 +604,29 @@ final class MapViewModel: ObservableObject {
         for candidate in currentBatch {
             let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
             mirrorToLocalVault(refinedCandidate)
+            var run: PlaceRecoveryWorkflowRun?
             do {
+                let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                    sourceURL: refinedCandidate.sourceURL,
+                    sourceType: nil
+                )
+                run = createdRun
                 let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                try await supabaseService.createPlaceCandidate(refinedCandidate, captureId: captureId, userId: userId)
+                let candidateId = try await supabaseService.createPlaceCandidate(
+                    refinedCandidate,
+                    captureId: captureId,
+                    userId: userId,
+                    workflowRunId: createdRun.id
+                )
+                _ = try await supabaseService.recordPlaceRecoveryResult(
+                    placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
+                    for: createdRun.id
+                )
                 if runSourceRecovery && refinedCandidate.isSourceOnly {
-                    _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId)
+                    _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
                 }
             } catch {
+                await recordPlaceRecoveryFailureIfNeeded(run: run, candidate: refinedCandidate, error: error)
                 failedCandidates.append(candidate)
                 print("MapViewModel: failed to import review candidate \(candidate.candidateName): \(error)")
             }
@@ -636,11 +652,28 @@ final class MapViewModel: ObservableObject {
         var importedCount = candidates.count
         for candidate in candidates {
             mirrorToLocalVault(candidate)
-            let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
-            try await supabaseService.createPlaceCandidate(candidate, captureId: captureId, userId: userId)
-            if candidate.isSourceOnly {
-                let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId)
-                importedCount += recovered?.count ?? 0
+            var run: PlaceRecoveryWorkflowRun?
+            do {
+                let createdRun = try await supabaseService.createPlaceRecoveryRun(sourceURL: candidate.sourceURL, sourceType: nil)
+                run = createdRun
+                let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
+                let candidateId = try await supabaseService.createPlaceCandidate(
+                    candidate,
+                    captureId: captureId,
+                    userId: userId,
+                    workflowRunId: createdRun.id
+                )
+                _ = try await supabaseService.recordPlaceRecoveryResult(
+                    placeRecoveryResult(for: candidate, candidateId: candidateId),
+                    for: createdRun.id
+                )
+                if candidate.isSourceOnly {
+                    let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
+                    importedCount += recovered?.count ?? 0
+                }
+            } catch {
+                await recordPlaceRecoveryFailureIfNeeded(run: run, candidate: candidate, error: error)
+                throw error
             }
         }
         try await refreshReviewCandidates()
@@ -649,11 +682,13 @@ final class MapViewModel: ObservableObject {
 
     func confirmReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "confirmed", placeId: nil)
+        await recordPlaceRecoveryDecision(for: candidate, action: "confirm", reason: "User confirmed review candidate.")
         updateLocalCandidate(candidate.id, status: "confirmed")
     }
 
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "rejected", placeId: nil)
+        await recordPlaceRecoveryDecision(for: candidate, action: "reject", reason: "User rejected review candidate.")
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -674,6 +709,12 @@ final class MapViewModel: ObservableObject {
 
         try await supabaseService.savePlace(place, userId: userId)
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: place.id)
+        await recordPlaceRecoveryDecision(
+            for: candidate,
+            action: "confirm",
+            editedPayload: ["place_id": place.id.uuidString],
+            reason: "User saved review candidate as confirmed Map Stamp."
+        )
         mirrorToLocalVault(place)
         places = [place] + places
         reviewCandidates.removeAll { $0.id == candidate.id }
@@ -876,6 +917,65 @@ final class MapViewModel: ObservableObject {
         reviewCandidates[index].status = status
         if selectedReviewCandidate?.id == candidateId {
             selectedReviewCandidate = reviewCandidates[index]
+        }
+    }
+
+    private func placeRecoveryResult(for candidate: PendingReviewCandidate, candidateId: UUID) -> PlaceRecoveryResultDraft {
+        PlaceRecoveryResultDraft(
+            resultType: candidate.isSourceOnly ? "source_only_clue" : "review_candidate",
+            evidenceTier: candidate.isSourceOnly ? "weak" : (candidate.latitude != nil || !candidate.address.isEmpty ? "likely" : "weak"),
+            confidence: candidate.confidence,
+            evidenceRefs: placeRecoveryEvidenceRefs(for: candidate),
+            candidateRefs: [candidateId.uuidString],
+            technicalFailure: false
+        )
+    }
+
+    private func placeRecoveryEvidenceRefs(for candidate: PendingReviewCandidate) -> [String] {
+        var refs = candidate.evidence.prefix(4).map { "evidence:\($0)" }
+        if let sourceURL = candidate.sourceURL, !sourceURL.isEmpty {
+            refs.insert("source_url:\(sourceURL)", at: 0)
+        }
+        return Array(refs.prefix(5))
+    }
+
+    private func recordPlaceRecoveryDecision(
+        for candidate: PlaceReviewCandidate,
+        action: String,
+        editedPayload: [String: Any] = [:],
+        reason: String
+    ) async {
+        guard let runId = candidate.workflowRunId else { return }
+        do {
+            _ = try await supabaseService.recordPlaceRecoveryDecision(
+                PlaceRecoveryDecisionDraft(action: action, editedPayload: editedPayload, reason: reason),
+                for: runId
+            )
+        } catch {
+            print("MapViewModel: failed to record place recovery decision receipt for \(candidate.name): \(error)")
+        }
+    }
+
+    private func recordPlaceRecoveryFailureIfNeeded(
+        run: PlaceRecoveryWorkflowRun?,
+        candidate: PendingReviewCandidate,
+        error: Error
+    ) async {
+        guard let run else { return }
+        do {
+            _ = try await supabaseService.recordPlaceRecoveryResult(
+                PlaceRecoveryResultDraft(
+                    resultType: "technical_failure",
+                    evidenceTier: "none",
+                    confidence: 0,
+                    evidenceRefs: placeRecoveryEvidenceRefs(for: candidate) + ["error:\(error.localizedDescription)"],
+                    candidateRefs: [],
+                    technicalFailure: true
+                ),
+                for: run.id
+            )
+        } catch {
+            print("MapViewModel: failed to record place recovery technical failure for \(candidate.candidateName): \(error)")
         }
     }
 

@@ -5,7 +5,6 @@ struct SaveSearchResultsComponent: View {
     let response: SaveSearchResponse
     var onSelectResult: (SaveSearchResult) -> Void = { _ in }
     var onSearchNearby: () -> Void = {}
-    @State private var showsSupportingPlaces = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -15,8 +14,10 @@ struct SaveSearchResultsComponent: View {
             }
 
             if hasAssistantAnswer {
-                supportingPlacesDisclosure
-                ForEach(separateContextSections) { section in
+                ForEach(primaryAnswerSections) { section in
+                    sectionView(section)
+                }
+                ForEach(contextSections) { section in
                     sectionView(section, isVisuallySecondary: true)
                 }
             } else {
@@ -32,62 +33,16 @@ struct SaveSearchResultsComponent: View {
             .filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
     }
 
-    private var saveUsedEvidenceSections: [SaveSearchSection] {
-        response.saveUsedEvidenceSections
-            .filter { !$0.results.isEmpty }
+    private var primaryAnswerSections: [SaveSearchSection] {
+        response.primaryAnswerDisplaySections
     }
 
-    private var separateContextSections: [SaveSearchSection] {
-        response.secondaryDisplaySections
-            .filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
+    private var contextSections: [SaveSearchSection] {
+        response.contextDisplaySections
     }
 
     private var hasAssistantAnswer: Bool {
         response.assistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-    }
-
-    @ViewBuilder
-    private var supportingPlacesDisclosure: some View {
-        if saveUsedEvidenceSections.isEmpty {
-            EmptyView()
-        } else {
-            DisclosureGroup(isExpanded: $showsSupportingPlaces) {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(saveUsedEvidenceSections) { section in
-                        sectionView(section)
-                    }
-                }
-                .padding(.top, 8)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(.caption.weight(.black))
-                    Text(languageSettings.localized(english: "Show SAV-E memory used", traditionalChinese: "顯示 SAV-E 使用的記憶"))
-                        .font(.caption.weight(.black))
-                    Spacer(minLength: 0)
-                    Text("\(supportingResultCount)")
-                        .font(.caption2.weight(.black))
-                        .foregroundColor(.saveInk)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.saveHoney)
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
-                        .clipShape(Capsule())
-                }
-                .foregroundColor(.saveInk)
-                .padding(12)
-                .background(Color.saveNotebookPage.opacity(0.68))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.86), lineWidth: 1.2)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            }
-        }
-    }
-
-    private var supportingResultCount: Int {
-        saveUsedEvidenceSections.reduce(0) { $0 + $1.results.count }
     }
 
     @ViewBuilder
@@ -181,6 +136,10 @@ struct SaveSearchResultsComponent: View {
                 return languageSettings.localized(english: label, traditionalChinese: "來自你的 SAV-E")
             case "PUBLIC DISCOVERY":
                 return languageSettings.localized(english: label, traditionalChinese: "公開探索")
+            case "REVIEW CANDIDATES":
+                return languageSettings.localized(english: label, traditionalChinese: "待確認")
+            case "SAVED, FAR":
+                return languageSettings.localized(english: label, traditionalChinese: "已保存但較遠")
             default:
                 return label
             }

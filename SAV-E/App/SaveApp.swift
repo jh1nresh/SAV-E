@@ -454,6 +454,7 @@ struct SignInView: View {
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
+    @State private var showsSampleProof = false
     @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
@@ -473,7 +474,11 @@ struct SignInView: View {
                 SignInWorkflowStrip()
                     .padding(.horizontal, 22)
 
-                Spacer(minLength: 24)
+                sampleProofButton
+                    .padding(.horizontal, 22)
+                    .padding(.top, 14)
+
+                Spacer(minLength: 18)
 
                 VStack(spacing: 12) {
                     appleSignInButton
@@ -495,6 +500,11 @@ struct SignInView: View {
             Button(languageSettings.text(.ok)) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
+        }
+        .sheet(isPresented: $showsSampleProof) {
+            OnboardingView(startWithSampleProof: true) {
+                showsSampleProof = false
+            }
         }
     }
 
@@ -561,6 +571,42 @@ struct SignInView: View {
                     .stroke(Color.saveNotebookLine, lineWidth: 2)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sampleProofButton: some View {
+        Button {
+            showsSampleProof = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.headline.weight(.black))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.localized(
+                        english: "Try a sample coffee clue",
+                        traditionalChinese: "先看咖啡店範例"
+                    ))
+                    .font(.subheadline.weight(.black))
+                    Text(languageSettings.localized(
+                        english: "See clue, review, Map Stamp, then ask SAV-E.",
+                        traditionalChinese: "先看線索、確認、地圖章，再問 SAV-E。"
+                    ))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.black))
+            }
+            .foregroundColor(.saveInk)
+            .padding(14)
+            .background(Color.saveHoney.opacity(0.50))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }

@@ -214,13 +214,29 @@ final class PlaceListViewModel: ObservableObject {
                 print("PlaceListViewModel: failed to mirror review candidate to local vault: \(error)")
             }
 
+            var run: PlaceRecoveryWorkflowRun?
             do {
+                let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                    sourceURL: refinedCandidate.sourceURL,
+                    sourceType: nil
+                )
+                run = createdRun
                 let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                try await supabaseService.createPlaceCandidate(refinedCandidate, captureId: captureId, userId: userId)
+                let candidateId = try await supabaseService.createPlaceCandidate(
+                    refinedCandidate,
+                    captureId: captureId,
+                    userId: userId,
+                    workflowRunId: createdRun.id
+                )
+                _ = try await supabaseService.recordPlaceRecoveryResult(
+                    placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
+                    for: createdRun.id
+                )
                 if runSourceRecovery && refinedCandidate.isSourceOnly {
-                    _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId)
+                    _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
                 }
             } catch {
+                await recordPlaceRecoveryFailureIfNeeded(run: run, candidate: refinedCandidate, error: error)
                 failedCandidates.append(candidate)
                 print("PlaceListViewModel: failed to import review candidate \(candidate.candidateName): \(error)")
             }
@@ -321,6 +337,48 @@ final class PlaceListViewModel: ObservableObject {
                 candidate.latitude == result.latitude &&
                 candidate.longitude == result.longitude
             )
+        }
+    }
+
+    private func placeRecoveryResult(for candidate: PendingReviewCandidate, candidateId: UUID) -> PlaceRecoveryResultDraft {
+        PlaceRecoveryResultDraft(
+            resultType: candidate.isSourceOnly ? "source_only_clue" : "review_candidate",
+            evidenceTier: candidate.isSourceOnly ? "weak" : (candidate.latitude != nil || !candidate.address.isEmpty ? "likely" : "weak"),
+            confidence: candidate.confidence,
+            evidenceRefs: placeRecoveryEvidenceRefs(for: candidate),
+            candidateRefs: [candidateId.uuidString],
+            technicalFailure: false
+        )
+    }
+
+    private func placeRecoveryEvidenceRefs(for candidate: PendingReviewCandidate) -> [String] {
+        var refs = candidate.evidence.prefix(4).map { "evidence:\($0)" }
+        if let sourceURL = candidate.sourceURL, !sourceURL.isEmpty {
+            refs.insert("source_url:\(sourceURL)", at: 0)
+        }
+        return Array(refs.prefix(5))
+    }
+
+    private func recordPlaceRecoveryFailureIfNeeded(
+        run: PlaceRecoveryWorkflowRun?,
+        candidate: PendingReviewCandidate,
+        error: Error
+    ) async {
+        guard let run else { return }
+        do {
+            _ = try await supabaseService.recordPlaceRecoveryResult(
+                PlaceRecoveryResultDraft(
+                    resultType: "technical_failure",
+                    evidenceTier: "none",
+                    confidence: 0,
+                    evidenceRefs: placeRecoveryEvidenceRefs(for: candidate) + ["error:\(error.localizedDescription)"],
+                    candidateRefs: [],
+                    technicalFailure: true
+                ),
+                for: run.id
+            )
+        } catch {
+            print("PlaceListViewModel: failed to record place recovery technical failure for \(candidate.candidateName): \(error)")
         }
     }
 

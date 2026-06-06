@@ -109,6 +109,7 @@ const captureFields = [
 const placeCandidateFields = [
   "id",
   "capture_id",
+  "workflow_run_id",
   "place_id",
   "name",
   "address",
@@ -1191,6 +1192,11 @@ async function handleCaptureSearchRecovery(
   const body = await readJson(request);
   const requestedQueries = stringArray(body.queries);
   const maxQueries = typeof body.max_queries === "number" ? Math.max(1, Math.min(6, body.max_queries)) : undefined;
+  if (body.workflow_run_id !== undefined && typeof body.workflow_run_id !== "string") {
+    return sendJson(response, { error: "workflow_run_id must be a string" }, 400);
+  }
+  const workflowRunId = stringValue(body.workflow_run_id);
+  if (workflowRunId) await ensureWorkflowRunOwner(workflowRunId, userId);
 
   const { rows } = await pool.query("select * from captures where id = $1 and user_id = $2", [captureId, userId]);
   const capture = asObject(rows[0]);
@@ -1213,7 +1219,7 @@ async function handleCaptureSearchRecovery(
     if (existingKeys.has(key)) continue;
     existingKeys.add(key);
 
-    const body = sourceSearchCandidateBody(candidate, captureId);
+    const body = sourceSearchCandidateBody(candidate, captureId, workflowRunId);
     const insert = buildInsert("place_candidates", body, placeCandidateFields);
     const { rows: insertedRows } = await pool.query(`${insert.sql} returning *`, insert.values);
     createdCandidates.push(formatPlaceCandidate(insertedRows[0]));
@@ -1307,6 +1313,10 @@ async function handleMemoryCandidates(
     const captureId = typeof body.capture_id === "string" ? body.capture_id : undefined;
     if (!captureId) return sendJson(response, { error: "capture_id is required" }, 400);
     await ensureCaptureOwner(captureId, userId);
+    if (body.workflow_run_id !== undefined && typeof body.workflow_run_id !== "string") {
+      return sendJson(response, { error: "workflow_run_id must be a string" }, 400);
+    }
+    if (body.workflow_run_id) await ensureWorkflowRunOwner(body.workflow_run_id, userId);
     await ensureOwnedPlaceReference(body.place_id, userId);
 
     const insert = buildInsert("place_candidates", body, placeCandidateFields);
@@ -1736,9 +1746,10 @@ async function existingCandidateKeys(captureId: string): Promise<Set<string>> {
   }));
 }
 
-function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string): JsonBody {
+function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string, workflowRunId?: string): JsonBody {
   return {
     capture_id: captureId,
+    workflow_run_id: workflowRunId,
     name: candidate.name,
     address: candidate.address,
     city: "",

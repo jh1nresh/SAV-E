@@ -1417,6 +1417,16 @@ extension SaveSearchResponse {
         [newRecommendations].filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
     }
 
+    var primaryAnswerDisplaySections: [SaveSearchSection] {
+        [fromYourSave, newRecommendations]
+            .filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
+    }
+
+    var contextDisplaySections: [SaveSearchSection] {
+        additionalSections
+            .filter { !$0.results.isEmpty || $0.emptyMessage != nil || $0.showsNearbySearchAction }
+    }
+
     var secondaryDisplaySections: [SaveSearchSection] {
         if isNearbyRecommendationResponse, fromYourSave.results.isEmpty {
             return publicDiscoverySections + farSavedSections

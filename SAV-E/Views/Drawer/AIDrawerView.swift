@@ -898,7 +898,7 @@ struct AIDrawerView: View {
                 .padding(.horizontal, 16)
 
                 categoryFilterStrip
-                socialSignalSection
+                publicTestFocusNote
 
                 if !viewModel.chatHistory.isEmpty {
                     NotebookBandLabel(languageSettings.localized(english: "Recent", traditionalChinese: "最近"))
@@ -947,19 +947,19 @@ struct AIDrawerView: View {
         switch languageSettings.language {
         case .english:
             return [
-                "Date night from my Map Stamps",
+                "Recommend nearby coffee",
                 "Coffee from my saved places first",
-                "Plan Tokyo from my Map Stamps",
                 "What is nearby from my memory?",
                 "Show Review clues",
+                "Find public coffee nearby",
             ]
         case .traditionalChinese:
             return [
-                "用我的地圖章安排約會晚餐",
+                "推薦附近咖啡",
                 "先從我存過的地方找咖啡",
-                "用我的地圖章規劃東京",
                 "我的記憶裡附近有什麼？",
                 "顯示待確認線索",
+                "搜尋附近公開咖啡",
             ]
         }
     }
@@ -982,6 +982,22 @@ struct AIDrawerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 2)
             }
+        }
+    }
+
+    private var publicTestFocusNote: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NotebookBandLabel(languageSettings.localized(english: "Public test focus", traditionalChinese: "Public test 主線"))
+                .padding(.horizontal, 16)
+
+            Text(languageSettings.localized(
+                english: "Start with saved places, Review clues, and clearly labeled public discovery. Friend signals and trip planning stay quiet until there is real shared memory.",
+                traditionalChinese: "先聚焦已保存地點、待確認線索，以及清楚標示的公開探索。朋友訊號和行程規劃等有真實共享記憶後再出現。"
+            ))
+            .font(.caption.weight(.semibold))
+            .foregroundColor(.saveCocoa.opacity(0.74))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
         }
     }
 

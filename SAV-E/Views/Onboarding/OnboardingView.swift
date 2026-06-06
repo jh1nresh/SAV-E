@@ -3,13 +3,20 @@ import SwiftUI
 struct OnboardingView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Namespace private var proofNamespace
-    @State private var stage: ProofStage = .language
+    @State private var stage: ProofStage
     @State private var clueText = ""
     @State private var selectedTags: Set<ProofIntentTag> = []
+    private let autoUseSampleClue: Bool
     var onComplete: () -> Void
 
     private var language: AppLanguage { languageSettings.language }
     private var isBrandEntryStage: Bool { stage == .language }
+
+    init(startWithSampleProof: Bool = false, onComplete: @escaping () -> Void) {
+        _stage = State(initialValue: startWithSampleProof ? .clue : .language)
+        self.autoUseSampleClue = startWithSampleProof
+        self.onComplete = onComplete
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -22,6 +29,11 @@ struct OnboardingView: View {
                 horizontalPadding: horizontalPadding,
                 verticalSpacing: verticalSpacing
             )
+        }
+        .onAppear {
+            if autoUseSampleClue && trimmedClue.isEmpty {
+                useSampleClue()
+            }
         }
     }
 

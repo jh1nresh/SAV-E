@@ -193,4 +193,105 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(receipt.placeId, placeId)
         XCTAssertEqual(receipt.consumerAgentId, "save-ios")
     }
+
+    func testPlaceRecoveryWorkflowRunDecodesResultState() throws {
+        let runId = UUID()
+        let candidateId = UUID()
+        let json = """
+        {
+          "id": "\(runId.uuidString)",
+          "workflow_id": "save_place_recovery_v0",
+          "listing_id": "save-place-recovery-agent",
+          "source_url": "https://www.instagram.com/reel/example/",
+          "source_type": "instagram",
+          "status": "needs_review",
+          "result_type": "review_candidate",
+          "confidence": 0.82,
+          "evidence_tier": "likely",
+          "result_evidence_refs": ["source_url:https://www.instagram.com/reel/example/"],
+          "result_candidate_refs": ["\(candidateId.uuidString)"],
+          "credit_reserved": 1,
+          "credit_settlement": "pending",
+          "receipt_id": null,
+          "created_at": "2026-06-06T10:00:00Z",
+          "completed_at": null
+        }
+        """.data(using: .utf8)!
+
+        let run = try JSONDecoder.supabase.decode(PlaceRecoveryWorkflowRun.self, from: json)
+
+        XCTAssertEqual(run.id, runId)
+        XCTAssertEqual(run.workflowId, "save_place_recovery_v0")
+        XCTAssertEqual(run.status, "needs_review")
+        XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
+    }
+
+    func testPlaceRecoveryDraftsBuildBackendBodiesAndDecodeReceipt() throws {
+        let runId = UUID()
+        let receiptId = UUID()
+        let candidateId = UUID()
+        let result = PlaceRecoveryResultDraft(
+            resultType: "review_candidate",
+            evidenceTier: "likely",
+            confidence: 0.78,
+            evidenceRefs: ["source_url:https://example.com"],
+            candidateRefs: [candidateId.uuidString],
+            technicalFailure: false
+        )
+        let decision = PlaceRecoveryDecisionDraft(
+            action: "confirm",
+            editedPayload: ["place_id": "place_123"],
+            reason: "User saved review candidate as confirmed Map Stamp."
+        )
+
+        XCTAssertEqual(result.body["result_type"] as? String, "review_candidate")
+        XCTAssertEqual(result.body["evidence_tier"] as? String, "likely")
+        XCTAssertEqual(result.body["candidate_refs"] as? [String], [candidateId.uuidString])
+        XCTAssertEqual(decision.body["action"] as? String, "confirm")
+        XCTAssertEqual(decision.body["reason"] as? String, "User saved review candidate as confirmed Map Stamp.")
+
+        let json = """
+        {
+          "run": {
+            "id": "\(runId.uuidString)",
+            "workflow_id": "save_place_recovery_v0",
+            "listing_id": "save-place-recovery-agent",
+            "source_url": "https://example.com",
+            "source_type": "url",
+            "status": "completed",
+            "result_type": "review_candidate",
+            "confidence": 0.78,
+            "evidence_tier": "likely",
+            "result_evidence_refs": ["source_url:https://example.com"],
+            "result_candidate_refs": ["\(candidateId.uuidString)"],
+            "credit_reserved": 1,
+            "credit_settlement": "consumed",
+            "receipt_id": "\(receiptId.uuidString)",
+            "created_at": "2026-06-06T10:00:00Z",
+            "completed_at": "2026-06-06T10:01:00Z"
+          },
+          "receipt": {
+            "id": "\(receiptId.uuidString)",
+            "run_id": "\(runId.uuidString)",
+            "workflow_id": "save_place_recovery_v0",
+            "verdict": "pass",
+            "settlement": "credit_consumed",
+            "evaluator_summary": "Place recovery produced a confirmed map stamp or user accepted the candidate.",
+            "evidence_refs": ["source_url:https://example.com"],
+            "candidate_refs": ["\(candidateId.uuidString)"],
+            "receipt_hash": "hash_123",
+            "anchor_status": "offchain",
+            "private_url": null,
+            "created_at": "2026-06-06T10:01:00Z"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let response = try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: json)
+
+        XCTAssertEqual(response.run.id, runId)
+        XCTAssertEqual(response.receipt.id, receiptId)
+        XCTAssertEqual(response.receipt.verdict, "pass")
+        XCTAssertEqual(response.receipt.candidateRefs, [candidateId.uuidString])
+    }
 }

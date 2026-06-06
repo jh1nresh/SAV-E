@@ -82,7 +82,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             currentLocation: currentLocation
         ))
         XCTAssertTrue(sectioned.fromYourSave.results.isEmpty)
-        XCTAssertTrue(sectioned.fromYourSave.showsNearbySearchAction)
+        XCTAssertFalse(sectioned.fromYourSave.showsNearbySearchAction)
         XCTAssertEqual(sectioned.additionalSections.first?.results.map(\.title), ["Cafe C"])
         XCTAssertTrue(sectioned.newRecommendations.showsNearbySearchAction)
     }
@@ -116,6 +116,66 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(message.contains("rating"))
         XCTAssertEqual(response.fromYourSave.title, "來自 SAV-E 的附近記憶")
         XCTAssertEqual(response.newRecommendations.title, "附近公開探索")
+        XCTAssertEqual(response.primaryAnswerDisplaySections.map(\.id), [
+            "from-your-save-nearby",
+            "nearby-unsaved-candidates"
+        ])
+    }
+
+    func testTraditionalChineseNearbyPublicLaneAppearsBeforeFarSavedContext() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let farCoffee = place(
+            name: "LA Coffee Archive",
+            category: .cafe,
+            latitude: 34.0522,
+            longitude: -118.2437,
+            note: "Saved coffee memory outside today's radius"
+        )
+        let publicCoffee = mapCandidate(name: "Public Coffee", category: .cafe)
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我咖啡廳",
+            places: [farCoffee],
+            mapCandidates: [publicCoffee],
+            currentLocation: currentLocation,
+            outputLanguage: .traditionalChinese
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), [])
+        XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Public Coffee"])
+        XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["LA Coffee Archive"])
+        XCTAssertEqual(response.primaryAnswerDisplaySections.map(\.id), [
+            "from-your-save-nearby",
+            "nearby-unsaved-candidates"
+        ])
+        XCTAssertEqual(response.contextDisplaySections.map(\.id), ["saved-but-not-nearby"])
+        XCTAssertTrue(response.assistantMessage?.contains("你的 SAV-E 記憶裡還沒有附近已保存咖啡廳") == true)
+        XCTAssertFalse(response.assistantMessage?.contains("Public discovery") == true)
+        XCTAssertFalse(response.assistantMessage?.contains("Saved Map Stamp") == true)
+    }
+
+    func testEnglishCafeRecommendationAnswerDoesNotMixChineseLead() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let savedCoffee = place(
+            name: "Bright Coffee Bar",
+            category: .cafe,
+            latitude: 33.6849,
+            longitude: -117.8262
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "recommend nearby coffee",
+            places: [savedCoffee],
+            currentLocation: currentLocation,
+            outputLanguage: .english
+        ))
+
+        let message = try XCTUnwrap(response.assistantMessage)
+        XCTAssertTrue(message.contains("I’d start with Bright Coffee Bar"))
+        XCTAssertFalse(message.contains("我會先推"))
+        XCTAssertFalse(message.contains("你的 SAV-E"))
     }
 
     func testNearbyCafeWithoutCurrentLocationReturnsLocationNeededMessage() throws {
@@ -240,7 +300,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
 
         XCTAssertEqual(response.fromYourSave.title, "From your SAV-E nearby")
         XCTAssertTrue(response.fromYourSave.results.isEmpty)
-        XCTAssertTrue(response.fromYourSave.showsNearbySearchAction)
+        XCTAssertFalse(response.fromYourSave.showsNearbySearchAction)
         XCTAssertTrue(response.newRecommendations.showsNearbySearchAction)
         XCTAssertTrue(response.newRecommendations.results.isEmpty)
     }

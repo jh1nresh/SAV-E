@@ -8,10 +8,13 @@ protocol SupabaseServiceProtocol {
     func updatePlace(_ place: Place) async throws
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
-    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String) async throws
-    func recoverSourceOnlyReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate]
+    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> [PlaceReviewCandidate]
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
+    func createPlaceRecoveryRun(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun
+    func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun
+    func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse
     func fetchTrips(for userId: String) async throws -> [Trip]
     func saveTrip(_ trip: Trip, userId: String) async throws
     func updateTrip(_ trip: Trip) async throws
@@ -203,12 +206,13 @@ final class SupabaseService: SupabaseServiceProtocol {
         return row.id
     }
 
-    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String) async throws {
+    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID? = nil) async throws -> UUID {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let evidence = candidate.evidence.map { ["text": $0] }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
+            "workflow_run_id": workflowRunId?.uuidString,
             "name": candidate.candidateName,
             "address": candidate.address,
             "city": "",
@@ -219,13 +223,17 @@ final class SupabaseService: SupabaseServiceProtocol {
             "missing_info": candidate.missingInfo,
             "status": "review",
         ])
-        try await request(path: "/memory/candidates", method: "POST", body: body)
+        let data = try await request(path: "/memory/candidates", method: "POST", body: body)
+        let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
+        return row.id
     }
 
-    func recoverSourceOnlyReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate] {
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> [PlaceReviewCandidate] {
         guard isConfigured else { return [] }
 
-        let body = try Self.jsonBody([:])
+        let body = try Self.jsonBody([
+            "workflow_run_id": workflowRunId?.uuidString,
+        ])
         let data = try await request(
             path: "/memory/captures/\(captureId.uuidString)/search-recovery",
             method: "POST",
@@ -252,6 +260,36 @@ final class SupabaseService: SupabaseServiceProtocol {
         }
         let body = try Self.jsonBody(values)
         try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+    }
+
+    // MARK: - Place Recovery Workflow
+
+    func createPlaceRecoveryRun(sourceURL: String?, sourceType: String? = nil) async throws -> PlaceRecoveryWorkflowRun {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.jsonBody([
+            "source_url": sourceURL,
+            "source_type": sourceType,
+            "credit_reserved": 1,
+        ])
+        let data = try await request(path: "/v0/workflows/place-recovery/runs", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(PlaceRecoveryWorkflowRun.self, from: data)
+    }
+
+    func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.jsonBody(result.body)
+        let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/result", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(PlaceRecoveryWorkflowRun.self, from: data)
+    }
+
+    func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.jsonBody(decision.body)
+        let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
     }
 
     // MARK: - Trips
@@ -685,6 +723,117 @@ struct ClaimUsageReceipt: Codable, Identifiable, Equatable {
     }
 }
 
+struct PlaceRecoveryWorkflowRun: Codable, Identifiable, Equatable {
+    let id: UUID
+    let workflowId: String
+    let listingId: String
+    let sourceURL: String?
+    let sourceType: String
+    let status: String
+    let resultType: String?
+    let confidence: Double?
+    let evidenceTier: String
+    let resultEvidenceRefs: [String]
+    let resultCandidateRefs: [String]
+    let creditReserved: Int
+    let creditSettlement: String
+    let receiptId: UUID?
+    let createdAt: String?
+    let completedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case workflowId = "workflow_id"
+        case listingId = "listing_id"
+        case sourceURL = "source_url"
+        case sourceType = "source_type"
+        case status
+        case resultType = "result_type"
+        case confidence
+        case evidenceTier = "evidence_tier"
+        case resultEvidenceRefs = "result_evidence_refs"
+        case resultCandidateRefs = "result_candidate_refs"
+        case creditReserved = "credit_reserved"
+        case creditSettlement = "credit_settlement"
+        case receiptId = "receipt_id"
+        case createdAt = "created_at"
+        case completedAt = "completed_at"
+    }
+}
+
+struct PlaceRecoveryResultDraft: Equatable {
+    var resultType: String
+    var evidenceTier: String
+    var confidence: Double
+    var evidenceRefs: [String]
+    var candidateRefs: [String]
+    var technicalFailure: Bool
+
+    var body: [String: Any?] {
+        [
+            "result_type": resultType,
+            "evidence_tier": evidenceTier,
+            "confidence": confidence,
+            "evidence_refs": evidenceRefs,
+            "candidate_refs": candidateRefs,
+            "technical_failure": technicalFailure,
+        ]
+    }
+}
+
+struct PlaceRecoveryDecisionDraft: Equatable {
+    var action: String
+    var editedPayload: [String: Any]
+    var reason: String?
+
+    var body: [String: Any?] {
+        [
+            "action": action,
+            "edited_payload": editedPayload,
+            "reason": reason,
+        ]
+    }
+
+    static func == (lhs: PlaceRecoveryDecisionDraft, rhs: PlaceRecoveryDecisionDraft) -> Bool {
+        lhs.action == rhs.action && lhs.reason == rhs.reason
+    }
+}
+
+struct PlaceRecoveryDecisionReceiptResponse: Codable, Equatable {
+    let run: PlaceRecoveryWorkflowRun
+    let receipt: WorkflowReceipt
+}
+
+struct WorkflowReceipt: Codable, Identifiable, Equatable {
+    let id: UUID
+    let runId: UUID
+    let workflowId: String
+    let verdict: String
+    let settlement: String
+    let evaluatorSummary: String
+    let evidenceRefs: [String]
+    let candidateRefs: [String]
+    let receiptHash: String
+    let anchorStatus: String
+    let privateURL: String?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case runId = "run_id"
+        case workflowId = "workflow_id"
+        case verdict
+        case settlement
+        case evaluatorSummary = "evaluator_summary"
+        case evidenceRefs = "evidence_refs"
+        case candidateRefs = "candidate_refs"
+        case receiptHash = "receipt_hash"
+        case anchorStatus = "anchor_status"
+        case privateURL = "private_url"
+        case createdAt = "created_at"
+    }
+}
+
 private struct PlaceRow: Codable {
     let id: UUID
     let user_id: String
@@ -828,6 +977,7 @@ private struct SourceSearchRecoveryRow: Codable {
 private struct PlaceCandidateRow: Codable {
     let id: UUID
     let capture_id: UUID?
+    let workflow_run_id: UUID?
     let name: String
     let address: String?
     let city: String?
@@ -843,6 +993,7 @@ private struct PlaceCandidateRow: Codable {
         PlaceReviewCandidate(
             id: id,
             captureId: capture_id,
+            workflowRunId: workflow_run_id,
             name: name,
             address: address ?? "",
             city: city,

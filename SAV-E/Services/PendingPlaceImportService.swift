@@ -293,6 +293,7 @@ struct PendingReviewCandidate: Codable {
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var id: UUID
     var captureId: UUID?
+    var workflowRunId: UUID?
     var name: String
     var address: String
     var city: String?
@@ -312,6 +313,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     init(
         id: UUID,
         captureId: UUID?,
+        workflowRunId: UUID? = nil,
         name: String,
         address: String,
         city: String?,
@@ -330,6 +332,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     ) {
         self.id = id
         self.captureId = captureId
+        self.workflowRunId = workflowRunId
         self.name = name
         self.address = address
         self.city = city
@@ -351,6 +354,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case id
         case captureId
+        case workflowRunId
         case name
         case address
         case city
@@ -372,6 +376,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
+        workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
         name = try container.decode(String.self, forKey: .name)
         address = try container.decode(String.self, forKey: .address)
         city = try container.decodeIfPresent(String.self, forKey: .city)
