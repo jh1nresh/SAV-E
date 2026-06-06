@@ -43,6 +43,7 @@ struct SaveAgentPromptPolicy {
     - citedResultIds must contain only IDs from Allowed result IDs; cite no more than two IDs.
     - If no allowed result IDs exist, citedResultIds must be [] and answer must not name a place.
     - Answer in the requested output language exactly.
+    - For Traditional Chinese output, write the full answer in natural Taiwanese Traditional Chinese. Do not leave English row labels such as "Saved Map Stamp", "rating", or "Public discovery" unless they are part of a place name or the SAV-E brand.
     - Sound like a concise assistant, not a debug report.
     - Recommend one best place first when a trustworthy allowed result exists.
     - If no nearby Saved Map Stamp exists but Public Discovery has allowed results, say SAV-E has no nearby saved match, then recommend one unsaved public option by title.

@@ -18,7 +18,8 @@ struct SaveLocationIntentRecommendationService {
         places: [Place],
         reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = [],
-        currentLocation: CLLocation?
+        currentLocation: CLLocation?,
+        outputLanguage: AppLanguage = .english
     ) -> SaveSearchResponse? {
         guard let intent = parser.parse(query) else {
             return nil
@@ -29,7 +30,8 @@ struct SaveLocationIntentRecommendationService {
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
-            currentLocation: currentLocation
+            currentLocation: currentLocation,
+            outputLanguage: outputLanguage
         )
     }
 
@@ -39,7 +41,8 @@ struct SaveLocationIntentRecommendationService {
         places: [Place],
         reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = [],
-        currentLocation: CLLocation?
+        currentLocation: CLLocation?,
+        outputLanguage: AppLanguage = .english
     ) -> SaveSearchResponse? {
         guard initialIntent.kind == .categoryRecommendation || initialIntent.kind == .craving || initialIntent.mustMatchLocation else {
             return nil
@@ -54,8 +57,12 @@ struct SaveLocationIntentRecommendationService {
         if let unsupportedCategoryLabel = intent.unsupportedCategoryLabel {
             return emptyResponse(
                 query: query,
-                title: "Unsupported category",
-                message: "SAV-E doesn't have a \(unsupportedCategoryLabel) category yet, so I won't map this to food or cafe by accident. You can search saved names/notes, or ask to search public nearby places."
+                title: outputLanguage.localized(english: "Unsupported category", traditionalChinese: "尚未支援的類別"),
+                message: outputLanguage.localized(
+                    english: "SAV-E doesn't have a \(unsupportedCategoryLabel) category yet, so I won't map this to food or cafe by accident. You can search saved names/notes, or ask to search public nearby places.",
+                    traditionalChinese: "SAV-E 還沒有「\(unsupportedCategoryLabel)」這個類別，所以我不會誤判成餐廳或咖啡廳。你可以搜尋已保存名稱/筆記，或另外搜尋附近公開地點。"
+                ),
+                outputLanguage: outputLanguage
             )
         }
 
@@ -64,8 +71,12 @@ struct SaveLocationIntentRecommendationService {
         if intent.mustMatchLocation, currentLocation == nil {
             return emptyResponse(
                 query: query,
-                title: "Location needed",
-                message: "I need your current location before I can answer nearby requests. Or ask for saved \(categoryLabel(for: intent)) anywhere."
+                title: outputLanguage.localized(english: "Location needed", traditionalChinese: "需要位置"),
+                message: outputLanguage.localized(
+                    english: "I need your current location before I can answer nearby requests. Or ask for saved \(categoryLabel(for: intent)) anywhere.",
+                    traditionalChinese: "我需要目前位置才能回答附近推薦。你也可以改問不限定附近的已保存\(localizedCategoryLabel(for: intent))。"
+                ),
+                outputLanguage: outputLanguage
             )
         }
 
@@ -111,10 +122,16 @@ struct SaveLocationIntentRecommendationService {
             guard !nearby.isEmpty else {
                 let farContext = far.isEmpty
                     ? ""
-                    : " You do have saved \(categoryLabel(for: intent)) places, but the closest one is outside the nearby radius."
+                    : outputLanguage.localized(
+                        english: " You do have saved \(categoryLabel(for: intent)) places, but the closest one is outside the nearby radius.",
+                        traditionalChinese: " 你有已保存\(localizedCategoryLabel(for: intent))，但最近的也超出目前附近範圍。"
+                    )
                 return sectionedResponse(
                     query: query,
-                    message: "你的 SAV-E 裡附近沒有\(localizedCategoryLabel(for: intent))。I did not recommend generic cafes or other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
+                    message: outputLanguage.localized(
+                        english: "I do not see a saved nearby \(categoryLabel(for: intent)) in your SAV-E. I did not recommend generic cafes or other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
+                        traditionalChinese: "你的 SAV-E 裡附近沒有\(localizedCategoryLabel(for: intent))。你問的是\(localizedCategoryLabel(for: intent))，所以我不會拿泛用咖啡廳或其他類別亂推。\(farContext)"
+                    ),
                     nearby: [],
                     far: far,
                     reviewCandidates: nearbyReviewMatches,
@@ -122,13 +139,17 @@ struct SaveLocationIntentRecommendationService {
                     intent: intent,
                     currentLocation: currentLocation,
                     tasteProfile: tasteProfile,
+                    outputLanguage: outputLanguage,
                     showFallbackAction: true
                 )
             }
 
             return sectionedResponse(
                 query: query,
-                message: "Found \(nearby.count) saved nearby \(categoryLabel(for: intent)) place\(nearby.count == 1 ? "" : "s") from your SAV-E.",
+                message: outputLanguage.localized(
+                    english: "Found \(nearby.count) saved nearby \(categoryLabel(for: intent)) place\(nearby.count == 1 ? "" : "s") from your SAV-E.",
+                    traditionalChinese: "從你的 SAV-E 找到 \(nearby.count) 個附近已保存\(localizedCategoryLabel(for: intent))。"
+                ),
                 nearby: nearby,
                 far: far,
                 reviewCandidates: nearbyReviewMatches,
@@ -136,6 +157,7 @@ struct SaveLocationIntentRecommendationService {
                 intent: intent,
                 currentLocation: currentLocation,
                 tasteProfile: tasteProfile,
+                outputLanguage: outputLanguage,
                 showFallbackAction: false
             )
         }
@@ -144,7 +166,10 @@ struct SaveLocationIntentRecommendationService {
             if !reviewMatches.isEmpty || !mapMatches.isEmpty {
                 return sectionedResponse(
                     query: query,
-                    message: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet. Review candidates and public discovery stay separate until you choose what to save.",
+                    message: outputLanguage.localized(
+                        english: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet. Review candidates and public discovery stay separate until you choose what to save.",
+                        traditionalChinese: "你的 SAV-E 還沒有已保存\(localizedCategoryLabel(for: intent))。待確認地點和公開探索會分開，等你決定要不要保存。"
+                    ),
                     nearby: [],
                     far: [],
                     reviewCandidates: reviewMatches,
@@ -152,20 +177,28 @@ struct SaveLocationIntentRecommendationService {
                     intent: intent,
                     currentLocation: currentLocation,
                     tasteProfile: tasteProfile,
+                    outputLanguage: outputLanguage,
                     showFallbackAction: mapMatches.isEmpty
                 )
             }
             return emptyResponse(
                 query: query,
-                title: "No saved \(categoryLabel(for: intent))",
-                message: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet.",
+                title: outputLanguage.localized(english: "No saved \(categoryLabel(for: intent))", traditionalChinese: "沒有已保存\(localizedCategoryLabel(for: intent))"),
+                message: outputLanguage.localized(
+                    english: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet.",
+                    traditionalChinese: "你的 SAV-E 還沒有已保存\(localizedCategoryLabel(for: intent))。"
+                ),
+                outputLanguage: outputLanguage,
                 showFallbackAction: true
             )
         }
 
         return sectionedResponse(
             query: query,
-            message: "Showing saved \(categoryLabel(for: intent)) places from your SAV-E.",
+            message: outputLanguage.localized(
+                english: "Showing saved \(categoryLabel(for: intent)) places from your SAV-E.",
+                traditionalChinese: "顯示你 SAV-E 裡已保存的\(localizedCategoryLabel(for: intent))。"
+            ),
             nearby: rankedCategoryMatches,
             far: [],
             reviewCandidates: reviewMatches,
@@ -173,6 +206,7 @@ struct SaveLocationIntentRecommendationService {
             intent: intent,
             currentLocation: currentLocation,
             tasteProfile: tasteProfile,
+            outputLanguage: outputLanguage,
             showFallbackAction: false
         )
     }
@@ -184,12 +218,14 @@ struct SaveLocationIntentRecommendationService {
         mapCandidates: [SaveMapCandidate] = [],
         currentLocation: CLLocation?
     ) -> SaveAIResponse? {
+        let outputLanguage = inferredOutputLanguage(for: query)
         guard let response = recommendationSearchResponse(
             for: query,
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
-            currentLocation: currentLocation
+            currentLocation: currentLocation,
+            outputLanguage: outputLanguage
         ) else {
             return nil
         }
@@ -306,17 +342,18 @@ struct SaveLocationIntentRecommendationService {
         intent: SaveSearchIntent,
         currentLocation: CLLocation?,
         tasteProfile: SaveTasteProfile,
+        outputLanguage: AppLanguage,
         showFallbackAction: Bool
     ) -> SaveSearchResponse {
         let mapResults = searchResults(for: mapCandidates)
         let canSearchNearby = showFallbackAction && mapResults.isEmpty
-        let nearbyResults = searchResults(for: nearby, intent: intent, currentLocation: currentLocation, isNearby: true, tasteProfile: tasteProfile)
+        let nearbyResults = searchResults(for: nearby, intent: intent, currentLocation: currentLocation, isNearby: true, tasteProfile: tasteProfile, outputLanguage: outputLanguage)
         let reviewResults = searchResults(for: reviewCandidates, currentLocation: currentLocation)
-        let farResults = searchResults(for: Array(far.prefix(5)), intent: intent, currentLocation: currentLocation, isNearby: false, tasteProfile: tasteProfile)
+        let farResults = searchResults(for: Array(far.prefix(5)), intent: intent, currentLocation: currentLocation, isNearby: false, tasteProfile: tasteProfile, outputLanguage: outputLanguage)
         let nearbySection = SaveSearchSection(
                 id: "from-your-save-nearby",
                 label: "FROM YOUR SAV-E",
-                title: "From your SAV-E nearby",
+                title: outputLanguage.localized(english: "From your SAV-E nearby", traditionalChinese: "來自 SAV-E 的附近記憶"),
                 subtitle: message,
                 results: nearbyResults,
                 emptyMessage: nearby.isEmpty ? message : nil,
@@ -328,8 +365,11 @@ struct SaveLocationIntentRecommendationService {
             additional.append(SaveSearchSection(
                 id: "review-candidates",
                 label: "REVIEW CANDIDATES",
-                title: "Waiting in Review Nest",
-                subtitle: "Possible matches from your Review queue. Confirm one before it becomes a Map Stamp.",
+                title: outputLanguage.localized(english: "Waiting in Review Nest", traditionalChinese: "待確認清單裡的可能地點"),
+                subtitle: outputLanguage.localized(
+                    english: "Possible matches from your Review queue. Confirm one before it becomes a Map Stamp.",
+                    traditionalChinese: "這些來自待確認清單；確認後才會變成地圖章。"
+                ),
                 results: reviewResults,
                 emptyMessage: nil
             ))
@@ -339,8 +379,11 @@ struct SaveLocationIntentRecommendationService {
             additional.append(SaveSearchSection(
                 id: "saved-but-not-nearby",
                 label: "SAVED, FAR",
-                title: "Saved but not nearby",
-                subtitle: "Same category, outside the current nearby radius. Not used as a primary recommendation.",
+                title: outputLanguage.localized(english: "Saved but not nearby", traditionalChinese: "已保存但不在附近"),
+                subtitle: outputLanguage.localized(
+                    english: "Same category, outside the current nearby radius. Not used as a primary recommendation.",
+                    traditionalChinese: "同類別，但超出目前附近範圍；不會當成主要推薦。"
+                ),
                 results: farResults,
                 emptyMessage: nil
             ))
@@ -349,10 +392,14 @@ struct SaveLocationIntentRecommendationService {
         return SaveSearchResponse(
             query: query,
             assistantMessage: assistantMessage(
-                categoryLabel: categoryLabel(for: intent),
+                categoryLabel: outputLanguage.localized(
+                    english: categoryLabel(for: intent),
+                    traditionalChinese: localizedCategoryLabel(for: intent)
+                ),
                 savedResults: nearbyResults,
                 reviewResults: reviewResults,
                 unsavedResults: mapResults,
+                outputLanguage: outputLanguage,
                 fallbackAvailable: canSearchNearby
             ),
             fromYourSave: nearbySection,
@@ -360,16 +407,22 @@ struct SaveLocationIntentRecommendationService {
             newRecommendations: SaveSearchSection(
                 id: "nearby-unsaved-candidates",
                 label: "PUBLIC DISCOVERY",
-                title: "Public nearby options",
-                subtitle: "Public discovery stays separate until you explicitly save one.",
+                title: outputLanguage.localized(english: "Public nearby options", traditionalChinese: "附近公開探索"),
+                subtitle: outputLanguage.localized(
+                    english: "Public discovery stays separate until you explicitly save one.",
+                    traditionalChinese: "公開探索會分開顯示；只有你手動保存後才會進 SAV-E 記憶。"
+                ),
                 results: mapResults,
-                emptyMessage: canSearchNearby ? "Search public nearby options only if you want places outside your SAV-E memory." : nil,
+                emptyMessage: canSearchNearby ? outputLanguage.localized(
+                    english: "Search public nearby options only if you want places outside your SAV-E memory.",
+                    traditionalChinese: "如果想看 SAV-E 記憶以外的附近地點，可以搜尋公開探索。"
+                ) : nil,
                 showsNearbySearchAction: canSearchNearby
             )
         )
     }
 
-    private func emptyResponse(query: String, title: String, message: String, showFallbackAction: Bool = false) -> SaveSearchResponse {
+    private func emptyResponse(query: String, title: String, message: String, outputLanguage: AppLanguage, showFallbackAction: Bool = false) -> SaveSearchResponse {
         SaveSearchResponse(
             query: query,
             assistantMessage: message,
@@ -384,10 +437,16 @@ struct SaveLocationIntentRecommendationService {
             newRecommendations: SaveSearchSection(
                 id: "nearby-unsaved-candidates",
                 label: "PUBLIC DISCOVERY",
-                title: "Public nearby options",
-                subtitle: "Public discovery is explicit fallback only.",
+                title: outputLanguage.localized(english: "Public nearby options", traditionalChinese: "附近公開探索"),
+                subtitle: outputLanguage.localized(
+                    english: "Public discovery is explicit fallback only.",
+                    traditionalChinese: "公開探索只會作為明確 fallback。"
+                ),
                 results: [],
-                emptyMessage: showFallbackAction ? "Search public nearby options only if you want places outside your SAV-E memory." : nil,
+                emptyMessage: showFallbackAction ? outputLanguage.localized(
+                    english: "Search public nearby options only if you want places outside your SAV-E memory.",
+                    traditionalChinese: "如果想看 SAV-E 記憶以外的附近地點，可以搜尋公開探索。"
+                ) : nil,
                 showsNearbySearchAction: showFallbackAction
             )
         )
@@ -398,10 +457,11 @@ struct SaveLocationIntentRecommendationService {
         intent: SaveSearchIntent,
         currentLocation: CLLocation?,
         isNearby: Bool,
-        tasteProfile: SaveTasteProfile
+        tasteProfile: SaveTasteProfile,
+        outputLanguage: AppLanguage
     ) -> [SaveSearchResult] {
         places.map { place in
-            let reasons = reasons(for: place, intent: intent, currentLocation: currentLocation, isNearby: isNearby, tasteProfile: tasteProfile)
+            let reasons = reasons(for: place, intent: intent, currentLocation: currentLocation, isNearby: isNearby, tasteProfile: tasteProfile, outputLanguage: outputLanguage)
             return SaveSearchResult(
                 id: "place-\(place.id.uuidString)",
                 objectType: place.status == .visited ? .triedMemory : .savedPlace,
@@ -516,20 +576,30 @@ struct SaveLocationIntentRecommendationService {
         savedResults: [SaveSearchResult],
         reviewResults: [SaveSearchResult],
         unsavedResults: [SaveSearchResult],
+        outputLanguage: AppLanguage,
         fallbackAvailable: Bool
     ) -> String {
+        if outputLanguage == .traditionalChinese {
+            return assistantMessageTraditionalChinese(
+                categoryLabel: categoryLabel,
+                savedResults: savedResults,
+                reviewResults: reviewResults,
+                unsavedResults: unsavedResults,
+                fallbackAvailable: fallbackAvailable
+            )
+        }
         if let top = savedResults.first {
             return agentAnswer(
                 lead: "我會先推 \(top.title)。",
-                reason: reasonLine(for: top, fallback: "It is already a Saved Map Stamp in your place memory."),
-                caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: []))Public discovery stays separate below. If you want, tell me budget, cuisine, or quick vs sit-down and I’ll narrow it."
+                reason: reasonLine(for: top, fallback: "It is already a Saved Map Stamp in your place memory.", outputLanguage: outputLanguage),
+                caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: [], outputLanguage: outputLanguage))Public discovery stays separate below. If you want, tell me budget, cuisine, or quick vs sit-down and I’ll narrow it."
             )
         }
 
         if let top = reviewResults.first {
             return agentAnswer(
                 lead: "我不會直接亂推一個未確認地點；先看 \(top.title)。",
-                reason: reasonLine(for: top, fallback: "It is waiting in Review, so SAV-E has a clue but still needs confirmation."),
+                reason: reasonLine(for: top, fallback: "It is waiting in Review, so SAV-E has a clue but still needs confirmation.", outputLanguage: outputLanguage),
                 caveat: "Confirm it into a Map Stamp, or add a clue before trusting it as the recommendation."
             )
         }
@@ -537,7 +607,7 @@ struct SaveLocationIntentRecommendationService {
         if let top = unsavedResults.first {
             return agentAnswer(
                 lead: "你的 SAV-E memory 裡還沒有 saved nearby \(categoryLabel)，但 public nearby 裡我會先看 \(top.title)。",
-                reason: reasonLine(for: top, fallback: "It is a nearby public result, not saved memory yet."),
+                reason: reasonLine(for: top, fallback: "It is a nearby public result, not saved memory yet.", outputLanguage: outputLanguage),
                 caveat: "Tell me budget or food mood, or save it first so SAV-E can remember whether you liked it later."
             )
         }
@@ -564,39 +634,100 @@ struct SaveLocationIntentRecommendationService {
         "\(lead) \(reason). \(caveat)"
     }
 
-    private func supportingSummary(reviewResults: [SaveSearchResult], unsavedResults: [SaveSearchResult]) -> String {
+    private func assistantMessageTraditionalChinese(
+        categoryLabel: String,
+        savedResults: [SaveSearchResult],
+        reviewResults: [SaveSearchResult],
+        unsavedResults: [SaveSearchResult],
+        fallbackAvailable: Bool
+    ) -> String {
+        if let top = savedResults.first {
+            return agentAnswer(
+                lead: "我會先推 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "它已經是 SAV-E 裡的地圖章", outputLanguage: .traditionalChinese),
+                caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: [], outputLanguage: .traditionalChinese))公開探索會分開列在下面。你可以再補預算、想坐一下或外帶，我再幫你縮小。"
+            )
+        }
+
+        if let top = reviewResults.first {
+            return agentAnswer(
+                lead: "我不會直接亂推未確認地點；可以先看 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "它還在待確認清單裡，需要確認後才會變成地圖章", outputLanguage: .traditionalChinese),
+                caveat: "先確認成地圖章，或再補一個線索後再信任它。"
+            )
+        }
+
+        if let top = unsavedResults.first {
+            return agentAnswer(
+                lead: "你的 SAV-E 記憶裡還沒有附近已保存\(categoryLabel)，但公開探索我會先看 \(top.title)。",
+                reason: reasonLine(for: top, fallback: "它是附近公開結果，還不是 SAV-E 記憶", outputLanguage: .traditionalChinese),
+                caveat: "你可以補預算或想要的氛圍，或先保存它，之後 SAV-E 才會記得你喜不喜歡。"
+            )
+        }
+
         var parts: [String] = []
+        if !savedResults.isEmpty {
+            parts.append("\(savedResults.count) 個已保存地圖章")
+        }
         if !reviewResults.isEmpty {
-            parts.append("\(reviewResults.count) Review candidate\(reviewResults.count == 1 ? "" : "s")")
+            parts.append("\(reviewResults.count) 個待確認地點")
         }
         if !unsavedResults.isEmpty {
-            parts.append("\(unsavedResults.count) unsaved nearby option\(unsavedResults.count == 1 ? "" : "s")")
+            parts.append("\(unsavedResults.count) 個附近公開選項")
         }
-        return parts.isEmpty ? "" : "I also found \(parts.joined(separator: ", ")); they stay separate. "
+        if parts.isEmpty {
+            return fallbackAvailable
+                ? "我目前沒有看到附近已保存\(categoryLabel)。可以接著搜尋公開探索；這些地點會維持未保存，直到你選擇保存。"
+                : "我目前沒有看到附近已保存\(categoryLabel)。"
+        }
+        return "我目前沒有找到附近已保存\(categoryLabel)。我找到 \(parts.joined(separator: "、"))；待確認地點和公開探索會分開，讓你自己決定要不要保存。"
     }
 
-    private func reasonLine(for result: SaveSearchResult, fallback: String) -> String {
+    private func supportingSummary(reviewResults: [SaveSearchResult], unsavedResults: [SaveSearchResult], outputLanguage: AppLanguage) -> String {
+        var parts: [String] = []
+        if !reviewResults.isEmpty {
+            parts.append(outputLanguage.localized(
+                english: "\(reviewResults.count) Review candidate\(reviewResults.count == 1 ? "" : "s")",
+                traditionalChinese: "\(reviewResults.count) 個待確認地點"
+            ))
+        }
+        if !unsavedResults.isEmpty {
+            parts.append(outputLanguage.localized(
+                english: "\(unsavedResults.count) unsaved nearby option\(unsavedResults.count == 1 ? "" : "s")",
+                traditionalChinese: "\(unsavedResults.count) 個附近公開選項"
+            ))
+        }
+        return parts.isEmpty ? "" : outputLanguage.localized(
+            english: "I also found \(parts.joined(separator: ", ")); they stay separate. ",
+            traditionalChinese: "我也找到 \(parts.joined(separator: "、"))；它們會分開顯示。"
+        )
+    }
+
+    private func reasonLine(for result: SaveSearchResult, fallback: String, outputLanguage: AppLanguage) -> String {
         var reasons: [String] = []
         switch result.objectType {
         case .savedPlace, .triedMemory:
-            reasons.append("Saved Map Stamp")
+            reasons.append(outputLanguage.localized(english: "Saved Map Stamp", traditionalChinese: "已保存地圖章"))
         case .pendingCandidate, .sourceOnlyClue:
-            reasons.append("Review Candidate")
+            reasons.append(outputLanguage.localized(english: "Review Candidate", traditionalChinese: "待確認地點"))
         case .mapVisibleUnsavedPlace, .newRecommendation:
-            reasons.append("unsaved public result")
+            reasons.append(outputLanguage.localized(english: "unsaved public result", traditionalChinese: "未保存公開結果"))
         case .review:
-            reasons.append("private review")
+            reasons.append(outputLanguage.localized(english: "private review", traditionalChinese: "私人評價"))
         case .tripStop:
-            reasons.append("trip stop")
+            reasons.append(outputLanguage.localized(english: "trip stop", traditionalChinese: "行程站點"))
         }
         if let distanceLabel = result.distanceLabel {
             reasons.append(distanceLabel)
         }
         if let rating = result.rating {
-            reasons.append(String(format: "%.1f rating", rating))
+            reasons.append(outputLanguage.localized(
+                english: String(format: "%.1f rating", rating),
+                traditionalChinese: String(format: "評分 %.1f", rating)
+            ))
         }
         if let reviewCount = result.reviewCount {
-            reasons.append("\(reviewCount) reviews")
+            reasons.append(outputLanguage.localized(english: "\(reviewCount) reviews", traditionalChinese: "\(reviewCount) 則評論"))
         }
         reasons.append(contentsOf: result.evidence.prefix(2))
         let cleaned = unique(reasons
@@ -610,35 +741,53 @@ struct SaveLocationIntentRecommendationService {
         return values.filter { seen.insert($0).inserted }
     }
 
-    private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool, tasteProfile: SaveTasteProfile) -> [String] {
-        var values = ["\(place.category.displayName) Map Stamp"]
+    private func reasons(for place: Place, intent: SaveSearchIntent, currentLocation: CLLocation?, isNearby: Bool, tasteProfile: SaveTasteProfile, outputLanguage: AppLanguage) -> [String] {
+        var values = [outputLanguage.localized(
+            english: "\(place.category.displayName) Map Stamp",
+            traditionalChinese: "\(categoryDisplayName(place.category, outputLanguage: outputLanguage))地圖章"
+        )]
         let signals = tasteProfile.rankingSignals(for: place)
         if !intent.categoryNeedles.isEmpty, evidenceScore(place, needles: intent.categoryNeedles) > 0 {
-            values.append("Saved evidence matches \(intent.categoryNeedles.prefix(2).joined(separator: " / "))")
+            values.append(outputLanguage.localized(
+                english: "Saved evidence matches \(intent.categoryNeedles.prefix(2).joined(separator: " / "))",
+                traditionalChinese: "已保存線索符合 \(intent.categoryNeedles.prefix(2).joined(separator: " / "))"
+            ))
         }
         if signals.isPositiveVisited {
-            values.append("Visited place you rated well")
+            values.append(outputLanguage.localized(english: "Visited place you rated well", traditionalChinese: "你去過且評價不錯"))
         } else if signals.hasVisitedTasteMatch {
-            values.append("Taste match from places you visited")
+            values.append(outputLanguage.localized(english: "Taste match from places you visited", traditionalChinese: "符合你去過地點的偏好"))
         }
         if let highRating = signals.highRating {
-            values.append(String(format: "High rating %.1f", highRating))
+            values.append(outputLanguage.localized(
+                english: String(format: "High rating %.1f", highRating),
+                traditionalChinese: String(format: "高評分 %.1f", highRating)
+            ))
         }
         if !signals.matchingPreferredTerms.isEmpty {
-            values.append("Taste tags match \(signals.matchingPreferredTerms.prefix(2).joined(separator: " / "))")
+            values.append(outputLanguage.localized(
+                english: "Taste tags match \(signals.matchingPreferredTerms.prefix(2).joined(separator: " / "))",
+                traditionalChinese: "偏好標籤符合 \(signals.matchingPreferredTerms.prefix(2).joined(separator: " / "))"
+            ))
         }
         if let priceRange = signals.preferredPriceRange {
-            values.append("Price matches places you liked (\(priceRange))")
+            values.append(outputLanguage.localized(
+                english: "Price matches places you liked (\(priceRange))",
+                traditionalChinese: "價位符合你喜歡的地點（\(priceRange)）"
+            ))
         }
         if signals.frequentCategoryCount >= SaveTasteProfile.frequentCategoryThreshold {
-            values.append("Category matches places you often save")
+            values.append(outputLanguage.localized(english: "Category matches places you often save", traditionalChinese: "符合你常保存的類別"))
         }
         if let currentLocation {
             let meters = distanceMeters(from: currentLocation, to: place)
-            values.append(isNearby ? "\(distanceLabel(meters)) away" : "\(distanceLabel(meters)) away, outside nearby radius")
+            values.append(outputLanguage.localized(
+                english: isNearby ? "\(distanceLabel(meters)) away" : "\(distanceLabel(meters)) away, outside nearby radius",
+                traditionalChinese: isNearby ? "距離 \(distanceLabel(meters))" : "距離 \(distanceLabel(meters))，超出附近範圍"
+            ))
         }
         if place.sourceUrl != nil {
-            values.append("Has source receipt")
+            values.append(outputLanguage.localized(english: "Has source receipt", traditionalChinese: "有來源憑證"))
         }
         return values
     }
@@ -656,6 +805,16 @@ struct SaveLocationIntentRecommendationService {
 
     private func localizedCategoryLabel(for intent: SaveSearchIntent) -> String {
         intent.localizedRecommendationLabel
+    }
+
+    private func categoryDisplayName(_ category: PlaceCategory, outputLanguage: AppLanguage) -> String {
+        category.displayName(language: outputLanguage)
+    }
+
+    private func inferredOutputLanguage(for query: String) -> AppLanguage {
+        query.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value))
+        } ? .traditionalChinese : .english
     }
 
     private func rawPlaceId(from resultId: String) -> String? {

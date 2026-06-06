@@ -99,14 +99,16 @@ final class AIDrawerViewModel: ObservableObject {
                 places: places,
                 reviewCandidates: reviewCandidates,
                 mapCandidates: mapCandidates,
-                currentLocation: currentLocation
+                currentLocation: currentLocation,
+                outputLanguage: outputLanguage
             )
         } ?? locationIntentRecommendationService.recommendationSearchResponse(
             for: trimmed,
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
-            currentLocation: currentLocation
+            currentLocation: currentLocation,
+            outputLanguage: outputLanguage
         )
         if let gatedResponse {
             await showGroundedRecommendationResponse(
@@ -292,6 +294,10 @@ final class AIDrawerViewModel: ObservableObject {
 
     func shouldSearchNearbyUnsavedCandidates(for query: String) -> Bool {
         saveSearchController.shouldSearchNearbyUnsavedCandidatesImmediately(for: query)
+    }
+
+    func shouldPrepareMapCandidates(for query: String) -> Bool {
+        saveSearchController.shouldPrepareMapCandidates(for: query)
     }
 
     func shouldSearchExactMapCandidates(for query: String) -> Bool {

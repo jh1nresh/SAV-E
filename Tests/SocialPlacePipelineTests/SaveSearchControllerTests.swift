@@ -413,6 +413,14 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "找附近新的咖啡廳"))
     }
 
+    @MainActor
+    func testDrawerRegularRecommendationPreparesPublicCandidatesWithoutPublicOnlyIntent() {
+        let drawer = AIDrawerViewModel(groundedAnswerClient: nil)
+
+        XCTAssertTrue(drawer.shouldPrepareMapCandidates(for: "推薦我咖啡廳"))
+        XCTAssertFalse(drawer.shouldSearchNearbyUnsavedCandidates(for: "推薦我咖啡廳"))
+    }
+
     func testPlainCafeSearchReturnsSavedAndUnsavedCandidatesWhenPrepared() throws {
         let controller = SaveSearchController()
         let response = controller.search(

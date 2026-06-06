@@ -74,7 +74,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.placeIds, [])
         XCTAssertNil(response.mapAction)
         XCTAssertTrue(response.messageText?.contains("附近沒有咖啡廳") == true)
-        XCTAssertTrue(response.messageText?.contains("did not recommend generic cafes or other categories") == true)
+        XCTAssertTrue(response.messageText?.contains("不會拿泛用咖啡廳或其他類別亂推") == true)
 
         let sectioned = try XCTUnwrap(service.recommendationSearchResponse(
             for: "附近咖啡廳",
@@ -85,6 +85,37 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(sectioned.fromYourSave.showsNearbySearchAction)
         XCTAssertEqual(sectioned.additionalSections.first?.results.map(\.title), ["Cafe C"])
         XCTAssertTrue(sectioned.newRecommendations.showsNearbySearchAction)
+    }
+
+    func testTraditionalChineseCafeRecommendationKeepsFallbackAnswerLocalized() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let savedCoffee = place(
+            name: "Bright Coffee Bar",
+            category: .cafe,
+            latitude: 33.6849,
+            longitude: -117.8262,
+            note: "Pour-over coffee and quiet tables",
+            googleRating: 4.6
+        )
+        let publicCoffee = mapCandidate(name: "Public Coffee", category: .cafe)
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我咖啡廳",
+            places: [savedCoffee],
+            mapCandidates: [publicCoffee],
+            currentLocation: currentLocation,
+            outputLanguage: .traditionalChinese
+        ))
+
+        let message = try XCTUnwrap(response.assistantMessage)
+        XCTAssertTrue(message.contains("我會先推 Bright Coffee Bar"))
+        XCTAssertTrue(message.contains("公開探索會分開"))
+        XCTAssertFalse(message.contains("Saved Map Stamp"))
+        XCTAssertFalse(message.contains("Public discovery"))
+        XCTAssertFalse(message.contains("rating"))
+        XCTAssertEqual(response.fromYourSave.title, "來自 SAV-E 的附近記憶")
+        XCTAssertEqual(response.newRecommendations.title, "附近公開探索")
     }
 
     func testNearbyCafeWithoutCurrentLocationReturnsLocationNeededMessage() throws {
@@ -557,9 +588,9 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         ))
 
         XCTAssertEqual(response.componentType, .message)
-        XCTAssertEqual(response.title, "Unsupported category")
+        XCTAssertEqual(response.title, "尚未支援的類別")
         XCTAssertEqual(response.placeIds, [])
-        XCTAssertTrue(response.messageText?.contains("won't map this to food or cafe") == true)
+        XCTAssertTrue(response.messageText?.contains("不會誤判成餐廳或咖啡廳") == true)
     }
 
     func testNearbyMilkTeaKeepsFarSavedPlacesOutOfPrimaryAnswer() throws {
@@ -874,12 +905,12 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
                 query: "推薦我附近咖啡",
                 places: [farSavedCoffee],
                 reviewCandidates: [],
-                mapCandidates: [],
+                mapCandidates: [publicCoffee],
                 expectedSavedTitles: [],
                 expectedReviewTitles: [],
-                expectedPublicTitles: [],
+                expectedPublicTitles: ["Public Coffee"],
                 expectedFarSavedTitles: ["LA Coffee Archive"],
-                shouldShowPublicFallback: true
+                shouldShowPublicFallback: false
             ),
             Fixture(
                 name: "review-only candidate is usable but not promoted to saved",

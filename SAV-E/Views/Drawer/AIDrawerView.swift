@@ -1477,6 +1477,8 @@ struct AIDrawerView: View {
             searchNearbyUnsavedCandidates(for: viewModel.query)
         } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
+        } else if viewModel.shouldPrepareMapCandidates(for: viewModel.query) {
+            searchNearbyUnsavedCandidates(for: viewModel.query)
         } else {
             Task {
                 await submitDrawerQuery()
@@ -1495,13 +1497,16 @@ struct AIDrawerView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let isExactSearch = viewModel.shouldSearchExactMapCandidates(for: trimmed)
+        let isExplicitPublicSearch = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed)
         let fallbackQuery = viewModel.shouldSearchNearbyUnsavedCandidates(for: trimmed) || isExactSearch
             ? trimmed
             : "search nearby unsaved candidates for \(trimmed)"
         viewModel.query = trimmed
         addSpotStatus = isExactSearch
             ? languageSettings.localized(english: "Looking for exact map matches. Review the result before saving.", traditionalChinese: "正在找精確地圖結果。保存前請先確認結果。")
-            : languageSettings.localized(english: "Looking for nearby unsaved candidates. Your SAV-E results stay separate.", traditionalChinese: "正在找附近未保存地點。這些會和你的 SAV-E 記憶分開。")
+            : isExplicitPublicSearch
+                ? languageSettings.localized(english: "Looking for nearby unsaved candidates. Your SAV-E results stay separate.", traditionalChinese: "正在找附近未保存地點。這些會和你的 SAV-E 記憶分開。")
+                : languageSettings.localized(english: "Looking for nearby public options. SAV-E memory still stays first.", traditionalChinese: "正在找附近公開候選地點。SAV-E 記憶仍會優先。")
         withAnimation { drawerDetent = .medium }
 
         Task {
