@@ -69,7 +69,7 @@ SAV-E/Models/Place.swift
 Current implementation facts:
 
 - `SaveAIService` uses Gemini via `GEMINI_API_KEY`.
-- Current model fallback order starts with `gemini-2.5-flash-lite`, then `gemini-2.5-flash`, then `gemini-flash-lite-latest`.
+- Current model fallback order is centralized in `SAVEProductionConfig.defaultGeminiModelFallbacks` and starts with `gemini-3.5-flash`.
 - `SaveAIService.localIntentResponse` only handles coarse category commands when the query contains English trigger words like `show`, `map`, `spots`, or `places`.
 - `SaveSearchController` already has early intent/category parsing for terms such as milk tea, coffee, food, bar, attraction, and stay.
 - `SaveSearchController` currently ranks local and unsaved map candidates but does not have a strict current-location distance gate for `nearby` queries.
@@ -458,12 +458,10 @@ Use an LLM where it helps, but make provider/model choice evidence-based.
 
 The current bug can happen even with GPT if retrieval is not gated. Model upgrade alone is not a fix.
 
-However, the current model order is probably too cheap/weak for polished Ask SAV-E behavior:
+The old `flash-lite`-first model order was too cheap/weak for polished Ask SAV-E behavior. The current shared default is:
 
 ```text
-1. gemini-2.5-flash-lite
-2. gemini-2.5-flash
-3. gemini-flash-lite-latest
+1. gemini-3.5-flash
 ```
 
 `flash-lite` is acceptable for cheap classification experiments, but it should not be the first model trusted for nuanced multilingual intent + explanation unless outputs are strictly validated.
@@ -515,8 +513,8 @@ Do **not** switch everything to GPT immediately.
 Recommended decision:
 
 ```text
-Keep Gemini API for now, but stop leading with flash-lite for Ask SAV-E.
-Use a provider gateway so SAV-E can compare Gemini 2.5 Flash vs GPT on the same fixtures.
+Keep Gemini API for now, with `gemini-3.5-flash` as the shared default model.
+Use a provider gateway later only if SAV-E needs to compare Gemini vs another provider on the same fixtures.
 ```
 
 Suggested default after P0/P1:
@@ -743,7 +741,7 @@ Gemini API is probably enough for P1/P2 if the task is framed correctly:
 structured intent parse + grounded wording from allowed candidate IDs
 ```
 
-The current first model, `gemini-2.5-flash-lite`, is likely too weak/cheap to be the trusted default for nuanced multilingual Ask SAV-E behavior. Use deterministic gates first, then prefer `gemini-2.5-flash` over `flash-lite` for intent fallback and answer polish.
+The old first model, `gemini-2.5-flash-lite`, was too weak/cheap to be the trusted default for nuanced multilingual Ask SAV-E behavior. Use deterministic gates first, then use the shared `gemini-3.5-flash` default for intent fallback and answer polish.
 
 GPT may be worth testing for P4 planning and ambiguous multilingual reasoning, but it should not be used as a band-aid for missing geo/category constraints. The acceptance test is not “sounds smarter”; it is:
 

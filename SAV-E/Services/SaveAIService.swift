@@ -9,9 +9,7 @@ struct ConversationTurn: Equatable {
 final class SaveAIService {
     static let shared = SaveAIService()
 
-    static let defaultModelFallbacks = [
-        "gemini-3-pro"
-    ]
+    static let defaultModelFallbacks = SAVEProductionConfig.defaultGeminiModelFallbacks
 
     private let apiKey: String?
     private let modelFallbacks: [String]
@@ -102,7 +100,7 @@ final class SaveAIService {
 
         var lastError: SaveAIError?
         for model in modelFallbacks {
-            let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+            let endpoint = SAVEProductionConfig.geminiGenerateContentURL(apiKey: apiKey, model: model)
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
