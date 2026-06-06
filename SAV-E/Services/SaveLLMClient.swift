@@ -38,14 +38,20 @@ struct SaveAgentPromptPolicy {
 
     static let outputContract = """
     Output contract:
+    - Respond ONLY with strict JSON. No markdown. No text outside JSON.
+    - JSON schema: {"answer":"string shown to the user","citedResultIds":["id-from-allowed-result-ids"]}
+    - citedResultIds must contain only IDs from Allowed result IDs; cite no more than two IDs.
+    - If no allowed result IDs exist, citedResultIds must be [] and answer must not name a place.
     - Answer in the requested output language exactly.
     - Sound like a concise assistant, not a debug report.
     - Recommend one best place first when a trustworthy allowed result exists.
     - If no nearby Saved Map Stamp exists but Public Discovery has allowed results, say SAV-E has no nearby saved match, then recommend one unsaved public option by title.
+    - Never call Public Discovery, unsaved map candidates, Review Candidates, or Source-only clues Map Stamps.
+    - If recommending Public Discovery, say it is unsaved/public discovery.
+    - If discussing a Review Candidate, say it needs review before becoming a Map Stamp.
+    - If discussing a Source-only clue, say it is only a clue/source and needs exact-place recovery.
     - Explain the reason using state, distance, rating/review count, and evidence.
-    - For broad cuisine or drink requests, recommend one safe option first, then ask one narrowing question such as ramen vs sushi or milk tea vs fruit tea.
     - Ask at most one lightweight follow-up question.
-    - Do not use headings like "Why:" or "Next:".
     - Do not use parenthetical lists, dangling brackets, or long row-label explanations.
     - Name no more than two places.
     - Keep it under 90 words and finish the final sentence.
@@ -100,9 +106,179 @@ struct SaveAgentPromptPolicy {
     }
 }
 
+struct GroundedLLMAnswer: Equatable {
+    var message: String
+    var citedResultIds: [String]
+}
+
+private struct GroundedLLMAnswerDTO: Decodable {
+    let answer: String
+    let citedResultIds: [String]
+}
+
+enum GroundedAnswerValidationError: LocalizedError, Equatable {
+    case malformedJSON
+    case unknownTopLevelKeys([String])
+    case emptyAnswer
+    case incompleteAnswer
+    case tooLong
+    case tooManyCitations
+    case citedUnknownResultID(String)
+    case citedResultNotGrounded(String)
+    case mentionsUncitedResult(String)
+    case mentionsDisallowedResult(String)
+    case missingPublicDiscoveryLabel(String)
+    case mislabeledUnsavedAsMapStamp(String)
+    case mislabeledReviewCandidateAsMapStamp(String)
+    case mislabeledSourceOnlyAsMapStamp(String)
+    case specificItemNotInEvidence(String)
+}
+
+struct GroundedAnswerJSONValidator {
+    func parseAndValidate(_ rawText: String, request: GroundedAnswerRequest) throws -> GroundedLLMAnswer {
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("{"), trimmed.hasSuffix("}"),
+              let data = trimmed.data(using: .utf8)
+        else { throw GroundedAnswerValidationError.malformedJSON }
+
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw GroundedAnswerValidationError.malformedJSON
+        }
+        let allowedKeys: Set<String> = ["answer", "citedResultIds"]
+        let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
+        guard unknownKeys.isEmpty else { throw GroundedAnswerValidationError.unknownTopLevelKeys(unknownKeys) }
+
+        let dto: GroundedLLMAnswerDTO
+        do {
+            dto = try JSONDecoder().decode(GroundedLLMAnswerDTO.self, from: data)
+        } catch {
+            throw GroundedAnswerValidationError.malformedJSON
+        }
+
+        let answer = dto.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty else { throw GroundedAnswerValidationError.emptyAnswer }
+        guard !GeminiSaveLLMClient.looksIncompleteGroundedAnswer(answer) else {
+            throw GroundedAnswerValidationError.incompleteAnswer
+        }
+        guard answer.count <= 700 && answer.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count <= 120 else {
+            throw GroundedAnswerValidationError.tooLong
+        }
+        guard dto.citedResultIds.count <= 2 else { throw GroundedAnswerValidationError.tooManyCitations }
+
+        let allowedIDs = Set(request.allowedPlaceIds)
+        let allResults = request.sections.flatMap(\.results)
+        let resultsByID = Dictionary(uniqueKeysWithValues: allResults.map { ($0.id, $0) })
+
+        for id in dto.citedResultIds {
+            guard allowedIDs.contains(id) else { throw GroundedAnswerValidationError.citedUnknownResultID(id) }
+            guard resultsByID[id] != nil else { throw GroundedAnswerValidationError.citedResultNotGrounded(id) }
+        }
+
+        let normalizedAnswer = normalize(answer)
+        for result in allResults {
+            let normalizedTitle = normalize(result.title)
+            guard !normalizedTitle.isEmpty, normalizedAnswer.contains(normalizedTitle) else { continue }
+            if !allowedIDs.contains(result.id) {
+                throw GroundedAnswerValidationError.mentionsDisallowedResult(result.id)
+            }
+            if !dto.citedResultIds.contains(result.id) {
+                throw GroundedAnswerValidationError.mentionsUncitedResult(result.id)
+            }
+        }
+
+        for id in dto.citedResultIds {
+            guard let result = resultsByID[id] else { continue }
+            try validateBoundary(result: result, answer: normalizedAnswer)
+            if request.intent.requiresSpecificEvidenceMatch {
+                try validateSpecificEvidence(result: result, intent: request.intent)
+            }
+        }
+
+        return GroundedLLMAnswer(message: answer, citedResultIds: dto.citedResultIds)
+    }
+
+    private func validateBoundary(result: SaveSearchResult, answer: String) throws {
+        let mapStampMarkers = ["map stamp", "saved memory", "your save", "your saved", "地圖章", "地图章", "已保存"]
+        let safeNegatedMapStampContext = answer.contains("no nearby saved map stamp") ||
+            answer.contains("no saved map stamp") ||
+            answer.contains("沒有已保存") ||
+            answer.contains("没有已保存") ||
+            answer.contains("沒有附近") ||
+            answer.contains("没有附近")
+        let saysMapStamp = !safeNegatedMapStampContext && mapStampMarkers.contains { answer.contains($0) }
+        switch result.objectType {
+        case .mapVisibleUnsavedPlace, .newRecommendation:
+            if saysMapStamp { throw GroundedAnswerValidationError.mislabeledUnsavedAsMapStamp(result.id) }
+            let labels = ["unsaved", "public", "not saved", "public discovery", "not in your saved", "未保存", "尚未保存", "公開探索", "公开探索", "不是地圖章", "不是地图章"]
+            guard labels.contains(where: { answer.contains($0) }) else {
+                throw GroundedAnswerValidationError.missingPublicDiscoveryLabel(result.id)
+            }
+        case .pendingCandidate:
+            if saysMapStamp { throw GroundedAnswerValidationError.mislabeledReviewCandidateAsMapStamp(result.id) }
+            let labels = ["review candidate", "needs review", "待確認", "待确认", "需要確認", "需要确认"]
+            guard labels.contains(where: { answer.contains($0) }) else {
+                throw GroundedAnswerValidationError.mislabeledReviewCandidateAsMapStamp(result.id)
+            }
+        case .sourceOnlyClue:
+            if saysMapStamp { throw GroundedAnswerValidationError.mislabeledSourceOnlyAsMapStamp(result.id) }
+            let labels = ["clue", "source", "source-only", "needs exact place", "線索", "线索", "來源", "来源"]
+            guard labels.contains(where: { answer.contains($0) }) else {
+                throw GroundedAnswerValidationError.mislabeledSourceOnlyAsMapStamp(result.id)
+            }
+        default:
+            break
+        }
+    }
+
+    private func validateSpecificEvidence(result: SaveSearchResult, intent: SaveSearchIntent) throws {
+        let needles = specificNeedles(for: intent)
+        guard !needles.isEmpty else { return }
+        let evidenceText = [
+            result.title,
+            result.subtitle,
+            result.statusLabel,
+            result.cityOrArea,
+            result.missingInfo.joined(separator: " "),
+            result.evidence
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("search:") }
+                .joined(separator: " "),
+            result.recoveryQueries.joined(separator: " ")
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
+        let normalized = normalize(evidenceText)
+        guard needles.contains(where: { normalized.contains($0) }) else {
+            throw GroundedAnswerValidationError.specificItemNotInEvidence(result.id)
+        }
+    }
+
+    private func specificNeedles(for intent: SaveSearchIntent) -> [String] {
+        var values = intent.categoryNeedles.map(normalize)
+        let query = normalize(intent.rawText)
+        let groups: [(String, [String])] = [
+            ("hot pot", ["hot pot", "shabu", "火鍋", "火锅"]),
+            ("boba", ["boba", "milk tea", "奶茶", "珍珠"]),
+            ("ramen", ["ramen", "拉麵", "拉面"]),
+            ("sushi", ["sushi", "壽司", "寿司"])
+        ]
+        for (_, group) in groups where group.contains(where: { query.contains(normalize($0)) }) {
+            values.append(contentsOf: group.map(normalize))
+        }
+        var seen = Set<String>()
+        return values.filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
+    private func normalize(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 protocol SaveLLMClient {
     func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent
-    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer
 }
 
 struct DeterministicSaveIntentParser: SaveLLMClient {
@@ -119,14 +295,18 @@ struct DeterministicSaveIntentParser: SaveLLMClient {
         return intent
     }
 
-    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
         if request.sections.allSatisfy(\.results.isEmpty) {
-            return "No matching Map Stamps passed the category and location gates."
+            return GroundedLLMAnswer(
+                message: "No matching Map Stamps passed the category and location gates.",
+                citedResultIds: []
+            )
         }
-        return request.sections
+        let message = request.sections
             .filter { !$0.results.isEmpty }
             .map { "\($0.title): \($0.results.count)" }
             .joined(separator: "\n")
+        return GroundedLLMAnswer(message: message, citedResultIds: Array(request.allowedPlaceIds.prefix(2)))
     }
 }
 
@@ -134,6 +314,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
     private let apiKey: String
     private let modelFallbacks: [String]
     private let validator: SaveSearchIntentJSONValidator
+    private let groundedAnswerValidator: GroundedAnswerJSONValidator
     private let promptPolicy: SaveAgentPromptPolicy
     private let session: URLSession
 
@@ -141,12 +322,14 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         apiKey: String,
         modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks,
         validator: SaveSearchIntentJSONValidator = SaveSearchIntentJSONValidator(),
+        groundedAnswerValidator: GroundedAnswerJSONValidator = GroundedAnswerJSONValidator(),
         promptPolicy: SaveAgentPromptPolicy = SaveAgentPromptPolicy(),
         session: URLSession = .shared
     ) {
         self.apiKey = apiKey
         self.modelFallbacks = modelFallbacks
         self.validator = validator
+        self.groundedAnswerValidator = groundedAnswerValidator
         self.promptPolicy = promptPolicy
         self.session = session
     }
@@ -190,24 +373,32 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         return try validator.parseIntentJSON(extractJSONObject(from: text), rawText: request.query)
     }
 
-    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
         let prompt = promptPolicy.groundedAnswerPrompt(for: request)
         let answer = try await generateText(prompt: prompt, temperature: 0.2, maxOutputTokens: 1_024)
-        guard Self.looksIncompleteGroundedAnswer(answer) else { return answer }
-        let repairPrompt = """
-        \(prompt)
+        do {
+            return try groundedAnswerValidator.parseAndValidate(answer, request: request)
+        } catch {
+            let repairPrompt = """
+            \(prompt)
 
-        Rewrite this incomplete draft as a complete SAV-E answer.
-        Incomplete draft:
-        \(answer)
+            The previous response failed validation.
 
-        Requirements:
-        - Output only the final answer.
-        - Use 1-3 complete sentences.
-        - Do not use parentheses or dangling lists.
-        - Finish the final sentence.
-        """
-        return try await generateText(prompt: repairPrompt, temperature: 0.1, maxOutputTokens: 512)
+            Previous response:
+            \(answer)
+
+            Return ONLY valid JSON matching:
+            {"answer":"complete user-facing answer","citedResultIds":["allowed-result-id"]}
+
+            Requirements:
+            - Use only Allowed result IDs.
+            - Do not invent place names.
+            - Do not call unsaved/public/review/source-only results Map Stamps.
+            - Finish the final sentence.
+            """
+            let repaired = try await generateText(prompt: repairPrompt, temperature: 0.1, maxOutputTokens: 512)
+            return try groundedAnswerValidator.parseAndValidate(repaired, request: request)
+        }
     }
 
     static func looksIncompleteGroundedAnswer(_ value: String) -> Bool {

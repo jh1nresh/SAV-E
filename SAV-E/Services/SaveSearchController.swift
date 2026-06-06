@@ -186,7 +186,12 @@ struct SaveSearchController {
             createdAt: place.createdAt,
             canRunRecovery: false,
             isRecommendationShell: false,
-            primaryAction: SavePlaceActionResolution(place: place).kind
+            primaryAction: SavePlaceActionResolution(place: place).kind,
+            placeHighlights: place.savedPlaceHighlights,
+            recommendedItems: place.savedRecommendedItems,
+            vibeTags: place.savedVibeTags,
+            accessNotes: place.savedAccessNotes,
+            sourceHandle: place.savedSourceHandle
         )
     }
 
@@ -233,7 +238,12 @@ struct SaveSearchController {
             createdAt: record.createdAt,
             canRunRecovery: resolvedPrimaryAction == .runRecovery,
             isRecommendationShell: false,
-            primaryAction: resolvedPrimaryAction
+            primaryAction: resolvedPrimaryAction,
+            placeHighlights: record.placeHighlights,
+            recommendedItems: record.recommendedItems,
+            vibeTags: record.vibeTags,
+            accessNotes: record.accessNotes,
+            sourceHandle: record.sourceHandle
         )
     }
 
@@ -262,7 +272,12 @@ struct SaveSearchController {
             createdAt: candidate.createdAt,
             canRunRecovery: !isMapReady,
             isRecommendationShell: false,
-            primaryAction: isMapReady ? .confirmMapStamp : .runRecovery
+            primaryAction: isMapReady ? .confirmMapStamp : .runRecovery,
+            placeHighlights: candidate.placeHighlights,
+            recommendedItems: candidate.recommendedItems,
+            vibeTags: candidate.vibeTags,
+            accessNotes: candidate.accessNotes,
+            sourceHandle: candidate.sourceHandle
         )
     }
 
@@ -381,8 +396,18 @@ struct SaveSearchController {
         if let note = place.note, !note.isEmpty {
             evidence.append("Note: \(note)")
         }
-        if let dishes = place.extractedDishes, !dishes.isEmpty {
-            evidence.append("Saved clues: \(dishes.joined(separator: ", "))")
+        let recommendedItems = place.savedRecommendedItems
+        if !recommendedItems.isEmpty {
+            evidence.append("Saved clues: \(recommendedItems.map(\.displayText).joined(separator: ", "))")
+        }
+        if !place.savedPlaceHighlights.isEmpty {
+            evidence.append(contentsOf: place.savedPlaceHighlights.map { "Highlight: \($0)" })
+        }
+        if !place.savedVibeTags.isEmpty {
+            evidence.append("Vibe: \(place.savedVibeTags.joined(separator: ", "))")
+        }
+        if !place.savedAccessNotes.isEmpty {
+            evidence.append(contentsOf: place.savedAccessNotes.map { "Access: \($0)" })
         }
         if let rating = place.rating {
             evidence.append("Your rating: \(rating)")

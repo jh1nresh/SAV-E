@@ -579,6 +579,7 @@ extension Place {
             displayName = refinedMatch?.name ?? candidate.name
         }
 
+        let sourceURL = sourceURL(from: candidate.evidence)
         return Place(
             id: UUID(),
             name: displayName,
@@ -591,16 +592,23 @@ extension Place {
             status: .wantToGo,
             rating: nil,
             note: candidate.evidence.joined(separator: "\n"),
-            sourceUrl: nil,
-            sourcePlatform: .other,
+            sourceUrl: sourceURL,
+            sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             sourceImageUrl: nil,
-            extractedDishes: nil,
+            extractedDishes: candidate.recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
-            recommender: nil,
+            recommender: candidate.sourceHandle,
             googleRating: refinedMatch?.rating,
             googlePriceLevel: refinedMatch?.priceLevel,
             openingHours: nil,
-            createdAt: Date()
+            createdAt: Date(),
+            visibility: .privateMemory,
+            socialSignal: nil,
+            placeHighlights: candidate.placeHighlights.nilIfEmpty,
+            recommendedItems: candidate.recommendedItems.nilIfEmpty,
+            vibeTags: candidate.vibeTags.nilIfEmpty,
+            accessNotes: candidate.accessNotes.nilIfEmpty,
+            sourceHandle: candidate.sourceHandle
         )
     }
 
@@ -626,6 +634,45 @@ extension Place {
             sourceUrl == other.sourceUrl
         )
     }
+}
+
+private func sourceURL(from evidence: [String]) -> String? {
+    for line in evidence {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+        if lowered.hasPrefix("source url:") || lowered.hasPrefix("source:") {
+            let value = trimmed
+                .split(separator: ":", maxSplits: 1)
+                .dropFirst()
+                .joined(separator: ":")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if isHTTPURL(value) { return value }
+        }
+        if let url = firstHTTPURL(in: trimmed) { return url }
+    }
+    return nil
+}
+
+private func firstHTTPURL(in text: String) -> String? {
+    guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    return detector
+        .matches(in: text, options: [], range: range)
+        .compactMap(\.url)
+        .first { url in
+            guard let scheme = url.scheme?.lowercased() else { return false }
+            return scheme == "http" || scheme == "https"
+        }?
+        .absoluteString
+}
+
+private func isHTTPURL(_ value: String) -> Bool {
+    guard let url = URL(string: value), let scheme = url.scheme?.lowercased() else { return false }
+    return scheme == "http" || scheme == "https"
+}
+
+private extension Array {
+    var nilIfEmpty: [Element]? { isEmpty ? nil : self }
 }
 
 extension PlaceCategory {

@@ -2208,6 +2208,211 @@ final class SaveSearchControllerTests: XCTestCase {
             createdAt: Date()
         )
     }
+
+    func testGroundedAnswerValidatorRejectsUnknownCitationAndMarkdownJSON() throws {
+        let placeID = "place-\(UUID().uuidString)"
+        let result = SaveSearchResult(
+            id: placeID,
+            objectType: .savedPlace,
+            userState: .wantToGo,
+            title: "Saved Coffee",
+            subtitle: "Irvine",
+            statusLabel: "Map Stamp",
+            sourceURL: nil,
+            sourcePlatform: nil,
+            category: .cafe,
+            cityOrArea: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            rating: nil,
+            reviewCount: nil,
+            confidence: nil,
+            missingInfo: [],
+            evidence: ["Saved clues: latte"],
+            recoveryQueries: [],
+            createdAt: Date(),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .recommendOrder
+        )
+        let request = groundedRequest(result: result, allowedIDs: [placeID], query: "coffee")
+
+        XCTAssertThrowsError(try GroundedAnswerJSONValidator().parseAndValidate(
+            "```json\n{\"answer\":\"Try Saved Coffee.\",\"citedResultIds\":[\"\(placeID)\"]}\n```",
+            request: request
+        ))
+        XCTAssertThrowsError(try GroundedAnswerJSONValidator().parseAndValidate(
+            "{\"answer\":\"Try Ghost Cafe.\",\"citedResultIds\":[\"ghost\"]}",
+            request: request
+        ))
+    }
+
+    func testGroundedAnswerValidatorRequiresPublicDiscoveryLabel() throws {
+        let id = "map-candidate-public"
+        let result = SaveSearchResult(
+            id: id,
+            objectType: .mapVisibleUnsavedPlace,
+            userState: .unsaved,
+            title: "Bright Coffee Bar",
+            subtitle: "Irvine",
+            statusLabel: "Unsaved Candidate · not memory",
+            sourceURL: nil,
+            sourcePlatform: nil,
+            category: .cafe,
+            cityOrArea: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            rating: 4.7,
+            reviewCount: 120,
+            confidence: nil,
+            missingInfo: [],
+            evidence: ["Google Places result"],
+            recoveryQueries: [],
+            createdAt: Date(),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .savePlace
+        )
+        let request = groundedRequest(result: result, allowedIDs: [id], query: "new coffee")
+
+        XCTAssertThrowsError(try GroundedAnswerJSONValidator().parseAndValidate(
+            "{\"answer\":\"Bright Coffee Bar is a great Map Stamp from your saved memory.\",\"citedResultIds\":[\"\(id)\"]}",
+            request: request
+        ))
+        let answer = try GroundedAnswerJSONValidator().parseAndValidate(
+            "{\"answer\":\"SAV-E has no nearby saved Map Stamp, but Bright Coffee Bar is an unsaved Public Discovery option.\",\"citedResultIds\":[\"\(id)\"]}",
+            request: request
+        )
+        XCTAssertEqual(answer.citedResultIds, [id])
+    }
+
+    func testPlaceFromReviewCandidatePreservesFoodIntelligenceOnConfirmation() throws {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Mume",
+            address: "No. 28, Siwei Rd, Taipei",
+            city: "Taipei",
+            latitude: 25.033,
+            longitude: 121.548,
+            evidence: [
+                "Source URL: https://www.instagram.com/reel/food123/",
+                "Creator/provenance: @taipeieats",
+                "Highlight: Recommended item: Uni Toast $480",
+                "Highlight: Open kitchen and date-night vibe",
+                "Highlight: 5 min walk from MRT"
+            ],
+            confidence: 0.92,
+            missingInfo: [],
+            status: "pending",
+            createdAt: Date()
+        )
+
+        let place = Place.from(candidate)
+
+        XCTAssertEqual(place.sourceUrl, "https://www.instagram.com/reel/food123/")
+        XCTAssertEqual(place.sourcePlatform, .instagram)
+        XCTAssertEqual(place.extractedDishes, ["Uni Toast"])
+        XCTAssertEqual(place.recommendedItems?.map(\.displayText), ["Uni Toast $480"])
+        XCTAssertTrue(place.placeHighlights?.contains("Open kitchen and date-night vibe") == true)
+        XCTAssertEqual(place.accessNotes, ["5 min walk from MRT"])
+        XCTAssertEqual(place.sourceHandle, "taipeieats")
+        XCTAssertEqual(place.recommender, "taipeieats")
+        XCTAssertEqual(place.visibility, .privateMemory)
+    }
+
+    func testFoodPlaceInsightServiceUsesSavedPrivateStructuredMemoryAndIgnoresPublicShell() {
+        let saved = place(
+            name: "Known Noodle",
+            address: "Taipei",
+            category: .food,
+            note: "Highlight: Recommended item: Beef noodle $220"
+        )
+        var enriched = saved
+        enriched.recommendedItems = [RecommendedItem(name: "Beef noodle", price: "$220")]
+        enriched.placeHighlights = ["Rich broth"]
+        enriched.vibeTags = ["Recommended"]
+        enriched.accessNotes = ["Near MRT"]
+        enriched.sourceHandle = "taipeieats"
+        enriched.sourceUrl = "https://www.instagram.com/reel/noodle/"
+
+        let insight = FoodPlaceInsightService().insight(for: enriched)
+        XCTAssertEqual(insight?.headline, "Try Beef noodle $220")
+        XCTAssertEqual(insight?.isFromSavedPrivateMemory, true)
+        XCTAssertEqual(insight?.sourceHandle, "taipeieats")
+
+        let publicResult = SaveSearchResult(
+            id: "new-recommendation-shell-test",
+            objectType: .newRecommendation,
+            userState: .unsaved,
+            title: "Search new places for ramen",
+            subtitle: "Recommendation only",
+            statusLabel: "Recommendation · unsaved",
+            sourceURL: nil,
+            sourcePlatform: nil,
+            category: .food,
+            cityOrArea: nil,
+            latitude: nil,
+            longitude: nil,
+            rating: nil,
+            reviewCount: nil,
+            confidence: nil,
+            missingInfo: [],
+            evidence: ["Recommendation only; no map pin or saved memory was created"],
+            recoveryQueries: [],
+            createdAt: Date(),
+            canRunRecovery: false,
+            isRecommendationShell: true,
+            primaryAction: .none
+        )
+        XCTAssertNil(FoodPlaceInsightService().insight(for: publicResult))
+    }
+
+    @MainActor
+    func testShowPlanAroundSavedPlaceBuildsTripItineraryWithoutLLM() {
+        let anchor = place(name: "Sushi Gen", address: "Los Angeles", category: .food, latitude: 34.0478, longitude: -118.2386)
+        let coffee = place(name: "Maru Coffee", address: "Los Angeles", category: .cafe, latitude: 34.0356, longitude: -118.2296)
+        let viewModel = AIDrawerViewModel(groundedAnswerClient: nil)
+        viewModel.places = [anchor, coffee]
+
+        viewModel.showPlanAround(anchor: anchor, outputLanguage: .english)
+
+        guard case .displaying(let response) = viewModel.drawerState else {
+            return XCTFail("Expected deterministic plan response")
+        }
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertTrue(response.itineraryDays[0].stops.map(\.placeName).contains("Sushi Gen"))
+        XCTAssertTrue(response.itineraryDays[0].stops.map(\.placeName).contains("Maru Coffee"))
+        XCTAssertEqual(response.mapAction?.type, .showRoute)
+    }
+
+    private func groundedRequest(
+        result: SaveSearchResult,
+        allowedIDs: [String],
+        query: String
+    ) -> GroundedAnswerRequest {
+        let intent = SaveSearchIntent(
+            rawText: query,
+            normalizedText: SaveSearchIntentParser.normalize(query),
+            kind: .categoryRecommendation,
+            requiredCategories: result.category.map { [$0] } ?? [],
+            optionalCategories: [],
+            locationMode: .unspecified,
+            sourceScope: .savedFirstAllowPublicFallback,
+            mustMatchCategory: false,
+            mustMatchLocation: false,
+            confidence: 0.8,
+            unsupportedCategoryLabel: nil,
+            categoryNeedles: []
+        )
+        return GroundedAnswerRequest(
+            query: query,
+            intent: intent,
+            allowedPlaceIds: allowedIDs,
+            sections: [SaveSearchSection(id: "test", title: "Test", subtitle: "", results: [result])],
+            outputLanguage: .english
+        )
+    }
 }
 
 private final class StubGroundedAnswerClient: SaveLLMClient {
@@ -2229,9 +2434,9 @@ private final class StubGroundedAnswerClient: SaveLLMClient {
         return parsedIntent
     }
 
-    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> String {
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
         requests.append(request)
-        return answer
+        return GroundedLLMAnswer(message: answer, citedResultIds: Array(request.allowedPlaceIds.prefix(1)))
     }
 }
 

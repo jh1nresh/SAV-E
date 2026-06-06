@@ -204,10 +204,19 @@ struct AIDrawerView: View {
                 viewModel.removePlace(place)
                 closeMapDetail()
             },
-            onPlanAroundPlace: { place in
+            onRecommendOrder: { place in
                 closeMapDetail()
                 viewModel.query = "What should I order at \(place.name)?"
                 Task { await submitDrawerQuery() }
+            },
+            onPlanAroundPlace: { place in
+                closeMapDetail()
+                viewModel.showPlanAround(
+                    anchor: place,
+                    reviewCandidates: reviewCandidates,
+                    outputLanguage: languageSettings.language
+                )
+                withAnimation { drawerDetent = .large }
             },
             onAddMoreClueCandidate: { candidate in
                 addMoreClue(for: candidate)
@@ -535,8 +544,12 @@ struct AIDrawerView: View {
                             drawerDetent = .height(72)
                         }
                     } onPlanAround: {
-                        viewModel.query = "What should I order at \(place.name)?"
-                        Task { await submitDrawerQuery() }
+                        viewModel.showPlanAround(
+                            anchor: place,
+                            reviewCandidates: reviewCandidates,
+                            outputLanguage: languageSettings.language
+                        )
+                        withAnimation { drawerDetent = .large }
                     } onUpdateVisibility: { visibility in
                         try await onUpdatePlaceVisibility(place, visibility)
                     }
@@ -1755,6 +1768,7 @@ private struct MapDetailDrawerView: View {
     let isWorkingMapCandidateID: String?
     let onClose: () -> Void
     let onDeletePlace: (Place) async throws -> Void
+    let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
@@ -1854,6 +1868,7 @@ private struct MapDetailDrawerView: View {
                 case .savedPlace(let place):
                     SavedMapDetailDrawerContent(
                         place: place,
+                        onRecommendOrder: { onRecommendOrder(place) },
                         onPlanAroundPlace: { onPlanAroundPlace(place) },
                         onDeletePlace: {
                             try await onDeletePlace(place)
@@ -2235,6 +2250,7 @@ private struct MapDetailDrawerBackground: View {
 private struct SavedMapDetailDrawerContent: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
+    let onRecommendOrder: () -> Void
     let onPlanAroundPlace: () -> Void
     let onDeletePlace: () async throws -> Void
     let onUpdateVisibility: (PlaceVisibility) async throws -> Void
@@ -2285,8 +2301,12 @@ private struct SavedMapDetailDrawerContent: View {
             }
 
             HStack(spacing: 8) {
-                Button(action: onPlanAroundPlace) {
+                Button(action: onRecommendOrder) {
                     PlaceDetailActionLabel(title: languageSettings.localized(english: "Order?", traditionalChinese: "點餐？"), systemImage: "fork.knife", fill: .saveHoney.opacity(0.78))
+                }
+
+                Button(action: onPlanAroundPlace) {
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveSignal.opacity(0.56))
                 }
 
                 Button {

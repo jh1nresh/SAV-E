@@ -1001,6 +1001,11 @@ struct SaveSearchResult: Identifiable, Hashable {
     var distanceMeters: Double? = nil
     var photoURL: String? = nil
     var businessPhotoURLs: [String]? = nil
+    var placeHighlights: [String] = []
+    var recommendedItems: [RecommendedItem] = []
+    var vibeTags: [String] = []
+    var accessNotes: [String] = []
+    var sourceHandle: String? = nil
 
     var searchText: String {
         [
@@ -1016,6 +1021,11 @@ struct SaveSearchResult: Identifiable, Hashable {
             missingInfo.joined(separator: " "),
             evidence.joined(separator: " "),
             recoveryQueries.joined(separator: " "),
+            placeHighlights.joined(separator: " "),
+            recommendedItems.map(\.displayText).joined(separator: " "),
+            vibeTags.joined(separator: " "),
+            accessNotes.joined(separator: " "),
+            sourceHandle,
         ]
         .compactMap { $0 }
         .joined(separator: " ")
@@ -1279,5 +1289,127 @@ extension SaveSearchResponse {
 
     private var reviewCandidateSections: [SaveSearchSection] {
         additionalSections.filter { $0.id == "review-candidates" }
+    }
+}
+
+struct FoodPlaceInsight: Identifiable, Hashable {
+    var id: String
+    var title: String
+    var subtitle: String
+    var recommendedItems: [RecommendedItem]
+    var highlights: [String]
+    var vibeTags: [String]
+    var accessNotes: [String]
+    var sourceHandle: String?
+    var sourceURL: String?
+    var evidence: [String]
+    var isFromSavedPrivateMemory: Bool
+
+    var hasOrderableItems: Bool { !recommendedItems.isEmpty }
+
+    var headline: String {
+        if let first = recommendedItems.first { return "Try \(first.displayText)" }
+        if let first = highlights.first { return first }
+        return "Saved food memory"
+    }
+}
+
+struct FoodPlaceInsightService {
+    func insight(for place: Place) -> FoodPlaceInsight? {
+        guard isFoodLike(
+            category: place.category,
+            text: [place.name, place.address, place.note ?? "", place.savedRecommendedItems.map(\.displayText).joined(separator: " "), place.savedPlaceHighlights.joined(separator: " ")].joined(separator: " ")
+        ) else { return nil }
+        let recommendedItems = place.savedRecommendedItems
+        let highlights = place.savedPlaceHighlights
+        let vibeTags = place.savedVibeTags
+        let accessNotes = place.savedAccessNotes
+        guard !recommendedItems.isEmpty || !highlights.isEmpty || !vibeTags.isEmpty || !accessNotes.isEmpty else { return nil }
+        return FoodPlaceInsight(
+            id: "place-\(place.id.uuidString)",
+            title: place.name,
+            subtitle: place.address,
+            recommendedItems: recommendedItems,
+            highlights: highlights,
+            vibeTags: vibeTags,
+            accessNotes: accessNotes,
+            sourceHandle: place.savedSourceHandle,
+            sourceURL: place.sourceUrl,
+            evidence: foodEvidence(sourceURL: place.sourceUrl, sourceHandle: place.savedSourceHandle, recommendedItems: recommendedItems, highlights: highlights, vibeTags: vibeTags, accessNotes: accessNotes, fallbackNote: place.note),
+            isFromSavedPrivateMemory: true
+        )
+    }
+
+    func insight(for record: SaveMemoryRecord) -> FoodPlaceInsight? {
+        guard record.state == .confirmedPlace || record.state == .reviewCandidate else { return nil }
+        let category = record.category ?? .inferred(from: [record.title, record.placeName ?? "", record.address ?? "", record.evidence.joined(separator: " ")].joined(separator: " "))
+        guard isFoodLike(category: category, text: record.evidence.joined(separator: " ")) else { return nil }
+        guard !record.recommendedItems.isEmpty || !record.placeHighlights.isEmpty || !record.vibeTags.isEmpty || !record.accessNotes.isEmpty else { return nil }
+        return FoodPlaceInsight(
+            id: "record-\(record.id.uuidString)",
+            title: record.displayTitle,
+            subtitle: record.address ?? "",
+            recommendedItems: record.recommendedItems,
+            highlights: record.placeHighlights,
+            vibeTags: record.vibeTags,
+            accessNotes: record.accessNotes,
+            sourceHandle: record.sourceHandle,
+            sourceURL: record.sourceURL,
+            evidence: record.evidence,
+            isFromSavedPrivateMemory: true
+        )
+    }
+
+    func insight(for result: SaveSearchResult) -> FoodPlaceInsight? {
+        guard result.objectType == .savedPlace || result.objectType == .triedMemory || result.objectType == .pendingCandidate || result.objectType == .sourceOnlyClue else { return nil }
+        let category = result.category ?? .inferred(from: [result.title, result.subtitle, result.evidence.joined(separator: " ")].joined(separator: " "))
+        guard isFoodLike(category: category, text: result.searchText) else { return nil }
+        guard !result.recommendedItems.isEmpty || !result.placeHighlights.isEmpty || !result.vibeTags.isEmpty || !result.accessNotes.isEmpty else { return nil }
+        return FoodPlaceInsight(
+            id: result.id,
+            title: result.title,
+            subtitle: result.subtitle,
+            recommendedItems: result.recommendedItems,
+            highlights: result.placeHighlights,
+            vibeTags: result.vibeTags,
+            accessNotes: result.accessNotes,
+            sourceHandle: result.sourceHandle,
+            sourceURL: result.sourceURL,
+            evidence: result.evidence,
+            isFromSavedPrivateMemory: result.userState != .unsaved
+        )
+    }
+
+    private func isFoodLike(category: PlaceCategory, text: String) -> Bool {
+        if category == .food || category == .cafe || category == .bar { return true }
+        let lowered = text.folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current).lowercased()
+        return lowered.range(of: #"\b(order|dish|menu|ramen|sushi|coffee|cafe|bakery|dessert|brunch|lunch|dinner|restaurant|bar|cocktail|noodle|rice|taco|pizza)\b|推薦|必點|餐|咖啡|甜點|拉麵|拉面|火鍋|火锅|壽司|寿司|牛舌|燒肉|烧肉"#, options: .regularExpression) != nil
+    }
+
+    private func foodEvidence(
+        sourceURL: String?,
+        sourceHandle: String?,
+        recommendedItems: [RecommendedItem],
+        highlights: [String],
+        vibeTags: [String],
+        accessNotes: [String],
+        fallbackNote: String?
+    ) -> [String] {
+        var evidence: [String] = []
+        if let sourceURL, !sourceURL.isEmpty { evidence.append("Source URL: \(sourceURL)") }
+        if let sourceHandle, !sourceHandle.isEmpty { evidence.append("Source handle: @\(sourceHandle)") }
+        evidence.append(contentsOf: recommendedItems.map { "Recommended item: \($0.displayText)" })
+        evidence.append(contentsOf: highlights.map { "Highlight: \($0)" })
+        evidence.append(contentsOf: vibeTags.map { "Vibe: \($0)" })
+        evidence.append(contentsOf: accessNotes.map { "Access: \($0)" })
+        if let fallbackNote, !fallbackNote.isEmpty { evidence.append(fallbackNote) }
+        return evidence.removingDuplicatesForFoodInsight()
+    }
+}
+
+private extension Array where Element == String {
+    func removingDuplicatesForFoodInsight() -> [String] {
+        var seen = Set<String>()
+        return filter { seen.insert($0).inserted }
     }
 }

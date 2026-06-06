@@ -27,6 +27,21 @@ struct Place: Identifiable, Codable, Hashable {
     var createdAt: Date
     var visibility: PlaceVisibility? = nil
     var socialSignal: PlaceSocialSignal? = nil
+    var placeHighlights: [String]? = nil
+    var recommendedItems: [RecommendedItem]? = nil
+    var vibeTags: [String]? = nil
+    var accessNotes: [String]? = nil
+    var sourceHandle: String? = nil
+
+    var savedRecommendedItems: [RecommendedItem] {
+        if let recommendedItems, !recommendedItems.isEmpty { return recommendedItems }
+        return (extractedDishes ?? []).map { RecommendedItem(name: $0, price: nil) }
+    }
+
+    var savedPlaceHighlights: [String] { placeHighlights ?? [] }
+    var savedVibeTags: [String] { vibeTags ?? [] }
+    var savedAccessNotes: [String] { accessNotes ?? [] }
+    var savedSourceHandle: String? { sourceHandle ?? recommender }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

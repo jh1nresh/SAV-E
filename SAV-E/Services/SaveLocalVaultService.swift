@@ -102,7 +102,12 @@ final class SaveLocalVaultService {
             title: place.name,
             placeName: place.name,
             address: place.address,
-            evidence: place.note.map { [$0] } ?? [],
+            evidence: confirmedPlaceEvidence(place),
+            placeHighlights: place.savedPlaceHighlights,
+            recommendedItems: place.savedRecommendedItems,
+            vibeTags: place.savedVibeTags,
+            accessNotes: place.savedAccessNotes,
+            sourceHandle: place.savedSourceHandle,
             latitude: place.latitude,
             longitude: place.longitude,
             category: place.category,
@@ -112,6 +117,25 @@ final class SaveLocalVaultService {
         )
         try append(record)
         return record
+    }
+
+    private func confirmedPlaceEvidence(_ place: Place) -> [String] {
+        var evidence: [String] = []
+        if let sourceUrl = place.sourceUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !sourceUrl.isEmpty {
+            evidence.append("Source URL: \(sourceUrl)")
+        }
+        if let sourceHandle = place.savedSourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !sourceHandle.isEmpty {
+            evidence.append("Source handle: @\(sourceHandle)")
+        }
+        evidence.append(contentsOf: place.savedPlaceHighlights.map { "Highlight: \($0)" })
+        evidence.append(contentsOf: place.savedRecommendedItems.map { "Highlight: Recommended item: \($0.displayText)" })
+        evidence.append(contentsOf: place.savedVibeTags.map { "Vibe: \($0)" })
+        evidence.append(contentsOf: place.savedAccessNotes.map { "Access: \($0)" })
+        if let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            evidence.append(note)
+        }
+        var seen = Set<String>()
+        return evidence.filter { seen.insert($0).inserted }
     }
 
     private func loadRecords() throws -> [SaveMemoryRecord] {
@@ -282,15 +306,26 @@ private extension SaveMemoryRecord {
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             sourceImageUrl: nil,
-            extractedDishes: recommendedItems.map(\.name),
+            extractedDishes: recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
             recommender: sourceHandle,
             googleRating: nil,
             googlePriceLevel: nil,
             openingHours: nil,
-            createdAt: createdAt
+            createdAt: createdAt,
+            visibility: .privateMemory,
+            socialSignal: nil,
+            placeHighlights: placeHighlights.nilIfEmpty,
+            recommendedItems: recommendedItems.nilIfEmpty,
+            vibeTags: vibeTags.nilIfEmpty,
+            accessNotes: accessNotes.nilIfEmpty,
+            sourceHandle: sourceHandle
         )
     }
+}
+
+private extension Array {
+    var nilIfEmpty: [Element]? { isEmpty ? nil : self }
 }
 
 private extension JSONEncoder {

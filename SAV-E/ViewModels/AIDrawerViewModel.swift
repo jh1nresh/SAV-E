@@ -311,6 +311,50 @@ final class AIDrawerViewModel: ObservableObject {
         drawerState = .displaying(list.itineraryResponse())
     }
 
+    func showPlanAround(
+        anchor place: Place,
+        reviewCandidates: [PlaceReviewCandidate] = [],
+        outputLanguage: AppLanguage = .english,
+        duration: SavePlanDuration = .halfDay,
+        intent: SavePlanIntent = .balanced
+    ) {
+        let response = saveSearchController.search(
+            query: "",
+            places: places,
+            localRecords: [],
+            reviewCandidates: reviewCandidates,
+            mapCandidates: mapCandidates
+        )
+        let allSavedResults = response.fromYourSave.results + response.additionalSections.flatMap(\.results)
+        let anchorID = "place-\(place.id.uuidString)"
+        guard let anchor = allSavedResults.first(where: { $0.id == anchorID }) else {
+            showMessage(
+                title: outputLanguage.localized(english: "Need saved place", traditionalChinese: "需要已保存地點"),
+                message: outputLanguage.localized(
+                    english: "Save this as a Map Stamp before planning around it.",
+                    traditionalChinese: "請先保存成地圖章，再用它規劃周邊行程。"
+                )
+            )
+            return
+        }
+
+        let request = SavePlanAroundRequest(anchorResultID: anchor.id, duration: duration, intent: intent)
+        let result = SavePlanAroundController().planAround(
+            anchor: anchor,
+            savedResults: allSavedResults,
+            mapCandidates: mapCandidates,
+            request: request
+        )
+        switch result {
+        case .draft(let draft):
+            let response = SaveAIResponse.planAroundDraft(draft, outputLanguage: outputLanguage)
+            drawerState = .displaying(response)
+            mapAction = response.mapAction
+        case .blocked(let state):
+            showMessage(title: state.title, message: state.message)
+        }
+    }
+
     func resolvePlaces(from ids: [String]) -> [Place] {
         let uuids = Set(ids.compactMap { UUID(uuidString: $0) })
         return places.filter { uuids.contains($0.id) }
@@ -535,10 +579,10 @@ private extension SaveSearchResponse {
 
         do {
             let answer = try await client.renderGroundedAnswer(request)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !answer.isEmpty else { return self }
+            let message = answer.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !message.isEmpty else { return self }
             var copy = self
-            copy.replaceAgentAnswer(answer, source: .groundedLLM)
+            copy.replaceAgentAnswer(message, source: .groundedLLM)
             return copy
         } catch {
             return self
@@ -550,7 +594,8 @@ private extension AIDrawerViewModel {
     func recommendationIntent(for query: String) async -> SaveSearchIntent? {
         let deterministic = SaveSearchIntentParser().parse(query)
         if let deterministic,
-           !deterministic.requiredCategories.isEmpty || deterministic.unsupportedCategoryLabel != nil {
+           deterministic.unsupportedCategoryLabel != nil ||
+           (!deterministic.requiredCategories.isEmpty && deterministic.categoryNeedles.isEmpty) {
             return deterministic
         }
         guard let groundedAnswerClient else {
@@ -564,5 +609,68 @@ private extension AIDrawerViewModel {
             return deterministic
         }
         return llmIntent
+    }
+}
+
+private extension SaveAIResponse {
+    static func planAroundDraft(_ draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> SaveAIResponse {
+        let savedPlaceIDs = draft.routeStops.compactMap(\.savedPlaceUUIDString)
+        let stops = draft.routeStops.enumerated().map { index, stop in
+            let noteParts = [
+                stop.distanceLabel.map { "\($0) from anchor" },
+                stop.reason,
+                index > 0 && draft.routeNotes.indices.contains(index - 1) ? draft.routeNotes[index - 1] : nil
+            ].compactMap { $0 }
+            return ItineraryStop(
+                id: UUID(),
+                placeId: stop.savedPlaceUUIDString,
+                placeName: stop.title,
+                time: nil,
+                duration: suggestedDurationMinutes(for: stop),
+                note: noteParts.joined(separator: " · ")
+            )
+        }
+        let title = outputLanguage.localized(
+            english: "Plan around \(draft.anchor.title)",
+            traditionalChinese: "用「\(draft.anchor.title)」規劃"
+        )
+        let publicNote = draft.newSuggestions.isEmpty ? "" : outputLanguage.localized(
+            english: " Unsaved map candidates are clearly marked; save them before treating them as your Map Stamps.",
+            traditionalChinese: " 未保存的地圖候選會清楚標示；保存後才會成為你的地圖章。"
+        )
+        return SaveAIResponse(
+            componentType: .tripItinerary,
+            title: title,
+            placeIds: savedPlaceIDs,
+            navigationPlaceId: draft.anchor.savedPlaceUUIDString,
+            transportMode: draft.routeStops.count > 3 ? .driving : .walking,
+            itineraryDays: [ItineraryDay(dayNumber: 1, label: title, stops: stops)],
+            messageText: nil,
+            mapAction: savedPlaceIDs.count >= 2
+                ? MapActionData(type: .showRoute, placeIds: savedPlaceIDs, lat: nil, lng: nil, span: nil)
+                : MapActionData(type: .focusRegion, placeIds: nil, lat: draft.anchor.latitude, lng: draft.anchor.longitude, span: 0.03),
+            aiMessage: draft.explanation + publicNote
+        )
+    }
+
+    static func suggestedDurationMinutes(for stop: SavePlanStop) -> Int {
+        switch stop.category {
+        case .cafe: return 45
+        case .food: return 90
+        case .bar: return 75
+        case .attraction: return 90
+        case .shopping: return 60
+        case .stay: return 30
+        case nil: return 45
+        }
+    }
+}
+
+private extension SavePlanStop {
+    var savedPlaceUUIDString: String? {
+        guard id.hasPrefix("place-") else { return nil }
+        let raw = String(id.dropFirst("place-".count))
+        guard UUID(uuidString: raw) != nil else { return nil }
+        return raw
     }
 }
