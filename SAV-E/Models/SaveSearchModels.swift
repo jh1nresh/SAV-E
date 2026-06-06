@@ -857,6 +857,147 @@ extension SaveMapCandidate {
     }
 }
 
+
+struct FoodPlaceOrderAnalysis: Equatable {
+    var title: String
+    var message: String
+    var citedEvidence: [String]
+    var recommendedItems: [RecommendedItem]
+    var placeID: String?
+}
+
+struct FoodPlaceAnalysisService {
+    private let insightService: FoodPlaceInsightService
+
+    init(insightService: FoodPlaceInsightService = FoodPlaceInsightService()) {
+        self.insightService = insightService
+    }
+
+    func whatShouldIOrder(
+        at place: Place,
+        outputLanguage: AppLanguage = .english
+    ) -> SaveAIResponse {
+        let analysis = orderAnalysis(for: place, outputLanguage: outputLanguage)
+        return SaveAIResponse(
+            componentType: .message,
+            title: analysis.title,
+            placeIds: analysis.placeID.map { [$0] } ?? [],
+            navigationPlaceId: analysis.placeID,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: analysis.message,
+            mapAction: MapActionData(
+                type: .focusRegion,
+                placeIds: analysis.placeID.map { [$0] },
+                lat: place.latitude,
+                lng: place.longitude,
+                span: 0.01
+            ),
+            aiMessage: analysis.message
+        )
+    }
+
+    func orderAnalysis(
+        for place: Place,
+        outputLanguage: AppLanguage = .english
+    ) -> FoodPlaceOrderAnalysis {
+        guard let insight = insightService.insight(for: place) else {
+            let message = outputLanguage.localized(
+                english: "I do not have saved order evidence for \(place.name) yet, so I will not invent a dish. Add a saved note or source clue with the item you want SAV-E to remember.",
+                traditionalChinese: "我目前沒有「\(place.name)」的已保存點餐證據，所以不會編造菜名。可以新增筆記或來源線索，讓 SAV-E 記住推薦品項。"
+            )
+            return FoodPlaceOrderAnalysis(
+                title: outputLanguage.localized(english: "No saved order clue yet", traditionalChinese: "尚無已保存點餐線索"),
+                message: message,
+                citedEvidence: [],
+                recommendedItems: [],
+                placeID: place.id.uuidString
+            )
+        }
+        return orderAnalysis(for: insight, placeID: place.id.uuidString, outputLanguage: outputLanguage)
+    }
+
+    func orderAnalysis(
+        for insight: FoodPlaceInsight,
+        placeID: String? = nil,
+        outputLanguage: AppLanguage = .english
+    ) -> FoodPlaceOrderAnalysis {
+        let citedEvidence = groundedEvidence(from: insight)
+        if !insight.recommendedItems.isEmpty {
+            let items = insight.recommendedItems.prefix(3).map(\.displayText).joined(separator: ", ")
+            let context = supportingContext(from: insight, outputLanguage: outputLanguage)
+            let source = sourceLine(from: insight, outputLanguage: outputLanguage)
+            let message = outputLanguage.localized(
+                english: "Order \(items).\(context) This is based only on your saved SAV-E evidence\(source).",
+                traditionalChinese: "可以點 \(items)。\(context) 這只根據你已保存的 SAV-E 證據\(source)。"
+            )
+            return FoodPlaceOrderAnalysis(
+                title: outputLanguage.localized(english: "What to order at \(insight.title)", traditionalChinese: "在「\(insight.title)」點什麼"),
+                message: message,
+                citedEvidence: citedEvidence,
+                recommendedItems: Array(insight.recommendedItems.prefix(3)),
+                placeID: placeID
+            )
+        }
+
+        let fallbackClue = firstNonDishClue(from: insight, outputLanguage: outputLanguage)
+        let message = outputLanguage.localized(
+            english: "I do not have a saved dish for \(insight.title) yet, so I will not invent a menu item.\(fallbackClue)",
+            traditionalChinese: "我目前沒有「\(insight.title)」的已保存菜名，所以不會編造菜單品項。\(fallbackClue)"
+        )
+        return FoodPlaceOrderAnalysis(
+            title: outputLanguage.localized(english: "No saved dish yet", traditionalChinese: "尚無已保存菜名"),
+            message: message,
+            citedEvidence: citedEvidence,
+            recommendedItems: [],
+            placeID: placeID
+        )
+    }
+
+    private func groundedEvidence(from insight: FoodPlaceInsight) -> [String] {
+        var evidence: [String] = []
+        evidence.append(contentsOf: insight.recommendedItems.map { "Recommended item: \($0.displayText)" })
+        evidence.append(contentsOf: insight.highlights.map { "Highlight: \($0)" })
+        evidence.append(contentsOf: insight.vibeTags.map { "Vibe: \($0)" })
+        evidence.append(contentsOf: insight.accessNotes.map { "Access: \($0)" })
+        evidence.append(contentsOf: insight.evidence)
+        return evidence.removingDuplicatesForFoodInsight()
+    }
+
+    private func supportingContext(from insight: FoodPlaceInsight, outputLanguage: AppLanguage) -> String {
+        if let highlight = insight.highlights.first?.trimmingCharacters(in: .whitespacesAndNewlines), !highlight.isEmpty {
+            return outputLanguage.localized(english: " Saved note: \(highlight).", traditionalChinese: " 已保存筆記：\(highlight)。")
+        }
+        if let vibe = insight.vibeTags.first?.trimmingCharacters(in: .whitespacesAndNewlines), !vibe.isEmpty {
+            return outputLanguage.localized(english: " Saved vibe: \(vibe).", traditionalChinese: " 已保存氛圍：\(vibe)。")
+        }
+        return ""
+    }
+
+    private func sourceLine(from insight: FoodPlaceInsight, outputLanguage: AppLanguage) -> String {
+        if let handle = insight.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !handle.isEmpty {
+            return outputLanguage.localized(english: " from @\(handle)", traditionalChinese: "，來源是 @\(handle)")
+        }
+        if insight.sourceURL?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return outputLanguage.localized(english: " from the saved source", traditionalChinese: "，來源是已保存連結")
+        }
+        return ""
+    }
+
+    private func firstNonDishClue(from insight: FoodPlaceInsight, outputLanguage: AppLanguage) -> String {
+        if let highlight = insight.highlights.first?.trimmingCharacters(in: .whitespacesAndNewlines), !highlight.isEmpty {
+            return outputLanguage.localized(english: " Saved clue: \(highlight).", traditionalChinese: " 已保存線索：\(highlight)。")
+        }
+        if let vibe = insight.vibeTags.first?.trimmingCharacters(in: .whitespacesAndNewlines), !vibe.isEmpty {
+            return outputLanguage.localized(english: " Saved vibe: \(vibe).", traditionalChinese: " 已保存氛圍：\(vibe)。")
+        }
+        if let access = insight.accessNotes.first?.trimmingCharacters(in: .whitespacesAndNewlines), !access.isEmpty {
+            return outputLanguage.localized(english: " Saved access note: \(access).", traditionalChinese: " 已保存交通/到訪線索：\(access)。")
+        }
+        return ""
+    }
+}
+
 private extension Array where Element == String {
     func removingDuplicates() -> [String] {
         var seen: Set<String> = []

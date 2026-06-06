@@ -206,8 +206,11 @@ struct AIDrawerView: View {
             },
             onRecommendOrder: { place in
                 closeMapDetail()
-                viewModel.query = "What should I order at \(place.name)?"
-                Task { await submitDrawerQuery() }
+                viewModel.showFoodPlaceAnalysis(
+                    for: place,
+                    outputLanguage: languageSettings.language
+                )
+                withAnimation { drawerDetent = .large }
             },
             onPlanAroundPlace: { place in
                 closeMapDetail()
@@ -1475,13 +1478,8 @@ struct AIDrawerView: View {
         } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
         } else {
-            let submittedQuery = viewModel.query
             Task {
                 await submitDrawerQuery()
-                if viewModel.shouldAutoSearchNearbyUnsavedCandidates() ||
-                    viewModel.shouldPrepareNearbyCandidatesAfterAnswer(for: submittedQuery) {
-                    searchNearbyUnsavedCandidates(for: submittedQuery)
-                }
             }
         }
     }

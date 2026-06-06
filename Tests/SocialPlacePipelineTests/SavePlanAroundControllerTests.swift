@@ -140,6 +140,41 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.newSuggestions.first?.reason, "Adds a non-food unsaved candidate between Map Stamps.")
     }
 
+
+    func testPlanAroundKeepsSavedFirstAndUnsavedSuggestionsSeparate() throws {
+        let searchController = SaveSearchController()
+        let planController = SavePlanAroundController()
+        let anchor = place(name: "Anchor Lunch", address: "Los Angeles, CA", category: .food, latitude: 34.0478, longitude: -118.2386)
+        let savedCoffee = place(name: "Saved Coffee", address: "Los Angeles, CA", category: .cafe, latitude: 34.0480, longitude: -118.2390)
+        let response = searchController.search(query: "", places: [anchor, savedCoffee], localRecords: [])
+        let anchorResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Anchor Lunch" })
+
+        let result = planController.planAround(
+            anchor: anchorResult,
+            savedResults: response.fromYourSave.results,
+            mapCandidates: [
+                SaveMapCandidate(
+                    title: "Unsaved Museum",
+                    subtitle: "Nearby · Museum",
+                    latitude: 34.0506,
+                    longitude: -118.2396,
+                    category: .attraction,
+                    evidence: ["Visible nearby on map"]
+                )
+            ],
+            request: SavePlanAroundRequest(anchorResultID: anchorResult.id, duration: .halfDay, intent: .balanced)
+        )
+
+        guard case .draft(let draft) = result else {
+            return XCTFail("Expected routeable draft")
+        }
+
+        XCTAssertEqual(draft.nearbySaved.map(\.title), ["Saved Coffee"])
+        XCTAssertEqual(draft.newSuggestions.map(\.title), ["Unsaved Museum"])
+        XCTAssertEqual(draft.routeStops.prefix(2).map(\.title), ["Anchor Lunch", "Saved Coffee"])
+        XCTAssertEqual(draft.newSuggestions.first?.source, .unsavedMapCandidate)
+    }
+
     private func place(
         name: String,
         address: String,

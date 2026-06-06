@@ -159,6 +159,50 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(response.aiMessage?.contains("Map Stamps") == true)
     }
 
+
+    func testPlannerHonorsExplicitTransitConstraintWithoutChangingSavedStops() throws {
+        let places = [
+            makePlace("Tokyo Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
+            makePlace("Tokyo Ramen", address: "Tokyo", latitude: 35.6720, longitude: 139.7650, category: .food),
+            makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6730, longitude: 139.7660, category: .attraction)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(for: "Plan a Tokyo day by transit", places: places))
+
+        XCTAssertEqual(response.transportMode, .transit)
+        XCTAssertEqual(response.itineraryDays.flatMap(\.stops).map(\.placeName), ["Tokyo Coffee", "Tokyo Ramen", "Tokyo Museum"])
+        XCTAssertTrue(response.itineraryDays.flatMap(\.stops).contains { $0.note?.contains("public transit") == true })
+    }
+
+    func testPlannerRelaxedPaceCapsStopsPerDayButUsesOnlySavedPlaces() throws {
+        let places = [
+            makePlace("A Coffee", address: "Los Angeles, CA", latitude: 34.0000, longitude: -118.0000, category: .cafe),
+            makePlace("B Lunch", address: "Los Angeles, CA", latitude: 34.0010, longitude: -118.0010, category: .food),
+            makePlace("C Museum", address: "Los Angeles, CA", latitude: 34.0020, longitude: -118.0020, category: .attraction),
+            makePlace("D Shop", address: "Los Angeles, CA", latitude: 34.0030, longitude: -118.0030, category: .shopping),
+            makePlace("E Dinner", address: "Los Angeles, CA", latitude: 34.0040, longitude: -118.0040, category: .food)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(for: "Plan a relaxed one day Los Angeles trip", places: places))
+        let plannedStops = response.itineraryDays.flatMap(\.stops)
+
+        XCTAssertLessThanOrEqual(plannedStops.count, 3)
+        XCTAssertTrue(plannedStops.allSatisfy { stop in places.contains { $0.name == stop.placeName } })
+    }
+
+    func testPlannerAppliesRequestedStartTimeOnlyWhenExplicit() throws {
+        let places = [
+            makePlace("Morning Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
+            makePlace("Lunch Ramen", address: "Tokyo", latitude: 35.6720, longitude: 139.7650, category: .food)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(for: "Plan a Tokyo day starting at 10:30 am", places: places))
+        let stops = response.itineraryDays.flatMap(\.stops)
+
+        XCTAssertEqual(stops.first?.time, "10:30 AM")
+        XCTAssertEqual(stops.first(where: { $0.placeName == "Lunch Ramen" })?.time, "12:30 PM")
+    }
+
     private func makePlace(
         _ name: String,
         address: String,

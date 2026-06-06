@@ -198,7 +198,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.newRecommendations.results.isEmpty)
     }
 
-    func testCoffeeCravingTodayFallsBackToExplicitUnsavedSearchWhenNoNearbySavedCafe() throws {
+    func testCoffeeCravingTodayOffersExplicitUnsavedSearchWhenNoNearbySavedCafe() throws {
         let service = SaveLocationIntentRecommendationService()
 
         let response = try XCTUnwrap(service.recommendationSearchResponse(
@@ -211,7 +211,30 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results.isEmpty)
         XCTAssertTrue(response.fromYourSave.showsNearbySearchAction)
         XCTAssertTrue(response.newRecommendations.showsNearbySearchAction)
-        XCTAssertTrue(response.shouldAutoSearchNearbyUnsavedCandidates)
+        XCTAssertTrue(response.newRecommendations.results.isEmpty)
+    }
+
+    func testSavedNearbyRecommendationDoesNotIncludePublicScoutUntilCandidatesArePrepared() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+        let savedCafe = place(
+            name: "Saved Coffee",
+            category: .cafe,
+            latitude: 33.6847,
+            longitude: -117.8266
+        )
+
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "推薦我附近咖啡",
+            places: [savedCafe],
+            mapCandidates: [],
+            currentLocation: currentLocation
+        ))
+
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Saved Coffee"])
+        XCTAssertTrue(response.newRecommendations.results.isEmpty)
+        XCTAssertFalse(response.newRecommendations.showsNearbySearchAction)
+        XCTAssertEqual(response.groundedAnswerSections.map(\.id), ["from-your-save-nearby"])
     }
 
     func testCoffeeCravingTodayShowsSavedCafeFirstWhenNearby() throws {

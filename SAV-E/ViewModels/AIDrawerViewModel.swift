@@ -298,17 +298,14 @@ final class AIDrawerViewModel: ObservableObject {
         saveSearchController.exactMapCandidateQuery(for: query) != nil
     }
 
-    func shouldPrepareNearbyCandidatesAfterAnswer(for query: String) -> Bool {
-        mapCandidates.isEmpty && saveSearchController.shouldPrepareMapCandidates(for: query)
-    }
-
-    func shouldAutoSearchNearbyUnsavedCandidates() -> Bool {
-        guard case .saveSearchResults(let response) = drawerState else { return false }
-        return response.shouldAutoSearchNearbyUnsavedCandidates
-    }
-
     func showCollaborativeListPlan(_ list: SaveCollaborativeList) {
         drawerState = .displaying(list.itineraryResponse())
+    }
+
+    func showFoodPlaceAnalysis(for place: Place, outputLanguage: AppLanguage = .english) {
+        let response = FoodPlaceAnalysisService().whatShouldIOrder(at: place, outputLanguage: outputLanguage)
+        drawerState = .displaying(response)
+        mapAction = response.mapAction
     }
 
     func showPlanAround(

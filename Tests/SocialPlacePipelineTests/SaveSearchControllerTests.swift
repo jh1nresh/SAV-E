@@ -2386,6 +2386,87 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.mapAction?.type, .showRoute)
     }
 
+
+    func testPublicDiscoveryRequiresExplicitUnsavedOrNewLanguage() {
+        let controller = SaveSearchController()
+
+        XCTAssertFalse(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "推薦我附近咖啡"))
+        XCTAssertFalse(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "附近咖啡廳"))
+        XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "search nearby unsaved cafes"))
+        XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "find new coffee near me"))
+        XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "找附近新的咖啡廳"))
+    }
+
+    func testFoodPlaceAnalysisServiceRecommendsOnlySavedRecommendedItems() {
+        var saved = place(
+            name: "Known Noodle",
+            address: "Taipei",
+            category: .food,
+            note: "Creator said to order beef noodle."
+        )
+        saved.recommendedItems = [RecommendedItem(name: "Beef noodle", price: "$220")]
+        saved.placeHighlights = ["Rich broth"]
+        saved.sourceHandle = "taipeieats"
+        saved.sourceUrl = "https://www.instagram.com/reel/noodle/"
+
+        let response = FoodPlaceAnalysisService().whatShouldIOrder(at: saved)
+        let message = response.aiMessage ?? ""
+
+        XCTAssertEqual(response.componentType, .message)
+        XCTAssertEqual(response.placeIds, [saved.id.uuidString])
+        XCTAssertEqual(response.navigationPlaceId, saved.id.uuidString)
+        XCTAssertTrue(message.contains("Beef noodle $220"))
+        XCTAssertTrue(message.contains("Rich broth"))
+        XCTAssertTrue(message.contains("@taipeieats"))
+        XCTAssertFalse(message.lowercased().contains("ramen"))
+        XCTAssertFalse(message.lowercased().contains("dumpling"))
+    }
+
+    func testFoodPlaceAnalysisServiceRefusesToInventDishWhenNoSavedItemExists() {
+        var saved = place(
+            name: "Broth Bar",
+            address: "Taipei",
+            category: .food,
+            note: "Saved for cozy late-night soup."
+        )
+        saved.placeHighlights = ["Cozy late-night soup"]
+        saved.vibeTags = ["Comfort food"]
+
+        let analysis = FoodPlaceAnalysisService().orderAnalysis(for: saved)
+
+        XCTAssertTrue(analysis.recommendedItems.isEmpty)
+        XCTAssertTrue(analysis.message.contains("will not invent"))
+        XCTAssertTrue(analysis.message.contains("Cozy late-night soup"))
+        XCTAssertFalse(analysis.message.lowercased().contains("ramen"))
+        XCTAssertFalse(analysis.message.lowercased().contains("beef noodle"))
+        XCTAssertFalse(analysis.message.lowercased().contains("dumpling"))
+    }
+
+    @MainActor
+    func testShowFoodPlaceAnalysisBypassesGroundedLLMAndUsesSavedItem() {
+        var saved = place(
+            name: "Known Noodle",
+            address: "Taipei",
+            category: .food
+        )
+        saved.recommendedItems = [RecommendedItem(name: "Beef noodle", price: "$220")]
+        saved.placeHighlights = ["Rich broth"]
+
+        let client = StubGroundedAnswerClient(answer: "Order invented lobster.")
+        let viewModel = AIDrawerViewModel(groundedAnswerClient: client)
+        viewModel.places = [saved]
+
+        viewModel.showFoodPlaceAnalysis(for: saved)
+
+        guard case .displaying(let response) = viewModel.drawerState else {
+            return XCTFail("Expected deterministic food analysis response")
+        }
+
+        XCTAssertEqual(client.requests.count, 0)
+        XCTAssertTrue(response.aiMessage?.contains("Beef noodle $220") == true)
+        XCTAssertFalse(response.aiMessage?.contains("invented lobster") == true)
+    }
+
     private func groundedRequest(
         result: SaveSearchResult,
         allowedIDs: [String],
