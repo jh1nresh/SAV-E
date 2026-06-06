@@ -5,7 +5,9 @@
       "requiredCategories": ["cafe"],
       "locationMode": "currentLocation",
       "mustMatchCategory": true,
-      "mustMatchLocation": true
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": false,
+      "localizedRecommendationLabel": "咖啡廳"
     }
   },
   {
@@ -14,7 +16,9 @@
       "requiredCategories": ["cafe"],
       "locationMode": "currentLocation",
       "mustMatchCategory": true,
-      "mustMatchLocation": true
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "奶茶 / 珍奶"
     }
   },
   {
@@ -23,7 +27,64 @@
       "requiredCategories": ["food"],
       "locationMode": "currentLocation",
       "mustMatchCategory": true,
-      "mustMatchLocation": true
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "火鍋"
+    }
+  },
+  {
+    "query": "推薦我日式餐廳",
+    "expected": {
+      "requiredCategories": ["food"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "日式餐廳"
+    }
+  },
+  {
+    "query": "推薦我附近韓式餐廳",
+    "expected": {
+      "requiredCategories": ["food"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "韓式餐廳"
+    }
+  },
+  {
+    "query": "附近泰式",
+    "expected": {
+      "requiredCategories": ["food"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "泰式餐廳"
+    }
+  },
+  {
+    "query": "我今天想吃甜點",
+    "expected": {
+      "requiredCategories": ["cafe"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "甜點"
+    }
+  },
+  {
+    "query": "附近安靜咖啡",
+    "expected": {
+      "requiredCategories": ["cafe"],
+      "locationMode": "currentLocation",
+      "mustMatchCategory": true,
+      "mustMatchLocation": true,
+      "requiresSpecificEvidenceMatch": true,
+      "localizedRecommendationLabel": "安靜咖啡廳"
     }
   },
   {
@@ -32,7 +93,9 @@
       "requiredCategories": ["cafe"],
       "locationMode": "namedArea:Los Angeles",
       "mustMatchCategory": true,
-      "mustMatchLocation": false
+      "mustMatchLocation": false,
+      "requiresSpecificEvidenceMatch": false,
+      "localizedRecommendationLabel": "咖啡廳"
     }
   },
   {

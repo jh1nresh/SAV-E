@@ -10,6 +10,8 @@ final class SaveSearchIntentEvalTests: XCTestCase {
             let mustMatchLocation: Bool?
             let supportedCategory: Bool?
             let shouldNotReturnCafeOrFood: Bool?
+            let requiresSpecificEvidenceMatch: Bool?
+            let localizedRecommendationLabel: String?
         }
 
         let query: String
@@ -37,6 +39,12 @@ final class SaveSearchIntentEvalTests: XCTestCase {
             }
             if let mustMatchLocation = fixture.expected.mustMatchLocation {
                 XCTAssertEqual(intent.mustMatchLocation, mustMatchLocation, fixture.query)
+            }
+            if let requiresSpecificEvidenceMatch = fixture.expected.requiresSpecificEvidenceMatch {
+                XCTAssertEqual(intent.requiresSpecificEvidenceMatch, requiresSpecificEvidenceMatch, fixture.query)
+            }
+            if let localizedRecommendationLabel = fixture.expected.localizedRecommendationLabel {
+                XCTAssertEqual(intent.localizedRecommendationLabel, localizedRecommendationLabel, fixture.query)
             }
             XCTAssertEqual(locationModeLabel(intent.locationMode), fixture.expected.locationMode, fixture.query)
         }

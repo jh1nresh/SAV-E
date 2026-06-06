@@ -745,68 +745,18 @@ private struct SaveIntentQuery {
     let categories: Set<PlaceCategory>
     let needles: [String]
     let publicSearchQuery: String?
+    let requiresSpecificEvidenceMatch: Bool
 
-    init(
-        id: String,
-        categories: Set<PlaceCategory>,
-        needles: [String],
-        publicSearchQuery: String? = nil
-    ) {
-        self.id = id
-        self.categories = categories
-        self.needles = needles
-        self.publicSearchQuery = publicSearchQuery
+    init(entry: SaveSearchIntentLexicon.Entry) {
+        id = entry.id
+        categories = [entry.category]
+        needles = entry.needles
+        publicSearchQuery = entry.publicSearchQuery
+        requiresSpecificEvidenceMatch = entry.requiresSpecificEvidenceMatch
     }
 
     static func parse(from normalizedQuery: String) -> SaveIntentQuery? {
-        let specs: [SaveIntentQuery] = [
-            SaveIntentQuery(
-                id: "milk-tea",
-                categories: [.cafe],
-                needles: ["milk tea", "boba", "bubble tea", "奶茶", "珍奶", "珍珠奶茶"],
-                publicSearchQuery: "boba milk tea"
-            ),
-            SaveIntentQuery(
-                id: "hot-pot",
-                categories: [.food],
-                needles: ["hot pot", "hotpot", "shabu", "shabu shabu", "火鍋", "火锅", "涮涮鍋", "涮涮锅"],
-                publicSearchQuery: "hot pot"
-            ),
-            SaveIntentQuery(
-                id: "japanese",
-                categories: [.food],
-                needles: ["japanese", "japanese restaurant", "japanese food", "sushi", "ramen", "izakaya", "yakiniku", "sukiyaki", "日式", "日式餐廳", "日式餐厅", "日本料理", "日式料理", "壽司", "寿司", "拉麵", "拉面", "居酒屋", "燒肉", "烧肉", "壽喜燒", "寿喜烧"],
-                publicSearchQuery: "japanese restaurant"
-            ),
-            SaveIntentQuery(
-                id: "coffee",
-                categories: [.cafe],
-                needles: ["coffee", "cafe", "咖啡"]
-            ),
-            SaveIntentQuery(
-                id: "food",
-                categories: [.food],
-                needles: ["food", "restaurant", "dinner", "lunch", "餐廳", "餐厅", "吃飯", "吃饭", "美食"]
-            ),
-            SaveIntentQuery(
-                id: "bar",
-                categories: [.bar],
-                needles: ["bar", "cocktail", "drink", "喝酒", "酒吧", "調酒", "调酒"]
-            ),
-            SaveIntentQuery(
-                id: "attraction",
-                categories: [.attraction],
-                needles: ["museum", "gallery", "exhibition", "展覽", "展览", "美術館", "美术馆", "博物館", "博物馆"]
-            ),
-            SaveIntentQuery(
-                id: "stay",
-                categories: [.stay],
-                needles: ["hotel", "stay", "住宿", "飯店", "酒店"]
-            )
-        ]
-        return specs.first { spec in
-            spec.needles.contains { normalizedQuery.contains($0) }
-        }
+        SaveSearchIntentLexicon.match(in: normalizedQuery).map(SaveIntentQuery.init(entry:))
     }
 
     func matches(_ result: SaveSearchResult) -> Bool {
@@ -823,10 +773,6 @@ private struct SaveIntentQuery {
         if matches(result) { return 40 }
         if !requiresSpecificEvidenceMatch, categoryMatches(result) { return 10 }
         return 0
-    }
-
-    var requiresSpecificEvidenceMatch: Bool {
-        id == "milk-tea" || id == "hot-pot" || id == "japanese"
     }
 
     func isIntentToken(_ token: String) -> Bool {

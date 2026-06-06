@@ -38,13 +38,186 @@ struct SaveSearchIntent: Equatable {
     let categoryNeedles: [String]
 }
 
+struct SaveSearchIntentLexicon {
+    enum EvidencePolicy: Equatable {
+        case categoryOnly
+        case specificEvidence
+    }
+
+    struct Entry: Equatable {
+        let id: String
+        let category: PlaceCategory
+        let needles: [String]
+        let publicSearchQuery: String?
+        let recommendationLabel: String
+        let localizedRecommendationLabel: String
+        let evidencePolicy: EvidencePolicy
+
+        var requiresSpecificEvidenceMatch: Bool {
+            evidencePolicy == .specificEvidence
+        }
+    }
+
+    static let entries: [Entry] = [
+        Entry(
+            id: "milk-tea",
+            category: .cafe,
+            needles: ["milk tea", "boba", "bubble tea", "tea shop", "奶茶", "珍奶", "珍珠奶茶"],
+            publicSearchQuery: "boba milk tea",
+            recommendationLabel: "boba / milk tea",
+            localizedRecommendationLabel: "奶茶 / 珍奶",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "quiet-cafe",
+            category: .cafe,
+            needles: ["quiet cafe", "work cafe", "work-friendly cafe", "wifi cafe", "安靜咖啡", "安静咖啡", "適合工作", "适合工作"],
+            publicSearchQuery: "quiet cafe wifi",
+            recommendationLabel: "quiet cafe",
+            localizedRecommendationLabel: "安靜咖啡廳",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "coffee",
+            category: .cafe,
+            needles: ["coffee", "cafe", "coffee shop", "咖啡", "咖啡廳", "咖啡厅"],
+            publicSearchQuery: nil,
+            recommendationLabel: "cafe",
+            localizedRecommendationLabel: "咖啡廳",
+            evidencePolicy: .categoryOnly
+        ),
+        Entry(
+            id: "hot-pot",
+            category: .food,
+            needles: ["hot pot", "hotpot", "shabu", "shabu shabu", "火鍋", "火锅", "涮涮鍋", "涮涮锅"],
+            publicSearchQuery: "hot pot",
+            recommendationLabel: "hot pot",
+            localizedRecommendationLabel: "火鍋",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "japanese",
+            category: .food,
+            needles: ["japanese", "japanese restaurant", "japanese food", "sushi", "ramen", "izakaya", "yakiniku", "sukiyaki", "日式", "日式餐廳", "日式餐厅", "日本料理", "日式料理", "壽司", "寿司", "拉麵", "拉面", "居酒屋", "燒肉", "烧肉", "壽喜燒", "寿喜烧"],
+            publicSearchQuery: "japanese restaurant",
+            recommendationLabel: "Japanese",
+            localizedRecommendationLabel: "日式餐廳",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "korean",
+            category: .food,
+            needles: ["korean", "korean bbq", "kbbq", "韓式", "韩式", "韓國料理", "韩国料理", "韓式烤肉", "韩式烤肉", "部隊鍋", "部队锅"],
+            publicSearchQuery: "korean restaurant",
+            recommendationLabel: "Korean",
+            localizedRecommendationLabel: "韓式餐廳",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "thai",
+            category: .food,
+            needles: ["thai", "thai food", "thai restaurant", "泰式", "泰國料理", "泰国料理"],
+            publicSearchQuery: "thai restaurant",
+            recommendationLabel: "Thai",
+            localizedRecommendationLabel: "泰式餐廳",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "chinese",
+            category: .food,
+            needles: ["chinese", "chinese food", "chinese restaurant", "中式", "中餐", "中國菜", "中国菜", "川菜", "粵菜", "粤菜", "港式"],
+            publicSearchQuery: "chinese restaurant",
+            recommendationLabel: "Chinese",
+            localizedRecommendationLabel: "中式餐廳",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "brunch",
+            category: .food,
+            needles: ["brunch", "breakfast", "早午餐", "早餐"],
+            publicSearchQuery: "brunch",
+            recommendationLabel: "brunch",
+            localizedRecommendationLabel: "早午餐",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "dessert",
+            category: .cafe,
+            needles: ["dessert", "bakery", "cake", "patisserie", "甜點", "甜点", "蛋糕", "烘焙", "麵包", "面包"],
+            publicSearchQuery: "dessert bakery",
+            recommendationLabel: "dessert",
+            localizedRecommendationLabel: "甜點",
+            evidencePolicy: .specificEvidence
+        ),
+        Entry(
+            id: "food",
+            category: .food,
+            needles: ["food", "restaurant", "restaurants", "dinner", "lunch", "餐廳", "餐厅", "晚餐", "午餐", "吃飯", "吃饭", "美食"],
+            publicSearchQuery: nil,
+            recommendationLabel: "food",
+            localizedRecommendationLabel: "餐廳",
+            evidencePolicy: .categoryOnly
+        ),
+        Entry(
+            id: "bar",
+            category: .bar,
+            needles: ["bar", "cocktail", "drink", "drinks", "酒吧", "喝酒", "調酒", "调酒"],
+            publicSearchQuery: nil,
+            recommendationLabel: "bar",
+            localizedRecommendationLabel: "酒吧",
+            evidencePolicy: .categoryOnly
+        ),
+        Entry(
+            id: "attraction",
+            category: .attraction,
+            needles: ["attraction", "museum", "gallery", "exhibition", "spot", "景點", "景点", "展覽", "展览", "美術館", "美术馆", "博物館", "博物馆"],
+            publicSearchQuery: nil,
+            recommendationLabel: "attraction",
+            localizedRecommendationLabel: "景點",
+            evidencePolicy: .categoryOnly
+        ),
+        Entry(
+            id: "stay",
+            category: .stay,
+            needles: ["hotel", "stay", "住宿", "飯店", "酒店"],
+            publicSearchQuery: nil,
+            recommendationLabel: "stay",
+            localizedRecommendationLabel: "住宿",
+            evidencePolicy: .categoryOnly
+        ),
+        Entry(
+            id: "shopping",
+            category: .shopping,
+            needles: ["shopping", "shop", "shops", "mall", "購物", "购物", "商場", "商场"],
+            publicSearchQuery: nil,
+            recommendationLabel: "shopping",
+            localizedRecommendationLabel: "購物地點",
+            evidencePolicy: .categoryOnly
+        )
+    ]
+
+    static func match(in normalized: String) -> Entry? {
+        entries.first { entry in
+            entry.needles.contains { normalized.contains($0) }
+        }
+    }
+
+    static func entry(matchingNeedles needles: [String]) -> Entry? {
+        entries.first { entry in
+            entry.needles.contains { needle in
+                needles.contains(needle)
+            }
+        }
+    }
+}
+
 struct SaveSearchIntentParser {
     func parse(_ rawText: String) -> SaveSearchIntent? {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
         let normalized = Self.normalize(trimmed)
-        let categoryMatch = Self.categoryMatch(in: normalized)
+        let categoryMatch = SaveSearchIntentLexicon.match(in: normalized)
         let unsupportedCategory = Self.unsupportedCategory(in: normalized)
         let locationMode = Self.locationMode(in: normalized, categoryMatch: categoryMatch)
         let mustMatchLocation = {
@@ -98,7 +271,7 @@ struct SaveSearchIntentParser {
 
     private static func locationMode(
         in normalized: String,
-        categoryMatch: (category: PlaceCategory, needles: [String])?
+        categoryMatch: SaveSearchIntentLexicon.Entry?
     ) -> SaveSearchIntent.LocationMode {
         if containsAny(normalized, keywords: ["walking", "walkable", "走路", "步行"]) {
             return .currentLocation(radiusMeters: 1_000)
@@ -131,23 +304,6 @@ struct SaveSearchIntentParser {
         return nil
     }
 
-    private static func categoryMatch(in normalized: String) -> (category: PlaceCategory, needles: [String])? {
-        let specs: [(PlaceCategory, [String])] = [
-            (.cafe, ["milk tea", "boba", "bubble tea", "tea shop", "奶茶", "珍奶", "珍珠奶茶"]),
-            (.cafe, ["coffee", "cafe", "coffee shop", "咖啡", "咖啡廳", "咖啡厅"]),
-            (.food, ["hot pot", "hotpot", "shabu", "shabu shabu", "火鍋", "火锅", "涮涮鍋", "涮涮锅"]),
-            (.food, ["japanese", "japanese restaurant", "japanese food", "sushi", "ramen", "izakaya", "yakiniku", "sukiyaki", "日式", "日式餐廳", "日式餐厅", "日本料理", "日式料理", "壽司", "寿司", "拉麵", "拉面", "居酒屋", "燒肉", "烧肉", "壽喜燒", "寿喜烧"]),
-            (.food, ["food", "restaurant", "restaurants", "dinner", "lunch", "sushi", "ramen", "餐廳", "餐厅", "晚餐", "午餐", "吃飯", "吃饭", "美食"]),
-            (.bar, ["bar", "cocktail", "drink", "drinks", "酒吧", "喝酒", "調酒", "调酒"]),
-            (.attraction, ["attraction", "museum", "gallery", "exhibition", "spot", "景點", "景点", "展覽", "展览", "美術館", "美术馆", "博物館", "博物馆"]),
-            (.stay, ["hotel", "stay", "住宿", "飯店", "酒店"]),
-            (.shopping, ["shopping", "shop", "shops", "mall", "購物", "购物", "商場", "商场"])
-        ]
-        return specs.first { _, needles in
-            needles.contains { normalized.contains($0) }
-        }
-    }
-
     private static func unsupportedCategory(in normalized: String) -> String? {
         if containsAny(normalized, keywords: ["gym", "fitness", "workout", "健身房", "健身"]) {
             return "gym"
@@ -162,34 +318,20 @@ struct SaveSearchIntentParser {
 
 extension SaveSearchIntent {
     var requiresSpecificEvidenceMatch: Bool {
-        categoryNeedles.contains { needle in
-            Self.specificEvidenceNeedles.contains(needle)
-        }
+        SaveSearchIntentLexicon.entry(matchingNeedles: categoryNeedles)?.requiresSpecificEvidenceMatch == true
     }
 
     var recommendationLabel: String {
-        if categoryNeedles.contains(where: Self.hotPotNeedles.contains) {
-            return "hot pot"
-        }
-        if categoryNeedles.contains(where: Self.milkTeaNeedles.contains) {
-            return "boba / milk tea"
-        }
-        if categoryNeedles.contains(where: Self.japaneseNeedles.contains) {
-            return "Japanese"
+        if let entry = SaveSearchIntentLexicon.entry(matchingNeedles: categoryNeedles) {
+            return entry.recommendationLabel
         }
         guard let category = requiredCategories.first else { return "places" }
         return category.displayName.lowercased()
     }
 
     var localizedRecommendationLabel: String {
-        if categoryNeedles.contains(where: Self.hotPotNeedles.contains) {
-            return "火鍋"
-        }
-        if categoryNeedles.contains(where: Self.milkTeaNeedles.contains) {
-            return "奶茶 / 珍奶"
-        }
-        if categoryNeedles.contains(where: Self.japaneseNeedles.contains) {
-            return "日式餐廳"
+        if let entry = SaveSearchIntentLexicon.entry(matchingNeedles: categoryNeedles) {
+            return entry.localizedRecommendationLabel
         }
         guard let category = requiredCategories.first else { return "地點" }
         switch category {
@@ -208,11 +350,6 @@ extension SaveSearchIntent {
             normalized.contains(needle)
         }
     }
-
-    private static let milkTeaNeedles: Set<String> = ["milk tea", "boba", "bubble tea", "tea shop", "奶茶", "珍奶", "珍珠奶茶"]
-    private static let hotPotNeedles: Set<String> = ["hot pot", "hotpot", "shabu", "shabu shabu", "火鍋", "火锅", "涮涮鍋", "涮涮锅"]
-    private static let japaneseNeedles: Set<String> = ["japanese", "japanese restaurant", "japanese food", "sushi", "ramen", "izakaya", "yakiniku", "sukiyaki", "日式", "日式餐廳", "日式餐厅", "日本料理", "日式料理", "壽司", "寿司", "拉麵", "拉面", "居酒屋", "燒肉", "烧肉", "壽喜燒", "寿喜烧"]
-    private static let specificEvidenceNeedles = milkTeaNeedles.union(hotPotNeedles).union(japaneseNeedles)
 }
 
 enum SaveSearchIntentValidationError: Error, Equatable {

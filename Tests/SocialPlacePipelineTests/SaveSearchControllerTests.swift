@@ -868,6 +868,88 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(response.newRecommendations.results.map(\.title).contains("Fonda Moderna"))
     }
 
+    func testSpecialtyQueryEvalFixturesRejectGenericCategoryMatches() {
+        struct Fixture {
+            let query: String
+            let positiveTitle: String
+            let positiveSubtitle: String
+            let negativeTitle: String
+            let negativeSubtitle: String
+            let category: PlaceCategory
+        }
+
+        let fixtures = [
+            Fixture(
+                query: "推薦我附近韓式餐廳",
+                positiveTitle: "Seoul BBQ",
+                positiveSubtitle: "Korean BBQ restaurant",
+                negativeTitle: "Fonda Moderna",
+                negativeSubtitle: "Tustin, CA",
+                category: .food
+            ),
+            Fixture(
+                query: "附近泰式",
+                positiveTitle: "Thai Kitchen",
+                positiveSubtitle: "Thai restaurant",
+                negativeTitle: "Aloha Hawaiian BBQ",
+                negativeSubtitle: "Tustin, CA",
+                category: .food
+            ),
+            Fixture(
+                query: "我今天想吃甜點",
+                positiveTitle: "Mochi Donut Bakery",
+                positiveSubtitle: "Dessert bakery",
+                negativeTitle: "The Lost Bean",
+                negativeSubtitle: "Coffee shop",
+                category: .cafe
+            ),
+            Fixture(
+                query: "附近安靜咖啡",
+                positiveTitle: "Quiet Coffee",
+                positiveSubtitle: "Quiet cafe with Wi-Fi",
+                negativeTitle: "Generic Coffee",
+                negativeSubtitle: "Coffee shop",
+                category: .cafe
+            )
+        ]
+
+        let controller = SaveSearchController()
+        for fixture in fixtures {
+            let positive = SaveMapCandidate(
+                title: fixture.positiveTitle,
+                subtitle: fixture.positiveSubtitle,
+                latitude: 33.6849,
+                longitude: -117.8262,
+                category: fixture.category,
+                rating: 4.6,
+                reviewCount: 400,
+                distanceMeters: 520,
+                evidence: ["Google Places result"]
+            )
+            let negative = SaveMapCandidate(
+                title: fixture.negativeTitle,
+                subtitle: fixture.negativeSubtitle,
+                latitude: 33.6850,
+                longitude: -117.8270,
+                category: fixture.category,
+                rating: 4.8,
+                reviewCount: 900,
+                distanceMeters: 180,
+                evidence: ["Google Places result"]
+            )
+
+            let response = controller.search(
+                query: fixture.query,
+                places: [],
+                localRecords: [],
+                mapCandidates: [negative, positive]
+            )
+
+            XCTAssertEqual(response.newRecommendations.results.map { $0.title }, [fixture.positiveTitle], fixture.query)
+            XCTAssertFalse(response.newRecommendations.results.map { $0.title }.contains(fixture.negativeTitle), fixture.query)
+        }
+    }
+
     func testAgentPromptPolicyHandlesNoAllowedResultsAsBoundedFollowUp() {
         let policy = SaveAgentPromptPolicy()
         let request = GroundedAnswerRequest(
