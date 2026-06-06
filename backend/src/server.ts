@@ -14,6 +14,7 @@ import {
   recommendPlacesByClaims,
 } from "./placeClaims.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
+import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
   formatSharedPlaceLink,
   normalizeSharedPlaceLinkCreate,
@@ -24,6 +25,7 @@ import {
   parseLens,
 } from "./socialContracts.js";
 import {
+  normalizePlaceRecoveryWorkOrderCreate,
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
@@ -220,6 +222,7 @@ const sharedPlaceLinkFields = [
 ] as const;
 
 const workflowRunFields = [
+  "work_order_id",
   "workflow_id",
   "listing_id",
   "user_id",
@@ -235,6 +238,20 @@ const workflowRunFields = [
   "credit_settlement",
   "receipt_id",
   "completed_at",
+] as const;
+
+const workOrderFields = [
+  "workflow_id",
+  "listing_id",
+  "user_id",
+  "intent",
+  "input_type",
+  "input_ref",
+  "source_url",
+  "evaluator_policy_id",
+  "settlement_mode",
+  "budget_policy",
+  "status",
 ] as const;
 
 const userDecisionFields = [
@@ -258,6 +275,28 @@ const workflowReceiptFields = [
   "private_url",
 ] as const;
 
+const clearingBlockFields = [
+  "chain_namespace",
+  "user_id",
+  "block_number",
+  "previous_block_hash",
+  "merkle_root",
+  "receipt_count",
+  "block_hash",
+  "signer_agent_id",
+  "anchor_status",
+  "anchor_chain",
+  "anchor_tx_hash",
+] as const;
+
+const clearingBlockItemFields = [
+  "block_id",
+  "receipt_id",
+  "receipt_hash",
+  "merkle_proof",
+  "position",
+] as const;
+
 const creditLedgerFields = [
   "run_id",
   "user_id",
@@ -272,6 +311,7 @@ const jsonbFields = new Set([
   "edited_payload",
   "input",
   "input_schema",
+  "budget_policy",
   "output",
   "output_schema",
   "payload",
@@ -941,12 +981,82 @@ async function handleWorkflows(
   segments: string[],
   userId: string,
 ): Promise<void> {
-  if (segments[0] !== "place-recovery" || segments[1] !== "runs") {
+  if (segments[0] !== "place-recovery") {
     return sendJson(response, { error: "Unsupported workflows route" }, 405);
   }
 
-  const runId = segments[2];
+  const kind = segments[1];
+  const id = segments[2];
   const action = segments[3];
+
+  if (kind === "work-orders") {
+    if (request.method === "GET" && !id) {
+      const { rows } = await pool.query(
+        `select *
+         from work_orders
+         where user_id = $1 and workflow_id = $2
+         order by created_at desc
+         limit 100`,
+        [userId, placeRecoveryWorkflowId],
+      );
+      return sendJson(response, rows.map((row) => formatDates(row)));
+    }
+
+    if (request.method === "POST" && !id) {
+      const workOrder = normalizePlaceRecoveryWorkOrderCreate(await readJson(request));
+      const client = await pool.connect();
+      try {
+        const row = await createPlaceRecoveryWorkOrder(client, userId, workOrder);
+        return sendJson(response, formatDates(row), 201);
+      } finally {
+        client.release();
+      }
+    }
+
+    return sendJson(response, { error: "Unsupported work order route" }, 405);
+  }
+
+  if (kind === "clearing-blocks") {
+    if (request.method === "GET" && id) {
+      const block = await clearingBlockForUser(id, userId);
+      const { rows: items } = await pool.query(
+        `select receipt_id, receipt_hash, merkle_proof, position, created_at
+         from clearing_block_items
+         where block_id = $1
+         order by position asc`,
+        [id],
+      );
+      return sendJson(response, {
+        block: formatDates(block),
+        items: items.map((row) => formatDates(row)),
+      });
+    }
+
+    if (request.method === "GET" && !id) {
+      const { rows } = await pool.query(
+        `select *
+         from clearing_blocks
+         where user_id = $1 and chain_namespace = $2
+         order by block_number desc
+         limit 100`,
+        [userId, placeRecoveryWorkflowId],
+      );
+      return sendJson(response, rows.map((row) => formatDates(row)));
+    }
+
+    if (request.method === "POST" && !id) {
+      const created = await createClearingBlockForPendingReceipts(userId, await readJson(request));
+      return sendJson(response, created, created.created ? 201 : 200);
+    }
+
+    return sendJson(response, { error: "Unsupported clearing block route" }, 405);
+  }
+
+  if (kind !== "runs") {
+    return sendJson(response, { error: "Unsupported workflows route" }, 405);
+  }
+
+  const runId = id;
 
   if (request.method === "GET" && !runId) {
     const { rows } = await pool.query(
@@ -961,11 +1071,22 @@ async function handleWorkflows(
   }
 
   if (request.method === "POST" && !runId) {
-    const run = normalizePlaceRecoveryRunCreate(await readJson(request));
+    const body = await readJson(request);
+    const run = normalizePlaceRecoveryRunCreate(body);
+    const workOrder = normalizePlaceRecoveryWorkOrderCreate({
+      ...body,
+      source_url: run.sourceUrl,
+      source_type: run.sourceType,
+      credit_reserved: run.creditReserved,
+    });
     const client = await pool.connect();
     try {
       await client.query("begin");
+      const workOrderId = run.workOrderId
+        ? await ensureWorkOrderOwner(run.workOrderId, userId, client)
+        : String((await createPlaceRecoveryWorkOrder(client, userId, workOrder)).id);
       const insert = buildInsert("workflow_runs", {
+        work_order_id: workOrderId,
         workflow_id: run.workflowId,
         listing_id: run.listingId,
         user_id: userId,
@@ -977,6 +1098,7 @@ async function handleWorkflows(
       }, workflowRunFields);
       const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
       const created = asObject(rows[0]);
+      await client.query("update work_orders set status = 'running' where id = $1 and user_id = $2", [workOrderId, userId]);
       await insertCreditLedger(client, {
         run_id: String(created.id),
         user_id: userId,
@@ -1026,6 +1148,7 @@ async function handleWorkflows(
         userId,
       ],
     );
+    await syncWorkOrderStatusForRun(asObject(rows[0]), status);
     return sendJson(response, formatDates(rows[0]));
   }
 
@@ -1085,6 +1208,13 @@ async function handleWorkflows(
          returning *`,
         [receipt.creditSettlement, receiptRow.id, runId, userId],
       );
+      const completedRun = asObject(rows[0]);
+      if (completedRun.work_order_id) {
+        await client.query(
+          "update work_orders set status = 'completed' where id = $1 and user_id = $2",
+          [completedRun.work_order_id, userId],
+        );
+      }
       await client.query("commit");
       return sendJson(response, {
         run: formatDates(rows[0]),
@@ -1829,6 +1959,35 @@ async function ensureOwnedRecommendationSetReference(recommendationSetId: unknow
   if (!rows[0]) throw new ApiError(404, "Recommendation not found");
 }
 
+async function createPlaceRecoveryWorkOrder(
+  client: PoolClient,
+  userId: string,
+  workOrder: ReturnType<typeof normalizePlaceRecoveryWorkOrderCreate>,
+): Promise<JsonBody> {
+  const insert = buildInsert("work_orders", {
+    workflow_id: workOrder.workflowId,
+    listing_id: workOrder.listingId,
+    user_id: userId,
+    intent: workOrder.intent,
+    input_type: workOrder.inputType,
+    input_ref: workOrder.inputRef ?? null,
+    source_url: workOrder.sourceUrl ?? null,
+    evaluator_policy_id: workOrder.evaluatorPolicyId,
+    settlement_mode: workOrder.settlementMode,
+    budget_policy: workOrder.budgetPolicy,
+    status: "queued",
+  }, workOrderFields);
+  const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+  return asObject(rows[0]);
+}
+
+async function ensureWorkOrderOwner(workOrderId: string, userId: string, client?: PoolClient): Promise<string> {
+  const db = client ?? pool;
+  const { rows } = await db.query("select id from work_orders where id = $1 and user_id = $2", [workOrderId, userId]);
+  if (!rows[0]) throw new ApiError(404, "Work order not found");
+  return workOrderId;
+}
+
 async function ensureWorkflowRunOwner(runId: string, userId: string): Promise<void> {
   const { rows } = await pool.query("select id from workflow_runs where id = $1 and user_id = $2", [runId, userId]);
   if (!rows[0]) throw new ApiError(404, "Workflow run not found");
@@ -1838,6 +1997,125 @@ async function workflowRunForUser(runId: string, userId: string): Promise<JsonBo
   const { rows } = await pool.query("select * from workflow_runs where id = $1 and user_id = $2", [runId, userId]);
   if (!rows[0]) throw new ApiError(404, "Workflow run not found");
   return asObject(rows[0]);
+}
+
+async function clearingBlockForUser(blockId: string, userId: string): Promise<JsonBody> {
+  const { rows } = await pool.query(
+    "select * from clearing_blocks where id = $1 and user_id = $2",
+    [blockId, userId],
+  );
+  if (!rows[0]) throw new ApiError(404, "Clearing block not found");
+  return asObject(rows[0]);
+}
+
+async function createClearingBlockForPendingReceipts(userId: string, body: JsonBody): Promise<JsonBody> {
+  const limit = boundedClearingBlockLimit(body.limit);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const { rows: receiptRows } = await client.query(
+      `select wr.id, wr.receipt_hash
+       from workflow_receipts wr
+       join workflow_runs r on r.id = wr.run_id
+       where r.user_id = $1
+         and wr.workflow_id = $2
+         and not exists (
+           select 1 from clearing_block_items cbi where cbi.receipt_id = wr.id
+         )
+       order by wr.created_at asc, wr.id asc
+       limit $3
+       for update of wr skip locked`,
+      [userId, placeRecoveryWorkflowId, limit],
+    );
+
+    if (!receiptRows.length) {
+      await client.query("commit");
+      return { created: false, pending_receipt_count: 0 };
+    }
+
+    const { rows: previousRows } = await client.query(
+      `select block_number, block_hash
+       from clearing_blocks
+       where user_id = $1 and chain_namespace = $2
+       order by block_number desc
+       limit 1
+       for update`,
+      [userId, placeRecoveryWorkflowId],
+    );
+    const previous = previousRows[0] ? asObject(previousRows[0]) : {};
+    const blockNumber = Number(previous.block_number ?? 0) + 1;
+    const previousBlockHash = stringValue(previous.block_hash);
+    const receipts = receiptRows.map((row) => {
+      const receipt = asObject(row);
+      return {
+        id: String(receipt.id),
+        receiptHash: String(receipt.receipt_hash),
+      };
+    });
+    const draft = buildClearingBlockDraft({
+      chainNamespace: placeRecoveryWorkflowId,
+      blockNumber,
+      previousBlockHash,
+      receipts,
+    });
+
+    const blockInsert = buildInsert("clearing_blocks", {
+      chain_namespace: draft.chainNamespace,
+      user_id: userId,
+      block_number: draft.blockNumber,
+      previous_block_hash: draft.previousBlockHash ?? null,
+      merkle_root: draft.merkleRoot,
+      receipt_count: draft.receiptCount,
+      block_hash: draft.blockHash,
+      signer_agent_id: "save-backend",
+      anchor_status: "offchain",
+      anchor_chain: null,
+      anchor_tx_hash: null,
+    }, clearingBlockFields);
+    const { rows: blockRows } = await client.query(`${blockInsert.sql} returning *`, blockInsert.values);
+    const block = asObject(blockRows[0]);
+
+    const items: JsonBody[] = [];
+    for (const [position, receipt] of receipts.entries()) {
+      const itemInsert = buildInsert("clearing_block_items", {
+        block_id: block.id,
+        receipt_id: receipt.id,
+        receipt_hash: receipt.receiptHash,
+        merkle_proof: [],
+        position,
+      }, clearingBlockItemFields);
+      const { rows } = await client.query(`${itemInsert.sql} returning *`, itemInsert.values);
+      items.push(asObject(rows[0]));
+    }
+
+    await client.query(
+      "update workflow_receipts set anchor_status = 'batch_anchored' where id = any($1::uuid[])",
+      [receipts.map((receipt) => receipt.id)],
+    );
+    await client.query("commit");
+    return {
+      created: true,
+      block: formatDates(block),
+      items: items.map((item) => formatDates(item)),
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function syncWorkOrderStatusForRun(run: JsonBody, status: string): Promise<void> {
+  const workOrderId = stringValue(run.work_order_id);
+  const userId = stringValue(run.user_id);
+  if (!workOrderId || !userId) return;
+  await pool.query("update work_orders set status = $1 where id = $2 and user_id = $3", [status, workOrderId, userId]);
+}
+
+function boundedClearingBlockLimit(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return 50;
+  return Math.max(1, Math.min(100, value));
 }
 
 async function uniqueShareCode(): Promise<string> {

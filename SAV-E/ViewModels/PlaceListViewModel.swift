@@ -216,7 +216,12 @@ final class PlaceListViewModel: ObservableObject {
 
             var run: PlaceRecoveryWorkflowRun?
             do {
+                let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
+                    sourceURL: refinedCandidate.sourceURL,
+                    sourceType: nil
+                )
                 let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                    workOrderId: workOrder.id,
                     sourceURL: refinedCandidate.sourceURL,
                     sourceType: nil
                 )

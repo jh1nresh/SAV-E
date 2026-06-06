@@ -15,6 +15,9 @@ export const creditSettlements = ["pending", "consumed", "refunded", "partial"] 
 export const receiptVerdicts = ["pass", "partial", "fail", "refund", "dispute"] as const;
 export const receiptSettlements = ["credit_consumed", "credit_refunded", "partial", "manual_review"] as const;
 export const userDecisionActions = ["confirm", "edit", "reject", "needs_more_evidence"] as const;
+export const placeRecoveryWorkOrderIntent = "recover_place_from_source";
+export const placeRecoveryEvaluatorPolicyId = "save_place_recovery_v0";
+export const placeRecoverySettlementMode = "credit_after_decision";
 
 export type WorkflowStatus = typeof workflowStatuses[number];
 export type WorkflowResultType = typeof workflowResultTypes[number];
@@ -24,7 +27,20 @@ export type ReceiptVerdict = typeof receiptVerdicts[number];
 export type ReceiptSettlement = typeof receiptSettlements[number];
 export type UserDecisionAction = typeof userDecisionActions[number];
 
+export interface PlaceRecoveryWorkOrderCreate {
+  workflowId: typeof placeRecoveryWorkflowId;
+  listingId: typeof placeRecoveryListingId;
+  intent: typeof placeRecoveryWorkOrderIntent;
+  inputType: string;
+  inputRef?: string;
+  sourceUrl?: string;
+  evaluatorPolicyId: typeof placeRecoveryEvaluatorPolicyId;
+  settlementMode: typeof placeRecoverySettlementMode;
+  budgetPolicy: JsonObject;
+}
+
 export interface PlaceRecoveryRunCreate {
+  workOrderId?: string;
   workflowId: typeof placeRecoveryWorkflowId;
   listingId: typeof placeRecoveryListingId;
   sourceUrl?: string;
@@ -58,10 +74,28 @@ export interface WorkflowReceiptDraft {
   candidateRefs: string[];
 }
 
+export function normalizePlaceRecoveryWorkOrderCreate(body: JsonObject): PlaceRecoveryWorkOrderCreate {
+  const sourceUrl = normalizedURL(body.source_url ?? body.sourceUrl);
+  const inputType = inputTypeFor(body.input_type ?? body.inputType, sourceUrl);
+  const inputRef = trimmedString(body.input_ref ?? body.inputRef) ?? sourceUrl;
+  return {
+    workflowId: placeRecoveryWorkflowId,
+    listingId: placeRecoveryListingId,
+    intent: placeRecoveryWorkOrderIntent,
+    inputType,
+    inputRef,
+    sourceUrl,
+    evaluatorPolicyId: placeRecoveryEvaluatorPolicyId,
+    settlementMode: placeRecoverySettlementMode,
+    budgetPolicy: objectValue(body.budget_policy ?? body.budgetPolicy) ?? { credit_reserved: boundedCredits(body.credit_reserved ?? body.creditReserved) },
+  };
+}
+
 export function normalizePlaceRecoveryRunCreate(body: JsonObject): PlaceRecoveryRunCreate {
   const sourceUrl = normalizedURL(body.source_url ?? body.sourceUrl);
   const sourceType = sourceTypeFor(body.source_type ?? body.sourceType, sourceUrl);
   return {
+    workOrderId: trimmedString(body.work_order_id ?? body.workOrderId),
     workflowId: placeRecoveryWorkflowId,
     listingId: placeRecoveryListingId,
     sourceUrl,
@@ -161,6 +195,12 @@ function downgradeUnsafeConfirmedResult(
   if (technicalFailure) return "technical_failure";
   if (resultType !== "confirmed_map_stamp") return resultType;
   return evidenceTier === "confirmed" ? resultType : "review_candidate";
+}
+
+function inputTypeFor(value: unknown, sourceUrl: string | undefined): string {
+  const explicit = trimmedString(value);
+  if (explicit) return explicit;
+  return sourceUrl ? "url" : "text";
 }
 
 function sourceTypeFor(value: unknown, sourceUrl: string | undefined): string {

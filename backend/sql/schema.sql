@@ -339,8 +339,30 @@ create table if not exists shared_place_links (
 create index if not exists idx_shared_place_links_user_id on shared_place_links(user_id, created_at desc);
 create index if not exists idx_shared_place_links_source_place_id on shared_place_links(source_place_id);
 
+create table if not exists work_orders (
+    id uuid primary key default gen_random_uuid(),
+    workflow_id text not null,
+    listing_id text not null,
+    user_id text references profiles(id) on delete cascade not null,
+    intent text not null,
+    input_type text not null default 'url',
+    input_ref text,
+    source_url text,
+    evaluator_policy_id text not null,
+    settlement_mode text not null,
+    budget_policy jsonb not null default '{}'::jsonb,
+    status text not null default 'queued',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint work_orders_status_check check (status in ('queued', 'running', 'completed', 'failed', 'needs_review', 'cancelled'))
+);
+
+create index if not exists idx_work_orders_user_id on work_orders(user_id, created_at desc);
+create index if not exists idx_work_orders_listing on work_orders(listing_id, status, created_at desc);
+
 create table if not exists workflow_runs (
     id uuid primary key default gen_random_uuid(),
+    work_order_id uuid references work_orders(id) on delete set null,
     workflow_id text not null,
     listing_id text not null,
     user_id text references profiles(id) on delete cascade not null,
@@ -368,6 +390,8 @@ create table if not exists workflow_runs (
 
 create index if not exists idx_workflow_runs_user_id on workflow_runs(user_id, created_at desc);
 create index if not exists idx_workflow_runs_listing on workflow_runs(listing_id, status, created_at desc);
+alter table workflow_runs add column if not exists work_order_id uuid references work_orders(id) on delete set null;
+create index if not exists idx_workflow_runs_work_order_id on workflow_runs(work_order_id, created_at desc);
 
 create table if not exists workflow_steps (
     id uuid primary key default gen_random_uuid(),
@@ -447,6 +471,42 @@ create table if not exists workflow_receipts (
 
 create unique index if not exists idx_workflow_receipts_hash on workflow_receipts(receipt_hash);
 create index if not exists idx_workflow_receipts_run_id on workflow_receipts(run_id, created_at desc);
+
+create table if not exists clearing_blocks (
+    id uuid primary key default gen_random_uuid(),
+    chain_namespace text not null,
+    user_id text references profiles(id) on delete cascade,
+    block_number bigint not null,
+    previous_block_hash text,
+    merkle_root text not null,
+    receipt_count integer not null,
+    block_hash text not null,
+    signer_agent_id text not null default 'save-backend',
+    anchor_status text not null default 'offchain',
+    anchor_chain text,
+    anchor_tx_hash text,
+    created_at timestamptz not null default now(),
+    constraint clearing_blocks_receipt_count_check check (receipt_count > 0),
+    constraint clearing_blocks_anchor_status_check check (anchor_status in ('offchain', 'batch_anchored', 'onchain'))
+);
+
+create unique index if not exists idx_clearing_blocks_namespace_user_number on clearing_blocks(chain_namespace, (coalesce(user_id, '')), block_number);
+create unique index if not exists idx_clearing_blocks_hash on clearing_blocks(block_hash);
+create index if not exists idx_clearing_blocks_user_id on clearing_blocks(user_id, created_at desc);
+
+create table if not exists clearing_block_items (
+    id uuid primary key default gen_random_uuid(),
+    block_id uuid references clearing_blocks(id) on delete cascade not null,
+    receipt_id uuid references workflow_receipts(id) on delete cascade not null,
+    receipt_hash text not null,
+    merkle_proof text[] not null default '{}',
+    position integer not null,
+    created_at timestamptz not null default now(),
+    constraint clearing_block_items_position_check check (position >= 0)
+);
+
+create unique index if not exists idx_clearing_block_items_receipt_id on clearing_block_items(receipt_id);
+create index if not exists idx_clearing_block_items_block_id on clearing_block_items(block_id, position);
 
 create table if not exists credit_ledger (
     id uuid primary key default gen_random_uuid(),
@@ -610,6 +670,10 @@ create trigger update_recommendation_sets_updated_at before update on recommenda
 
 drop trigger if exists update_agent_tool_calls_updated_at on agent_tool_calls;
 create trigger update_agent_tool_calls_updated_at before update on agent_tool_calls
+    for each row execute procedure update_updated_at();
+
+drop trigger if exists update_work_orders_updated_at on work_orders;
+create trigger update_work_orders_updated_at before update on work_orders
     for each row execute procedure update_updated_at();
 
 drop trigger if exists update_workflow_runs_updated_at on workflow_runs;

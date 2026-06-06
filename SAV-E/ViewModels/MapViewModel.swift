@@ -606,7 +606,12 @@ final class MapViewModel: ObservableObject {
             mirrorToLocalVault(refinedCandidate)
             var run: PlaceRecoveryWorkflowRun?
             do {
+                let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
+                    sourceURL: refinedCandidate.sourceURL,
+                    sourceType: nil
+                )
                 let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                    workOrderId: workOrder.id,
                     sourceURL: refinedCandidate.sourceURL,
                     sourceType: nil
                 )
@@ -654,7 +659,8 @@ final class MapViewModel: ObservableObject {
             mirrorToLocalVault(candidate)
             var run: PlaceRecoveryWorkflowRun?
             do {
-                let createdRun = try await supabaseService.createPlaceRecoveryRun(sourceURL: candidate.sourceURL, sourceType: nil)
+                let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
+                let createdRun = try await supabaseService.createPlaceRecoveryRun(workOrderId: workOrder.id, sourceURL: candidate.sourceURL, sourceType: nil)
                 run = createdRun
                 let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
                 let candidateId = try await supabaseService.createPlaceCandidate(

@@ -195,11 +195,13 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
     }
 
     func testPlaceRecoveryWorkflowRunDecodesResultState() throws {
+        let workOrderId = UUID()
         let runId = UUID()
         let candidateId = UUID()
         let json = """
         {
           "id": "\(runId.uuidString)",
+          "work_order_id": "\(workOrderId.uuidString)",
           "workflow_id": "save_place_recovery_v0",
           "listing_id": "save-place-recovery-agent",
           "source_url": "https://www.instagram.com/reel/example/",
@@ -221,12 +223,40 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         let run = try JSONDecoder.supabase.decode(PlaceRecoveryWorkflowRun.self, from: json)
 
         XCTAssertEqual(run.id, runId)
+        XCTAssertEqual(run.workOrderId, workOrderId)
         XCTAssertEqual(run.workflowId, "save_place_recovery_v0")
         XCTAssertEqual(run.status, "needs_review")
         XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
     }
 
+    func testPlaceRecoveryWorkOrderDecodesAgentClearingFields() throws {
+        let workOrderId = UUID()
+        let json = """
+        {
+          "id": "\(workOrderId.uuidString)",
+          "workflow_id": "save_place_recovery_v0",
+          "listing_id": "save-place-recovery-agent",
+          "intent": "recover_place_from_source",
+          "input_type": "url",
+          "input_ref": "https://www.instagram.com/reel/example/",
+          "source_url": "https://www.instagram.com/reel/example/",
+          "evaluator_policy_id": "save_place_recovery_v0",
+          "settlement_mode": "credit_after_decision",
+          "status": "queued",
+          "created_at": "2026-06-06T10:00:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let workOrder = try JSONDecoder.supabase.decode(PlaceRecoveryWorkOrder.self, from: json)
+
+        XCTAssertEqual(workOrder.id, workOrderId)
+        XCTAssertEqual(workOrder.intent, "recover_place_from_source")
+        XCTAssertEqual(workOrder.evaluatorPolicyId, "save_place_recovery_v0")
+        XCTAssertEqual(workOrder.settlementMode, "credit_after_decision")
+    }
+
     func testPlaceRecoveryDraftsBuildBackendBodiesAndDecodeReceipt() throws {
+        let workOrderId = UUID()
         let runId = UUID()
         let receiptId = UUID()
         let candidateId = UUID()
@@ -254,6 +284,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         {
           "run": {
             "id": "\(runId.uuidString)",
+            "work_order_id": "\(workOrderId.uuidString)",
             "workflow_id": "save_place_recovery_v0",
             "listing_id": "save-place-recovery-agent",
             "source_url": "https://example.com",
@@ -290,6 +321,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         let response = try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: json)
 
         XCTAssertEqual(response.run.id, runId)
+        XCTAssertEqual(response.run.workOrderId, workOrderId)
         XCTAssertEqual(response.receipt.id, receiptId)
         XCTAssertEqual(response.receipt.verdict, "pass")
         XCTAssertEqual(response.receipt.candidateRefs, [candidateId.uuidString])

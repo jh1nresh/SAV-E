@@ -12,7 +12,8 @@ protocol SupabaseServiceProtocol {
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> [PlaceReviewCandidate]
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
-    func createPlaceRecoveryRun(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun
+    func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder
+    func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun
     func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun
     func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse
     func fetchTrips(for userId: String) async throws -> [Trip]
@@ -264,10 +265,23 @@ final class SupabaseService: SupabaseServiceProtocol {
 
     // MARK: - Place Recovery Workflow
 
-    func createPlaceRecoveryRun(sourceURL: String?, sourceType: String? = nil) async throws -> PlaceRecoveryWorkflowRun {
+    func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String? = nil) async throws -> PlaceRecoveryWorkOrder {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody([
+            "source_url": sourceURL,
+            "source_type": sourceType,
+            "credit_reserved": 1,
+        ])
+        let data = try await request(path: "/v0/workflows/place-recovery/work-orders", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(PlaceRecoveryWorkOrder.self, from: data)
+    }
+
+    func createPlaceRecoveryRun(workOrderId: UUID? = nil, sourceURL: String?, sourceType: String? = nil) async throws -> PlaceRecoveryWorkflowRun {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.jsonBody([
+            "work_order_id": workOrderId?.uuidString,
             "source_url": sourceURL,
             "source_type": sourceType,
             "credit_reserved": 1,
@@ -723,8 +737,37 @@ struct ClaimUsageReceipt: Codable, Identifiable, Equatable {
     }
 }
 
+struct PlaceRecoveryWorkOrder: Codable, Identifiable, Equatable {
+    let id: UUID
+    let workflowId: String
+    let listingId: String
+    let intent: String
+    let inputType: String
+    let inputRef: String?
+    let sourceURL: String?
+    let evaluatorPolicyId: String
+    let settlementMode: String
+    let status: String
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case workflowId = "workflow_id"
+        case listingId = "listing_id"
+        case intent
+        case inputType = "input_type"
+        case inputRef = "input_ref"
+        case sourceURL = "source_url"
+        case evaluatorPolicyId = "evaluator_policy_id"
+        case settlementMode = "settlement_mode"
+        case status
+        case createdAt = "created_at"
+    }
+}
+
 struct PlaceRecoveryWorkflowRun: Codable, Identifiable, Equatable {
     let id: UUID
+    let workOrderId: UUID?
     let workflowId: String
     let listingId: String
     let sourceURL: String?
@@ -743,6 +786,7 @@ struct PlaceRecoveryWorkflowRun: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case workOrderId = "work_order_id"
         case workflowId = "workflow_id"
         case listingId = "listing_id"
         case sourceURL = "source_url"

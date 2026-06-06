@@ -1,17 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normalizePlaceRecoveryWorkOrderCreate,
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
   receiptForResult,
 } from "./workflowContracts.js";
 
+test("place recovery work order create canonicalizes agent clearing fields", () => {
+  const workOrder = normalizePlaceRecoveryWorkOrderCreate({
+    source_url: "https://www.instagram.com/reel/example/?igsh=abc#frag",
+    credit_reserved: 2,
+  });
+
+  assert.equal(workOrder.workflowId, "save_place_recovery_v0");
+  assert.equal(workOrder.listingId, "save-place-recovery-agent");
+  assert.equal(workOrder.intent, "recover_place_from_source");
+  assert.equal(workOrder.inputType, "url");
+  assert.equal(workOrder.inputRef, "https://www.instagram.com/reel/example/?igsh=abc");
+  assert.equal(workOrder.evaluatorPolicyId, "save_place_recovery_v0");
+  assert.equal(workOrder.settlementMode, "credit_after_decision");
+  assert.deepEqual(workOrder.budgetPolicy, { credit_reserved: 2 });
+});
+
 test("place recovery run create canonicalizes supported source URL and reserves one credit", () => {
   const run = normalizePlaceRecoveryRunCreate({
+    work_order_id: "9aebde27-6041-47ef-89a5-a3811b64d419",
     source_url: "https://www.instagram.com/reel/example/?igsh=abc#frag",
   });
 
+  assert.equal(run.workOrderId, "9aebde27-6041-47ef-89a5-a3811b64d419");
   assert.equal(run.workflowId, "save_place_recovery_v0");
   assert.equal(run.listingId, "save-place-recovery-agent");
   assert.equal(run.sourceType, "instagram");
