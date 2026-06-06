@@ -1185,12 +1185,6 @@ struct ShareExtensionView: View {
             throw NSError(domain: "save", code: 1, userInfo: [NSLocalizedDescriptionKey: "GEMINI_API_KEY not configured"])
         }
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         let prompt = """
         Extract place information from this shared content. Respond ONLY with a valid JSON object, no markdown.
 
@@ -1225,12 +1219,31 @@ struct ShareExtensionView: View {
             "generationConfig": ["temperature": 0.2, "maxOutputTokens": 512]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let requestBody = try JSONSerialization.data(withJSONObject: body)
+        var responseData: Data?
+        var lastStatusCode = 0
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw NSError(domain: "save", code: code, userInfo: [NSLocalizedDescriptionKey: "Gemini API error \(code)"])
+        for model in SAVEProductionConfig.defaultGeminiModelFallbacks {
+            let endpoint = SAVEProductionConfig.geminiGenerateContentURL(apiKey: apiKey, model: model)
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = requestBody
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { continue }
+            lastStatusCode = http.statusCode
+            if http.statusCode == 200 {
+                responseData = data
+                break
+            }
+            if http.statusCode != 404 && http.statusCode != 429 {
+                break
+            }
+        }
+
+        guard let data = responseData else {
+            throw NSError(domain: "save", code: lastStatusCode, userInfo: [NSLocalizedDescriptionKey: "Gemini API error \(lastStatusCode)"])
         }
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]

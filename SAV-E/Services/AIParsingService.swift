@@ -45,12 +45,14 @@ final class AIParsingService: AIParsingServiceProtocol {
     static let shared = AIParsingService()
 
     private let apiKey: String?
+    private let modelFallbacks: [String]
 
-    init(apiKey: String? = nil) {
+    init(apiKey: String? = nil, modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks) {
         let resolved = apiKey
             ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
             ?? SAVEProductionConfig.configValue(for: ["GEMINI_API_KEY"])
         self.apiKey = resolved
+        self.modelFallbacks = modelFallbacks
     }
 
     // MARK: - Parse URL
@@ -103,12 +105,6 @@ final class AIParsingService: AIParsingServiceProtocol {
 
         let base64 = imageData.base64EncodedString()
 
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
         let prompt = """
         Look at this image and extract place/restaurant information.
         Respond ONLY with a valid JSON object:
@@ -132,42 +128,46 @@ final class AIParsingService: AIParsingServiceProtocol {
             "generationConfig": ["temperature": 0.2, "maxOutputTokens": 512]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: code))
-        }
-
-        return try parseGeminiResponse(data)
+        return try await callGemini(body: body)
     }
 
     // MARK: - Private
 
     private func callGemini(prompt: String) async throws -> ParsedPlaceResult {
-        guard let apiKey else { throw AIParsingError.apiKeyMissing }
-
-        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro:generateContent?key=\(apiKey)")!
-
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard apiKey != nil else { throw AIParsingError.apiKeyMissing }
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
             "generationConfig": ["temperature": 0.2, "maxOutputTokens": 512]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await callGemini(body: body)
+    }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: code))
+    private func callGemini(body: [String: Any]) async throws -> ParsedPlaceResult {
+        guard let apiKey else { throw AIParsingError.apiKeyMissing }
+        let requestBody = try JSONSerialization.data(withJSONObject: body)
+        var lastStatusCode = 0
+
+        for model in modelFallbacks {
+            let endpoint = SAVEProductionConfig.geminiGenerateContentURL(apiKey: apiKey, model: model)
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = requestBody
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { continue }
+            lastStatusCode = http.statusCode
+            if http.statusCode == 200 {
+                return try parseGeminiResponse(data)
+            }
+            if http.statusCode != 404 && http.statusCode != 429 {
+                break
+            }
         }
 
-        return try parseGeminiResponse(data)
+        throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: lastStatusCode))
     }
 
     private static func userFacingGeminiError(statusCode: Int) -> String {

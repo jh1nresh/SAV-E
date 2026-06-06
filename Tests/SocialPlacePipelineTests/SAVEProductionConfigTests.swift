@@ -33,6 +33,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProductionConfig.pendingReviewCandidatesFileName, "pending-review-candidates.json")
     }
 
+    func testSharedGeminiModelFallbacksUseAvailableGemini35Flash() {
+        XCTAssertEqual(SAVEProductionConfig.defaultGeminiModelFallbacks, ["gemini-3.5-flash"])
+
+        let url = SAVEProductionConfig.geminiGenerateContentURL(apiKey: "test-key", model: "gemini-3.5-flash")
+        XCTAssertEqual(
+            url.absoluteString,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=test-key"
+        )
+    }
+
     private func plistTemplate(at relativePath: String) throws -> [String: Any] {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

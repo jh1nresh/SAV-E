@@ -135,7 +135,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
 
     init(
         apiKey: String,
-        modelFallbacks: [String] = SaveAIService.defaultModelFallbacks,
+        modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks,
         validator: SaveSearchIntentJSONValidator = SaveSearchIntentJSONValidator(),
         promptPolicy: SaveAgentPromptPolicy = SaveAgentPromptPolicy(),
         session: URLSession = .shared
@@ -199,7 +199,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         let requestBody = try JSONSerialization.data(withJSONObject: body)
 
         for model in modelFallbacks {
-            let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+            let endpoint = SAVEProductionConfig.geminiGenerateContentURL(apiKey: apiKey, model: model)
             var request = URLRequest(url: endpoint)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
