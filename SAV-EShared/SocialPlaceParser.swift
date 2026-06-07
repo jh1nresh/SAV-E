@@ -1020,11 +1020,24 @@ struct SocialPlaceParser {
         guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned),
               !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(cleaned),
               !SocialPlaceEvidenceScorer.looksLikeMarketingLine(cleaned),
-              cleaned.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil,
-              cleaned.range(of: #"^[A-Z][A-Za-z0-9 &'._-]{1,50}(?:\s+[A-Z][A-Za-z0-9 &'._-]{1,50}){0,4}$"#, options: .regularExpression) != nil else {
+              looksLikeStandaloneNameNearAddress(cleaned) else {
             return nil
         }
         return cleaned
+    }
+
+    private func looksLikeStandaloneNameNearAddress(_ value: String) -> Bool {
+        guard value.count >= 2,
+              value.count <= 40,
+              value.range(of: #"[@#<>📍📌🚩🗺，,。！!？?；;：:]"#, options: .regularExpression) == nil,
+              value.range(of: #"最強|最强|免費|免费|吃到飽|吃到饱|超浮誇|超浮夸|必吃|必喝|必訪|必访|推薦|推荐|隱身|隐藏|隱藏|份量|服務|服务|重頭戲|重头戏|銷魂|销魂|超好吃|打卡|排隊|排队"#, options: .regularExpression) == nil else {
+            return false
+        }
+        if value.range(of: #"^[A-Za-z][A-Za-z0-9 &'._-]{1,50}(?:\s+[A-Za-z][A-Za-z0-9 &'._-]{1,50}){0,4}$"#, options: .regularExpression) != nil {
+            return true
+        }
+        return value.range(of: #"[\u4e00-\u9fff]"#, options: .regularExpression) != nil &&
+            value.range(of: #"(?:店|館|馆|亭|坊|堂|屋|家|本家|食堂|餐廳|餐厅|咖啡|茶館|茶馆|麵|面|鍋|锅|燒肉|烧肉|壽司|寿司|甜點|甜点|酒吧|Bar|Cafe|Kitchen|Bistro)"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     private func addressOnlyCandidates(from lines: [String], sourceURL: String, fullText: String) -> [SocialPlaceCandidateDraft] {
@@ -1630,35 +1643,8 @@ struct SocialPlaceParser {
             return nil
         }
         let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstScalar = trimmedLine.unicodeScalars.first?.value
-        let hasVenueMarker = firstScalar == 0x1F449 ||
-            firstScalar == 0x27A1 ||
-            firstScalar == 0x2192 ||
-            firstScalar == 0x279C ||
-            firstScalar == 0x1F4CC ||
-            firstScalar == 0x1F4CD ||
-            firstScalar == 0x1F6A9 ||
-            firstScalar == 0x1F3E1 ||
-            firstScalar == 0x1F374 ||
-            firstScalar == 0x1F37D ||
-            firstScalar == 0x1F962 ||
-            trimmedLine.hasPrefix("店名")
-        if hasVenueMarker {
-            let markerStripped = trimmedLine
-                .replacingOccurrences(
-                    of: #"^\s*(?:[👉➡→➜📌📍🚩🏡🍴🍽🥢]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)?\s*[:：\-–—]?\s*"#,
-                    with: "",
-                    options: [.regularExpression, .caseInsensitive]
-                )
-                .replacingOccurrences(
-                    of: #"^[^A-Za-z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+"#,
-                    with: "",
-                    options: .regularExpression
-                )
-            let cleaned = cleanDisplayName(markerStripped)
-            if SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) {
-                return cleaned
-            }
+        if let markedName = venueNameFromMarkedCaptionLine(trimmedLine) {
+            return markedName
         }
         if let cjkSeparated = cjkSeparatedVenueName(in: line) {
             return cjkSeparated
@@ -1667,6 +1653,62 @@ struct SocialPlaceParser {
             return quoted
         }
         return nil
+    }
+
+    private func venueNameFromMarkedCaptionLine(_ trimmedLine: String) -> String? {
+        guard !trimmedLine.isEmpty,
+              !SocialPlaceEvidenceScorer.looksLikeTransitAccessLine(trimmedLine),
+              !SocialPlaceEvidenceScorer.looksLikeOperatingHoursLine(trimmedLine),
+              !SocialPlaceEvidenceScorer.looksLikeReviewMetricLine(trimmedLine),
+              !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(trimmedLine) else { return nil }
+        let firstScalar = trimmedLine.unicodeScalars.first?.value
+        if firstScalar == 0x1F3E0 || firstScalar == 0x1F687 || firstScalar == 0x1F68C || firstScalar == 0x1F68E ||
+            trimmedLine.range(of: #"公告|捷運|地鐵|地铁|metro|subway|station|出口"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return nil
+        }
+        let startsWithKnownMarker = firstScalar == 0x1F449 ||
+            firstScalar == 0x27A1 ||
+            firstScalar == 0x2192 ||
+            firstScalar == 0x279C ||
+            firstScalar == 0x1F4CC ||
+            firstScalar == 0x1F4CD ||
+            firstScalar == 0x1F6A9 ||
+            firstScalar == 0x1F3E1 ||
+            trimmedLine.hasPrefix("店名")
+        let startsWithGenericSymbolMarker = firstScalar.map { $0 >= 0x2000 } ?? false
+        guard startsWithKnownMarker || startsWithGenericSymbolMarker else { return nil }
+
+        let markerStripped = trimmedLine
+            .replacingOccurrences(
+                of: #"^\s*(?:[^A-Za-z0-9\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af@#]+\s*)*(?:店名|店家|餐廳|餐厅|venue|restaurant)?\s*[:：\-–—]?\s*"#,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .replacingOccurrences(
+                of: #"^[^A-Za-z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+"#,
+                with: "",
+                options: .regularExpression
+            )
+        guard markerStripped != trimmedLine else { return nil }
+
+        let cleaned = cleanDisplayName(markerStripped)
+        guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned),
+              looksLikeStandaloneMarkedVenueName(cleaned) else { return nil }
+        return cleaned
+    }
+
+    private func looksLikeStandaloneMarkedVenueName(_ value: String) -> Bool {
+        guard value.count <= 32 else { return false }
+        if value.range(of: #"[，,。！!？?；;]"#, options: .regularExpression) != nil {
+            return false
+        }
+        if value.range(of: #"最強|最强|免費|免费|吃到飽|吃到饱|超浮誇|超浮夸|必吃|必喝|必訪|必访|推薦|推荐|隱藏版|隐藏版|打卡|排隊|排队"#, options: .regularExpression) != nil {
+            return false
+        }
+        if value.range(of: #"(?i)\b(?:must\s+try|hidden\s+gem|save\s+this|best\s+of|things\s+to)\b"#, options: .regularExpression) != nil {
+            return false
+        }
+        return true
     }
 
     private func launchHeadlineVenueName(in line: String) -> String? {

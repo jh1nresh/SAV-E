@@ -355,19 +355,26 @@ private struct SocialPlaceEvidenceDiagnostic: Codable {
     var suggestedSearchQueries: [String]? = nil
 
     var statusLabel: String {
-        if canSaveAsMapStamp { return "Map match ready" }
-        if found.joined(separator: "\n").lowercased().contains("place-bearing source") { return "Place clue" }
-        if lowercasedMissingFields.contains(where: { $0.contains("place name") }) { return "Source clue" }
-        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Needs confirmation" }
+        if canSaveAsMapStamp { return "Ready to save" }
+        if found.joined(separator: "\n").lowercased().contains("place-bearing source") { return "Possible place" }
+        if lowercasedMissingFields.contains(where: { $0.contains("place name") }) { return "Saved for later" }
+        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Review candidate" }
         return "Review candidate"
     }
 
     var primaryActionLabel: String {
-        if canSaveAsMapStamp { return "Confirm map match" }
-        if statusLabel == "Place clue" { return "Run recovery search" }
-        if statusLabel == "Source clue" { return "Add caption / screenshot / map link" }
-        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Confirm address / coordinates" }
-        return "Review evidence"
+        if canSaveAsMapStamp { return "Save place" }
+        if statusLabel == "Possible place" { return "Review options" }
+        if statusLabel == "Saved for later" { return "Add details" }
+        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Confirm place" }
+        return "Review"
+    }
+
+    var consumerSummary: String {
+        if canSaveAsMapStamp { return "SAV-E matched this to a place. Review it once, then save it to your map." }
+        if statusLabel == "Possible place" { return "SAV-E found a likely place in this share. Pick or confirm the place before saving." }
+        if statusLabel == "Saved for later" { return "SAV-E saved this share. Add a caption, screenshot, or map link when you want it turned into a place." }
+        return "SAV-E found a possible place. Confirm the details before saving it to your map."
     }
 
     var canSaveAsMapStamp: Bool {
@@ -931,45 +938,45 @@ struct ShareExtensionView: View {
             return "Review each candidate in SAV-E before saving."
         }
         if candidate.isUnresolvedPlaceCandidate { return "Review Candidate from shared source" }
-        if candidate.isSourceOnly { return "Saved as a source clue, not a map pin yet" }
-        if candidate.isPlaceBearingSource { return "Needs exact venue before Map Stamp" }
-        return candidate.address.isEmpty ? "Needs address confirmation" : candidate.address
+        if candidate.isSourceOnly { return "Saved for later" }
+        if candidate.isPlaceBearingSource { return "Confirm the place to save it" }
+        return candidate.address.isEmpty ? "Confirm the address" : candidate.address
     }
 
     private func candidateIntro(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
-            return "SAV-E found a few place clues. Review the evidence before saving."
+            return "SAV-E found a few possible places. Pick what you want to save."
         }
         if candidate.isSourceOnly {
-            return "SAV-E found the source, but not enough place evidence yet. It will keep this as a clue and show exactly what is missing."
+            return "SAV-E saved this share. Add a caption, screenshot, or map link when you want it turned into a place."
         }
         if candidate.isUnresolvedPlaceCandidate {
-            return "SAV-E found a possible place. It still needs an address or Google Places match before saving this as a Map Stamp."
+            return "SAV-E found a possible place. Confirm the address before saving it to your map."
         }
         if candidate.isPlaceBearingSource {
-            return "This looks place-related, but SAV-E still needs the exact venue before it can save a Map Stamp."
+            return "This looks place-related. Confirm the exact place before saving it."
         }
-        return "SAV-E found a place clue. Check the evidence before saving."
+        return "SAV-E found a possible place. Check it before saving."
     }
 
     private func candidateActionTitle(_ candidate: PendingReviewCandidate) -> String {
-        if candidate.isSourceOnly { return "Save Source Clue" }
+        if candidate.isSourceOnly { return "Save for Later" }
         if candidate.isUnresolvedPlaceCandidate { return "Add Review Candidate" }
         return "Add to Review"
     }
 
     private func reviewCandidatesHeading(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
-            return "Place clues found"
+            return "Possible places found"
         }
         if candidate.isUnresolvedPlaceCandidate { return "Review Candidate found" }
-        if candidate.isSourceOnly { return "Source clue saved" }
+        if candidate.isSourceOnly { return "Saved for later" }
         if candidate.isPlaceBearingSource {
             return candidate.category == "food" || candidate.category == "cafe"
-                ? "Restaurant clue found"
-                : "Place clue found"
+                ? "Restaurant found"
+                : "Place found"
         }
-        return "Place clue found"
+        return "Place found"
     }
 
     private func shareEvidenceDiagnosticView(_ diagnostic: SocialPlaceEvidenceDiagnostic) -> some View {
@@ -990,18 +997,30 @@ struct ShareExtensionView: View {
                 Spacer()
             }
 
-            shareDiagnosticSection("Found", items: diagnostic.found)
-            shareDiagnosticSection("Tried", items: diagnostic.attempts)
-            shareDiagnosticSection("Search next", items: diagnostic.suggestedSearchQueries ?? [])
-            shareDiagnosticSection("Missing", items: diagnostic.missingFields)
+            Text(diagnostic.consumerSummary)
+                .font(.caption)
+                .foregroundColor(SaveTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
 
-            if !diagnostic.nextBestClue.isEmpty {
-                Text("Next best clue: \(diagnostic.nextBestClue)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(SaveTheme.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let queries = diagnostic.suggestedSearchQueries, !queries.isEmpty {
+                shareDiagnosticSection("Places SAV-E can check", items: queries)
             }
+
+            DisclosureGroup("Technical details") {
+                VStack(alignment: .leading, spacing: 8) {
+                    shareDiagnosticSection("Found", items: diagnostic.found)
+                    shareDiagnosticSection("Tried", items: diagnostic.attempts)
+                    shareDiagnosticSection("Internal checks", items: diagnostic.missingFields)
+                    if !diagnostic.nextBestClue.isEmpty {
+                        Text(diagnostic.nextBestClue)
+                            .font(.caption)
+                            .foregroundColor(SaveTheme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .font(.caption)
+            .foregroundColor(SaveTheme.ink)
         }
         .padding(12)
         .background(SaveTheme.pink.opacity(0.6))

@@ -909,6 +909,95 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北最強的便當店") })
     }
 
+    func testInstagramGenericEmojiVenueMarkerBeforePinAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            台北新店分享 on Instagram: "這間最近很多人收藏
+
+            🧋春水堂人文茶館
+            📍臺北市信義區松壽路9號
+            🕛11：00～22：00
+            """,
+            sourceURL: "https://www.instagram.com/reel/DGenericEmoji/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "春水堂人文茶館")
+        XCTAssertEqual(candidates.first?.address, "臺北市信義區松壽路9號")
+        XCTAssertFalse(candidates.first?.isSourceOnly == true)
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北新店分享") })
+    }
+
+    func testInstagramGenericEmojiMarkerRejectsMarketingHeadlineBeforeAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            煮惑甜心 • 廚娘在 Instagram: "
+            😋台北最強的便當店
+            滷肉飯免費吃到飽，飲料喝到飽！！
+
+            🍴食來運轉
+            📍臺北市士林區仁勇里小東街31號
+            """,
+            sourceURL: "https://www.instagram.com/reel/DZM8vmZBuNM/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "食來運轉")
+        XCTAssertEqual(candidates.first?.address, "臺北市士林區仁勇里小東街31號")
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北最強的便當店") })
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("滷肉飯免費吃到飽") })
+    }
+
+    func testInstagramStandaloneChineseVenueLineBeforePinAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            foodies__eric.sharon on Instagram: "內湖好吃到我連吃兩碗的超濃郁蟹黃麵
+            隱身瑞光路上生意超好的麵食館！
+            餐點份量很夠，服務也很親切🫶🏻
+
+            常客幾乎都點香麻帶勁的紅油燃麵
+            鮮蝦抄手&麵條緊緊扒附醬汁超好吃！
+            重頭戲絕對是鮮到不行的蟹黃拌麵🦀
+            滿滿蟹肉蟹黃裹滿麵條，鮮味爆擊太銷魂了～～
+
+            墨竹亭 燃麵本家 內湖瑞光店
+            📍臺北市內湖區港墘里瑞光路289號
+            ⏰ 11:00-15:00 / 17:00-20:30
+            """,
+            sourceURL: "https://www.instagram.com/reel/DY9UL8JTb5p/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "墨竹亭 燃麵本家 內湖瑞光店")
+        XCTAssertEqual(candidates.first?.address, "臺北市內湖區港墘里瑞光路289號")
+        XCTAssertFalse(candidates.first?.isSourceOnly == true)
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("foodies__eric") })
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("蟹黃麵") && $0.candidateName != "墨竹亭 燃麵本家 內湖瑞光店" })
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("隱身瑞光路") })
+        let diagnostic = try XCTUnwrap(candidates.first?.evidenceDiagnostic)
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: pairs venue-looking lines with nearby strong evidence such as a pinned/street address before creating a Review Candidate"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: accepts explicit venue anchors including labels, quotes/brackets, generic emoji/symbol markers, and standalone CJK/Latin venue lines before an address"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: rejects creator profiles, hashtags, marketing headlines, menu/price items, operating hours, transit/access lines, review metrics, and generic social shells as venue names"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: falls back to source-only when readable metadata is missing/blocked, only a creator handle exists, only OCR/headline text exists, only menu/items exist, multiple list places need selection, or no address/map-provider match is available"))
+    }
+
+    func testInstagramStandaloneLowercaseLatinVenueLineBeforePinAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            coffee notes on Instagram: "saved this one for a slow morning
+
+            blue bottle coffee
+            📍300 Webster St, Oakland
+            """,
+            sourceURL: "https://www.instagram.com/reel/DLowercaseVenue/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "blue bottle coffee")
+        XCTAssertEqual(candidates.first?.address, "300 Webster St, Oakland")
+        XCTAssertFalse(candidates.first?.isSourceOnly == true)
+    }
+
     func testInstagramTraditionalChineseBookTitleDiagnosticExplainsAnalysisMethod() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
@@ -930,8 +1019,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.found.contains("Readable metadata/caption/OCR: present with location clues"))
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: classified the shared URL/platform and canonical post id before trusting content"))
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: inspected readable metadata/caption/OCR for venue anchors, address pins, map links, and social handles"))
-        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: requires a place name plus address or map-provider match before Map Stamp; otherwise keeps Review/Source Clue"))
-        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records missing proof so SAV-E asks for the next clue instead of guessing"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: requires a place name plus address or map-provider match before saving directly; otherwise keeps it in Review"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records unresolved details internally so SAV-E can keep trying instead of guessing"))
     }
 
     func testInstagramPinVenueLineUsesNextLineHighwayAddress() async throws {
@@ -1785,7 +1874,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.missingInfo.contains("Verified coordinates"))
         XCTAssertFalse(candidate.missingInfo.contains("Verified place name"))
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Candidate place name: 東京家庭義大利麵 士林店") == true)
-        XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Needs confirmation")
+        XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Review candidate")
     }
 
     func testPlaceBearingInstagramMetadataCreatesWeakReviewCandidateInsteadOfSourceOnly() {
@@ -1813,8 +1902,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.missingInfo.contains("Verified coordinates"))
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains(where: { $0.contains("Place-bearing source") }) == true)
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Source intent: restaurantRecommendation") == true)
-        XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Place clue")
-        XCTAssertEqual(candidate.evidenceDiagnostic?.primaryActionLabel, "Run recovery search")
+        XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Possible place")
+        XCTAssertEqual(candidate.evidenceDiagnostic?.primaryActionLabel, "Review options")
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Resolver decision: pendingCandidate") == true)
         XCTAssertEqual(candidate.evidenceDiagnostic?.suggestedSearchQueries?.first, "\"DW2ZpyADbZ6\" restaurant LA")
         XCTAssertFalse(candidate.evidenceDiagnostic?.suggestedSearchQueries?.joined(separator: " ").contains("igsh") == true)
@@ -1944,8 +2033,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(record.evidenceDiagnostic?.missingFields.contains("Verified place name") == true)
         XCTAssertEqual(record.evidenceDiagnostic?.suggestedSearchQueries?.first, "instagram reel DYfallback place")
         XCTAssertEqual(record.evidenceDiagnostic?.nextBestClue, "Run the suggested public searches, or share a caption, screenshot/OCR frame, map link, or visible venue handle.")
-        XCTAssertEqual(record.evidenceDiagnostic?.statusLabel, "Source clue")
-        XCTAssertEqual(record.evidenceDiagnostic?.primaryActionLabel, "Add caption / screenshot / map link")
+        XCTAssertEqual(record.evidenceDiagnostic?.statusLabel, "Saved for later")
+        XCTAssertEqual(record.evidenceDiagnostic?.primaryActionLabel, "Add details")
         XCTAssertEqual(record.evidenceDiagnostic?.canSaveAsMapStamp, false)
         XCTAssertEqual(record.evidenceDiagnostic?.recoveryPlan?.decision, .sourceOnly)
         XCTAssertEqual(record.evidenceDiagnostic?.recoveryPlan?.allowsDirectSave, false)
@@ -2041,8 +2130,8 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         let refined = await service.refineCandidate(candidate)
 
-        XCTAssertEqual(refined.evidenceDiagnostic?.statusLabel, "Map match ready")
-        XCTAssertEqual(refined.evidenceDiagnostic?.primaryActionLabel, "Confirm map match")
+        XCTAssertEqual(refined.evidenceDiagnostic?.statusLabel, "Ready to save")
+        XCTAssertEqual(refined.evidenceDiagnostic?.primaryActionLabel, "Save place")
         XCTAssertEqual(refined.evidenceDiagnostic?.canSaveAsMapStamp, true)
     }
 

@@ -128,19 +128,19 @@ struct SocialPlaceEvidenceDiagnostic: Codable, Hashable {
     var rejectedEvidence: [SocialPlaceRejectedEvidence]? = nil
 
     var statusLabel: String {
-        if canSaveAsMapStamp { return "Map match ready" }
-        if found.joined(separator: "\n").lowercased().contains("place-bearing source") { return "Place clue" }
-        if lowercasedMissingFields.contains(where: { $0.contains("place name") }) { return "Source clue" }
-        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Needs confirmation" }
+        if canSaveAsMapStamp { return "Ready to save" }
+        if found.joined(separator: "\n").lowercased().contains("place-bearing source") { return "Possible place" }
+        if lowercasedMissingFields.contains(where: { $0.contains("place name") }) { return "Saved for later" }
+        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Review candidate" }
         return "Review candidate"
     }
 
     var primaryActionLabel: String {
-        if canSaveAsMapStamp { return "Confirm map match" }
-        if statusLabel == "Place clue" { return "Run recovery search" }
-        if statusLabel == "Source clue" { return "Add caption / screenshot / map link" }
-        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Confirm address / coordinates" }
-        return "Review evidence"
+        if canSaveAsMapStamp { return "Save place" }
+        if statusLabel == "Possible place" { return "Review options" }
+        if statusLabel == "Saved for later" { return "Add details" }
+        if lowercasedMissingFields.contains(where: { $0.contains("address") || $0.contains("coordinates") }) { return "Confirm place" }
+        return "Review"
     }
 
     var canSaveAsMapStamp: Bool {

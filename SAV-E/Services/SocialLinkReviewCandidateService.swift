@@ -1284,8 +1284,12 @@ final class SocialLinkReviewCandidateService {
         [
             "Analysis method: classified the shared URL/platform and canonical post id before trusting content",
             "Analysis method: inspected readable metadata/caption/OCR for venue anchors, address pins, map links, and social handles",
-            "Analysis method: requires a place name plus address or map-provider match before Map Stamp; otherwise keeps Review/Source Clue",
-            "Analysis method: records missing proof so SAV-E asks for the next clue instead of guessing"
+            "Analysis method: pairs venue-looking lines with nearby strong evidence such as a pinned/street address before creating a Review Candidate",
+            "Analysis method: accepts explicit venue anchors including labels, quotes/brackets, generic emoji/symbol markers, and standalone CJK/Latin venue lines before an address",
+            "Analysis method: rejects creator profiles, hashtags, marketing headlines, menu/price items, operating hours, transit/access lines, review metrics, and generic social shells as venue names",
+            "Analysis method: falls back to source-only when readable metadata is missing/blocked, only a creator handle exists, only OCR/headline text exists, only menu/items exist, multiple list places need selection, or no address/map-provider match is available",
+            "Analysis method: requires a place name plus address or map-provider match before saving directly; otherwise keeps it in Review",
+            "Analysis method: records unresolved details internally so SAV-E can keep trying instead of guessing"
         ]
     }
 
