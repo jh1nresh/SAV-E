@@ -1639,11 +1639,14 @@ struct SocialPlaceParser {
             firstScalar == 0x1F4CD ||
             firstScalar == 0x1F6A9 ||
             firstScalar == 0x1F3E1 ||
+            firstScalar == 0x1F374 ||
+            firstScalar == 0x1F37D ||
+            firstScalar == 0x1F962 ||
             trimmedLine.hasPrefix("店名")
         if hasVenueMarker {
             let markerStripped = trimmedLine
                 .replacingOccurrences(
-                    of: #"^\s*(?:[👉➡→➜📌📍🚩🏡]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)\s*[:：\-–—]?\s*"#,
+                    of: #"^\s*(?:[👉➡→➜📌📍🚩🏡🍴🍽🥢]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)?\s*[:：\-–—]?\s*"#,
                     with: "",
                     options: [.regularExpression, .caseInsensitive]
                 )

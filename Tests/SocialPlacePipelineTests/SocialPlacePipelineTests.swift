@@ -886,6 +886,29 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("SaSa") })
     }
 
+    func testInstagramFoodEmojiVenueMarkerBeforePinAddress() async throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidates = service.reviewCandidates(
+            fromEvidenceText: """
+            煮惑甜心 • 廚娘在 Instagram: "台北最強的便當店😋
+            滷肉飯免費吃到飽，飲料喝到飽！！
+
+            🍴食來運轉
+            📍臺北市士林區仁勇里小東街31號
+            🕛10：00～14：00、16：00～20：00
+
+            #廚娘 #台北美食 #士林夜市 #吃到飽 #滷肉飯"
+            """,
+            sourceURL: "https://www.instagram.com/reel/DZM8vmZBuNM/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "食來運轉")
+        XCTAssertEqual(candidates.first?.address, "臺北市士林區仁勇里小東街31號")
+        XCTAssertFalse(candidates.first?.isSourceOnly == true)
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("煮惑甜心") })
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北最強的便當店") })
+    }
+
     func testInstagramTraditionalChineseBookTitleDiagnosticExplainsAnalysisMethod() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
