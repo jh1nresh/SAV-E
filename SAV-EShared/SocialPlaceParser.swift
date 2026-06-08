@@ -1662,7 +1662,7 @@ struct SocialPlaceParser {
               !SocialPlaceEvidenceScorer.looksLikeReviewMetricLine(trimmedLine),
               !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(trimmedLine) else { return nil }
         let firstScalar = trimmedLine.unicodeScalars.first?.value
-        if firstScalar == 0x1F3E0 || firstScalar == 0x1F687 || firstScalar == 0x1F68C || firstScalar == 0x1F68E ||
+        if firstScalar == 0x1F687 || firstScalar == 0x1F68C || firstScalar == 0x1F68E ||
             trimmedLine.range(of: #"公告|捷運|地鐵|地铁|metro|subway|station|出口"#, options: [.regularExpression, .caseInsensitive]) != nil {
             return nil
         }
@@ -1673,6 +1673,7 @@ struct SocialPlaceParser {
             firstScalar == 0x1F4CC ||
             firstScalar == 0x1F4CD ||
             firstScalar == 0x1F6A9 ||
+            firstScalar == 0x1F3E0 ||
             firstScalar == 0x1F3E1 ||
             trimmedLine.hasPrefix("店名")
         let startsWithGenericSymbolMarker = firstScalar.map { $0 >= 0x2000 } ?? false
