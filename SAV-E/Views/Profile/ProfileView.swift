@@ -163,6 +163,7 @@ struct ProfileView: View {
 
 private struct EditProfileSheet: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var displayName: String
     let avatarURLString: String?
     @Binding var selectedAvatarData: Data?
@@ -266,12 +267,7 @@ private struct EditProfileSheet: View {
                         .textInputAutocapitalization(.words)
                         .focused($isNameFocused)
                         .padding(14)
-                        .background(Color.saveNotebookPage)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 2)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .profileGlassSurface(cornerRadius: 14, tint: .saveCream, fillOpacity: 0.12, strokeOpacity: 0.24, lineWidth: 1, isInteractive: true)
 
                     if let errorMessage {
                         Text(errorMessage)
@@ -284,14 +280,15 @@ private struct EditProfileSheet: View {
                     }
                 }
                 .padding(16)
-                .saveNotebookPage(cornerRadius: 20)
+                .profileGlassSurface(cornerRadius: 20, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
                 .padding(.horizontal)
 
                 Spacer()
             }
-            .background(SaveDottedBackground())
+            .background(ProfileGlassBackground(colorScheme: colorScheme))
             .toolbar(.hidden, for: .navigationBar)
         }
+        .presentationBackground(.clear)
         .onAppear {
             isNameFocused = true
         }
@@ -986,6 +983,7 @@ struct SettingsRow: View {
 private struct LanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -1036,12 +1034,12 @@ private struct LanguageSettingsSheet: View {
                             .padding(14)
                             .background(
                                 languageSettings.language == language
-                                ? Color.saveHoney.opacity(0.3)
-                                : Color.saveNotebookPage.opacity(0.94)
+                                ? Color.saveHoney.opacity(0.22)
+                                : Color.saveCream.opacity(0.08)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                                    .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
@@ -1052,9 +1050,10 @@ private struct LanguageSettingsSheet: View {
                 Spacer()
             }
             .padding(.horizontal, 18)
-            .background(SaveDottedBackground())
+            .background(ProfileGlassBackground(colorScheme: colorScheme))
             .toolbar(.hidden, for: .navigationBar)
         }
+        .presentationBackground(.clear)
     }
 }
 
