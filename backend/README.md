@@ -10,9 +10,14 @@ PRIVY_APP_ID=...
 PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
 SAVE_GUEST_SESSION_SECRET=...
 PORT=3000
+GOOGLE_PLACES_API_KEY=...
+SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=false
+SAVE_ENABLE_SERVER_OCR=false
 ```
 
 Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart.
+
+Source recovery can run with metadata and public search only. Set `GOOGLE_PLACES_API_KEY` to let the worker corroborate Review Candidates with Places address/coordinates. Set `SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=true` to allow bounded public video fetch plus one keyframe sample, and set `SAVE_ENABLE_SERVER_OCR=true` only on workers that have `tesseract` installed. If these toggles are off or unavailable, recovery keeps the source as a cited clue instead of inventing place details.
 
 ## Local
 

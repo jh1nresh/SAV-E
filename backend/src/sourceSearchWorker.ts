@@ -27,6 +27,9 @@ export type SourceSearchResult = {
 export type SourceSearchCandidate = {
   name: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
+  placeId?: string;
   evidence: string[];
   confidence: number;
   missingInfo: string[];
@@ -49,6 +52,8 @@ export type SourceMediaEvidence = {
   byteLength?: number;
   sha256?: string;
   frameSecond?: number;
+  text?: string;
+  textSource?: "ocr" | "asr";
 };
 
 export type SourceSearchOutput = {
@@ -70,6 +75,36 @@ type SourceMetadata = {
 
 type FetchText = (url: string) => Promise<string>;
 type FetchMediaEvidence = (metadata: SourceMetadata) => Promise<SourceMediaEvidence[]>;
+type PlacesCorroborator = (candidate: SourceSearchCandidate) => Promise<PlacesCorroboration | undefined>;
+type EvidenceRubricEvaluator = (input: EvidenceRubricInput) => EvidenceRubricVerdict;
+
+export type SourceSearchWorkerOptions = {
+  placesCorroborator?: PlacesCorroborator;
+  rubricEvaluator?: EvidenceRubricEvaluator;
+};
+
+type PlacesCorroboration = {
+  name?: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  placeId?: string;
+  confidenceBoost?: number;
+  evidence?: string[];
+};
+
+type EvidenceRubricInput = {
+  sourceMetadata?: SourceMetadata;
+  mediaEvidence: SourceMediaEvidence[];
+  searchResults: SourceSearchResult[];
+  candidate: SourceSearchCandidate;
+};
+
+type EvidenceRubricVerdict = {
+  confidenceReason: string;
+  evidenceTier: "source_only" | "weak" | "likely" | "corroborated";
+  missingInfo: string[];
+};
 
 const defaultMaxQueries = 4;
 const maxResultsPerQuery = 5;
@@ -79,6 +114,7 @@ export async function runSourceSearchRecovery(
   input: SourceSearchInput,
   fetchText: FetchText = defaultFetchText,
   fetchMediaEvidence: FetchMediaEvidence = defaultFetchMediaEvidence,
+  options: SourceSearchWorkerOptions = {},
 ): Promise<SourceSearchOutput> {
   const errors: string[] = [];
   const sourceMetadata = await fetchSourceMetadata(input.sourceUrl, fetchText, errors);
@@ -97,10 +133,22 @@ export async function runSourceSearchRecovery(
     }
   }
 
-  const candidates = dedupeCandidates([
+  const candidateDrafts = dedupeCandidates([
     ...candidatesFromSourceMetadata(sourceMetadata),
+    ...candidatesFromMediaEvidence(mediaEvidence, sourceMetadata),
     ...candidatesFromSearchResults(searchResults),
   ]);
+  const candidates = await finalizeCandidates(
+    candidateDrafts,
+    {
+      sourceMetadata,
+      mediaEvidence,
+      searchResults,
+      placesCorroborator: options.placesCorroborator ?? defaultPlacesCorroborator,
+      rubricEvaluator: options.rubricEvaluator ?? defaultEvidenceRubricEvaluator,
+    },
+    errors,
+  );
 
   return {
     queries,
@@ -207,6 +255,41 @@ function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): Sou
       "Source metadata-derived candidate; verify before saving",
     ],
   }];
+}
+
+function candidatesFromMediaEvidence(
+  mediaEvidence: SourceMediaEvidence[],
+  metadata: SourceMetadata | undefined,
+): SourceSearchCandidate[] {
+  const candidates: SourceSearchCandidate[] = [];
+  const evidenceText = mediaEvidence
+    .map((item) => item.text)
+    .filter(Boolean)
+    .join("\n");
+  if (!evidenceText) return candidates;
+
+  const address = addressFromText(evidenceText);
+  const name = mediaEvidencePlaceName(evidenceText, address);
+  if (!name || !isUsableCandidateName(name)) return candidates;
+
+  candidates.push({
+    name,
+    address: address ?? "",
+    evidence: [
+      "Server media analysis produced place-bearing text",
+      ...mediaEvidenceTextEvidence(mediaEvidence),
+      metadata?.imageURL ? `Source thumbnail URL: ${metadata.imageURL}` : "",
+      metadata?.videoURL ? `Source video URL: ${metadata.videoURL}` : "",
+    ].filter(Boolean),
+    confidence: address ? 0.58 : 0.44,
+    missingInfo: [
+      address ? "Confirm exact address" : "Verified address",
+      "Verified coordinates",
+      "Media-derived candidate; corroborate with Places before saving",
+    ],
+  });
+
+  return candidates;
 }
 
 function buildSourceRecoveryReceipt(
@@ -343,6 +426,190 @@ function dedupeCandidates(candidates: SourceSearchCandidate[]): SourceSearchCand
     result.push(candidate);
   }
   return result.slice(0, 5);
+}
+
+async function finalizeCandidates(
+  candidates: SourceSearchCandidate[],
+  context: {
+    sourceMetadata?: SourceMetadata;
+    mediaEvidence: SourceMediaEvidence[];
+    searchResults: SourceSearchResult[];
+    placesCorroborator: PlacesCorroborator;
+    rubricEvaluator: EvidenceRubricEvaluator;
+  },
+  errors: string[],
+): Promise<SourceSearchCandidate[]> {
+  const finalized: SourceSearchCandidate[] = [];
+
+  for (const candidate of candidates) {
+    let next = { ...candidate, evidence: [...candidate.evidence], missingInfo: [...candidate.missingInfo] };
+    try {
+      const places = await context.placesCorroborator(next);
+      if (places) next = applyPlacesCorroboration(next, places);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown Places corroboration error";
+      errors.push(`places corroboration ${candidate.name}: ${message}`);
+    }
+
+    const verdict = context.rubricEvaluator({
+      sourceMetadata: context.sourceMetadata,
+      mediaEvidence: context.mediaEvidence,
+      searchResults: context.searchResults,
+      candidate: next,
+    });
+    next = applyRubricVerdict(next, verdict);
+    finalized.push(next);
+  }
+
+  return finalized.slice(0, 5);
+}
+
+function applyPlacesCorroboration(
+  candidate: SourceSearchCandidate,
+  places: PlacesCorroboration,
+): SourceSearchCandidate {
+  const evidence = [
+    ...candidate.evidence,
+    ...(places.evidence ?? []),
+    places.placeId ? `Places corroboration place_id: ${places.placeId}` : "",
+    places.address ? `Places corroboration address: ${places.address}` : "",
+  ].filter(Boolean);
+  const hasCoordinates = typeof places.latitude === "number" && typeof places.longitude === "number";
+  return {
+    ...candidate,
+    name: places.name?.trim() || candidate.name,
+    address: places.address?.trim() || candidate.address,
+    latitude: hasCoordinates ? places.latitude : candidate.latitude,
+    longitude: hasCoordinates ? places.longitude : candidate.longitude,
+    placeId: places.placeId ?? candidate.placeId,
+    evidence: unique(evidence),
+    confidence: Math.min(0.95, candidate.confidence + (places.confidenceBoost ?? 0.18)),
+    missingInfo: candidate.missingInfo.filter((item) => {
+      if (places.address && item === "Verified address") return false;
+      if (hasCoordinates && item === "Verified coordinates") return false;
+      return true;
+    }),
+  };
+}
+
+function applyRubricVerdict(
+  candidate: SourceSearchCandidate,
+  verdict: EvidenceRubricVerdict,
+): SourceSearchCandidate {
+  const missing = unique([...candidate.missingInfo, ...verdict.missingInfo]);
+  return {
+    ...candidate,
+    evidence: unique([
+      ...candidate.evidence,
+      `Rubric verdict: ${verdict.evidenceTier}`,
+      `Confidence reason: ${verdict.confidenceReason}`,
+    ]),
+    missingInfo: missing,
+  };
+}
+
+function defaultEvidenceRubricEvaluator(input: EvidenceRubricInput): EvidenceRubricVerdict {
+  const evidenceText = input.candidate.evidence.join("\n");
+  const hasMetadata = input.candidate.evidence.some((item) => item.includes("Source metadata"));
+  const hasMediaText = input.mediaEvidence.some((item) => item.text?.trim());
+  const hasSearch = input.candidate.evidence.some((item) => item.includes("Search result"));
+  const hasPlaces = input.candidate.evidence.some((item) => item.includes("Places corroboration"));
+  const hasAddress = Boolean(input.candidate.address);
+  const hasCoordinates = typeof input.candidate.latitude === "number" && typeof input.candidate.longitude === "number";
+
+  if (hasPlaces && hasAddress && hasCoordinates) {
+    return {
+      evidenceTier: "corroborated",
+      confidenceReason: "source evidence produced a candidate and Places corroborated address/coordinates",
+      missingInfo: ["User confirmation before saving as Map Stamp"],
+    };
+  }
+
+  if ((hasMetadata || hasMediaText || hasSearch) && hasAddress) {
+    return {
+      evidenceTier: "likely",
+      confidenceReason: "place name and address are cited, but coordinates still need Places verification",
+      missingInfo: ["Verified coordinates", "User confirmation before saving as Map Stamp"],
+    };
+  }
+
+  if (hasMetadata || hasMediaText || hasSearch || evidenceText) {
+    return {
+      evidenceTier: "weak",
+      confidenceReason: "SAV-E found place-bearing clues, but not enough proof for a map-ready candidate",
+      missingInfo: ["Verified address", "Verified coordinates", "User confirmation before saving as Map Stamp"],
+    };
+  }
+
+  return {
+    evidenceTier: "source_only",
+    confidenceReason: "source was preserved, but no reliable place evidence was extracted",
+    missingInfo: ["Verified venue name", "Verified address", "Verified coordinates"],
+  };
+}
+
+async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Promise<PlacesCorroboration | undefined> {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return undefined;
+  const query = [candidate.name, candidate.address].filter(Boolean).join(" ");
+  if (!query.trim()) return undefined;
+  const params = new URLSearchParams({
+    query,
+    key,
+    fields: "place_id,name,formatted_address,geometry",
+  });
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "SAV-E Places corroborator/1.0",
+      "Accept": "application/json",
+    },
+    redirect: "manual",
+  });
+  if (isRedirectResponse(response) || !response.ok) return undefined;
+  const body = JSON.parse(await boundedResponseText(response, 512_000)) as {
+    results?: Array<{
+      place_id?: string;
+      name?: string;
+      formatted_address?: string;
+      geometry?: { location?: { lat?: number; lng?: number } };
+    }>;
+  };
+  const result = body.results?.[0];
+  if (!result) return undefined;
+  const latitude = result.geometry?.location?.lat;
+  const longitude = result.geometry?.location?.lng;
+  return {
+    name: result.name,
+    address: result.formatted_address,
+    latitude: typeof latitude === "number" ? latitude : undefined,
+    longitude: typeof longitude === "number" ? longitude : undefined,
+    placeId: result.place_id,
+    confidenceBoost: 0.22,
+    evidence: ["Places resolver matched the candidate by name/address query"],
+  };
+}
+
+function mediaEvidencePlaceName(text: string, address?: string): string | undefined {
+  const lines = text
+    .split(/\n|\r|[。！？!?]/)
+    .map(cleanMetadataPlaceLine)
+    .filter((line) => line && !looksLikeHours(line));
+  if (address) {
+    const addressLineIndex = lines.findIndex((line) => line.includes(address) || address.includes(line));
+    const beforeAddress = addressLineIndex >= 0 ? lines.slice(0, addressLineIndex) : lines;
+    return beforeAddress.reverse().find((line) => isUsableCandidateName(line));
+  }
+  return lines.find((line) => isUsableCandidateName(line));
+}
+
+function mediaEvidenceTextEvidence(mediaEvidence: SourceMediaEvidence[]): string[] {
+  return mediaEvidence.flatMap((item) => {
+    if (!item.text?.trim()) return [];
+    const label = item.textSource === "asr" ? "ASR transcript" : "Keyframe OCR";
+    const frame = typeof item.frameSecond === "number" ? ` at ${item.frameSecond}s` : "";
+    return [`${label}${frame}: ${cleanText(item.text).slice(0, 240)}`];
+  });
 }
 
 function sourceMetadataPlaceName(text: string, address: string): string | undefined {
@@ -699,6 +966,7 @@ async function extractFirstKeyframe(videoData: Uint8Array, sourceUrl: string): P
     ], { timeout: 12_000, maxBuffer: 200_000 });
     const frameData = new Uint8Array(await readFile(output));
     if (frameData.byteLength === 0 || frameData.byteLength > 6_000_000) return undefined;
+    const ocrText = await extractOCRText(output);
     return {
       kind: "video_keyframe",
       url: sourceUrl,
@@ -706,11 +974,27 @@ async function extractFirstKeyframe(videoData: Uint8Array, sourceUrl: string): P
       byteLength: frameData.byteLength,
       sha256: sha256(frameData),
       frameSecond: 1,
+      text: ocrText,
+      textSource: ocrText ? "ocr" : undefined,
     };
   } catch {
     return undefined;
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function extractOCRText(imagePath: string): Promise<string | undefined> {
+  if (process.env.SAVE_ENABLE_SERVER_OCR !== "true") return undefined;
+  try {
+    const { stdout } = await execFileAsync("tesseract", [imagePath, "stdout"], {
+      timeout: 10_000,
+      maxBuffer: 500_000,
+    });
+    const text = cleanText(stdout);
+    return text.length >= 2 ? text.slice(0, 2_000) : undefined;
+  } catch {
+    return undefined;
   }
 }
 

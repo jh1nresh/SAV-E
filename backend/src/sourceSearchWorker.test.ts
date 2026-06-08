@@ -313,3 +313,68 @@ test("runSourceSearchRecovery records bounded server media fetch and keyframe ev
   assert.ok(output.receipt.tried.includes("server_keyframe_extraction"));
   assert.equal(output.receipt.capabilityLevel, "media_evidence_recovery");
 });
+
+test("runSourceSearchRecovery turns keyframe OCR and Places corroboration into cited review candidate", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/DThinMetaOnly/",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="Food reel on Instagram">
+          <meta property="og:image" content="https://cdn.example.test/thin-cover.jpg">
+          <meta property="og:video" content="https://cdn.example.test/thin-video.mp4">
+        `;
+      }
+      return `
+        <div class="result">
+          <a class="result__a" href="https://www.instagram.com/reels/">Instagram</a>
+        </div>
+      `;
+    },
+    async (metadata) => [
+      {
+        kind: "video_keyframe",
+        url: metadata.videoURL ?? "",
+        contentType: "image/jpeg",
+        byteLength: 2345,
+        sha256: "frame-hash",
+        frameSecond: 1,
+        textSource: "ocr",
+        text: "🏠 Utopia Euro Caffe\n地址 2489 Park Ave, Tustin, CA",
+      },
+    ],
+    {
+      placesCorroborator: async (candidate) => {
+        assert.equal(candidate.name, "Utopia Euro Caffe");
+        assert.equal(candidate.address, "2489 Park Ave, Tustin");
+        return {
+          name: "Utopia Euro Caffe",
+          address: "2489 Park Ave, Tustin, CA 92782",
+          latitude: 33.7001,
+          longitude: -117.8273,
+          placeId: "google_utopia",
+          confidenceBoost: 0.24,
+          evidence: ["Places resolver matched OCR name/address"],
+        };
+      },
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "Utopia Euro Caffe");
+  assert.equal(output.candidates[0].address, "2489 Park Ave, Tustin, CA 92782");
+  assert.equal(output.candidates[0].latitude, 33.7001);
+  assert.equal(output.candidates[0].longitude, -117.8273);
+  assert.ok(output.candidates[0].confidence > 0.7);
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("Keyframe OCR at 1s")));
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("Places resolver matched OCR name/address")));
+  assert.ok(output.candidates[0].evidence.some((item) => item === "Rubric verdict: corroborated"));
+  assert.ok(output.candidates[0].evidence.some((item) => item.startsWith("Confidence reason:")));
+  assert.ok(!output.candidates[0].missingInfo.includes("Verified coordinates"));
+  assert.ok(output.candidates[0].missingInfo.includes("User confirmation before saving as Map Stamp"));
+  assert.equal(output.receipt.output, "review_candidate");
+  assert.equal(output.receipt.capabilityLevel, "media_evidence_recovery");
+});
