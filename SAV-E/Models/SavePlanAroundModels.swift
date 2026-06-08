@@ -4,6 +4,104 @@ struct SavePlanAroundRequest: Hashable {
     var anchorResultID: String
     var duration: SavePlanDuration
     var intent: SavePlanIntent
+    var planIntent: SavePlanIntentContract
+
+    init(
+        anchorResultID: String,
+        duration: SavePlanDuration,
+        intent: SavePlanIntent,
+        planIntent: SavePlanIntentContract = SavePlanIntentContract()
+    ) {
+        self.anchorResultID = anchorResultID
+        self.duration = duration
+        self.intent = intent
+        var resolvedPlanIntent = planIntent
+        if resolvedPlanIntent.duration == nil {
+            resolvedPlanIntent.duration = duration
+        }
+        self.planIntent = resolvedPlanIntent
+    }
+}
+
+struct SavePlanIntentContract: Hashable {
+    var cityOrRegion: String?
+    var duration: SavePlanDuration?
+    var dateText: String?
+    var timeWindow: String?
+    var transportMode: SaveAIResponse.TransportMode?
+    var pace: ItineraryPace
+    var mustIncludeResultIDs: Set<String>
+    var avoidResultIDs: Set<String>
+    var categoryGoals: [PlaceCategory]
+    var vibe: String?
+    var budget: String?
+    var mealPreferences: [String]
+    var allowedPublicFillerSlots: [SavePlanFillerSlot]
+
+    init(
+        cityOrRegion: String? = nil,
+        duration: SavePlanDuration? = nil,
+        dateText: String? = nil,
+        timeWindow: String? = nil,
+        transportMode: SaveAIResponse.TransportMode? = nil,
+        pace: ItineraryPace = .balanced,
+        mustIncludeResultIDs: Set<String> = [],
+        avoidResultIDs: Set<String> = [],
+        categoryGoals: [PlaceCategory] = [],
+        vibe: String? = nil,
+        budget: String? = nil,
+        mealPreferences: [String] = [],
+        allowedPublicFillerSlots: [SavePlanFillerSlot] = SavePlanFillerSlot.allCases
+    ) {
+        self.cityOrRegion = cityOrRegion
+        self.duration = duration
+        self.dateText = dateText
+        self.timeWindow = timeWindow
+        self.transportMode = transportMode
+        self.pace = pace
+        self.mustIncludeResultIDs = mustIncludeResultIDs
+        self.avoidResultIDs = avoidResultIDs
+        self.categoryGoals = categoryGoals
+        self.vibe = vibe
+        self.budget = budget
+        self.mealPreferences = mealPreferences
+        self.allowedPublicFillerSlots = allowedPublicFillerSlots
+    }
+}
+
+enum SavePlanFillerSlot: String, CaseIterable, Hashable {
+    case breakfast
+    case coffee
+    case viewpoint
+    case museum
+    case walkableActivity = "walkable_activity"
+    case dinner
+    case lateNight = "late_night"
+
+    var displayName: String {
+        switch self {
+        case .breakfast: return "breakfast"
+        case .coffee: return "coffee"
+        case .viewpoint: return "viewpoint"
+        case .museum: return "museum"
+        case .walkableActivity: return "walkable activity"
+        case .dinner: return "dinner"
+        case .lateNight: return "late-night stop"
+        }
+    }
+
+    var preferredCategories: Set<PlaceCategory> {
+        switch self {
+        case .breakfast, .dinner:
+            return [.food]
+        case .coffee:
+            return [.cafe]
+        case .viewpoint, .museum, .walkableActivity:
+            return [.attraction, .shopping]
+        case .lateNight:
+            return [.bar, .food]
+        }
+    }
 }
 
 enum SavePlanDuration: String, CaseIterable, Hashable {
@@ -59,6 +157,17 @@ enum SavePlanStopSource: String, Hashable {
     case userSaved
     case pendingCandidate
     case unsavedMapCandidate
+
+    var sourceLabel: String {
+        switch self {
+        case .anchor, .userSaved:
+            return "From your SAV-E"
+        case .pendingCandidate:
+            return "Review candidate"
+        case .unsavedMapCandidate:
+            return "New recommendation"
+        }
+    }
 }
 
 struct SavePlanStop: Identifiable, Hashable {
@@ -72,6 +181,49 @@ struct SavePlanStop: Identifiable, Hashable {
     var reason: String
     var latitude: Double?
     var longitude: Double?
+    var evidence: [String]
+    var fillerSlot: SavePlanFillerSlot?
+
+    var sourceLabel: String {
+        source.sourceLabel
+    }
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String?,
+        source: SavePlanStopSource,
+        category: PlaceCategory?,
+        distanceMeters: Double?,
+        distanceLabel: String?,
+        reason: String,
+        latitude: Double?,
+        longitude: Double?,
+        evidence: [String] = [],
+        fillerSlot: SavePlanFillerSlot? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.source = source
+        self.category = category
+        self.distanceMeters = distanceMeters
+        self.distanceLabel = distanceLabel
+        self.reason = reason
+        self.latitude = latitude
+        self.longitude = longitude
+        self.evidence = evidence
+        self.fillerSlot = fillerSlot
+    }
+}
+
+struct SavePlanRetrievalReceipt: Hashable {
+    var sourceBoundary: String
+    var querySelector: String
+    var candidateCount: Int
+    var filterRule: String
+    var scoreRule: String
+    var skippedReasons: [String]
 }
 
 struct SavePlanAroundDraft: Identifiable, Hashable {
@@ -83,6 +235,8 @@ struct SavePlanAroundDraft: Identifiable, Hashable {
     var routeStops: [SavePlanStop]
     var routeNotes: [String]
     var explanation: String
+    var unfilledGaps: [SavePlanFillerSlot]
+    var retrievalReceipt: SavePlanRetrievalReceipt
     var createdAt: Date
 
     init(
@@ -94,6 +248,15 @@ struct SavePlanAroundDraft: Identifiable, Hashable {
         routeStops: [SavePlanStop],
         routeNotes: [String],
         explanation: String,
+        unfilledGaps: [SavePlanFillerSlot] = [],
+        retrievalReceipt: SavePlanRetrievalReceipt = SavePlanRetrievalReceipt(
+            sourceBoundary: "Confirmed Map Stamps first; public recommendations stay unsaved.",
+            querySelector: "No public recommendation query was run.",
+            candidateCount: 0,
+            filterRule: "No candidates evaluated.",
+            scoreRule: "No candidates scored.",
+            skippedReasons: []
+        ),
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -104,6 +267,8 @@ struct SavePlanAroundDraft: Identifiable, Hashable {
         self.routeStops = routeStops
         self.routeNotes = routeNotes
         self.explanation = explanation
+        self.unfilledGaps = unfilledGaps
+        self.retrievalReceipt = retrievalReceipt
         self.createdAt = createdAt
     }
 }

@@ -18,7 +18,7 @@ struct SaveAIResponse: Equatable {
         case placeList, navigationCard, tripItinerary, message
     }
 
-    enum TransportMode: String, Codable, Equatable {
+    enum TransportMode: String, Codable, Equatable, Hashable {
         case walking, transit, driving
 
         var mapsKey: String {

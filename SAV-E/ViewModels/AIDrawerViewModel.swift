@@ -555,20 +555,29 @@ final class AIDrawerViewModel: ObservableObject {
 
     private func planAroundPrompt(for draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> String {
         let stops = draft.routeStops.enumerated().map { index, stop in
-            let marker = stop.savedPlaceUUIDString == nil ? "unsaved public candidate" : "saved Map Stamp"
+            let marker = stop.sourceLabel
             let distance = stop.distanceLabel.map { ", \($0) from anchor" } ?? ""
-            return "\(index + 1). \(stop.title) (\(marker)\(distance))"
+            let filler = stop.fillerSlot.map { ", fills \($0.displayName)" } ?? ""
+            let placeID = stop.savedPlaceUUIDString ?? "null"
+            return "\(index + 1). \(stop.title) (placeId: \(placeID), source: \(marker)\(distance)\(filler))"
         }.joined(separator: "\n")
+        let gaps = draft.unfilledGaps.isEmpty
+            ? "none"
+            : draft.unfilledGaps.map(\.displayName).joined(separator: ", ")
 
         return outputLanguage.localized(
             english: """
             Plan a \(draft.request.duration.displayName.lowercased()) \(draft.request.intent.displayName.lowercased()) route around \(draft.anchor.title).
-            Polish this deterministic route into a useful itinerary:
+            Polish this deterministic route into a useful itinerary. The deterministic planner owns stop IDs, order, day grouping, time slots, and source labels. Do not add stops, remove must-include stops, change place IDs, or relabel any stop. Public recommendations must keep placeId null and source "New recommendation".
+            Unfilled gaps: \(gaps).
+            Retrieval receipt: \(draft.retrievalReceipt.querySelector)
             \(stops)
             """,
             traditionalChinese: """
             請用「\(draft.anchor.title)」周邊規劃一個\(draft.request.duration.displayName.lowercased())、\(draft.request.intent.displayName.lowercased())行程。
-            把這個確定路線潤飾成實用行程：
+            把這個確定路線潤飾成實用行程。確定性 planner 已經決定停留點 ID、順序、天數、時段和來源標籤；不要新增停留點、刪掉 must-include 停留點、改 place ID，或改任何來源標籤。公開推薦必須維持 placeId null，來源維持「New recommendation」。
+            尚未補上的空缺：\(gaps)。
+            檢索 receipt：\(draft.retrievalReceipt.querySelector)
             \(stops)
             """
         )
@@ -703,9 +712,12 @@ private extension SaveAIResponse {
     static func planAroundDraft(_ draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> SaveAIResponse {
         let savedPlaceIDs = draft.routeStops.compactMap(\.savedPlaceUUIDString)
         let stops = draft.routeStops.enumerated().map { index, stop in
+            let evidence = stop.evidence.isEmpty ? nil : "Evidence: \(stop.evidence.joined(separator: "; "))"
             let noteParts = [
+                stop.sourceLabel,
                 stop.distanceLabel.map { "\($0) from anchor" },
                 stop.reason,
+                evidence,
                 index > 0 && draft.routeNotes.indices.contains(index - 1) ? draft.routeNotes[index - 1] : nil
             ].compactMap { $0 }
             return ItineraryStop(
@@ -722,8 +734,12 @@ private extension SaveAIResponse {
             traditionalChinese: "用「\(draft.anchor.title)」規劃"
         )
         let publicNote = draft.newSuggestions.isEmpty ? "" : outputLanguage.localized(
-            english: " Unsaved map candidates are clearly marked; save them before treating them as your Map Stamps.",
-            traditionalChinese: " 未保存的地圖候選會清楚標示；保存後才會成為你的地圖章。"
+            english: " New recommendations are clearly marked and are not saved to SAV-E unless you confirm them.",
+            traditionalChinese: " New recommendation 會清楚標示；只有你確認後才會保存到 SAV-E。"
+        )
+        let gapNote = draft.unfilledGaps.isEmpty ? "" : outputLanguage.localized(
+            english: " Public discovery could not fill: \(draft.unfilledGaps.map(\.displayName).joined(separator: ", ")).",
+            traditionalChinese: " 公開探索尚未補上：\(draft.unfilledGaps.map(\.displayName).joined(separator: ", "))。"
         )
         return SaveAIResponse(
             componentType: .tripItinerary,
@@ -736,7 +752,7 @@ private extension SaveAIResponse {
             mapAction: savedPlaceIDs.count >= 2
                 ? MapActionData(type: .showRoute, placeIds: savedPlaceIDs, lat: nil, lng: nil, span: nil)
                 : MapActionData(type: .focusRegion, placeIds: nil, lat: draft.anchor.latitude, lng: draft.anchor.longitude, span: 0.03),
-            aiMessage: draft.explanation + publicNote
+            aiMessage: draft.explanation + publicNote + gapNote
         )
     }
 
