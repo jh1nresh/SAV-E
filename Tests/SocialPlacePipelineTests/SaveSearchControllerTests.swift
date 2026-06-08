@@ -2499,13 +2499,13 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testShowPlanAroundSavedPlaceBuildsTripItineraryWithoutLLMEvenWhenConfigured() {
+    func testShowPlanAroundSavedPlaceBuildsTripItineraryWithoutLLMWhenUnconfigured() async {
         let anchor = place(name: "Sushi Gen", address: "Los Angeles", category: .food, latitude: 34.0478, longitude: -118.2386)
         let coffee = place(name: "Maru Coffee", address: "Los Angeles", category: .cafe, latitude: 34.0356, longitude: -118.2296)
-        let viewModel = AIDrawerViewModel(aiService: SaveAIService(apiKey: "test-key"), groundedAnswerClient: nil)
+        let viewModel = AIDrawerViewModel(aiService: SaveAIService(apiKey: ""), groundedAnswerClient: nil)
         viewModel.places = [anchor, coffee]
 
-        viewModel.showPlanAround(anchor: anchor, outputLanguage: .english)
+        await viewModel.showPlanAround(anchor: anchor, outputLanguage: .english)
 
         guard case .displaying(let response) = viewModel.drawerState else {
             return XCTFail("Expected deterministic plan response")

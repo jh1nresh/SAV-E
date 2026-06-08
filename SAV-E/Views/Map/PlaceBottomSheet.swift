@@ -4,7 +4,7 @@ struct PlaceBottomSheet: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     var onDelete: (() async throws -> Void)?
-    var onPlanAround: (() -> Void)?
+    var onPlanAround: (() async -> Void)?
     @Environment(\.openURL) private var openURL
     @Environment(\.colorScheme) private var colorScheme
     @State private var showDeleteConfirmation = false
@@ -113,7 +113,7 @@ struct PlaceBottomSheet: View {
 
             HStack(spacing: 8) {
                 Button {
-                    onPlanAround?()
+                    Task { await onPlanAround?() }
                 } label: {
                     PlaceDetailActionLabel(
                         title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"),

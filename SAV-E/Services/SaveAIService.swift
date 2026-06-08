@@ -27,7 +27,8 @@ final class SaveAIService {
         _ userMessage: String,
         places: [Place],
         conversationHistory: [ConversationTurn] = [],
-        outputLanguage: AppLanguage = .english
+        outputLanguage: AppLanguage = .english,
+        deterministicDraftOverride: SaveAIResponse? = nil
     ) async throws -> SaveAIResponse {
         guard !places.isEmpty else {
             return SaveAIResponse(
@@ -46,11 +47,12 @@ final class SaveAIService {
             )
         }
 
-        if let localResponse = localIntentResponse(for: userMessage, places: places, outputLanguage: outputLanguage) {
+        if deterministicDraftOverride == nil,
+           let localResponse = localIntentResponse(for: userMessage, places: places, outputLanguage: outputLanguage) {
             return localResponse
         }
 
-        let deterministicDraft = DeterministicTripPlanner().plan(
+        let deterministicDraft = deterministicDraftOverride ?? DeterministicTripPlanner().plan(
             for: userMessage,
             places: places,
             outputLanguage: outputLanguage
@@ -172,6 +174,31 @@ final class SaveAIService {
             return deterministicDraft
         }
         throw lastError ?? SaveAIError.apiError(0)
+    }
+
+    func polishItineraryDraft(
+        _ deterministicDraft: SaveAIResponse,
+        userMessage: String,
+        places: [Place],
+        outputLanguage: AppLanguage = .english
+    ) async -> SaveAIResponse {
+        guard deterministicDraft.componentType == .tripItinerary else {
+            return deterministicDraft
+        }
+        guard !places.isEmpty else {
+            return deterministicDraft
+        }
+
+        do {
+            return try await query(
+                userMessage,
+                places: places,
+                outputLanguage: outputLanguage,
+                deterministicDraftOverride: deterministicDraft
+            )
+        } catch {
+            return deterministicDraft
+        }
     }
 
     // MARK: - Private

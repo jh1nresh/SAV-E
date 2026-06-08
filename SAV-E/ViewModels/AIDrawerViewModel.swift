@@ -325,7 +325,7 @@ final class AIDrawerViewModel: ObservableObject {
         outputLanguage: AppLanguage = .english,
         duration: SavePlanDuration = .halfDay,
         intent: SavePlanIntent = .balanced
-    ) {
+    ) async {
         let response = saveSearchController.search(
             query: "",
             places: places,
@@ -362,11 +362,20 @@ final class AIDrawerViewModel: ObservableObject {
         case .draft(let draft):
             let prompt = planAroundPrompt(for: draft, outputLanguage: outputLanguage)
             let deterministicResponse = SaveAIResponse.planAroundDraft(draft, outputLanguage: outputLanguage)
+            let savedRoutePlaceIDs = Set(draft.routeStops.compactMap(\.savedPlaceUUIDString).compactMap(UUID.init(uuidString:)))
+            let routePlaces = places.filter { savedRoutePlaceIDs.contains($0.id) }
+            let polishedResponse = await aiService.polishItineraryDraft(
+                deterministicResponse,
+                userMessage: prompt,
+                places: routePlaces,
+                outputLanguage: outputLanguage
+            )
+            guard activeRequestID == requestID else { return }
             activeRequestID = nil
-            drawerState = .displaying(deterministicResponse)
-            mapAction = deterministicResponse.mapAction
+            drawerState = .displaying(polishedResponse)
+            mapAction = polishedResponse.mapAction
 
-            let responseJSON = aiService.encodeResponse(deterministicResponse)
+            let responseJSON = aiService.encodeResponse(polishedResponse)
             conversationTurns.append(ConversationTurn(userMessage: prompt, assistantResponse: responseJSON))
             if conversationTurns.count > 5 {
                 conversationTurns.removeFirst()
