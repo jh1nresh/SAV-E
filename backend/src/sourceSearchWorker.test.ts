@@ -378,3 +378,85 @@ test("runSourceSearchRecovery turns keyframe OCR and Places corroboration into c
   assert.equal(output.receipt.output, "review_candidate");
   assert.equal(output.receipt.capabilityLevel, "media_evidence_recovery");
 });
+
+test("runSourceSearchRecovery sends safe projection to external rubric adapter", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalRubricURL = process.env.SAVE_EVIDENCE_RUBRIC_URL;
+  const originalRubricToken = process.env.SAVE_EVIDENCE_RUBRIC_TOKEN;
+  const originalPlacesKey = process.env.GOOGLE_PLACES_API_KEY;
+  const postedBodies: unknown[] = [];
+  process.env.SAVE_EVIDENCE_RUBRIC_URL = "https://example.com/save-evidence-rubric";
+  process.env.SAVE_EVIDENCE_RUBRIC_TOKEN = "test-token";
+  delete process.env.GOOGLE_PLACES_API_KEY;
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    assert.equal(init?.method, "POST");
+    assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer test-token");
+    postedBodies.push(JSON.parse(String(init?.body)));
+    return new Response(JSON.stringify({
+      evidence_tier: "likely",
+      confidence_reason: "LLM rubric saw source text and ASR text pointing to the same venue",
+      missing_info: ["Verified coordinates", "User confirmation before saving as Map Stamp"],
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const output = await runSourceSearchRecovery(
+      {
+        sourceUrl: "https://www.instagram.com/reel/DExternalRubric/",
+        maxQueries: 1,
+      },
+      async (url) => {
+        if (url.includes("instagram.com")) {
+          return `
+            <meta property="og:title" content="Utopia Euro Caffe on Instagram">
+            <meta property="og:description" content="Utopia Euro Caffe 2489 Park Ave, Tustin">
+            <meta property="og:video" content="https://cdn.example.test/reel.mp4">
+          `;
+        }
+        return "";
+      },
+      async () => [
+        {
+          kind: "video",
+          url: "https://cdn.example.test/reel.mp4",
+          textSource: "asr",
+          text: "We are at Utopia Euro Caffe in Tustin for coffee.",
+        },
+      ],
+    );
+
+    const candidate = output.candidates.find((item) => item.name === "Utopia Euro Caffe");
+    assert.ok(candidate);
+    assert.ok(candidate.evidence.includes("Rubric verdict: likely"));
+    assert.ok(candidate.evidence.some((item) => item.includes("LLM rubric saw source text")));
+    const metadataBody = postedBodies.find((item) => {
+      const body = item as { candidate?: { name?: string } };
+      return body.candidate?.name === "Utopia Euro Caffe";
+    }) as {
+      source?: { title?: string; resolved_url_host?: string };
+      candidate?: { name?: string; evidence?: string[] };
+      media_evidence?: Array<{ text_source?: string; text?: string }>;
+    } | undefined;
+    const asrBody = postedBodies.find((item) => {
+      const body = item as { media_evidence?: Array<{ text_source?: string }> };
+      return body.media_evidence?.some((media) => media.text_source === "asr");
+    });
+    assert.ok(metadataBody);
+    assert.equal(metadataBody.source?.title, "Utopia Euro Caffe on Instagram");
+    assert.equal(metadataBody.source?.resolved_url_host, "www.instagram.com");
+    assert.equal(metadataBody.candidate?.name, "Utopia Euro Caffe");
+    assert.ok(asrBody);
+    assert.ok(!JSON.stringify(postedBodies).includes("cdn.example.test/reel.mp4"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalRubricURL === undefined) delete process.env.SAVE_EVIDENCE_RUBRIC_URL;
+    else process.env.SAVE_EVIDENCE_RUBRIC_URL = originalRubricURL;
+    if (originalRubricToken === undefined) delete process.env.SAVE_EVIDENCE_RUBRIC_TOKEN;
+    else process.env.SAVE_EVIDENCE_RUBRIC_TOKEN = originalRubricToken;
+    if (originalPlacesKey === undefined) delete process.env.GOOGLE_PLACES_API_KEY;
+    else process.env.GOOGLE_PLACES_API_KEY = originalPlacesKey;
+  }
+});

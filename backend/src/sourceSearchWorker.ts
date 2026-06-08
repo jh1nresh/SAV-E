@@ -76,7 +76,7 @@ type SourceMetadata = {
 type FetchText = (url: string) => Promise<string>;
 type FetchMediaEvidence = (metadata: SourceMetadata) => Promise<SourceMediaEvidence[]>;
 type PlacesCorroborator = (candidate: SourceSearchCandidate) => Promise<PlacesCorroboration | undefined>;
-type EvidenceRubricEvaluator = (input: EvidenceRubricInput) => EvidenceRubricVerdict;
+type EvidenceRubricEvaluator = (input: EvidenceRubricInput) => EvidenceRubricVerdict | Promise<EvidenceRubricVerdict>;
 
 export type SourceSearchWorkerOptions = {
   placesCorroborator?: PlacesCorroborator;
@@ -451,7 +451,7 @@ async function finalizeCandidates(
       errors.push(`places corroboration ${candidate.name}: ${message}`);
     }
 
-    const verdict = context.rubricEvaluator({
+    const verdict = await context.rubricEvaluator({
       sourceMetadata: context.sourceMetadata,
       mediaEvidence: context.mediaEvidence,
       searchResults: context.searchResults,
@@ -508,7 +508,12 @@ function applyRubricVerdict(
   };
 }
 
-function defaultEvidenceRubricEvaluator(input: EvidenceRubricInput): EvidenceRubricVerdict {
+async function defaultEvidenceRubricEvaluator(input: EvidenceRubricInput): Promise<EvidenceRubricVerdict> {
+  const externalVerdict = await externalEvidenceRubricEvaluator(input);
+  return externalVerdict ?? deterministicEvidenceRubricEvaluator(input);
+}
+
+function deterministicEvidenceRubricEvaluator(input: EvidenceRubricInput): EvidenceRubricVerdict {
   const evidenceText = input.candidate.evidence.join("\n");
   const hasMetadata = input.candidate.evidence.some((item) => item.includes("Source metadata"));
   const hasMediaText = input.mediaEvidence.some((item) => item.text?.trim());
@@ -545,6 +550,103 @@ function defaultEvidenceRubricEvaluator(input: EvidenceRubricInput): EvidenceRub
     evidenceTier: "source_only",
     confidenceReason: "source was preserved, but no reliable place evidence was extracted",
     missingInfo: ["Verified venue name", "Verified address", "Verified coordinates"],
+  };
+}
+
+async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Promise<EvidenceRubricVerdict | undefined> {
+  const rawURL = process.env.SAVE_EVIDENCE_RUBRIC_URL?.trim();
+  if (!rawURL) return undefined;
+  const url = safeURL(rawURL);
+  if (!url || !(await isSafePublicHTTPURL(url))) return undefined;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        "User-Agent": "SAV-E evidence rubric/1.0",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...(process.env.SAVE_EVIDENCE_RUBRIC_TOKEN
+          ? { "Authorization": `Bearer ${process.env.SAVE_EVIDENCE_RUBRIC_TOKEN}` }
+          : {}),
+      },
+      redirect: "manual",
+      signal: controller.signal,
+      body: JSON.stringify(evidenceRubricProjection(input)),
+    });
+    if (isRedirectResponse(response) || !response.ok) return undefined;
+    const body = JSON.parse(await boundedResponseText(response, 64_000)) as unknown;
+    return normalizeRubricVerdict(body);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function evidenceRubricProjection(input: EvidenceRubricInput): object {
+  return {
+    source: {
+      title: input.sourceMetadata?.title?.slice(0, 500),
+      description: input.sourceMetadata?.description?.slice(0, 1_000),
+      resolved_url_host: input.sourceMetadata?.resolvedURL ? safeURL(input.sourceMetadata.resolvedURL)?.host : undefined,
+      has_image: Boolean(input.sourceMetadata?.imageURL),
+      has_video: Boolean(input.sourceMetadata?.videoURL),
+    },
+    candidate: {
+      name: input.candidate.name,
+      address: input.candidate.address,
+      has_coordinates: typeof input.candidate.latitude === "number" && typeof input.candidate.longitude === "number",
+      evidence: input.candidate.evidence.slice(0, 12).map((item) => redactURLs(item).slice(0, 500)),
+      missing_info: input.candidate.missingInfo.slice(0, 12),
+    },
+    media_evidence: input.mediaEvidence
+      .filter((item) => item.text?.trim())
+      .slice(0, 6)
+      .map((item) => ({
+        kind: item.kind,
+        text_source: item.textSource,
+        frame_second: item.frameSecond,
+        text: redactURLs(cleanText(item.text ?? "")).slice(0, 1_000),
+      })),
+    search_results: input.searchResults.slice(0, 6).map((item) => ({
+      title: item.title.slice(0, 300),
+      url_host: item.url ? safeURL(item.url)?.host : undefined,
+      snippet: item.snippet ? redactURLs(item.snippet).slice(0, 500) : undefined,
+    })),
+  };
+}
+
+function redactURLs(value: string): string {
+  return value.replace(/https?:\/\/[^\s)]+/gi, "[redacted_url]");
+}
+
+function normalizeRubricVerdict(value: unknown): EvidenceRubricVerdict | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const tier = typeof record.evidence_tier === "string"
+    ? record.evidence_tier
+    : typeof record.evidenceTier === "string"
+      ? record.evidenceTier
+      : undefined;
+  if (tier !== "source_only" && tier !== "weak" && tier !== "likely" && tier !== "corroborated") return undefined;
+  const reason = typeof record.confidence_reason === "string"
+    ? record.confidence_reason
+    : typeof record.confidenceReason === "string"
+      ? record.confidenceReason
+      : undefined;
+  if (!reason?.trim()) return undefined;
+  const missing = Array.isArray(record.missing_info)
+    ? record.missing_info
+    : Array.isArray(record.missingInfo)
+      ? record.missingInfo
+      : [];
+  return {
+    evidenceTier: tier,
+    confidenceReason: cleanText(reason).slice(0, 500),
+    missingInfo: unique(missing.filter((item): item is string => typeof item === "string").map(cleanText).filter(Boolean)).slice(0, 12),
   };
 }
 
@@ -902,12 +1004,15 @@ async function defaultFetchMediaEvidence(metadata: SourceMetadata): Promise<Sour
   if (metadata.videoURL && process.env.SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION === "true") {
     const video = await fetchBoundedMedia(metadata.videoURL, 24_000_000);
     if (video) {
+      const transcript = await extractASRTranscript(video.data);
       evidence.push({
         kind: "video",
         url: metadata.videoURL,
         contentType: video.contentType,
         byteLength: video.data.byteLength,
         sha256: sha256(video.data),
+        text: transcript,
+        textSource: transcript ? "asr" : undefined,
       });
       const frame = await extractFirstKeyframe(video.data, metadata.videoURL);
       if (frame) evidence.push(frame);
@@ -995,6 +1100,32 @@ async function extractOCRText(imagePath: string): Promise<string | undefined> {
     return text.length >= 2 ? text.slice(0, 2_000) : undefined;
   } catch {
     return undefined;
+  }
+}
+
+async function extractASRTranscript(videoData: Uint8Array): Promise<string | undefined> {
+  if (process.env.SAVE_ENABLE_SERVER_ASR !== "true") return undefined;
+  const dir = await mkdtemp(join(tmpdir(), "save-reel-asr-"));
+  const input = join(dir, "input.mp4");
+  try {
+    await writeFile(input, videoData);
+    const command = process.env.SAVE_SERVER_ASR_COMMAND?.trim() || "whisper";
+    const model = process.env.SAVE_SERVER_ASR_MODEL?.trim() || "base";
+    await execFileAsync(command, [
+      input,
+      "--model",
+      model,
+      "--output_format",
+      "txt",
+      "--output_dir",
+      dir,
+    ], { timeout: 60_000, maxBuffer: 1_000_000 });
+    const text = cleanText(await readFile(join(dir, "input.txt"), "utf8"));
+    return text.length >= 2 ? text.slice(0, 4_000) : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 }
 
