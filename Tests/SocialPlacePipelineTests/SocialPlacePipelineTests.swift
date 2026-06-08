@@ -2447,4 +2447,53 @@ final class SocialPlacePipelineTests: XCTestCase {
         )
         XCTAssertTrue(addressOnly.isEmpty)
     }
+    func testInstagramReelCaptionKeepsVenueMarkerBeforeAddress() {
+        let caption = """
+        真蓁 挖寶美食💅 on Instagram: "這是我此生吃過最扯的吃到飽…….
+        竟然是帝王蟹吃到飽啊啊啊啊😍～～～～～～
+        台北店 $3588
+        桃園店／竹北店 $3888
+        新竹金山店 $4888
+        台中店 $4588
+        ‼️每間分店餐點有所不同，反應在價格上，這次在台中吃的
+
+        🏠孫太太。山海。惠中行館
+        📍臺中市西屯區惠中六街15號1樓
+
+        #台中美食 #台中吃到飽 #帝王蟹吃到飽 #台中火鍋 #台中必吃"
+        """
+
+        let candidates = SocialLinkReviewCandidateService.shared.reviewCandidates(
+            fromEvidenceText: caption,
+            sourceURL: "https://www.instagram.com/reel/DWiJELtk08-/"
+        )
+
+        XCTAssertEqual(candidates.first?.candidateName, "孫太太。山海。惠中行館")
+        XCTAssertEqual(candidates.first?.address, "臺中市西屯區惠中六街15號1樓")
+        XCTAssertEqual(candidates.first?.category, "food")
+        XCTAssertFalse(candidates.contains { $0.candidateName == "Address-only place clue" })
+    }
+
+    func testSavedPlaceMemorySummaryFiltersMapDistanceDebugLines() {
+        let place = Place(
+            id: UUID(),
+            name: "Utopia Euro Caffe",
+            address: "Selected on map",
+            latitude: 33.684,
+            longitude: -117.826,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Distance: 852m away",
+            sourcePlatform: .googleMaps,
+            priceRange: "$$",
+            googleRating: 4.6,
+            createdAt: Date(),
+            visibility: .privateMemory,
+            socialSignal: nil
+        )
+
+        XCTAssertNil(place.cleanMemoryNote)
+        XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
+    }
+
 }

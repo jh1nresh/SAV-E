@@ -213,13 +213,23 @@ final class SocialLinkReviewCandidateService {
         var title: String?
         var description: String?
         var imageURL: URL?
+        var videoURL: URL?
+        var jsonCaption: String?
+
+        var evidenceLines: [String] {
+            [title, description, jsonCaption]
+                .compactMap { $0 }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
     }
 
     func reviewCandidates(from url: URL) async throws -> [PendingReviewCandidate] {
         let metadata = await fetchMetadata(from: url)
         let ocrLines = await thumbnailOCRLines(from: metadata.imageURL)
         let ocrEvidence = ocrLines.isEmpty ? nil : ocrLines.joined(separator: "\n")
-        let evidenceText = [metadata.title, metadata.description, ocrEvidence]
+        let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
+        let evidenceText = (metadata.evidenceLines + [videoEvidence, ocrEvidence])
             .compactMap { $0 }
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
@@ -623,11 +633,12 @@ final class SocialLinkReviewCandidateService {
     }
 
     func reviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) -> [PendingReviewCandidate] {
-        let candidates = analyze(evidenceText: evidenceText, sourceURL: sourceURL)
+        let parserCandidates = analyze(evidenceText: evidenceText, sourceURL: sourceURL)
             .placesFound
             .filter { $0.displayName != "Address-only place clue" }
             .map { pendingReviewCandidate(from: $0, sourceURL: sourceURL, sourceText: evidenceText) }
-        return rankedCandidates(candidates)
+        let heuristicCandidates = analyzedCandidates(from: evidenceText, sourceURL: sourceURL)
+        return rankedCandidates(parserCandidates + heuristicCandidates)
     }
 
     private func analyze(evidenceText: String, sourceURL: String) -> SocialPlaceAgentAnalysis {
@@ -669,6 +680,11 @@ final class SocialLinkReviewCandidateService {
     private func rankedCandidates(_ candidates: [PendingReviewCandidate]) -> [PendingReviewCandidate] {
         var seenKeys = Set<String>()
         return candidates
+            .map { candidate in
+                var normalized = candidate
+                normalized.address = cleanLocationMarker(from: candidate.address)
+                return normalized
+            }
             .filter { !isTransitAccessCandidate($0) }
             .sorted { lhs, rhs in
                 socialAnalysisScore(lhs) > socialAnalysisScore(rhs)
@@ -820,14 +836,18 @@ final class SocialLinkReviewCandidateService {
             let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
             let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
             let imageURL = metadataImageURL(in: html, baseURL: response.url ?? url)
+            let videoURL = metadataVideoURL(in: html, baseURL: response.url ?? url)
+            let jsonCaption = embeddedSocialCaption(in: html)
             return PublicMetadata(
                 resolvedURL: response.url?.absoluteString ?? url.absoluteString,
                 title: title,
                 description: description,
-                imageURL: imageURL
+                imageURL: imageURL,
+                videoURL: videoURL,
+                jsonCaption: jsonCaption
             )
         } catch {
-            return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, imageURL: nil)
+            return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
         }
     }
 
@@ -839,6 +859,41 @@ final class SocialLinkReviewCandidateService {
             return nil
         }
         return isSafePublicHTTPURL(url) ? url : nil
+    }
+
+    private func metadataVideoURL(in html: String, baseURL: URL) -> URL? {
+        guard let value = metadataValue(in: html, keys: [
+            "og:video:secure_url",
+            "og:video:url",
+            "og:video",
+            "twitter:player:stream",
+            "twitter:player"
+        ]) else {
+            return nil
+        }
+        guard let url = URL(string: value, relativeTo: baseURL)?.absoluteURL else {
+            return nil
+        }
+        return isSafePublicHTTPURL(url) ? url : nil
+    }
+
+    private func embeddedSocialCaption(in html: String) -> String? {
+        let patterns = [
+            #"\"caption\"\s*:\s*\{[^{}]*\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
+            #"\"edge_media_to_caption\"\s*:\s*\{.*?\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
+            #"\"accessibility_caption\"\s*:\s*\"((?:\\.|[^\"])*)\""#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { continue }
+            let range = NSRange(html.startIndex..<html.endIndex, in: html)
+            guard let match = regex.firstMatch(in: html, range: range),
+                  match.numberOfRanges > 1,
+                  let valueRange = Range(match.range(at: 1), in: html) else { continue }
+            let decoded = decodeJSONStringFragment(String(html[valueRange]))
+            let cleaned = cleanHTMLText(decoded)
+            if !cleaned.isEmpty { return cleaned }
+        }
+        return nil
     }
 
     private func thumbnailOCRLines(from imageURL: URL?) async -> [String] {
@@ -2329,6 +2384,17 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func candidateNameFromCaptionLine(_ line: String) -> String? {
+        if let venueMarkerName = firstCapture(in: line, pattern: #"^\s*[🏠🏡🏘️🏚️🏪🏬🏢🍽️🍴☕️📍🚩]\s*([^\n\r]{2,60})"#) {
+            let cleaned = cleanCandidateName(venueMarkerName)
+            if isUsableCandidateName(cleaned),
+               !looksLikeAddressLine(cleaned),
+               !looksLikeOperatingHoursLine(cleaned),
+               !looksLikeReviewMetricLine(cleaned),
+               !looksLikeMarketingLine(cleaned) {
+                return cleaned
+            }
+        }
+
         if let leadingName = firstCapture(in: line, pattern: #"^([^/\n]{2,60})\s*/"#) {
             let cleaned = cleanCandidateName(leadingName)
             if isUsableCandidateName(cleaned),
@@ -2341,7 +2407,7 @@ final class SocialLinkReviewCandidateService {
         }
 
         let isVenueIntroLine = line.range(of: #"@|名店|插旗|開幕|新店|店名|餐廳|餐厅|restaurant"#, options: [.regularExpression, .caseInsensitive]) != nil
-        if let labeledName = firstCapture(in: line, pattern: #"^\s*(?:[👉➡→➜📌📍🚩🏡]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)\s*[:：\-–—]?\s*([^\n\r]{2,60})"#) {
+        if let labeledName = firstCapture(in: line, pattern: #"^\s*(?:[👉➡→➜📌📍🚩🏠🏡]\s*)?(?:店名|店家|餐廳|餐厅|venue|restaurant)\s*[:：\-–—]?\s*([^\n\r]{2,60})"#) {
             let cleaned = cleanCandidateName(labeledName)
             if isUsableCandidateName(cleaned), !looksLikeMarketingLine(cleaned) {
                 return cleaned
@@ -2482,6 +2548,18 @@ final class SocialLinkReviewCandidateService {
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func decodeJSONStringFragment(_ value: String) -> String {
+        let wrapped = "\"\(value)\""
+        guard let data = wrapped.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(String.self, from: data) else {
+            return value
+                .replacingOccurrences(of: #"\n"#, with: "\n")
+                .replacingOccurrences(of: #"\/"#, with: "/")
+                .replacingOccurrences(of: #"\""#, with: "\"")
+        }
+        return decoded
     }
 
     private func decodeNumericHTMLEntities(in value: String) -> String {

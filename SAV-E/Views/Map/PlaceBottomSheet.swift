@@ -437,6 +437,7 @@ extension Place {
                 let normalizedLine = line.normalizedSummaryText
                 let metadataPrefixes = ["source:", "category:", "rating:", "reviews:", "hours:", "address:"]
                 return !line.localizedCaseInsensitiveContains("Source URL:") &&
+                !normalizedLine.hasPrefix("distance:") &&
                 !line.localizedCaseInsensitiveContains("Analysis pipeline:") &&
                 !line.localizedCaseInsensitiveContains("Evidence tier:") &&
                 !line.localizedCaseInsensitiveContains("Apple Maps POI") &&
@@ -618,7 +619,9 @@ struct PlaceInsightSummaryPanel: View {
             .foregroundColor(.saveCocoa)
 
             VStack(alignment: .leading, spacing: 7) {
-                PlaceSummaryLine(icon: "sparkles", text: condensedSummary)
+                ForEach(summaryLines, id: \.text) { line in
+                    PlaceSummaryLine(icon: line.icon, text: line.text)
+                }
             }
         }
         .padding(12)
@@ -630,7 +633,26 @@ struct PlaceInsightSummaryPanel: View {
         )
     }
 
-    private var condensedSummary: String {
+    private var summaryLines: [(icon: String, text: String)] {
+        var lines: [(icon: String, text: String)] = []
+        if let whySavedSummary {
+            lines.append(("sparkles", whySavedSummary))
+        } else {
+            lines.append(("sparkles", condensedFallbackSummary))
+        }
+        if let reviewSummary {
+            lines.append(("star.fill", reviewSummary))
+        }
+        if let practicalInfo {
+            lines.append(("info.circle", practicalInfo))
+        }
+        if let sourceSummary {
+            lines.append(("link", sourceSummary))
+        }
+        return Array(lines.prefix(4))
+    }
+
+    private var condensedFallbackSummary: String {
         let firstLine = fallbackSummary
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -638,6 +660,31 @@ struct PlaceInsightSummaryPanel: View {
         let value = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard value.count > 120 else { return value }
         return String(value.prefix(117)) + "..."
+    }
+
+    private var whySavedSummary: String? {
+        var parts: [String] = []
+        if !place.savedRecommendedItems.isEmpty {
+            let names = place.savedRecommendedItems.prefix(3).map(\.name).filter { !$0.isEmpty }
+            if !names.isEmpty {
+                parts.append(languageSettings.localized(
+                    english: "saved for \(names.joined(separator: ", "))",
+                    traditionalChinese: "為了 \(names.joined(separator: "、")) 存下"
+                ))
+            }
+        }
+        let highlights = place.savedPlaceHighlights.prefix(2).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !highlights.isEmpty {
+            parts.append(highlights.joined(separator: " · "))
+        }
+        if let recommender = cleaned(place.recommender) ?? cleaned(place.savedSourceHandle) {
+            parts.append(languageSettings.localized(english: "from \(recommender)", traditionalChinese: "來自 \(recommender)"))
+        }
+        guard !parts.isEmpty else { return nil }
+        let prefix = place.status == .visited
+            ? languageSettings.localized(english: "Visited", traditionalChinese: "去過")
+            : languageSettings.localized(english: "Want to try", traditionalChinese: "想找時間去")
+        return "\(prefix): \(parts.joined(separator: " · "))"
     }
 
     private var practicalInfo: String? {
@@ -678,6 +725,18 @@ struct PlaceInsightSummaryPanel: View {
             return languageSettings.localized(english: "Recommended by: \(recommender)", traditionalChinese: "推薦人：\(recommender)")
         }
         return nil
+    }
+
+    private var sourceSummary: String? {
+        var parts: [String] = []
+        parts.append(place.sourceConfirmationLabel(language: languageSettings.language))
+        if place.googlePlaceId != nil || place.googleRating != nil || place.googlePriceLevel != nil || place.openingHours != nil {
+            parts.append(languageSettings.localized(english: "map-enriched", traditionalChinese: "已用地圖資料補強"))
+        }
+        return parts.isEmpty ? nil : languageSettings.localized(
+            english: "Evidence: \(parts.joined(separator: " · "))",
+            traditionalChinese: "證據：\(parts.joined(separator: " · "))"
+        )
     }
 
     private var reviewCountText: String? {
