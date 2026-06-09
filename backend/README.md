@@ -21,7 +21,7 @@ SAVE_EVIDENCE_RUBRIC_URL=
 SAVE_EVIDENCE_RUBRIC_TOKEN=
 SAVE_ENABLE_MAAT_PUBLIC_WEB=
 GEMINI_API_KEY=
-SAVE_MAAT_GEMINI_MODEL=gemini-2.0-flash
+SAVE_MAAT_GEMINI_MODEL=gemini-3.5-flash
 ```
 
 Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart.

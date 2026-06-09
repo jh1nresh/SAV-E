@@ -42,7 +42,7 @@ interface GeminiResponse {
   candidates?: GeminiCandidate[];
 }
 
-const defaultModel = "gemini-2.0-flash";
+const defaultModel = "gemini-3.5-flash";
 const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export function publicWebConfigFromEnv(env: NodeJS.ProcessEnv = process.env): MaatPublicWebConfig {

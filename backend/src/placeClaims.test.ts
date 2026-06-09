@@ -358,7 +358,9 @@ test("enrichMaatPlaceAnalysisWithPublicWeb is env-gated and keeps deterministic 
 });
 
 test("publicWebConfigFromEnv enables requested Ma'at web analysis unless explicitly disabled", () => {
-  assert.equal(publicWebConfigFromEnv({ GEMINI_API_KEY: "test-key" }).enabled, true);
+  const config = publicWebConfigFromEnv({ GEMINI_API_KEY: "test-key" });
+  assert.equal(config.enabled, true);
+  assert.equal(config.model, "gemini-3.5-flash");
   assert.equal(publicWebConfigFromEnv({ GEMINI_API_KEY: "test-key", SAVE_ENABLE_MAAT_PUBLIC_WEB: "false" }).enabled, false);
 });
 
