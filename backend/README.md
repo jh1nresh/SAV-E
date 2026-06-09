@@ -19,11 +19,16 @@ SAVE_SERVER_ASR_COMMAND=whisper
 SAVE_SERVER_ASR_MODEL=base
 SAVE_EVIDENCE_RUBRIC_URL=
 SAVE_EVIDENCE_RUBRIC_TOKEN=
+SAVE_ENABLE_MAAT_PUBLIC_WEB=false
+GEMINI_API_KEY=
+SAVE_MAAT_GEMINI_MODEL=gemini-2.0-flash
 ```
 
 Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart.
 
 Source recovery can run with metadata and public search only. Set `GOOGLE_PLACES_API_KEY` to let the worker corroborate Review Candidates with Places address/coordinates. Set `SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=true` to allow bounded public video fetch plus one keyframe sample, and set `SAVE_ENABLE_SERVER_OCR=true` only on workers that have `tesseract` installed. Set `SAVE_ENABLE_SERVER_ASR=true` only on workers that have a local Whisper-compatible CLI available through `SAVE_SERVER_ASR_COMMAND`; transcripts are attached as cited evidence and never used to invent address/coordinates. Set `SAVE_EVIDENCE_RUBRIC_URL` to an HTTPS public rubric service endpoint when you want an external LLM rubric; the worker sends a bounded projection of metadata/candidate/search/media text, validates the response schema, blocks redirects/private hosts, and falls back to the deterministic rubric when unavailable. If these toggles are off or unavailable, recovery keeps the source as a cited clue instead of inventing place details.
+
+Ma'at restaurant detail enrichment is deterministic by default. Set `SAVE_ENABLE_MAAT_PUBLIC_WEB=true` plus `GEMINI_API_KEY` or `GOOGLE_GEMINI_API_KEY` to let `GET /v0/places/:id/maat-analysis?includePublicWeb=true` ask Gemini with public web search for missing restaurant details such as dishes, parking, reservation tips, average cost, and common negative reviews. The prompt only sends bounded place metadata and non-private claim summaries; raw private evidence is never included. If the model key is missing, the model request fails, or the response cannot be parsed, the route falls back to the selected-place evidence analysis and marks `analysis_receipt.public_web_status`.
 
 ## Local
 
@@ -75,6 +80,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `GET /v0/places/:id/verified-claims` — returns owner-scoped place claims; raw evidence refs are omitted unless `includePrivateEvidence=true`.
 - `POST /v0/places/:id/verified-claims` — attaches an owner-scoped claim with proof level, confidence, visibility, context, ratings, and evidence refs.
 - `GET /v0/places/:id/trust-summary` — returns a compact agent-readable proof summary for a saved place.
+- `GET /v0/places/:id/maat-analysis` — returns selected-place Ma'at restaurant details. Add `includePublicWeb=true` to opt into env-gated Gemini public-web enrichment; model output only fills gaps and the receipt records whether public web/model enrichment was used.
 - `POST /v0/places/recommend-by-claims` — ranks owner-scoped saved places by verified claims, stores a private recommendation-analysis receipt, and returns a retrieval receipt plus AgentShack-safe envelope.
 - `POST /v0/recommendation-analysis-receipts` — stores an authenticated SAV-E recommendation-analysis receipt from bounded client request/output payloads and returns:
   - `id` (`string` UUID) — stored `recommendation_analysis_receipts.id`.

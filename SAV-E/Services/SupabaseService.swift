@@ -31,7 +31,7 @@ protocol SupabaseServiceProtocol {
     func fetchVerifiedPlaceClaims(for placeId: UUID, includePrivateEvidence: Bool) async throws -> [VerifiedPlaceClaim]
     func createVerifiedPlaceClaim(_ draft: VerifiedPlaceClaimDraft, for placeId: UUID) async throws -> VerifiedPlaceClaim
     func fetchPlaceTrustSummary(for placeId: UUID) async throws -> PlaceTrustSummaryResponse
-    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool) async throws -> MaatPlaceAnalysisResponse
+    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool, includePublicWeb: Bool) async throws -> MaatPlaceAnalysisResponse
     func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse
     func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt
     func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard
@@ -168,10 +168,14 @@ final class SupabaseService: SupabaseServiceProtocol {
         return try JSONDecoder.supabase.decode(PlaceTrustSummaryResponse.self, from: data)
     }
 
-    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool = false) async throws -> MaatPlaceAnalysisResponse {
+    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool = false, includePublicWeb: Bool = true) async throws -> MaatPlaceAnalysisResponse {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
-        let suffix = includePrivateEvidence ? "?includePrivateEvidence=true" : ""
+        let queryItems = [
+            includePrivateEvidence ? "includePrivateEvidence=true" : nil,
+            includePublicWeb ? "includePublicWeb=true" : nil,
+        ].compactMap { $0 }
+        let suffix = queryItems.isEmpty ? "" : "?\(queryItems.joined(separator: "&"))"
         let data = try await request(path: "/v0/places/\(placeId.uuidString)/maat-analysis\(suffix)")
         return try JSONDecoder.supabase.decode(MaatPlaceAnalysisResponse.self, from: data)
     }

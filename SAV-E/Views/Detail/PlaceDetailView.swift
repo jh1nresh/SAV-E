@@ -337,10 +337,7 @@ private struct PlaceMaatAnalysisPanel: View {
                     Text(languageSettings.localized(english: "Ma'at analysis", traditionalChinese: "Ma'at 分析"))
                         .font(.headline.weight(.bold))
                         .foregroundColor(.saveInk)
-                    Text(languageSettings.localized(
-                        english: "Selected-place evidence only",
-                        traditionalChinese: "只使用此地點的可引用證據"
-                    ))
+                    Text(scopeSubtitle)
                     .font(.caption)
                     .foregroundColor(.saveMutedText)
                 }
@@ -392,6 +389,20 @@ private struct PlaceMaatAnalysisPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(Color.saveNotebookLine.opacity(0.72), lineWidth: 1)
+        )
+    }
+
+    private var scopeSubtitle: String {
+        if analysis?.analysisReceipt.publicWebUsed == true {
+            return languageSettings.localized(
+                english: "Selected place + public web citations",
+                traditionalChinese: "此地點證據 + 公開網路引用"
+            )
+        }
+
+        return languageSettings.localized(
+            english: "Selected-place evidence only",
+            traditionalChinese: "只使用此地點的可引用證據"
         )
     }
 }
