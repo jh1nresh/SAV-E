@@ -10,10 +10,10 @@ struct OnboardingView: View {
     var onComplete: () -> Void
 
     private var language: AppLanguage { languageSettings.language }
-    private var isBrandEntryStage: Bool { stage == .language }
+    private var isBrandEntryStage: Bool { stage == .promise }
 
     init(startWithSampleProof: Bool = false, onComplete: @escaping () -> Void) {
-        _stage = State(initialValue: startWithSampleProof ? .clue : .language)
+        _stage = State(initialValue: startWithSampleProof ? .clue : .promise)
         self.autoUseSampleClue = startWithSampleProof
         self.onComplete = onComplete
     }
@@ -90,8 +90,8 @@ struct OnboardingView: View {
 
             VStack(spacing: isCompactHeight ? 5 : 8) {
                 Text(localized(
-                    english: "Set up your place memory",
-                    traditionalChinese: "設定你的地點記憶"
+                    english: "Rescue one place before it disappears",
+                    traditionalChinese: "先救回一個快忘掉的地點"
                 ))
                 .font(isCompactHeight ? .headline : .title2)
                 .fontWeight(.black)
@@ -99,8 +99,8 @@ struct OnboardingView: View {
                 .multilineTextAlignment(.center)
 
                 Text(localized(
-                    english: "Add one real post, map link, screenshot, or message. SAV-E will show what it found before it saves anything.",
-                    traditionalChinese: "先加入一個真的貼文、地圖連結、截圖或訊息。SAV-E 會先顯示找到什麼，不會直接存。"
+                    english: "Paste one messy clue. Memo finds the likely place and keeps proof until you confirm.",
+                    traditionalChinese: "貼上一個混亂線索。Memo 會找出可能地點、保留證據，等你確認才保存。"
                 ))
                 .font(isCompactHeight ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                 .lineSpacing(2)
@@ -132,15 +132,15 @@ struct OnboardingView: View {
             .opacity(stage == .clue && trimmedClue.isEmpty ? 0.58 : 1)
             .padding(.horizontal, 24)
 
-            if (!isCompactHeight || stage != .language) && stage != .tag {
+            if (!isCompactHeight || stage != .promise) && stage != .tag {
                 Button(secondaryActionTitle) {
                     skipCurrentStep()
                 }
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundColor(.saveMutedText)
-                .opacity(stage == .language ? 0 : 1)
-                .disabled(stage == .language)
+                .opacity(stage == .promise ? 0 : 1)
+                .disabled(stage == .promise)
             }
         }
         .padding(.bottom, isCompactHeight ? 8 : 22)
@@ -149,24 +149,24 @@ struct OnboardingView: View {
 
     private var primaryActionTitle: String {
         switch stage {
-        case .language:
-            return localized(english: "Start setup", traditionalChinese: "開始設定")
+        case .promise:
+            return localized(english: "Save my first place", traditionalChinese: "存下第一個地點")
         case .clue:
-            return localized(english: "See what SAV-E finds", traditionalChinese: "看看 SAV-E 找到什麼")
+            return localized(english: "Find the real place", traditionalChinese: "找出真正地點")
         case .candidate:
-            return localized(english: "Confirm Map Stamp", traditionalChinese: "確認成地圖章")
+            return localized(english: "Add to my map", traditionalChinese: "加到我的地圖")
         case .mapStamp:
-            return localized(english: "Ask from this memory", traditionalChinese: "用這個記憶問 SAV-E")
+            return localized(english: "Ask my saved places", traditionalChinese: "問我存過的地點")
         case .ask:
-            return localized(english: "Add why I saved it", traditionalChinese: "標記我為什麼想存")
+            return localized(english: "Add why it mattered", traditionalChinese: "補上為什麼重要")
         case .tag:
-            return localized(english: "Start free with Memo", traditionalChinese: "和 Memo 免費開始")
+            return localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
         }
     }
 
     private var primaryActionFill: Color {
         switch stage {
-        case .language: return .saveHoney
+        case .promise: return .saveHoney
         case .clue, .candidate: return .saveHoney
         case .mapStamp: return .saveMint
         case .ask: return .saveSky
@@ -176,7 +176,7 @@ struct OnboardingView: View {
 
     private var primaryActionForeground: Color {
         switch stage {
-        case .language: return .saveInk
+        case .promise: return .saveInk
         default: return .saveInk
         }
     }
@@ -196,7 +196,7 @@ struct OnboardingView: View {
 
     private func advance() {
         switch stage {
-        case .language:
+        case .promise:
             stage = .clue
         case .clue:
             guard !trimmedClue.isEmpty else { return }
@@ -214,7 +214,7 @@ struct OnboardingView: View {
 
     private func skipCurrentStep() {
         switch stage {
-        case .language:
+        case .promise:
             break
         case .clue:
             stage = .candidate
@@ -249,7 +249,7 @@ struct OnboardingView: View {
 }
 
 private enum ProofStage: Int, CaseIterable {
-    case language
+    case promise
     case clue
     case candidate
     case mapStamp
@@ -258,8 +258,8 @@ private enum ProofStage: Int, CaseIterable {
 
     func title(language: AppLanguage) -> String {
         switch (self, language) {
-        case (.language, .english): return "Language"
-        case (.language, .traditionalChinese): return "語言"
+        case (.promise, .english): return "Start"
+        case (.promise, .traditionalChinese): return "開始"
         case (.clue, .english): return "Clue"
         case (.clue, .traditionalChinese): return "線索"
         case (.candidate, .english): return "Review"
@@ -347,8 +347,8 @@ private struct BrandEntryHero: View {
                     .minimumScaleFactor(0.72)
 
                 Text(localized(
-                    english: "Turn messy place links into private Map Stamps.",
-                    traditionalChinese: "把混亂地點連結變成私人地圖章。"
+                    english: "Stop losing places friends send you.",
+                    traditionalChinese: "別再弄丟朋友傳來的地點。"
                 ))
                 .font(isCompactHeight ? .subheadline.weight(.black) : SaveTheme.Typography.entryTitle)
                 .foregroundColor(.saveInk)
@@ -356,15 +356,15 @@ private struct BrandEntryHero: View {
                 .fixedSize(horizontal: false, vertical: true)
 
                 Text(localized(
-                    english: "Memo keeps the source, shows what is missing, and waits for you before saving anything.",
-                    traditionalChinese: "Memo 會保留來源、顯示還缺什麼，確認前不會亂存。"
+                    english: "Memo keeps the clue and proof until you confirm.",
+                    traditionalChinese: "Memo 會接住線索、保留證據，等你確認才保存。"
                 ))
                 .font(isCompactHeight ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
                 .lineSpacing(2)
                 .foregroundColor(.saveMutedText)
                 .multilineTextAlignment(.center)
-                .lineLimit(isCompactHeight ? 2 : nil)
-                .minimumScaleFactor(0.84)
+                .lineLimit(isCompactHeight ? 3 : nil)
+                .minimumScaleFactor(0.76)
                 .fixedSize(horizontal: false, vertical: !isCompactHeight)
             }
 
@@ -383,7 +383,7 @@ private struct BrandEntryHero: View {
     }
 
     private var entryBadge: some View {
-        Text(localized(english: "MEMO SETUP", traditionalChinese: "Memo 設定"))
+        Text(localized(english: "FIRST RESCUE", traditionalChinese: "第一次救回地點"))
             .font(SaveTheme.Typography.eyebrow)
             .foregroundColor(.saveInk)
             .padding(.horizontal, isCompactHeight ? 9 : 10)
@@ -425,12 +425,12 @@ private struct OnboardingProofPromiseStrip: View {
                 tint: .saveBlush
             )
             promiseChip(
-                title: localized(english: "Review proof", traditionalChinese: "檢查證據"),
+                title: localized(english: "Confirm place", traditionalChinese: "確認地點"),
                 systemImage: "checklist.unchecked",
                 tint: .saveSky
             )
             promiseChip(
-                title: localized(english: "Ask saved", traditionalChinese: "問已保存"),
+                title: localized(english: "Ask map", traditionalChinese: "詢問地圖"),
                 systemImage: "sparkles",
                 tint: .saveLeaf
             )
@@ -534,7 +534,7 @@ private struct AnimatedProofHero: View {
     @ViewBuilder
     private var proofContent: some View {
         switch stage {
-        case .language, .clue:
+        case .promise, .clue:
             messySignalView
         case .candidate:
             reviewCandidateView
@@ -1024,8 +1024,8 @@ private struct ProofStageCard: View {
     @ViewBuilder
     private var stageContent: some View {
         switch stage {
-        case .language:
-            languageChoice
+        case .promise:
+            promiseChoice
         case .clue:
             clueInput
         case .candidate:
@@ -1039,43 +1039,92 @@ private struct ProofStageCard: View {
         }
     }
 
-    private var languageChoice: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 8 : 12) {
-            ForEach(AppLanguage.allCases) { option in
-                Button {
-                    onChooseLanguage(option)
-                } label: {
-                    HStack(spacing: isCompactHeight ? 9 : 12) {
-                        Image(systemName: option == language ? "checkmark.circle.fill" : "circle")
-                            .font((isCompactHeight ? Font.headline : Font.title3).weight(.black))
-                            .foregroundColor(.saveInk)
+    private var promiseChoice: some View {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 10 : 14) {
+            VStack(alignment: .leading, spacing: isCompactHeight ? 8 : 10) {
+                rescueLine(
+                    icon: "tray.and.arrow.down.fill",
+                    title: localized(english: "You paste one messy clue", traditionalChinese: "你貼上一個混亂線索"),
+                    subtitle: localized(english: "A Reel, map link, screenshot text, or friend message.", traditionalChinese: "短影音文案、地圖連結、截圖文字或朋友訊息都可以。"),
+                    tint: .saveBlush
+                )
+                rescueLine(
+                    icon: "sparkles",
+                    title: localized(english: "Memo finds what is real", traditionalChinese: "Memo 找出真正地點"),
+                    subtitle: localized(english: "Uncertain matches stay in Review instead of becoming fake pins.", traditionalChinese: "不確定的結果會留在待確認，不會變成假地圖點。"),
+                    tint: .saveHoney
+                )
+                rescueLine(
+                    icon: "mappin.and.ellipse",
+                    title: localized(english: "You add it to your map", traditionalChinese: "你再加到自己的地圖"),
+                    subtitle: localized(english: "The first useful memory is the reward.", traditionalChinese: "第一個有用地點記憶，就是這次的新手獎勵。"),
+                    tint: .saveMint
+                )
+            }
 
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(option.displayName)
-                                .font(isCompactHeight ? .subheadline : .headline)
-                                .fontWeight(.black)
-                                .foregroundColor(.saveInk)
-
-                            Text(languageDescription(for: option))
-                                .font(isCompactHeight ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-                                .foregroundColor(.saveMutedText)
-                        }
-
-                        Spacer()
-                    }
-                    .padding(isCompactHeight ? 10 : 14)
-                    .background(option == language ? Color.saveHoney.opacity(0.58) : Color.saveNotebookPage.opacity(0.58))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(option == language ? 0.72 : 0.42), lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            HStack(spacing: 10) {
+                Button(action: onUseSample) {
+                    Label(localized(english: "Try sample clue", traditionalChinese: "試用範例線索"), systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .background(Color.saveHoney.opacity(0.50))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.50), lineWidth: 1))
+                        .clipShape(Capsule())
                 }
-                .accessibilityLabel(option.displayName)
+
+                languageSwitcher
             }
 
             if !isCompactHeight {
                 FirstRunTrustNote(language: language)
+            }
+        }
+    }
+
+    private func rescueLine(icon: String, title: String, subtitle: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.black))
+                .foregroundColor(.saveInk)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.64))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(subtitle)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var languageSwitcher: some View {
+        HStack(spacing: 6) {
+            ForEach(AppLanguage.allCases) { option in
+                Button {
+                    onChooseLanguage(option)
+                } label: {
+                    Text(option == .english ? "EN" : "繁中")
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .frame(minWidth: 38)
+                        .padding(.vertical, 10)
+                        .background(option == language ? Color.saveSky.opacity(0.58) : Color.saveNotebookPage.opacity(0.58))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+                .accessibilityLabel(option.displayName)
             }
         }
     }
@@ -1144,7 +1193,7 @@ private struct ProofStageCard: View {
 
             Text(localized(
                 english: "This stays in Review until you confirm the exact place.",
-                traditionalChinese: "這會先留在 Review，等你確認正確地點後再保存。"
+                traditionalChinese: "這會先留在待確認，等你確認正確地點後再保存。"
             ))
             .font(.footnote)
             .fontWeight(.bold)
@@ -1267,7 +1316,7 @@ private struct ProofStageCard: View {
 
     private var iconName: String {
         switch stage {
-        case .language: return "globe"
+        case .promise: return "wand.and.stars"
         case .clue: return "square.and.pencil"
         case .candidate: return "checklist.unchecked"
         case .mapStamp: return "mappin.and.ellipse"
@@ -1278,7 +1327,7 @@ private struct ProofStageCard: View {
 
     private var headerTint: Color {
         switch stage {
-        case .language: return .saveSky
+        case .promise: return .saveHoney
         case .clue, .candidate: return .saveHoney
         case .mapStamp: return .saveMint
         case .ask: return .saveSky
@@ -1288,38 +1337,38 @@ private struct ProofStageCard: View {
 
     private var title: String {
         switch stage {
-        case .language:
-            return localized(english: "Choose your language", traditionalChinese: "選擇語言")
+        case .promise:
+            return localized(english: "Start with one rescue mission", traditionalChinese: "先完成一次救回地點任務")
         case .clue:
-            return localized(english: "Add one place clue", traditionalChinese: "加入一個地點線索")
+            return localized(english: "Paste the clue you almost lost", traditionalChinese: "貼上快被你忘掉的線索")
         case .candidate:
-            return localized(english: "Review before saving", traditionalChinese: "先確認，再保存")
+            return localized(english: "Check the likely place", traditionalChinese: "確認可能的地點")
         case .mapStamp:
-            return localized(english: "Confirm it into a Map Stamp", traditionalChinese: "確認成你的地圖章")
+            return localized(english: "Stamp it onto your map", traditionalChinese: "蓋到你的地圖上")
         case .ask:
-            return localized(english: "Ask from memory first", traditionalChinese: "先問你的地點記憶")
+            return localized(english: "Ask your saved places first", traditionalChinese: "先問你存過的地點")
         case .tag:
-            return localized(english: "Teach SAV-E your taste", traditionalChinese: "讓 SAV-E 學你的偏好")
+            return localized(english: "Tell Memo why it mattered", traditionalChinese: "告訴 Memo 為什麼重要")
         }
     }
 
     private var subtitle: String {
         switch stage {
-        case .language:
+        case .promise:
             return localized(
-                english: "This comes first so the setup is easy to understand. You can change it later.",
-                traditionalChinese: "先選語言，接下來的設定才看得懂。之後可以再改。"
+                english: "One clue becomes one confirmed private place. Change language here if you need to.",
+                traditionalChinese: "一個線索會變成一個確認過的私人地點。需要的話，也可以在這裡切換語言。"
             )
         case .clue:
-            return localized(english: "Use a Reel caption, Google Maps link, screenshot text, or friend message.", traditionalChinese: "可以用 Reels 文案、Google Maps 連結、截圖文字或朋友訊息。")
+            return localized(english: "Use a Reel caption, map link, screenshot text, or friend message.", traditionalChinese: "可以用短影音文案、地圖連結、截圖文字或朋友訊息。")
         case .candidate:
-            return localized(english: "SAV-E shows what it knows, what is missing, and the next action.", traditionalChinese: "SAV-E 會顯示已找到什麼、還缺什麼，以及下一步。")
+            return localized(english: "Memo shows what it found and what still needs your confirmation.", traditionalChinese: "Memo 會顯示找到什麼，以及還需要你確認什麼。")
         case .mapStamp:
             return localized(english: "Only confirmed places become private map memory.", traditionalChinese: "只有確認後，才會變成你的私人地圖記憶。")
         case .ask:
-            return localized(english: "SAV-E starts with places you saved, then labels public discovery separately.", traditionalChinese: "SAV-E 會先用你存過的地方回答，再分開標示公開搜尋。")
+            return localized(english: "SAV-E starts with your saved place, then keeps public discovery separate.", traditionalChinese: "SAV-E 會先用你存過的地點回答，再分開標示公開搜尋。")
         case .tag:
-            return localized(english: "A few tags help future recommendations understand why you saved it.", traditionalChinese: "用幾個標籤，讓之後的推薦知道你為什麼想存。")
+            return localized(english: "A few tags help future answers remember why you saved it.", traditionalChinese: "用幾個標籤，讓之後的回答記得你為什麼想存。")
         }
     }
 
@@ -1332,15 +1381,6 @@ private struct ProofStageCard: View {
 
     private var sampleTitle: String {
         localized(english: "Use sample clue", traditionalChinese: "使用範例線索")
-    }
-
-    private func languageDescription(for option: AppLanguage) -> String {
-        switch option {
-        case .english:
-            return "Use SAV-E in English"
-        case .traditionalChinese:
-            return "使用繁體中文操作 SAV-E"
-        }
     }
 
     private var sourceSummary: String {
@@ -1380,7 +1420,7 @@ private struct UpgradePreviewCard: View {
                         .lineLimit(2)
                         .minimumScaleFactor(0.84)
 
-                    Text(localized(english: "Start free. Pro is for heavier recovery and planning.", traditionalChinese: "先免費開始。Pro 留給更重的找地點與規劃。"))
+                    Text(localized(english: "Start free. Pro is for heavier recovery and planning.", traditionalChinese: "先免費開始。進階版留給更重的找地點與規劃。"))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.saveMutedText)
                         .lineLimit(2)
@@ -1397,8 +1437,8 @@ private struct UpgradePreviewCard: View {
                 )
 
                 planColumn(
-                    title: "SAV-E Pro",
-                    subtitle: localized(english: "OCR, recovery, planning", traditionalChinese: "OCR、找回地點、規劃"),
+                    title: localized(english: "SAV-E Pro", traditionalChinese: "SAV-E 進階版"),
+                    subtitle: localized(english: "OCR, recovery, planning", traditionalChinese: "截圖辨識、找回地點、規劃"),
                     systemImage: "lock.open.fill",
                     tint: .saveHoney
                 )
