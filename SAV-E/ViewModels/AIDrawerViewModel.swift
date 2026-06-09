@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import MapKit
 import OSLog
 
 @MainActor
@@ -42,6 +43,7 @@ final class AIDrawerViewModel: ObservableObject {
     private let saveSearchController: SaveSearchController
     private let locationIntentRecommendationService: SaveLocationIntentRecommendationService
     private let locationService: any AIDrawerLocationProviding
+    private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let groundedAnswerClient: SaveLLMClient?
     private let persistenceService: SupabaseServiceProtocol
     private let logger = Logger(subsystem: "SAV-E", category: "RecommendationAnalysisReceipt")
@@ -56,6 +58,7 @@ final class AIDrawerViewModel: ObservableObject {
         saveSearchController: SaveSearchController = SaveSearchController(),
         locationIntentRecommendationService: SaveLocationIntentRecommendationService = SaveLocationIntentRecommendationService(),
         locationService: (any AIDrawerLocationProviding)? = nil,
+        mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig(),
         persistenceService: SupabaseServiceProtocol = SupabaseService.shared
     ) {
@@ -63,6 +66,7 @@ final class AIDrawerViewModel: ObservableObject {
         self.saveSearchController = saveSearchController
         self.locationIntentRecommendationService = locationIntentRecommendationService
         self.locationService = locationService ?? LocationService.shared
+        self.mapCandidateSearchService = mapCandidateSearchService
         self.groundedAnswerClient = groundedAnswerClient
         self.persistenceService = persistenceService
     }
@@ -368,7 +372,9 @@ final class AIDrawerViewModel: ObservableObject {
                 deterministicResponse,
                 userMessage: prompt,
                 places: routePlaces,
-                outputLanguage: outputLanguage
+                publicCandidates: mapCandidates,
+                outputLanguage: outputLanguage,
+                requiredPlaceIDs: [place.id.uuidString]
             )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
@@ -497,9 +503,11 @@ final class AIDrawerViewModel: ObservableObject {
         rememberQuery(query)
 
         do {
+            let publicCandidates = await publicDiscoveryCandidates(for: query)
             let response = try await aiService.query(
                 query,
                 places: places,
+                publicCandidates: publicCandidates,
                 conversationHistory: conversationTurns,
                 outputLanguage: outputLanguage
             )
@@ -568,19 +576,47 @@ final class AIDrawerViewModel: ObservableObject {
         return outputLanguage.localized(
             english: """
             Plan a \(draft.request.duration.displayName.lowercased()) \(draft.request.intent.displayName.lowercased()) route around \(draft.anchor.title).
-            Polish this deterministic route into a useful itinerary. The deterministic planner owns stop IDs, order, day grouping, time slots, and source labels. Do not add stops, remove must-include stops, change place IDs, or relabel any stop. Public recommendations must keep placeId null and source "New recommendation".
+            Turn these approved candidates into a useful itinerary. You may reorder stops, assign smarter time slots, regroup by day, and drop optional non-anchor stops if the route would be unrealistic. Keep the anchor and every non-null placeId valid. Public recommendations must keep placeId null, source "New recommendation", and their exact candidate name.
             Unfilled gaps: \(gaps).
             Retrieval receipt: \(draft.retrievalReceipt.querySelector)
             \(stops)
             """,
             traditionalChinese: """
             請用「\(draft.anchor.title)」周邊規劃一個\(draft.request.duration.displayName.lowercased())、\(draft.request.intent.displayName.lowercased())行程。
-            把這個確定路線潤飾成實用行程。確定性 planner 已經決定停留點 ID、順序、天數、時段和來源標籤；不要新增停留點、刪掉 must-include 停留點、改 place ID，或改任何來源標籤。公開推薦必須維持 placeId null，來源維持「New recommendation」。
+            請把這些已核准候選整理成實用行程。你可以調整順序、安排更合理的時間、重新分天，也可以刪掉非錨點的 optional stop，避免路線不合理。必須保留錨點，所有非 null placeId 都必須有效。公開推薦必須維持 placeId null、來源維持「New recommendation」，並使用精確候選名稱。
             尚未補上的空缺：\(gaps)。
             檢索 receipt：\(draft.retrievalReceipt.querySelector)
             \(stops)
             """
         )
+    }
+
+    private func publicDiscoveryCandidates(for query: String) async -> [SaveMapCandidate] {
+        guard ItineraryPublicDiscoveryPlanner.shouldPreparePublicActivityCandidates(query: query, savedPlaces: places) else {
+            return []
+        }
+
+        let coordinate = locationService.currentLocation?.coordinate
+            ?? places.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        let span = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+        var results: [SaveMapCandidate] = []
+        var seen: Set<String> = []
+
+        for searchQuery in ItineraryPublicDiscoveryPlanner.publicActivitySearchQueries(for: query, savedPlaces: places) {
+            let candidates = await mapCandidateSearchService.searchCandidates(
+                matching: searchQuery,
+                near: coordinate,
+                span: span,
+                excluding: places
+            )
+            for candidate in candidates where ItineraryPublicDiscoveryPlanner.isPublicActivityCandidate(candidate) {
+                let key = "\(candidate.title.lowercased())|\(candidate.subtitle.lowercased())"
+                guard seen.insert(key).inserted else { continue }
+                results.append(candidate)
+            }
+        }
+
+        return Array(results.prefix(8))
     }
 
     private func recordRecommendationAnalysisReceiptIfNeeded(for response: SaveSearchResponse) async {
@@ -601,6 +637,69 @@ final class AIDrawerViewModel: ObservableObject {
             "怎麼選", "怎么选", "原因", "比較", "比较", "不懂", "看不懂"
         ]
         return followUpNeedles.contains { normalized.contains($0) }
+    }
+}
+
+struct ItineraryPublicDiscoveryPlanner {
+    private static let foodDrinkCategories: Set<PlaceCategory> = [.food, .cafe, .bar]
+    private static let activityCategories: Set<PlaceCategory> = [.attraction, .shopping]
+
+    static func shouldPreparePublicActivityCandidates(query: String, savedPlaces: [Place]) -> Bool {
+        guard DeterministicTripPlanner().isItineraryRequest(query) else { return false }
+        guard !savedPlaces.isEmpty else { return false }
+
+        let savedCategories = Set(savedPlaces.map(\.category))
+        let hasActivity = !savedCategories.isDisjoint(with: activityCategories)
+        let allFoodDrink = savedCategories.isSubset(of: foodDrinkCategories)
+        return allFoodDrink || !hasActivity
+    }
+
+    static func publicActivitySearchQueries(for query: String, savedPlaces: [Place]) -> [String] {
+        let destination = destinationHint(from: query) ?? destinationHint(from: savedPlaces)
+        let prefix = destination.map { "\($0) " } ?? ""
+        return [
+            "\(prefix)景點",
+            "\(prefix)things to do",
+            "\(prefix)museum park"
+        ].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    static func isPublicActivityCandidate(_ candidate: SaveMapCandidate) -> Bool {
+        guard let category = candidate.category else { return true }
+        return activityCategories.contains(category)
+    }
+
+    private static func destinationHint(from query: String) -> String? {
+        let normalized = query
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+
+        let knownDestinations: [(needle: String, destination: String)] = [
+            ("台北", "台北"),
+            ("臺北", "台北"),
+            ("taipei", "Taipei"),
+            ("台南", "台南"),
+            ("臺南", "台南"),
+            ("tainan", "Tainan"),
+            ("高雄", "高雄"),
+            ("kaohsiung", "Kaohsiung"),
+            ("東京", "東京"),
+            ("tokyo", "Tokyo"),
+            ("首爾", "首爾"),
+            ("seoul", "Seoul"),
+            ("los angeles", "Los Angeles"),
+            (" la ", "Los Angeles"),
+            ("anaheim", "Anaheim"),
+            ("irvine", "Irvine")
+        ]
+
+        let padded = " \(normalized) "
+        return knownDestinations.first { padded.contains($0.needle) || normalized.contains($0.needle) }?.destination
+    }
+
+    private static func destinationHint(from places: [Place]) -> String? {
+        let joinedAddresses = places.map(\.address).joined(separator: " ")
+        return destinationHint(from: joinedAddresses)
     }
 }
 

@@ -239,6 +239,93 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(stops.first(where: { $0.placeName == "Lunch Ramen" })?.time, "12:30 PM")
     }
 
+    func testItineraryPlanValidatorAllowsReorderDayGroupingAndPublicCandidatesOnlyFromRetrievalSet() throws {
+        let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
+        let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
+        let cafe = makePlace("Taipei Cafe", address: "台北市信義區", latitude: 25.0330, longitude: 121.5650, category: .cafe)
+        let publicPark = SaveMapCandidate(
+            title: "大安森林公園",
+            subtitle: "台北市大安區",
+            latitude: 25.0260,
+            longitude: 121.5350,
+            category: .attraction
+        )
+        let fallback = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
+                stop(place: lunch, time: "12:30 PM"),
+                stop(place: cafe, time: "3:00 PM"),
+                stop(place: museum, time: "10:00 AM")
+            ])
+        ])
+        let llmResponse = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
+                stop(place: museum, time: "9:30 AM"),
+                publicStop("大安森林公園", time: "11:00 AM"),
+                stop(place: lunch, time: "12:45 PM")
+            ]),
+            ItineraryDay(dayNumber: 2, label: "第 2 天", stops: [
+                stop(place: cafe, time: "10:00 AM")
+            ])
+        ])
+
+        let validated = try XCTUnwrap(ItineraryPlanValidator(
+            savedPlaces: [museum, lunch, cafe],
+            publicCandidates: [publicPark],
+            fallback: fallback,
+            requiredPlaceIDs: [lunch.id.uuidString]
+        ).validated(llmResponse))
+
+        XCTAssertEqual(validated.itineraryDays.count, 2)
+        XCTAssertEqual(validated.itineraryDays.first?.stops.map(\.placeName), ["Taipei Museum", "大安森林公園", "Taipei Lunch"])
+        XCTAssertEqual(validated.itineraryDays.first?.stops.first?.time, "9:30 AM")
+        XCTAssertEqual(validated.placeIds, [museum.id.uuidString, lunch.id.uuidString, cafe.id.uuidString])
+        XCTAssertEqual(validated.mapAction?.type, .showRoute)
+        XCTAssertEqual(validated.mapAction?.placeIds, validated.placeIds)
+    }
+
+    func testItineraryPlanValidatorRejectsHallucinatedPublicStop() {
+        let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
+        let fallback = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [stop(place: lunch, time: "12:30 PM")])
+        ])
+        let llmResponse = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
+                stop(place: lunch, time: "12:30 PM"),
+                publicStop("不存在的神秘景點", time: "2:00 PM")
+            ])
+        ])
+
+        let validated = ItineraryPlanValidator(
+            savedPlaces: [lunch],
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: []
+        ).validated(llmResponse)
+
+        XCTAssertNil(validated)
+    }
+
+    func testAllFoodSavedTripPreparesPublicActivityCandidatesAndPromptPolicy() {
+        let places = [
+            makePlace("永樂牛肉湯", address: "台北市大同區", latitude: 25.0520, longitude: 121.5100, category: .food),
+            makePlace("青山咖啡", address: "台北市萬華區", latitude: 25.0360, longitude: 121.5000, category: .cafe)
+        ]
+
+        XCTAssertTrue(ItineraryPublicDiscoveryPlanner.shouldPreparePublicActivityCandidates(
+            query: "規劃 台北 3 日行程",
+            savedPlaces: places
+        ))
+        XCTAssertTrue(ItineraryPublicDiscoveryPlanner.publicActivitySearchQueries(
+            for: "規劃 台北 3 日行程",
+            savedPlaces: places
+        ).contains("台北 景點"))
+
+        let policy = SaveAIService.itineraryCandidatePolicyInstruction(outputLanguage: .traditionalChinese)
+        XCTAssertTrue(policy.contains("景點"))
+        XCTAssertTrue(policy.contains("公開活動"))
+        XCTAssertTrue(policy.contains("不可直接輸出全餐廳行程"))
+    }
+
     private func makePlace(
         _ name: String,
         address: String,
@@ -268,6 +355,43 @@ final class DeterministicTripPlannerTests: XCTestCase {
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: Date()
+        )
+    }
+
+    private func itineraryResponse(days: [ItineraryDay]) -> SaveAIResponse {
+        let placeIDs = days.flatMap(\.stops).compactMap(\.placeId)
+        return SaveAIResponse(
+            componentType: .tripItinerary,
+            title: "Test itinerary",
+            placeIds: placeIDs,
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: days,
+            messageText: nil,
+            mapAction: MapActionData(type: .showRoute, placeIds: placeIDs, lat: nil, lng: nil, span: nil),
+            aiMessage: "Test"
+        )
+    }
+
+    private func stop(place: Place, time: String) -> ItineraryStop {
+        ItineraryStop(
+            id: UUID(),
+            placeId: place.id.uuidString,
+            placeName: place.name,
+            time: time,
+            duration: 90,
+            note: nil
+        )
+    }
+
+    private func publicStop(_ name: String, time: String) -> ItineraryStop {
+        ItineraryStop(
+            id: UUID(),
+            placeId: nil,
+            placeName: name,
+            time: time,
+            duration: 60,
+            note: "公開探索候選"
         )
     }
 }
