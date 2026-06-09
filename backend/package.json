@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check:source-recovery": "node dist/sourceRecoveryConfigCheck.js",
-    "prestart": "npm run check:source-recovery",
+    "prestart": "npm run build && npm run check:source-recovery",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts"

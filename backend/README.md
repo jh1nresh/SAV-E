@@ -54,7 +54,7 @@ npm run check:source-recovery
 curl "$RAILWAY_PUBLIC_DOMAIN/health/source-recovery"
 ```
 
-`npm start` runs `check:source-recovery` before boot. The check stays green when OCR, ASR, and external rubric are disabled. It fails when an enabled OCR/ASR adapter is missing its executable or when `SAVE_EVIDENCE_RUBRIC_URL` is not an HTTPS public URL. Railway also uses `/health/source-recovery` as the deployment healthcheck, so source-recovery adapter misconfiguration blocks rollout instead of silently falling back in production.
+`npm start` builds the TypeScript backend and runs `check:source-recovery` before boot. The check stays green when OCR, ASR, and external rubric are disabled. It fails when an enabled OCR/ASR adapter is missing its executable or when `SAVE_EVIDENCE_RUBRIC_URL` is not an HTTPS public URL. Railway also uses `/health/source-recovery` as the deployment healthcheck, so source-recovery adapter misconfiguration blocks rollout instead of silently falling back in production.
 
 ## Routes
 
