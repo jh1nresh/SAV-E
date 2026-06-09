@@ -179,6 +179,7 @@ export function buildMaatPlaceAnalysis(
   const summary = status === "ready"
     ? analysisSummary(place, citedClaims, strongestProofLevel)
     : "SAV-E has the selected place, but not enough saved notes, claims, receipts, or source evidence to analyze without guessing.";
+  const restaurantDetails = buildRestaurantDetails(place, citedClaims, scopedClaims, warnings);
 
   return {
     place_id: place.id,
@@ -193,6 +194,7 @@ export function buildMaatPlaceAnalysis(
     cited_evidence: citedEvidence,
     warnings,
     next_actions: nextAnalysisActions(status, strongestProofLevel, warnings),
+    restaurant_details: restaurantDetails,
     analysis_receipt: {
       input_scope: "selected_place_only",
       place_id: place.id,
@@ -456,6 +458,253 @@ function analysisSummary(place: JsonObject, citedClaims: JsonObject[], strongest
   const note = trimmedString(place.note);
   if (note) return `${name}: ${note}. Analysis is based on selected-place evidence only.`;
   return `${name} has enough selected-place metadata for a lightweight Ma'at analysis, but no verified claims were cited.`;
+}
+
+function buildRestaurantDetails(
+  place: JsonObject,
+  citedClaims: JsonObject[],
+  scopedClaims: JsonObject[],
+  warnings: string[],
+): JsonObject {
+  const evidenceTexts = detailEvidenceTexts(place, citedClaims.length ? citedClaims : scopedClaims);
+  const mustTry = mustTryItems(place, evidenceTexts);
+  const parking = firstMatchingEvidence(evidenceTexts, [
+    "parking",
+    "park ",
+    "valet",
+    "garage",
+    "停車",
+    "車位",
+    "代客泊車",
+  ]);
+  const reservationTips = firstMatchingEvidence(evidenceTexts, [
+    "reservation",
+    "reserve",
+    "book",
+    "waitlist",
+    "訂位",
+    "預約",
+  ]);
+  const ambiance = firstMatchingEvidence(evidenceTexts, [
+    "ambiance",
+    "atmosphere",
+    "vibe",
+    "cozy",
+    "date",
+    "view",
+    "環境",
+    "氣氛",
+    "氛圍",
+    "約會",
+    "景觀",
+  ]);
+  const serviceRating = firstMatchingEvidence(evidenceTexts, [
+    "service",
+    "staff",
+    "server",
+    "服務",
+    "店員",
+  ]);
+  const criticalReviews = criticalReviewItems(evidenceTexts, warnings);
+  const platformScores = platformScoreItems(place);
+  const priceRange = trimmedString(place.price_range);
+  const avgCost = averageCost(evidenceTexts);
+  const bestFor = bestForTags(place, evidenceTexts);
+  const evidenceGaps = detailEvidenceGaps({
+    mustTry,
+    parking,
+    reservationTips,
+    priceRange,
+    avgCost,
+  });
+
+  return {
+    platform_scores: platformScores,
+    must_try: mustTry,
+    warnings: warnings.map((warning) => warning.replace(/_/g, " ")),
+    critical_reviews: criticalReviews,
+    price_range: priceRange ?? null,
+    avg_cost: avgCost,
+    best_for: bestFor,
+    cuisine: cuisineLabel(place),
+    ambiance: ambiance ?? null,
+    service_rating: serviceRating ?? null,
+    reservation_tips: reservationTips ?? null,
+    parking: parking ?? null,
+    evidence_gaps: evidenceGaps,
+  };
+}
+
+function detailEvidenceTexts(place: JsonObject, claims: JsonObject[]): string[] {
+  return [
+    trimmedString(place.note),
+    ...(stringArray(place.extracted_dishes) ?? []),
+    ...claims.flatMap((claim) => [
+      trimmedString(claim.claim_type),
+      trimmedString(claim.claim),
+      trimmedString(claim.agent_usable_summary),
+      JSON.stringify(claim.context ?? {}),
+      JSON.stringify(claim.ratings ?? {}),
+    ]),
+  ].filter((value): value is string => Boolean(value && value.trim()));
+}
+
+function mustTryItems(place: JsonObject, evidenceTexts: string[]): JsonObject[] {
+  const items = new Map<string, JsonObject>();
+  for (const dish of stringArray(place.extracted_dishes) ?? []) {
+    const price = priceNearDish(dish, evidenceTexts);
+    items.set(dish.toLowerCase(), {
+      name: dish,
+      price,
+      evidence: "saved place dish",
+    });
+  }
+
+  for (const text of evidenceTexts) {
+    const match = text.match(/(?:recommended item|must try|order|必點|推薦(?:餐點)?)[：:\s-]+([^。.\n,，;；]+)(?:\s+((?:NT\$?|TWD|\$)\s?\d+(?:[.,]\d+)?))?/i);
+    if (!match) continue;
+    const name = cleanDetailText(match[1]);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!items.has(key)) {
+      items.set(key, {
+        name,
+        price: match[2]?.replace(/\s+/g, "") ?? priceNearDish(name, evidenceTexts),
+        evidence: "saved claim",
+      });
+    }
+  }
+
+  return [...items.values()].slice(0, 5);
+}
+
+function platformScoreItems(place: JsonObject): JsonObject[] {
+  const scores: JsonObject[] = [];
+  if (typeof place.google_rating === "number") {
+    scores.push({
+      platform: "Google",
+      score: place.google_rating,
+      source: "google_place_metadata",
+    });
+  }
+  if (typeof place.rating === "number" && place.rating !== place.google_rating) {
+    scores.push({
+      platform: "Saved rating",
+      score: place.rating,
+      source: "save_place_metadata",
+    });
+  }
+  return scores;
+}
+
+function criticalReviewItems(evidenceTexts: string[], warnings: string[]): JsonObject[] {
+  const items: JsonObject[] = [];
+  const waitText = firstMatchingEvidence(evidenceTexts, [
+    "long wait",
+    "wait",
+    "line",
+    "queue",
+    "排隊",
+    "候位",
+    "等很久",
+  ]);
+  if (waitText || warnings.includes("long_wait_peak_hours")) {
+    items.push({
+      issue: waitText ?? "Peak-hour waits are mentioned in saved evidence",
+      source: "SAV-E evidence",
+      frequency: "mentioned",
+    });
+  }
+  const negativeText = firstMatchingEvidence(evidenceTexts, [
+    "complaint",
+    "warning",
+    "bad",
+    "avoid",
+    "差評",
+    "缺點",
+    "雷",
+    "不推",
+  ]);
+  if (negativeText && !items.some((item) => item.issue === negativeText)) {
+    items.push({
+      issue: negativeText,
+      source: "SAV-E evidence",
+      frequency: "mentioned",
+    });
+  }
+  return items.slice(0, 3);
+}
+
+function firstMatchingEvidence(texts: string[], needles: string[]): string | null {
+  for (const text of texts) {
+    const normalized = text.toLowerCase();
+    if (needles.some((needle) => normalized.includes(needle.toLowerCase()))) {
+      return cleanDetailText(text);
+    }
+  }
+  return null;
+}
+
+function averageCost(texts: string[]): string | null {
+  for (const text of texts) {
+    const match = text.match(/(?:(?:avg|average) cost|per person|person|人均|平均(?:消費)?)[：:\s-]*((?:NT\$?|TWD|\$|¥|RMB)?\s?\d+(?:[.,]\d+)?(?:\s?[-~]\s?(?:NT\$?|TWD|\$|¥|RMB)?\s?\d+(?:[.,]\d+)?)?)/i);
+    if (match?.[1]) return match[1].replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
+function priceNearDish(dish: string, texts: string[]): string | null {
+  const escaped = dish.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`${escaped}[^\\n。.,，;；]{0,30}((?:NT\\$?|TWD|\\$|¥|RMB)\\s?\\d+(?:[.,]\\d+)?)`, "i");
+  for (const text of texts) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].replace(/\s+/g, "");
+  }
+  return null;
+}
+
+function bestForTags(place: JsonObject, texts: string[]): string[] {
+  const joined = [
+    trimmedString(place.category),
+    ...texts,
+  ].join(" ").toLowerCase();
+  const tags = new Set<string>();
+  if (/(date|約會)/.test(joined)) tags.add("date night");
+  if (/(family|kids|家庭|親子)/.test(joined)) tags.add("family");
+  if (/(friend|group|聚餐|朋友)/.test(joined)) tags.add("friends");
+  if (/(coffee|cafe|work|laptop|咖啡|工作)/.test(joined)) tags.add("coffee/work");
+  if (/(quick|solo|lunch|午餐|一個人)/.test(joined)) tags.add("quick solo stop");
+  return [...tags].slice(0, 4);
+}
+
+function detailEvidenceGaps(values: {
+  mustTry: JsonObject[];
+  parking: string | null;
+  reservationTips: string | null;
+  priceRange?: string;
+  avgCost: string | null;
+}): string[] {
+  const gaps: string[] = [];
+  if (values.mustTry.length === 0) gaps.push("recommended_dishes");
+  if (!values.parking) gaps.push("parking");
+  if (!values.reservationTips) gaps.push("reservation_tips");
+  if (!values.priceRange && !values.avgCost) gaps.push("cost");
+  return gaps;
+}
+
+function cuisineLabel(place: JsonObject): string | null {
+  const category = trimmedString(place.category);
+  if (!category) return null;
+  if (category === "food") return "restaurant";
+  return category;
+}
+
+function cleanDetailText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/^highlight:\s*/i, "")
+    .trim()
+    .slice(0, 180);
 }
 
 function verdictForProof(proofLevel: ClaimProofLevel, confidence: number): string {

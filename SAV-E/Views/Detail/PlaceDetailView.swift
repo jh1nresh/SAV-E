@@ -363,6 +363,10 @@ private struct PlaceMaatAnalysisPanel: View {
                     InfoChip(icon: "quote.bubble", text: "\(analysis.analysisReceipt.citedClaimCount) cited", color: .saveCocoa)
                 }
 
+                if let details = analysis.restaurantDetails {
+                    MaatRestaurantDetailsView(details: details, languageSettings: languageSettings)
+                }
+
                 if !analysis.warnings.isEmpty {
                     Text(analysis.warnings.map { $0.replacingOccurrences(of: "_", with: " ") }.joined(separator: " · "))
                         .font(.caption)
@@ -390,6 +394,169 @@ private struct PlaceMaatAnalysisPanel: View {
                 .stroke(Color.saveNotebookLine.opacity(0.72), lineWidth: 1)
         )
     }
+}
+
+private struct MaatRestaurantDetailsView: View {
+    let details: MaatRestaurantDetails
+    let languageSettings: AppLanguageSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !details.mustTry.isEmpty {
+                detailSection(
+                    title: languageSettings.localized(english: "What to order", traditionalChinese: "推薦餐點"),
+                    icon: "fork.knife",
+                    rows: details.mustTry.prefix(4).map { item in
+                        MaatDetailRow(
+                            title: item.name,
+                            value: [item.price, item.description].compactMap(cleaned).joined(separator: " · ")
+                        )
+                    }
+                )
+            }
+
+            detailSection(
+                title: languageSettings.localized(english: "Cost and score", traditionalChinese: "消費與評分"),
+                icon: "tag.fill",
+                rows: costRows
+            )
+
+            detailSection(
+                title: languageSettings.localized(english: "Logistics", traditionalChinese: "停車與訂位"),
+                icon: "car.fill",
+                rows: [
+                    MaatDetailRow(
+                        title: languageSettings.localized(english: "Parking", traditionalChinese: "停車"),
+                        value: details.parking
+                    ),
+                    MaatDetailRow(
+                        title: languageSettings.localized(english: "Reservation", traditionalChinese: "訂位"),
+                        value: details.reservationTips
+                    )
+                ]
+            )
+
+            detailSection(
+                title: languageSettings.localized(english: "Experience", traditionalChinese: "用餐體驗"),
+                icon: "sparkles",
+                rows: experienceRows
+            )
+
+            if !details.criticalReviews.isEmpty {
+                detailSection(
+                    title: languageSettings.localized(english: "Watch-outs", traditionalChinese: "注意事項"),
+                    icon: "exclamationmark.triangle.fill",
+                    rows: details.criticalReviews.prefix(3).map { review in
+                        MaatDetailRow(
+                            title: review.source ?? languageSettings.localized(english: "Saved evidence", traditionalChinese: "保存證據"),
+                            value: review.issue
+                        )
+                    }
+                )
+            }
+
+            if !details.evidenceGaps.isEmpty {
+                Text(languageSettings.localized(
+                    english: "Needs more evidence: \(details.evidenceGaps.map(gapLabel).joined(separator: ", "))",
+                    traditionalChinese: "還需要更多證據：\(details.evidenceGaps.map(gapLabel).joined(separator: "、"))"
+                ))
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveMutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var costRows: [MaatDetailRow] {
+        var rows: [MaatDetailRow] = []
+        if let priceRange = cleaned(details.priceRange) {
+            rows.append(MaatDetailRow(title: languageSettings.localized(english: "Price", traditionalChinese: "價格"), value: priceRange))
+        }
+        if let avgCost = cleaned(details.avgCost) {
+            rows.append(MaatDetailRow(title: languageSettings.localized(english: "Average", traditionalChinese: "人均"), value: avgCost))
+        }
+        rows += details.platformScores.prefix(2).map { score in
+            MaatDetailRow(title: score.platform, value: String(format: "%.1f", score.score))
+        }
+        return rows
+    }
+
+    private var experienceRows: [MaatDetailRow] {
+        var rows: [MaatDetailRow] = []
+        if let ambiance = cleaned(details.ambiance) {
+            rows.append(MaatDetailRow(title: languageSettings.localized(english: "Ambiance", traditionalChinese: "氛圍"), value: ambiance))
+        }
+        if let service = cleaned(details.serviceRating) {
+            rows.append(MaatDetailRow(title: languageSettings.localized(english: "Service", traditionalChinese: "服務"), value: service))
+        }
+        if !details.bestFor.isEmpty {
+            rows.append(MaatDetailRow(
+                title: languageSettings.localized(english: "Best for", traditionalChinese: "適合"),
+                value: details.bestFor.joined(separator: " · ")
+            ))
+        }
+        return rows
+    }
+
+    private func detailSection(title: String, icon: String, rows: [MaatDetailRow]) -> some View {
+        let visibleRows = rows.filter { cleaned($0.value) != nil }
+        return Group {
+            if !visibleRows.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    Label(title, systemImage: icon)
+                        .font(.caption.weight(.black))
+                        .foregroundColor(.saveCocoa)
+
+                    ForEach(visibleRows) { row in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(row.title)
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.saveInk)
+                                .frame(width: 86, alignment: .leading)
+                            Text(row.value ?? "")
+                                .font(.caption)
+                                .foregroundColor(.saveMutedText)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(Color.saveNotebookPage.opacity(0.56))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1)
+                )
+            }
+        }
+    }
+
+    private func gapLabel(_ value: String) -> String {
+        switch value {
+        case "recommended_dishes":
+            return languageSettings.localized(english: "recommended dishes", traditionalChinese: "推薦餐點")
+        case "parking":
+            return languageSettings.localized(english: "parking", traditionalChinese: "停車")
+        case "reservation_tips":
+            return languageSettings.localized(english: "reservation tips", traditionalChinese: "訂位建議")
+        case "cost":
+            return languageSettings.localized(english: "cost", traditionalChinese: "消費")
+        default:
+            return value.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    private func cleaned(_ value: String?) -> String? {
+        let text = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text?.isEmpty == false ? text : nil
+    }
+}
+
+private struct MaatDetailRow: Identifiable {
+    let id = UUID()
+    let title: String
+    let value: String?
 }
 
 // MARK: - Info Chip
