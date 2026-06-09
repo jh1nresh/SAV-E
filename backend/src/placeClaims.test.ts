@@ -10,6 +10,10 @@ import {
   normalizeUsageReceiptCreate,
   recommendPlacesByClaims,
 } from "./placeClaims.js";
+import {
+  enrichMaatPlaceAnalysisWithPublicWeb,
+  mergePublicWebDetails,
+} from "./maatPublicWebAnalysis.js";
 
 test("normalizePlaceClaimCreate keeps raw evidence refs private by default", () => {
   const claim = normalizePlaceClaimCreate({
@@ -299,6 +303,122 @@ test("buildMaatPlaceAnalysis refuses to invent analysis for thin source-only pla
   assert.deepEqual(output.cited_claim_ids, []);
   assert.deepEqual(output.next_actions, ["add_note", "confirm_place", "attach_source_or_receipt"]);
   assert.deepEqual(output.warnings, ["thin_place_evidence", "no_verified_claims_cited"]);
+});
+
+test("mergePublicWebDetails fills Ma'at restaurant detail gaps without replacing local scores", () => {
+  const base = buildMaatPlaceAnalysis(
+    {
+      id: "place_1",
+      name: "Spicy Date Noodles",
+      google_rating: 4.6,
+      price_range: "$$",
+      extracted_dishes: ["紅燒牛肉麵"],
+    },
+    [],
+  );
+  const output = mergePublicWebDetails(base, {
+    platform_scores: [{ platform: "Google", score: 4.9, source: "public web" }, { platform: "Yelp", score: 4.2, source: "Yelp" }],
+    must_try: [{ name: "紅燒牛肉麵", description: "湯頭濃郁", price: "$18", evidence: "public web" }],
+    parking: "附近有收費停車場。",
+    avg_cost: "$25-35/人",
+    critical_reviews: [{ issue: "尖峰時段等候較久", source: "Yelp", frequency: "常見" }],
+  }, [{ title: "Yelp", url: "https://example.com/restaurant" }], "gemini-test");
+
+  const details = output.restaurant_details as Record<string, unknown>;
+  assert.deepEqual(details.platform_scores, [
+    { platform: "Google", score: 4.6, source: "google_place_metadata" },
+    { platform: "Yelp", score: 4.2, source: "Yelp" },
+  ]);
+  assert.deepEqual(details.must_try, [{ name: "紅燒牛肉麵", description: "湯頭濃郁", price: "$18", evidence: "saved place dish" }]);
+  assert.equal(details.avg_cost, "$25-35/人");
+  assert.equal(details.parking, "附近有收費停車場。");
+  const receipt = output.analysis_receipt as Record<string, unknown>;
+  assert.equal(receipt.input_scope, "selected_place_plus_public_web");
+  assert.equal(receipt.public_web_used, true);
+  assert.equal(receipt.model_used, true);
+  assert.equal(receipt.public_web_status, "used");
+  assert.equal(receipt.model_name, "gemini-test");
+  assert.deepEqual(output.public_web_sources, [{ title: "Yelp", url: "https://example.com/restaurant" }]);
+});
+
+test("enrichMaatPlaceAnalysisWithPublicWeb is env-gated and keeps deterministic output when disabled", async () => {
+  const base = buildMaatPlaceAnalysis({ id: "place_1", name: "Spicy Date Noodles" }, []);
+  const output = await enrichMaatPlaceAnalysisWithPublicWeb({
+    place: { id: "place_1", name: "Spicy Date Noodles" },
+    claims: [],
+    analysis: base,
+  }, { enabled: false, model: "gemini-test" });
+
+  assert.equal(output.restaurant_details, base.restaurant_details);
+  const receipt = output.analysis_receipt as Record<string, unknown>;
+  assert.equal(receipt.public_web_used, false);
+  assert.equal(receipt.model_used, false);
+  assert.equal(receipt.public_web_status, "disabled");
+});
+
+test("enrichMaatPlaceAnalysisWithPublicWeb sends public claim summaries only", async () => {
+  let requestBody = "";
+  const base = buildMaatPlaceAnalysis({ id: "place_1", name: "A Cheng Goose" }, []);
+  const output = await enrichMaatPlaceAnalysisWithPublicWeb({
+    place: {
+      id: "place_1",
+      name: "A Cheng Goose",
+      address: "No. 105, Jilin Rd",
+      google_rating: 4.5,
+    },
+    claims: [
+      {
+        id: "public_claim",
+        claim: "public summary",
+        agent_usable_summary: "燒鵝是招牌",
+        visibility: "public",
+        proof_level: "source_backed",
+      },
+      {
+        id: "private_claim",
+        claim: "private companion note",
+        agent_usable_summary: "do not leak private note",
+        visibility: "private",
+        proof_level: "receipt_backed",
+      },
+    ],
+    analysis: base,
+  }, {
+    enabled: true,
+    apiKey: "test-key",
+    model: "gemini-test",
+    fetcher: async (_url, init) => {
+      requestBody = init.body;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          candidates: [{
+            content: {
+              parts: [{
+                text: JSON.stringify({
+                  must_try: [{ name: "燒鵝飯", description: "外皮酥脆", evidence: "public web" }],
+                  parking: "附近路邊停車有限。",
+                }),
+              }],
+            },
+            groundingMetadata: {
+              groundingChunks: [{ web: { title: "Review", uri: "https://example.com/review" } }],
+            },
+          }],
+        }),
+      };
+    },
+  });
+
+  assert.match(requestBody, /燒鵝是招牌/);
+  assert.doesNotMatch(requestBody, /do not leak private note/);
+  const details = output.restaurant_details as Record<string, unknown>;
+  assert.deepEqual(details.must_try, [{ name: "燒鵝飯", description: "外皮酥脆", price: undefined, evidence: "public web" }]);
+  assert.equal(details.parking, "附近路邊停車有限。");
+  const receipt = output.analysis_receipt as Record<string, unknown>;
+  assert.equal(receipt.public_web_used, true);
+  assert.equal(receipt.model_used, true);
 });
 
 test("recommendPlacesByClaims uses usage receipts as a small reputation boost", () => {

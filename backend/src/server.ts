@@ -15,6 +15,7 @@ import {
   proofLevelsAtLeast,
   recommendPlacesByClaims,
 } from "./placeClaims.js";
+import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
 import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
@@ -665,11 +666,23 @@ async function handlePlaceMaatAnalysis(
   const claims = await placeClaimsForPlace(placeId, userId);
   const includePrivateEvidence = url.searchParams.get("includePrivateEvidence") === "true" ||
     url.searchParams.get("include_private_evidence") === "true";
+  const includePublicWeb = url.searchParams.get("includePublicWeb") === "true" ||
+    url.searchParams.get("include_public_web") === "true";
   const maxCitedClaims = Number(url.searchParams.get("maxCitedClaims") ?? url.searchParams.get("max_cited_claims") ?? 3);
-  return sendJson(response, buildMaatPlaceAnalysis(place, claims.map((claim) => formatDates(claim)), {
+  const formattedClaims = claims.map((claim) => formatDates(claim));
+  const analysis = buildMaatPlaceAnalysis(place, formattedClaims, {
     includePrivateEvidence,
     maxCitedClaims,
-  }));
+  });
+  const enrichedAnalysis = includePublicWeb
+    ? await enrichMaatPlaceAnalysisWithPublicWeb({
+      place,
+      claims: formattedClaims,
+      analysis,
+      includePrivateEvidence,
+    })
+    : analysis;
+  return sendJson(response, enrichedAnalysis);
 }
 
 async function handlePlaceTrustSummary(
