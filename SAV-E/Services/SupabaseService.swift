@@ -634,6 +634,7 @@ struct MaatPlaceAnalysisResponse: Codable, Equatable {
     let citedEvidence: [String]
     let warnings: [String]
     let nextActions: [String]
+    let restaurantDetails: MaatRestaurantDetails?
     let analysisReceipt: MaatPlaceAnalysisReceipt
 
     enum CodingKeys: String, CodingKey {
@@ -649,8 +650,60 @@ struct MaatPlaceAnalysisResponse: Codable, Equatable {
         case citedEvidence = "cited_evidence"
         case warnings
         case nextActions = "next_actions"
+        case restaurantDetails = "restaurant_details"
         case analysisReceipt = "analysis_receipt"
     }
+}
+
+struct MaatRestaurantDetails: Codable, Equatable {
+    let platformScores: [MaatPlatformScore]
+    let mustTry: [MaatDishRecommendation]
+    let warnings: [String]
+    let criticalReviews: [MaatCriticalReview]
+    let priceRange: String?
+    let avgCost: String?
+    let bestFor: [String]
+    let cuisine: String?
+    let ambiance: String?
+    let serviceRating: String?
+    let reservationTips: String?
+    let parking: String?
+    let evidenceGaps: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case platformScores = "platform_scores"
+        case mustTry = "must_try"
+        case warnings
+        case criticalReviews = "critical_reviews"
+        case priceRange = "price_range"
+        case avgCost = "avg_cost"
+        case bestFor = "best_for"
+        case cuisine
+        case ambiance
+        case serviceRating = "service_rating"
+        case reservationTips = "reservation_tips"
+        case parking
+        case evidenceGaps = "evidence_gaps"
+    }
+}
+
+struct MaatPlatformScore: Codable, Equatable {
+    let platform: String
+    let score: Double
+    let source: String?
+}
+
+struct MaatDishRecommendation: Codable, Equatable {
+    let name: String
+    let description: String?
+    let price: String?
+    let evidence: String?
+}
+
+struct MaatCriticalReview: Codable, Equatable {
+    let issue: String
+    let source: String?
+    let frequency: String?
 }
 
 struct MaatPlaceAnalysisReceipt: Codable, Equatable {

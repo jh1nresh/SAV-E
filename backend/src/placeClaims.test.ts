@@ -226,16 +226,18 @@ test("buildMaatPlaceAnalysis scopes analysis to selected place evidence and excl
       id: "place_1",
       name: "Spicy Date Noodles",
       address: "100 Taipei Rd",
-      note: "Saved for casual dates; try the spicy noodles.",
+      note: "Saved for casual dates; try the spicy noodles $16. Parking garage nearby.",
       source_url: "https://www.instagram.com/reel/example/",
       google_rating: 4.6,
+      extracted_dishes: ["spicy noodles"],
+      price_range: "$$",
     },
     [
       {
         id: "claim_public",
         claim_type: "good_for_date",
-        claim: "Great casual date dinner with spicy noodles.",
-        agent_usable_summary: "date dinner spicy noodles",
+        claim: "Great casual date dinner with spicy noodles. Expect a line at peak dinner.",
+        agent_usable_summary: "date dinner spicy noodles; average cost $25 per person; reservation recommended",
         proof_level: "visited_self_reported",
         confidence: 0.82,
         visibility: "public",
@@ -259,7 +261,29 @@ test("buildMaatPlaceAnalysis scopes analysis to selected place evidence and excl
   assert.equal(output.verdict, "usable_with_caveats");
   assert.deepEqual(output.cited_claim_ids, ["claim_public"]);
   assert.match(String(output.summary), /date dinner spicy noodles/);
-  assert.deepEqual(output.warnings, ["private_claims_excluded"]);
+  assert.deepEqual(output.warnings, ["long_wait_peak_hours", "private_claims_excluded"]);
+  const details = output.restaurant_details as Record<string, unknown>;
+  assert.deepEqual(details.price_range, "$$");
+  assert.deepEqual(details.avg_cost, "$25");
+  assert.deepEqual(details.parking, "Saved for casual dates; try the spicy noodles $16. Parking garage nearby.");
+  assert.deepEqual(details.reservation_tips, "date dinner spicy noodles; average cost $25 per person; reservation recommended");
+  assert.deepEqual(details.best_for, ["date night"]);
+  assert.deepEqual(details.evidence_gaps, []);
+  assert.deepEqual(details.platform_scores, [{
+    platform: "Google",
+    score: 4.6,
+    source: "google_place_metadata",
+  }]);
+  assert.deepEqual(details.must_try, [{
+    name: "spicy noodles",
+    price: "$16",
+    evidence: "saved place dish",
+  }]);
+  assert.deepEqual(details.critical_reviews, [{
+    issue: "Great casual date dinner with spicy noodles. Expect a line at peak dinner.",
+    source: "SAV-E evidence",
+    frequency: "mentioned",
+  }]);
   const receipt = output.analysis_receipt as Record<string, unknown>;
   assert.equal(receipt.input_scope, "selected_place_only");
   assert.equal(receipt.whole_map_used, false);
