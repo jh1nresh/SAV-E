@@ -518,13 +518,20 @@ final class AIDrawerViewModel: ObservableObject {
                 mapAction = nil
                 return
             }
+            if deterministicDraft.componentType == .message {
+                guard activeRequestID == requestID else { return }
+                activeRequestID = nil
+                drawerState = .displaying(deterministicDraft)
+                mapAction = nil
+                return
+            }
 
-            let publicCandidates = await publicDiscoveryCandidates(for: query)
             let deterministicPlaceIDs = Set(
                 (deterministicDraft.placeIds + [deterministicDraft.navigationPlaceId].compactMap { $0 })
                     .compactMap(UUID.init(uuidString:))
             )
             let deterministicPlaces = places.filter { deterministicPlaceIDs.contains($0.id) }
+            let publicCandidates = await publicDiscoveryCandidates(for: query, scopedPlaces: deterministicPlaces)
             let response = try await aiService.query(
                 query,
                 places: deterministicPlaces,
@@ -621,23 +628,23 @@ final class AIDrawerViewModel: ObservableObject {
         )
     }
 
-    private func publicDiscoveryCandidates(for query: String) async -> [SaveMapCandidate] {
-        guard ItineraryPublicDiscoveryPlanner.shouldPreparePublicActivityCandidates(query: query, savedPlaces: places) else {
+    private func publicDiscoveryCandidates(for query: String, scopedPlaces: [Place]) async -> [SaveMapCandidate] {
+        guard ItineraryPublicDiscoveryPlanner.shouldPreparePublicActivityCandidates(query: query, savedPlaces: scopedPlaces) else {
             return []
         }
 
-        let coordinate = locationService.currentLocation?.coordinate
-            ?? places.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        let coordinate = scopedPlaces.first.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+            ?? locationService.currentLocation?.coordinate
         let span = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
         var results: [SaveMapCandidate] = []
         var seen: Set<String> = []
 
-        for searchQuery in ItineraryPublicDiscoveryPlanner.publicActivitySearchQueries(for: query, savedPlaces: places) {
+        for searchQuery in ItineraryPublicDiscoveryPlanner.publicActivitySearchQueries(for: query, savedPlaces: scopedPlaces) {
             let candidates = await mapCandidateSearchService.searchCandidates(
                 matching: searchQuery,
                 near: coordinate,
                 span: span,
-                excluding: places
+                excluding: scopedPlaces
             )
             for candidate in candidates where ItineraryPublicDiscoveryPlanner.isPublicActivityCandidate(candidate) {
                 let key = "\(candidate.title.lowercased())|\(candidate.subtitle.lowercased())"
@@ -687,7 +694,7 @@ struct ItineraryPublicDiscoveryPlanner {
     }
 
     static func publicActivitySearchQueries(for query: String, savedPlaces: [Place]) -> [String] {
-        let destination = destinationHint(from: query) ?? destinationHint(from: savedPlaces)
+        let destination = TripDestinationScope.destinationHint(from: query) ?? TripDestinationScope.destinationHint(from: savedPlaces)
         let prefix = destination.map { "\($0) " } ?? ""
         return [
             "\(prefix)景點",
@@ -699,39 +706,6 @@ struct ItineraryPublicDiscoveryPlanner {
     static func isPublicActivityCandidate(_ candidate: SaveMapCandidate) -> Bool {
         guard let category = candidate.category else { return true }
         return activityCategories.contains(category)
-    }
-
-    private static func destinationHint(from query: String) -> String? {
-        let normalized = query
-            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
-            .lowercased()
-
-        let knownDestinations: [(needle: String, destination: String)] = [
-            ("台北", "台北"),
-            ("臺北", "台北"),
-            ("taipei", "Taipei"),
-            ("台南", "台南"),
-            ("臺南", "台南"),
-            ("tainan", "Tainan"),
-            ("高雄", "高雄"),
-            ("kaohsiung", "Kaohsiung"),
-            ("東京", "東京"),
-            ("tokyo", "Tokyo"),
-            ("首爾", "首爾"),
-            ("seoul", "Seoul"),
-            ("los angeles", "Los Angeles"),
-            (" la ", "Los Angeles"),
-            ("anaheim", "Anaheim"),
-            ("irvine", "Irvine")
-        ]
-
-        let padded = " \(normalized) "
-        return knownDestinations.first { padded.contains($0.needle) || normalized.contains($0.needle) }?.destination
-    }
-
-    private static func destinationHint(from places: [Place]) -> String? {
-        let joinedAddresses = places.map(\.address).joined(separator: " ")
-        return destinationHint(from: joinedAddresses)
     }
 }
 

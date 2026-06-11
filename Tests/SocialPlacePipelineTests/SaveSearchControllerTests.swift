@@ -689,6 +689,87 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testTripPublicDiscoveryUsesScopedTripAnchorBeforeCurrentLocation() async throws {
+        let mapSearch = RecordingMapCandidateSearchService(candidates: [
+            SaveMapCandidate(
+                id: "public-la-activity",
+                title: "Griffith Observatory",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.1184,
+                longitude: -118.3004,
+                category: .attraction
+            )
+        ])
+        let drawer = AIDrawerViewModel(
+            aiService: SaveAIService(apiKey: ""),
+            locationService: StubAIDrawerLocationProvider(currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)),
+            mapCandidateSearchService: mapSearch,
+            groundedAnswerClient: nil
+        )
+        drawer.places = [
+            place(
+                name: "Los Angeles Taco",
+                address: "Los Angeles, CA",
+                category: .food,
+                latitude: 34.0522,
+                longitude: -118.2437
+            ),
+            place(
+                name: "LA Coffee",
+                address: "Los Angeles, CA",
+                category: .cafe,
+                latitude: 34.0450,
+                longitude: -118.2500
+            )
+        ]
+        drawer.query = "幫我規劃 LA 兩天行程"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        let firstSearch = try XCTUnwrap(mapSearch.matchingRequests.first)
+        let coordinate = try XCTUnwrap(firstSearch.coordinate)
+        XCTAssertEqual(firstSearch.query, "Los Angeles 景點")
+        XCTAssertEqual(coordinate.latitude, 34.0522, accuracy: 0.001)
+        XCTAssertEqual(coordinate.longitude, -118.2437, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testDrawerAsksForDurationBeforePlanningAmbiguousTrip() async {
+        let drawer = AIDrawerViewModel(
+            aiService: SaveAIService(apiKey: ""),
+            groundedAnswerClient: nil
+        )
+        drawer.places = [
+            place(
+                name: "Los Angeles Taco",
+                address: "Los Angeles, CA",
+                category: .food,
+                latitude: 34.0522,
+                longitude: -118.2437
+            ),
+            place(
+                name: "LA Coffee",
+                address: "Los Angeles, CA",
+                category: .cafe,
+                latitude: 34.0450,
+                longitude: -118.2500
+            )
+        ]
+        drawer.query = "幫我規劃 LA 行程"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        guard case .displaying(let response) = drawer.drawerState else {
+            return XCTFail("Expected clarification response")
+        }
+        XCTAssertEqual(response.componentType, .message)
+        XCTAssertEqual(response.title, "需要行程天數")
+        XCTAssertTrue(response.messageText?.contains("幾天") == true)
+        XCTAssertTrue(response.itineraryDays.isEmpty)
+        XCTAssertNil(response.mapAction)
+    }
+
+    @MainActor
     func testDrawerDoesNotPlanWrongCityWhenTripHasNoMatchingMapStamps() async {
         let drawer = AIDrawerViewModel(
             aiService: SaveAIService(apiKey: ""),
@@ -703,7 +784,7 @@ final class SaveSearchControllerTests: XCTestCase {
                 longitude: -117.8265
             )
         ]
-        drawer.query = "Plan a Los Angeles trip"
+        drawer.query = "Plan a one day Los Angeles trip"
 
         await drawer.submit()
 
@@ -2715,5 +2796,38 @@ private struct StubAIDrawerLocationProvider: AIDrawerLocationProviding {
 
     func requestCurrentLocation() async -> CLLocation? {
         currentLocation
+    }
+}
+
+private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol {
+    struct MatchingRequest {
+        let query: String
+        let coordinate: CLLocationCoordinate2D?
+    }
+
+    private let candidates: [SaveMapCandidate]
+    private(set) var matchingRequests: [MatchingRequest] = []
+
+    init(candidates: [SaveMapCandidate]) {
+        self.candidates = candidates
+    }
+
+    func searchCandidates(
+        near coordinate: CLLocationCoordinate2D,
+        span: MKCoordinateSpan,
+        excluding savedPlaces: [Place],
+        categories: Set<PlaceCategory>
+    ) async -> [SaveMapCandidate] {
+        []
+    }
+
+    func searchCandidates(
+        matching query: String,
+        near coordinate: CLLocationCoordinate2D?,
+        span: MKCoordinateSpan?,
+        excluding savedPlaces: [Place]
+    ) async -> [SaveMapCandidate] {
+        matchingRequests.append(MatchingRequest(query: query, coordinate: coordinate))
+        return candidates
     }
 }

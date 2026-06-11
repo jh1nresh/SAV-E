@@ -1,5 +1,77 @@
 import Foundation
 
+struct TripDestinationScope {
+    let destination: String
+    private let normalizedDestination: String
+
+    init?(query: String? = nil, places: [Place]) {
+        let destination = query.flatMap(Self.destinationHint(from:)) ?? Self.destinationHint(from: places)
+        guard let destination else { return nil }
+        self.destination = destination
+        self.normalizedDestination = Self.normalize(destination)
+    }
+
+    func contains(place: Place) -> Bool {
+        matches(text: "\(place.name) \(place.address) \(place.category.rawValue)")
+    }
+
+    func contains(reviewCandidate: PlaceReviewCandidate) -> Bool {
+        let text = ([reviewCandidate.name, reviewCandidate.address, reviewCandidate.city].compactMap { $0 } + reviewCandidate.evidence)
+            .joined(separator: " ")
+        return matches(text: text)
+    }
+
+    func contains(mapCandidate: SaveMapCandidate) -> Bool {
+        matches(text: "\(mapCandidate.title) \(mapCandidate.subtitle)")
+    }
+
+    static func destinationHint(from query: String) -> String? {
+        let normalized = normalize(query)
+        let padded = " \(normalized) "
+        return knownDestinations.first { item in
+            item.needles.contains { needle in
+                let normalizedNeedle = normalize(needle)
+                return padded.contains(" \(normalizedNeedle) ") || normalized.contains(normalizedNeedle)
+            }
+        }?.destination
+    }
+
+    static func destinationHint(from places: [Place]) -> String? {
+        let joinedAddresses = places.map(\.address).joined(separator: " ")
+        return destinationHint(from: joinedAddresses)
+    }
+
+    private func matches(text: String) -> Bool {
+        let normalized = Self.normalize(text)
+        if normalized.contains(normalizedDestination) {
+            return true
+        }
+        return Self.knownDestinations
+            .first { $0.destination == destination }?
+            .needles
+            .map(Self.normalize)
+            .contains { normalized.contains($0) } == true
+    }
+
+    private static func normalize(_ text: String) -> String {
+        text
+            .folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+    }
+
+    private static let knownDestinations: [(destination: String, needles: [String])] = [
+        ("台北", ["台北", "臺北", "taipei"]),
+        ("台南", ["台南", "臺南", "tainan"]),
+        ("高雄", ["高雄", "kaohsiung"]),
+        ("東京", ["東京", "tokyo"]),
+        ("首爾", ["首爾", "seoul"]),
+        ("Los Angeles", ["los angeles", " la ", "hollywood", "santa monica", "malibu", "beverly hills", "playa vista"]),
+        ("Anaheim", ["anaheim", "disneyland"]),
+        ("Orange County", ["orange county", "costa mesa", "newport beach", "westminster"]),
+        ("Irvine", ["irvine"])
+    ]
+}
+
 struct TripGapSuggestionEngine {
     func suggestions(
         for gaps: [TripGap],
@@ -9,11 +81,15 @@ struct TripGapSuggestionEngine {
         mapCandidates: [SaveMapCandidate],
         outputLanguage: AppLanguage
     ) -> [GapSuggestion] {
-        gaps.compactMap { gap in
-            let usedPlaceIDs = Set(days.flatMap(\.stops).compactMap(\.placeId))
+        let usedPlaceIDs = Set(days.flatMap(\.stops).compactMap(\.placeId))
+        let anchorPlaces = savedPlaces.filter { usedPlaceIDs.contains($0.id.uuidString) }
+        let destinationScope = TripDestinationScope(places: anchorPlaces)
+
+        return gaps.compactMap { gap -> GapSuggestion? in
             let categories = preferredCategories(for: gap.type)
             let savedOptions = savedPlaces
                 .filter { categories.contains($0.category) && !usedPlaceIDs.contains($0.id.uuidString) }
+                .filter { destinationScope?.contains(place: $0) ?? true }
                 .prefix(3)
                 .map { place in
                     GapSuggestionOption(
@@ -38,6 +114,7 @@ struct TripGapSuggestionEngine {
                 .filter { candidate in
                     categories.contains(PlaceCategory.inferred(from: ([candidate.name, candidate.address] + candidate.evidence).joined(separator: " ")))
                 }
+                .filter { destinationScope?.contains(reviewCandidate: $0) ?? true }
                 .prefix(3)
                 .map { candidate in
                     let hasCoordinates = candidate.hasReliableCoordinates
@@ -70,6 +147,7 @@ struct TripGapSuggestionEngine {
                     guard let category = candidate.category else { return true }
                     return categories.contains(category)
                 }
+                .filter { destinationScope?.contains(mapCandidate: $0) ?? true }
                 .prefix(3)
                 .map { candidate in
                     GapSuggestionOption(
@@ -90,7 +168,7 @@ struct TripGapSuggestionEngine {
                     )
                 }
 
-            let options = Array(savedOptions + reviewOptions + externalOptions)
+            let options: [GapSuggestionOption] = Array(savedOptions) + Array(reviewOptions) + Array(externalOptions)
             guard !options.isEmpty else { return nil }
             return GapSuggestion(
                 id: "gap-suggestion-\(gap.id)",

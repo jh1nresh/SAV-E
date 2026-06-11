@@ -203,10 +203,12 @@ struct DeterministicTripPlanner {
 
     func plan(for message: String, places: [Place], outputLanguage: AppLanguage = .english) -> SaveAIResponse? {
         guard isItineraryRequest(message), !places.isEmpty else { return nil }
+        guard let days = requestedDayCount(from: message) else {
+            return clarificationResponse(for: message, outputLanguage: outputLanguage)
+        }
 
         let constraintPlanner = ItineraryConstraintPlanner()
         let constraints = constraintPlanner.constraints(from: message)
-        let days = requestedDayCount(from: message, placeCount: places.count)
         let selectedPlaces = selectedPlaces(
             for: message,
             places: places,
@@ -280,7 +282,7 @@ struct DeterministicTripPlanner {
 
     // MARK: - Intent
 
-    private func requestedDayCount(from message: String, placeCount: Int) -> Int {
+    private func requestedDayCount(from message: String) -> Int? {
         let normalized = message.lowercased()
         let patterns = [
             #"(\d+)\s*[- ]?\s*days?"#,
@@ -298,8 +300,12 @@ struct DeterministicTripPlanner {
             }
         }
 
+        if normalized.contains("half day") || normalized.contains("half-day") || normalized.contains("半日") || normalized.contains("半天") {
+            return 1
+        }
+
         let englishDayCounts: [(String, Int)] = [
-            ("one day", 1), ("single day", 1), ("two days", 2), ("three days", 3),
+            ("one day", 1), ("single day", 1), ("a day", 1), ("day trip", 1), ("two days", 2), ("three days", 3),
             ("four days", 4), ("five days", 5), ("six days", 6), ("seven days", 7)
         ]
         if let count = englishDayCounts.first(where: { normalized.contains($0.0) })?.1 {
@@ -308,6 +314,9 @@ struct DeterministicTripPlanner {
 
         if normalized.contains("weekend") {
             return 2
+        }
+        if normalized.contains(" day") {
+            return 1
         }
 
         let chineseDayCounts: [(String, Int)] = [
@@ -323,7 +332,28 @@ struct DeterministicTripPlanner {
             return count
         }
 
-        return max(1, min(3, Int(ceil(Double(placeCount) / 4.0))))
+        return nil
+    }
+
+    private func clarificationResponse(for message: String, outputLanguage: AppLanguage) -> SaveAIResponse {
+        let text = outputLanguage.localized(
+            english: "How many days should I plan for? Tell me the duration and style, for example: LA 1 day relaxed, LA 3 days food + activities, or LA weekend with kids. I will use your saved Map Stamps first, then keep public activity candidates separate for approval.",
+            traditionalChinese: "你想規劃幾天？先告訴我天數和風格，例如：LA 一日輕鬆、LA 3 天吃喝加景點、或 LA 週末親子。之後我會先用你的已存地圖章，再把公開活動候選分開給你批准。"
+        )
+        return SaveAIResponse(
+            componentType: .message,
+            title: outputLanguage.localized(
+                english: "Need trip duration",
+                traditionalChinese: "需要行程天數"
+            ),
+            placeIds: [],
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: text,
+            mapAction: nil,
+            aiMessage: text
+        )
     }
 
     // MARK: - Selection
@@ -593,23 +623,7 @@ struct DeterministicTripPlanner {
     }
 
     private func hasExplicitDayCount(_ message: String) -> Bool {
-        let normalized = message.lowercased()
-        if normalized.contains("weekend") { return true }
-        let patterns = [
-            #"(\d+)\s*[- ]?\s*days?"#,
-            #"(\d+)\s*[- ]?\s*day"#,
-            #"(\d+)\s*[天日]"#
-        ]
-        if patterns.contains(where: { pattern in
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
-            return regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..<normalized.endIndex, in: normalized)) != nil
-        }) {
-            return true
-        }
-        return [
-            "一天", "一日", "兩天", "两天", "二天", "二日", "三天", "三日",
-            "四天", "四日", "五天", "五日", "六天", "六日", "七天", "七日"
-        ].contains { normalized.contains($0) }
+        requestedDayCount(from: message) != nil
     }
 
     // MARK: - Trip Judge

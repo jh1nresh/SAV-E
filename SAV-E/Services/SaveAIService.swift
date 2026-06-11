@@ -417,6 +417,9 @@ struct ItineraryPlanValidator {
                 }
             }
         }
+        guard Set(stopSavedIDs).count == stopSavedIDs.count else {
+            return nil
+        }
 
         let responsePlaceIDs = response.placeIds.compactMap { Self.nonEmptyPlaceID($0) }
         let navigationIDs = [response.navigationPlaceId].compactMap { Self.nonEmptyPlaceID($0) }

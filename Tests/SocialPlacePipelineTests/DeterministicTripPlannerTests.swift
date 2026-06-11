@@ -128,7 +128,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
             makePlace("Costa Mesa Coffee", address: "Costa Mesa, CA", latitude: 33.6411, longitude: -117.9187, category: .cafe)
         ]
 
-        let response = DeterministicTripPlanner().plan(for: "Plan a Los Angeles trip", places: places)
+        let response = DeterministicTripPlanner().plan(for: "Plan a one day Los Angeles trip", places: places)
 
         XCTAssertNil(response)
     }
@@ -139,10 +139,17 @@ final class DeterministicTripPlannerTests: XCTestCase {
             makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
         ]
 
-        let response = try XCTUnwrap(DeterministicTripPlanner().plan(for: "幫我規劃 LA 行程", places: places))
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "幫我規劃 LA 行程",
+            places: places,
+            outputLanguage: .traditionalChinese
+        ))
 
-        XCTAssertTrue(response.aiMessage?.contains("how many days") == true)
-        XCTAssertTrue(response.aiMessage?.contains("food/drink") == true)
+        XCTAssertEqual(response.componentType, .message)
+        XCTAssertTrue(response.messageText?.contains("幾天") == true)
+        XCTAssertTrue(response.messageText?.contains("公開活動候選") == true)
+        XCTAssertTrue(response.itineraryDays.isEmpty)
+        XCTAssertNil(response.mapAction)
     }
 
     func testPlannerSkipsNonItineraryQueries() {
@@ -369,6 +376,28 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(validated)
     }
 
+    func testItineraryPlanValidatorRejectsRepeatedSavedStop() {
+        let dinner = makePlace("Sake House Malibu", address: "Malibu, Los Angeles, CA", latitude: 34.0360, longitude: -118.6860, category: .food)
+        let fallback = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [stop(place: dinner, time: "6:30 PM")])
+        ])
+        let llmResponse = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [
+                stop(place: dinner, time: "6:30 PM"),
+                stop(place: dinner, time: "8:00 PM")
+            ])
+        ])
+
+        let validated = ItineraryPlanValidator(
+            savedPlaces: [dinner],
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: []
+        ).validated(llmResponse)
+
+        XCTAssertNil(validated)
+    }
+
     func testAllFoodSavedTripPreparesPublicActivityCandidatesAndPromptPolicy() {
         let places = [
             makePlace("永樂牛肉湯", address: "台北市大同區", latitude: 25.0520, longitude: 121.5100, category: .food),
@@ -463,6 +492,41 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(suggestion.options.last?.action, .addExternalWithApproval)
         XCTAssertNil(suggestion.options.last?.placeId)
         XCTAssertTrue(suggestion.requiresUserApproval)
+    }
+
+    func testGapSuggestionEngineScopesOptionsToPlannedDestination() throws {
+        let laDinner = makePlace("Los Angeles Dinner", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food)
+        let laMuseum = makePlace("The Broad", address: "Los Angeles, CA", latitude: 34.0544, longitude: -118.2500, category: .attraction)
+        let irvineMuseum = makePlace("Irvine Museum", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .attraction)
+        let publicLA = SaveMapCandidate(
+            id: "public-la",
+            title: "Griffith Observatory",
+            subtitle: "Los Angeles, CA",
+            latitude: 34.1184,
+            longitude: -118.3004,
+            category: .attraction
+        )
+        let publicOC = SaveMapCandidate(
+            id: "public-oc",
+            title: "Orange County Museum",
+            subtitle: "Costa Mesa, CA",
+            latitude: 33.6955,
+            longitude: -117.9260,
+            category: .attraction
+        )
+
+        let suggestion = try XCTUnwrap(TripGapSuggestionEngine().suggestions(
+            for: [tripGap(.missingAfternoonActivity)],
+            days: [ItineraryDay(dayNumber: 1, label: "Day 1", stops: [stop(place: laDinner, time: "12:30 PM")])],
+            savedPlaces: [laDinner, irvineMuseum, laMuseum],
+            reviewCandidates: [],
+            mapCandidates: [publicOC, publicLA],
+            outputLanguage: .english
+        ).first)
+
+        XCTAssertEqual(suggestion.options.map(\.title), ["The Broad", "Griffith Observatory"])
+        XCTAssertFalse(suggestion.options.map(\.title).contains("Irvine Museum"))
+        XCTAssertFalse(suggestion.options.map(\.title).contains("Orange County Museum"))
     }
 
     func testGapSuggestionEngineLabelsReviewCandidateAndSourceOnlySeparately() throws {
