@@ -503,13 +503,36 @@ final class AIDrawerViewModel: ObservableObject {
         rememberQuery(query)
 
         do {
+            let deterministicDraft = DeterministicTripPlanner().plan(
+                for: query,
+                places: places,
+                outputLanguage: outputLanguage
+            )
+            guard let deterministicDraft else {
+                guard activeRequestID == requestID else { return }
+                activeRequestID = nil
+                drawerState = .displaying(Self.tripAnchorMessageResponse(
+                    hasPlaces: !places.isEmpty,
+                    outputLanguage: outputLanguage
+                ))
+                mapAction = nil
+                return
+            }
+
             let publicCandidates = await publicDiscoveryCandidates(for: query)
+            let deterministicPlaceIDs = Set(
+                (deterministicDraft.placeIds + [deterministicDraft.navigationPlaceId].compactMap { $0 })
+                    .compactMap(UUID.init(uuidString:))
+            )
+            let deterministicPlaces = places.filter { deterministicPlaceIDs.contains($0.id) }
             let response = try await aiService.query(
                 query,
-                places: places,
+                places: deterministicPlaces,
                 publicCandidates: publicCandidates,
                 conversationHistory: conversationTurns,
-                outputLanguage: outputLanguage
+                outputLanguage: outputLanguage,
+                deterministicDraftOverride: deterministicDraft,
+                requiredPlaceIDs: Set(deterministicPlaces.map { $0.id.uuidString })
             )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
@@ -524,28 +547,9 @@ final class AIDrawerViewModel: ObservableObject {
         } catch SaveAIError.apiKeyMissing {
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
-            let message = places.isEmpty
-                ? outputLanguage.localized(
-                    english: "Save or import a few Map Stamps first, then ask SAV-E to plan from them.",
-                    traditionalChinese: "先保存或匯入幾個地圖章，再請 SAV-E 從你的地點開始規劃。"
-                )
-                : outputLanguage.localized(
-                    english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately.",
-                    traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 SAV-E 搜尋公開探索。"
-                )
-            drawerState = .displaying(SaveAIResponse(
-                componentType: .message,
-                title: outputLanguage.localized(
-                    english: "Need trip anchors",
-                    traditionalChinese: "需要行程錨點"
-                ),
-                placeIds: [],
-                navigationPlaceId: nil,
-                transportMode: .walking,
-                itineraryDays: [],
-                messageText: message,
-                mapAction: nil,
-                aiMessage: message
+            drawerState = .displaying(Self.tripAnchorMessageResponse(
+                hasPlaces: !places.isEmpty,
+                outputLanguage: outputLanguage
             ))
         } catch {
             guard activeRequestID == requestID else { return }
@@ -559,6 +563,32 @@ final class AIDrawerViewModel: ObservableObject {
             chatHistory.insert(ChatEntry(query: query, timestamp: Date()), at: 0)
             if chatHistory.count > 20 { chatHistory.removeLast() }
         }
+    }
+
+    private static func tripAnchorMessageResponse(hasPlaces: Bool, outputLanguage: AppLanguage) -> SaveAIResponse {
+        let message = hasPlaces
+            ? outputLanguage.localized(
+                english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately.",
+                traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 SAV-E 搜尋公開探索。"
+            )
+            : outputLanguage.localized(
+                english: "Save or import a few Map Stamps first, then ask SAV-E to plan from them.",
+                traditionalChinese: "先保存或匯入幾個地圖章，再請 SAV-E 從你的地點開始規劃。"
+            )
+        return SaveAIResponse(
+            componentType: .message,
+            title: outputLanguage.localized(
+                english: "Need trip anchors",
+                traditionalChinese: "需要行程錨點"
+            ),
+            placeIds: [],
+            navigationPlaceId: nil,
+            transportMode: .walking,
+            itineraryDays: [],
+            messageText: message,
+            mapAction: nil,
+            aiMessage: message
+        )
     }
 
     private func planAroundPrompt(for draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> String {
