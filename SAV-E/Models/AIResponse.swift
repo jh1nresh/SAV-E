@@ -68,6 +68,111 @@ struct ItineraryStop: Identifiable, Equatable {
     var risks: [TripRisk] = []
 }
 
+struct TripCanvasDraft: Equatable {
+    private(set) var days: [ItineraryDay]
+    private(set) var approvedExternalStopIDs: Set<UUID>
+    private(set) var skippedStopIDs: Set<UUID>
+
+    init(
+        days: [ItineraryDay],
+        approvedExternalStopIDs: Set<UUID> = [],
+        skippedStopIDs: Set<UUID> = []
+    ) {
+        self.days = days
+        self.approvedExternalStopIDs = approvedExternalStopIDs
+        self.skippedStopIDs = skippedStopIDs
+    }
+
+    var visibleDays: [ItineraryDay] {
+        days.map { day in
+            day.replacingStops(day.stops.filter { !skippedStopIDs.contains($0.id) })
+        }
+    }
+
+    mutating func approveExternalStop(_ stopID: UUID) {
+        guard stop(with: stopID)?.placeState == .externalSuggestion else { return }
+        skippedStopIDs.remove(stopID)
+        approvedExternalStopIDs.insert(stopID)
+    }
+
+    mutating func skipStop(_ stopID: UUID) {
+        guard stop(with: stopID) != nil else { return }
+        approvedExternalStopIDs.remove(stopID)
+        skippedStopIDs.insert(stopID)
+    }
+
+    mutating func moveStopEarlier(_ stopID: UUID) {
+        guard let location = location(of: stopID), location.stopIndex > 0 else { return }
+        moveStop(stopID, toDayNumber: days[location.dayIndex].dayNumber, at: location.stopIndex - 1)
+    }
+
+    mutating func moveStopLater(_ stopID: UUID) {
+        guard let location = location(of: stopID) else { return }
+        let day = days[location.dayIndex]
+        guard location.stopIndex < day.stops.count - 1 else { return }
+        moveStop(stopID, toDayNumber: day.dayNumber, at: location.stopIndex + 1)
+    }
+
+    mutating func insertExternalSuggestion(
+        title: String,
+        dayNumber: Int,
+        note: String,
+        sourceSummary: String
+    ) {
+        guard let index = days.firstIndex(where: { $0.dayNumber == dayNumber }) else { return }
+        let suggestion = ItineraryStop(
+            id: UUID(),
+            placeId: nil,
+            placeState: .externalSuggestion,
+            placeName: title,
+            time: nil,
+            duration: 60,
+            note: note,
+            sourceSummary: sourceSummary,
+            risks: [.externalSuggestion, .hoursUnknown, .bookingUnknown]
+        )
+        var stops = days[index].stops
+        stops.append(suggestion)
+        days[index] = days[index].replacingStops(stops)
+    }
+
+    func isApprovedExternalStop(_ stopID: UUID) -> Bool {
+        approvedExternalStopIDs.contains(stopID)
+    }
+
+    private mutating func moveStop(_ stopID: UUID, toDayNumber dayNumber: Int, at insertionIndex: Int) {
+        guard let source = location(of: stopID),
+              let targetDayIndex = days.firstIndex(where: { $0.dayNumber == dayNumber }) else { return }
+        var sourceStops = days[source.dayIndex].stops
+        let stop = sourceStops.remove(at: source.stopIndex)
+        days[source.dayIndex] = days[source.dayIndex].replacingStops(sourceStops)
+
+        var targetStops = days[targetDayIndex].stops
+        let boundedIndex = min(max(insertionIndex, 0), targetStops.count)
+        targetStops.insert(stop, at: boundedIndex)
+        days[targetDayIndex] = days[targetDayIndex].replacingStops(targetStops)
+    }
+
+    private func stop(with id: UUID) -> ItineraryStop? {
+        days.flatMap(\.stops).first { $0.id == id }
+    }
+
+    private func location(of id: UUID) -> (dayIndex: Int, stopIndex: Int)? {
+        for dayIndex in days.indices {
+            if let stopIndex = days[dayIndex].stops.firstIndex(where: { $0.id == id }) {
+                return (dayIndex, stopIndex)
+            }
+        }
+        return nil
+    }
+}
+
+extension ItineraryDay {
+    func replacingStops(_ stops: [ItineraryStop]) -> ItineraryDay {
+        ItineraryDay(dayNumber: dayNumber, label: label, stops: stops, health: health)
+    }
+}
+
 enum ItineraryPlaceState: String, Codable, Equatable, Hashable {
     case sourceOnly
     case reviewCandidate

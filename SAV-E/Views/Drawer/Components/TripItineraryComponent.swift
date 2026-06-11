@@ -2,12 +2,28 @@ import SwiftUI
 
 struct TripItineraryComponent: View {
     let title: String
-    let days: [ItineraryDay]
+    private let sourceDays: [ItineraryDay]
     var tripHealth: TripHealth?
     let aiMessage: String?
     var places: [Place] = []
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showShareSheet = false
+    @State private var canvas: TripCanvasDraft
+
+    init(
+        title: String,
+        days: [ItineraryDay],
+        tripHealth: TripHealth? = nil,
+        aiMessage: String?,
+        places: [Place] = []
+    ) {
+        self.title = title
+        self.sourceDays = days
+        self.tripHealth = tripHealth
+        self.aiMessage = aiMessage
+        self.places = places
+        _canvas = State(initialValue: TripCanvasDraft(days: days))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -74,12 +90,29 @@ struct TripItineraryComponent: View {
             }
 
             if let tripHealth {
-                TripHealthSummaryCard(health: tripHealth)
+                TripHealthSummaryCard(health: tripHealth) { gap in
+                    canvas.insertExternalSuggestion(
+                        title: suggestionTitle(for: gap),
+                        dayNumber: dayNumber(for: gap),
+                        note: gap.message,
+                        sourceSummary: languageSettings.localized(
+                            english: "External gap-fill suggestion. Approve before treating it as part of the plan.",
+                            traditionalChinese: "外部補缺建議。先批准，才會視為行程的一部分。"
+                        )
+                    )
+                }
             }
 
             LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(days) { day in
-                    DaySection(day: day)
+                ForEach(canvas.visibleDays) { day in
+                    DaySection(
+                        day: day,
+                        approvedExternalStopIDs: canvas.approvedExternalStopIDs,
+                        onApproveExternalStop: { stopID in canvas.approveExternalStop(stopID) },
+                        onSkipStop: { stopID in canvas.skipStop(stopID) },
+                        onMoveEarlier: { stopID in canvas.moveStopEarlier(stopID) },
+                        onMoveLater: { stopID in canvas.moveStopLater(stopID) }
+                    )
                 }
             }
         }
@@ -90,19 +123,60 @@ struct TripItineraryComponent: View {
                 .stroke(Color.saveNotebookLine, lineWidth: 2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onChange(of: canvasInputID) { _, _ in
+            canvas = TripCanvasDraft(days: sourceDays)
+        }
     }
 
     private func buildShareURL() -> URL? {
-        let tripData = SharedTripData.from(title: title, city: "", days: days, places: places)
+        let tripData = SharedTripData.from(title: title, city: "", days: canvas.visibleDays, places: places)
         return tripData.toURL()
+    }
+
+    private var canvasInputID: String {
+        sourceDays
+            .map { day in
+                "\(day.dayNumber):" + day.stops.map(\.id.uuidString).joined(separator: ",")
+            }
+            .joined(separator: "|")
     }
 
     private var dayCountText: String {
         switch languageSettings.language {
         case .english:
-            return days.count == 1 ? "1 day" : "\(days.count) days"
+            return canvas.visibleDays.count == 1 ? "1 day" : "\(canvas.visibleDays.count) days"
         case .traditionalChinese:
-            return "\(days.count) 天"
+            return "\(canvas.visibleDays.count) 天"
+        }
+    }
+
+    private func dayNumber(for gap: TripGap) -> Int {
+        if let explicit = Int(gap.dayId.filter(\.isNumber)) {
+            return explicit
+        }
+        return canvas.visibleDays.first?.dayNumber ?? 1
+    }
+
+    private func suggestionTitle(for gap: TripGap) -> String {
+        switch gap.type {
+        case .missingBreakfast:
+            return languageSettings.localized(english: "Breakfast option", traditionalChinese: "早餐候選")
+        case .missingLunch:
+            return languageSettings.localized(english: "Lunch option", traditionalChinese: "午餐候選")
+        case .missingDinner:
+            return languageSettings.localized(english: "Dinner option", traditionalChinese: "晚餐候選")
+        case .missingCoffeeBreak:
+            return languageSettings.localized(english: "Coffee break option", traditionalChinese: "咖啡休息候選")
+        case .missingAfternoonActivity:
+            return languageSettings.localized(english: "Afternoon activity option", traditionalChinese: "下午活動候選")
+        case .missingEveningPlan:
+            return languageSettings.localized(english: "Evening option", traditionalChinese: "晚間候選")
+        case .needsAreaCluster:
+            return languageSettings.localized(english: "Nearby stop option", traditionalChinese: "附近停留候選")
+        case .needsRainBackup:
+            return languageSettings.localized(english: "Rain backup option", traditionalChinese: "雨天備案候選")
+        case .needsHoursCheck:
+            return languageSettings.localized(english: "Hours check needed", traditionalChinese: "營業時間待查")
         }
     }
 }
@@ -111,6 +185,7 @@ struct TripItineraryComponent: View {
 
 private struct TripHealthSummaryCard: View {
     let health: TripHealth
+    var onAddSuggestion: ((TripGap) -> Void)?
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
@@ -148,7 +223,25 @@ private struct TripHealthSummaryCard: View {
                         TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: .saveHoney)
                     }
                     ForEach(health.gaps.prefix(3)) { gap in
-                        TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: .saveSky)
+                        VStack(alignment: .leading, spacing: 6) {
+                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: .saveSky)
+                            if let onAddSuggestion {
+                                Button(action: { onAddSuggestion(gap) }) {
+                                    Label(
+                                        languageSettings.localized(english: "Add option", traditionalChinese: "加入候選"),
+                                        systemImage: "plus"
+                                    )
+                                    .font(.caption2.weight(.black))
+                                    .foregroundColor(.saveInk)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color.saveMint.opacity(0.52))
+                                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                                    .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                 }
             }
@@ -207,6 +300,11 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 private struct DaySection: View {
     let day: ItineraryDay
+    let approvedExternalStopIDs: Set<UUID>
+    let onApproveExternalStop: (UUID) -> Void
+    let onSkipStop: (UUID) -> Void
+    let onMoveEarlier: (UUID) -> Void
+    let onMoveLater: (UUID) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
@@ -285,6 +383,16 @@ private struct DaySection: View {
                                 .foregroundColor(.saveMutedText)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        StopCanvasControls(
+                            stop: stop,
+                            canMoveEarlier: index > 0,
+                            canMoveLater: index < day.stops.count - 1,
+                            isApprovedExternalStop: approvedExternalStopIDs.contains(stop.id),
+                            onApproveExternalStop: onApproveExternalStop,
+                            onSkipStop: onSkipStop,
+                            onMoveEarlier: onMoveEarlier,
+                            onMoveLater: onMoveLater
+                        )
                     }
                     .padding(.bottom, 14)
                 }
@@ -367,6 +475,96 @@ private struct DaySection: View {
         case .sourceWeak:
             return languageSettings.localized(english: "Weak source", traditionalChinese: "來源弱")
         }
+    }
+}
+
+private struct StopCanvasControls: View {
+    let stop: ItineraryStop
+    let canMoveEarlier: Bool
+    let canMoveLater: Bool
+    let isApprovedExternalStop: Bool
+    let onApproveExternalStop: (UUID) -> Void
+    let onSkipStop: (UUID) -> Void
+    let onMoveEarlier: (UUID) -> Void
+    let onMoveLater: (UUID) -> Void
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        if canMoveEarlier || canMoveLater || stop.placeState == .externalSuggestion {
+            VStack(alignment: .leading, spacing: 7) {
+                controls
+
+                if stop.placeState == .externalSuggestion, isApprovedExternalStop {
+                    Text(languageSettings.localized(
+                        english: "Approved for this draft. It is still not saved to memory.",
+                        traditionalChinese: "已加入這份草稿，但還不會存進記憶。"
+                    ))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                }
+            }
+            .padding(.top, 5)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 7) {
+            Button(action: { onMoveEarlier(stop.id) }) {
+                Image(systemName: "arrow.up")
+                    .font(.caption2.weight(.black))
+                    .frame(width: 28, height: 26)
+                    .background(Color.saveNotebookPage.opacity(0.74))
+                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .clipShape(Capsule())
+            }
+            .disabled(!canMoveEarlier)
+            .opacity(canMoveEarlier ? 1 : 0.38)
+
+            Button(action: { onMoveLater(stop.id) }) {
+                Image(systemName: "arrow.down")
+                    .font(.caption2.weight(.black))
+                    .frame(width: 28, height: 26)
+                    .background(Color.saveNotebookPage.opacity(0.74))
+                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .clipShape(Capsule())
+            }
+            .disabled(!canMoveLater)
+            .opacity(canMoveLater ? 1 : 0.38)
+
+            if stop.placeState == .externalSuggestion {
+                Button(action: { onApproveExternalStop(stop.id) }) {
+                    Label(approveText, systemImage: isApprovedExternalStop ? "checkmark.circle.fill" : "checkmark")
+                        .font(.caption2.weight(.black))
+                        .padding(.horizontal, 8)
+                        .frame(height: 26)
+                        .background((isApprovedExternalStop ? Color.saveMint : Color.saveHoney).opacity(0.58))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+
+                Button(action: { onSkipStop(stop.id) }) {
+                    Label(skipText, systemImage: "xmark")
+                        .font(.caption2.weight(.black))
+                        .padding(.horizontal, 8)
+                        .frame(height: 26)
+                        .background(Color.saveCoral.opacity(0.22))
+                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.saveInk)
+    }
+
+    private var approveText: String {
+        isApprovedExternalStop
+            ? languageSettings.localized(english: "Added", traditionalChinese: "已加入")
+            : languageSettings.localized(english: "Approve", traditionalChinese: "批准")
+    }
+
+    private var skipText: String {
+        languageSettings.localized(english: "Skip", traditionalChinese: "略過")
     }
 }
 

@@ -390,6 +390,54 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(policy.contains("不可直接輸出全餐廳行程"))
     }
 
+    func testTripCanvasApprovesSkipsAndInsertsExternalSuggestionWithoutSavingIt() throws {
+        let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
+        var canvas = TripCanvasDraft(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [stop(place: museum, time: "10:00 AM")])
+        ])
+
+        canvas.insertExternalSuggestion(
+            title: "下午活動候選",
+            dayNumber: 1,
+            note: "補上下午活動",
+            sourceSummary: "外部補缺建議"
+        )
+
+        let inserted = try XCTUnwrap(canvas.visibleDays.first?.stops.last)
+        XCTAssertNil(inserted.placeId)
+        XCTAssertEqual(inserted.placeState, .externalSuggestion)
+        XCTAssertTrue(inserted.risks.contains(.externalSuggestion))
+        XCTAssertFalse(canvas.isApprovedExternalStop(inserted.id))
+
+        canvas.approveExternalStop(inserted.id)
+        XCTAssertTrue(canvas.isApprovedExternalStop(inserted.id))
+        XCTAssertTrue(canvas.visibleDays.first?.stops.contains(where: { $0.id == inserted.id }) == true)
+
+        canvas.skipStop(inserted.id)
+        XCTAssertFalse(canvas.isApprovedExternalStop(inserted.id))
+        XCTAssertFalse(canvas.visibleDays.first?.stops.contains(where: { $0.id == inserted.id }) == true)
+    }
+
+    func testTripCanvasReordersStopsWithoutChangingPlaceIDs() throws {
+        let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
+        let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
+        let cafe = makePlace("Taipei Cafe", address: "台北市信義區", latitude: 25.0330, longitude: 121.5650, category: .cafe)
+        var canvas = TripCanvasDraft(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
+                stop(place: museum, time: "10:00 AM"),
+                stop(place: lunch, time: "12:30 PM"),
+                stop(place: cafe, time: "3:00 PM")
+            ])
+        ])
+        let originalIDs = canvas.visibleDays.flatMap(\.stops).compactMap(\.placeId).sorted()
+        let lunchStopID = try XCTUnwrap(canvas.visibleDays.first?.stops[1].id)
+
+        canvas.moveStopEarlier(lunchStopID)
+
+        XCTAssertEqual(canvas.visibleDays.first?.stops.map(\.placeName), ["Taipei Lunch", "Taipei Museum", "Taipei Cafe"])
+        XCTAssertEqual(canvas.visibleDays.flatMap(\.stops).compactMap(\.placeId).sorted(), originalIDs)
+    }
+
     private func makePlace(
         _ name: String,
         address: String,
