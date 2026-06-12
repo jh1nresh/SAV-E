@@ -204,6 +204,23 @@ private final class StubPlaceResolverService: PlaceResolverServiceProtocol {
                 )
             ]
         }
+        if query.contains("奢海陌野民宿") {
+            return [
+                PlaceProviderMatch(
+                    provider: .amap,
+                    id: "amap-shehai-moye",
+                    name: "奢海陌野民宿",
+                    address: "青岛市崂山区雕龙嘴村",
+                    latitude: 36.1689,
+                    longitude: 120.6651,
+                    rating: 4.8,
+                    reviewCount: 42,
+                    priceLevel: nil,
+                    types: ["住宿服务"],
+                    coordinateSystem: .gcj02
+                )
+            ]
+        }
         return []
     }
 }
@@ -956,6 +973,58 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Xiaohongshu note id: 65abc123") == true)
         XCTAssertTrue(candidate.evidenceDiagnostic?.attempts.contains("Used readable Xiaohongshu caption/metadata as place evidence") == true)
         XCTAssertTrue(candidate.missingInfo.contains("Confirm coordinates"))
+    }
+
+    func testDianpingKeywordsCreateReviewCandidateWithoutFakeCoordinates() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            Title: 青岛崂山📍住到了人生酒店！
+            Keywords: 奢海陌野民宿
+            Description: 青岛崂山旅行住宿推荐，面朝大海的民宿体验。
+            """,
+            sourceURL: "http://dpurl.cn/IFoOLolz"
+        ).first)
+        let diagnostic = try XCTUnwrap(candidate.evidenceDiagnostic)
+
+        XCTAssertEqual(candidate.candidateName, "奢海陌野民宿")
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertEqual(candidate.reviewState, "review_candidate")
+        XCTAssertNil(candidate.latitude)
+        XCTAssertNil(candidate.longitude)
+        XCTAssertTrue(candidate.missingInfo.contains("Verified coordinates"))
+        XCTAssertTrue(diagnostic.found.contains("Dianping feed id: IFoOLolz"))
+        XCTAssertTrue(diagnostic.found.contains("Dianping business clue: 奢海陌野民宿"))
+        XCTAssertTrue(diagnostic.attempts.contains("Preferred Dianping keywords/business field over generic feed title"))
+    }
+
+    func testDianpingKeywordOutranksGenericTitleAndRefinementKeepsAmapProvenance() async throws {
+        let resolver = StubPlaceResolverService()
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: StubGooglePlacesService(),
+            placeResolverService: resolver
+        )
+
+        let candidates = try await service.recoverReviewCandidates(
+            fromEvidenceText: """
+            Title: 青岛崂山📍住到了人生酒店！
+            Keywords: 奢海陌野民宿
+            Description: 青岛崂山旅行住宿推荐，面朝大海的民宿体验。
+            """,
+            sourceURL: "https://m.dianping.com/feeddetail/466776750"
+        )
+        let candidate = try XCTUnwrap(candidates.first)
+
+        XCTAssertEqual(candidate.candidateName, "奢海陌野民宿")
+        XCTAssertNotEqual(candidate.candidateName, "青岛崂山📍住到了人生酒店！")
+        XCTAssertEqual(candidate.reviewState, "map_match_ready")
+        XCTAssertEqual(candidate.address, "青岛市崂山区雕龙嘴村")
+        XCTAssertEqual(candidate.latitude, 36.1689)
+        XCTAssertEqual(candidate.longitude, 120.6651)
+        XCTAssertTrue(resolver.queries.contains { $0.contains("奢海陌野民宿") })
+        XCTAssertTrue(candidate.evidence.contains("Amap coordinates (GCJ-02): 36.1689, 120.6651"))
+        XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Dianping feed id: 466776750") == true)
     }
 
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {

@@ -212,12 +212,13 @@ final class SocialLinkReviewCandidateService {
         var resolvedURL: String?
         var title: String?
         var description: String?
+        var keywords: String?
         var imageURL: URL?
         var videoURL: URL?
         var jsonCaption: String?
 
         var evidenceLines: [String] {
-            [title, description, jsonCaption]
+            [title, description, keywords.map { "Keywords: \($0)" }, jsonCaption]
                 .compactMap { $0 }
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
@@ -611,6 +612,9 @@ final class SocialLinkReviewCandidateService {
         if let directMapCandidate = directChinaMapCandidate(evidenceText: evidenceText, sourceURL: sourceURL) {
             return [directMapCandidate]
         }
+        if let dianpingCandidate = dianpingCandidate(from: evidenceText, sourceURL: sourceURL) {
+            return [dianpingCandidate]
+        }
 
         let analysis = analyze(evidenceText: evidenceText, sourceURL: sourceURL)
         let candidates = rankedCandidates(
@@ -663,6 +667,9 @@ final class SocialLinkReviewCandidateService {
         }
         if let venueIntroCandidate = captionVenueIntroCandidate(from: evidenceText, sourceURL: sourceURL) {
             candidates.append(venueIntroCandidate)
+        }
+        if let dianpingCandidate = dianpingCandidate(from: evidenceText, sourceURL: sourceURL) {
+            candidates.append(dianpingCandidate)
         }
         if let titleCandidate = chineseSocialTitleCandidate(from: evidenceText, sourceURL: sourceURL) {
             candidates.append(titleCandidate)
@@ -901,6 +908,7 @@ final class SocialLinkReviewCandidateService {
             let html = String(data: data.prefix(300_000), encoding: .utf8) ?? ""
             let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
             let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
+            let keywords = metadataValue(in: html, keys: ["keywords"])
             let imageURL = metadataImageURL(in: html, baseURL: response.url ?? url)
             let videoURL = metadataVideoURL(in: html, baseURL: response.url ?? url)
             let jsonCaption = embeddedSocialCaption(in: html)
@@ -908,12 +916,13 @@ final class SocialLinkReviewCandidateService {
                 resolvedURL: response.url?.absoluteString ?? url.absoluteString,
                 title: title,
                 description: description,
+                keywords: keywords,
                 imageURL: imageURL,
                 videoURL: videoURL,
                 jsonCaption: jsonCaption
             )
         } catch {
-            return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
+            return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, keywords: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
         }
     }
 
@@ -1366,6 +1375,57 @@ final class SocialLinkReviewCandidateService {
             confidence: min((address.isEmpty ? 0.52 : 0.6) + resolved.confidenceBoost, 0.85),
             missingInfo: missingInfo(tier: tier, hasAddress: !address.isEmpty),
             savedAt: Date()
+        )
+    }
+
+    private func dianpingCandidate(from evidenceText: String, sourceURL: String) -> PendingReviewCandidate? {
+        guard let context = dianpingLinkContext(sourceURL: sourceURL) else { return nil }
+        guard let name = dianpingBusinessName(in: evidenceText) else { return nil }
+
+        let address = streetAddressLine(in: evidenceText) ?? firstLocationPin(in: evidenceText) ?? locatedCity(in: evidenceText) ?? cityAddress(in: evidenceText) ?? ""
+        let category = category(from: "\(name) \(evidenceText)")
+        let diagnostic = SocialPlaceEvidenceDiagnostic(
+            found: appendUnique(
+                [
+                    "Source URL: \(sourceURL)",
+                    context.identifierEvidence,
+                    "Dianping business clue: \(name)"
+                ],
+                [
+                    address.isEmpty ? "" : "Address/location clue: \(address)",
+                    dianpingKeywordsEvidence(in: evidenceText) ?? "",
+                    dianpingTitleEvidence(in: evidenceText) ?? ""
+                ]
+            ),
+            attempts: appendUnique(
+                analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
+                [
+                    "Detected Dianping source metadata",
+                    "Preferred Dianping keywords/business field over generic feed title",
+                    "Prepared China place-provider refinement query",
+                    "Kept Dianping match in Review until provider coordinates or user confirmation"
+                ]
+            ),
+            missingFields: appendUnique(address.isEmpty ? ["Verified address"] : [], ["Verified coordinates", "User confirmation required"]),
+            nextBestClue: address.isEmpty
+                ? "Confirm the exact Dianping listing or share an AMap/Baidu/Google Maps link before saving this as a Map Stamp."
+                : "Confirm the provider match and coordinates before saving this Dianping clue as a Map Stamp."
+        )
+
+        return PendingReviewCandidate(
+            candidateName: name,
+            address: address,
+            category: category,
+            latitude: nil,
+            longitude: nil,
+            sourceURL: sourceURL,
+            sourceText: evidenceText.isEmpty ? nil : evidenceText,
+            evidence: diagnostic.found + diagnostic.attempts + ["Dianping source stays review-only until verified"],
+            confidence: address.isEmpty ? 0.58 : 0.66,
+            missingInfo: diagnostic.missingFields,
+            savedAt: Date(),
+            evidenceDiagnostic: diagnostic,
+            reviewState: "review_candidate"
         )
     }
 
@@ -2094,6 +2154,90 @@ final class SocialLinkReviewCandidateService {
         return nil
     }
 
+    private func dianpingLinkContext(sourceURL: String) -> DianpingLinkContext? {
+        guard let url = URL(string: sourceURL),
+              let host = url.host()?.lowercased(),
+              host.matchesSocialDomain("dianping.com") || host.matchesSocialDomain("dpurl.cn"),
+              let feedID = dianpingFeedID(in: url) else {
+            return nil
+        }
+        return DianpingLinkContext(feedID: feedID)
+    }
+
+    private func dianpingFeedID(in url: URL) -> String? {
+        let path = url.path
+        if let id = firstCapture(in: path, pattern: #"/feeddetail/([A-Za-z0-9_-]{4,})"#) {
+            return id
+        }
+        let components = url.pathComponents
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")) }
+            .filter { !$0.isEmpty }
+        if url.host()?.lowercased().matchesSocialDomain("dpurl.cn") == true {
+            return components.last
+        }
+        return components.reversed().first { value in
+            value.range(of: #"^[A-Za-z0-9_-]{4,}$"#, options: .regularExpression) != nil
+        }
+    }
+
+    private func dianpingBusinessName(in evidenceText: String) -> String? {
+        if let keywords = dianpingKeywords(in: evidenceText) {
+            let candidates = keywords
+                .components(separatedBy: CharacterSet(charactersIn: ",，、|｜;；"))
+                .map(cleanDianpingBusinessName)
+                .filter { !$0.isEmpty }
+            if let best = candidates.first(where: isLikelyDianpingBusinessName) {
+                return best
+            }
+        }
+        let titleCandidates = evidenceText
+            .components(separatedBy: .newlines)
+            .compactMap { line -> String? in
+                let cleaned = cleanHTMLText(line)
+                guard cleaned.range(of: #"(?i)^(?:Title|og:title|Dianping title)\s*[:：]"#, options: .regularExpression) != nil else { return nil }
+                return cleaned
+                    .replacingOccurrences(of: #"(?i)^(?:Title|og:title|Dianping title)\s*[:：]\s*"#, with: "", options: .regularExpression)
+            }
+            .map(cleanDianpingBusinessName)
+        return titleCandidates.first(where: isLikelyDianpingBusinessName)
+    }
+
+    private func dianpingKeywords(in evidenceText: String) -> String? {
+        firstCapture(in: evidenceText, pattern: #"(?im)^\s*(?:Keywords|keywords|Dianping keywords)\s*[:：]\s*([^\n\r]+)"#)
+            .map(cleanHTMLText)
+    }
+
+    private func dianpingKeywordsEvidence(in evidenceText: String) -> String? {
+        dianpingKeywords(in: evidenceText).map { "Dianping keywords: \($0)" }
+    }
+
+    private func dianpingTitleEvidence(in evidenceText: String) -> String? {
+        firstCapture(in: evidenceText, pattern: #"(?im)^\s*(?:Title|og:title|Dianping title)\s*[:：]\s*([^\n\r]+)"#)
+            .map(cleanHTMLText)
+            .map { "Dianping title: \($0)" }
+    }
+
+    private func cleanDianpingBusinessName(_ value: String) -> String {
+        cleanCandidateName(value)
+            .replacingOccurrences(of: #"(?i)\s*(?:大众点评|大眾點評|dianping).*$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r,，.。:：;；|｜-–—"))
+    }
+
+    private func isLikelyDianpingBusinessName(_ value: String) -> Bool {
+        guard isUsableCandidateName(value), !looksLikeMarketingLine(value), !looksLikeAddressLine(value) else {
+            return false
+        }
+        let generic = [
+            "青岛崂山", "青島嶗山", "住到了人生酒店", "人生酒店", "酒店", "民宿", "美食", "攻略", "大众点评", "大眾點評"
+        ]
+        if generic.contains(value) { return false }
+        if value.range(of: #"不要放過|不要放过|攻略|推薦|推荐|住到了|人生|五一|20\+"#, options: .regularExpression) != nil {
+            return false
+        }
+        return true
+    }
+
     private func cityQualifiedVenuePhrase(in text: String) -> String? {
         firstCapture(in: text, pattern: #"((?:台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)的(?!(?:那間店|那家店|這間店|这间店|這家店|这家店|那個地方|那个地方))[^\n\r，,。！!？?@#]{2,24})"#)
             .map(cleanHTMLText)
@@ -2114,6 +2258,14 @@ final class SocialLinkReviewCandidateService {
         var platformName: String
         var id: String
         var siteQuery: String
+    }
+
+    private struct DianpingLinkContext {
+        var feedID: String
+
+        var identifierEvidence: String {
+            "Dianping feed id: \(feedID)"
+        }
     }
 
     private struct XiaohongshuLinkContext {
@@ -2172,6 +2324,10 @@ final class SocialLinkReviewCandidateService {
             guard let id = components.reversed().first(where: { $0.count >= 4 && $0 != "/" })?.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")),
                   !id.isEmpty else { return nil }
             return SocialPostDescriptor(platformName: "douyin", id: id, siteQuery: "site:douyin.com \(id)")
+        }
+        if host.matchesSocialDomain("dianping.com") || host.matchesSocialDomain("dpurl.cn") {
+            guard let id = dianpingFeedID(in: descriptorURL) else { return nil }
+            return SocialPostDescriptor(platformName: "dianping", id: id, siteQuery: "site:dianping.com \(id)")
         }
         return nil
     }
@@ -2288,6 +2444,7 @@ final class SocialLinkReviewCandidateService {
         if url.host?.lowercased().contains("instagram") == true { return "Instagram link" }
         if url.host?.lowercased().matchesSocialDomain("xiaohongshu.com") == true || url.host?.lowercased().matchesSocialDomain("xhslink.com") == true { return "Xiaohongshu link" }
         if url.host?.lowercased().matchesSocialDomain("douyin.com") == true || url.host?.lowercased().matchesSocialDomain("iesdouyin.com") == true { return "Douyin link" }
+        if url.host?.lowercased().matchesSocialDomain("dianping.com") == true || url.host?.lowercased().matchesSocialDomain("dpurl.cn") == true { return "Dianping link" }
         return "Social link"
     }
 

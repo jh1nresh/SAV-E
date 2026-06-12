@@ -2688,6 +2688,8 @@ private struct PlaceSourceEvidencePanel: View {
             return "Xiaohongshu"
         case .douyin:
             return "Douyin"
+        case .dianping:
+            return "Dianping"
         case .amap:
             return "Amap"
         case .baidu:

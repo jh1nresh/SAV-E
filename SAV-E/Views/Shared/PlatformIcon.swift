@@ -18,6 +18,7 @@ struct PlatformIcon: View {
         case .threads: return "at"
         case .xiaohongshu: return "book.fill"
         case .douyin: return "play.rectangle.fill"
+        case .dianping: return "fork.knife"
         case .googleMaps: return "map.fill"
         case .amap: return "map.circle.fill"
         case .baidu: return "mappin.circle.fill"
@@ -27,7 +28,7 @@ struct PlatformIcon: View {
 
     private var iconColor: Color {
         switch platform {
-        case .instagram, .threads, .xiaohongshu, .douyin, .googleMaps, .amap, .baidu: return .saveCocoa
+        case .instagram, .threads, .xiaohongshu, .douyin, .dianping, .googleMaps, .amap, .baidu: return .saveCocoa
         case .other: return .saveMutedText
         }
     }

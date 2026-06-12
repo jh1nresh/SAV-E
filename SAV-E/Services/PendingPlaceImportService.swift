@@ -889,6 +889,7 @@ extension SourcePlatform {
         if host.matchesDomain("threads.net") || host.matchesDomain("threads.com") { return .threads }
         if host.matchesDomain("xiaohongshu.com") || host.matchesDomain("xhslink.com") { return .xiaohongshu }
         if host.matchesDomain("douyin.com") || host.matchesDomain("iesdouyin.com") { return .douyin }
+        if host.matchesDomain("dianping.com") || host.matchesDomain("dpurl.cn") { return .dianping }
         if host.matchesDomain("amap.com") { return .amap }
         if host.isGoogleMapsHost(path: url.path, queryItems: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems) {
             return .googleMaps

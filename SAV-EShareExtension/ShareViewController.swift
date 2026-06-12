@@ -922,6 +922,7 @@ struct ShareExtensionView: View {
         if sourceURL.contains("tiktok.com") { return "Found from TikTok" }
         if sourceURL.contains("xiaohongshu.com") || sourceURL.contains("xhslink.com") { return "Found from Xiaohongshu" }
         if sourceURL.contains("douyin.com") || sourceURL.contains("iesdouyin.com") { return "Found from Douyin" }
+        if sourceURL.contains("dianping.com") || sourceURL.contains("dpurl.cn") { return "Found from Dianping" }
         if sourceURL.contains("pin.it") || sourceURL.contains("pinterest.") { return "Found from Pinterest" }
         return "Found from shared link"
     }
@@ -2982,7 +2983,9 @@ struct ShareExtensionView: View {
             host.hasSuffix("threads.net") ||
             host.hasSuffix("threads.com") ||
             host.hasSuffix("tiktok.com") ||
-            host.hasSuffix("douyin.com")
+            host.hasSuffix("douyin.com") ||
+            host == "dpurl.cn" ||
+            host.hasSuffix("dianping.com")
     }
 
     private func deterministicMapPlace(from content: String, title: String, text: String) -> ParsedPlace? {
