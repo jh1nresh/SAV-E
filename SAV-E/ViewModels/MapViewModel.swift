@@ -374,6 +374,7 @@ final class MapViewModel: ObservableObject {
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
+    private var routeCalculationID = UUID()
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
@@ -886,6 +887,7 @@ final class MapViewModel: ObservableObject {
             .map { $0.asPlace(createdAt: $0.addedAt) }
         guard !routePlaces.isEmpty else { return }
 
+        let calculationID = invalidateRouteCalculation()
         routeCoordinates = routePlaces.map(\.coordinate)
         calculatedRoute = nil
 
@@ -898,7 +900,7 @@ final class MapViewModel: ObservableObject {
         if let region = regionContaining(routePlaces) {
             cameraPosition = .region(region)
         }
-        await calculateRoute(for: routePlaces)
+        await calculateRoute(for: routePlaces, calculationID: calculationID)
     }
 
     private func refinedMatchIfNeeded(for candidate: PlaceReviewCandidate) async throws -> GooglePlaceMatch? {
@@ -1346,8 +1348,7 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
         selectedCategories = []
         activeFilter = nil
-        routeCoordinates = []
-        calculatedRoute = nil
+        clearRoute()
     }
 
     func selectMapFeature(_ feature: MapFeature?) {
@@ -1425,8 +1426,7 @@ final class MapViewModel: ObservableObject {
             selectedPlace = nil
         }
         activeFilter?.remove(place.id)
-        routeCoordinates.removeAll()
-        calculatedRoute = nil
+        clearRoute()
 
         do {
             try await supabaseService.deletePlace(place.id)
@@ -1660,10 +1660,12 @@ final class MapViewModel: ObservableObject {
     func apply(_ action: MapActionData) {
         switch action.type {
         case .filterPins:
+            clearRoute()
             let ids = Set((action.placeIds ?? []).compactMap { UUID(uuidString: $0) })
             activeFilter = ids.isEmpty ? nil : ids
 
         case .focusRegion:
+            clearRoute()
             guard let lat = action.lat, let lng = action.lng else { return }
             let span = action.span ?? 0.03
             if let candidate = mapCandidate(nearLatitude: lat, longitude: lng) {
@@ -1678,25 +1680,38 @@ final class MapViewModel: ObservableObject {
             let orderedIds = action.placeIds ?? []
             let idToPlace = Dictionary(uniqueKeysWithValues: places.map { ($0.id.uuidString, $0) })
             let routePlaces = orderedIds.compactMap { idToPlace[$0] }
+            let calculationID = invalidateRouteCalculation()
             routeCoordinates = routePlaces.map { $0.coordinate }
             activeFilter = Set(routePlaces.map { $0.id })
             if let region = regionContaining(routePlaces) {
                 cameraPosition = .region(region)
             }
-            Task { await calculateRoute(for: routePlaces) }
+            Task { await calculateRoute(for: routePlaces, calculationID: calculationID) }
 
         case .resetPins:
             activeFilter = nil
-            routeCoordinates = []
-            calculatedRoute = nil
+            clearRoute()
         }
     }
 
     // MARK: - Route Calculation
 
-    private func calculateRoute(for places: [Place]) async {
-        guard places.count >= 2 else { return }
+    @discardableResult
+    private func invalidateRouteCalculation() -> UUID {
+        routeCalculationID = UUID()
+        return routeCalculationID
+    }
+
+    private func clearRoute() {
+        invalidateRouteCalculation()
+        routeCoordinates = []
         calculatedRoute = nil
+    }
+
+    private func calculateRoute(for places: [Place], calculationID: UUID) async {
+        guard calculationID == routeCalculationID else { return }
+        calculatedRoute = nil
+        guard places.count >= 2 else { return }
 
         var allCoordinates: [CLLocationCoordinate2D] = []
 
@@ -1713,6 +1728,7 @@ final class MapViewModel: ObservableObject {
             do {
                 let directions = MKDirections(request: request)
                 let response = try await directions.calculate()
+                guard calculationID == routeCalculationID else { return }
                 if let route = response.routes.first {
                     let points = route.polyline.points()
                     let count = route.polyline.pointCount
@@ -1721,6 +1737,7 @@ final class MapViewModel: ObservableObject {
                     }
                 }
             } catch {
+                guard calculationID == routeCalculationID else { return }
                 print("Route calculation failed for segment \(i): \(error)")
                 // Fallback: add straight line for this segment
                 allCoordinates.append(places[i].coordinate)
@@ -1728,6 +1745,7 @@ final class MapViewModel: ObservableObject {
             }
         }
 
+        guard calculationID == routeCalculationID else { return }
         guard allCoordinates.count >= 2 else { return }
         calculatedRoute = MKPolyline(coordinates: allCoordinates, count: allCoordinates.count)
     }

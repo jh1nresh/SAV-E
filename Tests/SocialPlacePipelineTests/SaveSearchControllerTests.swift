@@ -686,6 +686,11 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.componentType, .tripItinerary)
         XCTAssertEqual(response.mapAction?.type, .showRoute)
         XCTAssertEqual(Set(response.placeIds), Set([taco.id.uuidString, coffee.id.uuidString]))
+
+        drawer.returnToCommands()
+
+        XCTAssertEqual(drawer.drawerState, .idle)
+        XCTAssertEqual(drawer.mapAction?.type, .resetPins)
     }
 
     @MainActor
@@ -1521,6 +1526,65 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(map.selectedCategories.isEmpty)
         XCTAssertNil(map.activeFilter)
         XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+    }
+
+    @MainActor
+    func testMapNonRouteActionsClearStaleTripRoute() {
+        let map = MapViewModel()
+        var route = [
+            CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437),
+            CLLocationCoordinate2D(latitude: 34.1184, longitude: -118.3004)
+        ]
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+
+        map.apply(MapActionData(
+            type: .filterPins,
+            placeIds: [UUID().uuidString],
+            lat: nil,
+            lng: nil,
+            span: nil
+        ))
+
+        XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+        map.apply(MapActionData(
+            type: .focusRegion,
+            placeIds: nil,
+            lat: 34.0522,
+            lng: -118.2437,
+            span: 0.03
+        ))
+
+        XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+    }
+
+    @MainActor
+    func testShortShowRouteActionClearsStaleTripRoute() async {
+        let savedPlace = place(name: "Saved Stop", address: "Los Angeles, CA", category: .food)
+        let map = MapViewModel()
+        var route = [
+            CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437),
+            CLLocationCoordinate2D(latitude: 34.1184, longitude: -118.3004)
+        ]
+        map.places = [savedPlace]
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+
+        map.apply(MapActionData(
+            type: .showRoute,
+            placeIds: [savedPlace.id.uuidString, UUID().uuidString],
+            lat: nil,
+            lng: nil,
+            span: nil
+        ))
+        await Task.yield()
+
         XCTAssertNil(map.calculatedRoute)
     }
 

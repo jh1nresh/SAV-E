@@ -271,6 +271,7 @@ final class AIDrawerViewModel: ObservableObject {
         query = ""
         conversationTurns = []
         lastSaveSearchResponse = nil
+        mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }
 
     func returnToCommands() {
@@ -278,6 +279,7 @@ final class AIDrawerViewModel: ObservableObject {
         drawerState = .idle
         query = ""
         lastSaveSearchResponse = nil
+        mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }
 
     func cancelCurrentRequest() {
@@ -285,6 +287,7 @@ final class AIDrawerViewModel: ObservableObject {
         drawerState = .idle
         query = ""
         lastSaveSearchResponse = nil
+        mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }
 
     func showMessage(title: String, message: String) {
