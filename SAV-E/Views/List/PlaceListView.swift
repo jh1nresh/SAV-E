@@ -79,6 +79,8 @@ struct PlaceListView: View {
                         Task { await viewModel.saveMapCandidate(result) }
                     } onPlanAround: { result in
                         viewModel.planAround(result)
+                    } onSearchPublicNearby: {
+                        viewModel.searchPublicNearbyNow()
                     }
                 } else if viewModel.filteredPlaces.isEmpty {
                     EmptyStateView(
@@ -149,6 +151,9 @@ struct PlaceListView: View {
                     traditionalChinese: "搜尋地圖章、線索或推薦..."
                 )
             )
+            .onChange(of: viewModel.searchText) { _, _ in
+                viewModel.prepareMapCandidatesIfNeeded()
+            }
             .navigationDestination(for: Place.self) { place in
                 PlaceDetailView(place: place) {
                     try await viewModel.deletePlace(place)
@@ -210,6 +215,7 @@ private struct SaveSearchResultsList: View {
     let savingResultID: String?
     let onSaveMapCandidate: (SaveSearchResult) -> Void
     let onPlanAround: (SaveSearchResult) -> Void
+    let onSearchPublicNearby: () -> Void
 
     var body: some View {
         ScrollView {
@@ -218,13 +224,15 @@ private struct SaveSearchResultsList: View {
                     section: response.fromYourSave,
                     savingResultID: savingResultID,
                     onSaveMapCandidate: onSaveMapCandidate,
-                    onPlanAround: onPlanAround
+                    onPlanAround: onPlanAround,
+                    onSearchPublicNearby: onSearchPublicNearby
                 )
                 SaveSearchSectionView(
                     section: response.newRecommendations,
                     savingResultID: savingResultID,
                     onSaveMapCandidate: onSaveMapCandidate,
-                    onPlanAround: onPlanAround
+                    onPlanAround: onPlanAround,
+                    onSearchPublicNearby: onSearchPublicNearby
                 )
             }
             .padding(.horizontal, 16)
@@ -235,10 +243,12 @@ private struct SaveSearchResultsList: View {
 }
 
 private struct SaveSearchSectionView: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     let section: SaveSearchSection
     let savingResultID: String?
     let onSaveMapCandidate: (SaveSearchResult) -> Void
     let onPlanAround: (SaveSearchResult) -> Void
+    let onSearchPublicNearby: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -252,12 +262,34 @@ private struct SaveSearchSectionView: View {
             }
 
             if section.results.isEmpty {
-                Text(section.emptyMessage ?? "No results yet.")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .saveNotebookPage(cornerRadius: 14)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(section.emptyMessage ?? "No results yet.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.saveCocoa)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if section.showsNearbySearchAction {
+                        Button {
+                            onSearchPublicNearby()
+                        } label: {
+                            Label(
+                                languageSettings.localized(
+                                    english: "Search public nearby options",
+                                    traditionalChinese: "搜尋附近公開選項"
+                                ),
+                                systemImage: "location.magnifyingglass"
+                            )
+                                .font(.caption2.weight(.black))
+                                .foregroundColor(.saveInk)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.saveHoney)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(12)
+                .saveNotebookPage(cornerRadius: 14)
             } else {
                 ForEach(section.results) { result in
                     SaveSearchResultCard(

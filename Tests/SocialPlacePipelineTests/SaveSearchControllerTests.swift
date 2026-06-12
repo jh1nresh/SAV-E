@@ -1499,6 +1499,35 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaceListPublicNearbyActionFetchesMapCandidates() async {
+        let candidate = SaveMapCandidate(
+            title: "Boba Harmony",
+            subtitle: "Santa Ana, CA",
+            latitude: 33.744,
+            longitude: -117.867,
+            category: .cafe,
+            rating: 4.9,
+            reviewCount: 81,
+            distanceMeters: 8_700,
+            evidence: ["Apple Maps result"]
+        )
+        let mapSearch = RecordingMapCandidateSearchService(candidates: [candidate])
+        let viewModel = PlaceListViewModel(mapCandidateSearchService: mapSearch)
+        viewModel.places = []
+        viewModel.searchText = "幫我找附近的珍珠奶茶 推薦我一家"
+
+        viewModel.searchPublicNearbyNow()
+        for _ in 0..<20 {
+            if !viewModel.mapCandidates.isEmpty { break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        XCTAssertEqual(mapSearch.matchingRequests.map(\.query), ["boba milk tea"])
+        XCTAssertEqual(viewModel.mapCandidates.map(\.title), ["Boba Harmony"])
+        XCTAssertEqual(viewModel.saveSearchResponse.newRecommendations.results.map(\.title), ["Boba Harmony"])
+    }
+
+    @MainActor
     func testMapSearchClearRemovesUnsavedPinsAndCategoryFilter() {
         let map = MapViewModel()
         let candidate = SaveMapCandidate(

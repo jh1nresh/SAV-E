@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import MapKit
 
 enum PlaceFilter: String, CaseIterable {
     case all = "All"
@@ -59,6 +60,8 @@ final class PlaceListViewModel: ObservableObject {
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private let searchController: SaveSearchController
     private let planAroundController: SavePlanAroundController
+    private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
+    private var mapCandidateSearchTask: Task<Void, Never>?
     private var importedPendingKeys: Set<String> = []
 
     init(
@@ -67,7 +70,8 @@ final class PlaceListViewModel: ObservableObject {
         saveLocalVaultService: SaveLocalVaultService = .shared,
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
         searchController: SaveSearchController = SaveSearchController(),
-        planAroundController: SavePlanAroundController = SavePlanAroundController()
+        planAroundController: SavePlanAroundController = SavePlanAroundController(),
+        mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService()
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
@@ -76,6 +80,11 @@ final class PlaceListViewModel: ObservableObject {
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
         self.searchController = searchController
         self.planAroundController = planAroundController
+        self.mapCandidateSearchService = mapCandidateSearchService
+    }
+
+    deinit {
+        mapCandidateSearchTask?.cancel()
     }
 
     var filteredPlaces: [Place] {
@@ -399,5 +408,66 @@ final class PlaceListViewModel: ObservableObject {
             print("Failed to delete place: \(error)")
             throw error
         }
+    }
+
+    // MARK: - Public discovery preparation for intelligent search
+    func prepareMapCandidatesIfNeeded(force: Bool = false) {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        mapCandidateSearchTask?.cancel()
+
+        let shouldPrepare = force || searchController.shouldPrepareMapCandidates(for: query) || isLikelyPublicDiscoveryKeyword(query)
+        guard shouldPrepare, !query.isEmpty else {
+            if !force { self.mapCandidates = [] }
+            return
+        }
+
+        if force {
+            mapCandidateSearchTask = Task { [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                await self.fetchMapCandidates(for: query)
+            }
+            return
+        }
+
+        mapCandidateSearchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await self.fetchMapCandidates(for: query)
+        }
+    }
+
+    func searchPublicNearbyNow() {
+        prepareMapCandidatesIfNeeded(force: true)
+    }
+
+    private func fetchMapCandidates(for query: String) async {
+        let exact = searchController.exactMapCandidateQuery(for: query)
+        let specialty = searchController.specialtyMapCandidateQuery(for: query)
+        let searchQuery = (exact ?? specialty ?? query).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !searchQuery.isEmpty else { return }
+
+        let coordinate = LocationService.shared.currentLocation?.coordinate
+        let span = MKCoordinateSpan(latitudeDelta: 0.12, longitudeDelta: 0.12)
+        let candidates = await mapCandidateSearchService.searchCandidates(
+            matching: searchQuery,
+            near: coordinate,
+            span: span,
+            excluding: places
+        )
+        await MainActor.run {
+            guard self.searchText.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+            self.mapCandidates = candidates
+        }
+    }
+
+    private func isLikelyPublicDiscoveryKeyword(_ value: String) -> Bool {
+        let normalized = value
+            .folding(options: [.diacriticInsensitive, .widthInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+        let needles = [
+            "waffle", "pancake", "brunch", "coffee", "dessert", "boba",
+            "鬆餅", "松餅", "拉麵", "拉面", "壽司", "寿司", "奶茶"
+        ]
+        return needles.contains { normalized.contains($0) }
     }
 }
