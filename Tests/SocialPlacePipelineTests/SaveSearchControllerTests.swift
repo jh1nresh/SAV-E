@@ -600,6 +600,40 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testDrawerExactSavedPlaceSearchFiltersPinsWithoutAI() async {
+        let client = StubGroundedAnswerClient(answer: "Invented public answer.")
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        let saved = place(
+            name: "Rise Bagels",
+            address: "Irvine, CA",
+            category: .cafe
+        )
+        drawer.places = [saved]
+        drawer.mapCandidates = [
+            SaveMapCandidate(
+                title: "Public Bagel Shop",
+                subtitle: "Irvine, CA",
+                latitude: 33.6846,
+                longitude: -117.8265,
+                category: .cafe,
+                evidence: ["Visible on public map"]
+            )
+        ]
+        drawer.query = "Rise Bagels"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected grounded saved search results")
+        }
+        XCTAssertEqual(client.requests.count, 0)
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Rise Bagels"])
+        XCTAssertTrue(response.newRecommendations.results.isEmpty)
+        XCTAssertEqual(drawer.mapAction?.type, .filterPins)
+        XCTAssertEqual(drawer.mapAction?.placeIds, [saved.id.uuidString])
+    }
+
+    @MainActor
     func testDrawerUsesLLMParsedIntentWhenDeterministicParserMissesCategory() async {
         let parsedIntent = SaveSearchIntent(
             rawText: "where should i go for brunch nearby",
