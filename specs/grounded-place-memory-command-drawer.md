@@ -435,8 +435,8 @@ Ask about your places...
 With one of:
 
 ```text
-Search or plan from your saved places...
-Ask SAV-E where to go...
+Ask saved places or paste a spot...
+Save or find a place...
 ```
 
 ### Suggested chips
@@ -445,9 +445,10 @@ Use chips as examples/shortcuts, not as hard modes or tabs. The drawer must stil
 
 ```text
 Search saved places
-Plan a day
 Find boba
 Review clues
+Open my map
+Share a place
 Import a link
 ```
 

@@ -26,6 +26,45 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertEqual(SaveSearchUserState.sourceOnly.displayName(language: .english), "Needs one more clue")
     }
 
+    func testMVPDrawerEntryCopyDoesNotPromoteTripPlanning() {
+        XCTAssertEqual(
+            SaveText.text(.askPlaceholder, language: .english),
+            "Ask saved places or paste a spot..."
+        )
+        XCTAssertEqual(
+            SaveText.text(.askPlaceholder, language: .traditionalChinese),
+            "問你存過的地點，或貼上一個新地點..."
+        )
+
+        let englishSuggestions = SaveMVPDrawerEntryCopy.suggestions(language: .english)
+        XCTAssertEqual(englishSuggestions, [
+            "Paste a place link",
+            "Search saved places",
+            "Find boba from my saved places",
+            "Review clues",
+            "Open my map",
+            "Share a place"
+        ])
+        XCTAssertFalse(englishSuggestions.contains { suggestion in
+            suggestion.localizedCaseInsensitiveContains("plan") ||
+                suggestion.localizedCaseInsensitiveContains("trip") ||
+                suggestion.localizedCaseInsensitiveContains("itinerary")
+        })
+
+        let chineseSuggestions = SaveMVPDrawerEntryCopy.suggestions(language: .traditionalChinese)
+        XCTAssertEqual(chineseSuggestions, [
+            "貼上地點連結",
+            "搜尋已保存地點",
+            "從已保存地點找珍奶",
+            "確認線索",
+            "打開我的地圖",
+            "分享一個地點"
+        ])
+        XCTAssertFalse(chineseSuggestions.contains { $0.contains("行程") || $0.contains("規劃") })
+        XCTAssertTrue(SaveMVPDrawerEntryCopy.focusNote(language: .english).contains("place-memory loop"))
+        XCTAssertTrue(SaveMVPDrawerEntryCopy.focusNote(language: .traditionalChinese).contains("地點記憶流程"))
+    }
+
     func testLanguageSettingsTracksObservationForEnvironmentConsumers() {
         let suiteName = "AppLanguageSettingsTests.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: suiteName)!

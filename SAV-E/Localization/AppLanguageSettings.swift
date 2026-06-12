@@ -357,3 +357,35 @@ enum SaveText {
         }
     }
 }
+
+enum SaveMVPDrawerEntryCopy {
+    static func suggestions(language: AppLanguage) -> [String] {
+        switch language {
+        case .english:
+            return [
+                "Paste a place link",
+                "Search saved places",
+                "Find boba from my saved places",
+                "Review clues",
+                "Open my map",
+                "Share a place"
+            ]
+        case .traditionalChinese:
+            return [
+                "貼上地點連結",
+                "搜尋已保存地點",
+                "從已保存地點找珍奶",
+                "確認線索",
+                "打開我的地圖",
+                "分享一個地點"
+            ]
+        }
+    }
+
+    static func focusNote(language: AppLanguage) -> String {
+        language.localized(
+            english: "MVP focus: capture place clues, review evidence, save Map Stamps, then search, recommend, open, or share from your saved memory. Full itinerary planning stays in the background until the place-memory loop is reliable.",
+            traditionalChinese: "MVP 主線：收進地點線索、檢查證據、保存成地圖章，再從已保存記憶搜尋、推薦、開地圖或分享。完整行程規劃先退到背景，等地點記憶流程穩定後再推。"
+        )
+    }
+}

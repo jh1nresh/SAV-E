@@ -974,24 +974,7 @@ struct AIDrawerView: View {
     }
 
     private var suggestions: [String] {
-        switch languageSettings.language {
-        case .english:
-            return [
-                "Recommend nearby coffee",
-                "Coffee from my saved places first",
-                "What is nearby from my memory?",
-                "Show Review clues",
-                "Find public coffee nearby",
-            ]
-        case .traditionalChinese:
-            return [
-                "推薦附近咖啡",
-                "先從我存過的地方找咖啡",
-                "我的記憶裡附近有什麼？",
-                "顯示待確認線索",
-                "搜尋附近公開咖啡",
-            ]
-        }
+        SaveMVPDrawerEntryCopy.suggestions(language: languageSettings.language)
     }
 
     private var categoryFilterStrip: some View {
@@ -1020,10 +1003,7 @@ struct AIDrawerView: View {
             NotebookBandLabel(languageSettings.localized(english: "Public test focus", traditionalChinese: "Public test 主線"))
                 .padding(.horizontal, 16)
 
-            Text(languageSettings.localized(
-                english: "Start with saved places, Review clues, and clearly labeled public discovery. Friend signals and trip planning stay quiet until there is real shared memory.",
-                traditionalChinese: "先聚焦已保存地點、待確認線索，以及清楚標示的公開探索。朋友訊號和行程規劃等有真實共享記憶後再出現。"
-            ))
+            Text(SaveMVPDrawerEntryCopy.focusNote(language: languageSettings.language))
             .font(.caption.weight(.semibold))
             .foregroundColor(.saveCocoa.opacity(0.74))
             .fixedSize(horizontal: false, vertical: true)
