@@ -711,16 +711,19 @@ struct SocialPlaceParser {
             )
         }
 
+        let isDouyinAggregateList = looksLikeDouyinAggregateFoodList(text: text, sourceURL: evidence.sourceURL)
         var candidates: [SocialPlaceCandidateDraft] = []
         candidates.append(contentsOf: douyinFoodListCandidates(from: text, sourceURL: evidence.sourceURL))
-        candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
-        candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL))
-        candidates.append(contentsOf: englishStayCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
-        candidates.append(contentsOf: inferredAddressCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
-        candidates.append(contentsOf: addressOnlyCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
-        candidates.append(contentsOf: chineseVenueCandidates(from: text, sourceURL: evidence.sourceURL))
-        candidates.append(contentsOf: instagramMetadataTitleCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
-        candidates.append(contentsOf: handleOnlyCandidates(from: handleContexts, sourceURL: evidence.sourceURL, fullText: text, creatorHandles: creatorHandles))
+        if !isDouyinAggregateList || !candidates.isEmpty {
+            candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
+            candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL))
+            candidates.append(contentsOf: englishStayCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+            candidates.append(contentsOf: inferredAddressCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+            candidates.append(contentsOf: addressOnlyCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+            candidates.append(contentsOf: chineseVenueCandidates(from: text, sourceURL: evidence.sourceURL))
+            candidates.append(contentsOf: instagramMetadataTitleCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+            candidates.append(contentsOf: handleOnlyCandidates(from: handleContexts, sourceURL: evidence.sourceURL, fullText: text, creatorHandles: creatorHandles))
+        }
         candidates.append(contentsOf: ocrCandidates(from: evidence.ocrLines, sourceURL: evidence.sourceURL, fullText: text))
 
         let sourceType = sourceType(
@@ -1456,6 +1459,19 @@ struct SocialPlaceParser {
         return pRangeCount >= 2 && (hasDouyinSource || textHasDouyinURL)
     }
 
+    private func looksLikeDouyinAggregateFoodList(text: String, sourceURL: String) -> Bool {
+        let loweredURL = sourceURL.lowercased()
+        let hasDouyinSource = loweredURL.contains("douyin.com") ||
+            loweredURL.contains("iesdouyin.com") ||
+            text.contains("抖音") ||
+            text.range(of: #"(?i)https?://(?:www\.)?(?:v\.)?(?:ies)?douyin\.com/\S*"#, options: .regularExpression) != nil
+        guard hasDouyinSource else { return false }
+        return text.range(
+            of: #"(?:从|從)?\s*(?:\d{1,2}|[０-９]{1,2}|[一二三四五六七八九十]{1,3})\s*\+?\s*(?:間|家|個)?\s*(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡|咖啡廳|餐廳|餐厅|小吃|美食|店)"#,
+            options: .regularExpression
+        ) != nil
+    }
+
     private func douyinVenueName(from body: String) -> String? {
         var value = body
             .replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
@@ -1911,6 +1927,9 @@ struct SocialPlaceParser {
         if looksLikeDouyinFoodList(text: text, sourceURL: sourceURL), candidates.count >= 2 {
             return .multiPlaceList
         }
+        if looksLikeDouyinAggregateFoodList(text: text, sourceURL: sourceURL), candidates.isEmpty {
+            return .multiPlaceList
+        }
         if candidates.count == 1 {
             return .singleVenuePost
         }
@@ -2084,7 +2103,7 @@ struct SocialPlaceParser {
 
     private func isPlaceListRecommendation(_ text: String) -> Bool {
         guard !text.isEmpty else { return false }
-        let countPattern = #"(?:\d{1,2}|[０-９]{1,2}|[一二三四五六七八九十]{1,3})"#
+        let countPattern = #"(?:\d{1,2}|[０-９]{1,2}|[一二三四五六七八九十]{1,3})\s*\+?"#
         let patterns = [
             #"\b(?:best|top|favorite|favourite|must[- ]?try|recommended?)\s+\d{1,2}\s+(?:restaurants?|cafes?|coffee shops?|dessert shops?|ice shops?|places to eat|food spots?)\b"#,
             #"(?:推薦|精選|必吃|必去|收藏)\s*"# + countPattern + #"\s*(?:間|家|個)?\s*(?:冰店|冰品|剉冰|刨冰|甜點|甜品|咖啡|咖啡廳|餐廳|餐厅|小吃|美食|店)"#,
@@ -2228,6 +2247,7 @@ struct SocialPlaceParser {
             #"(?i)\bOrange County\b"#,
             #"(?i)\bOC\b"#,
             #"(?i)#(losangeles|lacoffee|orangecounty|ocfood|tokyo|taipei|seoul|paris|london|newyork)\b"#,
+            #"(北京|上海|廣州|广州|深圳|杭州|南京|成都|重慶|重庆|武漢|武汉|西安|青島|青岛|廈門|厦门|長沙|长沙)(?=[^\n\r]{0,20}(?:攻略|推薦|推荐|必吃|美食|餐廳|餐厅|小吃|咖啡|甜點|甜品|店))"#,
             #"(士林|西門|大安|信義|萬華|中山|松山|內湖|板橋|新莊|蘆洲)(?=[📍\s·・:：-]{0,4}[^\n\r]{0,40}(?:壽喜燒|寿喜烧|漢堡排|日本料理|日式料理|餐廳|餐厅|美食|咖啡|甜點|甜品|小吃))"#,
             #"(台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)(?=的(?!(?:那間店|那家店|這間店|这间店|這家店|这家店|那個地方|那个地方))[^\n\r，,。！!？?@#]{2,24})"#,
             #"(台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)(?=[^\n\r]{0,12}(?:冰店|冰品|剉冰|刨冰|小吃|美食|餐廳|餐厅|甜點|甜品|咖啡廳|推薦|必吃|吃什麼))"#,

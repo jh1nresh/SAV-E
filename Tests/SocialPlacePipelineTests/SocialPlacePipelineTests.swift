@@ -1754,6 +1754,56 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(names.contains("已经开到上海咯"))
     }
 
+    func testDouyinNoisyAggregateShareStaysMultiPlaceSourceOnly() {
+        let noisyShareText = """
+        9.41 复制打开抖音，看看【金贵七七（环游中国版）的作品】五一大家不要放过武汉！三刷武汉后从20+家美食里筛...
+        https://v.douyin.com/1GiTQ8dM5U8/
+        05/20 JIi:/ f@o.Qk :9pm
+        """
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://v.douyin.com/1GiTQ8dM5U8/",
+                resolvedURL: "https://www.iesdouyin.com/share/video/7628919504407399680/",
+                sharedTitle: nil,
+                sharedText: noisyShareText,
+                metadataTitle: "抖音",
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertEqual(analysis.sourceType, .multiPlaceList)
+        XCTAssertEqual(analysis.sourceIntent, .multiPlaceList)
+        XCTAssertEqual(analysis.resolverDecision.kind, .multiPlaceList)
+        XCTAssertTrue(analysis.isPlaceBearing)
+        XCTAssertTrue(analysis.placesFound.isEmpty)
+        XCTAssertTrue(analysis.recoveryStrategies.contains(.listMode))
+        XCTAssertTrue(analysis.regionClues.contains("武汉") || analysis.regionClues.contains("武漢"))
+    }
+
+    func testDouyinNoisyAggregateShareDoesNotInventRestaurantCoordinates() {
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            9.41 复制打开抖音，看看【金贵七七（环游中国版）的作品】五一大家不要放过武汉！三刷武汉后从20+家美食里筛...
+            https://v.douyin.com/1GiTQ8dM5U8/
+            05/20 JIi:/ f@o.Qk :9pm
+            """,
+            sourceURL: "https://v.douyin.com/1GiTQ8dM5U8/"
+        )
+
+        let candidate = try! XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidate.reviewState, "unresolved_place_candidate")
+        XCTAssertEqual(candidate.latitude, nil)
+        XCTAssertEqual(candidate.longitude, nil)
+        XCTAssertTrue(candidate.address.isEmpty)
+        XCTAssertFalse(candidate.hasReliableCoordinates)
+        XCTAssertTrue(candidate.missingInfo.contains("Verified address"))
+        XCTAssertTrue(candidate.evidenceDiagnostic?.recoveryPlan?.decision == .multiPlaceList)
+        XCTAssertTrue(candidate.evidenceDiagnostic?.recoveryPlan?.requiredEvidence.contains("Map/place match") == true)
+    }
+
     func testInstagramCarouselWithPMarkersDoesNotTriggerDouyinListParser() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
