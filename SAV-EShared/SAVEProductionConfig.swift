@@ -10,7 +10,9 @@ enum SAVEProductionConfig {
     static let defaultPlaceShareBaseURL = "https://sav-e-app.vercel.app/p"
     static let defaultTripShareBaseURL = "https://sav-e-app.vercel.app/trip"
     static let defaultListShareBaseURL = "https://sav-e-app.vercel.app/list"
-    static let defaultGeminiModelFallbacks = ["gemini-3.5-flash"]
+    // Strongest current flash-class model first; transport falls back to the
+    // next entry on 404 (model unavailable) or 429 (rate limited).
+    static let defaultGeminiModelFallbacks = ["gemini-3.5-flash", "gemini-2.5-flash"]
 
     static func geminiGenerateContentURL(apiKey: String, model: String) -> URL {
         URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
@@ -73,22 +75,57 @@ struct SAVEGeminiTransport {
     var session: URLSession = .shared
     var accessTokenProvider: (() async throws -> String)?
     var directAPIKey: String? = SAVEProductionConfig.clientGeminiAPIKeyIfAllowed()
+    var requestTimeout: TimeInterval = 30
+    var maxAttemptsPerModel: Int = 2
+    var transientRetryDelayNanoseconds: UInt64 = 500_000_000
 
     func generateContent(body: [String: Any]) async throws -> [String: Any] {
         var lastError: Error?
         for model in modelFallbacks {
             do {
-                return try await generateContent(body: body, model: model)
+                return try await generateContentWithRetry(body: body, model: model)
             } catch {
                 lastError = error
                 if case SAVEGeminiTransportError.upstreamStatus(let status) = error,
-                   status == 404 || status == 429 {
+                   status == 404 || status == 429 || (500...599).contains(status) {
                     continue
                 }
                 break
             }
         }
         throw lastError ?? SAVEGeminiTransportError.emptyResponse
+    }
+
+    private func generateContentWithRetry(body: [String: Any], model: String) async throws -> [String: Any] {
+        let attempts = max(maxAttemptsPerModel, 1)
+        var lastError: Error?
+        for attempt in 1...attempts {
+            do {
+                return try await generateContent(body: body, model: model)
+            } catch {
+                lastError = error
+                guard attempt < attempts, isTransientError(error) else { throw error }
+                // Brief backoff so a momentary 429/5xx/network blip does not
+                // fail the whole link parse.
+                try? await Task.sleep(nanoseconds: transientRetryDelayNanoseconds << UInt64(attempt - 1))
+            }
+        }
+        throw lastError ?? SAVEGeminiTransportError.emptyResponse
+    }
+
+    private func isTransientError(_ error: Error) -> Bool {
+        if case SAVEGeminiTransportError.upstreamStatus(let status) = error {
+            return status == 429 || (500...599).contains(status)
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .cannotConnectToHost, .dnsLookupFailed, .notConnectedToInternet:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private func generateContent(body: [String: Any], model: String) async throws -> [String: Any] {
@@ -115,6 +152,7 @@ struct SAVEGeminiTransport {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(try await accessTokenProvider())", forHTTPHeaderField: "Authorization")
         request.httpBody = requestBody
@@ -125,6 +163,7 @@ struct SAVEGeminiTransport {
         let endpoint = SAVEProductionConfig.geminiGenerateContentURL(apiKey: apiKey, model: model)
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await decodeResponse(for: request)

@@ -440,14 +440,22 @@ final class AIDrawerViewModel: ObservableObject {
         activeRequestID = requestID
         drawerState = .loading
         mapAction = nil
+        let context = groundedContext(for: query)
         rememberQuery(query)
 
+        // Natural-language queries still get a grounded LLM answer even when
+        // the deterministic classifier could not extract an intent, instead of
+        // degrading to a raw literal-match list.
+        let resolvedIntent = intent
+            ?? SaveSearchIntentParser().parse(query)
+            ?? (SaveSearchLLMRouter.isNaturalLanguageQuery(query) ? .freeformFallback(rawText: query) : nil)
+
         let groundedResponse: SaveSearchResponse
-        if let groundedAnswerClient,
-           let intent = intent ?? SaveSearchIntentParser().parse(query) {
+        if let groundedAnswerClient, let resolvedIntent {
             groundedResponse = await response.withGroundedAnswer(
                 query: query,
-                intent: intent,
+                intent: resolvedIntent,
+                context: context,
                 outputLanguage: outputLanguage,
                 client: groundedAnswerClient
             )
@@ -473,9 +481,10 @@ final class AIDrawerViewModel: ObservableObject {
         activeRequestID = requestID
         drawerState = .loading
         mapAction = nil
+        let context = groundedContext(for: query)
         rememberQuery(query)
 
-        let intent = SaveSearchIntentParser().parse(previousResponse.query) ?? SaveSearchIntent.followUpIntent(
+        let intent = SaveSearchIntentParser().parse(previousResponse.query) ?? SaveSearchIntent.freeformFallback(
             rawText: previousResponse.query
         )
         let followUpQuery = """
@@ -486,6 +495,7 @@ final class AIDrawerViewModel: ObservableObject {
         let groundedResponse = await previousResponse.withGroundedAnswer(
             query: followUpQuery,
             intent: intent,
+            context: context,
             outputLanguage: outputLanguage,
             client: client
         )
@@ -577,6 +587,19 @@ final class AIDrawerViewModel: ObservableObject {
             chatHistory.insert(ChatEntry(query: query, timestamp: Date()), at: 0)
             if chatHistory.count > 20 { chatHistory.removeLast() }
         }
+    }
+
+    /// Bounded user context for the grounded LLM answer. Built before
+    /// `rememberQuery` so the current query is not echoed back as history.
+    private func groundedContext(for query: String) -> GroundedAnswerContext {
+        SaveDrawerContextBuilder.makeContext(
+            query: query,
+            places: places,
+            currentLocation: locationService.currentLocation,
+            recentQueries: chatHistory.prefix(SaveDrawerContextBuilder.maxRecentQueries).map(\.query),
+            lastAssistantAnswer: lastSaveSearchResponse?.resolvedAgentAnswer?.message
+                ?? lastSaveSearchResponse?.assistantMessage
+        )
     }
 
     private static func tripAnchorMessageResponse(
@@ -814,26 +837,6 @@ struct ItineraryPublicDiscoveryPlanner {
     }
 }
 
-private extension SaveSearchIntent {
-    static func followUpIntent(rawText: String) -> SaveSearchIntent {
-        let normalized = SaveSearchIntentParser.normalize(rawText)
-        return SaveSearchIntent(
-            rawText: rawText,
-            normalizedText: normalized,
-            kind: .unknown,
-            requiredCategories: [],
-            optionalCategories: [],
-            locationMode: .unspecified,
-            sourceScope: .savedFirstAllowPublicFallback,
-            mustMatchCategory: false,
-            mustMatchLocation: false,
-            confidence: 0.5,
-            unsupportedCategoryLabel: nil,
-            categoryNeedles: []
-        )
-    }
-}
-
 private extension SaveSearchResponse {
     var hasVisibleResults: Bool {
         !fromYourSave.results.isEmpty ||
@@ -844,6 +847,7 @@ private extension SaveSearchResponse {
     func withGroundedAnswer(
         query: String,
         intent: SaveSearchIntent,
+        context: GroundedAnswerContext = GroundedAnswerContext(),
         outputLanguage: AppLanguage,
         client: SaveLLMClient
     ) async -> SaveSearchResponse {
@@ -853,23 +857,28 @@ private extension SaveSearchResponse {
             intent: intent,
             allowedPlaceIds: grounding.allowedResultIDs,
             sections: groundedAnswerSections,
-            outputLanguage: outputLanguage
+            outputLanguage: outputLanguage,
+            context: context
         )
 
         guard grounding.hasContext, shouldUseGroundedLLMAnswer else {
             return self
         }
 
+        // Retry once on transient failures; on the second failure keep the
+        // deterministic assistant message so the drawer never dead-ends.
+        let answer: GroundedLLMAnswer?
         do {
-            let answer = try await client.renderGroundedAnswer(request)
-            let message = answer.message.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !message.isEmpty else { return self }
-            var copy = self
-            copy.replaceAgentAnswer(message, source: .groundedLLM)
-            return copy
+            answer = try await client.renderGroundedAnswer(request)
         } catch {
-            return self
+            answer = try? await client.renderGroundedAnswer(request)
         }
+        guard let answer else { return self }
+        let message = answer.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return self }
+        var copy = self
+        copy.replaceAgentAnswer(message, source: .groundedLLM)
+        return copy
     }
 
     private var shouldUseGroundedLLMAnswer: Bool {
@@ -902,6 +911,11 @@ private extension AIDrawerViewModel {
         if let deterministic,
            deterministic.unsupportedCategoryLabel != nil ||
            (!deterministic.requiredCategories.isEmpty && deterministic.categoryNeedles.isEmpty) {
+            return deterministic
+        }
+        // Confident lexicon hits skip the LLM round trip; only low-confidence
+        // natural-language queries pay for the structured extraction step.
+        if SaveSearchLLMRouter.shouldTrustDeterministicIntent(deterministic) {
             return deterministic
         }
         guard let groundedAnswerClient else {

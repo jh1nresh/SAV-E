@@ -636,8 +636,8 @@ final class SaveSearchControllerTests: XCTestCase {
     @MainActor
     func testDrawerUsesLLMParsedIntentWhenDeterministicParserMissesCategory() async {
         let parsedIntent = SaveSearchIntent(
-            rawText: "where should i go for brunch nearby",
-            normalizedText: "where should i go for brunch nearby",
+            rawText: "where should i go for a hearty morning meal nearby",
+            normalizedText: "where should i go for a hearty morning meal nearby",
             kind: .categoryRecommendation,
             requiredCategories: [.food],
             optionalCategories: [],
@@ -674,14 +674,14 @@ final class SaveSearchControllerTests: XCTestCase {
             longitude: -117.8266
         )
         drawer.places = [cafe, brunch]
-        drawer.query = "where should i go for brunch nearby"
+        drawer.query = "where should i go for a hearty morning meal nearby"
 
         await drawer.submit()
 
         guard case .saveSearchResults(let response) = drawer.drawerState else {
             return XCTFail("Expected save search results")
         }
-        XCTAssertEqual(client.intentRequests.map(\.query), ["where should i go for brunch nearby"])
+        XCTAssertEqual(client.intentRequests.map(\.query), ["where should i go for a hearty morning meal nearby"])
         XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Saved Brunch"])
         XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("Saved Coffee"))
         XCTAssertEqual(response.agentAnswer?.source, .groundedLLM)
@@ -955,14 +955,27 @@ final class SaveSearchControllerTests: XCTestCase {
                     results: [result]
                 )
             ],
-            outputLanguage: .traditionalChinese
+            outputLanguage: .traditionalChinese,
+            context: GroundedAnswerContext(
+                localityHint: "Irvine",
+                savedPlaceDigest: ["Happy Lamb Hot Pot — Food, Irvine"],
+                recentConversation: ["User: 附近有什麼好吃的", "SAV-E: 我會先看 Happy Lamb Hot Pot。"]
+            )
         )
 
         let prompt = policy.groundedAnswerPrompt(for: request)
 
         XCTAssertTrue(prompt.contains("cute place-memory scout"))
+        XCTAssertTrue(prompt.contains("personal place-memory agent"))
         XCTAssertTrue(prompt.contains("private place memory first"))
         XCTAssertTrue(prompt.contains("public discovery second"))
+        XCTAssertTrue(prompt.contains("User context (background memory, not results):"))
+        XCTAssertTrue(prompt.contains("- Locality: Irvine"))
+        XCTAssertTrue(prompt.contains("Happy Lamb Hot Pot — Food, Irvine"))
+        XCTAssertTrue(prompt.contains("User: 附近有什麼好吃的"))
+        XCTAssertTrue(prompt.contains("Never recommend or cite a place that appears only in the saved place memory sample"))
+        XCTAssertTrue(prompt.contains("Name which saved place your answer is based on"))
+        XCTAssertTrue(prompt.contains("End with one concrete next step"))
         XCTAssertTrue(prompt.contains("Keep Saved Map Stamps, Review Candidates, Source-only clues, and Public Discovery separate."))
         XCTAssertTrue(prompt.contains("Use ONLY allowed result IDs"))
         XCTAssertTrue(prompt.contains("Do not introduce or invent places outside the allowed results."))
@@ -982,6 +995,186 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("我會先看 Tea Maru，"))
         XCTAssertTrue(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("I would pick Tea Maru (nearby"))
         XCTAssertFalse(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("我會先看 Tea Maru，因為最近且評分高。想喝奶茶還是水果茶？"))
+    }
+
+    func testDrawerContextBuilderKeepsCommaLessStreetAddressesOffDigest() {
+        let cjkStreetAddress = place(
+            name: "巷弄甜點店",
+            address: "台北市大安區忠孝東路四段181巷40號",
+            category: .cafe
+        )
+        let digest = SaveDrawerContextBuilder.savedPlaceDigest(
+            query: "甜點",
+            places: [cjkStreetAddress],
+            currentLocation: nil
+        )
+        XCTAssertTrue(digest.first?.contains("巷弄甜點店") == true)
+        XCTAssertFalse(digest.contains { $0.contains("忠孝東路") })
+        XCTAssertNil(SaveDrawerContextBuilder.localityHint(places: [cjkStreetAddress], currentLocation: nil))
+
+        let bareLocality = place(name: "Beach Cafe", address: "Santa Monica", category: .cafe)
+        XCTAssertEqual(
+            SaveDrawerContextBuilder.localityHint(places: [bareLocality], currentLocation: nil),
+            "Santa Monica"
+        )
+    }
+
+    func testDrawerContextBuilderSelectsRelevantBoundedPlacesWithoutNotes() {
+        var boba = place(
+            name: "Omomo Tea Shoppe",
+            address: "100 Spectrum Dr, Irvine, CA",
+            category: .cafe,
+            note: "boba heaven, do not tell anyone"
+        )
+        boba.createdAt = Date()
+        let filler = (1...10).map { index in
+            place(
+                name: "Generic Diner \(index)",
+                address: "\(index) Main St, Irvine, CA",
+                category: .food
+            )
+        }
+
+        let digest = SaveDrawerContextBuilder.savedPlaceDigest(
+            query: "boba milk tea",
+            places: filler + [boba],
+            currentLocation: nil
+        )
+
+        XCTAssertEqual(digest.count, SaveDrawerContextBuilder.maxDigestEntries)
+        XCTAssertTrue(digest.first?.contains("Omomo Tea Shoppe") == true)
+        XCTAssertFalse(digest.contains { $0.contains("do not tell anyone") })
+        XCTAssertTrue(digest.allSatisfy { $0.count <= SaveDrawerContextBuilder.maxDigestLineLength })
+
+        let locality = SaveDrawerContextBuilder.localityHint(places: filler + [boba], currentLocation: nil)
+        XCTAssertEqual(locality, "Irvine")
+
+        let conversation = SaveDrawerContextBuilder.recentConversation(
+            recentQueries: ["奶茶", "coffee", "hot pot", "fourth query is dropped"],
+            lastAssistantAnswer: String(repeating: "答", count: 400)
+        )
+        XCTAssertEqual(conversation.count, SaveDrawerContextBuilder.maxRecentQueries + 1)
+        XCTAssertEqual(conversation.first, "User: 奶茶")
+        XCTAssertFalse(conversation.contains { $0.contains("fourth query is dropped") })
+        XCTAssertTrue(conversation.last?.hasPrefix("SAV-E: ") == true)
+        XCTAssertLessThanOrEqual(
+            conversation.last?.count ?? 0,
+            SaveDrawerContextBuilder.maxAssistantAnswerLength + "SAV-E: ".count
+        )
+    }
+
+    func testLLMRouterTrustsConfidentDeterministicIntentAndDetectsNaturalLanguage() {
+        let parser = SaveSearchIntentParser()
+        XCTAssertTrue(SaveSearchLLMRouter.shouldTrustDeterministicIntent(parser.parse("coffee nearby")))
+        XCTAssertFalse(SaveSearchLLMRouter.shouldTrustDeterministicIntent(nil))
+        // Location-only parse has no category and low confidence -> LLM should refine it.
+        XCTAssertFalse(SaveSearchLLMRouter.shouldTrustDeterministicIntent(parser.parse("somewhere fun around here")))
+
+        XCTAssertTrue(SaveSearchLLMRouter.isNaturalLanguageQuery("which one is worth it"))
+        XCTAssertTrue(SaveSearchLLMRouter.isNaturalLanguageQuery("推薦我附近奶茶"))
+        XCTAssertFalse(SaveSearchLLMRouter.isNaturalLanguageQuery("Rise Bagels"))
+        XCTAssertFalse(SaveSearchLLMRouter.isNaturalLanguageQuery("Blue Bottle"))
+    }
+
+    @MainActor
+    func testDrawerSkipsLLMIntentParseWhenDeterministicLexiconIsConfident() async {
+        let parsedIntent = SaveSearchIntent.freeformFallback(rawText: "coffee")
+        let client = StubGroundedAnswerClient(
+            answer: "I would pick Saved Coffee from your Map Stamps. Want me to show it on the map?",
+            parsedIntent: parsedIntent
+        )
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        drawer.places = [place(name: "Saved Coffee", address: "1 Main St, Irvine, CA", category: .cafe)]
+        drawer.query = "coffee"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertTrue(client.intentRequests.isEmpty, "Confident lexicon hit should not pay for an LLM intent parse")
+        XCTAssertEqual(client.requests.map(\.query), ["coffee"])
+    }
+
+    @MainActor
+    func testDrawerGroundedAnswerRetriesOnceAfterTransientFailure() async {
+        let client = FlakyGroundedAnswerClient(
+            answer: "Saved Coffee is your closest Map Stamp. Want it on the map?",
+            failuresBeforeSuccess: 1
+        )
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        drawer.places = [place(name: "Saved Coffee", address: "1 Main St, Irvine, CA", category: .cafe)]
+        drawer.query = "coffee"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected save search results")
+        }
+        XCTAssertEqual(client.renderCallCount, 2)
+        XCTAssertEqual(response.agentAnswer?.source, .groundedLLM)
+        XCTAssertEqual(response.agentAnswer?.message, client.answer)
+    }
+
+    @MainActor
+    func testDrawerGroundedAnswerFallsBackToDeterministicListAfterRepeatedFailures() async {
+        let client = FlakyGroundedAnswerClient(
+            answer: "never delivered",
+            failuresBeforeSuccess: .max
+        )
+        let drawer = AIDrawerViewModel(groundedAnswerClient: client)
+        drawer.places = [place(name: "Saved Coffee", address: "1 Main St, Irvine, CA", category: .cafe)]
+        drawer.query = "coffee"
+
+        await drawer.submit()
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("Expected deterministic save search results, never a stuck spinner")
+        }
+        XCTAssertEqual(client.renderCallCount, 2, "Exactly one retry, then give up gracefully")
+        XCTAssertNotEqual(response.resolvedAgentAnswer?.source, .groundedLLM)
+        XCTAssertTrue(response.groundedAnswerGrounding.allowedResultIDs.contains { $0.hasPrefix("place-") })
+    }
+
+    func testGroundedAnswerValidatorRejectsDigestOnlyPlaceMention() throws {
+        let placeID = "place-saved-coffee"
+        let result = SaveSearchResult(
+            id: placeID,
+            objectType: .savedPlace,
+            userState: .wantToGo,
+            title: "Saved Coffee",
+            subtitle: "Irvine",
+            statusLabel: "Map Stamp",
+            sourceURL: nil,
+            sourcePlatform: nil,
+            category: .cafe,
+            cityOrArea: "Irvine",
+            latitude: nil,
+            longitude: nil,
+            rating: nil,
+            reviewCount: nil,
+            confidence: nil,
+            missingInfo: [],
+            evidence: ["Saved clues: latte"],
+            recoveryQueries: [],
+            createdAt: Date(),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .recommendOrder
+        )
+        var request = groundedRequest(result: result, allowedIDs: [placeID], query: "coffee")
+        request.context = GroundedAnswerContext(savedPlaceDigest: ["Hidden Gem Cafe — Cafe, Irvine"])
+
+        XCTAssertThrowsError(try GroundedAnswerJSONValidator().parseAndValidate(
+            "{\"answer\":\"Try Hidden Gem Cafe instead of your saved options.\",\"citedResultIds\":[\"\(placeID)\"]}",
+            request: request
+        ))
+
+        let answer = try GroundedAnswerJSONValidator().parseAndValidate(
+            "{\"answer\":\"Try Saved Coffee from your Map Stamps. Want it on the map?\",\"citedResultIds\":[\"\(placeID)\"]}",
+            request: request
+        )
+        XCTAssertEqual(answer.citedResultIds, [placeID])
     }
 
     func testNearbySearchDisplaysPublicDiscoveryBeforeFarSavedWhenNoNearbyMemory() {
@@ -3037,6 +3230,29 @@ private final class StubGroundedAnswerClient: SaveLLMClient {
 
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
         requests.append(request)
+        return GroundedLLMAnswer(message: answer, citedResultIds: Array(request.allowedPlaceIds.prefix(1)))
+    }
+}
+
+private final class FlakyGroundedAnswerClient: SaveLLMClient {
+    let answer: String
+    let failuresBeforeSuccess: Int
+    private(set) var renderCallCount = 0
+
+    init(answer: String, failuresBeforeSuccess: Int) {
+        self.answer = answer
+        self.failuresBeforeSuccess = failuresBeforeSuccess
+    }
+
+    func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent {
+        throw SaveSearchIntentValidationError.malformedJSON
+    }
+
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
+        renderCallCount += 1
+        guard renderCallCount > failuresBeforeSuccess else {
+            throw SAVEGeminiTransportError.upstreamStatus(503)
+        }
         return GroundedLLMAnswer(message: answer, citedResultIds: Array(request.allowedPlaceIds.prefix(1)))
     }
 }

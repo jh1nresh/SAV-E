@@ -18,6 +18,16 @@ struct SaveApp: App {
     private let pendingImportService = PendingPlaceImportService.shared
     private let minimumOpeningAnimationDuration: UInt64 = 1_800_000_000
 
+#if DEBUG
+    init() {
+        // UI tests cannot use "-hasCompletedOnboarding NO": NSArgumentDomain outranks
+        // the persistent domain, so the in-app write back to true would never be read.
+        if ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding") {
+            UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        }
+    }
+#endif
+
     var body: some Scene {
         WindowGroup {
             Group {

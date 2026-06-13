@@ -1084,7 +1084,14 @@ struct ShareExtensionView: View {
             }
         }
 
-        let content = sharedURL.isEmpty ? sharedText : sharedURL
+        // Mainland app shares often paste boilerplate text with an embedded
+        // short URL instead of a URL item; recover the link so the social
+        // pipeline runs instead of falling through to the AI text path.
+        let shareBundle = sharedURL.isEmpty && !sharedText.isEmpty
+            ? SocialShareTextNormalizer.normalize(sharedText)
+            : nil
+        let resolvedShareURLString = sharedURL.isEmpty ? (shareBundle?.primaryURLString ?? "") : sharedURL
+        let content = resolvedShareURLString.isEmpty ? sharedText : resolvedShareURLString
         if let imageData = extractedImageData, sharedURL.isEmpty {
             let candidates = await sharedImageReviewCandidates(
                 from: imageData,
@@ -1108,7 +1115,7 @@ struct ShareExtensionView: View {
             return
         }
 
-        let metadata = await shareMetadata(from: sharedURL)
+        let metadata = await shareMetadata(from: resolvedShareURLString)
         let parseContent = metadata.resolvedURL.flatMap { $0.isEmpty ? nil : $0 } ?? content
 
         if GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
@@ -2984,6 +2991,7 @@ struct ShareExtensionView: View {
             host.hasSuffix("threads.com") ||
             host.hasSuffix("tiktok.com") ||
             host.hasSuffix("douyin.com") ||
+            host.hasSuffix("iesdouyin.com") ||
             host == "dpurl.cn" ||
             host.hasSuffix("dianping.com")
     }

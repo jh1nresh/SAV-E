@@ -113,6 +113,190 @@ struct TikTokSourceAdapter {
     }
 }
 
+enum SocialSharePlatform: String, Codable {
+    case douyin
+    case xiaohongshu
+    case dianping
+    case tiktok
+    case instagram
+    case googleMaps
+    case appleMaps
+    case chinaMaps
+    case generic
+}
+
+struct SocialShareSourceBundle: Hashable {
+    var rawShareText: String
+    var embeddedURLStrings: [String]
+    var primaryURLString: String?
+    var platform: SocialSharePlatform
+    var captionEvidence: String
+    var creatorName: String?
+
+    var primaryURL: URL? {
+        primaryURLString.flatMap(URL.init(string:))
+    }
+
+    var hasResolvableURL: Bool {
+        primaryURL != nil
+    }
+}
+
+/// Normalizes messy real-world share pastes (mixed caption + URLs + app-open
+/// boilerplate in zh/en + opaque share tokens) into a bounded source bundle.
+/// The raw paste is always preserved; caption clues are never required to be a
+/// bare URL, matching the china-social source adapter contract.
+enum SocialShareTextNormalizer {
+    static func normalize(_ rawShareText: String) -> SocialShareSourceBundle {
+        let urls = embeddedURLStrings(in: rawShareText)
+        let primary = primaryURLString(in: urls)
+        let creatorName = creatorName(in: rawShareText)
+
+        var working = rawShareText
+        for pattern in boilerplatePatterns {
+            working = working.replacingOccurrences(of: pattern, with: " ", options: .regularExpression)
+        }
+        working = working
+            .replacingOccurrences(of: urlPattern, with: " ", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: trailingShareTokenPattern, with: " ", options: .regularExpression)
+
+        let captionLines = working
+            .components(separatedBy: .newlines)
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { !$0.isEmpty && !looksLikeShareTokenNoise($0) }
+
+        return SocialShareSourceBundle(
+            rawShareText: rawShareText,
+            embeddedURLStrings: urls,
+            primaryURLString: primary,
+            platform: primary.map(platform(forURLString:)) ?? .generic,
+            captionEvidence: captionLines.joined(separator: "\n"),
+            creatorName: creatorName
+        )
+    }
+
+    static func embeddedURLStrings(in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: urlPattern, options: [.caseInsensitive]) else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: range).compactMap { match in
+            guard let matchRange = Range(match.range, in: text) else { return nil }
+            return String(text[matchRange]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;。；，)）]】」』\"'"))
+        }
+    }
+
+    static func platform(forURLString urlString: String) -> SocialSharePlatform {
+        let lowered = urlString.lowercased()
+        if lowered.hasPrefix("iosamap://") || lowered.hasPrefix("amapuri://") || lowered.hasPrefix("baidumap://") {
+            return .chinaMaps
+        }
+        guard let url = URL(string: urlString), let host = url.host?.lowercased() else { return .generic }
+        let path = url.path.lowercased()
+        if isHost(host, domain: "douyin.com") || isHost(host, domain: "iesdouyin.com") { return .douyin }
+        if isHost(host, domain: "xiaohongshu.com") || isHost(host, domain: "xhslink.com") { return .xiaohongshu }
+        if isHost(host, domain: "dianping.com") || isHost(host, domain: "dpurl.cn") { return .dianping }
+        if isHost(host, domain: "tiktok.com") { return .tiktok }
+        if isHost(host, domain: "instagram.com") { return .instagram }
+        if isHost(host, domain: "amap.com") || isHost(host, domain: "map.baidu.com") { return .chinaMaps }
+        if host == "maps.app.goo.gl" || (isHost(host, domain: "goo.gl") && path.contains("maps")) { return .googleMaps }
+        if isHost(host, domain: "google.com") && path.contains("/maps") { return .googleMaps }
+        if isHost(host, domain: "maps.apple.com") { return .appleMaps }
+        return .generic
+    }
+
+    // MARK: - Private
+
+    private static let urlPattern = #"https?://[^\s<>\"'，。；）)\]】」』]+|(?:iosamap|amapuri|baidumap)://[^\s<>\"]+"#
+
+    // Trailing copy-code soup appended by mainland share sheets, e.g.
+    // "05/20 JIi:/ f@o.Qk :9pm" glued to the end of a caption line.
+    private static let trailingShareTokenPattern =
+        #"\s+\d{1,2}/\d{1,2}(?:\s+[A-Za-z0-9@:/.,!?%$#\-_]{1,16}){0,8}\s*$"#
+
+    private static let boilerplatePatterns = [
+        // Douyin share lead-in: "9.41 复制打开抖音，看看【…的作品】…"
+        #"\d{1,2}\.\d{2}\s+(?=(?:[A-Za-z0-9]{2,10}[:/]{1,3}\s+)?复制打开)"#,
+        #"[A-Za-z0-9]{2,10}[:/]{1,3}\s+(?=复制打开)"#,
+        #"复制打开(?:抖音|快手)(?:极速版|極速版)?[，,]?\s*(?:看看)?"#,
+        #"【[^【】\n]{1,40}的(?:图文作品|圖文作品|作品|视频|視頻|影片|直播)】"#,
+        #"长按复制此条消息[^\n]*"#,
+        #"長按複製此條訊息[^\n]*"#,
+        // Xiaohongshu share lead-in: "73 【标题】 😆 token 😆 link 复制本条信息…"
+        #"^\s*\d{1,3}\s+(?=【)"#,
+        #"[😆😝🤗🥳😊]\s*[A-Za-z0-9]{6,24}\s*[😆😝🤗🥳😊]"#,
+        #"复制本条信息[^\n]*"#,
+        #"複製本條訊息[^\n]*"#,
+        #"打开【?小红书】?\s*App查看精彩内容[！!]?"#,
+        #"打開【?小紅書】?\s*App查看精彩內容[！!]?"#,
+        #"(?:\d+\s+)?发现了?一篇[^\n]{0,20}笔记[^\n]{0,20}(?:快来看吧)?[！!]?"#,
+        #"复制这段内容[^\n]*"#,
+        // English app share boilerplate.
+        #"(?i)check out [^\n]{0,60}(?:'s)? (?:video|post) on tiktok[.!]?"#
+    ]
+
+    private static func primaryURLString(in urls: [String]) -> String? {
+        urls.enumerated().min { lhs, rhs in
+            let lhsRank = platformPriority(platform(forURLString: lhs.element))
+            let rhsRank = platformPriority(platform(forURLString: rhs.element))
+            if lhsRank != rhsRank { return lhsRank < rhsRank }
+            return lhs.offset < rhs.offset
+        }?.element
+    }
+
+    private static func platformPriority(_ platform: SocialSharePlatform) -> Int {
+        switch platform {
+        case .chinaMaps, .googleMaps, .appleMaps:
+            return 0
+        case .dianping:
+            return 1
+        case .douyin:
+            return 2
+        case .xiaohongshu:
+            return 3
+        case .tiktok:
+            return 4
+        case .instagram:
+            return 5
+        case .generic:
+            return 6
+        }
+    }
+
+    private static func creatorName(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"【([^【】\n]{1,40})的(?:图文作品|圖文作品|作品|视频|視頻|影片|直播)】"#
+        ) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: text) else { return nil }
+        let cleaned = SocialPlaceEvidenceScorer.cleanText(String(text[captureRange]))
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
+    private static func looksLikeShareTokenNoise(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              trimmed.count <= 48,
+              trimmed.range(of: #"[\u4e00-\u9fff]"#, options: .regularExpression) == nil,
+              trimmed.range(of: #"[@:/]"#, options: .regularExpression) != nil,
+              trimmed.range(of: #"^@[A-Za-z0-9._]{3,30}$"#, options: .regularExpression) == nil else {
+            return false
+        }
+        if trimmed.range(of: #"^\d{1,2}/\d{1,2}\b"#, options: .regularExpression) != nil { return true }
+        let tokens = trimmed.split(separator: " ")
+        let opaque = tokens.allSatisfy { token in
+            token.count <= 12 &&
+                token.range(of: #"^[A-Za-z0-9@:/.,!?%$#\-_]+$"#, options: .regularExpression) != nil
+        }
+        let hasRealWord = trimmed.range(of: #"(?i)\b[a-z]{5,}\b"#, options: .regularExpression) != nil
+        return opaque && !hasRealWord
+    }
+
+    private static func isHost(_ host: String, domain: String) -> Bool {
+        host == domain || host.hasSuffix("." + domain)
+    }
+}
+
 struct SocialEvidenceAtom {
     var source: SocialEvidenceSource
     var role: SocialEvidenceRole
@@ -767,8 +951,10 @@ struct SocialPlaceParser {
             isPlaceBearing: isPlaceBearing
         )
 
-        let analysisSourceType = sourceType == .sourceOnly && merged.isEmpty
-            ? .sourceOnly
+        // A list-shaped source (e.g. OCR cover "推薦４間冰店") stays a
+        // multi-place list needing evidence instead of a bare source receipt.
+        let analysisSourceType: SocialPlaceSourceType = sourceType == .sourceOnly && merged.isEmpty
+            ? (understanding.sourceType == .multiPlaceList ? .multiPlaceList : .sourceOnly)
             : (sourceType == .ambiguous || sourceType == .unknown ? understanding.sourceType : sourceType)
 
         return SocialPlaceAgentAnalysis(

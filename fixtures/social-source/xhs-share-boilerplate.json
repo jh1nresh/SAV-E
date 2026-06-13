@@ -1,0 +1,10 @@
+{
+  "rawShareText": "73 【青岛崂山民宿推荐】😆 mNGbeXuTslakeR3 😆 http://xhslink.com/o/7FgwQfDuTc4 复制本条信息，打开【小红书】App查看精彩内容！",
+  "expected": {
+    "primaryURLString": "http://xhslink.com/o/7FgwQfDuTc4",
+    "platform": "xiaohongshu",
+    "creatorName": null,
+    "captionContains": ["青岛崂山民宿推荐"],
+    "captionExcludes": ["复制本条信息", "mNGbeXuTslakeR3", "😆", "App查看精彩内容"]
+  }
+}

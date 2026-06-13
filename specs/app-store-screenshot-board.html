@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SAV-E App Store Screenshot Board</title>
+<style>
+  :root {
+    --cream: #FFF5E7;
+    --cream-deep: #FCEBD2;
+    --page: #FFF0DC;
+    --ink: #3A2415;
+    --muted: #7A5D45;
+    --honey: #FFD66B;
+    --honey-deep: #F2BE3F;
+    --mint: #C8EBCF;
+    --mint-deep: #7FBF92;
+    --sky: #8FCAEA;
+    --coral: #EE9C78;
+    --pink: #F6C1CB;
+    --blue-ink: #315D76;
+    --line: rgba(58, 36, 21, .22);
+    --line-strong: rgba(58, 36, 21, .85);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #241a11;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .workspace { display: grid; justify-items: center; }
+
+  /* ===================== SHOT CANVAS ===================== */
+  .shot {
+    position: relative;
+    width: 1242px;
+    height: 2688px;
+    overflow: hidden;
+    background:
+      radial-gradient(1100px 700px at 88% -6%, var(--accent-wash, rgba(255,214,107,.55)) 0%, rgba(255,214,107,0) 62%),
+      radial-gradient(900px 640px at -10% 30%, rgba(246,193,203,.30) 0%, rgba(246,193,203,0) 60%),
+      linear-gradient(180deg, #FFFAF1 0%, var(--cream) 46%, var(--cream-deep) 100%);
+  }
+  .shot::before { /* notebook dot grid */
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(58,36,21,.075) 2.4px, transparent 2.4px);
+    background-size: 46px 46px;
+    pointer-events: none;
+  }
+  .shot[data-accent="sky"]   { --accent-wash: rgba(143,202,234,.50); }
+  .shot[data-accent="mint"]  { --accent-wash: rgba(200,235,207,.62); }
+  .shot[data-accent="coral"] { --accent-wash: rgba(238,156,120,.40); }
+  .shot[data-accent="honey"] { --accent-wash: rgba(255,214,107,.55); }
+  .shot[data-accent="pink"]  { --accent-wash: rgba(246,193,203,.55); }
+
+  /* ===================== MASTHEAD ===================== */
+  .masthead {
+    position: absolute; top: 84px; left: 100px; right: 100px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 30;
+  }
+  .lockup { display: flex; align-items: center; gap: 26px; }
+  .memo-chip {
+    width: 104px; height: 104px;
+    border-radius: 32px;
+    background: var(--honey);
+    border: 4px solid var(--ink);
+    display: grid; place-items: center;
+    box-shadow: 0 10px 0 rgba(58,36,21,.16);
+  }
+  .memo-chip svg { width: 72px; height: 72px; }
+  .wordmark { font-size: 52px; font-weight: 900; letter-spacing: .04em; }
+  .shot-stamp {
+    font-size: 28px; font-weight: 900; letter-spacing: .22em;
+    color: var(--muted);
+    border: 3px solid var(--line);
+    border-radius: 999px;
+    padding: 16px 30px;
+    background: rgba(255,255,255,.5);
+  }
+
+  /* ===================== HEADLINE BLOCK ===================== */
+  .head {
+    position: absolute; top: 268px; left: 100px; right: 100px;
+    z-index: 30;
+    text-align: left;
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 34px; font-weight: 900; letter-spacing: .24em;
+    color: var(--ink);
+    background: var(--eyebrow-bg, var(--honey));
+    border: 3.5px solid var(--ink);
+    border-radius: 999px;
+    padding: 16px 34px 14px;
+    box-shadow: 0 8px 0 rgba(58,36,21,.18);
+    margin-bottom: 44px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 132px;
+    line-height: 1.04;
+    font-weight: 900;
+    letter-spacing: -0.022em;
+    color: var(--ink);
+  }
+  .hl {
+    background-image: linear-gradient(0deg, var(--mark, var(--honey)) 0%, var(--mark, var(--honey)) 38%, transparent 38%);
+    border-radius: 6px;
+    padding: 0 6px;
+    margin: 0 -6px;
+  }
+  .sub {
+    margin: 40px 0 0;
+    font-size: 47px;
+    line-height: 1.32;
+    font-weight: 600;
+    color: var(--muted);
+    max-width: 1000px;
+  }
+
+  /* ===================== PHONE ===================== */
+  .phone-wrap {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: var(--phone-top, 830px);
+    z-index: 20;
+    filter: drop-shadow(0 70px 90px rgba(58,36,21,.38));
+  }
+  .phone {
+    position: relative;
+    width: 952px;
+    border-radius: 152px;
+    background: linear-gradient(160deg, #3c322a 0%, #14100c 30%, #0a0807 100%);
+    padding: 22px;
+  }
+  .phone::before { /* metal rim highlight */
+    content: "";
+    position: absolute; inset: 5px;
+    border-radius: 147px;
+    border: 2px solid rgba(255,245,231,.16);
+    pointer-events: none;
+  }
+  .side-btn {
+    position: absolute; width: 10px; border-radius: 6px;
+    background: #1c1611;
+  }
+  .side-btn.vol1 { left: -8px; top: 430px;  height: 120px; }
+  .side-btn.vol2 { left: -8px; top: 580px;  height: 120px; }
+  .side-btn.pwr  { right: -8px; top: 500px; height: 190px; }
+  .screen {
+    position: relative;
+    width: 908px;
+    height: 1965px;
+    border-radius: 130px;
+    overflow: hidden;
+    background: #F3EFE2;
+  }
+  .island {
+    position: absolute; top: 30px; left: 50%; transform: translateX(-50%);
+    width: 270px; height: 80px;
+    background: #060504; border-radius: 44px;
+    z-index: 60;
+  }
+  .statusbar {
+    position: absolute; top: 36px; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 92px 0 110px;
+    z-index: 55;
+    color: var(--sb, var(--ink));
+  }
+  .statusbar .time { font-size: 40px; font-weight: 700; letter-spacing: .01em; }
+  .statusbar svg { display: block; }
+
+  /* ===================== IN-SCREEN MAP ===================== */
+  .map { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .stamp-pin {
+    position: absolute;
+    z-index: 40;
+    display: flex; flex-direction: column; align-items: center;
+    transform: translate(-50%, -50%);
+  }
+  .stamp-pin .disc {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: var(--pin, var(--honey));
+    border: 5px solid var(--ink);
+    box-shadow: 0 0 0 7px rgba(255,255,255,.95), 0 10px 18px rgba(58,36,21,.30);
+    display: grid; place-items: center;
+    font-size: 46px;
+  }
+  .stamp-pin.sm .disc { width: 78px; height: 78px; font-size: 38px; border-width: 4px; }
+  .stamp-pin .tag {
+    margin-top: 10px;
+    font-size: 30px; font-weight: 800; color: var(--ink);
+    text-shadow: 0 2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 0 -2px 0 #fff, 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff;
+    white-space: nowrap;
+  }
+  .stamp-pin.review .disc {
+    background: #fff;
+    border-style: dashed;
+    border-color: var(--coral);
+    color: var(--coral);
+    font-weight: 900;
+  }
+  .pin-pop { /* highlight rings behind a hero pin */
+    position: absolute; transform: translate(-50%, -50%);
+    width: 96px; height: 96px; z-index: 39;
+  }
+  .pin-pop::before, .pin-pop::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+  }
+  .pin-pop::before { box-shadow: 0 0 0 34px rgba(255,214,107,.42); }
+  .pin-pop::after  { box-shadow: 0 0 0 78px rgba(255,214,107,.20); }
+  .me-dot {
+    position: absolute; z-index: 38; transform: translate(-50%, -50%);
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #2E7CF6; border: 6px solid #fff;
+    box-shadow: 0 0 0 14px rgba(46,124,246,.18), 0 4px 10px rgba(0,0,0,.25);
+  }
+
+  /* ===================== DRAWER (in-screen) ===================== */
+  .drawer {
+    position: absolute; left: 16px; right: 16px; bottom: -10px;
+    z-index: 50;
+    background: rgba(255,245,231,.96);
+    border: 3px solid var(--line);
+    border-radius: 56px 56px 64px 64px;
+    padding: 22px 30px 60px;
+    box-shadow: 0 -16px 50px rgba(58,36,21,.18);
+    backdrop-filter: blur(6px);
+  }
+  .grab { width: 110px; height: 11px; border-radius: 8px; background: rgba(58,36,21,.22); margin: 4px auto 24px; }
+  .searchbar {
+    display: flex; align-items: center; gap: 20px;
+    background: #fff;
+    border: 2.5px solid var(--line);
+    border-radius: 999px;
+    padding: 22px 26px;
+  }
+  .searchbar .q { flex: 1; font-size: 35px; font-weight: 600; color: #A08A75; white-space: nowrap; overflow: hidden; }
+  .searchbar .q.typed { color: var(--ink); font-weight: 700; }
+  .searchbar svg { flex: none; }
+  .avatar {
+    flex: none;
+    width: 58px; height: 58px; border-radius: 50%;
+    background: var(--honey); border: 3px solid var(--ink);
+    display: grid; place-items: center; font-size: 28px; font-weight: 900;
+  }
+  .tabs { display: flex; gap: 16px; margin-top: 24px; }
+  .tab {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 30px; font-weight: 800;
+    border: 2.5px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 16px 26px;
+    white-space: nowrap;
+  }
+  .tab.on { background: var(--honey); border-color: var(--ink); box-shadow: 0 5px 0 rgba(58,36,21,.20); }
+  .tab svg { display: block; }
+
+  .card {
+    background: var(--page);
+    border: 3px solid var(--line);
+    border-radius: 32px;
+    padding: 30px 32px;
+    margin-top: 26px;
+  }
+  .card .kicker {
+    display: inline-block;
+    font-size: 24px; font-weight: 900; letter-spacing: .14em;
+    padding: 10px 20px 8px; border-radius: 999px;
+    border: 2.5px solid var(--ink);
+    margin-bottom: 18px;
+  }
+  .kicker.honey { background: var(--honey); }
+  .kicker.mint  { background: var(--mint); }
+  .kicker.sky   { background: var(--sky); }
+  .kicker.coral { background: var(--coral); color: #fff; border-color: rgba(58,36,21,.7); }
+  .card h3 { margin: 0; font-size: 44px; font-weight: 900; letter-spacing: -.01em; }
+  .card .meta { margin-top: 10px; font-size: 30px; font-weight: 600; color: var(--muted); line-height: 1.35; }
+  .btn-row { display: flex; gap: 18px; margin-top: 26px; }
+  .btn {
+    flex: 1; text-align: center;
+    font-size: 32px; font-weight: 900;
+    padding: 24px 10px;
+    border-radius: 22px;
+    border: 3px solid var(--ink);
+  }
+  .btn.primary { background: var(--ink); color: var(--cream); box-shadow: 0 6px 0 rgba(58,36,21,.30); }
+  .btn.honey   { background: var(--honey); color: var(--ink); box-shadow: 0 6px 0 rgba(58,36,21,.22); }
+  .btn.ghost   { background: #fff; color: var(--ink); border-color: var(--line); }
+
+  .toast {
+    position: absolute; top: 150px; left: 50%; transform: translateX(-50%);
+    z-index: 58;
+    display: flex; align-items: center; gap: 18px;
+    background: var(--ink); color: var(--cream);
+    font-size: 33px; font-weight: 800;
+    border-radius: 999px;
+    padding: 22px 38px;
+    box-shadow: 0 14px 30px rgba(58,36,21,.35);
+    white-space: nowrap;
+  }
+  .toast .dot { width: 40px; height: 40px; border-radius: 50%; background: var(--mint); border: 3px solid rgba(255,255,255,.65); display:grid; place-items:center; }
+
+  .source-chip {
+    display: inline-flex; align-items: center; gap: 14px;
+    font-size: 27px; font-weight: 800; color: var(--muted);
+    background: #fff; border: 2.5px solid var(--line); border-radius: 999px;
+    padding: 12px 24px;
+    margin-top: 18px;
+  }
+
+  /* mini stamp row (shot 1) */
+  .mini-row { display: flex; gap: 20px; margin-top: 26px; }
+  .mini {
+    flex: 1;
+    background: var(--page);
+    border: 3px solid var(--line);
+    border-radius: 28px;
+    padding: 24px 22px;
+  }
+  .mini .ic {
+    width: 70px; height: 70px; border-radius: 50%;
+    border: 4px solid var(--ink);
+    display: grid; place-items: center; font-size: 34px;
+    margin-bottom: 16px;
+  }
+  .mini h4 { margin: 0; font-size: 31px; font-weight: 900; line-height: 1.12; }
+  .mini p { margin: 8px 0 0; font-size: 25px; font-weight: 600; color: var(--muted); }
+
+  /* result rows (shot 5) */
+  .result {
+    display: flex; align-items: center; gap: 24px;
+    background: var(--page);
+    border: 3px solid var(--line);
+    border-radius: 30px;
+    padding: 24px 28px;
+    margin-top: 22px;
+  }
+  .result .ic {
+    flex: none;
+    width: 84px; height: 84px; border-radius: 50%;
+    border: 4px solid var(--ink);
+    display: grid; place-items: center; font-size: 40px;
+  }
+  .result .tx { flex: 1; min-width: 0; }
+  .result h4 { margin: 0; font-size: 37px; font-weight: 900; }
+  .result p { margin: 8px 0 0; font-size: 28px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .result .go {
+    flex: none;
+    font-size: 28px; font-weight: 900;
+    background: var(--honey); border: 3px solid var(--ink); border-radius: 999px;
+    padding: 14px 24px;
+  }
+  .memo-say {
+    display: flex; gap: 22px; align-items: flex-start;
+    margin-top: 26px;
+  }
+  .memo-say .face {
+    flex: none; width: 86px; height: 86px; border-radius: 28px;
+    background: var(--honey); border: 4px solid var(--ink);
+    display: grid; place-items: center;
+  }
+  .memo-say .face svg { width: 58px; height: 58px; }
+  .memo-say .bubble {
+    background: #fff; border: 3px solid var(--line);
+    border-radius: 10px 32px 32px 32px;
+    padding: 24px 30px;
+    font-size: 32px; font-weight: 700; line-height: 1.35;
+  }
+
+  /* ===================== PASSPORT SCREEN (shot 6) ===================== */
+  .passport-screen {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #FFF8EC 0%, var(--page) 100%);
+    padding: 150px 0 0;
+  }
+  .passport-screen::before { /* spine */
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0; width: 54px;
+    background:
+      repeating-linear-gradient(180deg, transparent 0 96px, rgba(58,36,21,.25) 96px 100px),
+      #F6C181;
+    border-right: 4px solid rgba(58,36,21,.45);
+  }
+  .pp-inner { padding: 40px 60px 0 110px; }
+  .pp-hero { display: flex; align-items: center; gap: 34px; }
+  .pp-hero .face {
+    width: 150px; height: 150px; border-radius: 44px;
+    background: var(--honey); border: 5px solid var(--ink);
+    display: grid; place-items: center;
+    box-shadow: 0 10px 0 rgba(58,36,21,.16);
+  }
+  .pp-hero .face svg { width: 104px; height: 104px; }
+  .pp-hero .t1 { font-size: 32px; font-weight: 900; letter-spacing: .26em; color: var(--muted); }
+  .pp-hero h2 { margin: 8px 0 0; font-size: 62px; font-weight: 900; letter-spacing: -.01em; }
+  .pp-stats { display: flex; gap: 22px; margin-top: 44px; }
+  .pp-stat {
+    flex: 1;
+    background: #fff;
+    border: 3px solid var(--line);
+    border-radius: 30px;
+    padding: 28px 10px 24px;
+    text-align: center;
+  }
+  .pp-stat b { display: block; font-size: 66px; font-weight: 900; letter-spacing: -.02em; }
+  .pp-stat span { display: block; margin-top: 6px; font-size: 27px; font-weight: 800; letter-spacing: .1em; color: var(--muted); }
+  .pp-section { margin-top: 46px; font-size: 30px; font-weight: 900; letter-spacing: .2em; color: var(--muted); }
+  .pp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 26px; }
+  .pp-cell {
+    background: var(--cream);
+    border: 3px solid var(--line);
+    border-radius: 30px;
+    padding: 26px 20px 22px;
+    text-align: center;
+  }
+  .pp-cell .seal {
+    width: 110px; height: 110px; margin: 0 auto 16px;
+    border-radius: 50%;
+    border: 5px solid var(--ink);
+    display: grid; place-items: center;
+    font-size: 50px;
+    position: relative;
+  }
+  .pp-cell .seal::after {
+    content: ""; position: absolute; inset: 7px;
+    border-radius: 50%; border: 2.5px dashed rgba(58,36,21,.5);
+  }
+  .pp-cell h5 { margin: 0; font-size: 30px; font-weight: 900; }
+  .pp-cell p { margin: 6px 0 0; font-size: 24px; font-weight: 700; color: var(--muted); }
+  .pp-lock {
+    margin-top: 44px;
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    font-size: 30px; font-weight: 800; color: var(--muted);
+  }
+
+  /* phone-screen plain panels (shot 2) */
+  .panel-screen {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #FFF8EC 0%, var(--cream) 100%);
+    padding: 170px 44px 0;
+  }
+  .flow-arrow {
+    display: grid; place-items: center;
+    margin: 18px auto;
+    width: 86px; height: 86px;
+    border-radius: 50%;
+    background: var(--honey);
+    border: 4px solid var(--ink);
+    box-shadow: 0 8px 0 rgba(58,36,21,.18);
+  }
+  .reel-card {
+    border-radius: 36px;
+    border: 3px solid var(--line);
+    overflow: hidden;
+    background: #fff;
+  }
+  .reel-thumb {
+    height: 360px;
+    position: relative;
+    background:
+      radial-gradient(420px 260px at 22% 30%, rgba(255,214,107,.85), transparent 60%),
+      radial-gradient(420px 300px at 80% 70%, rgba(238,156,120,.9), transparent 62%),
+      linear-gradient(150deg, #F6C1CB 0%, #EE9C78 52%, #8FCAEA 130%);
+  }
+  .reel-thumb .bowl {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 150px;
+    filter: drop-shadow(0 12px 16px rgba(58,36,21,.3));
+  }
+  .reel-thumb .ig {
+    position: absolute; top: 26px; left: 26px;
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,.92);
+    border-radius: 999px;
+    padding: 12px 24px;
+    font-size: 27px; font-weight: 900;
+  }
+  .reel-thumb .len {
+    position: absolute; bottom: 24px; right: 26px;
+    background: rgba(0,0,0,.62); color: #fff;
+    font-size: 25px; font-weight: 800;
+    border-radius: 999px; padding: 8px 18px;
+  }
+  .reel-body { padding: 28px 32px 30px; }
+  .reel-body .cap { font-size: 33px; font-weight: 700; line-height: 1.35; }
+  .reel-body .cap b { font-weight: 900; }
+  .reel-body .by { margin-top: 12px; font-size: 28px; font-weight: 700; color: var(--muted); }
+
+  /* ===================== EXPORT CONTROL ===================== */
+  body[data-shot] .shot { display: none; }
+  body[data-shot="shot-01-hook"]        #shot-01-hook,
+  body[data-shot="shot-02-paste-link"]  #shot-02-paste-link,
+  body[data-shot="shot-03-on-your-map"] #shot-03-on-your-map,
+  body[data-shot="shot-04-confirm"]     #shot-04-confirm,
+  body[data-shot="shot-05-ask-your-map"] #shot-05-ask-your-map,
+  body[data-shot="shot-06-passport"]    #shot-06-passport { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ====================== SHARED SVG DEFS ====================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Memo the elephant -->
+    <symbol id="memo" viewBox="0 0 100 100">
+      <!-- ears -->
+      <circle cx="22" cy="38" r="20" fill="#7A4A2C" stroke="#3A2415" stroke-width="5"/>
+      <circle cx="78" cy="38" r="20" fill="#7A4A2C" stroke="#3A2415" stroke-width="5"/>
+      <circle cx="22" cy="38" r="10" fill="#F6C1CB"/>
+      <circle cx="78" cy="38" r="10" fill="#F6C1CB"/>
+      <!-- head -->
+      <rect x="22" y="18" width="56" height="52" rx="24" fill="#A9714B" stroke="#3A2415" stroke-width="5"/>
+      <!-- eyes -->
+      <circle cx="40" cy="42" r="5.5" fill="#3A2415"/>
+      <circle cx="60" cy="42" r="5.5" fill="#3A2415"/>
+      <circle cx="42" cy="40" r="1.8" fill="#fff"/>
+      <circle cx="62" cy="40" r="1.8" fill="#fff"/>
+      <!-- cheeks -->
+      <circle cx="32" cy="52" r="4.5" fill="#F6C1CB"/>
+      <circle cx="68" cy="52" r="4.5" fill="#F6C1CB"/>
+      <!-- trunk -->
+      <path d="M50 52 C50 64 50 72 40 80 C36 83 30 82 29 77 C28 73 32 72 34 73"
+            fill="none" stroke="#3A2415" stroke-width="5" stroke-linecap="round"/>
+      <path d="M50 52 C50 64 50 71 41 78" fill="none" stroke="#A9714B" stroke-width="9" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Stylized city map, Apple-Maps light cartography -->
+    <symbol id="citymap" viewBox="0 0 1600 3500" preserveAspectRatio="xMidYMid slice">
+      <rect width="1600" height="3500" fill="#F3EFE2"/>
+      <!-- city blocks -->
+      <g fill="#EAE4D2">
+        <rect x="60"  y="120"  width="280" height="180" rx="14"/>
+        <rect x="420" y="90"   width="300" height="200" rx="14"/>
+        <rect x="1010" y="140" width="240" height="170" rx="14"/>
+        <rect x="1330" y="110" width="220" height="200" rx="14"/>
+        <rect x="70"  y="900"  width="240" height="240" rx="14"/>
+        <rect x="640" y="880"  width="220" height="280" rx="14"/>
+        <rect x="990" y="920"  width="250" height="240" rx="14"/>
+        <rect x="1320" y="880" width="230" height="260" rx="14"/>
+        <rect x="80"  y="1340" width="260" height="280" rx="14"/>
+        <rect x="650" y="1340" width="200" height="260" rx="14"/>
+        <rect x="1000" y="1330" width="240" height="280" rx="14"/>
+        <rect x="1330" y="1360" width="220" height="240" rx="14"/>
+        <rect x="70"  y="1800" width="250" height="270" rx="14"/>
+        <rect x="430" y="1820" width="180" height="240" rx="14"/>
+        <rect x="1010" y="1790" width="230" height="270" rx="14"/>
+        <rect x="1330" y="1820" width="220" height="240" rx="14"/>
+        <rect x="90"  y="2280" width="240" height="240" rx="14"/>
+        <rect x="440" y="2300" width="190" height="220" rx="14"/>
+        <rect x="660" y="2280" width="200" height="250" rx="14"/>
+        <rect x="1340" y="2300" width="210" height="230" rx="14"/>
+        <rect x="100" y="2760" width="230" height="250" rx="14"/>
+        <rect x="450" y="2780" width="190" height="230" rx="14"/>
+        <rect x="700" y="2760" width="210" height="260" rx="14"/>
+        <rect x="1030" y="2780" width="220" height="240" rx="14"/>
+        <rect x="100" y="3180" width="240" height="220" rx="14"/>
+        <rect x="460" y="3200" width="200" height="200" rx="14"/>
+        <rect x="1050" y="3180" width="230" height="220" rx="14"/>
+      </g>
+
+      <!-- park -->
+      <path d="M330 380 C300 280 460 220 600 250 C760 285 850 380 820 520 C795 640 640 700 480 670 C340 645 360 480 330 380 Z"
+            fill="#CBE5BC"/>
+      <g fill="#A9CD96">
+        <circle cx="470" cy="380" r="16"/><circle cx="560" cy="330" r="13"/>
+        <circle cx="640" cy="420" r="17"/><circle cx="520" cy="500" r="14"/>
+        <circle cx="630" cy="560" r="12"/><circle cx="430" cy="560" r="13"/>
+      </g>
+      <text x="490" y="463" font-size="34" font-weight="700" fill="#6FA065" font-family="-apple-system, sans-serif">Hilltop Park</text>
+
+      <!-- second green -->
+      <path d="M1290 2520 C1270 2440 1380 2400 1470 2430 C1570 2465 1600 2560 1560 2640 C1520 2715 1380 2720 1320 2660 C1270 2610 1305 2580 1290 2520 Z" fill="#CBE5BC"/>
+      <circle cx="1400" cy="2520" r="14" fill="#A9CD96"/>
+      <circle cx="1480" cy="2580" r="12" fill="#A9CD96"/>
+
+      <!-- water -->
+      <path d="M1600 2900 C1380 2960 1280 3100 1180 3260 C1100 3390 1020 3460 900 3500 L1600 3500 Z" fill="#B9DDF2"/>
+      <path d="M1600 2980 C1430 3030 1340 3140 1250 3280" fill="none" stroke="#A3CFEA" stroke-width="10" stroke-linecap="round"/>
+      <text x="1230" y="3230" font-size="32" font-style="italic" font-weight="600" fill="#5F94B8" font-family="-apple-system, sans-serif" transform="rotate(-38 1230 3230)">Mill River</text>
+
+      <!-- minor roads: casing then fill -->
+      <g fill="none" stroke="#DCD5BF" stroke-width="30" stroke-linecap="round">
+        <path d="M-40 340 H1640"/>
+        <path d="M-40 800 H1640"/>
+        <path d="M-40 1270 C400 1255 1200 1290 1640 1265"/>
+        <path d="M-40 1720 H1640"/>
+        <path d="M-40 2200 H1640"/>
+        <path d="M-40 2660 H1640"/>
+        <path d="M-40 3120 C500 3105 1100 3140 1640 3110"/>
+        <path d="M380 -40 C390 800 360 2400 380 3540"/>
+        <path d="M1290 -40 C1280 900 1300 2400 1285 3540"/>
+        <path d="M640 1720 C700 2100 660 2900 690 3540"/>
+      </g>
+      <g fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round">
+        <path d="M-40 340 H1640"/>
+        <path d="M-40 800 H1640"/>
+        <path d="M-40 1270 C400 1255 1200 1290 1640 1265"/>
+        <path d="M-40 1720 H1640"/>
+        <path d="M-40 2200 H1640"/>
+        <path d="M-40 2660 H1640"/>
+        <path d="M-40 3120 C500 3105 1100 3140 1640 3110"/>
+        <path d="M380 -40 C390 800 360 2400 380 3540"/>
+        <path d="M1290 -40 C1280 900 1300 2400 1285 3540"/>
+        <path d="M640 1720 C700 2100 660 2900 690 3540"/>
+      </g>
+
+      <!-- major avenue: vertical -->
+      <g fill="none" stroke-linecap="round">
+        <path d="M905 -40 C920 700 890 2600 910 3540" stroke="#E5CE8C" stroke-width="44"/>
+        <path d="M905 -40 C920 700 890 2600 910 3540" stroke="#FBE7A3" stroke-width="32"/>
+      </g>
+      <!-- major diagonal -->
+      <g fill="none" stroke-linecap="round">
+        <path d="M-60 2980 C420 2700 1100 2050 1660 1560" stroke="#E5CE8C" stroke-width="44"/>
+        <path d="M-60 2980 C420 2700 1100 2050 1660 1560" stroke="#FBE7A3" stroke-width="32"/>
+      </g>
+
+      <!-- street labels -->
+      <g font-family="-apple-system, sans-serif" font-weight="600" fill="#9B9279">
+        <text x="120" y="780" font-size="30">Alder St</text>
+        <text x="1010" y="1248" font-size="30">Juniper Ave</text>
+        <text x="150" y="2180" font-size="30">Quince St</text>
+        <text x="1020" y="2640" font-size="30">Marigold St</text>
+        <text x="410" y="1080" font-size="30" transform="rotate(90 410 1080)">Fern St</text>
+        <text x="940" y="560" font-size="32" transform="rotate(90 940 560)">Meridian Ave</text>
+        <text x="1318" y="1980" font-size="30" transform="rotate(90 1318 1980)">Cypress Ave</text>
+        <text x="430" y="2760" font-size="32" transform="rotate(-29 430 2760)">Old Mill Rd</text>
+      </g>
+
+      <!-- district labels -->
+      <g font-family="-apple-system, sans-serif" font-weight="700" fill="#B5AB90" letter-spacing="8">
+        <text x="520" y="980" font-size="46">NORTH&#160;END</text>
+        <text x="330" y="2440" font-size="46">OLD&#160;TOWN</text>
+        <text x="1010" y="1880" font-size="40">RIVERSIDE</text>
+      </g>
+
+      <!-- tiny neutral POIs -->
+      <g font-family="-apple-system, sans-serif" font-weight="600" font-size="24" fill="#A89C84">
+        <circle cx="540" cy="1490" r="9" fill="#C9BFA6"/><text x="560" y="1499">Grocer</text>
+        <circle cx="1130" cy="710" r="9" fill="#C9BFA6"/><text x="1150" y="719">Library</text>
+        <circle cx="250" cy="3060" r="9" fill="#C9BFA6"/><text x="270" y="3069">Station</text>
+      </g>
+    </symbol>
+
+    <!-- status bar icons (ink) -->
+    <symbol id="sbicons" viewBox="0 0 140 36">
+      <g fill="currentColor">
+        <rect x="0"  y="20" width="6" height="10" rx="2"/>
+        <rect x="10" y="15" width="6" height="15" rx="2"/>
+        <rect x="20" y="10" width="6" height="20" rx="2"/>
+        <rect x="30" y="5"  width="6" height="25" rx="2"/>
+        <path d="M62 14 a18 18 0 0 1 24 0 l-4 5 a12 12 0 0 0 -16 0 z"/>
+        <path d="M68 21 a10 10 0 0 1 12 0 l-3.5 4.5 a5 5 0 0 0 -5 0 z"/>
+        <circle cx="74" cy="29" r="3"/>
+        <rect x="98" y="8" width="34" height="20" rx="6" fill="none" stroke="currentColor" stroke-width="3"/>
+        <rect x="102" y="12" width="22" height="12" rx="3"/>
+        <rect x="134" y="14" width="4" height="8" rx="2"/>
+      </g>
+    </symbol>
+
+    <symbol id="ic-search" viewBox="0 0 40 40">
+      <circle cx="17" cy="17" r="11" fill="none" stroke="#3A2415" stroke-width="4.5"/>
+      <path d="M26 26 L35 35" stroke="#3A2415" stroke-width="5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-mic" viewBox="0 0 40 40">
+      <rect x="14" y="5" width="12" height="20" rx="6" fill="none" stroke="#7A5D45" stroke-width="4"/>
+      <path d="M9 20 a11 11 0 0 0 22 0 M20 31 v5" fill="none" stroke="#7A5D45" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-plus" viewBox="0 0 40 40">
+      <path d="M20 8 v24 M8 20 h24" stroke="#3A2415" stroke-width="5.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-stamp" viewBox="0 0 40 40">
+      <circle cx="20" cy="17" r="10" fill="none" stroke="#3A2415" stroke-width="4"/>
+      <circle cx="20" cy="17" r="4" fill="#3A2415"/>
+      <path d="M10 33 h20" stroke="#3A2415" stroke-width="4.5" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-check-sq" viewBox="0 0 40 40">
+      <rect x="6" y="6" width="28" height="28" rx="8" fill="none" stroke="#3A2415" stroke-width="4"/>
+      <path d="M13 20 l6 6 l9 -11" fill="none" stroke="#3A2415" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-list" viewBox="0 0 40 40">
+      <path d="M13 10 h20 M13 20 h20 M13 30 h20" stroke="#3A2415" stroke-width="4.5" stroke-linecap="round"/>
+      <circle cx="6.5" cy="10" r="3"/><circle cx="6.5" cy="20" r="3"/><circle cx="6.5" cy="30" r="3"/>
+    </symbol>
+    <symbol id="ic-friends" viewBox="0 0 40 40">
+      <circle cx="14" cy="14" r="7" fill="none" stroke="#3A2415" stroke-width="4"/>
+      <path d="M3 34 a11 11 0 0 1 22 0" fill="none" stroke="#3A2415" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="29" cy="16" r="5.5" fill="none" stroke="#3A2415" stroke-width="3.6"/>
+      <path d="M24 33 a9 9 0 0 1 14 -6" fill="none" stroke="#3A2415" stroke-width="3.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-link" viewBox="0 0 40 40">
+      <path d="M17 23 a7 7 0 0 1 0 -10 l6 -6 a7 7 0 0 1 10 10 l-4 4" fill="none" stroke="#3A2415" stroke-width="4.2" stroke-linecap="round"/>
+      <path d="M23 17 a7 7 0 0 1 0 10 l-6 6 a7 7 0 0 1 -10 -10 l4 -4" fill="none" stroke="#3A2415" stroke-width="4.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="ic-arrow-down" viewBox="0 0 40 40">
+      <path d="M20 6 v24 M9 20 l11 11 l11 -11" fill="none" stroke="#3A2415" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="ic-lock" viewBox="0 0 40 40">
+      <rect x="8" y="17" width="24" height="18" rx="6" fill="none" stroke="currentColor" stroke-width="3.6"/>
+      <path d="M13 17 v-4 a7 7 0 0 1 14 0 v4" fill="none" stroke="currentColor" stroke-width="3.6"/>
+      <circle cx="20" cy="26" r="3" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="workspace">
+
+<!-- ============================================================
+     SHOT 01 — HOOK: the saved map
+============================================================= -->
+<section class="shot" id="shot-01-hook" data-accent="honey">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">01</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow">MEET SAV-E</div>
+    <h1 style="font-size: 118px;">Stop losing places<br>friends <span class="hl">send you.</span></h1>
+    <p class="sub">Reels, links, screenshots, notes — every spot lands on one private map.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 868px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <svg class="map" viewBox="120 240 1340 2900" preserveAspectRatio="xMidYMid slice"><use href="#citymap"/></svg>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+
+        <div class="me-dot" style="left: 47%; top: 56%;"></div>
+
+        <div class="stamp-pin" style="left: 26%; top: 17.5%;"><div class="disc">☕</div><div class="tag">Driftwood Coffee</div></div>
+        <div class="stamp-pin" style="left: 70%; top: 25%;"><div class="disc">🍜</div><div class="tag">Noodle &amp; Co.</div></div>
+        <div class="stamp-pin sm" style="left: 18%; top: 36%;"><div class="disc" style="--pin: var(--pink);">🥐</div><div class="tag">Flour Bakery</div></div>
+        <div class="stamp-pin" style="left: 56%; top: 42%;"><div class="disc" style="--pin: var(--mint);">🌮</div><div class="tag">Casa Lupe</div></div>
+        <div class="stamp-pin sm" style="left: 80%; top: 49%;"><div class="disc" style="--pin: var(--sky);">🍸</div><div class="tag">Bar Sora</div></div>
+
+        <div class="drawer">
+          <div class="grab"></div>
+          <div class="searchbar">
+            <svg width="40" height="40"><use href="#ic-search"/></svg>
+            <div class="q">Ask saved places or paste a spot…</div>
+            <svg width="40" height="40"><use href="#ic-mic"/></svg>
+            <div class="avatar">J</div>
+          </div>
+          <div class="tabs">
+            <div class="tab"><svg width="30" height="30"><use href="#ic-plus"/></svg>Add</div>
+            <div class="tab on"><svg width="30" height="30"><use href="#ic-stamp"/></svg>Stamps</div>
+            <div class="tab"><svg width="30" height="30"><use href="#ic-check-sq"/></svg>Review</div>
+            <div class="tab"><svg width="30" height="30"><use href="#ic-friends"/></svg>Friends</div>
+          </div>
+          <div class="mini-row">
+            <div class="mini"><div class="ic" style="background: var(--honey);">🍜</div><h4>Noodle &amp; Co.</h4><p>From Mina's Reel</p></div>
+            <div class="mini"><div class="ic" style="background: var(--mint);">🌮</div><h4>Casa Lupe</h4><p>From a TikTok</p></div>
+            <div class="mini"><div class="ic" style="background: var(--sky);">🍸</div><h4>Bar Sora</h4><p>From group chat</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SHOT 02 — CORE MAGIC: paste a link
+============================================================= -->
+<section class="shot" id="shot-02-paste-link" data-accent="pink">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">02</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow" style="--eyebrow-bg: var(--pink);">THE MAGIC</div>
+    <h1 style="font-size: 116px;">Paste a link.<br>Get the <span class="hl">real place.</span></h1>
+    <p class="sub">Drop any Reel, TikTok or article. SAV-E finds the actual spot behind it.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 868px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <div class="panel-screen">
+          <div class="searchbar" style="box-shadow: 0 10px 24px rgba(58,36,21,.10);">
+            <svg width="40" height="40"><use href="#ic-link"/></svg>
+            <div class="q typed">instagram.com/reel/xK29mQ…</div>
+            <div class="avatar" style="background: var(--mint); font-size: 24px;">⌘V</div>
+          </div>
+
+          <div class="reel-card" style="margin-top: 40px;">
+            <div class="reel-thumb">
+              <div class="ig">📸 Instagram Reel</div>
+              <div class="bowl">🍜</div>
+              <div class="len">0:23</div>
+            </div>
+            <div class="reel-body">
+              <div class="cap">"hidden tonkotsu spot, no sign on the door — <b>trust me on this one</b> 🍜🔥"</div>
+              <div class="by">@minaeats · 2.1M views</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow"><svg width="44" height="44"><use href="#ic-arrow-down"/></svg></div>
+
+          <div class="card" style="margin-top: 0; background: #fff; border-color: var(--line-strong); border-width: 3.5px; box-shadow: 0 14px 0 rgba(58,36,21,.10);">
+            <span class="kicker mint">✓&#160; FOUND THE REAL PLACE</span>
+            <h3>Menya Kotetsu</h3>
+            <div class="meta">Ramen · Old Town · 4.8 ★ (1,204) · Opens 11:30</div>
+            <div class="source-chip">🔗&#160; Source kept — Mina's Reel</div>
+            <div class="btn-row">
+              <div class="btn ghost">Review first</div>
+              <div class="btn primary">Save to map</div>
+            </div>
+          </div>
+
+          <div class="card" style="background: rgba(255,255,255,.7);">
+            <span class="kicker sky">ALSO IN THIS REEL</span>
+            <h3>2 more spots mentioned</h3>
+            <div class="meta">A dessert bar and a listening café — review them when you're ready.</div>
+          </div>
+        </div>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SHOT 03 — IT LANDS ON YOUR MAP
+============================================================= -->
+<section class="shot" id="shot-03-on-your-map" data-accent="honey">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">03</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow">NO TYPING</div>
+    <h1>It lands right<br>on <span class="hl">your map.</span></h1>
+    <p class="sub">Pinned with the source attached — so you'll always know why you saved it.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 880px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <svg class="map" viewBox="430 1180 980 2120" preserveAspectRatio="xMidYMid slice"><use href="#citymap"/></svg>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+
+        <div class="toast"><span class="dot">✓</span> Saved — Menya Kotetsu</div>
+
+        <div class="pin-pop" style="left: 50%; top: 38%;"></div>
+        <div class="stamp-pin" style="left: 50%; top: 38%;">
+          <div class="disc" style="width: 120px; height: 120px; font-size: 58px;">🍜</div>
+          <div class="tag" style="font-size: 36px;">Menya Kotetsu</div>
+        </div>
+        <div class="stamp-pin sm" style="left: 17%; top: 24%;"><div class="disc" style="--pin: var(--sky);">🍸</div><div class="tag">Bar Sora</div></div>
+        <div class="stamp-pin sm" style="left: 79%; top: 60%;"><div class="disc" style="--pin: var(--pink);">🥐</div><div class="tag">Flour Bakery</div></div>
+        <div class="me-dot" style="left: 30%; top: 70%;"></div>
+
+        <div class="drawer">
+          <div class="grab"></div>
+          <div class="card" style="margin-top: 6px; background: #fff;">
+            <span class="kicker honey">MAP STAMP</span>
+            <h3>Menya Kotetsu &#160;🍜</h3>
+            <div class="meta">Saved just now · from Mina's Reel · Old Town</div>
+            <div class="btn-row">
+              <div class="btn ghost">View source</div>
+              <div class="btn honey">Plan around this</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SHOT 04 — TRUST: you confirm first
+============================================================= -->
+<section class="shot" id="shot-04-confirm" data-accent="sky">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">04</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow" style="--eyebrow-bg: var(--sky);">TRUST, BUILT IN</div>
+    <h1>You confirm<br>before <span class="hl" style="--mark: var(--sky);">it counts.</span></h1>
+    <p class="sub">Uncertain clues wait in Review — your map never shows a guess as a memory.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 880px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <svg class="map" viewBox="120 240 1340 2900" preserveAspectRatio="xMidYMid slice" style="opacity:.55;"><use href="#citymap"/></svg>
+        <div style="position:absolute; inset:0; background: linear-gradient(180deg, rgba(255,248,236,.2) 0%, rgba(255,245,231,.65) 55%);"></div>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+
+        <div class="stamp-pin review" style="left: 62%; top: 17%;"><div class="disc">?</div><div class="tag" style="color: #B65C36;">Likely match</div></div>
+
+        <div class="drawer" style="padding-bottom: 70px;">
+          <div class="grab"></div>
+          <div class="tabs" style="margin-top: 4px;">
+            <div class="tab"><svg width="30" height="30"><use href="#ic-plus"/></svg>Add</div>
+            <div class="tab"><svg width="30" height="30"><use href="#ic-stamp"/></svg>Stamps</div>
+            <div class="tab on" style="background: var(--sky);"><svg width="30" height="30"><use href="#ic-check-sq"/></svg>Review · 2</div>
+            <div class="tab"><svg width="30" height="30"><use href="#ic-list"/></svg>Lists</div>
+          </div>
+
+          <div class="card" style="background:#fff;">
+            <span class="kicker sky">REVIEW CANDIDATE</span>
+            <h3>Golden Lotus Dim Sum</h3>
+            <div class="meta">From Leo's TikTok · likely match in North End</div>
+            <div class="btn-row">
+              <div class="btn ghost">Not it</div>
+              <div class="btn honey">Confirm ✓</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="kicker coral">WAITING CLUE</span>
+            <h3>"that rooftop bar??"</h3>
+            <div class="meta">Screenshot from group chat · needs exact place — stays off your map for now</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SHOT 05 — ASK YOUR MAP
+============================================================= -->
+<section class="shot" id="shot-05-ask-your-map" data-accent="mint">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">05</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow" style="--eyebrow-bg: var(--mint);">PLAN IN SECONDS</div>
+    <h1>Ask your map,<br>not the <span class="hl" style="--mark: var(--mint);">internet.</span></h1>
+    <p class="sub">Dinner tonight? Memo answers from places you already saved and trust.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 880px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <svg class="map" viewBox="280 700 1200 2600" preserveAspectRatio="xMidYMid slice" style="opacity:.5;"><use href="#citymap"/></svg>
+        <div style="position:absolute; inset:0; background: linear-gradient(180deg, rgba(255,248,236,.25) 0%, rgba(255,245,231,.72) 50%);"></div>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+
+        <div class="drawer" style="padding-bottom: 64px;">
+          <div class="grab"></div>
+          <div class="searchbar">
+            <svg width="40" height="40"><use href="#ic-search"/></svg>
+            <div class="q typed">dinner tonight, walkable?</div>
+            <svg width="40" height="40"><use href="#ic-mic"/></svg>
+          </div>
+
+          <div class="memo-say">
+            <div class="face"><svg><use href="#memo"/></svg></div>
+            <div class="bubble">3 of your saved spots are open now, within a 12-min walk:</div>
+          </div>
+
+          <div class="result">
+            <div class="ic" style="background: var(--honey);">🍜</div>
+            <div class="tx"><h4>Menya Kotetsu</h4><p>6 min walk · from Mina's Reel</p></div>
+            <div class="go">Go</div>
+          </div>
+          <div class="result">
+            <div class="ic" style="background: var(--mint);">🌮</div>
+            <div class="tx"><h4>Casa Lupe</h4><p>9 min walk · saved 2 weeks ago</p></div>
+            <div class="go">Go</div>
+          </div>
+          <div class="result">
+            <div class="ic" style="background: var(--pink);">🍕</div>
+            <div class="tx"><h4>Slice Society</h4><p>12 min walk · Leo's favorite</p></div>
+            <div class="go">Go</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SHOT 06 — PASSPORT PAYOFF
+============================================================= -->
+<section class="shot" id="shot-06-passport" data-accent="honey">
+  <header class="masthead">
+    <div class="lockup">
+      <div class="memo-chip"><svg><use href="#memo"/></svg></div>
+      <div class="wordmark">SAV-E</div>
+    </div>
+    <div class="shot-stamp">06</div>
+  </header>
+
+  <div class="head">
+    <div class="eyebrow">THE PAYOFF</div>
+    <h1>Your passport<br>of <span class="hl">places.</span></h1>
+    <p class="sub">Every confirmed spot becomes a stamp in a story only you can open.</p>
+  </div>
+
+  <div class="phone-wrap" style="--phone-top: 880px;">
+    <div class="phone">
+      <i class="side-btn vol1"></i><i class="side-btn vol2"></i><i class="side-btn pwr"></i>
+      <div class="screen">
+        <div class="passport-screen">
+          <div class="pp-inner">
+            <div class="pp-hero">
+              <div class="face"><svg><use href="#memo"/></svg></div>
+              <div>
+                <div class="t1">SAV-E PASSPORT</div>
+                <h2>Jerry's Places</h2>
+              </div>
+            </div>
+
+            <div class="pp-stats">
+              <div class="pp-stat"><b>128</b><span>SAVED</span></div>
+              <div class="pp-stat"><b>36</b><span>VISITED</span></div>
+              <div class="pp-stat"><b>9</b><span>CITIES</span></div>
+            </div>
+
+            <div class="pp-section">RECENT MAP STAMPS</div>
+            <div class="pp-grid">
+              <div class="pp-cell"><div class="seal" style="background: var(--honey);">🍜</div><h5>Menya Kotetsu</h5><p>Old Town · Jun</p></div>
+              <div class="pp-cell"><div class="seal" style="background: var(--mint);">🌮</div><h5>Casa Lupe</h5><p>North End · Jun</p></div>
+              <div class="pp-cell"><div class="seal" style="background: var(--sky);">🍸</div><h5>Bar Sora</h5><p>Riverside · May</p></div>
+              <div class="pp-cell"><div class="seal" style="background: var(--pink);">🥐</div><h5>Flour Bakery</h5><p>Old Town · May</p></div>
+              <div class="pp-cell"><div class="seal" style="background: var(--coral);">⛩️</div><h5>Hilltop Shrine</h5><p>Kyoto · Apr</p></div>
+              <div class="pp-cell"><div class="seal" style="background: var(--honey);">☕</div><h5>Driftwood</h5><p>Riverside · Apr</p></div>
+            </div>
+
+            <div class="pp-lock">
+              <svg width="34" height="34" viewBox="0 0 40 40" style="color: var(--muted);"><use href="#ic-lock"/></svg>
+              Private to you. No feed, no followers.
+            </div>
+          </div>
+        </div>
+        <div class="island"></div>
+        <div class="statusbar"><span class="time">9:41</span><svg width="120" height="32" viewBox="0 0 140 36"><use href="#sbicons"/></svg></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const shot = params.get("shot");
+  if (shot) {
+    document.body.dataset.shot = shot;
+  }
+</script>
+</body>
+</html>

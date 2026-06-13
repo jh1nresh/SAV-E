@@ -1,0 +1,10 @@
+{
+  "rawShareText": "9.41 复制打开抖音，看看【金贵七七（环游中国版）的作品】五一大家不要放过武汉！三刷武汉后从20+家美食里筛出这篇攻略 # 武汉美食 https://v.douyin.com/1GiTQ8dM5U8/ 05/20 JIi:/ f@o.Qk :9pm",
+  "expected": {
+    "primaryURLString": "https://v.douyin.com/1GiTQ8dM5U8/",
+    "platform": "douyin",
+    "creatorName": "金贵七七（环游中国版）",
+    "captionContains": ["武汉", "美食"],
+    "captionExcludes": ["复制打开抖音", "的作品】", "JIi:/", "9.41"]
+  }
+}

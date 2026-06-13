@@ -226,18 +226,37 @@ final class SocialLinkReviewCandidateService {
     }
 
     func reviewCandidates(from url: URL) async throws -> [PendingReviewCandidate] {
+        await reviewCandidates(from: url, sharedCaption: nil)
+    }
+
+    /// Entry point for messy pasted share text (caption + URLs + app-open
+    /// boilerplate). Never hard-fails: a paste SAV-E cannot resolve degrades to
+    /// a source-only receipt with a next action instead of throwing.
+    func reviewCandidates(fromSharedText rawShareText: String) async -> [PendingReviewCandidate] {
+        let bundle = SocialShareTextNormalizer.normalize(rawShareText)
+        guard let url = bundle.primaryURL else {
+            let evidenceText = bundle.captionEvidence.isEmpty ? cleanHTMLText(rawShareText) : bundle.captionEvidence
+            return reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: "")
+        }
+        return await reviewCandidates(from: url, sharedCaption: bundle.captionEvidence.isEmpty ? nil : bundle.captionEvidence)
+    }
+
+    private func reviewCandidates(from url: URL, sharedCaption: String?) async -> [PendingReviewCandidate] {
         let metadata = await fetchMetadata(from: url)
         let ocrLines = await thumbnailOCRLines(from: metadata.imageURL)
         let ocrEvidence = ocrLines.isEmpty ? nil : ocrLines.joined(separator: "\n")
         let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
-        let evidenceText = (metadata.evidenceLines + [videoEvidence, ocrEvidence])
+        let evidenceText = ([sharedCaption] + metadata.evidenceLines + [videoEvidence, ocrEvidence])
             .compactMap { $0 }
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
-        let candidates = try await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL)
+        // Never hard-fail a link the user pasted: if recovery search throws,
+        // fall back to the deterministic local parse / source-only path.
+        let candidates = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
+            ?? reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
         guard !ocrLines.isEmpty else { return candidates }
         return candidates.map { candidate in
             candidate.withThumbnailOCREvidence(ocrLines)
@@ -612,6 +631,9 @@ final class SocialLinkReviewCandidateService {
         if let directMapCandidate = directChinaMapCandidate(evidenceText: evidenceText, sourceURL: sourceURL) {
             return [directMapCandidate]
         }
+        if let mapLinkCandidate = westernMapLinkCandidate(evidenceText: evidenceText, sourceURL: sourceURL) {
+            return [mapLinkCandidate]
+        }
         if let dianpingCandidate = dianpingCandidate(from: evidenceText, sourceURL: sourceURL) {
             return [dianpingCandidate]
         }
@@ -848,12 +870,94 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func embeddedURLStrings(in text: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: #"https?://[^\s<>\"]+|(?:iosamap|amapuri|baidumap)://[^\s<>\"]+"#, options: [.caseInsensitive]) else { return [] }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.matches(in: text, range: range).compactMap { match in
-            guard let matchRange = Range(match.range, in: text) else { return nil }
-            return String(text[matchRange]).trimmingCharacters(in: CharacterSet(charactersIn: ".,;。；，)）]】\"'"))
+        SocialShareTextNormalizer.embeddedURLStrings(in: text)
+    }
+
+    /// Structured Google/Apple Maps place links carry the place identity and
+    /// coordinates in the URL itself. Mirror the China deep-link path: verified
+    /// coordinates come from the link, but the user still confirms the match
+    /// before anything becomes a Map Stamp.
+    private func westernMapLinkCandidate(evidenceText: String, sourceURL: String) -> PendingReviewCandidate? {
+        let mapURLStrings = ([sourceURL] + embeddedURLStrings(in: evidenceText))
+            .filter { !$0.isEmpty }
+        for urlString in mapURLStrings {
+            guard let match = westernMapLinkMatch(in: urlString) else { continue }
+            let diagnostic = SocialPlaceEvidenceDiagnostic(
+                found: appendUnique(
+                    [],
+                    [
+                        "Source URL: \(sourceURL)",
+                        "Structured \(match.providerName) place link: \(match.name)",
+                        "Verified coordinates: \(match.latitude), \(match.longitude)"
+                    ]
+                ),
+                attempts: appendUnique(
+                    analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
+                    ["Parsed structured map place link before public metadata recovery"]
+                ),
+                missingFields: [],
+                nextBestClue: "Confirm this \(match.providerName) match before saving it as a Map Stamp."
+            )
+            return PendingReviewCandidate(
+                candidateName: match.name,
+                address: "",
+                category: category(from: "\(match.name) \(evidenceText)"),
+                latitude: match.latitude,
+                longitude: match.longitude,
+                sourceURL: sourceURL,
+                sourceText: evidenceText.isEmpty ? nil : evidenceText,
+                evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.providerName)"],
+                confidence: 0.84,
+                missingInfo: ["User confirmation required"],
+                savedAt: Date(),
+                evidenceDiagnostic: diagnostic,
+                reviewState: "map_match_ready"
+            )
         }
+        return nil
+    }
+
+    private func isValidMapCoordinate(latitude: Double, longitude: Double) -> Bool {
+        latitude.isFinite
+            && longitude.isFinite
+            && abs(latitude) <= 90
+            && abs(longitude) <= 180
+            && (latitude != 0 || longitude != 0)
+    }
+
+    private func westernMapLinkMatch(in urlString: String) -> (providerName: String, name: String, latitude: Double, longitude: Double)? {
+        guard let url = URL(string: urlString), let host = url.host?.lowercased() else { return nil }
+        let isGoogleMapsHost = host.matchesSocialDomain("google.com") || host.matchesSocialDomain("maps.google.com")
+        if isGoogleMapsHost, url.path.lowercased().contains("/maps/place/") {
+            guard let regex = try? NSRegularExpression(pattern: #"/maps/place/([^/@?#]+)/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)"#) else { return nil }
+            let range = NSRange(urlString.startIndex..<urlString.endIndex, in: urlString)
+            guard let match = regex.firstMatch(in: urlString, range: range),
+                  match.numberOfRanges > 3,
+                  let nameRange = Range(match.range(at: 1), in: urlString),
+                  let latRange = Range(match.range(at: 2), in: urlString),
+                  let lngRange = Range(match.range(at: 3), in: urlString),
+                  let latitude = Double(urlString[latRange]),
+                  let longitude = Double(urlString[lngRange]) else { return nil }
+            let name = decodedMapPlaceName(String(urlString[nameRange]))
+            guard isUsableCandidateName(name), isValidMapCoordinate(latitude: latitude, longitude: longitude) else { return nil }
+            return ("Google Maps", name, latitude, longitude)
+        }
+        if host.matchesSocialDomain("maps.apple.com") {
+            let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let query = queryItems.first(where: { $0.name == "q" })?.value ?? ""
+            let ll = queryItems.first(where: { $0.name == "ll" })?.value ?? ""
+            let parts = ll.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            let name = decodedMapPlaceName(query)
+            guard isUsableCandidateName(name), parts.count == 2, isValidMapCoordinate(latitude: parts[0], longitude: parts[1]) else { return nil }
+            return ("Apple Maps", name, parts[0], parts[1])
+        }
+        return nil
+    }
+
+    private func decodedMapPlaceName(_ value: String) -> String {
+        let plusDecoded = value.replacingOccurrences(of: "+", with: " ")
+        let decoded = plusDecoded.removingPercentEncoding ?? plusDecoded
+        return cleanCandidateName(decoded)
     }
 
     private func pendingReviewCandidate(
@@ -903,26 +1007,44 @@ final class SocialLinkReviewCandidateService {
         request.setValue("zh-TW,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
         request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let html = String(data: data.prefix(300_000), encoding: .utf8) ?? ""
-            let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
-            let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
-            let keywords = metadataValue(in: html, keys: ["keywords"])
-            let imageURL = metadataImageURL(in: html, baseURL: response.url ?? url)
-            let videoURL = metadataVideoURL(in: html, baseURL: response.url ?? url)
-            let jsonCaption = embeddedSocialCaption(in: html)
-            return PublicMetadata(
-                resolvedURL: response.url?.absoluteString ?? url.absoluteString,
-                title: title,
-                description: description,
-                keywords: keywords,
-                imageURL: imageURL,
-                videoURL: videoURL,
-                jsonCaption: jsonCaption
-            )
-        } catch {
-            return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, keywords: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
+        // Short-link resolution gets one bounded retry: a transient network
+        // blip must not silently downgrade a resolvable link to source-only.
+        let maxAttempts = 2
+        for attempt in 1...maxAttempts {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                // Lossy decode keeps partially valid UTF-8 metadata readable.
+                let html = String(decoding: data.prefix(300_000), as: UTF8.self)
+                let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
+                let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
+                let keywords = metadataValue(in: html, keys: ["keywords"])
+                let imageURL = metadataImageURL(in: html, baseURL: response.url ?? url)
+                let videoURL = metadataVideoURL(in: html, baseURL: response.url ?? url)
+                let jsonCaption = embeddedSocialCaption(in: html)
+                return PublicMetadata(
+                    resolvedURL: response.url?.absoluteString ?? url.absoluteString,
+                    title: title,
+                    description: description,
+                    keywords: keywords,
+                    imageURL: imageURL,
+                    videoURL: videoURL,
+                    jsonCaption: jsonCaption
+                )
+            } catch {
+                guard attempt < maxAttempts, isTransientNetworkError(error) else { break }
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+        }
+        return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, keywords: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
+    }
+
+    private func isTransientNetworkError(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost, .dnsLookupFailed, .notConnectedToInternet, .secureConnectionFailed:
+            return true
+        default:
+            return false
         }
     }
 
@@ -1986,7 +2108,7 @@ final class SocialLinkReviewCandidateService {
             .replacingOccurrences(of: #"site:\S+"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\bD[A-Za-z0-9_-]{6,}\b"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"@[A-Za-z0-9._]{3,30}"#, with: " ", options: .regularExpression)
-            .replacingOccurrences(of: #"(?i)\b(?:instagram\s+reel|xiaohongshu|xhs|douyin)\b"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)\b(?:instagram\s+reel|instagram\s+post|xiaohongshu|xhs|douyin|tiktok(?:\s+short\s+link)?|dianping)\b"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"(?:小红书|小紅書|抖音)"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"(?i)\b(?:restaurant|venue|place|address|cafe|coffee|hotel|map)\b"#, with: " ", options: .regularExpression)
             .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
@@ -2307,10 +2429,25 @@ final class SocialLinkReviewCandidateService {
         let host = descriptorURL.host()?.lowercased() ?? ""
         let components = descriptorURL.pathComponents
         if host.contains("instagram"),
-           let markerIndex = components.firstIndex(where: { $0.lowercased() == "reel" || $0.lowercased() == "reels" }),
+           let markerIndex = components.firstIndex(where: { ["reel", "reels", "p", "tv"].contains($0.lowercased()) }),
            components.indices.contains(markerIndex + 1) {
+            let marker = components[markerIndex].lowercased()
             let id = components[markerIndex + 1].trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-            return id.isEmpty ? nil : SocialPostDescriptor(platformName: "instagram reel", id: id, siteQuery: "site:instagram.com/reel/\(id)")
+            guard !id.isEmpty else { return nil }
+            let platformName = marker == "p" || marker == "tv" ? "instagram post" : "instagram reel"
+            let pathMarker = marker == "reels" ? "reel" : marker
+            return SocialPostDescriptor(platformName: platformName, id: id, siteQuery: "site:instagram.com/\(pathMarker)/\(id)")
+        }
+        if host.matchesSocialDomain("tiktok.com") {
+            if let videoIndex = components.firstIndex(where: { $0.lowercased() == "video" }),
+               components.indices.contains(videoIndex + 1) {
+                let id = components[videoIndex + 1].trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+                return id.isEmpty ? nil : SocialPostDescriptor(platformName: "tiktok", id: id, siteQuery: "site:tiktok.com \(id)")
+            }
+            // vm./vt. share short links only expose an opaque code.
+            guard let id = components.reversed().first(where: { $0.count >= 4 && $0 != "/" })?.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")),
+                  !id.isEmpty else { return nil }
+            return SocialPostDescriptor(platformName: "tiktok short link", id: id, siteQuery: "\"\(canonicalSearchURL(from: descriptorURL) ?? descriptorURL.absoluteString)\"")
         }
         if host.matchesSocialDomain("xiaohongshu.com") || host.matchesSocialDomain("xhslink.com") {
             guard let id = components.reversed().first(where: { $0.count >= 4 && $0 != "/" })?.trimmingCharacters(in: CharacterSet(charactersIn: "/ ")),
@@ -2440,11 +2577,15 @@ final class SocialLinkReviewCandidateService {
     private func sourceOnlyDisplayName(for sourceURL: String) -> String {
         guard let url = URL(string: sourceURL) else { return "Social link" }
         let path = url.path.lowercased()
+        let host = url.host?.lowercased() ?? ""
         if path.contains("/reel/") || path.contains("/reels/") { return "Instagram reel" }
-        if url.host?.lowercased().contains("instagram") == true { return "Instagram link" }
-        if url.host?.lowercased().matchesSocialDomain("xiaohongshu.com") == true || url.host?.lowercased().matchesSocialDomain("xhslink.com") == true { return "Xiaohongshu link" }
-        if url.host?.lowercased().matchesSocialDomain("douyin.com") == true || url.host?.lowercased().matchesSocialDomain("iesdouyin.com") == true { return "Douyin link" }
-        if url.host?.lowercased().matchesSocialDomain("dianping.com") == true || url.host?.lowercased().matchesSocialDomain("dpurl.cn") == true { return "Dianping link" }
+        if host.contains("instagram") { return "Instagram link" }
+        if host.matchesSocialDomain("xiaohongshu.com") || host.matchesSocialDomain("xhslink.com") { return "Xiaohongshu link" }
+        if host.matchesSocialDomain("douyin.com") || host.matchesSocialDomain("iesdouyin.com") { return "Douyin link" }
+        if host.matchesSocialDomain("dianping.com") || host.matchesSocialDomain("dpurl.cn") { return "Dianping link" }
+        if host.matchesSocialDomain("tiktok.com") { return "TikTok link" }
+        if host == "maps.app.goo.gl" || (host.contains("google") && path.contains("/maps")) { return "Google Maps link" }
+        if host.matchesSocialDomain("maps.apple.com") { return "Apple Maps link" }
         return "Social link"
     }
 

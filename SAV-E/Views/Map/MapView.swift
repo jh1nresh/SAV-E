@@ -76,6 +76,7 @@ struct MapView: View {
                         CurrentLocationButton(
                             isLocating: viewModel.isLocatingUser,
                             action: {
+                                SaveHaptics.tap()
                                 Task { await viewModel.focusOnUserLocation() }
                             }
                         )
@@ -83,7 +84,36 @@ struct MapView: View {
                         .padding(.bottom, max(geo.safeAreaInsets.bottom + 96, 112))
                     }
                 }
+
+                if let moment = viewModel.stampMoment {
+                    VStack {
+                        SaveStampMomentView(moment: moment)
+                            .padding(.top, geo.safeAreaInsets.top + 18)
+                            .padding(.horizontal, 24)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .id(moment.id)
+                    .zIndex(2)
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .onTapGesture {
+                        withAnimation(SaveTheme.Motion.standardSpring) {
+                            viewModel.stampMoment = nil
+                        }
+                    }
+                    .task(id: moment.id) {
+                        try? await Task.sleep(for: .seconds(2.4))
+                        guard viewModel.stampMoment?.id == moment.id else { return }
+                        withAnimation(SaveTheme.Motion.standardSpring) {
+                            viewModel.stampMoment = nil
+                        }
+                    }
+                }
             }
+            .animation(SaveTheme.Motion.standardSpring, value: viewModel.stampMoment)
             .ignoresSafeArea()
         }
         .task {
@@ -146,7 +176,10 @@ struct PlaceMapPin: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            SaveHaptics.select()
+            onTap()
+        } label: {
             DefaultPOIMarker(
                 systemName: place.category.iconName,
                 tint: place.category.mapMarkerTint,
@@ -164,7 +197,10 @@ private struct SocialPlaceMapPin: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            SaveHaptics.select()
+            onTap()
+        } label: {
             DefaultPOIMarker(
                 systemName: place.category.iconName,
                 tint: place.category.mapMarkerTint,
@@ -183,7 +219,10 @@ private struct ReviewCandidateMapPin: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            SaveHaptics.select()
+            onTap()
+        } label: {
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
                 tint: .saveHoney,
@@ -203,12 +242,17 @@ private struct UnsavedMapCandidatePin: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button {
+            SaveHaptics.select()
+            onTap()
+        } label: {
             DefaultPOIMarker(
                 systemName: candidate.category?.iconName ?? "mappin.circle.fill",
                 tint: candidate.category?.mapMarkerTint ?? .saveSky,
                 state: .publicResult
             )
+            .scaleEffect(isSelected ? 1.18 : 1)
+            .animation(SaveTheme.Motion.standardSpring, value: isSelected)
         }
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
@@ -244,6 +288,8 @@ private struct DefaultPOIMarker: View {
             }
         }
         .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
+        // Keep the 30 pt marker visual, but guarantee a >= 44 pt touch target.
+        .frame(width: 44, height: 44)
         .contentShape(Rectangle())
     }
 }

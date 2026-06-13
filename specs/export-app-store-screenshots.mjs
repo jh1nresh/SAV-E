@@ -17,14 +17,12 @@ const height = 2688;
 const contactOnly = process.argv.includes("--contact-only");
 
 const shots = [
-  ["shot-01-save-any-clue", "01-save-every-place.png"],
-  ["shot-02-review-before-map", "02-review-before-map.png"],
-  ["shot-03-ask-private-memory", "03-ask-saved-map-first.png"],
-  ["shot-04-trust-states", "04-know-what-you-can-trust.png"],
-  ["shot-05-keep-clues-waiting", "05-keep-uncertain-clues-off-map.png"],
-  ["shot-06-save-why-it-mattered", "06-save-why-it-mattered.png"],
-  ["shot-07-plan-from-trusted-places", "07-find-dinner-from-trusted-places.png"],
-  ["shot-08-private-memory", "08-private-place-memory.png"],
+  ["shot-01-hook", "01-stop-losing-places.png"],
+  ["shot-02-paste-link", "02-paste-a-link-get-the-place.png"],
+  ["shot-03-on-your-map", "03-lands-on-your-map.png"],
+  ["shot-04-confirm", "04-you-confirm-before-it-counts.png"],
+  ["shot-05-ask-your-map", "05-ask-your-map.png"],
+  ["shot-06-passport", "06-your-passport-of-places.png"],
 ];
 
 function run(command, args) {
@@ -131,7 +129,7 @@ fs.writeFileSync(
       color: #3a2415;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
     }
-    main { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+    main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
     figure { margin: 0; }
     img {
       display: block;

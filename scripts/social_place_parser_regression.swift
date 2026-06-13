@@ -117,7 +117,10 @@ struct SocialPlaceParserRegressionRunner {
             for fragment in testCase.rejectedAddressFragments where first.locationClues.joined(separator: " | ").contains(fragment) {
                 failures.append("\(testCase.name): rejected address fragment leaked: \(fragment)")
             }
-            if analysis.sourceType != .singleVenuePost || analysis.sourceIntent != .singleVenuePost {
+            // The classifier reports modern singlePlaceRecommendation for what
+            // older cases called singleVenuePost; both mean one-venue source.
+            let isSingleVenueType = analysis.sourceType == .singleVenuePost || analysis.sourceType == .singlePlaceRecommendation
+            if !isSingleVenueType || analysis.sourceIntent != .singleVenuePost {
                 failures.append("\(testCase.name): expected single venue post; got type=\(analysis.sourceType.rawValue), intent=\(analysis.sourceIntent.rawValue)")
             }
         }

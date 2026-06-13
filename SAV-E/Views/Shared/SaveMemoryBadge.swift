@@ -117,6 +117,77 @@ struct SaveMemoryBadge: View {
     }
 }
 
+// MARK: - Stamp Moment (clue -> Map Stamp brand moment)
+
+/// One save event worth celebrating: a place became a Map Stamp.
+struct SaveStampMoment: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let category: PlaceCategory
+    /// Additional places stamped in the same action (bulk import).
+    let extraCount: Int
+
+    init(id: UUID = UUID(), title: String, category: PlaceCategory, extraCount: Int = 0) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.extraCount = max(0, extraCount)
+    }
+}
+
+/// Rubber-stamp celebration card shown over the map right after a save.
+/// Plays the success haptic and slams the stamp in with a spring.
+struct SaveStampMomentView: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let moment: SaveStampMoment
+    @State private var stamped = false
+
+    var body: some View {
+        VStack(spacing: SaveTheme.Spacing.sm + 2) {
+            SaveMemoryBadge(state: .saved(moment.category), size: 62)
+                .scaleEffect(stamped ? 1 : 1.85)
+                .rotationEffect(.degrees(stamped ? -4 : -16))
+                .opacity(stamped ? 1 : 0)
+
+            VStack(spacing: 2) {
+                Text(languageSettings.localized(english: "STAMPED TO YOUR MAP", traditionalChinese: "已蓋上地圖章"))
+                    .font(SaveTheme.Typography.stamp)
+                    .foregroundColor(.saveCocoa)
+
+                Text(headline)
+                    .font(SaveTheme.Typography.cardTitle)
+                    .foregroundColor(.saveInk)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, SaveTheme.Spacing.xl)
+        .padding(.vertical, SaveTheme.Spacing.lg)
+        .frame(maxWidth: 320)
+        .saveNotebookPage(cornerRadius: 20)
+        .shadow(color: Color.saveCocoa.opacity(0.18), radius: 14, x: 0, y: 6)
+        .onAppear {
+            SaveHaptics.stamp()
+            withAnimation(SaveTheme.Motion.stampSpring) {
+                stamped = true
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(languageSettings.localized(
+            english: "\(headline) saved as a Map Stamp",
+            traditionalChinese: "\(headline) 已存成地圖章"
+        ))
+    }
+
+    private var headline: String {
+        guard moment.extraCount > 0 else { return moment.title }
+        return languageSettings.localized(
+            english: "\(moment.title) +\(moment.extraCount) more",
+            traditionalChinese: "\(moment.title) 等 \(moment.extraCount + 1) 個地點"
+        )
+    }
+}
+
 private extension PlaceCategory {
     var stampIconName: String {
         switch self {

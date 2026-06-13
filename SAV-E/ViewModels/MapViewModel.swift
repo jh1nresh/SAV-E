@@ -358,6 +358,8 @@ final class MapViewModel: ObservableObject {
     @Published var socialLens: SaveSocialLens = .forYou
     @Published var socialPlaces: [Place] = []
     @Published var selectedSocialPlace: Place?
+    /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
+    @Published var stampMoment: SaveStampMoment?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
@@ -1040,6 +1042,11 @@ final class MapViewModel: ObservableObject {
                 span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
             ))
         }
+        stampMoment = SaveStampMoment(
+            title: first.name,
+            category: first.category,
+            extraCount: importedPlaces.count - 1
+        )
     }
 
     private func completeReferralHandoffIfNeeded() async {

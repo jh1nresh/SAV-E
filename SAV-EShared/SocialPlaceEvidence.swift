@@ -92,7 +92,28 @@ enum SocialPlaceEvidenceScorer {
             looksLikeMarketingLine(value) ||
             looksLikeHashtagsOnlyLine(value) ||
             looksLikeGenericProductOrCityLine(value) ||
-            looksLikeCaptionHeadlineTitle(value)
+            looksLikeCaptionHeadlineTitle(value) ||
+            looksLikeCreatorWorkTitle(value) ||
+            looksLikeShareBoilerplateText(value)
+    }
+
+    /// Mainland share boilerplate wraps the creator name as 【创作者的作品】;
+    /// that bracketed title must never be promoted to a venue name.
+    static func looksLikeCreatorWorkTitle(_ value: String) -> Bool {
+        value.range(
+            of: #"的(?:图文作品|圖文作品|作品|视频|視頻|影片|直播|主页|主頁)\s*$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    /// App-open share boilerplate ("9.41 复制打开抖音…") can look like a
+    /// numbered caption line; names containing it or a raw URL are never venues.
+    static func looksLikeShareBoilerplateText(_ value: String) -> Bool {
+        value.range(of: #"(?i)https?://\S+"#, options: .regularExpression) != nil ||
+            value.range(
+                of: #"复制打开|複製打開|复制本条信息|複製本條訊息|复制这段内容|App查看精彩内容|快来看吧|快來看吧|长按复制|長按複製"#,
+                options: .regularExpression
+            ) != nil
     }
 
     static func looksLikeCaptionHeadlineTitle(_ value: String) -> Bool {

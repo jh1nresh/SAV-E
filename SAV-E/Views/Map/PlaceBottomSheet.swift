@@ -104,6 +104,7 @@ struct PlaceBottomSheet: View {
 
             HStack(spacing: 8) {
                 Button {
+                    SaveHaptics.tap()
                     Task { await onPlanAround?() }
                 } label: {
                     PlaceDetailActionLabel(
@@ -116,6 +117,7 @@ struct PlaceBottomSheet: View {
                 .opacity(onPlanAround == nil ? 0.55 : 1)
 
                 Button {
+                    SaveHaptics.tap()
                     NavigationService.navigate(to: place.coordinate, name: place.name)
                 } label: {
                     PlaceDetailActionLabel(

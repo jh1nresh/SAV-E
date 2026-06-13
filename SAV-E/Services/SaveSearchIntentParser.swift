@@ -352,6 +352,56 @@ extension SaveSearchIntent {
     }
 }
 
+extension SaveSearchIntent {
+    /// Low-confidence intent for natural-language queries the deterministic
+    /// parser cannot classify. Keeps the grounded LLM answer available instead
+    /// of falling back to a raw literal-match list.
+    static func freeformFallback(rawText: String, confidence: Double = 0.5) -> SaveSearchIntent {
+        SaveSearchIntent(
+            rawText: rawText,
+            normalizedText: SaveSearchIntentParser.normalize(rawText),
+            kind: .unknown,
+            requiredCategories: [],
+            optionalCategories: [],
+            locationMode: .unspecified,
+            sourceScope: .savedFirstAllowPublicFallback,
+            mustMatchCategory: false,
+            mustMatchLocation: false,
+            confidence: confidence,
+            unsupportedCategoryLabel: nil,
+            categoryNeedles: []
+        )
+    }
+}
+
+/// Decides when the deterministic classifier is good enough on its own and
+/// when a query should be routed through the LLM intent-extraction step.
+struct SaveSearchLLMRouter {
+    static let deterministicConfidenceThreshold = 0.9
+
+    /// High-confidence deterministic intents (explicit category needle hit) skip
+    /// the LLM round trip: faster, cheaper, and the lexicon gates are stricter.
+    static func shouldTrustDeterministicIntent(_ intent: SaveSearchIntent?) -> Bool {
+        guard let intent else { return false }
+        return intent.confidence >= deterministicConfidenceThreshold &&
+            !intent.requiredCategories.isEmpty
+    }
+
+    /// Natural-language queries deserve an LLM answer even when no intent was
+    /// classified. Short literal lookups (place names, addresses) do not.
+    static func isNaturalLanguageQuery(_ query: String) -> Bool {
+        let normalized = SaveSearchIntentParser.normalize(query)
+        let markers = [
+            "?", "？", "why", "how", "should", "which", "where", "what", "who",
+            "recommend", "suggest", "worth", "best", "good for",
+            "嗎", "吗", "呢", "哪", "什麼", "什么", "怎麼", "怎么", "推薦", "推荐", "想", "好不好", "值得"
+        ]
+        if markers.contains(where: { normalized.contains($0) }) { return true }
+        let wordCount = normalized.split { $0.isWhitespace }.count
+        return wordCount >= 4
+    }
+}
+
 enum SaveSearchIntentValidationError: Error, Equatable {
     case malformedJSON
     case unknownCategory(String)

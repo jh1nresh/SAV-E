@@ -1,30 +1,85 @@
 import XCTest
 
 final class SAVEOnboardingCarouselTests: XCTestCase {
-    func testCarouselReachesFirstPlaceInput() {
+    func testProofFirstFlowReachesOpenAppCTA() {
+        let app = launchOnboardingApp()
+        let primary = app.buttons["onboarding.primary"]
+
+        // Language step comes first.
+        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: 10))
+        let englishChoice = app.buttons["onboarding.language.en"]
+        XCTAssertTrue(englishChoice.exists)
+        englishChoice.tap()
+        primary.tap()
+
+        // Clue step: cannot continue without a clue, sample fills it.
+        XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: 5))
+        XCTAssertFalse(primary.isEnabled)
+        app.buttons["onboarding.sampleClue"].tap()
+        XCTAssertTrue(primary.isEnabled)
+        primary.tap()
+
+        // Review Candidate demo.
+        XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        primary.tap()
+
+        // Map Stamp demo.
+        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        primary.tap()
+
+        // Ask demo.
+        XCTAssertTrue(app.staticTexts["Ask your own map"].waitForExistence(timeout: 5))
+        primary.tap()
+
+        // Optional tags, then the final CTA exits onboarding.
+        XCTAssertTrue(app.staticTexts["Why did it matter?"].waitForExistence(timeout: 5))
+        app.buttons["onboarding.tag.coffee"].tap()
+        primary.tap()
+
+        waitForDisappearance(of: primary)
+    }
+
+    func testNonLanguageStepsSkipOneAtATime() {
+        let app = launchOnboardingApp()
+        let primary = app.buttons["onboarding.primary"]
+        let skip = app.buttons["onboarding.skip"]
+
+        // Language step is not skippable.
+        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: 10))
+        XCTAssertFalse(skip.exists)
+        primary.tap()
+
+        XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: 5))
+        skip.tap()
+
+        XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        skip.tap()
+
+        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        skip.tap()
+
+        XCTAssertTrue(app.staticTexts["Ask your own map"].waitForExistence(timeout: 5))
+        skip.tap()
+
+        // Skipping the last optional step exits onboarding.
+        XCTAssertTrue(app.staticTexts["Why did it matter?"].waitForExistence(timeout: 5))
+        skip.tap()
+
+        waitForDisappearance(of: primary)
+    }
+
+    private func launchOnboardingApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [
-            "-hasCompletedOnboarding", "NO",
+            "--uitest-reset-onboarding",
             "-save.appLanguage", "en"
         ]
         app.launch()
+        return app
+    }
 
-        XCTAssertTrue(app.staticTexts["Keep the clue before it disappears."].waitForExistence(timeout: 10))
-
-        app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["SAV-E shows why it guessed."].waitForExistence(timeout: 3))
-
-        app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["Confirm before it becomes memory."].waitForExistence(timeout: 3))
-
-        app.buttons["Next"].tap()
-        XCTAssertTrue(app.staticTexts["Rescue one place now"].waitForExistence(timeout: 3))
-
-        let saveButton = app.buttons["Save my first place"]
-        XCTAssertTrue(saveButton.exists)
-        XCTAssertFalse(saveButton.isEnabled)
-
-        app.buttons["Try sample clue"].tap()
-        XCTAssertTrue(saveButton.isEnabled)
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 6) {
+        let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
+        wait(for: [gone], timeout: timeout)
     }
 }

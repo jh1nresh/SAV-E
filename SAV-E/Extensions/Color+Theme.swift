@@ -9,6 +9,21 @@ enum SaveTheme {
         static let amber = Color(hex: "FFD66B")
     }
 
+    /// Shared spacing scale per DESIGN.md "Shape, Stroke, Spacing".
+    /// Compact rows 8-10, cards 12-18, sheet sections 14-16.
+    enum Spacing {
+        /// Tight icon/text gaps inside chips and badges.
+        static let xs: CGFloat = 4
+        /// Compact row internal spacing.
+        static let sm: CGFloat = 8
+        /// Default card padding.
+        static let md: CGFloat = 12
+        /// Comfortable card / sheet section padding.
+        static let lg: CGFloat = 16
+        /// Large notebook or Passport panel padding.
+        static let xl: CGFloat = 22
+    }
+
     enum Motion {
         static let breathingDuration: TimeInterval = 2.8
         static let standardResponse: Double = 0.52
@@ -21,6 +36,11 @@ enum SaveTheme {
         static var standardSpring: Animation {
             .spring(response: standardResponse, dampingFraction: standardDamping)
         }
+
+        /// Punchy rubber-stamp spring for the clue -> Map Stamp brand moment.
+        static var stampSpring: Animation {
+            .spring(response: 0.38, dampingFraction: 0.6)
+        }
     }
 
     enum Typography {
@@ -28,6 +48,37 @@ enum SaveTheme {
         static let entryTitle = Font.title3.weight(.black)
         static let cta = Font.caption.weight(.black)
         static let eyebrow = Font.caption2.weight(.black)
+        /// Card titles per DESIGN.md: `.headline.weight(.black)`.
+        static let cardTitle = Font.headline.weight(.black)
+        /// Compact list-row titles.
+        static let rowTitle = Font.subheadline.weight(.black)
+        /// Section labels inside cards and panels.
+        static let sectionLabel = Font.caption.weight(.black)
+        /// Status stamps per DESIGN.md: `.caption2.weight(.black)`.
+        static let stamp = Font.caption2.weight(.black)
+        /// Supporting / muted copy.
+        static let supporting = Font.caption.weight(.semibold)
+    }
+}
+
+/// Centralized haptics so key SAV-E actions feel consistent.
+/// `stamp()` is reserved for the save moment (clue -> Map Stamp).
+@MainActor
+enum SaveHaptics {
+    static func stamp() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    static func tap() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func select() {
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    static func warning() {
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 }
 

@@ -40,8 +40,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProductionConfig.pendingReviewCandidatesFileName, "pending-review-candidates.json")
     }
 
-    func testSharedGeminiModelFallbacksUseAvailableGemini35Flash() {
-        XCTAssertEqual(SAVEProductionConfig.defaultGeminiModelFallbacks, ["gemini-3.5-flash"])
+    func testSharedGeminiModelFallbacksPreferStrongFlashWithStableFallback() {
+        XCTAssertEqual(SAVEProductionConfig.defaultGeminiModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
 
         let url = SAVEProductionConfig.geminiGenerateContentURL(apiKey: "test-key", model: "gemini-3.5-flash")
         XCTAssertEqual(

@@ -15,32 +15,42 @@ struct PlaceListView: View {
                             title: filter.title(language: languageSettings.language),
                             isSelected: viewModel.filter == filter
                         ) {
-                            viewModel.filter = filter
+                            SaveHaptics.select()
+                            withAnimation(SaveTheme.Motion.standardSpring) {
+                                viewModel.filter = filter
+                            }
                         }
                     }
                 }
                 .padding(.horizontal)
-                .padding(.top, 12)
+                .padding(.top, SaveTheme.Spacing.md)
 
                 // Category pills
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: SaveTheme.Spacing.sm) {
                         ForEach(PlaceCategory.allCases, id: \.self) { category in
-                            CategoryPill(
-                                category: category,
-                                isSelected: viewModel.selectedCategories.contains(category)
-                            )
-                            .onTapGesture {
-                                if viewModel.selectedCategories.contains(category) {
-                                    viewModel.selectedCategories.remove(category)
-                                } else {
-                                    viewModel.selectedCategories.insert(category)
+                            Button {
+                                SaveHaptics.select()
+                                withAnimation(SaveTheme.Motion.standardSpring) {
+                                    if viewModel.selectedCategories.contains(category) {
+                                        viewModel.selectedCategories.remove(category)
+                                    } else {
+                                        viewModel.selectedCategories.insert(category)
+                                    }
                                 }
+                            } label: {
+                                CategoryPill(
+                                    category: category,
+                                    isSelected: viewModel.selectedCategories.contains(category)
+                                )
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, SaveTheme.Spacing.xs)
                 }
 
                 // Sort selector
@@ -76,7 +86,12 @@ struct PlaceListView: View {
                         response: viewModel.saveSearchResponse,
                         savingResultID: viewModel.savingResultID
                     ) { result in
-                        Task { await viewModel.saveMapCandidate(result) }
+                        Task {
+                            await viewModel.saveMapCandidate(result)
+                            if viewModel.saveCandidateError == nil {
+                                SaveHaptics.stamp()
+                            }
+                        }
                     } onPlanAround: { result in
                         viewModel.planAround(result)
                     } onSearchPublicNearby: {
@@ -106,6 +121,7 @@ struct PlaceListView: View {
                                 .tint(.saveSky)
 
                                 Button {
+                                    SaveHaptics.stamp()
                                     Task { await viewModel.markVisited(place) }
                                 } label: {
                                     Label(languageSettings.localized(english: "Visited", traditionalChinese: "去過"), systemImage: "checkmark.circle.fill")
@@ -124,6 +140,7 @@ struct PlaceListView: View {
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
                     .background(SaveDottedBackground())
+                    .animation(SaveTheme.Motion.standardSpring, value: viewModel.filteredPlaces)
                 }
 
                 if let deleteError = viewModel.deleteError {
@@ -865,6 +882,9 @@ private struct FilterNotebookTab: View {
                         .stroke(Color.saveNotebookLine, lineWidth: isSelected ? 1.8 : 1.2)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                // 34 pt visual, >= 44 pt touch target.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

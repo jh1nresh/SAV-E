@@ -8,13 +8,13 @@ struct PlaceCard: View {
         HStack(alignment: .top, spacing: 12) {
             memoryBadge
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
+                HStack(alignment: .top) {
                     Text(place.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(SaveTheme.Typography.rowTitle)
                         .foregroundColor(.saveInk)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Spacer()
 
@@ -54,7 +54,7 @@ struct PlaceCard: View {
                 }
             }
         }
-        .padding(12)
+        .padding(SaveTheme.Spacing.md)
         .saveNotebookPage(cornerRadius: 16)
     }
 
@@ -62,7 +62,7 @@ struct PlaceCard: View {
         VStack(spacing: 4) {
             SaveMemoryBadge(state: .saved(place.category), size: 44)
             Text(place.status == .visited ? "TRIED" : "STAMP")
-                .font(.system(size: 7, weight: .black))
+                .font(.system(size: 9, weight: .black, design: .rounded))
                 .foregroundColor(.saveCocoa)
         }
         .frame(width: 54)

@@ -691,9 +691,9 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Far Loved Restaurant"])
     }
 
-    func testSharedGeminiFallbacksUseGemini35FlashOnly() {
+    func testSharedGeminiFallbacksPrimary35FlashWith25FlashFallback() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, SAVEProductionConfig.defaultGeminiModelFallbacks)
-        XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash"])
+        XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
     }
 
     func testUnsupportedGymQueryDoesNotMapToFoodOrCafe() throws {

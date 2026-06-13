@@ -1,8 +1,32 @@
+import CoreLocation
 import Foundation
 
 struct IntentParseRequest: Equatable {
     let query: String
     let allowedCategories: [PlaceCategory]
+}
+
+/// Bounded user context that travels with a grounded-answer request.
+/// Privacy: only place names, categories, and city/area go to the LLM —
+/// never private notes, full addresses, or precise coordinates.
+struct GroundedAnswerContext: Equatable {
+    var localityHint: String?
+    var savedPlaceDigest: [String] = []
+    var recentConversation: [String] = []
+
+    var isEmpty: Bool {
+        localityHint == nil && savedPlaceDigest.isEmpty && recentConversation.isEmpty
+    }
+
+    /// Place names mentioned in the digest. Used to keep the LLM from
+    /// recommending digest places that are not allowed grounded results.
+    var digestPlaceNames: [String] {
+        savedPlaceDigest.compactMap { line in
+            let name = line.components(separatedBy: " — ").first?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return name?.isEmpty == false ? name : nil
+        }
+    }
 }
 
 struct GroundedAnswerRequest: Equatable {
@@ -11,13 +35,156 @@ struct GroundedAnswerRequest: Equatable {
     let allowedPlaceIds: [String]
     let sections: [SaveSearchSection]
     let outputLanguage: AppLanguage
+    var context: GroundedAnswerContext = GroundedAnswerContext()
+}
+
+/// Builds the bounded `GroundedAnswerContext` from drawer state.
+/// Pure functions so prompt context stays unit-testable without network.
+struct SaveDrawerContextBuilder {
+    static let maxDigestEntries = 8
+    static let maxDigestLineLength = 80
+    static let maxRecentQueries = 3
+    static let maxRecentQueryLength = 160
+    static let maxAssistantAnswerLength = 200
+
+    static func makeContext(
+        query: String,
+        places: [Place],
+        currentLocation: CLLocation?,
+        recentQueries: [String] = [],
+        lastAssistantAnswer: String? = nil
+    ) -> GroundedAnswerContext {
+        GroundedAnswerContext(
+            localityHint: localityHint(places: places, currentLocation: currentLocation),
+            savedPlaceDigest: savedPlaceDigest(query: query, places: places, currentLocation: currentLocation),
+            recentConversation: recentConversation(
+                recentQueries: recentQueries,
+                lastAssistantAnswer: lastAssistantAnswer
+            )
+        )
+    }
+
+    static func savedPlaceDigest(
+        query: String,
+        places: [Place],
+        currentLocation: CLLocation?
+    ) -> [String] {
+        let scored = places
+            .map { (place: $0, score: relevanceScore(query: query, place: $0, currentLocation: currentLocation)) }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.place.createdAt > rhs.place.createdAt
+            }
+        return scored
+            .prefix(maxDigestEntries)
+            .map { digestLine(for: $0.place) }
+    }
+
+    static func digestLine(for place: Place) -> String {
+        let pieces = [
+            String(place.name.prefix(40)),
+            [place.category.displayName, cityOrArea(from: place.address)]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+        ]
+        return String(pieces.filter { !$0.isEmpty }.joined(separator: " — ").prefix(maxDigestLineLength))
+    }
+
+    static func localityHint(places: [Place], currentLocation: CLLocation?) -> String? {
+        let candidates: [Place]
+        if let currentLocation {
+            candidates = places
+                .sorted {
+                    distance(from: currentLocation, to: $0) < distance(from: currentLocation, to: $1)
+                }
+                .prefix(10)
+                .map { $0 }
+        } else {
+            candidates = places
+        }
+        let cities = candidates.compactMap { cityOrArea(from: $0.address) }
+        guard !cities.isEmpty else { return nil }
+        var counts: [String: Int] = [:]
+        for city in cities { counts[city, default: 0] += 1 }
+        return counts.max { lhs, rhs in
+            lhs.value == rhs.value ? lhs.key > rhs.key : lhs.value < rhs.value
+        }?.key
+    }
+
+    static func recentConversation(recentQueries: [String], lastAssistantAnswer: String?) -> [String] {
+        var lines = recentQueries
+            .prefix(maxRecentQueries)
+            .map { "User: \(String($0.prefix(maxRecentQueryLength)))" }
+        if let answer = lastAssistantAnswer?.trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty {
+            lines.append("SAV-E: \(String(answer.prefix(maxAssistantAnswerLength)))")
+        }
+        return lines
+    }
+
+    private static func relevanceScore(query: String, place: Place, currentLocation: CLLocation?) -> Int {
+        let normalizedQuery = normalize(query)
+        let terms = normalizedQuery
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { $0.count > 1 }
+        let haystack = normalize(
+            ([place.name, place.category.rawValue, place.category.displayName, place.note ?? ""]
+                + place.savedVibeTags
+                + (place.extractedDishes ?? []))
+                .joined(separator: " ")
+        )
+
+        var score = 0
+        if !place.name.isEmpty, normalizedQuery.contains(normalize(place.name)) { score += 12 }
+        for term in terms where haystack.contains(term) { score += 5 }
+        if let currentLocation {
+            let meters = distance(from: currentLocation, to: place)
+            if meters <= 2_000 { score += 4 } else if meters <= 10_000 { score += 2 }
+        }
+        return score
+    }
+
+    private static func distance(from location: CLLocation, to place: Place) -> CLLocationDistance {
+        location.distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude))
+    }
+
+    private static func cityOrArea(from address: String) -> String? {
+        let pieces = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard pieces.count >= 2 else {
+            // Comma-less addresses (common for CJK) may be full street addresses; only
+            // pass through short digit-free values so street-level detail never leaves the device.
+            guard let only = pieces.first,
+                  only.count <= 20,
+                  only.rangeOfCharacter(from: .decimalDigits) == nil else { return nil }
+            return only
+        }
+        return pieces[pieces.count - 2]
+    }
+
+    private static func normalize(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+    }
 }
 
 struct SaveAgentPromptPolicy {
     static let productSoul = """
     SAV-E is a cute place-memory scout, not a generic travel or map chatbot.
+    You act as the user's personal place-memory agent: you know which places they saved, why they saved them, and you reason over that memory like a sharp local friend.
     SAV-E captures messy place signals into Source Clues and Review Candidates, then helps the user decide from confirmed Map Stamps.
     Default answer from the user's private place memory first; public discovery second and clearly labeled.
+    Mirror the user's language: reply in Traditional Chinese when they write Chinese, English when they write English, exactly as the output language instruction says.
+    """
+
+    static let userContextRules = """
+    User context rules:
+    - The user context block is background memory, not search results.
+    - Never recommend or cite a place that appears only in the saved place memory sample; recommend only from Grounded sections.
+    - Use locality and recent conversation to resolve vague words like "there", "nearby", "the one you mentioned".
     """
 
     static let hardBoundaries = """
@@ -52,6 +219,8 @@ struct SaveAgentPromptPolicy {
     - If discussing a Review Candidate, say it needs review before becoming a Map Stamp.
     - If discussing a Source-only clue, say it is only a clue/source and needs exact-place recovery.
     - Explain the reason using state, distance, rating/review count, and evidence.
+    - Name which saved place your answer is based on, so the user can trust the grounding.
+    - End with one concrete next step the user can take in SAV-E: save it, show it on the map, narrow the filter, or answer your follow-up.
     - Ask at most one lightweight follow-up question.
     - Do not use parenthetical lists, dangling brackets, or long row-label explanations.
     - Name no more than two places.
@@ -70,7 +239,7 @@ struct SaveAgentPromptPolicy {
 
         Output language:
         \(request.outputLanguage.serviceOutputInstruction)
-
+        \(contextSummary(request.context))
         Grounded sections:
         \(sectionSummary(request.sections))
 
@@ -80,6 +249,24 @@ struct SaveAgentPromptPolicy {
 
         \(Self.outputContract)
         """
+    }
+
+    func contextSummary(_ context: GroundedAnswerContext) -> String {
+        guard !context.isEmpty else { return "" }
+        var lines = ["", "User context (background memory, not results):"]
+        if let localityHint = context.localityHint {
+            lines.append("- Locality: \(localityHint)")
+        }
+        if !context.recentConversation.isEmpty {
+            lines.append("- Recent conversation:")
+            lines.append(contentsOf: context.recentConversation.prefix(4).map { "  \($0)" })
+        }
+        if !context.savedPlaceDigest.isEmpty {
+            lines.append("- Saved place memory sample (names only, may be irrelevant):")
+            lines.append(contentsOf: context.savedPlaceDigest.prefix(SaveDrawerContextBuilder.maxDigestEntries).map { "  - \($0)" })
+        }
+        lines.append(contentsOf: ["", Self.userContextRules, ""])
+        return lines.joined(separator: "\n")
     }
 
     func sectionSummary(_ sections: [SaveSearchSection]) -> String {
@@ -185,6 +372,18 @@ struct GroundedAnswerJSONValidator {
             if !dto.citedResultIds.contains(result.id) {
                 throw GroundedAnswerValidationError.mentionsUncitedResult(result.id)
             }
+        }
+
+        // Context digest names are background memory only. If the answer names a
+        // digest place that is not a grounded result, reject it.
+        let groundedTitles = Set(allResults.map { normalize($0.title) })
+        for digestName in request.context.digestPlaceNames {
+            let normalizedName = normalize(digestName)
+            guard !normalizedName.isEmpty,
+                  !groundedTitles.contains(where: { $0.contains(normalizedName) || normalizedName.contains($0) }),
+                  normalizedAnswer.contains(normalizedName)
+            else { continue }
+            throw GroundedAnswerValidationError.mentionsDisallowedResult(digestName)
         }
 
         for id in dto.citedResultIds {
@@ -355,7 +554,20 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
         let payloadJSON = String(data: payloadData, encoding: .utf8) ?? "{}"
         let prompt = """
+        You extract a structured place-search intent for SAV-E, a personal place-memory app over the user's saved places.
         Respond ONLY with strict JSON. No markdown.
+
+        Guidance:
+        - Queries can be English or Chinese. Map cravings and vibes to the closest category: "想喝點甜的" -> cafe, "date night drinks" -> bar, "somewhere to walk around" -> attraction.
+        - "nearby", "near me", "walking distance", "附近", "走路" -> locationMode currentLocation. A named city or neighborhood -> namedArea with that name in "area".
+        - "new", "unsaved", "public", "新的", "沒存" -> sourceScope publicOnly. Otherwise default savedFirstAllowPublicFallback.
+        - Asking for a specific saved place by name -> kind explicitPlaceSearch. Multi-day or itinerary wording -> tripPlanning.
+        - Be honest with confidence: 0.9+ only when category and location are explicit; below 0.6 when you are guessing.
+
+        Examples:
+        Query: "find me a quiet cafe near me to work" -> {"kind":"categoryRecommendation","requiredCategories":["cafe"],"optionalCategories":[],"locationMode":{"type":"currentLocation","radiusMeters":2000,"area":null},"sourceScope":"savedFirstAllowPublicFallback","mustMatchCategory":true,"mustMatchLocation":true,"confidence":0.93}
+        Query: "今晚想吃辣的" -> {"kind":"craving","requiredCategories":["food"],"optionalCategories":[],"locationMode":{"type":"currentLocation","radiusMeters":2000,"area":null},"sourceScope":"savedFirstAllowPublicFallback","mustMatchCategory":true,"mustMatchLocation":false,"confidence":0.7}
+
         Input:
         \(payloadJSON)
 

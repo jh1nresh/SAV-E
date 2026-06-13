@@ -198,6 +198,7 @@ struct PlaceDetailView: View {
     }
 
     private func openInMaps() {
+        SaveHaptics.tap()
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: detailPlace.coordinate))
         mapItem.name = detailPlace.name
         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])

@@ -2628,4 +2628,256 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidate.candidateName.isEmpty)
     }
 
+    // MARK: - Share-text normalization (messy real-world pastes)
+
+    private struct ShareTextFixture: Decodable {
+        struct Expected: Decodable {
+            var primaryURLString: String
+            var platform: SocialSharePlatform
+            var creatorName: String?
+            var captionContains: [String]
+            var captionExcludes: [String]
+        }
+
+        var rawShareText: String
+        var expected: Expected
+    }
+
+    private func loadShareTextFixture(_ name: String) throws -> ShareTextFixture {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot
+            .appendingPathComponent("fixtures/social-source", isDirectory: true)
+            .appendingPathComponent(name)
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(ShareTextFixture.self, from: data)
+    }
+
+    private func assertShareTextFixtureNormalizes(_ name: String) throws {
+        let fixture = try loadShareTextFixture(name)
+        let bundle = SocialShareTextNormalizer.normalize(fixture.rawShareText)
+
+        XCTAssertEqual(bundle.primaryURLString, fixture.expected.primaryURLString, name)
+        XCTAssertEqual(bundle.platform, fixture.expected.platform, name)
+        XCTAssertEqual(bundle.creatorName, fixture.expected.creatorName, name)
+        XCTAssertEqual(bundle.rawShareText, fixture.rawShareText, "\(name): raw paste must be preserved")
+        for clue in fixture.expected.captionContains {
+            XCTAssertTrue(bundle.captionEvidence.contains(clue), "\(name): caption should keep clue \(clue)")
+        }
+        for noise in fixture.expected.captionExcludes {
+            XCTAssertFalse(bundle.captionEvidence.contains(noise), "\(name): caption should strip noise \(noise)")
+        }
+    }
+
+    func testDouyinNoisyShareTextNormalizesToSourceBundle() throws {
+        try assertShareTextFixtureNormalizes("douyin-noisy-share-wuhan.json")
+    }
+
+    func testXiaohongshuShareBoilerplateNormalizesToSourceBundle() throws {
+        try assertShareTextFixtureNormalizes("xhs-share-boilerplate.json")
+    }
+
+    func testShareTextNormalizerPrefersStructuredMapLinkAcrossMultipleURLs() {
+        let bundle = SocialShareTextNormalizer.normalize(
+            """
+            看看這個 https://www.instagram.com/reel/DW2ZpyADbZ6/
+            還有地圖 https://maps.app.goo.gl/AbCdEf123
+            """
+        )
+
+        XCTAssertEqual(bundle.embeddedURLStrings.count, 2)
+        XCTAssertEqual(bundle.primaryURLString, "https://maps.app.goo.gl/AbCdEf123")
+        XCTAssertEqual(bundle.platform, .googleMaps)
+        XCTAssertTrue(bundle.captionEvidence.contains("看看這個"))
+    }
+
+    func testShareTextNormalizerKeepsBareShortLinkAndURLLessPastes() {
+        let bare = SocialShareTextNormalizer.normalize("http://xhslink.com/o/7FgwQfDuTc4")
+        XCTAssertEqual(bare.primaryURLString, "http://xhslink.com/o/7FgwQfDuTc4")
+        XCTAssertEqual(bare.platform, .xiaohongshu)
+        XCTAssertTrue(bare.captionEvidence.isEmpty)
+
+        let urlless = SocialShareTextNormalizer.normalize("今天天氣很好，沒有連結")
+        XCTAssertNil(urlless.primaryURLString)
+        XCTAssertFalse(urlless.hasResolvableURL)
+        XCTAssertEqual(urlless.captionEvidence, "今天天氣很好，沒有連結")
+    }
+
+    func testCreatorWorkBracketTitleNeverBecomesVenueCandidate() {
+        XCTAssertTrue(SocialPlaceEvidenceScorer.isRejectedTitle("金贵七七（环游中国版）的作品"))
+        XCTAssertTrue(SocialPlaceEvidenceScorer.looksLikeShareBoilerplateText("9.41 复制打开抖音，看看"))
+        XCTAssertFalse(SocialPlaceEvidenceScorer.isRejectedTitle("奢海陌野民宿"))
+
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://v.douyin.com/abc123XYZ/",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: "7.89 复制打开抖音，看看【小张美食日记的作品】这家咖啡店环境太好了 https://v.douyin.com/abc123XYZ/",
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName.hasSuffix("的作品") })
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName.contains("复制打开") })
+        XCTAssertFalse(analysis.placesFound.contains { $0.displayName.contains("http") })
+        XCTAssertFalse(analysis.resolverDecision.allowsDirectSave)
+    }
+
+    func testSharedTextEntryWithoutURLNeverHardFails() async throws {
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: StubPublicSourceSearchService()
+        )
+
+        let clueCandidates = await service.reviewCandidates(
+            fromSharedText: """
+            店名：牛喜壽喜燒
+            地址：台北市士林區忠誠路二段200號3樓
+            """
+        )
+        XCTAssertTrue(clueCandidates.contains { candidate in
+            candidate.candidateName == "牛喜壽喜燒" && candidate.address.contains("台北市士林區忠誠路二段200號")
+        })
+        XCTAssertTrue(clueCandidates.allSatisfy { $0.latitude == nil && $0.longitude == nil })
+
+        let vagueCandidates = await service.reviewCandidates(fromSharedText: "今天天氣很好，沒有連結")
+        let vague = try XCTUnwrap(vagueCandidates.first)
+        XCTAssertFalse(vague.hasReliableCoordinates)
+        XCTAssertNil(vague.latitude)
+        XCTAssertFalse(vague.candidateName.isEmpty)
+        XCTAssertFalse(vague.evidenceDiagnostic?.nextBestClue.isEmpty ?? true)
+    }
+
+    func testGoogleMapsPlaceLinkBecomesMapMatchReadyCandidateWithURLCoordinates() {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
+
+        let google = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
+        )
+        XCTAssertEqual(google.count, 1)
+        XCTAssertEqual(google.first?.candidateName, "Quarter Sheets Pizza Club")
+        XCTAssertEqual(google.first?.latitude, 34.0779)
+        XCTAssertEqual(google.first?.longitude, -118.2543)
+        XCTAssertEqual(google.first?.reviewState, "map_match_ready")
+        XCTAssertEqual(google.first?.missingInfo, ["User confirmation required"])
+
+        let apple = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://maps.apple.com/?q=Courage%20Bagels&ll=34.105,-118.287"
+        )
+        XCTAssertEqual(apple.first?.candidateName, "Courage Bagels")
+        XCTAssertEqual(apple.first?.latitude, 34.105)
+        XCTAssertEqual(apple.first?.longitude, -118.287)
+        XCTAssertEqual(apple.first?.reviewState, "map_match_ready")
+    }
+
+    func testWesternMapLinkRejectsInvalidCoordinatesAndLookalikeHosts() {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
+
+        let nanApple = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://maps.apple.com/?q=Fake%20Spot&ll=nan,nan"
+        )
+        XCTAssertNotEqual(nanApple.first?.reviewState, "map_match_ready")
+        XCTAssertNil(nanApple.first?.latitude)
+
+        let outOfRangeApple = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://maps.apple.com/?q=Fake%20Spot&ll=95.0,200.0"
+        )
+        XCTAssertNotEqual(outOfRangeApple.first?.reviewState, "map_match_ready")
+        XCTAssertNil(outOfRangeApple.first?.latitude)
+
+        let outOfRangeGoogle = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://www.google.com/maps/place/Fake+Spot/@999.0779,-118.2543,17z"
+        )
+        XCTAssertNotEqual(outOfRangeGoogle.first?.reviewState, "map_match_ready")
+
+        let lookalikeHost = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://maps.google.evil.com/maps/place/Fake+Spot/@34.0779,-118.2543,17z"
+        )
+        XCTAssertNotEqual(lookalikeHost.first?.reviewState, "map_match_ready")
+        XCTAssertNil(lookalikeHost.first?.latitude)
+    }
+
+    func testTikTokAndInstagramPostVariantsKeepDescriptorBackedSourceReceipts() {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
+
+        let tiktokVideo = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://www.tiktok.com/@foodie/video/7301234567890123456"
+        )
+        XCTAssertEqual(tiktokVideo.first?.candidateName, "TikTok link")
+        XCTAssertTrue(tiktokVideo.first?.isSourceOnly == true)
+        XCTAssertTrue(tiktokVideo.first?.evidenceDiagnostic?.suggestedSearchQueries?.contains { $0.contains("7301234567890123456") } == true)
+
+        let tiktokShort = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://vt.tiktok.com/ZS8abcdEf/"
+        )
+        XCTAssertEqual(tiktokShort.first?.candidateName, "TikTok link")
+        XCTAssertTrue(tiktokShort.first?.isSourceOnly == true)
+
+        let instagramPost = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://www.instagram.com/p/DW2ZpyADbZ6/"
+        )
+        XCTAssertEqual(instagramPost.first?.candidateName, "Instagram link")
+        XCTAssertTrue(instagramPost.first?.evidenceDiagnostic?.suggestedSearchQueries?.contains { $0.contains("DW2ZpyADbZ6") } == true)
+    }
+
+    func testGeminiTransportRetriesTransientUpstreamErrorBeforeFailingLinkParse() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubGeminiURLProtocol.self]
+        StubGeminiURLProtocol.responses = [
+            (statusCode: 429, body: "{}"),
+            (statusCode: 200, body: #"{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"#)
+        ]
+        StubGeminiURLProtocol.requestCount = 0
+
+        var transport = SAVEGeminiTransport(
+            modelFallbacks: ["gemini-test"],
+            session: URLSession(configuration: config),
+            accessTokenProvider: nil,
+            directAPIKey: "test-key"
+        )
+        transport.transientRetryDelayNanoseconds = 0
+
+        let json = try await transport.generateContent(body: ["contents": []])
+        XCTAssertEqual(StubGeminiURLProtocol.requestCount, 2)
+        XCTAssertNotNil(json["candidates"])
+    }
+
+}
+
+private final class StubGeminiURLProtocol: URLProtocol {
+    static var responses: [(statusCode: Int, body: String)] = []
+    static var requestCount = 0
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let index = min(Self.requestCount, max(Self.responses.count - 1, 0))
+        Self.requestCount += 1
+        let stub = Self.responses.indices.contains(index) ? Self.responses[index] : (statusCode: 500, body: "{}")
+        let url = request.url ?? URL(string: "https://generativelanguage.googleapis.com")!
+        guard let response = HTTPURLResponse(url: url, statusCode: stub.statusCode, httpVersion: nil, headerFields: nil) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(stub.body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
