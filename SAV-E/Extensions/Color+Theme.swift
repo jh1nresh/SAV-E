@@ -131,6 +131,10 @@ extension Color {
     /// Hairline stroke for drawer surfaces (search bar, nav header, glass edge).
     static let saveDrawerStroke = Color(light: "3A2415", dark: "F7EFE5")
 
+    /// Notebook-friendly red/coral for error banners and destructive actions.
+    /// Muted enough to sit on cream in light mode and stay readable in dark.
+    static let saveError = Color(light: "C0392B", dark: "E88A7D")
+
     // MARK: - Category Colors
     static func categoryColor(for category: PlaceCategory) -> Color {
         saveStampColor(for: category)

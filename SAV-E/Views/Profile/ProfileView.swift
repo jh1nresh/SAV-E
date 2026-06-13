@@ -27,18 +27,19 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: SaveTheme.Spacing.lg) {
                     PassportTopBar(
                         waitingClues: waitingClues,
                         onClose: { dismiss() },
                         onEdit: {
+                            SaveHaptics.tap()
                             draftDisplayName = viewModel.profile.displayName
                             draftAvatarData = nil
                             showEditProfile = true
                         }
                     )
                     .padding(.horizontal)
-                    .padding(.top, 16)
+                    .padding(.top, SaveTheme.Spacing.lg)
 
                     PassportHero(
                         profile: viewModel.profile
@@ -48,17 +49,17 @@ struct ProfileView: View {
                     StatsView(stats: passportStats)
 
                     if let errorMessage = viewModel.errorMessage {
-                        HStack(spacing: 8) {
+                        HStack(spacing: SaveTheme.Spacing.sm) {
                             Image(systemName: "exclamationmark.triangle")
                             Text(errorMessage)
                                 .lineLimit(2)
                             Spacer()
                         }
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding(12)
-                        .background(Color.red.opacity(0.08))
-                        .cornerRadius(12)
+                        .font(SaveTheme.Typography.supporting)
+                        .foregroundColor(.saveError)
+                        .padding(SaveTheme.Spacing.md)
+                        .background(Color.saveError.opacity(0.08))
+                        .cornerRadius(SaveTheme.Spacing.md)
                         .padding(.horizontal)
                     }
 
@@ -69,11 +70,11 @@ struct ProfileView: View {
                         onUpdate: updatePlaceVisibility
                     )
 
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                         Text(languageSettings.text(.passportControls))
-                            .font(.caption2.weight(.black))
+                            .font(SaveTheme.Typography.eyebrow)
                             .foregroundColor(.saveCocoa)
-                            .padding(.horizontal, 4)
+                            .padding(.horizontal, SaveTheme.Spacing.xs)
 
                         SettingsRow(
                             icon: "globe.asia.australia",
@@ -81,8 +82,10 @@ struct ProfileView: View {
                             detail: languageSettings.language.displayName,
                             color: .saveSky
                         ) {
+                            SaveHaptics.tap()
                             showLanguageSettings = true
                         }
+                        .accessibilityIdentifier("profile.language")
 
                         NavigationLink {
                             SaveMemoryDebugView()
@@ -95,17 +98,21 @@ struct ProfileView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
+                        .accessibilityIdentifier("profile.debugMemory")
 
-                        SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .red) {
+                        SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .saveError) {
+                            SaveHaptics.tap()
                             Task { await viewModel.signOut() }
                         }
+                        .accessibilityIdentifier("profile.signOut")
                     }
-                    .padding(12)
+                    .padding(SaveTheme.Spacing.md)
                     .profileGlassSurface(cornerRadius: 18, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1.1)
                     .padding(.horizontal)
                 }
-                .padding(.bottom, 32)
-                .profileGlassGroup(spacing: 16)
+                .padding(.bottom, SaveTheme.Spacing.xl)
+                .profileGlassGroup(spacing: SaveTheme.Spacing.lg)
                 .padding(.top, 2)
             }
             .background(ProfileGlassBackground(colorScheme: colorScheme))
@@ -177,9 +184,12 @@ private struct EditProfileSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                HStack(spacing: 12) {
-                    Button(action: onCancel) {
+            VStack(spacing: SaveTheme.Spacing.lg) {
+                HStack(spacing: SaveTheme.Spacing.md) {
+                    Button(action: {
+                        SaveHaptics.tap()
+                        onCancel()
+                    }) {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
@@ -195,22 +205,23 @@ private struct EditProfileSheet: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(languageSettings.text(.editPassport))
-                            .font(.title3.weight(.black))
+                            .font(SaveTheme.Typography.entryTitle)
                             .foregroundColor(.saveInk)
                         Text(languageSettings.text(.editPassportDescription))
-                            .font(.caption.weight(.semibold))
+                            .font(SaveTheme.Typography.supporting)
                             .foregroundColor(.saveMutedText)
                     }
 
                     Spacer()
 
                     Button {
+                        SaveHaptics.stamp()
                         Task { await onSave() }
                     } label: {
                         Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
-                            .padding(.horizontal, 13)
+                            .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 38)
                             .background(Color.saveHoney)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -220,11 +231,12 @@ private struct EditProfileSheet: View {
                             )
                     }
                     .disabled(isSaving)
+                    .accessibilityIdentifier("profile.editSave")
                 }
                 .padding(.horizontal)
-                .padding(.top, 18)
+                .padding(.top, SaveTheme.Spacing.lg)
 
-                VStack(spacing: 10) {
+                VStack(spacing: SaveTheme.Spacing.sm) {
                     EditableProfileAvatar(
                         avatarURLString: avatarURLString,
                         selectedAvatarData: selectedAvatarData
@@ -234,7 +246,7 @@ private struct EditProfileSheet: View {
                         Label(languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片"), systemImage: "camera.fill")
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 36)
                             .background(Color.saveSky.opacity(0.42))
                             .overlay(
@@ -248,17 +260,17 @@ private struct EditProfileSheet: View {
 
                     if let photoError {
                         Text(photoError)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.red)
+                            .font(SaveTheme.Typography.supporting)
+                            .foregroundColor(.saveError)
                     }
                 }
-                .padding(16)
+                .padding(SaveTheme.Spacing.lg)
                 .saveNotebookPage(cornerRadius: 20)
                 .padding(.horizontal)
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                     Text(languageSettings.text(.passportName))
-                        .font(.caption2.weight(.black))
+                        .font(SaveTheme.Typography.eyebrow)
                         .foregroundColor(.saveCocoa)
 
                     TextField(languageSettings.text(.name), text: $displayName)
@@ -266,20 +278,20 @@ private struct EditProfileSheet: View {
                         .foregroundColor(.saveInk)
                         .textInputAutocapitalization(.words)
                         .focused($isNameFocused)
-                        .padding(14)
+                        .padding(SaveTheme.Spacing.md)
                         .profileGlassSurface(cornerRadius: 14, tint: .saveCream, fillOpacity: 0.12, strokeOpacity: 0.24, lineWidth: 1, isInteractive: true)
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.red)
+                            .font(SaveTheme.Typography.supporting)
+                            .foregroundColor(.saveError)
                     } else {
                         Text(languageSettings.text(.accountManagedByLogin))
-                            .font(.caption)
+                            .font(SaveTheme.Typography.supporting)
                             .foregroundColor(.saveMutedText)
                     }
                 }
-                .padding(16)
+                .padding(SaveTheme.Spacing.lg)
                 .profileGlassSurface(cornerRadius: 20, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
                 .padding(.horizontal)
 
@@ -321,35 +333,36 @@ private struct PassportTopBar: View {
     let onEdit: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SaveTheme.Spacing.md) {
             PassportIconButton(systemName: "xmark", action: onClose)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(languageSettings.text(.profileTitle))
-                    .font(.headline.weight(.black))
+                    .font(SaveTheme.Typography.cardTitle)
                     .foregroundColor(.saveInk)
                 Text(languageSettings.memoWaitingText(waitingClues))
-                    .font(.caption.weight(.semibold))
+                    .font(SaveTheme.Typography.supporting)
                     .foregroundColor(.saveMutedText)
             }
 
             Spacer()
 
             Button(action: onEdit) {
-                HStack(spacing: 6) {
+                HStack(spacing: SaveTheme.Spacing.xs) {
                     Image(systemName: "pencil")
                         .font(.caption.weight(.black))
                     Text(languageSettings.text(.edit))
                         .font(.caption.weight(.black))
                 }
                     .foregroundColor(.saveInk)
-                    .padding(.horizontal, 11)
+                    .padding(.horizontal, SaveTheme.Spacing.md)
                     .frame(height: 38)
                     .profileGlassSurface(cornerRadius: 14, tint: .saveHoney, fillOpacity: 0.34, strokeOpacity: 0.42, lineWidth: 1.1, isInteractive: true)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.edit")
         }
-        .padding(10)
+        .padding(SaveTheme.Spacing.sm)
         .profileGlassSurface(cornerRadius: 22, tint: .saveCream, fillOpacity: 0.16, strokeOpacity: 0.28)
     }
 }
@@ -378,11 +391,12 @@ private struct PassportHero: View {
         HStack(spacing: 0) {
             PassportNotebookSpine(color: .saveNotebookSpine)
 
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+                HStack(alignment: .top, spacing: SaveTheme.Spacing.md) {
                     ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 78)
                         .overlay(alignment: .bottomTrailing) {
                             Image(systemName: "book.closed")
+                                // Intentional one-off badge glyph size; no token maps cleanly.
                                 .font(.system(size: 18, weight: .black))
                                 .foregroundColor(.saveInk)
                                 .frame(width: 28, height: 28)
@@ -391,16 +405,17 @@ private struct PassportHero: View {
                                 .offset(x: 6, y: 6)
                         }
 
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                         Text(languageSettings.text(.profileTitle))
-                            .font(.caption2.weight(.black))
+                            .font(SaveTheme.Typography.eyebrow)
                             .foregroundColor(.saveCocoa)
                         Text(profile.displayName)
+                            // Intentional large display name; .title2 is the hero size, no token.
                             .font(.title2.weight(.black))
                             .foregroundColor(.saveInk)
                             .lineLimit(2)
                         Text(profile.email ?? languageSettings.text(.localMemoHelper))
-                            .font(.caption.weight(.semibold))
+                            .font(SaveTheme.Typography.supporting)
                             .foregroundColor(.saveMutedText)
                             .lineLimit(1)
                     }
@@ -408,13 +423,13 @@ private struct PassportHero: View {
                     Spacer(minLength: 0)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: SaveTheme.Spacing.sm) {
                     PassportBadge(text: languageSettings.text(.memoHelper), color: .saveHoney)
                     PassportBadge(text: visitedBadgeText, color: .saveSignal)
                     Spacer()
                 }
             }
-            .padding(16)
+            .padding(SaveTheme.Spacing.lg)
         }
         .profileGlassSurface(cornerRadius: 22, tint: .saveCream, fillOpacity: 0.18, strokeOpacity: 0.32, lineWidth: 1.2)
     }
@@ -518,7 +533,7 @@ private struct PassportNotebookSpine: View {
             Spacer(minLength: 0)
         }
         .frame(width: 24)
-        .padding(.top, 18)
+        .padding(.top, SaveTheme.Spacing.lg)
         .background(color.opacity(0.42))
     }
 }
@@ -529,12 +544,12 @@ private struct PassportBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.black))
+            .font(SaveTheme.Typography.stamp)
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, SaveTheme.Spacing.sm)
+            .padding(.vertical, SaveTheme.Spacing.xs)
             .background(color.opacity(0.38))
             .clipShape(Capsule())
     }
@@ -546,17 +561,17 @@ private struct PassportStampSection: View {
     let stats: PassportStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
             HStack {
                 Text(languageSettings.text(.passportStamps))
-                    .font(.headline.weight(.black))
+                    .font(SaveTheme.Typography.cardTitle)
                     .foregroundColor(.saveInk)
                 Spacer()
                 Text(languageSettings.text(.memoBook))
-                    .font(.caption2.weight(.black))
+                    .font(SaveTheme.Typography.stamp)
                     .foregroundColor(.saveCocoa)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, SaveTheme.Spacing.sm)
+                    .padding(.vertical, SaveTheme.Spacing.xs)
                     .background(Color.saveHoney.opacity(0.18))
                     .clipShape(Capsule())
             }
@@ -596,7 +611,7 @@ private struct PassportStampSection: View {
             )
             PassportStampRow(icon: "calendar", title: languageSettings.text(.memberSince), value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
         }
-        .padding()
+        .padding(SaveTheme.Spacing.lg)
         .profileGlassSurface(cornerRadius: 18, tint: .saveCream, fillOpacity: 0.16, strokeOpacity: 0.28)
         .padding(.horizontal)
     }
@@ -644,24 +659,24 @@ private struct PassportStampRow: View {
     var detail: String? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: SaveTheme.Spacing.md) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(.saveCocoa)
                 .frame(width: 30, height: 30)
                 .background(Color.saveHoney.opacity(0.16))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: SaveTheme.Spacing.sm, style: .continuous)
                         .stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: SaveTheme.Spacing.sm, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.subheadline.weight(.bold))
+                    .font(SaveTheme.Typography.rowTitle)
                     .foregroundColor(.saveInk)
                 Text(value)
-                    .font(.caption)
+                    .font(SaveTheme.Typography.supporting)
                     .foregroundColor(.saveMutedText)
                     .lineLimit(1)
                 if let detail {
@@ -682,14 +697,14 @@ private struct PassportCityStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: SaveTheme.Spacing.xs) {
                 ForEach(cityNames.prefix(8), id: \.self) { city in
                     Text(city)
-                        .font(.caption2.weight(.black))
+                        .font(SaveTheme.Typography.stamp)
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, SaveTheme.Spacing.sm)
+                        .padding(.vertical, SaveTheme.Spacing.xs)
                         .background(Color.saveHoney.opacity(0.18))
                         .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1))
                         .clipShape(Capsule())
@@ -705,24 +720,24 @@ private struct PassportCountingRulesPanel: View {
     let stats: PassportStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack(spacing: SaveTheme.Spacing.sm) {
                 Image(systemName: "seal")
-                    .font(.caption.weight(.black))
+                    .font(SaveTheme.Typography.sectionLabel)
                     .foregroundColor(.saveCocoa)
                 Text(title)
-                    .font(.caption.weight(.black))
+                    .font(SaveTheme.Typography.sectionLabel)
                     .foregroundColor(.saveCocoa)
                 Spacer()
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                 PassportRuleLine(icon: "building.2", text: cityRule)
                 PassportRuleLine(icon: "figure.walk", text: visitedRule)
                 PassportRuleLine(icon: "checkmark.seal", text: proofRule)
             }
         }
-        .padding(12)
+        .padding(SaveTheme.Spacing.md)
         .profileGlassSurface(cornerRadius: 16, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
         .padding(.horizontal)
     }
@@ -766,18 +781,18 @@ private struct PassportVisibilityPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack(spacing: SaveTheme.Spacing.sm) {
                 Image(systemName: "person.2.wave.2.fill")
-                    .font(.caption.weight(.black))
+                    .font(SaveTheme.Typography.sectionLabel)
                     .foregroundColor(.saveCocoa)
                 Text(languageSettings.localized(english: "Sharing controls", traditionalChinese: "分享設定"))
-                    .font(.caption.weight(.black))
+                    .font(SaveTheme.Typography.sectionLabel)
                     .foregroundColor(.saveCocoa)
                 Spacer()
             }
 
-            FlowLayout(spacing: 7) {
+            FlowLayout(spacing: SaveTheme.Spacing.sm) {
                 ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
                     PassportVisibilityChip(
                         visibility: visibility,
@@ -791,7 +806,7 @@ private struct PassportVisibilityPanel: View {
                     english: "Save places first, then choose which memories stay private or become shareable links.",
                     traditionalChinese: "先保存地點，再選哪些記憶保持私密、哪些可以用公開連結分享。"
                 ))
-                    .font(.caption.weight(.semibold))
+                    .font(SaveTheme.Typography.supporting)
                     .foregroundColor(.saveCocoa.opacity(0.72))
             } else {
                 Text(languageSettings.localized(
@@ -801,14 +816,14 @@ private struct PassportVisibilityPanel: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.70))
 
-                VStack(spacing: 8) {
+                VStack(spacing: SaveTheme.Spacing.sm) {
                     ForEach(places.prefix(4)) { place in
                         PassportVisibilityRow(place: place, onUpdate: onUpdate)
                     }
                 }
             }
         }
-        .padding(12)
+        .padding(SaveTheme.Spacing.md)
         .profileGlassSurface(cornerRadius: 16, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
         .padding(.horizontal)
     }
@@ -821,10 +836,10 @@ private struct PassportVisibilityChip: View {
 
     var body: some View {
         Label("\(visibility.displayName(language: languageSettings.language)) \(count)", systemImage: visibility.systemImage)
-            .font(.caption2.weight(.black))
+            .font(SaveTheme.Typography.stamp)
             .foregroundColor(.saveInk)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, SaveTheme.Spacing.sm)
+            .padding(.vertical, SaveTheme.Spacing.xs)
             .background(Color.saveHoney.opacity(visibility == .privateMemory ? 0.18 : 0.36))
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1))
@@ -846,17 +861,17 @@ private struct PassportVisibilityRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: SaveTheme.Spacing.sm) {
             SaveMemoryBadge(state: .saved(place.category), size: 34)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.name)
-                    .font(.caption.weight(.black))
+                    .font(SaveTheme.Typography.stamp)
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
                 Text(errorMessage ?? selectedVisibility.detailText(language: languageSettings.language))
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(errorMessage == nil ? .saveCocoa.opacity(0.72) : .red)
+                    .foregroundColor(errorMessage == nil ? .saveCocoa.opacity(0.72) : .saveError)
                     .lineLimit(1)
             }
 
@@ -871,7 +886,7 @@ private struct PassportVisibilityRow: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: SaveTheme.Spacing.xs) {
                     if isUpdating {
                         ProgressView()
                             .controlSize(.mini)
@@ -880,15 +895,16 @@ private struct PassportVisibilityRow: View {
                     }
                     Text(selectedVisibility.displayName(language: languageSettings.language))
                 }
-                .font(.caption2.weight(.black))
+                .font(SaveTheme.Typography.stamp)
                 .foregroundColor(.saveInk)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, SaveTheme.Spacing.sm)
+                .padding(.vertical, SaveTheme.Spacing.xs)
                 .profileGlassCapsule(tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, isInteractive: true)
             }
             .disabled(isUpdating)
+            .accessibilityIdentifier("profile.visibility.\(place.id)")
         }
-        .padding(8)
+        .padding(SaveTheme.Spacing.sm)
         .profileGlassSurface(cornerRadius: 12, tint: .saveCream, fillOpacity: 0.10, strokeOpacity: 0.18, lineWidth: 1)
         .onChange(of: place.effectiveVisibility) { _, visibility in
             selectedVisibility = visibility
@@ -897,8 +913,11 @@ private struct PassportVisibilityRow: View {
 
     private func update(_ visibility: PlaceVisibility) async {
         guard visibility != selectedVisibility else { return }
+        SaveHaptics.select()
         let previous = selectedVisibility
-        selectedVisibility = visibility
+        withAnimation(SaveTheme.Motion.standardSpring) {
+            selectedVisibility = visibility
+        }
         isUpdating = true
         errorMessage = nil
         defer { isUpdating = false }
@@ -906,7 +925,9 @@ private struct PassportVisibilityRow: View {
         do {
             try await onUpdate(place, visibility)
         } catch {
-            selectedVisibility = previous
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                selectedVisibility = previous
+            }
             errorMessage = error.localizedDescription
         }
     }
@@ -917,7 +938,7 @@ private struct PassportRuleLine: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
             Image(systemName: icon)
                 .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa)
@@ -930,7 +951,7 @@ private struct PassportRuleLine: View {
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             Text(text)
-                .font(.caption.weight(.semibold))
+                .font(SaveTheme.Typography.supporting)
                 .foregroundColor(.saveInk)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -950,7 +971,7 @@ struct SettingsRow: View {
 
     var body: some View {
         Button(action: { action?() }) {
-            HStack(spacing: 12) {
+            HStack(spacing: SaveTheme.Spacing.md) {
                 SaveIconTile(
                     systemName: icon,
                     size: 32,
@@ -963,12 +984,12 @@ struct SettingsRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.subheadline)
+                        .font(SaveTheme.Typography.rowTitle)
                         .foregroundColor(.saveInk)
 
                     if let detail {
                         Text(detail)
-                            .font(.caption.weight(.semibold))
+                            .font(SaveTheme.Typography.supporting)
                             .foregroundColor(.saveMutedText)
                     }
                 }
@@ -979,8 +1000,8 @@ struct SettingsRow: View {
                     .font(.caption2)
                     .foregroundColor(.saveMutedText)
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 10)
+            .padding(.vertical, SaveTheme.Spacing.md)
+            .padding(.horizontal, SaveTheme.Spacing.sm)
             .profileGlassSurface(cornerRadius: 14, tint: color, fillOpacity: 0.10, strokeOpacity: 0.18, lineWidth: 1, isInteractive: true)
         }
         .buttonStyle(.plain)
@@ -994,9 +1015,12 @@ private struct LanguageSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 12) {
-                    Button(action: { dismiss() }) {
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
+                HStack(spacing: SaveTheme.Spacing.md) {
+                    Button(action: {
+                        SaveHaptics.tap()
+                        dismiss()
+                    }) {
                         Image(systemName: "xmark")
                             .font(.caption.weight(.black))
                             .foregroundColor(.saveInk)
@@ -1009,23 +1033,26 @@ private struct LanguageSettingsSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                         Text(languageSettings.text(.chooseLanguage))
-                            .font(.title3.weight(.black))
+                            .font(SaveTheme.Typography.entryTitle)
                             .foregroundColor(.saveInk)
                         Text(languageSettings.text(.languageDescription))
-                            .font(.caption.weight(.semibold))
+                            .font(SaveTheme.Typography.supporting)
                             .foregroundColor(.saveMutedText)
                     }
                 }
-                .padding(.top, 18)
+                .padding(.top, SaveTheme.Spacing.lg)
 
-                VStack(spacing: 10) {
+                VStack(spacing: SaveTheme.Spacing.sm) {
                     ForEach(AppLanguage.allCases) { language in
                         Button {
-                            languageSettings.language = language
+                            SaveHaptics.select()
+                            withAnimation(SaveTheme.Motion.standardSpring) {
+                                languageSettings.language = language
+                            }
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: SaveTheme.Spacing.md) {
                                 Text(language.displayName)
                                     .font(.headline.weight(.bold))
                                     .foregroundColor(.saveInk)
@@ -1038,7 +1065,7 @@ private struct LanguageSettingsSheet: View {
                                         .foregroundColor(.saveSuccess)
                                 }
                             }
-                            .padding(14)
+                            .padding(SaveTheme.Spacing.md)
                             .background(
                                 languageSettings.language == language
                                 ? Color.saveHoney.opacity(0.22)
@@ -1051,12 +1078,13 @@ private struct LanguageSettingsSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("profile.languageOption.\(language.id)")
                     }
                 }
 
                 Spacer()
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, SaveTheme.Spacing.lg)
             .background(ProfileGlassBackground(colorScheme: colorScheme))
             .toolbar(.hidden, for: .navigationBar)
         }
