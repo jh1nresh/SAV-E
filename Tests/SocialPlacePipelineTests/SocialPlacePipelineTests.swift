@@ -1516,6 +1516,50 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertNotEqual(candidates.first?.candidateName, "TANG, CHIH-CHUN")
     }
 
+    // MARK: - Instagram reel Thai venue caption (mixed CJK + Thai script)
+
+    /// The exact og:description Instagram returns for
+    /// https://www.instagram.com/reel/DZXG6QJTifN/ — a Bangkok 豬雜湯 spot
+    /// whose venue name mixes CJK + Thai script and whose 📍 address line is
+    /// Thai script ending in "Bangkok 10110泰國". Earlier this degraded to a
+    /// whole-caption "unresolved place candidate" with no address because the
+    /// inline 👉🏻/📍 markers were not split into lines and the Thai-script
+    /// address was not recognized. Stored as a fixture so the exact bytes are
+    /// inspectable. See fixtures/social-osint/DZXG6QJTifN_citiesmemory_bangkok.txt
+    private func loadOSINTCaptionFixture(_ name: String) throws -> String {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot
+            .appendingPathComponent("fixtures/social-osint", isDirectory: true)
+            .appendingPathComponent(name)
+        return try String(contentsOf: url, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func testInstagramReelThaiVenueCaptionExtractsVenueNotSourceOnly() throws {
+        let caption = try loadOSINTCaptionFixture("DZXG6QJTifN_citiesmemory_bangkok.txt")
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: caption,
+            sourceURL: "https://www.instagram.com/reel/DZXG6QJTifN/"
+        )
+
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertFalse(candidate.isSourceOnly,
+                       "Caption carries a 👉🏻 venue marker + 📍 address; must not degrade to source-only")
+        XCTAssertTrue(candidate.candidateName.contains("鄭良明"),
+                      "Expected venue name to contain 鄭良明, got: \(candidate.candidateName)")
+        XCTAssertFalse(candidate.candidateName.contains("曼谷的夜生活"),
+                       "Venue name must be the 👉🏻 marker line, not the whole caption blob")
+        let addressText = "\(candidate.address) \(candidate.evidence.joined(separator: " "))"
+        XCTAssertTrue(addressText.contains("Ekkamai") || addressText.contains("295") || addressText.contains("Bangkok"),
+                      "Expected address evidence to mention Ekkamai/295/Bangkok, got: \(candidate.address)")
+        XCTAssertFalse(candidate.address.hasSuffix("-\""),
+                       "Address must not keep the trailing caption separator artifact, got: \(candidate.address)")
+    }
+
     func testVenueMarkerStripsStoreNamePrefixBeforeScoring() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(

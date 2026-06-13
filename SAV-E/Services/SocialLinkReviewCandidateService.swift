@@ -216,12 +216,31 @@ final class SocialLinkReviewCandidateService {
         var imageURL: URL?
         var videoURL: URL?
         var jsonCaption: String?
+        /// True when the fetch failed entirely (no caption AND no image), i.e.
+        /// Instagram returned a logged-out wall or the network blipped. Lets the
+        /// debug receipt distinguish "fetch returned nothing" from "fetch
+        /// returned a caption the parser couldn't resolve".
+        var fetchReturnedNothing: Bool = false
 
         var evidenceLines: [String] {
             [title, description, keywords.map { "Keywords: \($0)" }, jsonCaption]
                 .compactMap { $0 }
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
+        }
+
+        /// Lightweight, inspectable receipt of what the public fetch saw. Wired
+        /// into candidate evidence so a future source-only degrade is
+        /// diagnosable without re-running the fetch.
+        var fetchDiagnosticLines: [String] {
+            let decodedDescriptionLength = (description ?? jsonCaption ?? "").count
+            return [
+                "Social fetch: og_title_present=\(title?.isEmpty == false)",
+                "Social fetch: og_description_present=\((description ?? jsonCaption)?.isEmpty == false)",
+                "Social fetch: og_image_present=\(imageURL != nil)",
+                "Social fetch: decoded_og_description_length=\(decodedDescriptionLength)",
+                "Social fetch: fetch_returned_caption=\(!fetchReturnedNothing && (title != nil || description != nil || jsonCaption != nil))"
+            ]
         }
     }
 
@@ -255,8 +274,15 @@ final class SocialLinkReviewCandidateService {
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
         // Never hard-fail a link the user pasted: if recovery search throws,
         // fall back to the deterministic local parse / source-only path.
-        let candidates = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
+        let resolved = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
             ?? reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
+        // Attach a lightweight fetch receipt to every candidate so a future
+        // source-only degrade (Instagram's flaky logged-out wall) is
+        // diagnosable: it records whether og:title/description/image were
+        // present, the decoded caption length, and the parse stage reached.
+        let candidates = resolved.map { candidate in
+            candidate.withSocialFetchDiagnostic(metadata.fetchDiagnosticLines)
+        }
         guard !ocrLines.isEmpty else { return candidates }
         return candidates.map { candidate in
             candidate.withThumbnailOCREvidence(ocrLines)
@@ -1035,7 +1061,7 @@ final class SocialLinkReviewCandidateService {
                 try? await Task.sleep(nanoseconds: 400_000_000)
             }
         }
-        return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, keywords: nil, imageURL: nil, videoURL: nil, jsonCaption: nil)
+        return PublicMetadata(resolvedURL: url.absoluteString, title: nil, description: nil, keywords: nil, imageURL: nil, videoURL: nil, jsonCaption: nil, fetchReturnedNothing: true)
     }
 
     private func isTransientNetworkError(_ error: Error) -> Bool {
@@ -3081,6 +3107,25 @@ private extension PendingReviewCandidate {
         if var diagnostic = copy.evidenceDiagnostic {
             diagnostic.found = uniqueStrings(diagnostic.found + ["Thumbnail OCR text: \(String(ocrText.prefix(300)))"])
             diagnostic.attempts = uniqueStrings(diagnostic.attempts + ["Ran OCR on public metadata image/thumbnail"])
+            copy.evidenceDiagnostic = diagnostic
+        }
+        return copy
+    }
+
+    /// Records the public-fetch receipt (og:title/description/image presence,
+    /// decoded caption length, whether the fetch returned a caption) on the
+    /// candidate. For a source-only degrade it also stamps the parse outcome so
+    /// future failures can be triaged from the evidence alone.
+    func withSocialFetchDiagnostic(_ lines: [String]) -> PendingReviewCandidate {
+        guard !lines.isEmpty else { return self }
+        var copy = self
+        var receipt = lines
+        if copy.isSourceOnly {
+            receipt.append("Social fetch: parse_outcome=source_only (caption present but no venue/address resolved)")
+        }
+        copy.evidence = uniqueStrings(copy.evidence + receipt)
+        if var diagnostic = copy.evidenceDiagnostic {
+            diagnostic.attempts = uniqueStrings(diagnostic.attempts + lines)
             copy.evidenceDiagnostic = diagnostic
         }
         return copy

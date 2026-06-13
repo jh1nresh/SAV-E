@@ -873,8 +873,44 @@ struct SocialPlaceParser {
         analyze(evidence: evidence).placesFound
     }
 
+    /// Promotes inline caption markers (👉 name pointer, 📍/🗺️ location pin,
+    /// 🍽️ hours, 🚇/🚇 transit, · separator) to line breaks so the per-line
+    /// marker parsers fire on single-line og:description captions. A marker that
+    /// already starts a line is left untouched; only mid-line occurrences get a
+    /// preceding newline inserted.
+    static func lineBreakInlineCaptionMarkers(in text: String) -> String {
+        guard !text.isEmpty else { return text }
+        // Rewrite is applied per physical line so multi-line captions (where
+        // 👉/📍/🍽️/🚇 already lead their own line) are untouched. A line is only
+        // exploded when it is a long single-line og:description blob carrying
+        // multiple markers inline — the shape Instagram returns. A short venue
+        // line like "<阿夢> 📍中正紀念堂" (one inline area marker) stays intact so
+        // its inline area clue is not detached from the venue.
+        return text
+            .components(separatedBy: "\n")
+            .map(explodeInlineMarkersIfBlob)
+            .joined(separator: "\n")
+    }
+
+    private static func explodeInlineMarkersIfBlob(_ line: String) -> String {
+        guard line.count >= 60 else { return line }
+        let markerPattern = #"(👉|📍|🗺️?|🍽️?|🚇|🚉|🚩|📌)"#
+        guard let countRegex = try? NSRegularExpression(pattern: markerPattern) else { return line }
+        let fullRange = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard countRegex.numberOfMatches(in: line, range: fullRange) >= 2 else { return line }
+        let inlinePattern = #"(?<=[^\n\r])\s*"# + markerPattern
+        guard let regex = try? NSRegularExpression(pattern: inlinePattern) else { return line }
+        return regex.stringByReplacingMatches(in: line, range: fullRange, withTemplate: "\n$1")
+    }
+
     func analyze(evidence: SocialPlaceSourceEvidence) -> SocialPlaceAgentAnalysis {
-        let text = evidence.combinedText
+        // Single-line og:description captions (Instagram returns the whole
+        // caption as one og:title/og:description line, no newlines) embed venue
+        // markers inline: "…👉🏻Venue 📍Address…". The per-line marker logic
+        // below only fires when 👉/📍/🍽️/🚇 anchor the start of a line, so we
+        // first promote inline markers to line breaks. Multi-line captions are
+        // unaffected (markers already lead their own line).
+        let text = SocialPlaceParser.lineBreakInlineCaptionMarkers(in: evidence.combinedText)
         let lines = text
             .components(separatedBy: .newlines)
             .map(SocialPlaceEvidenceScorer.cleanText)
@@ -1173,7 +1209,9 @@ struct SocialPlaceParser {
             !SocialPlaceEvidenceScorer.looksLikeMarketingLine(line) &&
             !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(line) {
             let address = firstLocationClue(in: line) ?? cleanLocationMarker(from: line)
-            guard strictAddressLike(address) || firstStreetAddress(in: address) != nil else { continue }
+            guard strictAddressLike(address)
+                    || firstStreetAddress(in: address) != nil
+                    || looksLikeInternationalAddressLine(address) else { continue }
             let priorLines = Array(lines.prefix(index))
             let candidateLines = priorLines.reversed() + priorLines
             for priorLine in candidateLines {
@@ -1396,6 +1434,16 @@ struct SocialPlaceParser {
     private func strictAddressLike(_ value: String) -> Bool {
         value.rangeOfCharacter(from: .decimalDigits) != nil &&
             value.range(of: #"[縣市區路街巷弄號]"#, options: .regularExpression) != nil
+    }
+
+    /// International (non-CJK, non-US-street) address line: a 5-digit postal code
+    /// after a capitalized locality, or a recognizable SEA street/district token
+    /// ("Alley", "Soi", "Khlong", "Watthana", "Bangkok", "Thanon"). Lets
+    /// Thai-script + Latin pin addresses like
+    /// "295 …, Ekkamai 15 Alley, …, Bangkok 10110泰國" pair with a venue.
+    private func looksLikeInternationalAddressLine(_ value: String) -> Bool {
+        value.range(of: #"\b[A-Z][A-Za-z .'-]{2,40}\s+\d{5}\b"#, options: .regularExpression) != nil ||
+            value.range(of: #"(?i)\b(?:Alley|Soi|Khlong|Watthana|Bangkok|Thanon)\b"#, options: .regularExpression) != nil
     }
 
     private func orderedLocationClues(_ values: [String]) -> [String] {
@@ -1721,7 +1769,11 @@ struct SocialPlaceParser {
         for pattern in explicitLocationPatterns {
             guard let value = firstCapture(in: text, pattern: pattern) else { continue }
             let cleaned = SocialPlaceEvidenceScorer.cleanText(value)
-                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，:："))
+                // Strip a dangling caption separator / closing quote left when an
+                // inline 📍 address is the caption's last clause (e.g.
+                // "…Bangkok 10110泰國 -\"").
+                .replacingOccurrences(of: #"\s*[-–—]\s*["“”']?\s*$"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，:：\"“”'"))
             if !cleaned.isEmpty { return cleaned }
         }
 
@@ -1747,7 +1799,12 @@ struct SocialPlaceParser {
                 .replacingOccurrences(of: #"(?i)\s+(?:if\s+you|to\s+check|for\s+more).*$"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.。!！?？,，"))
         }
+        // Strip trailing caption sentence artifacts (a dangling caption
+        // separator / closing quote left when an inline 📍 address is the last
+        // clause, e.g. "…Bangkok 10110泰國 -\"").
         return cleaned
+            .replacingOccurrences(of: #"\s*[-–—]\s*["“”']?\s*$"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r。!！?？,，\"“”'"))
     }
 
     private func englishThisIsStayMatch(in line: String) -> (name: String, area: String)? {
