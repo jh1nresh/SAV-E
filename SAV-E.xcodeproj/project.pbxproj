@@ -18,6 +18,7 @@
 		283787AE9627CB588A26B5A1 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1CAB36A11288E7007AEBF7 /* ProfileView.swift */; };
 		2CB40725EFEDED4A9B1275C9 /* SaveSearchIntentParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */; };
 		2E13EB2E4D0C170AF6B107F5 /* SAVEProductionConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */; };
+		346469A0705DCADF67B899B0 /* PlacePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */; };
 		362D688B8CC9DEA7219CBC87 /* SaveSearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */; };
 		38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DF55BE93F14D29CE673F5D /* SaveAIService.swift */; };
 		39FF5DB199938DCC8C8CD544 /* PlatformIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E45623E52CFE065303EC21 /* PlatformIcon.swift */; };
@@ -34,6 +35,7 @@
 		4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */; };
 		4CF65DAE4673D60F28E20D77 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */; };
 		4EF9CBE70CD4A87789905A9B /* SavePlanAroundModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4029203B816A870C920B8924 /* SavePlanAroundModels.swift */; };
+		4F96A8556DEC1BDEE2074F27 /* MessagesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0263F2B88706E83B518B1B7 /* MessagesViewController.swift */; };
 		53366272BA57D223332D803E /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0CF4C9AB8BF5F3EFEA8857C /* SupabaseService.swift */; };
 		579303842569012072D744B3 /* TripTimelineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31FDD2A52D5723D6C711ADCA /* TripTimelineCard.swift */; };
 		593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BCBA8DC934BBB3AEEACF81 /* SaveMemoryDebugView.swift */; };
@@ -67,6 +69,7 @@
 		8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146D4B13678DF31140133614 /* SaveCard.swift */; };
 		8FAE51D29985371D4354B8F4 /* PlaceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE3FFDD9049F7D382C75375 /* PlaceListView.swift */; };
 		92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */; };
+		93414EEA558AA358DF83A7B6 /* SAVEiMessageExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9A731A432A325621A34E63 /* NavigationCardComponent.swift */; };
 		97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DCE926696754031AE2C514 /* MapViewModel.swift */; };
 		991602CD0733FC27340D71D1 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088DFD7077650B834811C66B /* SharedTripData.swift */; };
@@ -108,6 +111,7 @@
 		E50147EFD7E84680403EBFB6 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1A097A4193288BCF9B829B49 /* ZIPFoundation */; };
 		E7A367167920D268C966716E /* SaveGuideCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2482E5F6DAD10800DD570280 /* SaveGuideCustomizationView.swift */; };
 		E962B07677F83EC27DB285FB /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1974222FBD914DA6249A96E /* LocationService.swift */; };
+		EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
 		F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8165C7FCD4C17E50EFFC6532 /* ContentView.swift */; };
 		F53F17B082DBB81DCC487486 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0F64C102747295852D0AA /* OnboardingView.swift */; };
 		F6BB8B9B625606BB8C917B5C /* TripItineraryComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF89D27BB41CF8DAC9C08D5 /* TripItineraryComponent.swift */; };
@@ -129,6 +133,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 9F18DE3C3B83AA483BDE2A71;
 			remoteInfo = SAVE;
+		};
+		0603BB4A2A1ACD72393DD2D7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 43550FDD34C39407C1B8C2DC;
+			remoteInfo = SAVEiMessageExtension;
 		};
 		2A16BFFF54935FE6938375FD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -161,6 +172,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */,
+				93414EEA558AA358DF83A7B6 /* SAVEiMessageExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -185,6 +197,7 @@
 		14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
 		16A0F81D4878F533277C2E84 /* AIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIResponse.swift; sourceTree = "<group>"; };
 		1A55AC71904B498274561F2D /* MapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapView.swift; sourceTree = "<group>"; };
+		1C7387A58A6933CCA32968D2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		20C3E36D76FC12C5F397674A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaatAnalysisCache.swift; sourceTree = "<group>"; };
@@ -209,6 +222,7 @@
 		48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifiedPlaceClaimsClientTests.swift; sourceTree = "<group>"; };
 		4BC655EDFB19DA65585D0838 /* PlaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceCard.swift; sourceTree = "<group>"; };
 		4CF89D27BB41CF8DAC9C08D5 /* TripItineraryComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripItineraryComponent.swift; sourceTree = "<group>"; };
+		4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesVaultReader.swift; sourceTree = "<group>"; };
 		4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImport.swift; sourceTree = "<group>"; };
 		51DF55BE93F14D29CE673F5D /* SaveAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAIService.swift; sourceTree = "<group>"; };
 		53130D5A88AAB65EF3312276 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
@@ -252,6 +266,7 @@
 		A78E2B528C610D14058FBFF5 /* PendingPlaceImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingPlaceImportService.swift; sourceTree = "<group>"; };
 		A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListComponent.swift; sourceTree = "<group>"; };
 		A8238D841A80D8B370120F95 /* SAVEClip.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SAVEClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacePickerView.swift; sourceTree = "<group>"; };
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		B14C815DA9D24219C76EF772 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
@@ -261,8 +276,10 @@
 		BCD47697053E087BC8D7F914 /* GoogleMapsListPlaceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleMapsListPlaceExtractor.swift; sourceTree = "<group>"; };
 		BE34326AB142B818431A5A1F /* SAVETests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SAVETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF9765EC478AD233D709637A /* PlaceBusinessEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceBusinessEnricher.swift; sourceTree = "<group>"; };
+		C0263F2B88706E83B518B1B7 /* MessagesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesViewController.swift; sourceTree = "<group>"; };
 		C0CF4C9AB8BF5F3EFEA8857C /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseService.swift; sourceTree = "<group>"; };
 		C2F29BED31958E2047FAE72E /* ClipContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipContentView.swift; sourceTree = "<group>"; };
+		C307A42EE62F19EB2871B30D /* SAV-EiMessage.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SAV-EiMessage.entitlements"; sourceTree = "<group>"; };
 		C7E2C636EDAE7EAA2E062014 /* GooglePlacesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesService.swift; sourceTree = "<group>"; };
 		CC74577E9D14A1648B111939 /* GoogleTakeoutImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImportView.swift; sourceTree = "<group>"; };
 		CE5369114E224A1BCF036E80 /* TripPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlannerView.swift; sourceTree = "<group>"; };
@@ -288,6 +305,7 @@
 		F32313D7425E554355EEDF42 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
 		F50ABA09CC51700F3AB8F9A9 /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettings.swift; sourceTree = "<group>"; };
+		FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEiMessageExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBE3FFDD9049F7D382C75375 /* PlaceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListView.swift; sourceTree = "<group>"; };
 		FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -345,6 +363,18 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		0CF7B764D167547324A531C5 /* SAV-EiMessage */ = {
+			isa = PBXGroup;
+			children = (
+				1C7387A58A6933CCA32968D2 /* Info.plist */,
+				4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */,
+				C0263F2B88706E83B518B1B7 /* MessagesViewController.swift */,
+				ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */,
+				C307A42EE62F19EB2871B30D /* SAV-EiMessage.entitlements */,
+			);
+			path = "SAV-EiMessage";
+			sourceTree = "<group>";
+		};
 		0CF873FD5E2B5B611179A1D6 /* Previews */ = {
 			isa = PBXGroup;
 			children = (
@@ -374,6 +404,7 @@
 			children = (
 				9EA4DC73269662C5AAE6EEB4 /* SAVE.app */,
 				A8238D841A80D8B370120F95 /* SAVEClip.app */,
+				FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */,
 				DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */,
 				BE34326AB142B818431A5A1F /* SAVETests.xctest */,
 				75980C64772B9E80FBEA8DF6 /* SAVEUITests.xctest */,
@@ -525,6 +556,7 @@
 			children = (
 				5551A8BAF62E2BF9365C82A0 /* SAV-E */,
 				0A32D4ADB26D43F114C08A4A /* SAV-EClip */,
+				0CF7B764D167547324A531C5 /* SAV-EiMessage */,
 				A2E50A68C45C77F93AD3F626 /* SAV-EShared */,
 				051C942F7137E365C09B7E40 /* SAV-EShareExtension */,
 				ABC8567013403AA25EA4E4F0 /* SAVEUITests */,
@@ -704,6 +736,23 @@
 			productReference = DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E932E730147D2872A9548590 /* Build configuration list for PBXNativeTarget "SAVEiMessageExtension" */;
+			buildPhases = (
+				23F012CE5567E1DD12240E21 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SAVEiMessageExtension;
+			packageProductDependencies = (
+			);
+			productName = SAVEiMessageExtension;
+			productReference = FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		9F18DE3C3B83AA483BDE2A71 /* SAVE */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 70CA07F0843BD50BE64AFAFE /* Build configuration list for PBXNativeTarget "SAVE" */;
@@ -719,6 +768,7 @@
 			);
 			dependencies = (
 				D17F672BA48B43380D9F9176 /* PBXTargetDependency */,
+				CA69B28206B947AB97F87367 /* PBXTargetDependency */,
 				7ECA88DFC51C5D59D5E1CF00 /* PBXTargetDependency */,
 			);
 			name = SAVE;
@@ -786,6 +836,10 @@
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
 					};
+					43550FDD34C39407C1B8C2DC = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
 					9F18DE3C3B83AA483BDE2A71 = {
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
@@ -823,6 +877,7 @@
 				2C46EB502B5B4F5C95F36907 /* SAVEShareExtension */,
 				F150541C6B87E28EBACEF1CB /* SAVETests */,
 				0B5351F22114512D2367DDDD /* SAVEUITests */,
+				43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -900,6 +955,16 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		23F012CE5567E1DD12240E21 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */,
+				4F96A8556DEC1BDEE2074F27 /* MessagesViewController.swift in Sources */,
+				346469A0705DCADF67B899B0 /* PlacePickerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		4231383B72CC54131558E549 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1056,6 +1121,11 @@
 			target = 9F18DE3C3B83AA483BDE2A71 /* SAVE */;
 			targetProxy = 2A16BFFF54935FE6938375FD /* PBXContainerItemProxy */;
 		};
+		CA69B28206B947AB97F87367 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */;
+			targetProxy = 0603BB4A2A1ACD72393DD2D7 /* PBXContainerItemProxy */;
+		};
 		D17F672BA48B43380D9F9176 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2C46EB502B5B4F5C95F36907 /* SAVEShareExtension */;
@@ -1077,7 +1147,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1250,6 +1320,28 @@
 			};
 			name = Release;
 		};
+		7EC793C835ED94BE9374C84C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 67;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.iMessage;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		8AB34D46C99FF40275212872 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1263,7 +1355,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1331,6 +1423,28 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		D0F9C0D72DDE98A5AD46EBC1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 67;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.iMessage;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		D5643B52C06BCF1D6E84D34E /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1486,6 +1600,15 @@
 			buildConfigurations = (
 				1E2102EEBB202453FA453F8C /* Debug */,
 				2AE8951AFB9527C591A0C414 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E932E730147D2872A9548590 /* Build configuration list for PBXNativeTarget "SAVEiMessageExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7EC793C835ED94BE9374C84C /* Debug */,
+				D0F9C0D72DDE98A5AD46EBC1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
