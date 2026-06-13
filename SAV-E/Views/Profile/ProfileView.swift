@@ -373,11 +373,15 @@ private struct PassportIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.caption.weight(.black))
-                .foregroundColor(.saveInk)
-                .frame(width: 38, height: 38)
-                .profileGlassSurface(cornerRadius: 14, tint: .saveCream, fillOpacity: 0.12, strokeOpacity: 0.28, isInteractive: true)
+            SaveIconTile(
+                systemName: systemName,
+                size: 36,
+                iconSize: 15,
+                fill: Color.saveCream.opacity(0.16),
+                foreground: .saveCocoa,
+                strokeOpacity: 0.48,
+                cornerRadius: 10
+            )
         }
         .buttonStyle(.plain)
     }
@@ -660,16 +664,15 @@ private struct PassportStampRow: View {
 
     var body: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveCocoa)
-                .frame(width: 30, height: 30)
-                .background(Color.saveHoney.opacity(0.16))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SaveTheme.Spacing.sm, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: SaveTheme.Spacing.sm, style: .continuous))
+            SaveIconTile(
+                systemName: icon,
+                size: 32,
+                iconSize: 13,
+                fill: Color.saveHoney.opacity(0.16),
+                foreground: .saveCocoa,
+                strokeOpacity: 0.48,
+                cornerRadius: 10
+            )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -861,7 +864,7 @@ private struct PassportVisibilityRow: View {
     }
 
     var body: some View {
-        HStack(spacing: SaveTheme.Spacing.sm) {
+        HStack(spacing: SaveTheme.Spacing.md) {
             SaveMemoryBadge(state: .saved(place.category), size: 34)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -938,17 +941,16 @@ private struct PassportRuleLine: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa)
-                .frame(width: 22, height: 22)
-                .background(Color.saveCream.opacity(0.72))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        HStack(alignment: .top, spacing: SaveTheme.Spacing.md) {
+            SaveIconTile(
+                systemName: icon,
+                size: 32,
+                iconSize: 13,
+                fill: Color.saveCocoa.opacity(0.16),
+                foreground: .saveCocoa,
+                strokeOpacity: 0.48,
+                cornerRadius: 10
+            )
 
             Text(text)
                 .font(SaveTheme.Typography.supporting)
