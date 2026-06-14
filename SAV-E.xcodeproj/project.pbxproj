@@ -69,7 +69,6 @@
 		8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146D4B13678DF31140133614 /* SaveCard.swift */; };
 		8FAE51D29985371D4354B8F4 /* PlaceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE3FFDD9049F7D382C75375 /* PlaceListView.swift */; };
 		92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */; };
-		93414EEA558AA358DF83A7B6 /* SAVEiMessageExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9A731A432A325621A34E63 /* NavigationCardComponent.swift */; };
 		97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DCE926696754031AE2C514 /* MapViewModel.swift */; };
 		991602CD0733FC27340D71D1 /* SharedTripData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 088DFD7077650B834811C66B /* SharedTripData.swift */; };
@@ -134,13 +133,6 @@
 			remoteGlobalIDString = 9F18DE3C3B83AA483BDE2A71;
 			remoteInfo = SAVE;
 		};
-		0603BB4A2A1ACD72393DD2D7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 43550FDD34C39407C1B8C2DC;
-			remoteInfo = SAVEiMessageExtension;
-		};
 		2A16BFFF54935FE6938375FD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
@@ -172,7 +164,6 @@
 			dstSubfolderSpec = 13;
 			files = (
 				67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */,
-				93414EEA558AA358DF83A7B6 /* SAVEiMessageExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -768,7 +759,6 @@
 			);
 			dependencies = (
 				D17F672BA48B43380D9F9176 /* PBXTargetDependency */,
-				CA69B28206B947AB97F87367 /* PBXTargetDependency */,
 				7ECA88DFC51C5D59D5E1CF00 /* PBXTargetDependency */,
 			);
 			name = SAVE;
@@ -1121,11 +1111,6 @@
 			target = 9F18DE3C3B83AA483BDE2A71 /* SAVE */;
 			targetProxy = 2A16BFFF54935FE6938375FD /* PBXContainerItemProxy */;
 		};
-		CA69B28206B947AB97F87367 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */;
-			targetProxy = 0603BB4A2A1ACD72393DD2D7 /* PBXContainerItemProxy */;
-		};
 		D17F672BA48B43380D9F9176 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2C46EB502B5B4F5C95F36907 /* SAVEShareExtension */;
@@ -1141,7 +1126,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
@@ -1306,7 +1291,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1326,7 +1311,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -1349,7 +1334,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
@@ -1388,7 +1373,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1408,7 +1393,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
@@ -1430,7 +1415,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -1452,7 +1437,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 67;
+				CURRENT_PROJECT_VERSION = 68;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
