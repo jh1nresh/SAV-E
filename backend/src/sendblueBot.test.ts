@@ -9,6 +9,8 @@ import {
   isRecommendIntent,
   isOrderIntent,
   orderQuery,
+  isLocationIntent,
+  parseLocationQuery,
   detectArea,
   looksChinese,
   processSendblueInbound,
@@ -19,7 +21,7 @@ import {
   type PendingStore,
 } from "./sendblueBot.js";
 import type { ExtractedVenue } from "./sendblueBot.js";
-import type { ListOpts, SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
+import type { ListOpts, SavedPlace, SendbluePlaceStore, StoredLocation } from "./sendbluePlaceStore.js";
 
 function htmlWithOG(description: string, title = "Some Reel"): string {
   return `<!doctype html><html><head>
@@ -79,6 +81,13 @@ class FakeStore implements SendbluePlaceStore {
       .map((p) => p.area)
       .filter((a): a is string => Boolean(a && a.trim()));
     return [...new Set(areas)];
+  }
+  public locations = new Map<string, StoredLocation>();
+  async getLocation(phone: string): Promise<StoredLocation | null> {
+    return this.locations.get(phone) ?? null;
+  }
+  async setLocation(phone: string, location: StoredLocation): Promise<void> {
+    this.locations.set(phone, location);
   }
 }
 
@@ -615,6 +624,10 @@ test("webhook flow: recommend in a saved area with no match → haven't-saved-th
     async distinctAreas() {
       return ["Los Angeles"];
     },
+    async getLocation() {
+      return null;
+    },
+    async setLocation() {},
   };
   const result = await processSendblueInbound(
     { from_number: "+15554440000", content: "recommend somewhere in Los Angeles" },
@@ -666,33 +679,67 @@ test("isOrderIntent + orderQuery", () => {
   assert.equal(orderQuery("下單 拿鐵"), "拿鐵");
 });
 
-test("webhook flow: order intent routes to the SLL-R order dep (not saved)", async () => {
+test("webhook flow: order intent (with known location) routes to the SLL-R order dep (not saved)", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
+  await store.setLocation("+15551112222", { label: "Miami Beach", lat: 25.79, lng: -80.13 });
   let received = "";
+  let receivedLoc: StoredLocation | undefined;
   const result = await processSendblueInbound(
     { from_number: "+15551112222", content: "order iced latte" },
     {
       client,
       store,
-      order: async (q) => {
+      order: async (q, _from, loc) => {
         received = q;
+        receivedLoc = loc;
         return "✅ Ordered Iced latte ($6.50) at Raposa Coffee. I'll text you when it's confirmed.";
       },
     },
   );
   assert.equal(received, "iced latte");
+  assert.equal(receivedLoc?.label, "Miami Beach"); // location threaded through
   assert.equal(result.replied, true);
   assert.match(client.calls[0]?.content ?? "", /Ordered Iced latte/);
   assert.equal((await store.list("+15551112222")).length, 0); // ordering ≠ saving a place
 });
 
-test("webhook flow: order dep returning null falls through to normal flow", async () => {
+test("webhook flow: order with NO known location asks for the area", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
+  let orderCalled = false;
   const result = await processSendblueInbound(
-    { from_number: "+15553334444", content: "order something weird" },
-    { client, store, order: async () => null },
+    { from_number: "+15559990000", content: "order iced latte" },
+    { client, store, order: async () => { orderCalled = true; return "x"; } },
   );
-  assert.equal(result.replied, true); // fell through to the no-URL hint/recall path
+  assert.equal(orderCalled, false); // didn't order without a location
+  assert.match(client.calls[0]?.content ?? "", /what area/i);
+  assert.equal(result.replied, true);
+});
+
+test("webhook flow: 'I'm in X' geocodes + stores the location", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  let geocoded = "";
+  const result = await processSendblueInbound(
+    { from_number: "+15551112222", content: "I'm in Santa Monica" },
+    {
+      client,
+      store,
+      geocode: async (area) => { geocoded = area; return { label: "Santa Monica, CA", lat: 34.0195, lng: -118.4912 }; },
+    },
+  );
+  assert.equal(geocoded, "Santa Monica");
+  assert.equal((await store.getLocation("+15551112222"))?.label, "Santa Monica, CA");
+  assert.match(client.calls[0]?.content ?? "", /Santa Monica/);
+  assert.equal(result.replied, true);
+});
+
+test("isLocationIntent + parseLocationQuery", () => {
+  assert.equal(isLocationIntent("I'm in Miami Beach"), true);
+  assert.equal(isLocationIntent("area: downtown LA"), true);
+  assert.equal(isLocationIntent("我在台北"), true);
+  assert.equal(isLocationIntent("order iced latte"), false);
+  assert.equal(parseLocationQuery("I'm in Miami Beach"), "Miami Beach");
+  assert.equal(parseLocationQuery("area: downtown LA"), "downtown LA");
 });

@@ -23,7 +23,9 @@ import {
   processSendblueInbound,
   SendblueClient,
 } from "./sendblueBot.js";
-import { issueBuyerSession, placeOrder, type SllrBuyer } from "./sllrCommerce.js";
+import { issueBuyerSession, placeOrder, nearby, type SllrBuyer } from "./sllrCommerce.js";
+import { defaultGeocode } from "./sendblueBot.js";
+import type { StoredLocation } from "./sendbluePlaceStore.js";
 import {
   PgSendbluePlaceStore,
   sendblueSavedPlacesTableSql,
@@ -85,13 +87,22 @@ const sendbluePlaceStore = new PgSendbluePlaceStore({
 // buyer (the cross-merchant receipt graph). In-memory v0; persist later.
 const sllrBuyerByNumber = new Map<string, SllrBuyer>();
 // Place an SLL-R order for an inbound number. Returned to the bot as deps.order.
-async function placeSllrOrder(query: string, fromNumber: string): Promise<string> {
+async function placeSllrOrder(query: string, fromNumber: string, location?: StoredLocation): Promise<string> {
   let buyer = sllrBuyerByNumber.get(fromNumber);
   if (!buyer) {
     buyer = await issueBuyerSession(`SAV-E ${fromNumber}`);
     sllrBuyerByNumber.set(fromNumber, buyer);
   }
-  const merchantId = process.env.SLLR_DEFAULT_MERCHANT?.trim() || "raposa-coffee";
+  // Pick the nearest merchant to the user's area; fall back to the default.
+  let merchantId = process.env.SLLR_DEFAULT_MERCHANT?.trim() || "raposa-coffee";
+  if (location) {
+    try {
+      const near = await nearby(location.lat, location.lng, { limit: 1 });
+      if (near[0]) merchantId = near[0].id;
+    } catch (error) {
+      console.error("[sendblue] nearby lookup failed, using default merchant", error);
+    }
+  }
   try {
     const order = await placeOrder(merchantId, query, buyer, { customerLabel: "SAV-E" });
     return `✅ Ordered ${order.item.name} ($${order.item.subtotalUsd}) at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`;
@@ -526,6 +537,7 @@ async function handleSendblueWebhook(
         gemini: defaultGeminiText,
         placesSearch: defaultPlacesSearch,
         order: placeSllrOrder,
+        geocode: defaultGeocode,
       });
       console.log(
         `[sendblue] done replied=${result.replied}` +

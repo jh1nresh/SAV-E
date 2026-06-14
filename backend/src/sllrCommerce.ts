@@ -95,6 +95,22 @@ export async function paymentOptions(merchantId: string, orderId: string): Promi
   return r.paymentOptions ?? [];
 }
 
+export type SllrNearbyMerchant = { id: string; name: string; category: string; location: string; distanceKm: number };
+// Merchants near a location, sorted by distance (SLL-R geo lookup). Used to pick
+// the nearest merchant to order from for a given area.
+export async function nearby(
+  lat: number,
+  lng: number,
+  opts: { radiusKm?: number; category?: string; limit?: number } = {},
+): Promise<SllrNearbyMerchant[]> {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+  if (opts.radiusKm) params.set("radiusKm", String(opts.radiusKm));
+  if (opts.category) params.set("category", opts.category);
+  if (opts.limit) params.set("limit", String(opts.limit));
+  const r = await sllrFetch<{ merchants?: SllrNearbyMerchant[] }>(`/merchants/nearby?${params.toString()}`, { method: "GET" });
+  return r.merchants ?? [];
+}
+
 // The buyer's cross-merchant order history (SLL-R receipt/taste graph). SAV-E can
 // fold this into its experience memory.
 export async function myOrders(buyer: SllrBuyer): Promise<SllrOrder[]> {

@@ -24,7 +24,7 @@ import {
   defaultFetchText,
   sourceMetadataFromHTML,
 } from "./sourceSearchWorker.js";
-import type { SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
+import type { SavedPlace, SendbluePlaceStore, StoredLocation } from "./sendbluePlaceStore.js";
 
 const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models";
 const defaultGeminiModel = "gemini-2.5-flash";
@@ -418,6 +418,44 @@ export function orderQuery(text: string): string {
     .replace(/^(下單|點餐|幫我點|幫我買|buy me|get me a)[:\s]*/i, "")
     .trim();
   return stripped || text.trim();
+}
+
+// "I'm in <area>" — sets the per-number location used for nearby orders.
+const locationIntentPhrases = ["i'm in ", "i am in ", "im in ", "area:", "set area", "my area", "我在", "我人在"];
+export function isLocationIntent(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return false;
+  return locationIntentPhrases.some((phrase) => lower.includes(phrase));
+}
+export function parseLocationQuery(text: string): string {
+  const stripped = text
+    .trim()
+    .replace(/^(i'?m in|i am in|im in|set area|my area is|my area|area)[:\s]+/i, "")
+    .replace(/^(我人在|我在)[:\s]*/, "")
+    .trim();
+  return stripped || text.trim();
+}
+
+// Geocode an area string → coordinates (Google Geocoding API; GOOGLE_PLACES_API_KEY
+// works for it). Injectable so tests run offline.
+export type Geocoder = (area: string) => Promise<StoredLocation | null>;
+export async function defaultGeocode(area: string): Promise<StoredLocation | null> {
+  const key = process.env.GOOGLE_PLACES_API_KEY ?? process.env.GOOGLE_GEOCODING_API_KEY;
+  const query = area.trim();
+  if (!key || !query) return null;
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${key}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      results?: Array<{ formatted_address?: string; geometry?: { location?: { lat?: number; lng?: number } } }>;
+    };
+    const loc = body.results?.[0]?.geometry?.location;
+    if (!loc || typeof loc.lat !== "number" || typeof loc.lng !== "number") return null;
+    return { label: body.results?.[0]?.formatted_address ?? query, lat: loc.lat, lng: loc.lng };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -835,7 +873,9 @@ export type ProcessDeps = {
   store: SendbluePlaceStore;
   /** Place an SLL-R order for this number; returns the reply, or null to fall
    *  through to the normal save/recall flow. Omitted in tests / when SLL-R is off. */
-  order?: (query: string, fromNumber: string) => Promise<string | null>;
+  order?: (query: string, fromNumber: string, location?: StoredLocation) => Promise<string | null>;
+  /** Geocode an area the user texts ("I'm in X") → coordinates, stored per number. */
+  geocode?: Geocoder;
 };
 
 /**
@@ -921,12 +961,30 @@ export async function processSendblueInbound(
   let reply: string;
   try {
     const url = firstUrlInText(text);
+    if (deps.geocode && !url && isLocationIntent(text)) {
+      // Location set: "I'm in X" → geocode → remember per number for nearby orders.
+      const loc = await deps.geocode(parseLocationQuery(text));
+      if (loc) {
+        await deps.store.setLocation(from, loc);
+        reply = `📍 Got it — I'll use ${loc.label} for nearby orders.`;
+      } else {
+        reply = 'I couldn\'t find that area. Try a city/neighborhood, e.g. "I\'m in Santa Monica".';
+      }
+      await deps.client.sendMessage(from, reply);
+      return { replied: true, reply };
+    }
     if (deps.order && !url && isOrderIntent(text)) {
-      // Order flow: text → SLL-R order (a real transaction). null falls through.
-      const orderReply = await deps.order(orderQuery(text), from);
+      // Order flow: needs the user's area to pick the nearest merchant.
+      const loc = await deps.store.getLocation(from);
+      if (!loc) {
+        reply = '📍 What area are you in? Tell me e.g. "I\'m in Miami Beach" and I\'ll order from the nearest spot.';
+        await deps.client.sendMessage(from, reply);
+        return { replied: true, reply };
+      }
+      const orderReply = await deps.order(orderQuery(text), from, loc);
       if (orderReply) {
         await deps.client.sendMessage(from, orderReply);
-        console.log(`[sendblue] order reply for ${from}`);
+        console.log(`[sendblue] order reply for ${from} near ${loc.label}`);
         return { replied: true, reply: orderReply };
       }
     }

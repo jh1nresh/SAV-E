@@ -18,6 +18,9 @@ export type SavedPlace = {
   createdAt?: Date;
 };
 
+/** A phone's last-known location (per-request location, remembered as a default). */
+export type StoredLocation = { label: string; lat: number; lng: number };
+
 /** Minimal pg-pool-like surface: only `query` is needed. */
 export type Queryable = {
   query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
@@ -38,6 +41,9 @@ export interface SendbluePlaceStore {
   list(phone: string, opts?: number | ListOpts): Promise<SavedPlace[]>;
   /** The distinct, non-empty `area` values this phone has saved (for area detection). */
   distinctAreas(phone: string): Promise<string[]>;
+  /** The phone's last-known location (set when they tell the bot an area). null = unknown. */
+  getLocation(phone: string): Promise<StoredLocation | null>;
+  setLocation(phone: string, location: StoredLocation): Promise<void>;
 }
 
 /** Normalize the legacy `number` arg or the new options object into a shape. */
@@ -58,6 +64,14 @@ create table if not exists sendblue_saved_places (
 );
 create index if not exists sendblue_saved_places_phone_created_idx
   on sendblue_saved_places (phone, created_at desc);
+
+create table if not exists sendblue_user_locations (
+  phone text primary key,
+  label text not null default '',
+  lat double precision not null,
+  lng double precision not null,
+  updated_at timestamptz not null default now()
+);
 `;
 
 /**
@@ -145,5 +159,24 @@ export class PgSendbluePlaceStore implements SendbluePlaceStore {
     return rows
       .map((row) => (row.area ? String(row.area) : ""))
       .filter((area) => area.length > 0);
+  }
+
+  async getLocation(phone: string): Promise<StoredLocation | null> {
+    const { rows } = await this.db.query(
+      `select label, lat, lng from sendblue_user_locations where phone = $1`,
+      [phone],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { label: String(row.label ?? ""), lat: Number(row.lat), lng: Number(row.lng) };
+  }
+
+  async setLocation(phone: string, location: StoredLocation): Promise<void> {
+    await this.db.query(
+      `insert into sendblue_user_locations (phone, label, lat, lng, updated_at)
+       values ($1, $2, $3, $4, now())
+       on conflict (phone) do update set label = excluded.label, lat = excluded.lat, lng = excluded.lng, updated_at = now()`,
+      [phone, location.label, location.lat, location.lng],
+    );
   }
 }
