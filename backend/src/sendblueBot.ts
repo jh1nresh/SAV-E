@@ -24,6 +24,7 @@ import {
   defaultFetchText,
   sourceMetadataFromHTML,
 } from "./sourceSearchWorker.js";
+import type { SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
 
 const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models";
 const defaultGeminiModel = "gemini-3.5-flash";
@@ -211,12 +212,17 @@ export class SendblueClient {
   private readonly fetchImpl: SendblueFetch;
   private readonly endpoint: string;
 
+  private readonly markReadEndpoint: string;
+  private readonly typingEndpoint: string;
+
   constructor(options?: {
     apiKeyId?: string;
     apiSecret?: string;
     fromNumber?: string;
     fetchImpl?: SendblueFetch;
     endpoint?: string;
+    markReadEndpoint?: string;
+    typingEndpoint?: string;
   }) {
     this.apiKeyId = options?.apiKeyId ?? requireEnv("SENDBLUE_API_KEY_ID");
     this.apiSecret = options?.apiSecret ?? requireEnv("SENDBLUE_API_SECRET");
@@ -226,6 +232,16 @@ export class SendblueClient {
     this.fromNumber = options?.fromNumber ?? process.env.SENDBLUE_FROM_NUMBER ?? undefined;
     this.fetchImpl = options?.fetchImpl ?? fetch;
     this.endpoint = options?.endpoint ?? "https://api.sendblue.co/api/send-message";
+    this.markReadEndpoint = options?.markReadEndpoint ?? "https://api.sendblue.co/api/mark-read";
+    this.typingEndpoint = options?.typingEndpoint ?? "https://api.sendblue.co/api/send-typing-indicator";
+  }
+
+  private authHeaders(): Record<string, string> {
+    return {
+      "content-type": "application/json",
+      "sb-api-key-id": this.apiKeyId,
+      "sb-api-secret-key": this.apiSecret,
+    };
   }
 
   async sendMessage(toNumber: string, content: string): Promise<string> {
@@ -233,11 +249,7 @@ export class SendblueClient {
     if (this.fromNumber) payload.from_number = this.fromNumber;
     const response = await this.fetchImpl(this.endpoint, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "sb-api-key-id": this.apiKeyId,
-        "sb-api-secret-key": this.apiSecret,
-      },
+      headers: this.authHeaders(),
       body: JSON.stringify(payload),
     });
     const body = await response.text().catch(() => "");
@@ -245,6 +257,40 @@ export class SendblueClient {
       throw new Error(`Sendblue send-message failed: ${response.status} ${body.slice(0, 400)}`);
     }
     return body;
+  }
+
+  /**
+   * Mark the user's inbound message as read (blue receipt). Best-effort: both
+   * mark-read and typing-indicator require from_number per the Sendblue
+   * dashboard, so they no-op when it's unset and never throw into the caller.
+   */
+  async markRead(toNumber: string): Promise<void> {
+    await this.bestEffortPost(this.markReadEndpoint, toNumber, "mark-read");
+  }
+
+  /** Show a typing indicator to the user while we fetch + extract. Best-effort. */
+  async sendTypingIndicator(toNumber: string): Promise<void> {
+    await this.bestEffortPost(this.typingEndpoint, toNumber, "send-typing-indicator");
+  }
+
+  private async bestEffortPost(endpoint: string, toNumber: string, label: string): Promise<void> {
+    if (!this.fromNumber) {
+      console.log(`[sendblue] ${label} skipped (no from_number configured)`);
+      return;
+    }
+    try {
+      const response = await this.fetchImpl(endpoint, {
+        method: "POST",
+        headers: this.authHeaders(),
+        body: JSON.stringify({ from_number: this.fromNumber, number: toNumber }),
+      });
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        console.warn(`[sendblue] ${label} failed: ${response.status} ${body.slice(0, 200)}`);
+      }
+    } catch (error) {
+      console.warn(`[sendblue] ${label} error`, error);
+    }
   }
 }
 
@@ -286,12 +332,74 @@ function emojiForCategory(category?: string): string {
 const noUrlReply = "Send me an Instagram/TikTok link and I'll find the place 🗺️";
 const noVenueReply =
   "Couldn't find a clear place in that one — try one with the spot named in the caption.";
+const emptyListReply =
+  "You haven't saved any places yet — send me an Instagram/TikTok link! / 你還沒存任何地點，傳個 IG/TikTok 連結給我！";
 
 export function formatVenueReply(venue: ExtractedVenue): string {
   const emoji = emojiForCategory(venue.category);
   const where = venue.area ? `${venue.name} in ${venue.area}` : venue.name;
   const second = venue.category ? `\n${venue.category}` : "";
   return `Found ${where} ${emoji}${second}`;
+}
+
+/**
+ * Heuristic: does the inbound text look like it's (primarily) Chinese? Used to
+ * localize confirmations/lists. Any CJK ideograph present => reply in 繁中.
+ */
+export function looksChinese(text: string): boolean {
+  return /[一-鿿]/.test(text);
+}
+
+// "Show me my saved places" intents, English + 中文. Matched as case-insensitive
+// substrings so "show me my places" / "what have I saved?" still trigger.
+const listIntentPhrases = [
+  "what have i saved",
+  "my places",
+  "my saved",
+  "saved places",
+  "list",
+  "我存了哪些",
+  "我的地點",
+  "存了什麼",
+  "我存過",
+  "清單",
+];
+
+export function isListIntent(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return false;
+  return listIntentPhrases.some((phrase) => lower.includes(phrase));
+}
+
+/**
+ * Confirmation reply after a place is saved, with the running count.
+ * Localizes to 繁中 when the inbound looked Chinese.
+ */
+export function formatSaveReply(venue: ExtractedVenue, count: number, chinese: boolean): string {
+  if (chinese) {
+    const where = venue.area ? `${venue.name}（${venue.area}）` : venue.name;
+    return `已存 ${where} ✓\n你已存 ${count} 個地點，傳「我存了哪些」查看。`;
+  }
+  const where = venue.area ? `${venue.name} in ${venue.area}` : venue.name;
+  const plural = count === 1 ? "" : "s";
+  return `Saved ${where} ✓\nYou've saved ${count} place${plural} — text "my places" to see them.`;
+}
+
+/** Short numbered list of saved places, capped, localized. */
+export function formatPlaceList(places: SavedPlace[], chinese: boolean, cap = 15): string {
+  if (places.length === 0) return emptyListReply;
+  const shown = places.slice(0, cap);
+  const lines = shown.map((place, index) => {
+    const where = place.area ? `${place.name} — ${place.area}` : place.name;
+    return `${index + 1}. ${where}`;
+  });
+  const header = chinese ? "你存過的地點：" : "Your saved places:";
+  let body = `${header}\n${lines.join("\n")}`;
+  if (places.length > shown.length) {
+    const more = places.length - shown.length;
+    body += chinese ? `\n…還有 ${more} 個` : `\n…and ${more} more`;
+  }
+  return body;
 }
 
 // Defensive field extraction: Sendblue inbound payloads vary, so accept several
@@ -334,7 +442,8 @@ export type ProcessResult = {
 export type ProcessDeps = {
   fetchText?: FetchText;
   gemini?: GeminiCaller;
-  client: Pick<SendblueClient, "sendMessage">;
+  client: Pick<SendblueClient, "sendMessage" | "markRead" | "sendTypingIndicator">;
+  store: SendbluePlaceStore;
 };
 
 /**
@@ -359,18 +468,53 @@ export async function processSendblueInbound(
   }
   console.log(`[sendblue] inbound from=${from} text=${text.slice(0, 120)}`);
 
+  // Best-effort: show the user a blue read receipt + typing indicator while we
+  // fetch + extract. These never throw into the main flow (client wraps them),
+  // so a Sendblue outage here can't block the reply.
+  await deps.client.markRead(from);
+  await deps.client.sendTypingIndicator(from);
+
+  const chinese = looksChinese(text);
   let reply: string;
   try {
     const url = firstUrlInText(text);
-    if (!url) {
-      console.log("[sendblue] no URL in message → hint");
-      reply = noUrlReply;
-    } else {
+    if (url) {
+      // Save flow: link → caption → venue → remember it for this number.
       const { caption } = await fetchLinkCaption(url, deps.fetchText);
       console.log(`[sendblue] url=${url} captionLen=${caption.length}`);
       const venue = caption ? await extractVenueFromCaption(caption, deps.gemini) : null;
       console.log(`[sendblue] venue=${venue ? JSON.stringify(venue) : "(none)"}`);
-      reply = venue ? formatVenueReply(venue) : noVenueReply;
+      if (venue) {
+        let count: number;
+        try {
+          count = await deps.store.save(from, venue, url);
+        } catch (storeError) {
+          // Degrade gracefully: still confirm the find even if persistence fails.
+          console.error("[sendblue] store.save error", storeError);
+          reply = formatVenueReply(venue);
+          await deps.client.sendMessage(from, reply);
+          console.log(`[sendblue] sent to ${from} (save failed, no count)`);
+          return { replied: true, reply };
+        }
+        console.log(`[sendblue] saved place for ${from} count=${count}`);
+        reply = formatSaveReply(venue, count, chinese);
+      } else {
+        reply = noVenueReply;
+      }
+    } else if (isListIntent(text)) {
+      // List flow: no URL + a "show me my places" intent → reply with the list.
+      let places: SavedPlace[];
+      try {
+        places = await deps.store.list(from);
+      } catch (storeError) {
+        console.error("[sendblue] store.list error", storeError);
+        places = [];
+      }
+      console.log(`[sendblue] list intent for ${from} count=${places.length}`);
+      reply = formatPlaceList(places, chinese);
+    } else {
+      console.log("[sendblue] no URL / no list intent → hint");
+      reply = noUrlReply;
     }
   } catch (error) {
     // Spike: degrade gracefully, never bubble up to the webhook.

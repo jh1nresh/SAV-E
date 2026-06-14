@@ -18,6 +18,10 @@ import {
 import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
 import { processSendblueInbound, SendblueClient } from "./sendblueBot.js";
+import {
+  PgSendbluePlaceStore,
+  sendblueSavedPlacesTableSql,
+} from "./sendbluePlaceStore.js";
 import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
   formatSharedPlaceLink,
@@ -64,6 +68,22 @@ const pool = new Pool({
 });
 
 let verificationKeyPromise: Promise<KeyLike> | undefined;
+
+// Per-number place memory for the Sendblue bot. Backed by pool.query (injected,
+// not the pool itself, to avoid a circular import in the bot module).
+const sendbluePlaceStore = new PgSendbluePlaceStore({
+  query: (sql, values) => pool.query(sql, values as QueryValue[]),
+});
+
+// Idempotent create-if-not-exists; awaited at startup. Failure is logged, not
+// fatal — the webhook still 200s and the save path degrades gracefully.
+async function ensureSendblueTable(): Promise<void> {
+  try {
+    await pool.query(sendblueSavedPlacesTableSql);
+  } catch (error) {
+    console.error("[sendblue] ensureSendblueTable failed", error);
+  }
+}
 
 const placeFields = [
   "id",
@@ -442,6 +462,7 @@ createServer(async (request, response) => {
   }
 }).listen(Number(process.env.PORT ?? 3000), () => {
   console.log(`SAV-E backend listening on ${process.env.PORT ?? 3000}`);
+  void ensureSendblueTable();
 });
 
 // Sendblue inbound webhook. Spike: synchronous fetch -> caption -> venue ->
@@ -466,7 +487,7 @@ async function handleSendblueWebhook(
   void (async () => {
     try {
       const client = new SendblueClient();
-      const result = await processSendblueInbound(body, { client });
+      const result = await processSendblueInbound(body, { client, store: sendbluePlaceStore });
       console.log(
         `[sendblue] done replied=${result.replied}` +
           (result.reply ? ` reply=${JSON.stringify(result.reply)}` : ""),
