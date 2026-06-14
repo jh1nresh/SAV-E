@@ -1134,13 +1134,13 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1299,7 +1299,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1319,7 +1319,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -1342,13 +1342,13 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EClip/SAV-EClip.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1381,7 +1381,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-E/SAV-E.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1401,7 +1401,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
@@ -1423,7 +1423,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EiMessage/SAV-EiMessage.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EiMessage/Info.plist";
@@ -1445,7 +1445,7 @@
 				CODE_SIGN_ENTITLEMENTS = "SAV-EShareExtension/SAV-EShareExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 68;
+				CURRENT_PROJECT_VERSION = 69;
 				DEVELOPMENT_TEAM = JC6858UYM9;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "SAV-EShareExtension/Info.plist";
