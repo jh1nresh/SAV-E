@@ -613,6 +613,16 @@ values
         'quote',
         '{"type":"object","required":["origin","destination","departure_date"],"properties":{"origin":{"type":"string"},"destination":{"type":"string"},"departure_date":{"type":"string"},"return_date":{"type":"string"}}}'::jsonb,
         '{"type":"object","required":["itineraries"],"properties":{"itineraries":{"type":"array"},"handoff_url":{"type":"string"}}}'::jsonb
+    ),
+    (
+        'SLR.cafe.place_order',
+        'SLR',
+        'cafe',
+        'place_order',
+        'Place a cafe/food order via SLL-R from buyer intent + location, charge (card-on-file or pay link), and return a receipt.',
+        'purchase',
+        '{"type":"object","required":["query"],"properties":{"query":{"type":"string"},"location":{"type":"object","properties":{"lat":{"type":"number"},"lng":{"type":"number"}}}}}'::jsonb,
+        '{"type":"object","required":["order_id","status"],"properties":{"order_id":{"type":"string"},"status":{"type":"string"},"receipt_url":{"type":"string"}}}'::jsonb
     )
 on conflict (id) do update
 set agent_family = excluded.agent_family,
