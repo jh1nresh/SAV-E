@@ -16,6 +16,7 @@ import {
   phraseDiscovery,
   type GeminiCaller,
   type DiscoveredPlace,
+  type PendingStore,
 } from "./sendblueBot.js";
 import type { ExtractedVenue } from "./sendblueBot.js";
 import type { ListOpts, SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
@@ -377,6 +378,55 @@ test("webhook flow: discovery with no location asks where you are", async () => 
   );
   assert.equal(result.replied, true);
   assert.match(client.calls[0]?.content ?? "", /Where are you|你現在在哪/);
+});
+
+test("decideRecall: a bare location resumes the pending discovery query", async () => {
+  let sawContext = false;
+  const gemini: GeminiCaller = async (prompt) => {
+    sawContext = prompt.includes("CONVERSATION CONTEXT");
+    return JSON.stringify({ search: { query: "coffee", area: "Tustin" } });
+  };
+  const decision = await decideRecall("Tustin", [], gemini, false, "coffee");
+  assert.equal(sawContext, true);
+  assert.deepEqual(decision, { kind: "search", query: "coffee", area: "Tustin" });
+});
+
+test("webhook flow: ask location → bare place name resumes search (conversation memory)", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const m = new Map<string, { query: string; at: number }>();
+  const pending: PendingStore = {
+    get: (p) => m.get(p),
+    set: (p, q) => void m.set(p, { query: q, at: 0 }),
+    clear: (p) => void m.delete(p),
+  };
+  let searched = "";
+  const placesSearch = async (q: string): Promise<DiscoveredPlace[]> => {
+    searched = q;
+    return [{ name: "Kean Coffee", address: "Tustin", rating: 4.5 }];
+  };
+  const gemini: GeminiCaller = async (prompt) => {
+    if (prompt.includes("Results:")) return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
+    if (prompt.includes("CONVERSATION CONTEXT")) return JSON.stringify({ search: { query: "coffee", area: "Tustin" } });
+    return JSON.stringify({ search: { query: "coffee", area: null } });
+  };
+
+  // Turn 1: "find coffee nearby" → asks for location, sets pending.
+  const t1 = await processSendblueInbound(
+    { from_number: "+15557779999", content: "find me coffee nearby" },
+    { client, store, gemini, placesSearch, pending },
+  );
+  assert.match(t1.reply ?? "", /Where are you|你現在在哪/);
+  assert.equal(m.get("+15557779999")?.query, "coffee");
+
+  // Turn 2: bare "Tustin" → resumes the pending coffee search.
+  const t2 = await processSendblueInbound(
+    { from_number: "+15557779999", content: "Tustin" },
+    { client, store, gemini, placesSearch, pending },
+  );
+  assert.match(searched, /coffee in Tustin/);
+  assert.equal(t2.reply, "Try Kean Coffee in Tustin ☕");
+  assert.equal(m.get("+15557779999"), undefined); // cleared after resume
 });
 
 test("webhook flow: agentic falls back to keyword list when model yields nothing", async () => {
