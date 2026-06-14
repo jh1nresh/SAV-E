@@ -65,7 +65,7 @@ export type SourceSearchOutput = {
   receipt: SourceRecoveryReceipt;
 };
 
-type SourceMetadata = {
+export type SourceMetadata = {
   resolvedURL?: string;
   title?: string;
   description?: string;
@@ -885,7 +885,7 @@ function duckDuckGoHTMLURL(query: string): string {
   return `https://duckduckgo.com/html/?${params.toString()}`;
 }
 
-async function defaultFetchText(url: string): Promise<string> {
+export async function defaultFetchText(url: string): Promise<string> {
   const parsed = safeURL(url);
   if (!parsed || !(await isSafePublicHTTPURL(parsed))) throw new Error("Blocked non-public URL");
 
@@ -928,7 +928,7 @@ async function fetchSourceMetadata(
   }
 }
 
-function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
+export function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
   const baseURL = resolvedURL ? safeURL(resolvedURL) : undefined;
   return {
     resolvedURL,
@@ -1249,7 +1249,7 @@ function stripTags(value: string): string {
   return value.replace(/<[^>]*>/g, " ");
 }
 
-function decodeHTML(value: string): string {
+export function decodeHTML(value: string): string {
   return value
     .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
     .replace(/&#([0-9]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))

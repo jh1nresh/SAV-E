@@ -17,6 +17,7 @@ import {
 } from "./placeClaims.js";
 import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
+import { processSendblueInbound, SendblueClient } from "./sendblueBot.js";
 import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
   formatSharedPlaceLink,
@@ -386,6 +387,12 @@ createServer(async (request, response) => {
       return sendJson(response, createGuestSession(guestSessionSecret), 201);
     }
 
+    // Sendblue iMessage bot webhook (unauthenticated — no Privy). Must be
+    // registered before resolveUserId(). Always returns 200 quickly.
+    if (isV0 && request.method === "POST" && resource === "sendblue" && id === "webhook") {
+      return await handleSendblueWebhook(request, response);
+    }
+
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
@@ -436,6 +443,25 @@ createServer(async (request, response) => {
 }).listen(Number(process.env.PORT ?? 3000), () => {
   console.log(`SAV-E backend listening on ${process.env.PORT ?? 3000}`);
 });
+
+// Sendblue inbound webhook. Spike: synchronous fetch -> caption -> venue ->
+// reply, always returns 200 to Sendblue (even on internal errors) so the
+// webhook is never retried/disabled. No Privy auth on this route.
+async function handleSendblueWebhook(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  try {
+    const body = await readJson(request);
+    const client = new SendblueClient();
+    await processSendblueInbound(body, { client });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("sendblue webhook error", message);
+  }
+  // Always 200, regardless of internal outcome.
+  return sendJson(response, { ok: true }, 200);
+}
 
 async function handlePlaces(
   request: IncomingMessage,

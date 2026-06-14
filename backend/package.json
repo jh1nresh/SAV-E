@@ -9,7 +9,8 @@
     "prestart": "npm run build && npm run check:source-recovery",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts"
+    "dev": "tsx watch src/server.ts",
+    "try:sendblue": "tsx scripts/try-sendblue.ts"
   },
   "dependencies": {
     "jose": "^5.9.6",
