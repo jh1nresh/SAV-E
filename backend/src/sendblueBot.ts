@@ -188,6 +188,11 @@ export async function defaultGeminiText(prompt: string): Promise<string> {
       generationConfig: {
         temperature: 0.1,
         responseMimeType: "application/json",
+        // These tasks (venue extraction, recall routing, phrasing) are simple
+        // structured outputs — deep reasoning adds ~2s/call for no quality gain.
+        // Disabling the thinking budget cuts each call ~2.8s -> ~0.9s (measured).
+        thinkingConfig: { thinkingBudget: 0 },
+        maxOutputTokens: 1024,
       },
     }),
   });
@@ -860,10 +865,11 @@ export async function processSendblueInbound(
   console.log(`[sendblue] inbound from=${from} text=${text.slice(0, 120)}`);
 
   // Best-effort: show the user a blue read receipt + typing indicator while we
-  // fetch + extract. These never throw into the main flow (client wraps them),
-  // so a Sendblue outage here can't block the reply.
-  await deps.client.markRead(from);
-  await deps.client.sendTypingIndicator(from);
+  // fetch + extract. Fire-and-forget (not awaited) so two Sendblue round-trips
+  // don't sit on the critical path — the typing dots show DURING processing,
+  // which is exactly when we want them. The client wraps its own errors.
+  void deps.client.markRead(from);
+  void deps.client.sendTypingIndicator(from);
 
   const chinese = looksChinese(text);
   let reply: string;

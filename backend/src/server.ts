@@ -506,6 +506,11 @@ async function handleSendblueWebhook(
     return sendJson(response, { ok: true }, 200);
   }
 
+  // Diagnostic: log the FULL raw inbound payload so we can verify empirically
+  // whether Sendblue forwards a shared location / map pin (coordinates, a
+  // location message_type, or a media_url) — the docs list no location field.
+  console.log(`[sendblue] RAW ${JSON.stringify(body)}`);
+
   // Respond 200 IMMEDIATELY so Sendblue's webhook never times out on a slow
   // link fetch / Gemini call; process + reply in the background (fire-and-forget).
   sendJson(response, { ok: true }, 200);
