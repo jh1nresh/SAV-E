@@ -531,6 +531,9 @@ final class GeminiSaveLLMClient: SaveLLMClient {
             modelFallbacks: modelFallbacks,
             session: session,
             accessTokenProvider: { try await PrivyAuthService.shared.accessToken() },
+            // App Review demo: drawer search reaches the LLM proxy via an
+            // anonymous guest token when there's no real Privy JWT.
+            guestTokenProvider: { ReviewDemoGuestTokenHolder.shared.current },
             directAPIKey: apiKey ?? SAVEProductionConfig.clientGeminiAPIKeyIfAllowed()
         )
     }

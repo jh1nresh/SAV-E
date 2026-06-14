@@ -74,6 +74,10 @@ struct SAVEGeminiTransport {
     var modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks
     var session: URLSession = .shared
     var accessTokenProvider: (() async throws -> String)?
+    /// App Review demo: returns an anonymous backend guest token when available.
+    /// When the normal Privy access token is missing (demo session), the proxy
+    /// request authenticates with `x-save-guest-token` instead of a Bearer JWT.
+    var guestTokenProvider: (() -> String?)?
     var directAPIKey: String? = SAVEProductionConfig.clientGeminiAPIKeyIfAllowed()
     var requestTimeout: TimeInterval = 30
     var maxAttemptsPerModel: Int = 2
@@ -139,10 +143,30 @@ struct SAVEGeminiTransport {
     }
 
     private func generateViaBackendProxy(body: [String: Any], model: String) async throws -> [String: Any]? {
-        guard let apiBaseURL = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
-              let accessTokenProvider else {
+        guard let apiBaseURL = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) else {
             return nil
         }
+        // Prefer the real Privy JWT. If it's unavailable (App Review demo session,
+        // where `accessTokenProvider` throws), fall back to the anonymous guest
+        // token via the `x-save-guest-token` header which the proxy accepts.
+        let guestToken = guestTokenProvider?().flatMap { $0.isEmpty ? nil : $0 }
+        let authorization: (header: String, value: String)?
+        if let accessTokenProvider {
+            do {
+                authorization = ("Authorization", "Bearer \(try await accessTokenProvider())")
+            } catch {
+                // No Privy JWT. Use the guest token if we have one (demo mode);
+                // otherwise preserve the original behavior and surface the error.
+                guard let guestToken else { throw error }
+                authorization = ("x-save-guest-token", guestToken)
+            }
+        } else if let guestToken {
+            authorization = ("x-save-guest-token", guestToken)
+        } else {
+            return nil
+        }
+        guard let authorization else { return nil }
+
         var proxyBody = body
         proxyBody["model"] = model
         let requestBody = try JSONSerialization.data(withJSONObject: proxyBody)
@@ -154,7 +178,7 @@ struct SAVEGeminiTransport {
         request.httpMethod = "POST"
         request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(try await accessTokenProvider())", forHTTPHeaderField: "Authorization")
+        request.setValue(authorization.value, forHTTPHeaderField: authorization.header)
         request.httpBody = requestBody
         return try await decodeResponse(for: request)
     }

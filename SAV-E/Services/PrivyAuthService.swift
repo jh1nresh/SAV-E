@@ -16,12 +16,17 @@ enum AuthError: LocalizedError {
     case signInFailed(String)
     case invalidCode
     case missingPrivyConfig(String)
+    /// Thrown by `accessToken()` while in the App Review demo session, which has
+    /// no real Privy user. Callers must treat this as "no token available" and
+    /// degrade to local/cached behavior — never crash or block.
+    case reviewerDemoNoToken
 
     var errorDescription: String? {
         switch self {
         case .signInFailed(let reason): return "Sign in failed: \(reason)"
         case .invalidCode: return "No pending email — call signInWithEmail first"
         case .missingPrivyConfig(let key): return "Missing Privy config: \(key)"
+        case .reviewerDemoNoToken: return "Reviewer demo session has no auth token"
         }
     }
 }
@@ -38,6 +43,16 @@ final class PrivyAuthService: ObservableObject {
     private let appId: String
     private let clientId: String
     private var authStateTask: Task<Void, Never>?
+
+    // MARK: App Review Demo
+
+    /// True while the App Review demo session is active. See `ReviewDemo`.
+    private(set) var isReviewerDemo = false
+
+    /// Anonymous backend guest token for the demo session, used so drawer search
+    /// works via the LLM proxy without a real Privy JWT. Nil if the guest-session
+    /// request failed (demo still proceeds local-only).
+    private(set) var demoGuestToken: String?
 
     var isAuthenticated: Bool {
         if case .authenticated = authState { return true }
@@ -112,12 +127,27 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Email OTP
 
     func signInWithEmail(_ email: String) async throws {
+        // App Review demo bypass: never send a real OTP for the demo email — it
+        // would fail/spam and the reviewer can't receive it anyway. Just record
+        // the pending email so the UI advances to the code field.
+        if ReviewDemo.isDemoEmail(email) {
+            pendingEmail = email
+            return
+        }
         let privy = try validatedPrivy()
         pendingEmail = email
         try await privy.email.sendCode(to: email)
     }
 
     func verifyEmailCode(_ code: String) async throws {
+        // App Review demo bypass: the EXACT (demo email, demo code) pair enters
+        // the isolated demo session instead of calling Privy. Any other email or
+        // code falls through to the normal Privy flow below, unchanged.
+        if let email = pendingEmail, ReviewDemo.isDemoCredentialPair(email: email, code: code) {
+            pendingEmail = nil
+            await enterReviewerDemo()
+            return
+        }
         let privy = try validatedPrivy()
         guard let email = pendingEmail else { throw AuthError.invalidCode }
         let user = try await privy.email.loginWithCode(code, sentTo: email)
@@ -125,9 +155,72 @@ final class PrivyAuthService: ObservableObject {
         authState = .authenticated(userId: user.id)
     }
 
+    // MARK: - App Review Demo Session
+
+    /// Enters the isolated App Review demo session: best-effort backend guest
+    /// token + locally-seeded places, then flips `authState` to authenticated.
+    /// Never throws — if the network call fails we still enter local-only demo so
+    /// the reviewer is never blocked at the door.
+    func enterReviewerDemo() async {
+        isReviewerDemo = true
+        demoGuestToken = await fetchGuestToken()
+        ReviewDemoGuestTokenHolder.shared.set(demoGuestToken)
+        seedReviewerDemoVaultIfNeeded()
+        authState = .authenticated(userId: ReviewDemo.userId)
+    }
+
+    /// POST {API}/v0/guest-sessions -> { guest_token }. Returns nil on any error.
+    private func fetchGuestToken() async -> String? {
+        guard let apiBaseURL = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+              let url = URL(string: "\(apiBaseURL)/v0/guest-sessions") else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let token = json["guest_token"] as? String,
+                  !token.isEmpty else {
+                return nil
+            }
+            return token
+        } catch {
+            return nil
+        }
+    }
+
+    /// Seeds the local vault with demo places once. Idempotent via a UserDefaults
+    /// flag so re-entering demo mode doesn't duplicate places. Best-effort: a
+    /// seed failure must not block demo entry.
+    private func seedReviewerDemoVaultIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: ReviewDemo.seededDefaultsKey) else { return }
+        let vault = SaveLocalVaultService()
+        let alreadyHasPlaces = (try? vault.confirmedPlaces(limit: 1).isEmpty == false) ?? false
+        guard !alreadyHasPlaces else {
+            defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+            return
+        }
+        for place in ReviewDemoSeed.places() {
+            _ = try? vault.saveConfirmedPlace(place)
+        }
+        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+    }
+
     // MARK: - Sign Out
 
     func signOut() async {
+        if isReviewerDemo {
+            isReviewerDemo = false
+            demoGuestToken = nil
+            ReviewDemoGuestTokenHolder.shared.set(nil)
+            authState = .unauthenticated
+            return
+        }
         guard let privy else {
             authState = .unauthenticated
             return
@@ -138,6 +231,10 @@ final class PrivyAuthService: ObservableObject {
     }
 
     func accessToken() async throws -> String {
+        // The App Review demo session has no Privy user. Throw a clear, already-
+        // handled error so callers degrade to local/cached behavior. The demo
+        // path that needs the backend (drawer search) uses `demoGuestToken`.
+        if isReviewerDemo { throw AuthError.reviewerDemoNoToken }
         let privy = try validatedPrivy()
         guard let user = await privy.getUser() else { throw AuthError.signInFailed("No authenticated user") }
         return try await user.getAccessToken()
