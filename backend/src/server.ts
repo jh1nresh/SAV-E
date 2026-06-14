@@ -17,7 +17,7 @@ import {
 } from "./placeClaims.js";
 import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
 import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
-import { processSendblueInbound, SendblueClient } from "./sendblueBot.js";
+import { defaultGeminiText, processSendblueInbound, SendblueClient } from "./sendblueBot.js";
 import {
   PgSendbluePlaceStore,
   sendblueSavedPlacesTableSql,
@@ -487,7 +487,13 @@ async function handleSendblueWebhook(
   void (async () => {
     try {
       const client = new SendblueClient();
-      const result = await processSendblueInbound(body, { client, store: sendbluePlaceStore });
+      // Inject the LLM so no-URL messages get an agentic, grounded answer over
+      // the user's saved places (not just keyword-matched intents).
+      const result = await processSendblueInbound(body, {
+        client,
+        store: sendbluePlaceStore,
+        gemini: defaultGeminiText,
+      });
       console.log(
         `[sendblue] done replied=${result.replied}` +
           (result.reply ? ` reply=${JSON.stringify(result.reply)}` : ""),

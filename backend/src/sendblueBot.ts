@@ -175,7 +175,7 @@ function foldText(value: string): string {
     .trim();
 }
 
-async function defaultGeminiText(prompt: string): Promise<string> {
+export async function defaultGeminiText(prompt: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
   const model = process.env.SAVE_MAAT_GEMINI_MODEL ?? defaultGeminiModel;
@@ -516,6 +516,68 @@ export function pickRecommendation(places: SavedPlace[]): SavedPlace | undefined
   return top[Math.floor(Math.random() * top.length)];
 }
 
+function parseReplyJson(text: string): { reply?: unknown } | null {
+  const tryParse = (value: string): { reply?: unknown } | null => {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed && typeof parsed === "object") return parsed as { reply?: unknown };
+    } catch {
+      // fall through
+    }
+    return null;
+  };
+  const direct = tryParse(text.trim());
+  if (direct) return direct;
+  const match = text.match(/\{[\s\S]*\}/);
+  return match ? tryParse(match[0]) : null;
+}
+
+/**
+ * Agentic recall: instead of keyword-matching the message against fixed intents,
+ * hand the user's text AND their saved places to the LLM and let it answer
+ * naturally — list, recommend, or answer a free-form question ("the cafe my
+ * friend sent?", "somewhere for tonight", "anything in Tokyo?"). The model is
+ * GROUNDED: it must only reference places in the supplied list, never invent one.
+ * Returns null when there's nothing to ground on or the model is unavailable /
+ * yields no usable reply, so the caller can fall back to deterministic intents.
+ */
+export async function answerOverSavedPlaces(
+  text: string,
+  places: SavedPlace[],
+  gemini: GeminiCaller = defaultGeminiText,
+  chinese = false,
+): Promise<string | null> {
+  if (places.length === 0) return null;
+  const context = places
+    .slice(0, 50)
+    .map((p, i) => {
+      const bits = [p.name];
+      if (p.area) bits.push(`area: ${p.area}`);
+      if (p.category) bits.push(p.category);
+      return `${i + 1}. ${bits.join(" — ")}`;
+    })
+    .join("\n");
+  const lang = chinese ? "繁體中文" : "the same language the user wrote in";
+  const prompt = `You are SAV-E, a friend who remembers places the user saved from Instagram/TikTok. Answer ONLY using the saved places listed below. NEVER invent a place that is not in the list. If nothing in the list fits what they asked, say so in one short sentence and suggest they send a new link. Keep it to 1-3 short sentences — this is a text message. Reply in ${lang}. At most one emoji.
+
+The user's saved places:
+${context}
+
+The user just texted: "${text}"
+
+Return STRICT JSON only, no markdown: {"reply": string}`;
+  let raw: string;
+  try {
+    raw = await gemini(prompt);
+  } catch (error) {
+    console.error("[sendblue] agentic answer gemini error", error);
+    return null;
+  }
+  const parsed = parseReplyJson(raw);
+  const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+  return reply.length > 0 ? reply : null;
+}
+
 // Defensive field extraction: Sendblue inbound payloads vary, so accept several
 // common field names for the message text and the sender number.
 function inboundText(body: Record<string, unknown>): string | undefined {
@@ -559,6 +621,56 @@ export type ProcessDeps = {
   client: Pick<SendblueClient, "sendMessage" | "markRead" | "sendTypingIndicator">;
   store: SendbluePlaceStore;
 };
+
+/**
+ * Deterministic recall used when the LLM is unavailable: detect an area from the
+ * user's OWN saved areas (no GPS), then match a recommend / list intent. This is
+ * the pre-agentic keyword path, kept as a graceful fallback.
+ */
+async function keywordRecallReply(
+  text: string,
+  from: string,
+  chinese: boolean,
+  store: SendbluePlaceStore,
+): Promise<string> {
+  let savedAreas: string[] = [];
+  try {
+    savedAreas = await store.distinctAreas(from);
+  } catch (storeError) {
+    console.error("[sendblue] store.distinctAreas error", storeError);
+  }
+  const area = detectArea(text, savedAreas);
+
+  if (isRecommendIntent(text)) {
+    let places: SavedPlace[];
+    try {
+      places = await store.list(from, area ? { area } : undefined);
+    } catch (storeError) {
+      console.error("[sendblue] store.list error", storeError);
+      places = [];
+    }
+    const picked = pickRecommendation(places);
+    console.log(`[sendblue] recommend intent area=${area ?? "(any)"} picked=${picked?.name ?? "(none)"}`);
+    if (picked) return formatRecommendReply(picked, chinese);
+    if (area) return formatNoAreaMatch(area, chinese);
+    return emptyListReply;
+  }
+
+  if (isListIntent(text) || isBareAreaMention(text, area)) {
+    let places: SavedPlace[];
+    try {
+      places = await store.list(from, area ? { area } : undefined);
+    } catch (storeError) {
+      console.error("[sendblue] store.list error", storeError);
+      places = [];
+    }
+    console.log(`[sendblue] list intent for ${from} area=${area ?? "(any)"} count=${places.length}`);
+    return area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
+  }
+
+  console.log("[sendblue] no URL / no recommend / no list intent → hint");
+  return noUrlReply;
+}
 
 /**
  * Core webhook logic, decoupled from http for testing: parse the inbound
@@ -615,52 +727,32 @@ export async function processSendblueInbound(
       } else {
         reply = noVenueReply;
       }
-    } else {
-      // No URL: recall/recommend flow. Detect an area by matching the user's OWN
-      // saved areas against the text (no GPS — area is text-based on their data).
-      let savedAreas: string[] = [];
+    } else if (deps.gemini) {
+      // No URL + an LLM is available: AGENTIC recall. Hand the message + the
+      // user's saved places to the model and let it answer naturally (list /
+      // recommend / free-form question), grounded only in what they've saved.
+      // Falls back to deterministic keyword intents if the model yields nothing.
+      let places: SavedPlace[] = [];
       try {
-        savedAreas = await deps.store.distinctAreas(from);
+        places = await deps.store.list(from, { limit: 50 });
       } catch (storeError) {
-        console.error("[sendblue] store.distinctAreas error", storeError);
+        console.error("[sendblue] store.list error", storeError);
       }
-      const area = detectArea(text, savedAreas);
-
-      if (isRecommendIntent(text)) {
-        // Recommend: pick ONE saved place (area-filtered if detected, else all).
-        let places: SavedPlace[];
-        try {
-          places = await deps.store.list(from, area ? { area } : undefined);
-        } catch (storeError) {
-          console.error("[sendblue] store.list error", storeError);
-          places = [];
-        }
-        const picked = pickRecommendation(places);
-        console.log(
-          `[sendblue] recommend intent area=${area ?? "(any)"} picked=${picked?.name ?? "(none)"}`,
-        );
-        if (picked) {
-          reply = formatRecommendReply(picked, chinese);
-        } else if (area) {
-          reply = formatNoAreaMatch(area, chinese);
-        } else {
-          reply = emptyListReply;
-        }
-      } else if (isListIntent(text) || isBareAreaMention(text, area)) {
-        // List flow: a "show me my places" intent OR a bare area mention.
-        let places: SavedPlace[];
-        try {
-          places = await deps.store.list(from, area ? { area } : undefined);
-        } catch (storeError) {
-          console.error("[sendblue] store.list error", storeError);
-          places = [];
-        }
-        console.log(`[sendblue] list intent for ${from} area=${area ?? "(any)"} count=${places.length}`);
-        reply = area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
+      if (places.length === 0) {
+        reply = emptyListReply;
       } else {
-        console.log("[sendblue] no URL / no recommend / no list intent → hint");
-        reply = noUrlReply;
+        const agentic = await answerOverSavedPlaces(text, places, deps.gemini, chinese);
+        if (agentic) {
+          console.log(`[sendblue] agentic answer for ${from} placeCount=${places.length}`);
+          reply = agentic;
+        } else {
+          console.log(`[sendblue] agentic empty → keyword fallback for ${from}`);
+          reply = await keywordRecallReply(text, from, chinese, deps.store);
+        }
       }
+    } else {
+      // No LLM injected (e.g. tests): deterministic keyword recall.
+      reply = await keywordRecallReply(text, from, chinese, deps.store);
     }
   } catch (error) {
     // Spike: degrade gracefully, never bubble up to the webhook.

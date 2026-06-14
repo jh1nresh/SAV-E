@@ -10,6 +10,7 @@ import {
   detectArea,
   looksChinese,
   processSendblueInbound,
+  answerOverSavedPlaces,
   type GeminiCaller,
 } from "./sendblueBot.js";
 import type { ExtractedVenue } from "./sendblueBot.js";
@@ -258,6 +259,65 @@ test("webhook flow: Chinese list intent replies in 中文", async () => {
   const content = client.calls[0]?.content ?? "";
   assert.match(content, /你存過的地點/);
   assert.match(content, /鼎泰豐/);
+});
+
+test("answerOverSavedPlaces grounds a free-form question in the saved list", async () => {
+  const places: SavedPlace[] = [
+    { name: "Cafe Leon Dore", area: "West Hollywood", category: "cafe" },
+    { name: "Aquarela", area: "Cabo", category: "restaurant" },
+  ];
+  let seenPrompt = "";
+  const gemini: GeminiCaller = async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ reply: "Cafe Leon Dore in West Hollywood is your coffee spot ☕" });
+  };
+  const reply = await answerOverSavedPlaces("where can I get coffee tonight?", places, gemini, false);
+  assert.equal(reply, "Cafe Leon Dore in West Hollywood is your coffee spot ☕");
+  // The model is grounded: both saved places are in the prompt context.
+  assert.match(seenPrompt, /Cafe Leon Dore/);
+  assert.match(seenPrompt, /Aquarela/);
+});
+
+test("answerOverSavedPlaces returns null on empty list or unusable model output", async () => {
+  const places: SavedPlace[] = [{ name: "Tartine", area: "San Francisco" }];
+  assert.equal(await answerOverSavedPlaces("hi", [], fakeGemini({ reply: "x" }), false), null);
+  assert.equal(await answerOverSavedPlaces("hi", places, async () => "not json", false), null);
+  assert.equal(
+    await answerOverSavedPlaces("hi", places, async () => {
+      throw new Error("boom");
+    }, false),
+    null,
+  );
+});
+
+test("webhook flow: agentic answer used when a gemini is injected", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15557778888", { name: "Cafe Leon Dore", area: "West Hollywood", category: "cafe" });
+  const gemini: GeminiCaller = async () =>
+    JSON.stringify({ reply: "Go grab coffee at Cafe Leon Dore ☕" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15557778888", content: "i feel like coffee, ideas?" },
+    { client, store, gemini },
+  );
+  assert.equal(result.replied, true);
+  assert.equal(client.calls[0]?.content, "Go grab coffee at Cafe Leon Dore ☕");
+});
+
+test("webhook flow: agentic falls back to keyword list when model yields nothing", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15559990000", { name: "Aquarela", area: "Cabo" });
+  // Model returns unusable output → keyword 'my places' list takes over.
+  const gemini: GeminiCaller = async () => "garbage, not json";
+
+  const result = await processSendblueInbound(
+    { from_number: "+15559990000", content: "my places" },
+    { client, store, gemini },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls[0]?.content ?? "", /Aquarela/);
 });
 
 test("webhook flow: list intent with empty store replies with a friendly empty message", async () => {
