@@ -359,6 +359,7 @@ const listIntentPhrases = [
   "saved places",
   "list",
   "我存了哪些",
+  "存了哪些",
   "我的地點",
   "存了什麼",
   "我存過",
@@ -369,6 +370,67 @@ export function isListIntent(text: string): boolean {
   const lower = text.toLowerCase().trim();
   if (!lower) return false;
   return listIntentPhrases.some((phrase) => lower.includes(phrase));
+}
+
+// "Recommend somewhere" intents, English + 中文. Matched as case-insensitive
+// substrings. "附近" doubles as both a recommend trigger and an area-ish hint.
+const recommendIntentPhrases = [
+  "recommend",
+  "where should i go",
+  "where to",
+  "what should i",
+  "somewhere to",
+  "suggest",
+  "推薦",
+  "去哪",
+  "要去哪",
+  "吃什麼",
+  "附近",
+];
+
+export function isRecommendIntent(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return false;
+  return recommendIntentPhrases.some((phrase) => lower.includes(phrase));
+}
+
+/**
+ * Detect which of the user's OWN saved areas the inbound text refers to.
+ *
+ * Location-via-text: a text bot can't auto-GPS, so instead of geocoding we match
+ * the user's distinct saved area strings against the message as case-insensitive
+ * substrings, longest match winning. "I'm in LA" matches a saved "LA"; "near
+ * West Hollywood" matches "West Hollywood". Returns the stored area string
+ * (original casing) so it round-trips back into the area filter + reply copy.
+ */
+export function detectArea(text: string, savedAreas: string[]): string | undefined {
+  const folded = foldText(text);
+  let best: string | undefined;
+  for (const area of savedAreas) {
+    const trimmed = area.trim();
+    if (!trimmed) continue;
+    if (folded.includes(foldText(trimmed))) {
+      if (!best || trimmed.length > best.length) best = trimmed;
+    }
+  }
+  return best;
+}
+
+/**
+ * Is the text basically *just* an area mention (so we should list that area
+ * rather than fall through to the hint)? True when a saved area was detected and
+ * the remaining text is short filler ("in LA", "台北", "near West Hollywood").
+ */
+export function isBareAreaMention(text: string, detectedArea: string | undefined): boolean {
+  if (!detectedArea) return false;
+  const stripped = foldText(text).replace(foldText(detectedArea), " ");
+  // Drop common location filler so "i'm in LA" counts as bare.
+  const residual = stripped
+    .replace(/\b(i'?m|im|in|near|at|around|the|me|to|go)\b/g, " ")
+    .replace(/在|附近|有什麼|有什么/g, " ")
+    .replace(/[^a-z0-9一-鿿]+/g, "")
+    .trim();
+  return residual.length === 0;
 }
 
 /**
@@ -400,6 +462,58 @@ export function formatPlaceList(places: SavedPlace[], chinese: boolean, cap = 15
     body += chinese ? `\n…還有 ${more} 個` : `\n…and ${more} more`;
   }
   return body;
+}
+
+/**
+ * Warm one-place recommendation, localized. Drops the "from a … clip" tail when
+ * category/source are missing. Area is included when known.
+ */
+export function formatRecommendReply(place: SavedPlace, chinese: boolean): string {
+  const emoji = emojiForCategory(place.category);
+  if (chinese) {
+    const where = place.area ? `${place.name}（${place.area}）` : place.name;
+    return `去 ${where} ${emoji} — 你存過的。`;
+  }
+  const where = place.area ? `${place.name} in ${place.area}` : place.name;
+  const tail = place.category ? ` — you saved it from a ${place.category} clip.` : ".";
+  return `Go to ${where} ${emoji}${tail}`;
+}
+
+/** Numbered list of saved places in a specific area, capped, localized. */
+export function formatAreaList(
+  places: SavedPlace[],
+  area: string,
+  chinese: boolean,
+  cap = 15,
+): string {
+  if (places.length === 0) return formatNoAreaMatch(area, chinese);
+  const shown = places.slice(0, cap);
+  const lines = shown.map((place, index) => `${index + 1}. ${place.name}`);
+  const header = chinese ? `你在 ${area} 存的：` : `Your saved places in ${area}:`;
+  let body = `${header}\n${lines.join("\n")}`;
+  if (places.length > shown.length) {
+    const more = places.length - shown.length;
+    body += chinese ? `\n…還有 ${more} 個` : `\n…and ${more} more`;
+  }
+  return body;
+}
+
+/** "You haven't saved anything in {area} yet" reply, localized. */
+export function formatNoAreaMatch(area: string, chinese: boolean): string {
+  return chinese
+    ? `你還沒在 ${area} 存過 — 傳個那邊的連結給我！`
+    : `You haven't saved anything in ${area} yet — send me a link from there!`;
+}
+
+/**
+ * Choose one place to recommend from a most-recent-first list: pick randomly
+ * among the top few so repeated asks vary, biased toward recent saves. Returns
+ * undefined for an empty list.
+ */
+export function pickRecommendation(places: SavedPlace[]): SavedPlace | undefined {
+  if (places.length === 0) return undefined;
+  const top = places.slice(0, Math.min(3, places.length));
+  return top[Math.floor(Math.random() * top.length)];
 }
 
 // Defensive field extraction: Sendblue inbound payloads vary, so accept several
@@ -501,20 +615,52 @@ export async function processSendblueInbound(
       } else {
         reply = noVenueReply;
       }
-    } else if (isListIntent(text)) {
-      // List flow: no URL + a "show me my places" intent → reply with the list.
-      let places: SavedPlace[];
-      try {
-        places = await deps.store.list(from);
-      } catch (storeError) {
-        console.error("[sendblue] store.list error", storeError);
-        places = [];
-      }
-      console.log(`[sendblue] list intent for ${from} count=${places.length}`);
-      reply = formatPlaceList(places, chinese);
     } else {
-      console.log("[sendblue] no URL / no list intent → hint");
-      reply = noUrlReply;
+      // No URL: recall/recommend flow. Detect an area by matching the user's OWN
+      // saved areas against the text (no GPS — area is text-based on their data).
+      let savedAreas: string[] = [];
+      try {
+        savedAreas = await deps.store.distinctAreas(from);
+      } catch (storeError) {
+        console.error("[sendblue] store.distinctAreas error", storeError);
+      }
+      const area = detectArea(text, savedAreas);
+
+      if (isRecommendIntent(text)) {
+        // Recommend: pick ONE saved place (area-filtered if detected, else all).
+        let places: SavedPlace[];
+        try {
+          places = await deps.store.list(from, area ? { area } : undefined);
+        } catch (storeError) {
+          console.error("[sendblue] store.list error", storeError);
+          places = [];
+        }
+        const picked = pickRecommendation(places);
+        console.log(
+          `[sendblue] recommend intent area=${area ?? "(any)"} picked=${picked?.name ?? "(none)"}`,
+        );
+        if (picked) {
+          reply = formatRecommendReply(picked, chinese);
+        } else if (area) {
+          reply = formatNoAreaMatch(area, chinese);
+        } else {
+          reply = emptyListReply;
+        }
+      } else if (isListIntent(text) || isBareAreaMention(text, area)) {
+        // List flow: a "show me my places" intent OR a bare area mention.
+        let places: SavedPlace[];
+        try {
+          places = await deps.store.list(from, area ? { area } : undefined);
+        } catch (storeError) {
+          console.error("[sendblue] store.list error", storeError);
+          places = [];
+        }
+        console.log(`[sendblue] list intent for ${from} area=${area ?? "(any)"} count=${places.length}`);
+        reply = area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
+      } else {
+        console.log("[sendblue] no URL / no recommend / no list intent → hint");
+        reply = noUrlReply;
+      }
     }
   } catch (error) {
     // Spike: degrade gracefully, never bubble up to the webhook.

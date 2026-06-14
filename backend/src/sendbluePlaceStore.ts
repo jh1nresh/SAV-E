@@ -23,11 +23,27 @@ export type Queryable = {
   query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
 };
 
+/** Options for {@link SendbluePlaceStore.list}. Backward-compatible: a bare
+ * number is still accepted as the limit. */
+export type ListOpts = { limit?: number; area?: string };
+
 export interface SendbluePlaceStore {
   /** Save (or refresh) a place for a phone. Returns the phone's total distinct place count. */
   save(phone: string, venue: ExtractedVenue, sourceUrl?: string): Promise<number>;
-  /** Most-recent saved places for a phone (default 15). */
-  list(phone: string, limit?: number): Promise<SavedPlace[]>;
+  /**
+   * Most-recent saved places for a phone (default limit 15).
+   * Accepts either a bare `limit` number (legacy) or an options object with an
+   * optional `area` filter (case-insensitive partial match on the stored area).
+   */
+  list(phone: string, opts?: number | ListOpts): Promise<SavedPlace[]>;
+  /** The distinct, non-empty `area` values this phone has saved (for area detection). */
+  distinctAreas(phone: string): Promise<string[]>;
+}
+
+/** Normalize the legacy `number` arg or the new options object into a shape. */
+function normalizeListOpts(opts?: number | ListOpts): { limit: number; area?: string } {
+  if (typeof opts === "number") return { limit: opts };
+  return { limit: opts?.limit ?? 15, area: opts?.area };
 }
 
 export const sendblueSavedPlacesTableSql = `
@@ -87,15 +103,29 @@ export class PgSendbluePlaceStore implements SendbluePlaceStore {
     return typeof count === "number" ? count : Number(count ?? 0);
   }
 
-  async list(phone: string, limit = 15): Promise<SavedPlace[]> {
-    const { rows } = await this.db.query(
-      `select name, area, category, source_url, created_at
-       from sendblue_saved_places
-       where phone = $1
-       order by created_at desc
-       limit $2`,
-      [phone, limit],
-    );
+  async list(phone: string, opts?: number | ListOpts): Promise<SavedPlace[]> {
+    const { limit, area } = normalizeListOpts(opts);
+    // NOTE: `area` is a text filter on the user's stored area string — there is
+    // no GPS/coordinates and therefore no true distance ranking. We honestly
+    // approximate "near me" with a case-insensitive partial match (ILIKE) on the
+    // area the user typed when they saved the place, most-recent first.
+    const { rows } = area
+      ? await this.db.query(
+          `select name, area, category, source_url, created_at
+           from sendblue_saved_places
+           where phone = $1 and area ilike '%' || $2 || '%'
+           order by created_at desc
+           limit $3`,
+          [phone, area, limit],
+        )
+      : await this.db.query(
+          `select name, area, category, source_url, created_at
+           from sendblue_saved_places
+           where phone = $1
+           order by created_at desc
+           limit $2`,
+          [phone, limit],
+        );
     return rows.map((row) => ({
       name: String(row.name ?? ""),
       area: row.area ? String(row.area) : undefined,
@@ -103,5 +133,17 @@ export class PgSendbluePlaceStore implements SendbluePlaceStore {
       sourceUrl: row.source_url ? String(row.source_url) : undefined,
       createdAt: row.created_at instanceof Date ? row.created_at : undefined,
     }));
+  }
+
+  async distinctAreas(phone: string): Promise<string[]> {
+    const { rows } = await this.db.query(
+      `select distinct area
+       from sendblue_saved_places
+       where phone = $1 and area is not null and area <> ''`,
+      [phone],
+    );
+    return rows
+      .map((row) => (row.area ? String(row.area) : ""))
+      .filter((area) => area.length > 0);
   }
 }

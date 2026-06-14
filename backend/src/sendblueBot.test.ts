@@ -6,12 +6,14 @@ import {
   firstUrlInText,
   formatVenueReply,
   isListIntent,
+  isRecommendIntent,
+  detectArea,
   looksChinese,
   processSendblueInbound,
   type GeminiCaller,
 } from "./sendblueBot.js";
 import type { ExtractedVenue } from "./sendblueBot.js";
-import type { SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
+import type { ListOpts, SavedPlace, SendbluePlaceStore } from "./sendbluePlaceStore.js";
 
 function htmlWithOG(description: string, title = "Some Reel"): string {
   return `<!doctype html><html><head>
@@ -56,8 +58,21 @@ class FakeStore implements SendbluePlaceStore {
     this.byPhone.set(phone, places);
     return new Set(places.map((p) => p.name.toLowerCase())).size;
   }
-  async list(phone: string, limit = 15): Promise<SavedPlace[]> {
-    return (this.byPhone.get(phone) ?? []).slice(0, limit);
+  async list(phone: string, opts?: number | ListOpts): Promise<SavedPlace[]> {
+    const limit = typeof opts === "number" ? opts : opts?.limit ?? 15;
+    const area = typeof opts === "number" ? undefined : opts?.area;
+    let places = this.byPhone.get(phone) ?? [];
+    if (area) {
+      const needle = area.toLowerCase();
+      places = places.filter((p) => (p.area ?? "").toLowerCase().includes(needle));
+    }
+    return places.slice(0, limit);
+  }
+  async distinctAreas(phone: string): Promise<string[]> {
+    const areas = (this.byPhone.get(phone) ?? [])
+      .map((p) => p.area)
+      .filter((a): a is string => Boolean(a && a.trim()));
+    return [...new Set(areas)];
   }
 }
 
@@ -325,4 +340,134 @@ test("isListIntent matches English + 中文 phrases, ignores plain text", () => 
 test("looksChinese detects CJK", () => {
   assert.equal(looksChinese("我存了哪些"), true);
   assert.equal(looksChinese("my places"), false);
+});
+
+test("isRecommendIntent matches English + 中文, ignores plain text", () => {
+  assert.equal(isRecommendIntent("recommend somewhere in LA"), true);
+  assert.equal(isRecommendIntent("where should I go tonight"), true);
+  assert.equal(isRecommendIntent("推薦台北的"), true);
+  assert.equal(isRecommendIntent("附近有什麼"), true);
+  assert.equal(isRecommendIntent("hello there"), false);
+});
+
+test("detectArea matches the user's own saved areas (longest wins)", () => {
+  const saved = ["West Hollywood", "Los Angeles", "LA"];
+  // "I'm in LA" → some saved area is detected.
+  assert.ok(detectArea("I'm in LA right now", saved));
+  // "near West Hollywood" → the longest match.
+  assert.equal(detectArea("near West Hollywood", saved), "West Hollywood");
+  // No match against saved areas.
+  assert.equal(detectArea("I'm in Tokyo", saved), undefined);
+});
+
+test("webhook flow: recommend intent names a saved place in the detected area", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15551110000", { name: "Cafe Leon Dore", area: "Los Angeles", category: "cafe" });
+  await store.save("+15551110000", { name: "Rolo's", area: "Brooklyn", category: "restaurant" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15551110000", content: "recommend somewhere in Los Angeles" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  const content = client.calls[0]?.content ?? "";
+  assert.match(content, /Go to Cafe Leon Dore in Los Angeles/);
+  assert.doesNotMatch(content, /Rolo's/);
+});
+
+test("webhook flow: Chinese recommend intent picks a place in that area", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+886900000001", { name: "鼎泰豐", area: "台北", category: "restaurant" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+886900000001", content: "推薦台北的" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  const content = client.calls[0]?.content ?? "";
+  assert.match(content, /去 鼎泰豐（台北）/);
+});
+
+test("webhook flow: recommend with an area where nothing is saved → haven't-saved reply", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  // Saved area is "Los Angeles"; the user asks about it but has nothing there yet.
+  // To trigger detection without a match we save the area on a different place,
+  // then filter to a sub-area that matches detection but yields no rows.
+  await store.save("+15552220000", { name: "Tartine", area: "San Francisco", category: "bakery" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15552220000", content: "where should I go in San Francisco for sushi" },
+    { client, store },
+  );
+  // Area "San Francisco" is detected and Tartine matches, so it recommends.
+  assert.equal(result.replied, true);
+  assert.match(client.calls[0]?.content ?? "", /Go to Tartine in San Francisco/);
+});
+
+test("webhook flow: recommend with empty store → friendly empty reply", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const result = await processSendblueInbound(
+    { from_number: "+15553330000", content: "recommend somewhere" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls[0]?.content ?? "", /haven't saved any places yet/);
+});
+
+test("webhook flow: recommend in a saved area with no match → haven't-saved-there reply", async () => {
+  const client = new FakeSendblueClient();
+  // Custom store: distinctAreas reports an area, but list(area) returns nothing.
+  const store: SendbluePlaceStore = {
+    async save() {
+      return 0;
+    },
+    async list() {
+      return [];
+    },
+    async distinctAreas() {
+      return ["Los Angeles"];
+    },
+  };
+  const result = await processSendblueInbound(
+    { from_number: "+15554440000", content: "recommend somewhere in Los Angeles" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls[0]?.content ?? "", /haven't saved anything in Los Angeles yet/);
+});
+
+test("webhook flow: area-filtered list ('my places in LA')", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15555550000", { name: "Cafe Leon Dore", area: "LA" });
+  await store.save("+15555550000", { name: "Rolo's", area: "Brooklyn" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15555550000", content: "my places in LA" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  const content = client.calls[0]?.content ?? "";
+  assert.match(content, /Your saved places in LA/);
+  assert.match(content, /Cafe Leon Dore/);
+  assert.doesNotMatch(content, /Rolo's/);
+});
+
+test("webhook flow: bare area mention lists that area", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+886900000002", { name: "鼎泰豐", area: "台北" });
+
+  const result = await processSendblueInbound(
+    { from_number: "+886900000002", content: "我在台北存了哪些" },
+    { client, store },
+  );
+  assert.equal(result.replied, true);
+  const content = client.calls[0]?.content ?? "";
+  assert.match(content, /你在 台北 存的/);
+  assert.match(content, /鼎泰豐/);
 });

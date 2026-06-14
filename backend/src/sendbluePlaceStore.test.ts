@@ -65,3 +65,43 @@ test("list maps rows to SavedPlace and passes the limit", async () => {
   assert.equal(places[1]?.area, undefined);
   assert.deepEqual(db.statements[0]?.values, ["+15551234567", 5]);
 });
+
+test("list with an area filter uses ILIKE and passes the area param", async () => {
+  const db = new FakeQuery(() => [
+    { name: "Cafe Leon Dore", area: "Los Angeles", category: "cafe", source_url: null, created_at: null },
+  ]);
+  const store = new PgSendbluePlaceStore(db);
+
+  const places = await store.list("+15551234567", { area: "LA", limit: 10 });
+
+  assert.equal(places.length, 1);
+  assert.equal(places[0]?.name, "Cafe Leon Dore");
+  // Area-filtered query must use ILIKE and pass [phone, area, limit].
+  const stmt = db.statements[0];
+  assert.ok(stmt?.sql.includes("ilike"), "area filter must use ILIKE");
+  assert.deepEqual(stmt?.values, ["+15551234567", "LA", 10]);
+});
+
+test("list with a bare number arg stays backward-compatible (no area)", async () => {
+  const db = new FakeQuery(() => []);
+  const store = new PgSendbluePlaceStore(db);
+
+  await store.list("+15551234567", 7);
+
+  const stmt = db.statements[0];
+  assert.ok(!stmt?.sql.includes("ilike"), "no area filter when called with a number");
+  assert.deepEqual(stmt?.values, ["+15551234567", 7]);
+});
+
+test("distinctAreas returns unique non-empty areas", async () => {
+  const db = new FakeQuery((sql) => {
+    assert.ok(sql.includes("distinct area"), "must select distinct area");
+    return [{ area: "Los Angeles" }, { area: "Taipei" }];
+  });
+  const store = new PgSendbluePlaceStore(db);
+
+  const areas = await store.distinctAreas("+15551234567");
+
+  assert.deepEqual(areas, ["Los Angeles", "Taipei"]);
+  assert.deepEqual(db.statements[0]?.values, ["+15551234567"]);
+});
