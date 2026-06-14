@@ -394,6 +394,27 @@ export function isRecommendIntent(text: string): boolean {
   return recommendIntentPhrases.some((phrase) => lower.includes(phrase));
 }
 
+// "Order this for me" intents, English + 中文. Drives an SLL-R order (a real
+// transaction), distinct from save/recall/recommend. Kept narrow to avoid
+// false positives (e.g. "in order to").
+const orderIntentPhrases = ["幫我點", "幫我買", "點餐", "點一", "下單", "buy me", "get me a"];
+export function isOrderIntent(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  if (!lower) return false;
+  if (lower.startsWith("order")) return true;
+  return orderIntentPhrases.some((phrase) => lower.includes(phrase));
+}
+
+// Strip the order keyword so the rest is the item intent for SLL-R.
+export function orderQuery(text: string): string {
+  const stripped = text
+    .trim()
+    .replace(/^order[:\s]+/i, "")
+    .replace(/^(下單|點餐|幫我點|幫我買|buy me|get me a)[:\s]*/i, "")
+    .trim();
+  return stripped || text.trim();
+}
+
 /**
  * Detect which of the user's OWN saved areas the inbound text refers to.
  *
@@ -761,6 +782,9 @@ export type ProcessDeps = {
   placesSearch?: PlacesSearch;
   client: Pick<SendblueClient, "sendMessage" | "markRead" | "sendTypingIndicator">;
   store: SendbluePlaceStore;
+  /** Place an SLL-R order for this number; returns the reply, or null to fall
+   *  through to the normal save/recall flow. Omitted in tests / when SLL-R is off. */
+  order?: (query: string, fromNumber: string) => Promise<string | null>;
 };
 
 /**
@@ -845,6 +869,15 @@ export async function processSendblueInbound(
   let reply: string;
   try {
     const url = firstUrlInText(text);
+    if (deps.order && !url && isOrderIntent(text)) {
+      // Order flow: text → SLL-R order (a real transaction). null falls through.
+      const orderReply = await deps.order(orderQuery(text), from);
+      if (orderReply) {
+        await deps.client.sendMessage(from, orderReply);
+        console.log(`[sendblue] order reply for ${from}`);
+        return { replied: true, reply: orderReply };
+      }
+    }
     if (url) {
       // Save flow: link → caption → venue → remember it for this number.
       const { caption } = await fetchLinkCaption(url, deps.fetchText);

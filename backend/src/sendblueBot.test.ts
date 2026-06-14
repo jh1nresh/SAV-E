@@ -7,6 +7,8 @@ import {
   formatVenueReply,
   isListIntent,
   isRecommendIntent,
+  isOrderIntent,
+  orderQuery,
   detectArea,
   looksChinese,
   processSendblueInbound,
@@ -602,4 +604,45 @@ test("webhook flow: bare area mention lists that area", async () => {
   const content = client.calls[0]?.content ?? "";
   assert.match(content, /你在 台北 存的/);
   assert.match(content, /鼎泰豐/);
+});
+
+test("isOrderIntent + orderQuery", () => {
+  assert.equal(isOrderIntent("order iced latte from raposa"), true);
+  assert.equal(isOrderIntent("下單 一杯拿鐵"), true);
+  assert.equal(isOrderIntent("buy me a cold brew"), true);
+  assert.equal(isOrderIntent("recommend somewhere nearby"), false);
+  assert.equal(isOrderIntent("in order to plan my trip"), false);
+  assert.equal(orderQuery("order iced latte"), "iced latte");
+  assert.equal(orderQuery("下單 拿鐵"), "拿鐵");
+});
+
+test("webhook flow: order intent routes to the SLL-R order dep (not saved)", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  let received = "";
+  const result = await processSendblueInbound(
+    { from_number: "+15551112222", content: "order iced latte" },
+    {
+      client,
+      store,
+      order: async (q) => {
+        received = q;
+        return "✅ Ordered Iced latte ($6.50) at Raposa Coffee. I'll text you when it's confirmed.";
+      },
+    },
+  );
+  assert.equal(received, "iced latte");
+  assert.equal(result.replied, true);
+  assert.match(client.calls[0]?.content ?? "", /Ordered Iced latte/);
+  assert.equal((await store.list("+15551112222")).length, 0); // ordering ≠ saving a place
+});
+
+test("webhook flow: order dep returning null falls through to normal flow", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const result = await processSendblueInbound(
+    { from_number: "+15553334444", content: "order something weird" },
+    { client, store, order: async () => null },
+  );
+  assert.equal(result.replied, true); // fell through to the no-URL hint/recall path
 });

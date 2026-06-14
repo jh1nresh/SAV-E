@@ -23,6 +23,7 @@ import {
   processSendblueInbound,
   SendblueClient,
 } from "./sendblueBot.js";
+import { issueBuyerSession, placeOrder, type SllrBuyer } from "./sllrCommerce.js";
 import {
   PgSendbluePlaceStore,
   sendblueSavedPlacesTableSql,
@@ -79,6 +80,26 @@ let verificationKeyPromise: Promise<KeyLike> | undefined;
 const sendbluePlaceStore = new PgSendbluePlaceStore({
   query: (sql, values) => pool.query(sql, values as QueryValue[]),
 });
+
+// One SLL-R buyer session per phone number, so orders/receipts accrue to a stable
+// buyer (the cross-merchant receipt graph). In-memory v0; persist later.
+const sllrBuyerByNumber = new Map<string, SllrBuyer>();
+// Place an SLL-R order for an inbound number. Returned to the bot as deps.order.
+async function placeSllrOrder(query: string, fromNumber: string): Promise<string> {
+  let buyer = sllrBuyerByNumber.get(fromNumber);
+  if (!buyer) {
+    buyer = await issueBuyerSession(`SAV-E ${fromNumber}`);
+    sllrBuyerByNumber.set(fromNumber, buyer);
+  }
+  const merchantId = process.env.SLLR_DEFAULT_MERCHANT?.trim() || "raposa-coffee";
+  try {
+    const order = await placeOrder(merchantId, query, buyer, { customerLabel: "SAV-E" });
+    return `✅ Ordered ${order.item.name} ($${order.item.subtotalUsd}) at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`;
+  } catch (error) {
+    console.error("[sendblue] SLL-R order failed", error);
+    return "Sorry — I couldn't place that order right now. Try again in a moment.";
+  }
+}
 
 // Idempotent create-if-not-exists; awaited at startup. Failure is logged, not
 // fatal — the webhook still 200s and the save path degrades gracefully.
@@ -499,6 +520,7 @@ async function handleSendblueWebhook(
         store: sendbluePlaceStore,
         gemini: defaultGeminiText,
         placesSearch: defaultPlacesSearch,
+        order: placeSllrOrder,
       });
       console.log(
         `[sendblue] done replied=${result.replied}` +
