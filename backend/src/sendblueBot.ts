@@ -654,13 +654,21 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
 export type ConversationState = {
   pendingQuery?: string;
   lastPlaces?: DiscoveredPlace[];
+  /** The last location the user gave — reused for "something else" follow-ups. */
+  lastArea?: string;
+  /** Names already recommended this conversation — excluded so "something else" varies. */
+  shownNames?: string[];
   at: number;
 };
 export interface ConversationStore {
   get(phone: string): ConversationState | undefined;
   setPending(phone: string, query: string): void;
   setPlaces(phone: string, places: DiscoveredPlace[]): void;
-  /** Clear the pending location only; keep lastPlaces for follow-ups. */
+  /** Remember the user's last given location, for follow-up recommendations. */
+  setArea(phone: string, area: string): void;
+  /** Append a recommended place name (so we don't repeat it next time). */
+  addShown(phone: string, name: string): void;
+  /** Clear the pending location only; keep lastPlaces/lastArea for follow-ups. */
   clearPending(phone: string): void;
 }
 
@@ -686,6 +694,14 @@ class InMemoryConversationStore implements ConversationStore {
   }
   setPlaces(phone: string, places: DiscoveredPlace[]): void {
     this.merge(phone, { lastPlaces: places.slice(0, 5) });
+  }
+  setArea(phone: string, area: string): void {
+    this.merge(phone, { lastArea: area });
+  }
+  addShown(phone: string, name: string): void {
+    const prev = this.get(phone);
+    const shownNames = [...(prev?.shownNames ?? []), name].slice(-20);
+    this.merge(phone, { shownNames });
   }
   clearPending(phone: string): void {
     const prev = this.get(phone);
@@ -716,10 +732,11 @@ export async function decideRecall(
   places: SavedPlace[],
   gemini: GeminiCaller = defaultGeminiText,
   chinese = false,
-  convo?: { pendingQuery?: string; lastPlaces?: DiscoveredPlace[] },
+  convo?: { pendingQuery?: string; lastPlaces?: DiscoveredPlace[]; lastArea?: string },
 ): Promise<RecallDecision | null> {
   const pendingQuery = convo?.pendingQuery;
   const lastPlaces = convo?.lastPlaces ?? [];
+  const lastArea = convo?.lastArea;
   const context =
     places.length > 0
       ? places
@@ -755,7 +772,11 @@ export async function decideRecall(
 1. Answer from their saved places OR about a place you recently recommended (see below). Use ONLY known data — NEVER invent a place, menu, or detail. Return {"reply":"<message>"}.
 2. Find NEW places nearby — when they want a recommendation for somewhere not yet known (e.g. "somewhere nearby", "anywhere else", "that one's too far", "find me a coffee place", "推薦附近的") AND a location is given or clearly known. Return {"search":{"query":"<2-4 word search like 'coffee' or 'ramen'>","area":"<the location, e.g. 'Santa Monica'>"}}.
 3. They want something nearby but gave NO location yet. Return {"search":{"query":"<2-4 word search>","area":null}} — a null area signals we still need their location. Do NOT phrase this as a reply.
-${pendingBlock}${recentBlock}
+${pendingBlock}${recentBlock}${
+    lastArea
+      ? `\nLAST KNOWN LOCATION: the user is near "${lastArea}". For a follow-up like "something else", "anything closer", "still too far", or "what else" — reuse this location and return a search there. Do NOT ask for their location again unless they say they moved or give a new place.\n`
+      : ""
+  }
 Keep any reply to 1-3 short sentences (a text message), in ${lang}, at most one emoji.
 
 The user's saved places:
@@ -813,34 +834,44 @@ function noDiscoveryReply(area: string, chinese: boolean): string {
 }
 
 /**
- * Phrase a discovery result naturally: pass the REAL Google results back to the
- * LLM to pick + recommend one in the user's voice. Falls back to a deterministic
- * template (top result) when the model is unavailable, so discovery never fails
- * just because phrasing did. Grounded in the actual search results, not invented.
+ * Pick the best discovery result the user hasn't already been shown: highest
+ * rating among names not in `exclude` (case-insensitive). Falls back to the
+ * highest-rated overall if everything was already shown (better to repeat than
+ * to dead-end). Returns undefined only for an empty result set.
  */
-export async function phraseDiscovery(
-  query: string,
-  area: string,
+export function pickBestPlace(
   found: DiscoveredPlace[],
+  exclude: string[] = [],
+): DiscoveredPlace | undefined {
+  if (found.length === 0) return undefined;
+  const seen = new Set(exclude.map((n) => n.toLowerCase()));
+  const byRating = (a: DiscoveredPlace, b: DiscoveredPlace) => (b.rating ?? 0) - (a.rating ?? 0);
+  const fresh = found.filter((p) => !seen.has(p.name.toLowerCase())).sort(byRating);
+  if (fresh.length > 0) return fresh[0];
+  return [...found].sort(byRating)[0];
+}
+
+/**
+ * Phrase a single chosen place naturally via the LLM (grounded in its real
+ * data), with a deterministic template fallback so a recommendation never fails
+ * just because phrasing did.
+ */
+export async function phrasePlaceRec(
+  place: DiscoveredPlace,
+  area: string,
   gemini: GeminiCaller = defaultGeminiText,
   chinese = false,
 ): Promise<string> {
-  const top = found.slice(0, 5);
-  const template = (): string => {
-    const best = top[0];
-    const stars = best.rating ? ` ${best.rating}★` : "";
-    return chinese
-      ? `${area}附近可以試試 ${best.name}${stars} 📍${best.address ? `\n${best.address}` : ""}`
-      : `Near ${area}, try ${best.name}${stars} 📍${best.address ? `\n${best.address}` : ""}`;
-  };
+  const stars = place.rating ? ` ${place.rating}★` : "";
+  const template = (): string =>
+    chinese
+      ? `${area}附近可以試試 ${place.name}${stars} 📍${place.address ? `\n${place.address}` : ""}`
+      : `Near ${area}, try ${place.name}${stars} 📍${place.address ? `\n${place.address}` : ""}`;
   const lang = chinese ? "繁體中文" : "the same language the user wrote in";
-  const list = top
-    .map((p, i) => `${i + 1}. ${p.name}${p.rating ? ` (${p.rating}★)` : ""}${p.address ? ` — ${p.address}` : ""}`)
-    .join("\n");
-  const prompt = `Recommend ONE place to the user from these REAL Google results for "${query}" near ${area}. Pick the best (consider rating). Use ONLY these results — do not invent. 1-2 short sentences, ${lang}, at most one emoji.
+  const facts = `${place.name}${place.rating ? ` (${place.rating}★)` : ""}${place.address ? ` — ${place.address}` : ""}`;
+  const prompt = `Recommend this ONE place to the user near ${area}, warmly, in ${lang}, 1-2 short sentences, at most one emoji. Use ONLY these facts — do not invent anything (no menu, no hours):
 
-Results:
-${list}
+${facts}
 
 Return STRICT JSON only: {"reply": string}`;
   try {
@@ -849,7 +880,7 @@ Return STRICT JSON only: {"reply": string}`;
     const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     return reply.length > 0 ? reply : template();
   } catch (error) {
-    console.error("[sendblue] phraseDiscovery gemini error", error);
+    console.error("[sendblue] phrasePlaceRec gemini error", error);
     return template();
   }
 }
@@ -1059,6 +1090,7 @@ export async function processSendblueInbound(
       const decision = await decideRecall(text, places, deps.gemini, chinese, {
         pendingQuery: convo?.pendingQuery,
         lastPlaces: convo?.lastPlaces,
+        lastArea: convo?.lastArea,
       });
       if (!decision) {
         convoStore.clearPending(from);
@@ -1085,14 +1117,20 @@ export async function processSendblueInbound(
         } catch (searchError) {
           console.error("[sendblue] places search error", searchError);
         }
+        // Skip places we've already recommended this conversation so a
+        // "something else" actually returns something else.
+        const picked = pickBestPlace(found, convo?.shownNames ?? []);
         console.log(
-          `[sendblue] discovery query="${decision.query}" area="${decision.area}" results=${found.length}` +
-            (convo?.pendingQuery ? ` (resumed pending)` : ""),
+          `[sendblue] discovery query="${decision.query}" area="${decision.area}" results=${found.length} picked="${picked?.name ?? "(none)"}"` +
+            (convo?.pendingQuery ? " (resumed pending)" : "") +
+            (convo?.lastArea ? " (reused area)" : ""),
         );
-        if (found.length) {
-          // Remember what we recommended so follow-ups can ask about it.
+        if (picked) {
+          // Remember location + what we recommended for follow-ups / "something else".
+          convoStore.setArea(from, decision.area);
           convoStore.setPlaces(from, found);
-          reply = await phraseDiscovery(decision.query, decision.area, found, deps.gemini, chinese);
+          convoStore.addShown(from, picked.name);
+          reply = await phrasePlaceRec(picked, decision.area, deps.gemini, chinese);
         } else {
           reply = noDiscoveryReply(decision.area, chinese);
         }

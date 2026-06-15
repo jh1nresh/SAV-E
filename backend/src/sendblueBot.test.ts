@@ -15,7 +15,8 @@ import {
   looksChinese,
   processSendblueInbound,
   decideRecall,
-  phraseDiscovery,
+  phrasePlaceRec,
+  pickBestPlace,
   type GeminiCaller,
   type DiscoveredPlace,
   type ConversationStore,
@@ -323,15 +324,27 @@ test("decideRecall: null on unusable / thrown model output", async () => {
   );
 });
 
-test("phraseDiscovery falls back to a template when the model fails", async () => {
-  const found: DiscoveredPlace[] = [
-    { name: "Maru Coffee", address: "1936 Hillhurst Ave", rating: 4.6 },
-  ];
-  const reply = await phraseDiscovery("coffee", "Los Feliz", found, async () => {
+test("phrasePlaceRec falls back to a template when the model fails", async () => {
+  const place: DiscoveredPlace = { name: "Maru Coffee", address: "1936 Hillhurst Ave", rating: 4.6 };
+  const reply = await phrasePlaceRec(place, "Los Feliz", async () => {
     throw new Error("down");
   }, false);
   assert.match(reply, /Maru Coffee/);
   assert.match(reply, /Los Feliz/);
+});
+
+test("pickBestPlace skips already-shown names, then picks highest rating", () => {
+  const found: DiscoveredPlace[] = [
+    { name: "Ayer Coffee", rating: 4.8 },
+    { name: "Kean Coffee", rating: 4.5 },
+    { name: "Maru Coffee", rating: 4.7 },
+  ];
+  // Nothing shown → highest rating.
+  assert.equal(pickBestPlace(found, [])?.name, "Ayer Coffee");
+  // Ayer shown → next highest unshown.
+  assert.equal(pickBestPlace(found, ["Ayer Coffee"])?.name, "Maru Coffee");
+  // All shown → falls back to highest overall (better than dead-end).
+  assert.equal(pickBestPlace(found, ["Ayer Coffee", "Kean Coffee", "Maru Coffee"])?.name, "Ayer Coffee");
 });
 
 test("webhook flow: agentic reply used when a gemini is injected", async () => {
@@ -424,6 +437,9 @@ function fakeConversation(): { store: ConversationStore; map: Map<string, Conver
     get,
     setPending: (p, q) => map.set(p, { ...(get(p) ?? { at: 0 }), pendingQuery: q, at: 0 }),
     setPlaces: (p, places) => map.set(p, { ...(get(p) ?? { at: 0 }), lastPlaces: places.slice(0, 5), at: 0 }),
+    setArea: (p, area) => map.set(p, { ...(get(p) ?? { at: 0 }), lastArea: area, at: 0 }),
+    addShown: (p, name) =>
+      map.set(p, { ...(get(p) ?? { at: 0 }), shownNames: [...(get(p)?.shownNames ?? []), name], at: 0 }),
     clearPending: (p) => {
       const v = get(p);
       if (v) map.set(p, { ...v, pendingQuery: undefined, at: 0 });
@@ -442,7 +458,7 @@ test("webhook flow: ask location → bare place name resumes search (conversatio
     return [{ name: "Kean Coffee", address: "Tustin", rating: 4.5 }];
   };
   const gemini: GeminiCaller = async (prompt) => {
-    if (prompt.includes("Results:")) return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
+    if (prompt.includes("Recommend this ONE place")) return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
     if (prompt.includes("LOCATION FOLLOW-UP")) return JSON.stringify({ search: { query: "coffee", area: "Tustin" } });
     return JSON.stringify({ search: { query: "coffee", area: null } });
   };
@@ -483,6 +499,44 @@ test("webhook flow: follow-up about the recommended place is answered (not 'not 
   );
   assert.equal(result.replied, true);
   assert.match(client.calls.at(-1)?.content ?? "", /Maru Coffee/);
+});
+
+test("webhook flow: 'something else' reuses last location and returns a DIFFERENT place", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation } = fakeConversation();
+  // Seed: we already recommended Ayer Coffee near Tustin.
+  conversation.setArea("+15552345678", "Tustin");
+  conversation.addShown("+15552345678", "Ayer Coffee");
+  let searched = "";
+  let askedLocation = false;
+  const placesSearch = async (q: string): Promise<DiscoveredPlace[]> => {
+    searched = q;
+    return [
+      { name: "Ayer Coffee", rating: 4.8 },
+      { name: "Kean Coffee", rating: 4.6, address: "Tustin" },
+    ];
+  };
+  const gemini: GeminiCaller = async (prompt) => {
+    if (prompt.includes("Recommend this ONE place")) {
+      return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
+    }
+    // decideRecall: the LAST KNOWN LOCATION context must be present so it reuses it.
+    assert.ok(prompt.includes("LAST KNOWN LOCATION"), "last location must be in context");
+    return JSON.stringify({ search: { query: "coffee", area: "Tustin" } });
+  };
+
+  const result = await processSendblueInbound(
+    { from_number: "+15552345678", content: "Recommend something else" },
+    { client, store, gemini, placesSearch, conversation },
+  );
+  const out = client.calls.at(-1)?.content ?? "";
+  askedLocation = /Where are you|你現在在哪/.test(out);
+  assert.equal(askedLocation, false, "must NOT re-ask for location");
+  assert.match(searched, /coffee in Tustin/); // reused the area
+  assert.match(out, /Kean Coffee/); // different place, not Ayer again
+  assert.doesNotMatch(out, /Ayer Coffee/);
+  assert.equal(result.replied, true);
 });
 
 test("webhook flow: agentic falls back to keyword list when model yields nothing", async () => {
