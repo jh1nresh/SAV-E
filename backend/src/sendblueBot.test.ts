@@ -226,6 +226,36 @@ test("webhook flow: inbound IG link saves the place and confirms with a count", 
   assert.equal((await store.list("+15551234567")).length, 1);
 });
 
+
+test("webhook flow: linked phone saves and recalls from canonical SAV-E profile key", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const resolveMemoryKey = async (phone: string) => phone === "+155****4567" ? "privy:profile-1" : phone;
+  const fetchText = async () =>
+    htmlWithOG("Dinner at Aquarela in San Jose del Cabo was unreal.");
+  const gemini = fakeGemini({
+    name: "Aquarela",
+    area: "San Jose del Cabo",
+    category: "restaurant",
+    confidence: 0.9,
+  });
+
+  await processSendblueInbound(
+    { from_number: "+155****4567", content: "save https://www.instagram.com/reel/ABC123/" },
+    { client, store, fetchText, gemini, resolveMemoryKey },
+  );
+
+  assert.equal((await store.list("+155****4567")).length, 0);
+  assert.equal((await store.list("privy:profile-1")).length, 1);
+
+  await processSendblueInbound(
+    { from_number: "+155****4567", content: "my places" },
+    { client, store, resolveMemoryKey },
+  );
+  assert.equal(client.calls[1]?.to, "+155****4567");
+  assert.match(client.calls[1]?.content ?? "", /Aquarela/);
+});
+
 test("webhook flow: read receipt + typing indicator fire on a valid inbound", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();

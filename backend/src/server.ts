@@ -98,6 +98,24 @@ const sendblueReviewStore = new PgReviewStore({
   query: (sql, values) => pool.query(sql, values as QueryValue[]),
 });
 
+export const userChannelsTableSql = `
+create table if not exists user_channels (
+  id uuid primary key default gen_random_uuid(),
+  profile_id text references profiles(id) on delete cascade not null,
+  channel text not null,
+  channel_user_id text not null,
+  phone_e164 text,
+  verified_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint user_channels_channel_check check (channel in ('imessage', 'sms', 'line', 'whatsapp', 'sendblue'))
+);
+create unique index if not exists user_channels_channel_user_unique
+  on user_channels (channel, channel_user_id);
+create index if not exists user_channels_profile_idx
+  on user_channels (profile_id, channel);
+`;
+
 // One SLL-R buyer session per phone number, so orders/receipts accrue to a stable
 // buyer (the cross-merchant receipt graph). In-memory v0; persist later.
 const sllrBuyerByNumber = new Map<string, SllrBuyer>();
@@ -134,6 +152,7 @@ async function ensureSendblueTable(): Promise<void> {
     await pool.query(sendblueSavedPlacesTableSql);
     await pool.query(verifiedVisitsTableSql);
     await pool.query(reviewsTableSql);
+    await pool.query(userChannelsTableSql);
   } catch (error) {
     console.error("[sendblue] ensureSendblueTable failed", error);
   }
@@ -470,6 +489,10 @@ createServer(async (request, response) => {
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
+    if (isV0 && resource === "user-channels") {
+      return await handleUserChannels(request, response, id, userId);
+    }
+
     if (isV0 && resource === "places" && id === "recommend-by-claims") {
       return await handleRecommendByClaims(request, response, userId);
     }
@@ -519,6 +542,80 @@ createServer(async (request, response) => {
   void ensureSendblueTable();
 });
 
+async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
+  const normalized = normalizeChannelUserId(fromNumber);
+  if (!normalized) return fromNumber;
+  const { rows } = await pool.query(
+    `select profile_id
+     from user_channels
+     where channel in ('sendblue', 'imessage', 'sms')
+       and verified_at is not null
+       and (channel_user_id = $1 or phone_e164 = $1)
+     order by case channel when 'sendblue' then 0 when 'imessage' then 1 else 2 end
+     limit 1`,
+    [normalized],
+  );
+  return typeof rows[0]?.profile_id === "string" ? rows[0].profile_id : fromNumber;
+}
+
+function normalizeChannelUserId(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function handleUserChannels(
+  request: IncomingMessage,
+  response: ServerResponse,
+  channelId: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET" && !channelId) {
+    const { rows } = await pool.query(
+      `select id, channel, channel_user_id, phone_e164, verified_at, created_at, updated_at
+       from user_channels
+       where profile_id = $1
+       order by created_at desc`,
+      [userId],
+    );
+    return sendJson(response, rows.map(formatDates));
+  }
+
+  if (request.method === "POST" && !channelId) {
+    const body = await readJson(request);
+    const channelRaw = typeof body.channel === "string" ? body.channel.trim().toLowerCase() : "sendblue";
+    const supportedChannels = new Set(["imessage", "sms", "line", "whatsapp", "sendblue"]);
+    if (!supportedChannels.has(channelRaw)) {
+      return sendJson(response, { error: "Unsupported channel" }, 400);
+    }
+    const channel = channelRaw;
+    const channelUserId = normalizeChannelUserId(body.channel_user_id ?? body.phone ?? body.phone_e164);
+    if (!channelUserId) return sendJson(response, { error: "channel_user_id or phone is required" }, 400);
+    const phone = normalizeChannelUserId(body.phone_e164 ?? body.phone) || null;
+    const { rows } = await pool.query(
+      `insert into user_channels (profile_id, channel, channel_user_id, phone_e164, verified_at, updated_at)
+       values ($1, $2, $3, $4, null, now())
+       on conflict (channel, channel_user_id) do update
+         set phone_e164 = coalesce(excluded.phone_e164, user_channels.phone_e164),
+             updated_at = now()
+       where user_channels.profile_id = excluded.profile_id
+       returning id, profile_id, channel, channel_user_id, phone_e164, verified_at, created_at, updated_at`,
+      [userId, channel, channelUserId, phone],
+    );
+    if (!rows[0]) return sendJson(response, { error: "Channel is already linked to another profile" }, 409);
+    return sendJson(response, formatDates(rows[0]), 201);
+  }
+
+  if (request.method === "DELETE" && channelId) {
+    const { rows } = await pool.query(
+      `delete from user_channels where id = $1 and profile_id = $2 returning id`,
+      [channelId, userId],
+    );
+    if (!rows[0]) return sendJson(response, { error: "User channel not found" }, 404);
+    return sendJson(response, null, 204);
+  }
+
+  return sendJson(response, { error: "Unsupported user-channels route" }, 405);
+}
+
 // Sendblue inbound webhook. Spike: synchronous fetch -> caption -> venue ->
 // reply, always returns 200 to Sendblue (even on internal errors) so the
 // webhook is never retried/disabled. No Privy auth on this route.
@@ -557,6 +654,7 @@ async function handleSendblueWebhook(
         placesSearch: defaultPlacesSearch,
         order: placeSllrOrder,
         geocode: defaultGeocode,
+        resolveMemoryKey: resolveSendblueMemoryKey,
       });
       console.log(
         `[sendblue] done replied=${result.replied}` +

@@ -1148,6 +1148,11 @@ export type ProcessDeps = {
   order?: (query: string, fromNumber: string, location?: StoredLocation) => Promise<string | null>;
   /** Geocode an area the user texts ("I'm in X") → coordinates, stored per number. */
   geocode?: Geocoder;
+  /**
+   * Resolve the inbound phone/provider id to the canonical SAV-E vault key.
+   * Unlinked numbers fall back to the phone so the public bot still works.
+   */
+  resolveMemoryKey?: (fromNumber: string) => Promise<string>;
 };
 
 /**
@@ -1221,6 +1226,15 @@ export async function processSendblueInbound(
     return { replied: false };
   }
   console.log(`[sendblue] inbound from=${from} text=${text.slice(0, 120)}`);
+  let memoryKey = from;
+  if (deps.resolveMemoryKey) {
+    try {
+      memoryKey = await deps.resolveMemoryKey(from);
+    } catch (error) {
+      console.error("[sendblue] resolveMemoryKey error", error);
+    }
+  }
+  if (memoryKey !== from) console.log("[sendblue] resolved inbound channel to SAV-E profile");
 
   // Best-effort: show the user a blue read receipt + typing indicator while we
   // fetch + extract. Fire-and-forget (not awaited) so two Sendblue round-trips
@@ -1233,7 +1247,7 @@ export async function processSendblueInbound(
   // Conversation memory is loaded up front so the receipt/review branches and the
   // agentic branch all share one snapshot (pending location, last places, pending review).
   const convoStore = deps.conversation ?? defaultConversationStore;
-  const convo = convoStore.get(from);
+  const convo = convoStore.get(memoryKey);
   let reply: string;
   try {
     const url = firstUrlInText(text);
@@ -1245,7 +1259,7 @@ export async function processSendblueInbound(
       if (receipt) {
         let count = 0;
         try {
-          count = await deps.receiptStore.save(from, {
+          count = await deps.receiptStore.save(memoryKey, {
             merchant: receipt.merchant,
             total: receipt.total,
             visitDate: receipt.date,
@@ -1259,7 +1273,7 @@ export async function processSendblueInbound(
         );
         // Arm a receipt-gated review: the next message is read as a review of
         // this exact (verified) merchant.
-        if (deps.reviewStore) convoStore.setReview(from, receipt.merchant);
+        if (deps.reviewStore) convoStore.setReview(memoryKey, receipt.merchant);
         reply = formatReceiptReply(receipt, count, chinese);
         await deps.client.sendMessage(from, reply);
         return { replied: true, reply };
@@ -1271,11 +1285,11 @@ export async function processSendblueInbound(
     if (deps.reviewStore && deps.gemini && convo?.pendingReview && !url) {
       const merchant = convo.pendingReview;
       const review = await extractReview(text, merchant, deps.gemini);
-      convoStore.clearReview(from);
+      convoStore.clearReview(memoryKey);
       if (review) {
         let count = 0;
         try {
-          count = await deps.reviewStore.save(from, {
+          count = await deps.reviewStore.save(memoryKey, {
             merchant,
             rating: review.rating,
             text: review.text,
@@ -1296,7 +1310,7 @@ export async function processSendblueInbound(
       // Location set: "I'm in X" → geocode → remember per number for nearby orders.
       const loc = await deps.geocode(parseLocationQuery(text));
       if (loc) {
-        await deps.store.setLocation(from, loc);
+        await deps.store.setLocation(memoryKey, loc);
         reply = `📍 Got it — I'll use ${loc.label} for nearby orders.`;
       } else {
         reply = 'I couldn\'t find that area. Try a city/neighborhood, e.g. "I\'m in Santa Monica".';
@@ -1306,7 +1320,7 @@ export async function processSendblueInbound(
     }
     if (deps.order && !url && isOrderIntent(text)) {
       // Order flow: needs the user's area to pick the nearest merchant.
-      const loc = await deps.store.getLocation(from);
+      const loc = await deps.store.getLocation(memoryKey);
       if (!loc) {
         reply = '📍 What area are you in? Tell me e.g. "I\'m in Miami Beach" and I\'ll order from the nearest spot.';
         await deps.client.sendMessage(from, reply);
@@ -1328,7 +1342,7 @@ export async function processSendblueInbound(
       if (venue) {
         let count: number;
         try {
-          count = await deps.store.save(from, venue, url);
+          count = await deps.store.save(memoryKey, venue, url);
         } catch (storeError) {
           // Degrade gracefully: still confirm the find even if persistence fails.
           console.error("[sendblue] store.save error", storeError);
@@ -1349,7 +1363,7 @@ export async function processSendblueInbound(
       // deterministic keyword intents if the model yields nothing usable.
       let places: SavedPlace[] = [];
       try {
-        places = await deps.store.list(from, { limit: 50 });
+        places = await deps.store.list(memoryKey, { limit: 50 });
       } catch (storeError) {
         console.error("[sendblue] store.list error", storeError);
       }
@@ -1358,7 +1372,7 @@ export async function processSendblueInbound(
       let visitedMerchants: string[] = [];
       if (deps.receiptStore) {
         try {
-          visitedMerchants = (await deps.receiptStore.list(from, 50)).map((v) => v.merchant);
+          visitedMerchants = (await deps.receiptStore.list(memoryKey, 50)).map((v) => v.merchant);
         } catch (storeError) {
           console.error("[sendblue] receiptStore.list error", storeError);
         }
@@ -1372,33 +1386,33 @@ export async function processSendblueInbound(
         lastRecommended: convo?.lastRecommended,
       });
       if (!decision) {
-        convoStore.clearPending(from);
+        convoStore.clearPending(memoryKey);
         console.log(`[sendblue] agentic empty → keyword fallback for ${from}`);
-        reply = await keywordRecallReply(text, from, chinese, deps.store);
+        reply = await keywordRecallReply(text, memoryKey, chinese, deps.store);
       } else if (decision.kind === "location") {
         // Pure location, nothing pending → store it and ask what they want,
         // instead of a hollow "I'll remember" that loses the area.
-        convoStore.setArea(from, decision.area);
+        convoStore.setArea(memoryKey, decision.area);
         console.log(`[sendblue] location set for ${from} area="${decision.area}"`);
         reply = chinese
           ? `📍 收到,你在 ${decision.area} 附近 — 要找什麼?(咖啡、吃的、酒吧…)`
           : `📍 Got it, you're near ${decision.area} — what are you looking for? (coffee, food, a bar…)`;
       } else if (decision.kind === "reply") {
-        convoStore.clearPending(from);
+        convoStore.clearPending(memoryKey);
         console.log(
           `[sendblue] agentic reply for ${from} placeCount=${places.length} recentPlaces=${convo?.lastPlaces?.length ?? 0}`,
         );
         reply = decision.reply;
       } else if (!(decision.area ?? convo?.lastArea)) {
         // Wants nearby but we have NO location at all → remember query, ask where.
-        convoStore.setPending(from, decision.query);
+        convoStore.setPending(memoryKey, decision.query);
         console.log(`[sendblue] discovery wants location from ${from} (pending="${decision.query}")`);
         reply = askLocationReply(chinese);
       } else {
         // Discovery: search near the given area, OR — deterministically — the
         // last location we already know, so we never re-ask once we have it.
         const area = decision.area ?? convo!.lastArea!;
-        convoStore.clearPending(from);
+        convoStore.clearPending(memoryKey);
         const search = deps.placesSearch ?? defaultPlacesSearch;
         let found: DiscoveredPlace[] = [];
         try {
@@ -1417,18 +1431,18 @@ export async function processSendblueInbound(
         );
         if (picked) {
           // Remember location + what we recommended for follow-ups / "something else".
-          convoStore.setArea(from, area);
-          convoStore.setPlaces(from, found);
-          convoStore.setRecommended(from, picked);
-          convoStore.addShown(from, picked.name);
+          convoStore.setArea(memoryKey, area);
+          convoStore.setPlaces(memoryKey, found);
+          convoStore.setRecommended(memoryKey, picked);
+          convoStore.addShown(memoryKey, picked.name);
           reply = await phrasePlaceRec(picked, area, deps.gemini, chinese);
         } else {
           reply = noDiscoveryReply(area, chinese);
         }
       }
-    } else {
+     } else {
       // No LLM injected (e.g. tests): deterministic keyword recall.
-      reply = await keywordRecallReply(text, from, chinese, deps.store);
+      reply = await keywordRecallReply(text, memoryKey, chinese, deps.store);
     }
   } catch (error) {
     // Spike: degrade gracefully, never bubble up to the webhook.

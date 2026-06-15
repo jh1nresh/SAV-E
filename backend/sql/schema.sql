@@ -20,6 +20,23 @@ alter table profiles add column if not exists profile_stamp_unlocked_at timestam
 create unique index if not exists idx_profiles_handle on profiles(lower(handle)) where handle is not null;
 create unique index if not exists idx_profiles_referral_code on profiles(referral_code) where referral_code is not null;
 
+create table if not exists user_channels (
+    id uuid primary key default gen_random_uuid(),
+    profile_id text references profiles(id) on delete cascade not null,
+    channel text not null,
+    channel_user_id text not null,
+    phone_e164 text,
+    verified_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint user_channels_channel_check check (channel in ('imessage', 'sms', 'line', 'whatsapp', 'sendblue'))
+);
+
+create unique index if not exists user_channels_channel_user_unique
+    on user_channels(channel, channel_user_id);
+create index if not exists user_channels_profile_idx
+    on user_channels(profile_id, channel);
+
 create table if not exists places (
     id uuid primary key default gen_random_uuid(),
     user_id text references profiles(id) on delete cascade not null,
