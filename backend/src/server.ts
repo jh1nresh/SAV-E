@@ -30,6 +30,10 @@ import {
   PgSendbluePlaceStore,
   sendblueSavedPlacesTableSql,
 } from "./sendbluePlaceStore.js";
+import {
+  PgVerifiedVisitStore,
+  verifiedVisitsTableSql,
+} from "./sendblueReceiptStore.js";
 import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
   formatSharedPlaceLink,
@@ -83,6 +87,11 @@ const sendbluePlaceStore = new PgSendbluePlaceStore({
   query: (sql, values) => pool.query(sql, values as QueryValue[]),
 });
 
+// Per-number verified-visit memory: forwarded receipts → proof-of-visit.
+const sendblueReceiptStore = new PgVerifiedVisitStore({
+  query: (sql, values) => pool.query(sql, values as QueryValue[]),
+});
+
 // One SLL-R buyer session per phone number, so orders/receipts accrue to a stable
 // buyer (the cross-merchant receipt graph). In-memory v0; persist later.
 const sllrBuyerByNumber = new Map<string, SllrBuyer>();
@@ -117,6 +126,7 @@ async function placeSllrOrder(query: string, fromNumber: string, location?: Stor
 async function ensureSendblueTable(): Promise<void> {
   try {
     await pool.query(sendblueSavedPlacesTableSql);
+    await pool.query(verifiedVisitsTableSql);
   } catch (error) {
     console.error("[sendblue] ensureSendblueTable failed", error);
   }
@@ -534,6 +544,7 @@ async function handleSendblueWebhook(
       const result = await processSendblueInbound(body, {
         client,
         store: sendbluePlaceStore,
+        receiptStore: sendblueReceiptStore,
         gemini: defaultGeminiText,
         placesSearch: defaultPlacesSearch,
         order: placeSllrOrder,

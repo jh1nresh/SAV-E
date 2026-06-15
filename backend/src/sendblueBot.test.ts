@@ -17,6 +17,8 @@ import {
   decideRecall,
   phrasePlaceRec,
   pickBestPlace,
+  looksLikeReceipt,
+  extractReceipt,
   type GeminiCaller,
   type DiscoveredPlace,
   type ConversationStore,
@@ -24,6 +26,7 @@ import {
 } from "./sendblueBot.js";
 import type { ExtractedVenue } from "./sendblueBot.js";
 import type { ListOpts, SavedPlace, SendbluePlaceStore, StoredLocation } from "./sendbluePlaceStore.js";
+import type { VerifiedVisit, VerifiedVisitStore } from "./sendblueReceiptStore.js";
 
 function htmlWithOG(description: string, title = "Some Reel"): string {
   return `<!doctype html><html><head>
@@ -843,4 +846,76 @@ test("isLocationIntent + parseLocationQuery", () => {
   assert.equal(isLocationIntent("order iced latte"), false);
   assert.equal(parseLocationQuery("I'm in Miami Beach"), "Miami Beach");
   assert.equal(parseLocationQuery("area: downtown LA"), "downtown LA");
+});
+
+// --- Receipts → verified visits ------------------------------------------
+
+class FakeReceiptStore implements VerifiedVisitStore {
+  public byPhone = new Map<string, VerifiedVisit[]>();
+  async save(phone: string, visit: VerifiedVisit): Promise<number> {
+    const list = this.byPhone.get(phone) ?? [];
+    list.unshift(visit);
+    this.byPhone.set(phone, list);
+    return list.length;
+  }
+  async list(phone: string, limit = 15): Promise<VerifiedVisit[]> {
+    return (this.byPhone.get(phone) ?? []).slice(0, limit);
+  }
+}
+
+test("looksLikeReceipt gates receipt-ish text and ignores normal chat", () => {
+  assert.equal(looksLikeReceipt("Thank you for your order! Total: $24.50"), true);
+  assert.equal(looksLikeReceipt("Subtotal 18.00 Tax 1.62"), true);
+  assert.equal(looksLikeReceipt("收據 金額 NT$320"), true);
+  assert.equal(looksLikeReceipt("recommend coffee nearby"), false);
+  assert.equal(looksLikeReceipt("what did I save"), false);
+});
+
+test("extractReceipt returns merchant only when the model confirms a receipt", async () => {
+  const yes: GeminiCaller = async () =>
+    JSON.stringify({ is_receipt: true, merchant: "Blue Bottle", total: "$8.50", date: "2026-06-14" });
+  assert.deepEqual(await extractReceipt("...", yes), {
+    merchant: "Blue Bottle",
+    total: "$8.50",
+    date: "2026-06-14",
+  });
+  const no: GeminiCaller = async () => JSON.stringify({ is_receipt: false, merchant: null });
+  assert.equal(await extractReceipt("just a chat", no), null);
+});
+
+test("webhook flow: a forwarded receipt is logged as a verified visit", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const receiptStore = new FakeReceiptStore();
+  const gemini: GeminiCaller = async () =>
+    JSON.stringify({ is_receipt: true, merchant: "Ayer Coffee", total: "$6.25", date: null });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15558889999", content: "Thanks for your order at Ayer Coffee! Total $6.25" },
+    { client, store, gemini, receiptStore },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls.at(-1)?.content ?? "", /verified visit/i);
+  assert.match(client.calls.at(-1)?.content ?? "", /Ayer Coffee/);
+  assert.equal(receiptStore.byPhone.get("+15558889999")?.[0]?.merchant, "Ayer Coffee");
+  assert.equal(receiptStore.byPhone.get("+15558889999")?.[0]?.total, "$6.25");
+});
+
+test("webhook flow: a non-receipt message is NOT logged as a visit", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15557776666", { name: "Cafe Leon Dore", area: "West Hollywood" });
+  const receiptStore = new FakeReceiptStore();
+  // Heuristic won't even fire for this, but make the model say "not a receipt" too.
+  const gemini: GeminiCaller = async (prompt) =>
+    prompt.includes("is_receipt")
+      ? JSON.stringify({ is_receipt: false, merchant: null })
+      : JSON.stringify({ reply: "You saved Cafe Leon Dore." });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15557776666", content: "what did I save" },
+    { client, store, gemini, receiptStore },
+  );
+  assert.equal(result.replied, true);
+  assert.equal(receiptStore.byPhone.get("+15557776666"), undefined); // nothing logged
 });

@@ -25,6 +25,7 @@ import {
   sourceMetadataFromHTML,
 } from "./sourceSearchWorker.js";
 import type { SavedPlace, SendbluePlaceStore, StoredLocation } from "./sendbluePlaceStore.js";
+import type { VerifiedVisitStore } from "./sendblueReceiptStore.js";
 
 const geminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models";
 const defaultGeminiModel = "gemini-2.5-flash";
@@ -173,6 +174,72 @@ function foldText(value: string): string {
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
+}
+
+// ---------------------------------------------------------------------------
+// Receipts → verified visits (the receipt-gated-review primitive).
+// A user forwards/texts a purchase receipt; we confirm it's a receipt, extract
+// the merchant, and record a VERIFIED VISIT keyed by their phone number.
+// ---------------------------------------------------------------------------
+
+export type ExtractedReceipt = { merchant: string; total?: string; date?: string };
+
+// Cheap pre-filter so we don't spend an LLM call on every message — only text
+// that smells like a receipt/order/payment is sent on to the model to confirm.
+const receiptSignals =
+  /\b(receipt|invoice|subtotal|order\s*#?\d|order\s+confirmation|thank you for your (order|purchase|visit)|amount\s+(due|paid)|paid|tip|tax|grand\s+total|total)\b|收據|發票|訂單|消費明細|帳單|\$\s?\d|\d+\.\d{2}\b|NT\$|US\$/i;
+
+export function looksLikeReceipt(text: string): boolean {
+  return receiptSignals.test(text);
+}
+
+/**
+ * Confirm + extract a receipt via Gemini. Returns null when the text is not a
+ * receipt (a normal message, a place name, a question) or the model is
+ * unavailable — so a false positive from the heuristic gate is harmless.
+ */
+export async function extractReceipt(
+  text: string,
+  gemini: GeminiCaller = defaultGeminiText,
+): Promise<ExtractedReceipt | null> {
+  const prompt = `Decide if this text message is a PURCHASE RECEIPT or an order / payment confirmation (from a restaurant, cafe, bar, shop, etc.). A normal chat message, a question, or a bare place name is NOT a receipt.
+
+If it IS a receipt, extract:
+- "merchant": the business/venue name on the receipt (keep its original language).
+- "total": the total amount with currency if shown (e.g. "$24.50"), else null.
+- "date": the purchase date if shown, else null.
+
+Return STRICT JSON only, no markdown:
+{"is_receipt": boolean, "merchant": string|null, "total": string|null, "date": string|null}
+
+Text:
+${text}`;
+  let raw: string;
+  try {
+    raw = await gemini(prompt);
+  } catch (error) {
+    console.error("[sendblue] extractReceipt gemini error", error);
+    return null;
+  }
+  const parsed = parseReplyJson(raw) as {
+    is_receipt?: unknown;
+    merchant?: unknown;
+    total?: unknown;
+    date?: unknown;
+  } | null;
+  if (!parsed || parsed.is_receipt !== true) return null;
+  const merchant = typeof parsed.merchant === "string" ? parsed.merchant.trim() : "";
+  if (!merchant) return null;
+  const total = typeof parsed.total === "string" && parsed.total.trim() ? parsed.total.trim() : undefined;
+  const date = typeof parsed.date === "string" && parsed.date.trim() ? parsed.date.trim() : undefined;
+  return { merchant, total, date };
+}
+
+export function formatReceiptReply(receipt: ExtractedReceipt, count: number, chinese: boolean): string {
+  const amount = receipt.total ? (chinese ? `（${receipt.total}）` : ` (${receipt.total})`) : "";
+  return chinese
+    ? `✓ 已記錄你在 ${receipt.merchant}${amount} 的訪問 — 這是一筆驗證訪問,你目前有 ${count} 筆。要留評論嗎?`
+    : `✓ Logged your visit to ${receipt.merchant}${amount} — that's a verified visit. You have ${count} now. Want to leave a review?`;
 }
 
 export async function defaultGeminiText(prompt: string): Promise<string> {
@@ -929,6 +996,8 @@ export type ProcessDeps = {
   placesSearch?: PlacesSearch;
   /** Conversation memory (pending location + last recommended places). Defaults to the module singleton. */
   conversation?: ConversationStore;
+  /** Verified-visit memory: forwarded receipts → proof-of-visit. Omitted = receipts disabled. */
+  receiptStore?: VerifiedVisitStore;
   client: Pick<SendblueClient, "sendMessage" | "markRead" | "sendTypingIndicator">;
   store: SendbluePlaceStore;
   /** Place an SLL-R order for this number; returns the reply, or null to fall
@@ -1021,6 +1090,31 @@ export async function processSendblueInbound(
   let reply: string;
   try {
     const url = firstUrlInText(text);
+    // Receipt → verified visit (proof-of-visit). Checked FIRST: a receipt's
+    // "thank you for your order" text must not be mistaken for an order intent.
+    // Cheap heuristic gate, then the LLM confirms; only fires when wired in.
+    if (deps.receiptStore && deps.gemini && looksLikeReceipt(text)) {
+      const receipt = await extractReceipt(text, deps.gemini);
+      if (receipt) {
+        let count = 0;
+        try {
+          count = await deps.receiptStore.save(from, {
+            merchant: receipt.merchant,
+            total: receipt.total,
+            visitDate: receipt.date,
+            raw: text,
+          });
+        } catch (storeError) {
+          console.error("[sendblue] receipt save error", storeError);
+        }
+        console.log(
+          `[sendblue] receipt merchant="${receipt.merchant}" total="${receipt.total ?? ""}" count=${count}`,
+        );
+        reply = formatReceiptReply(receipt, count, chinese);
+        await deps.client.sendMessage(from, reply);
+        return { replied: true, reply };
+      }
+    }
     if (deps.geocode && !url && isLocationIntent(text)) {
       // Location set: "I'm in X" → geocode → remember per number for nearby orders.
       const loc = await deps.geocode(parseLocationQuery(text));
