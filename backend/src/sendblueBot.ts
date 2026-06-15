@@ -721,6 +721,8 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
 export type ConversationState = {
   pendingQuery?: string;
   lastPlaces?: DiscoveredPlace[];
+  /** The single place we actually recommended (what "it/their/that place" means). */
+  lastRecommended?: DiscoveredPlace;
   /** The last location the user gave — reused for "something else" follow-ups. */
   lastArea?: string;
   /** Names already recommended this conversation — excluded so "something else" varies. */
@@ -731,6 +733,8 @@ export interface ConversationStore {
   get(phone: string): ConversationState | undefined;
   setPending(phone: string, query: string): void;
   setPlaces(phone: string, places: DiscoveredPlace[]): void;
+  /** Remember THE place we recommended (for "what's their…?" follow-ups). */
+  setRecommended(phone: string, place: DiscoveredPlace): void;
   /** Remember the user's last given location, for follow-up recommendations. */
   setArea(phone: string, area: string): void;
   /** Append a recommended place name (so we don't repeat it next time). */
@@ -762,6 +766,9 @@ class InMemoryConversationStore implements ConversationStore {
   setPlaces(phone: string, places: DiscoveredPlace[]): void {
     this.merge(phone, { lastPlaces: places.slice(0, 5) });
   }
+  setRecommended(phone: string, place: DiscoveredPlace): void {
+    this.merge(phone, { lastRecommended: place });
+  }
   setArea(phone: string, area: string): void {
     this.merge(phone, { lastArea: area });
   }
@@ -786,7 +793,9 @@ export const defaultConversationStore: ConversationStore = new InMemoryConversat
  */
 export type RecallDecision =
   | { kind: "reply"; reply: string }
-  | { kind: "search"; query: string; area: string | null };
+  | { kind: "search"; query: string; area: string | null }
+  // The user stated WHERE they are with no specific request — remember it.
+  | { kind: "location"; area: string };
 
 /**
  * Agentic router: hand the user's message + their saved places to the LLM and
@@ -799,11 +808,17 @@ export async function decideRecall(
   places: SavedPlace[],
   gemini: GeminiCaller = defaultGeminiText,
   chinese = false,
-  convo?: { pendingQuery?: string; lastPlaces?: DiscoveredPlace[]; lastArea?: string },
+  convo?: {
+    pendingQuery?: string;
+    lastPlaces?: DiscoveredPlace[];
+    lastArea?: string;
+    lastRecommended?: DiscoveredPlace;
+  },
 ): Promise<RecallDecision | null> {
   const pendingQuery = convo?.pendingQuery;
   const lastPlaces = convo?.lastPlaces ?? [];
   const lastArea = convo?.lastArea;
+  const lastRecommended = convo?.lastRecommended;
   const context =
     places.length > 0
       ? places
@@ -823,22 +838,30 @@ export async function decideRecall(
   const pendingBlock = pendingQuery
     ? `\nLOCATION FOLLOW-UP: You just asked the user where they are, because they want to find: "${pendingQuery}". If their message below is a location (city, neighborhood, ZIP code, or address) — even just a bare place name — return {"search":{"query":"${pendingQuery}","area":"<that location>"}}. Only ignore this if they clearly changed the subject.\n`
     : "";
+  const placeFacts = (p: DiscoveredPlace): string => {
+    const bits = [p.name];
+    if (typeof p.rating === "number") bits.push(`${p.rating}★`);
+    if (p.address) bits.push(p.address);
+    return bits.join(" — ");
+  };
   const recentBlock =
-    lastPlaces.length > 0
-      ? `\nRECENTLY RECOMMENDED to this user (you may answer follow-ups about these — "it", "their", "that place" refer here):\n${lastPlaces
-          .map((p, i) => {
-            const bits = [p.name];
-            if (typeof p.rating === "number") bits.push(`${p.rating}★`);
-            if (p.address) bits.push(p.address);
-            return `${i + 1}. ${bits.join(" — ")}`;
-          })
-          .join("\n")}\nWhen they ask about one of these, answer with {"reply"} using ONLY this known data (name/rating/address). If they ask something you do NOT have (e.g. menu items, "best coffee", prices), say honestly you don't have that detail, then offer what you do have (rating/address) or to save it. NEVER make up menu/details.\n`
+    lastRecommended || lastPlaces.length > 0
+      ? `\n${
+          lastRecommended
+            ? `THE PLACE YOU JUST RECOMMENDED is: ${placeFacts(lastRecommended)}. When the user says "it", "their", "that place", "their popular drink", etc., they mean THIS place — answer about THIS one, never silently switch to a different place.\n`
+            : ""
+        }${
+          lastPlaces.length > 0
+            ? `Other nearby options you mentioned: ${lastPlaces.map((p) => p.name).join(", ")}.\n`
+            : ""
+        }When they ask about the recommended place, answer with {"reply"} using ONLY its known data (name/rating/address). If they ask something you do NOT have (menu items, "popular drink", prices, hours), say honestly you don't have that detail about <that place>, then offer what you do have (rating/address) or to save it. NEVER make up details and NEVER answer about a different place than the one they asked about.\n`
       : "";
   const prompt = `You are SAV-E, a friend who remembers places the user saved from Instagram/TikTok and can also find NEW places nearby. Decide EXACTLY ONE action:
 
 1. Answer from their saved places OR about a place you recently recommended (see below). Use ONLY known data — NEVER invent a place, menu, or detail. Return {"reply":"<message>"}.
 2. Find NEW places nearby — when they want a recommendation for somewhere not yet known (e.g. "somewhere nearby", "anywhere else", "that one's too far", "find me a coffee place", "推薦附近的") AND a location is given or clearly known. Return {"search":{"query":"<2-4 word search like 'coffee' or 'ramen'>","area":"<the location, e.g. 'Santa Monica'>"}}.
 3. They want something nearby but gave NO location yet. Return {"search":{"query":"<2-4 word search>","area":null}} — a null area signals we still need their location. Do NOT phrase this as a reply.
+4. The message is ONLY a location (a bare address, city, neighborhood, or ZIP) with no request, AND there is no pending search to resume. Return {"location":{"area":"<that location>"}} — never just acknowledge it in a reply; this records where they are for next time.
 ${pendingBlock}${recentBlock}${
     lastArea
       ? `\nLAST KNOWN LOCATION: the user is near "${lastArea}". For a follow-up like "something else", "anything closer", "still too far", or "what else" — reuse this location and return a search there. Do NOT ask for their location again unless they say they moved or give a new place.\n`
@@ -868,22 +891,23 @@ Return STRICT JSON only, no markdown.`;
         : null;
     return { kind: "search", query: parsed.search.query.trim(), area };
   }
+  if (parsed.location && typeof parsed.location.area === "string" && parsed.location.area.trim()) {
+    return { kind: "location", area: parsed.location.area.trim() };
+  }
   if (typeof parsed.reply === "string" && parsed.reply.trim()) {
     return { kind: "reply", reply: parsed.reply.trim() };
   }
   return null;
 }
 
-function parseRecallJson(
-  text: string,
-): { reply?: unknown; search?: { query?: unknown; area?: unknown } } | null {
-  const obj = parseReplyJson(text) as
-    | { reply?: unknown; search?: { query?: unknown; area?: unknown } }
-    | null;
-  if (!obj) return null;
-  if (obj.search && typeof obj.search === "object") return obj;
-  if (typeof obj.reply === "string") return obj;
-  return obj;
+type ParsedRecall = {
+  reply?: unknown;
+  search?: { query?: unknown; area?: unknown };
+  location?: { area?: unknown };
+};
+
+function parseRecallJson(text: string): ParsedRecall | null {
+  return parseReplyJson(text) as ParsedRecall | null;
 }
 
 const askLocationReplyEn =
@@ -1185,11 +1209,20 @@ export async function processSendblueInbound(
         pendingQuery: convo?.pendingQuery,
         lastPlaces: convo?.lastPlaces,
         lastArea: convo?.lastArea,
+        lastRecommended: convo?.lastRecommended,
       });
       if (!decision) {
         convoStore.clearPending(from);
         console.log(`[sendblue] agentic empty → keyword fallback for ${from}`);
         reply = await keywordRecallReply(text, from, chinese, deps.store);
+      } else if (decision.kind === "location") {
+        // Pure location, nothing pending → store it and ask what they want,
+        // instead of a hollow "I'll remember" that loses the area.
+        convoStore.setArea(from, decision.area);
+        console.log(`[sendblue] location set for ${from} area="${decision.area}"`);
+        reply = chinese
+          ? `📍 收到,你在 ${decision.area} 附近 — 要找什麼?(咖啡、吃的、酒吧…)`
+          : `📍 Got it, you're near ${decision.area} — what are you looking for? (coffee, food, a bar…)`;
       } else if (decision.kind === "reply") {
         convoStore.clearPending(from);
         console.log(
@@ -1223,6 +1256,7 @@ export async function processSendblueInbound(
           // Remember location + what we recommended for follow-ups / "something else".
           convoStore.setArea(from, decision.area);
           convoStore.setPlaces(from, found);
+          convoStore.setRecommended(from, picked);
           convoStore.addShown(from, picked.name);
           reply = await phrasePlaceRec(picked, decision.area, deps.gemini, chinese);
         } else {

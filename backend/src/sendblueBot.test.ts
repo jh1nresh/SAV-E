@@ -420,13 +420,13 @@ test("decideRecall: a bare location resumes the pending discovery query", async 
 test("decideRecall: a follow-up about a recommended place is grounded in its data", async () => {
   let sawRecent = false;
   const gemini: GeminiCaller = async (prompt) => {
-    sawRecent = prompt.includes("RECENTLY RECOMMENDED") && prompt.includes("Ayer Coffee");
+    sawRecent = prompt.includes("THE PLACE YOU JUST RECOMMENDED is: Ayer Coffee");
     return JSON.stringify({
       reply: "I don't have Ayer Coffee's menu, but it's rated 4.8★ — want me to save it?",
     });
   };
   const decision = await decideRecall("what's their best coffee", [], gemini, false, {
-    lastPlaces: [{ name: "Ayer Coffee", rating: 4.8, address: "Tustin" }],
+    lastRecommended: { name: "Ayer Coffee", rating: 4.8, address: "Tustin" },
   });
   assert.equal(sawRecent, true);
   assert.equal(decision?.kind, "reply");
@@ -440,6 +440,7 @@ function fakeConversation(): { store: ConversationStore; map: Map<string, Conver
     get,
     setPending: (p, q) => map.set(p, { ...(get(p) ?? { at: 0 }), pendingQuery: q, at: 0 }),
     setPlaces: (p, places) => map.set(p, { ...(get(p) ?? { at: 0 }), lastPlaces: places.slice(0, 5), at: 0 }),
+    setRecommended: (p, place) => map.set(p, { ...(get(p) ?? { at: 0 }), lastRecommended: place, at: 0 }),
     setArea: (p, area) => map.set(p, { ...(get(p) ?? { at: 0 }), lastArea: area, at: 0 }),
     addShown: (p, name) =>
       map.set(p, { ...(get(p) ?? { at: 0 }), shownNames: [...(get(p)?.shownNames ?? []), name], at: 0 }),
@@ -918,4 +919,68 @@ test("webhook flow: a non-receipt message is NOT logged as a visit", async () =>
   );
   assert.equal(result.replied, true);
   assert.equal(receiptStore.byPhone.get("+15557776666"), undefined); // nothing logged
+});
+
+// --- Location coherence + recommended-place grounding --------------------
+
+test("decideRecall: a bare location with nothing pending → location decision", async () => {
+  const gemini: GeminiCaller = async () =>
+    JSON.stringify({ location: { area: "Tustin, CA" } });
+  const decision = await decideRecall("16267 Stella Cir, Tustin, CA", [], gemini, false, {});
+  assert.deepEqual(decision, { kind: "location", area: "Tustin, CA" });
+});
+
+test("webhook flow: stating a location stores it and asks what they want (no hollow 'I'll remember')", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation, map } = fakeConversation();
+  const gemini: GeminiCaller = async () => JSON.stringify({ location: { area: "Tustin" } });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15551112222", content: "16267 Stella Cir, Tustin, CA" },
+    { client, store, gemini, conversation },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls.at(-1)?.content ?? "", /what are you looking for|要找什麼/);
+  assert.equal(map.get("+15551112222")?.lastArea, "Tustin"); // actually remembered
+});
+
+test("decideRecall: a follow-up answers about THE recommended place, not another option", async () => {
+  let prompt = "";
+  const gemini: GeminiCaller = async (p) => {
+    prompt = p;
+    return JSON.stringify({ reply: "I don't have Jam Jam Tea Lab's menu, but it's 4.7★." });
+  };
+  const decision = await decideRecall("what's their popular drink", [], gemini, false, {
+    lastRecommended: { name: "Jam Jam Tea Lab", rating: 4.7, address: "Irvine" },
+    lastPlaces: [
+      { name: "Jam Jam Tea Lab", rating: 4.7 },
+      { name: "3CAT Handcrafted Beverage", rating: 4.0 },
+    ],
+  });
+  // The recommended place is singled out; the model is told not to switch places.
+  assert.match(prompt, /THE PLACE YOU JUST RECOMMENDED is: Jam Jam Tea Lab/);
+  assert.match(prompt, /never silently switch/);
+  assert.equal(decision?.kind, "reply");
+});
+
+test("webhook flow: discovery records THE recommended place as lastRecommended", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation, map } = fakeConversation();
+  conversation.setArea("+15553339999", "Tustin");
+  const placesSearch = async (): Promise<DiscoveredPlace[]> => [
+    { name: "Jam Jam Tea Lab", rating: 4.7, address: "Irvine" },
+    { name: "3CAT", rating: 4.0 },
+  ];
+  const gemini: GeminiCaller = async (p) =>
+    p.includes("Recommend this ONE place")
+      ? JSON.stringify({ reply: "Try Jam Jam Tea Lab ✨" })
+      : JSON.stringify({ search: { query: "boba", area: "Tustin" } });
+
+  await processSendblueInbound(
+    { from_number: "+15553339999", content: "recommend a boba place" },
+    { client, store, gemini, placesSearch, conversation },
+  );
+  assert.equal(map.get("+15553339999")?.lastRecommended?.name, "Jam Jam Tea Lab");
 });
