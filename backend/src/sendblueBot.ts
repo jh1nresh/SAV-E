@@ -1229,18 +1229,20 @@ export async function processSendblueInbound(
           `[sendblue] agentic reply for ${from} placeCount=${places.length} recentPlaces=${convo?.lastPlaces?.length ?? 0}`,
         );
         reply = decision.reply;
-      } else if (!decision.area) {
-        // Wants nearby but gave no location → remember the query and ask where.
+      } else if (!(decision.area ?? convo?.lastArea)) {
+        // Wants nearby but we have NO location at all → remember query, ask where.
         convoStore.setPending(from, decision.query);
         console.log(`[sendblue] discovery wants location from ${from} (pending="${decision.query}")`);
         reply = askLocationReply(chinese);
       } else {
-        // Discovery: search Google for NEW places near the given area.
+        // Discovery: search near the given area, OR — deterministically — the
+        // last location we already know, so we never re-ask once we have it.
+        const area = decision.area ?? convo!.lastArea!;
         convoStore.clearPending(from);
         const search = deps.placesSearch ?? defaultPlacesSearch;
         let found: DiscoveredPlace[] = [];
         try {
-          found = await search(`${decision.query} in ${decision.area}`);
+          found = await search(`${decision.query} in ${area}`);
         } catch (searchError) {
           console.error("[sendblue] places search error", searchError);
         }
@@ -1248,19 +1250,19 @@ export async function processSendblueInbound(
         // "something else" actually returns something else.
         const picked = pickBestPlace(found, convo?.shownNames ?? []);
         console.log(
-          `[sendblue] discovery query="${decision.query}" area="${decision.area}" results=${found.length} picked="${picked?.name ?? "(none)"}"` +
+          `[sendblue] discovery query="${decision.query}" area="${area}" results=${found.length} picked="${picked?.name ?? "(none)"}"` +
             (convo?.pendingQuery ? " (resumed pending)" : "") +
-            (convo?.lastArea ? " (reused area)" : ""),
+            (!decision.area && convo?.lastArea ? " (reused area)" : ""),
         );
         if (picked) {
           // Remember location + what we recommended for follow-ups / "something else".
-          convoStore.setArea(from, decision.area);
+          convoStore.setArea(from, area);
           convoStore.setPlaces(from, found);
           convoStore.setRecommended(from, picked);
           convoStore.addShown(from, picked.name);
-          reply = await phrasePlaceRec(picked, decision.area, deps.gemini, chinese);
+          reply = await phrasePlaceRec(picked, area, deps.gemini, chinese);
         } else {
-          reply = noDiscoveryReply(decision.area, chinese);
+          reply = noDiscoveryReply(area, chinese);
         }
       }
     } else {

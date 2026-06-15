@@ -984,3 +984,29 @@ test("webhook flow: discovery records THE recommended place as lastRecommended",
   );
   assert.equal(map.get("+15553339999")?.lastRecommended?.name, "Jam Jam Tea Lab");
 });
+
+test("webhook flow: known location is reused even when the model returns a null area (deterministic)", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation } = fakeConversation();
+  conversation.setArea("+15554443210", "Tustin"); // we already know where they are
+  let searched = "";
+  const placesSearch = async (q: string): Promise<DiscoveredPlace[]> => {
+    searched = q;
+    return [{ name: "Jam Jam Tea Lab", rating: 4.7 }];
+  };
+  const gemini: GeminiCaller = async (p) =>
+    p.includes("Recommend this ONE place")
+      ? JSON.stringify({ reply: "Try Jam Jam Tea Lab ✨" })
+      : // Model "forgets" to fill the area — code must reuse lastArea anyway.
+        JSON.stringify({ search: { query: "boba", area: null } });
+
+  const result = await processSendblueInbound(
+    { from_number: "+15554443210", content: "recommend me a boba place" },
+    { client, store, gemini, placesSearch, conversation },
+  );
+  assert.match(searched, /boba in Tustin/); // reused area, did NOT re-ask
+  assert.doesNotMatch(client.calls.at(-1)?.content ?? "", /Where are you|你現在在哪/);
+  assert.match(client.calls.at(-1)?.content ?? "", /Jam Jam Tea Lab/);
+  assert.equal(result.replied, true);
+});
