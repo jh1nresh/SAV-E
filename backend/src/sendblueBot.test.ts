@@ -18,6 +18,8 @@ import {
   phrasePlaceRec,
   pickBestPlace,
   isSearchedAddress,
+  rankPlaces,
+  phraseRecommendations,
   looksLikeReceipt,
   isReceiptLink,
   formatPlaceCard,
@@ -504,7 +506,7 @@ test("webhook flow: ask location → bare place name resumes search (conversatio
     return [{ name: "Kean Coffee", address: "Tustin", rating: 4.5 }];
   };
   const gemini: GeminiCaller = async (prompt) => {
-    if (prompt.includes("Recommend this ONE place")) return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
+    if (prompt.includes("Recommend 2-3")) return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
     if (prompt.includes("LOCATION FOLLOW-UP")) return JSON.stringify({ search: { query: "coffee", area: "Tustin" } });
     return JSON.stringify({ search: { query: "coffee", area: null } });
   };
@@ -564,7 +566,7 @@ test("webhook flow: 'something else' reuses last location and returns a DIFFEREN
     ];
   };
   const gemini: GeminiCaller = async (prompt) => {
-    if (prompt.includes("Recommend this ONE place")) {
+    if (prompt.includes("Recommend 2-3")) {
       return JSON.stringify({ reply: "Try Kean Coffee in Tustin ☕" });
     }
     // decideRecall: the LAST KNOWN LOCATION context must be present so it reuses it.
@@ -1017,7 +1019,7 @@ test("webhook flow: discovery records THE recommended place as lastRecommended",
     { name: "3CAT", rating: 4.0 },
   ];
   const gemini: GeminiCaller = async (p) =>
-    p.includes("Recommend this ONE place")
+    p.includes("Recommend 2-3")
       ? JSON.stringify({ reply: "Try Jam Jam Tea Lab ✨" })
       : JSON.stringify({ search: { query: "boba", area: "Tustin" } });
 
@@ -1039,7 +1041,7 @@ test("webhook flow: known location is reused even when the model returns a null 
     return [{ name: "Jam Jam Tea Lab", rating: 4.7 }];
   };
   const gemini: GeminiCaller = async (p) =>
-    p.includes("Recommend this ONE place")
+    p.includes("Recommend 2-3")
       ? JSON.stringify({ reply: "Try Jam Jam Tea Lab ✨" })
       : // Model "forgets" to fill the area — code must reuse lastArea anyway.
         JSON.stringify({ search: { query: "boba", area: null } });
@@ -1492,7 +1494,7 @@ test("webhook flow: 'boba' near a street address never recommends the address it
     { name: "Tea Lab", rating: 4.6, address: "Tustin" },
   ];
   const gemini: GeminiCaller = async (p) =>
-    p.includes("Recommend this ONE place")
+    p.includes("Recommend 2-3")
       ? JSON.stringify({ reply: "Try Tea Lab in Tustin 🧋" })
       : JSON.stringify({ search: { query: "boba", area: "16267 Stella Cir, Tustin" } });
 
@@ -1503,4 +1505,84 @@ test("webhook flow: 'boba' near a street address never recommends the address it
   const out = client.calls.at(-1)?.content ?? "";
   assert.match(out, /Tea Lab/); // a real business
   assert.doesNotMatch(out, /16267 Stella Cir/); // never the user's own address
+});
+
+// --- Recommend a few places WITH a history-based reason --------------------
+
+test("phraseRecommendations puts the user's history in the prompt and recommends multiple", async () => {
+  let seen = "";
+  const gemini: GeminiCaller = async (p) => {
+    seen = p;
+    return JSON.stringify({ reply: "Since you've been to Mendocino Farms, try Tea Lab 4.6★ or Boba King 4.4★" });
+  };
+  const reply = await phraseRecommendations(
+    "boba",
+    "Tustin",
+    [{ name: "Tea Lab", rating: 4.6 }, { name: "Boba King", rating: 4.4 }],
+    { categories: ["cafe"], visited: ["Mendocino Farms"], saved: ["Cafe Leon Dore"] },
+    gemini,
+    false,
+  );
+  assert.match(seen, /Mendocino Farms/); // visited history available for the reason
+  assert.match(seen, /Tea Lab/);
+  assert.match(seen, /Boba King/);
+  assert.match(reply, /Tea Lab/);
+});
+
+test("phraseRecommendations template fallback lists multiple places", async () => {
+  const reply = await phraseRecommendations(
+    "boba",
+    "Tustin",
+    [{ name: "A", rating: 4.6 }, { name: "B", rating: 4.4 }],
+    { categories: [], visited: [], saved: [] },
+    async () => {
+      throw new Error("down");
+    },
+    false,
+  );
+  assert.match(reply, /1\. A/);
+  assert.match(reply, /2\. B/);
+});
+
+test("rankPlaces returns a taste-ranked list (top first), excludes shown", () => {
+  const found: DiscoveredPlace[] = [
+    { name: "Low", rating: 4.0 },
+    { name: "High", rating: 4.9 },
+    { name: "Mid", rating: 4.5, category: "cafe" },
+  ];
+  const ranked = rankPlaces(found, ["High"], ["cafe"]); // High excluded; cafe boosted
+  assert.equal(ranked[0]?.name, "Mid"); // 4.5 + 0.3 cafe boost > 4.0
+  assert.equal(ranked.length, 2);
+});
+
+test("webhook flow: discovery recommends a few places with a history-based reason", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15558880000", { name: "Cafe Leon Dore", area: "WeHo", category: "cafe" });
+  const receiptStore = new FakeReceiptStore();
+  receiptStore.byPhone.set("+15558880000", [{ merchant: "Mendocino Farms", createdAt: new Date() }]);
+  const { store: conversation } = fakeConversation();
+  conversation.setArea("+15558880000", "Tustin");
+  const placesSearch = async (): Promise<DiscoveredPlace[]> => [
+    { name: "Tea Lab", rating: 4.7, address: "Tustin" },
+    { name: "Boba King", rating: 4.5, address: "Tustin" },
+    { name: "Sip", rating: 4.3, address: "Tustin" },
+  ];
+  let recPrompt = "";
+  const gemini: GeminiCaller = async (p) => {
+    if (p.includes("Recommend 2-3")) {
+      recPrompt = p;
+      return JSON.stringify({ reply: "Since you've been to Mendocino Farms: 1. Tea Lab 4.7★ 2. Boba King 4.5★ 3. Sip 4.3★" });
+    }
+    return JSON.stringify({ search: { query: "boba", area: "Tustin" } });
+  };
+
+  await processSendblueInbound(
+    { from_number: "+15558880000", content: "boba" },
+    { client, store, gemini, placesSearch, receiptStore, conversation },
+  );
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /Tea Lab/);
+  assert.match(out, /Boba King/); // more than one place
+  assert.match(recPrompt, /Mendocino Farms/); // visit history passed in for the reason
 });

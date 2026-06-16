@@ -1274,16 +1274,17 @@ export function isSearchedAddress(place: DiscoveredPlace, area: string): boolean
  * highest-rated overall if everything was already shown (better to repeat than
  * to dead-end). Returns undefined only for an empty result set.
  */
-export function pickBestPlace(
+/**
+ * Rank discovery results: taste-aware (Google rating + a boost for the user's
+ * categories), excluded names dropped. Fresh (non-excluded) first; if everything
+ * was excluded, falls back to the full set ranked. Returns a sorted copy.
+ */
+export function rankPlaces(
   found: DiscoveredPlace[],
   exclude: string[] = [],
   preferredCategories: string[] = [],
-): DiscoveredPlace | undefined {
-  if (found.length === 0) return undefined;
+): DiscoveredPlace[] {
   const seen = new Set(exclude.map((n) => n.toLowerCase()));
-  // Taste-aware score: Google rating, plus a small boost when the place's
-  // category matches one the user engages with — so personalization nudges the
-  // pick without overriding a clearly higher-rated spot.
   const score = (p: DiscoveredPlace): number => {
     const base = p.rating ?? 0;
     const cat = p.category?.toLowerCase() ?? "";
@@ -1292,8 +1293,83 @@ export function pickBestPlace(
   };
   const byScore = (a: DiscoveredPlace, b: DiscoveredPlace) => score(b) - score(a);
   const fresh = found.filter((p) => !seen.has(p.name.toLowerCase())).sort(byScore);
-  if (fresh.length > 0) return fresh[0];
-  return [...found].sort(byScore)[0];
+  return fresh.length > 0 ? fresh : [...found].sort(byScore);
+}
+
+/** The user's history used to justify a recommendation. */
+export type TasteContext = {
+  /** categories the user saves most (from saved places) */
+  categories: string[];
+  /** merchant names the user has a receipt for (verified visits) */
+  visited: string[];
+  /** names of places the user has saved */
+  saved: string[];
+};
+
+/**
+ * Recommend 2-3 real places with ONE personalized reason tied to the user's
+ * history ("since you've been to X / you save a lot of cafes…"). Grounded: the
+ * reason may only cite history actually passed in; the places are real Google
+ * results. Deterministic multi-place template fallback when the model fails.
+ */
+export async function phraseRecommendations(
+  query: string,
+  area: string,
+  picks: DiscoveredPlace[],
+  taste: TasteContext,
+  gemini: GeminiCaller = defaultGeminiText,
+  chinese = false,
+): Promise<string> {
+  const top = picks.slice(0, 3);
+  const template = (): string => {
+    const head = chinese ? `${area} 附近評分最高的:` : `Top-rated near ${area}:`;
+    const lines = top.map((p, i) => `${i + 1}. ${p.name}${p.rating ? ` ${p.rating}★` : ""}`);
+    return [head, ...lines].join("\n");
+  };
+  if (top.length === 0) return template();
+  const lang = chinese ? "繁體中文" : "the same language the user wrote in";
+  const list = top
+    .map(
+      (p, i) =>
+        `${i + 1}. ${p.name}${p.rating ? ` (${p.rating}★)` : ""}${p.address ? ` — ${p.address}` : ""}${p.category ? ` [${p.category}]` : ""}`,
+    )
+    .join("\n");
+  const history =
+    [
+      taste.visited.length ? `Places they have a receipt for (visited): ${taste.visited.slice(0, 5).join(", ")}` : "",
+      taste.categories.length ? `Categories they save most: ${taste.categories.join(", ")}` : "",
+      taste.saved.length ? `Places they've saved: ${taste.saved.slice(0, 8).join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n") || "(no history yet)";
+  const prompt = `Recommend 2-3 of these REAL Google results for "${query}" near ${area}, WITH one short personalized reason tied to the user's history.
+
+The user's history:
+${history}
+
+If the history is relevant, LEAD with a reason like "Since you've been to <place> / you save a lot of <category>, …" — but ONLY cite history that is actually listed above; NEVER invent a visit, order, or saved place. If there is no relevant history, just say these are the top-rated spots near them. Then list the 2-3 places (name + rating). Use ONLY the results + history above; do not invent places, addresses, or menus. ${lang}, SMS-friendly, at most 4 short lines, at most one emoji.
+
+Results:
+${list}
+
+Return STRICT JSON only: {"reply": string}`;
+  try {
+    const raw = await gemini(prompt);
+    const parsed = parseReplyJson(raw);
+    const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+    return reply.length > 0 ? reply : template();
+  } catch (error) {
+    console.error("[sendblue] phraseRecommendations gemini error", error);
+    return template();
+  }
+}
+
+export function pickBestPlace(
+  found: DiscoveredPlace[],
+  exclude: string[] = [],
+  preferredCategories: string[] = [],
+): DiscoveredPlace | undefined {
+  return rankPlaces(found, exclude, preferredCategories)[0];
 }
 
 /**
@@ -1859,22 +1935,33 @@ export async function processSendblueInbound(
         // a "place" (a geocode/premise, no rating). Never recommend the user's own
         // location back to them — drop any result that is just the searched area.
         const businesses = found.filter((p) => !isSearchedAddress(p, area));
-        // Personalized pick: skip places already recommended this conversation
-        // AND places the user already knows (saved/visited), then taste-rank.
+        // Personalized: skip places already recommended this conversation AND
+        // places the user already knows (saved/visited), taste-rank, take a few.
         const exclude = [...(convo?.shownNames ?? []), ...taste.knownNames];
-        const picked = pickBestPlace(businesses, exclude, taste.preferredCategories);
+        const picks = rankPlaces(businesses, exclude, taste.preferredCategories).slice(0, 3);
         console.log(
-          `[sendblue] discovery query="${decision.query}" area="${area}" results=${found.length} picked="${picked?.name ?? "(none)"}" known=${taste.knownNames.length} cats=[${taste.preferredCategories.join(",")}]` +
+          `[sendblue] discovery query="${decision.query}" area="${area}" results=${found.length} picks=[${picks.map((p) => p.name).join(" | ")}] known=${taste.knownNames.length} cats=[${taste.preferredCategories.join(",")}]` +
             (convo?.pendingQuery ? " (resumed pending)" : "") +
             (!decision.area && convo?.lastArea ? " (reused area)" : ""),
         );
-        if (picked) {
+        if (picks.length) {
           // Remember location + what we recommended for follow-ups / "something else".
           convoStore.setArea(memoryKey, area);
-          convoStore.setPlaces(memoryKey, found);
-          convoStore.setRecommended(memoryKey, picked);
-          convoStore.addShown(memoryKey, picked.name);
-          reply = await phrasePlaceRec(picked, area, deps.gemini, chinese);
+          convoStore.setPlaces(memoryKey, picks);
+          convoStore.setRecommended(memoryKey, picks[0]); // the top pick is "the" place for follow-ups
+          for (const p of picks) convoStore.addShown(memoryKey, p.name);
+          reply = await phraseRecommendations(
+            decision.query,
+            area,
+            picks,
+            {
+              categories: taste.preferredCategories,
+              visited: visitedMerchants,
+              saved: places.map((p) => p.name),
+            },
+            deps.gemini,
+            chinese,
+          );
         } else {
           reply = noDiscoveryReply(area, chinese);
         }
