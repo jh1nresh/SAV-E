@@ -85,16 +85,26 @@ function section(title: string, empty: string, body: string): string {
   </section>`;
 }
 
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function renderMySavesPage(payload: MySavesPayload): string {
   const places = payload.places.map(placeCard).join("");
   const visits = payload.visits.map(visitCard).join("");
   const reviews = payload.reviews.map(reviewCard).join("");
+  const metaTitle = `My SAV-E: ${countLabel(payload.counts.places, "place", "places")}, ${countLabel(payload.counts.visits, "visit", "visits")}, ${countLabel(payload.counts.reviews, "review", "reviews")}`;
+  const metaDescription = "Open your private SAV-E cards, map links, verified visits, and receipt-gated reviews.";
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="${escapeHtml(metaDescription)}" />
+  <meta property="og:title" content="${escapeHtml(metaTitle)}" />
+  <meta property="og:description" content="${escapeHtml(metaDescription)}" />
+  <meta name="twitter:card" content="summary" />
   <title>My SAV-E</title>
   <style>
     :root { color-scheme: light dark; --bg:#f7f2e8; --ink:#35271d; --muted:#7b6b5f; --card:#fffaf1; --line:#d8c8b4; --green:#456f55; --gold:#a16f1e; }

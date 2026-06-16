@@ -306,10 +306,11 @@ test("webhook flow: 'my places' lists saved places", async () => {
   assert.match(content, /Cafe Leon Dore — West Hollywood/);
 });
 
-test("webhook flow: 'my places' includes the private web page link", async () => {
+test("webhook flow: 'my places' with private link sends a compact web handoff instead of a long list", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
   await store.save("+15552223333", { name: "Cafe Leon Dore", area: "West Hollywood" });
+  await store.save("+15552223333", { name: "Aquarela", area: "Cabo" });
 
   await processSendblueInbound(
     { from_number: "+15552223333", content: "my places" },
@@ -317,8 +318,11 @@ test("webhook flow: 'my places' includes the private web page link", async () =>
   );
 
   const content = client.calls[0]?.content ?? "";
-  assert.match(content, /Cafe Leon Dore/);
-  assert.match(content, /Open your SAV-E: https:\/\/save\.example\/my\/token-for-\+15552223333/);
+  assert.match(content, /2 saved places/);
+  assert.match(content, /Open My SAV-E/);
+  assert.match(content, /https:\/\/save\.example\/my\/token-for-\+15552223333/);
+  assert.doesNotMatch(content, /1\. Aquarela/);
+  assert.doesNotMatch(content, /2\. Cafe Leon Dore/);
 });
 
 test("webhook flow: explicit list intent is deterministic even when Gemini is available", async () => {
@@ -333,7 +337,7 @@ test("webhook flow: explicit list intent is deterministic even when Gemini is av
   );
 
   const content = client.calls[0]?.content ?? "";
-  assert.match(content, /Cafe Leon Dore/);
+  assert.match(content, /1 saved place/);
   assert.doesNotMatch(content, /Model should not answer/);
   assert.match(content, /https:\/\/save\.example\/my\/private/);
 });
@@ -347,6 +351,8 @@ test("renderMySavesPage escapes saved content and renders counts", () => {
   });
 
   assert.match(html, /My SAV-E/);
+  assert.match(html, /<meta property="og:title" content="My SAV-E: 1 place, 1 visit, 1 review"/);
+  assert.match(html, /Open your private SAV-E cards/);
   assert.match(html, /<strong>1<\/strong><span>places<\/span>/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>alert/);
@@ -519,6 +525,27 @@ test("decideRecall: a follow-up about a recommended place is grounded in its dat
   });
   assert.equal(sawRecent, true);
   assert.equal(decision?.kind, "reply");
+});
+
+test("webhook flow: price follow-up gives a short honest reply without dumping the address", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation } = fakeConversation();
+  conversation.setRecommended("+15558880001", {
+    name: "Cafe 86 - Tustin",
+    rating: 4.4,
+    address: "2423 Park Ave, Tustin, CA 92782, USA",
+  });
+
+  await processSendblueInbound(
+    { from_number: "+15558880001", content: "How much is the price" },
+    { client, store, conversation },
+  );
+
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /don't have menu prices/i);
+  assert.match(out, /4\.4★/);
+  assert.doesNotMatch(out, /2423 Park Ave/);
 });
 
 // Minimal in-memory ConversationStore for webhook tests.

@@ -803,9 +803,24 @@ export function formatPlaceList(places: SavedPlace[], chinese: boolean, cap = 15
   return body;
 }
 
-export function appendMySavesLink(reply: string, url: string | null | undefined, chinese: boolean): string {
-  if (!url) return reply;
-  return chinese ? `${reply}\n\n打開你的 SAV-E：${url}` : `${reply}\n\nOpen your SAV-E: ${url}`;
+function savedPlaceCountLabel(count: number, chinese: boolean): string {
+  if (chinese) return `${count} 個已存地點`;
+  return `${count} saved place${count === 1 ? "" : "s"}`;
+}
+
+function formatMySavesLinkHandoff(
+  places: SavedPlace[],
+  area: string | undefined,
+  url: string,
+  chinese: boolean,
+): string {
+  if (places.length === 0) return emptyListReply;
+  if (chinese) {
+    const scope = area ? `（${area}）` : "";
+    return `找到 ${savedPlaceCountLabel(places.length, true)}${scope}。\n打開 My SAV-E 看卡片和地圖：\n${url}`;
+  }
+  const scope = area ? ` in ${area}` : "";
+  return `I found ${savedPlaceCountLabel(places.length, false)}${scope}.\nOpen My SAV-E to browse cards and map:\n${url}`;
 }
 
 /**
@@ -881,6 +896,7 @@ export type DiscoveredPlace = {
   name: string;
   address?: string;
   rating?: number;
+  priceRange?: string;
   category?: string;
   mapsUri?: string;
   lat?: number;
@@ -917,7 +933,7 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       "content-type": "application/json",
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask":
-        "places.displayName,places.formattedAddress,places.rating,places.primaryType,places.googleMapsUri,places.location",
+        "places.displayName,places.formattedAddress,places.rating,places.priceLevel,places.primaryType,places.googleMapsUri,places.location",
     },
     body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
   });
@@ -927,6 +943,7 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       displayName?: { text?: string };
       formattedAddress?: string;
       rating?: number;
+      priceLevel?: string | number;
       primaryType?: string;
       googleMapsUri?: string;
       location?: { latitude?: number; longitude?: number };
@@ -937,12 +954,25 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       name: p.displayName?.text ?? "",
       address: p.formattedAddress,
       rating: typeof p.rating === "number" ? p.rating : undefined,
+      priceRange: googlePriceLevelToSymbol(p.priceLevel),
       category: p.primaryType?.replace(/_/g, " "),
       mapsUri: p.googleMapsUri,
       lat: typeof p.location?.latitude === "number" ? p.location.latitude : undefined,
       lng: typeof p.location?.longitude === "number" ? p.location.longitude : undefined,
     }))
     .filter((p) => p.name.length > 0);
+}
+
+function googlePriceLevelToSymbol(priceLevel: string | number | undefined): string | undefined {
+  if (typeof priceLevel === "number" && priceLevel > 0) return "$".repeat(Math.min(Math.round(priceLevel), 4));
+  if (typeof priceLevel !== "string") return undefined;
+  const normalized = priceLevel.trim().toUpperCase();
+  if (normalized === "PRICE_LEVEL_FREE") return "free";
+  if (normalized === "PRICE_LEVEL_INEXPENSIVE") return "$";
+  if (normalized === "PRICE_LEVEL_MODERATE") return "$$";
+  if (normalized === "PRICE_LEVEL_EXPENSIVE") return "$$$";
+  if (normalized === "PRICE_LEVEL_VERY_EXPENSIVE") return "$$$$";
+  return undefined;
 }
 
 /** Google reviews + editorial summary for one place — evidence for "what to order". */
@@ -1239,6 +1269,7 @@ export async function decideRecall(
   const placeFacts = (p: DiscoveredPlace): string => {
     const bits = [p.name];
     if (typeof p.rating === "number") bits.push(`${p.rating}★`);
+    if (p.priceRange) bits.push(p.priceRange);
     if (p.address) bits.push(p.address);
     return bits.join(" — ");
   };
@@ -1414,7 +1445,7 @@ export async function phraseRecommendations(
   const list = top
     .map(
       (p, i) =>
-        `${i + 1}. ${p.name}${p.rating ? ` (${p.rating}★)` : ""}${p.address ? ` — ${p.address}` : ""}${p.category ? ` [${p.category}]` : ""}`,
+        `${i + 1}. ${p.name}${p.rating ? ` (${p.rating}★)` : ""}${p.priceRange ? ` ${p.priceRange}` : ""}${p.address ? ` — ${p.address}` : ""}${p.category ? ` [${p.category}]` : ""}`,
     )
     .join("\n");
   const history =
@@ -1468,9 +1499,34 @@ export function pickBestPlace(
  */
 export function formatPlaceCard(place: DiscoveredPlace, chinese: boolean): string {
   const lines = [place.name + (place.rating ? ` — ${place.rating}★` : "")];
+  if (place.priceRange) lines[0] += ` — ${place.priceRange}`;
   if (place.address) lines.push(`📍 ${place.address}`);
   lines.push(place.mapsUri ?? appleMapsUrl(place));
   return lines.join("\n");
+}
+
+function isPriceIntent(text: string): boolean {
+  return /\b(how much|price|prices|pricing|cost|costs|expensive|cheap)\b|多少錢|多少钱|價格|价钱|價錢|價位|貴嗎|贵吗/i.test(text);
+}
+
+function formatPriceReply(place: DiscoveredPlace, chinese: boolean): string {
+  const known = [
+    typeof place.rating === "number" ? `${place.rating}★` : "",
+    place.address ? (chinese ? "地址/card" : "address/card") : "",
+  ].filter(Boolean);
+  if (place.priceRange) {
+    return chinese
+      ? `${place.name} 的大概價位是 ${place.priceRange}。\n我還沒有可靠的單品菜單價格。`
+      : `${place.name} looks like ${place.priceRange}.\nI don't have reliable menu item prices yet.`;
+  }
+  const knownLine = known.length
+    ? chinese
+      ? `我目前只知道：${known.join("、")}。`
+      : `I only have: ${known.join(", ")}.`
+    : "";
+  return chinese
+    ? `我還沒有 ${place.name} 的可靠菜單價格。\n${knownLine}`.trim()
+    : `I don't have menu prices for ${place.name} yet.\n${knownLine}`.trim();
 }
 
 /**
@@ -1679,8 +1735,9 @@ async function keywordRecallReply(
       places = [];
     }
     console.log(`[sendblue] list intent for ${from} area=${area ?? "(any)"} count=${places.length}`);
-    const reply = area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
-    return appendMySavesLink(reply, mySavesUrl?.(from), chinese);
+    const url = mySavesUrl?.(from);
+    if (url) return formatMySavesLinkHandoff(places, area, url, chinese);
+    return area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
   }
 
   console.log("[sendblue] no URL / no recommend / no list intent → hint");
@@ -1841,6 +1898,11 @@ export async function processSendblueInbound(
       await deps.client.sendMessage(from, reply);
       return { replied: true, reply };
     }
+    if (!url && isPriceIntent(text) && convo?.lastRecommended) {
+      reply = formatPriceReply(convo.lastRecommended, chinese);
+      await deps.client.sendMessage(from, reply);
+      return { replied: true, reply };
+    }
     if (deps.geocode && !url && isLocationIntent(text)) {
       // Location set: "I'm in X" → geocode → remember per number for nearby orders.
       const loc = await deps.geocode(parseLocationQuery(text));
@@ -1925,6 +1987,7 @@ export async function processSendblueInbound(
                 name: venue.name,
                 address: hit.address ?? venue.area,
                 rating: hit.rating,
+                priceRange: hit.priceRange,
                 category: venue.category ?? hit.category,
               };
               console.log(`[sendblue] save enrich → "${hit.name}" ${hit.address ?? "(no addr)"}`);
