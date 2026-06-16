@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomBytes, createHash } from "node:crypto";
+import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
 import pg, { type PoolClient } from "pg";
 import { createGuestSession, userIdFromGuestSessionToken } from "./guestSessions.js";
@@ -629,6 +629,13 @@ createServer(async (request, response) => {
       return await handleSendblueWebhook(request, response);
     }
 
+    // Tokenized "my SAV-E" read: a signed link lets a phone see ITS OWN saved
+    // places / verified visits / reviews — no Privy login (the number IS the
+    // account, see auto-account). The data layer a web view / app consumes.
+    if (isV0 && request.method === "GET" && resource === "my" && id) {
+      return await handleMySaves(response, id);
+    }
+
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
@@ -741,6 +748,56 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
 
 function normalizeChannelUserId(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// Signed private link for a phone's own SAV-E data. A stable secret keeps the
+// link valid across deploys (set SAVE_MY_SAVES_SECRET on Railway).
+const mySavesSecret = process.env.SAVE_MY_SAVES_SECRET?.trim() || guestSessionSecret;
+
+export function signMyToken(phone: string): string {
+  const mac = createHmac("sha256", mySavesSecret).update(phone).digest("base64url");
+  return `${Buffer.from(phone).toString("base64url")}.${mac}`;
+}
+
+function verifyMyToken(token: string): string | null {
+  const [b64, mac] = token.split(".");
+  if (!b64 || !mac) return null;
+  let phone: string;
+  try {
+    phone = Buffer.from(b64, "base64url").toString("utf8");
+  } catch {
+    return null;
+  }
+  const expected = createHmac("sha256", mySavesSecret).update(phone).digest("base64url");
+  const a = Buffer.from(mac);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  return phone;
+}
+
+/**
+ * Read-only "my SAV-E" payload for a tokenized phone link: the account's saved
+ * places + verified visits + reviews. This is the unified data layer a web view
+ * or the app reads (step 3) — everything is keyed by the phone (= the account).
+ */
+async function handleMySaves(response: ServerResponse, token: string): Promise<void> {
+  const phone = verifyMyToken(token);
+  if (!phone) return sendJson(response, { error: "Invalid or expired link" }, 403);
+  const [places, visits, reviews] = await Promise.all([
+    sendbluePlaceStore.list(phone, 100).catch(() => []),
+    sendblueReceiptStore.list(phone, 100).catch(() => []),
+    sendblueReviewStore.list(phone, 100).catch(() => []),
+  ]);
+  return sendJson(
+    response,
+    {
+      places,
+      visits,
+      reviews,
+      counts: { places: places.length, visits: visits.length, reviews: reviews.length },
+    },
+    200,
+  );
 }
 
 async function handleUserChannels(
