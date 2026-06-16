@@ -75,7 +75,7 @@ function writeShareRouteFallbacks() {
   const indexPath = path.join(distRoot, "index.html");
   if (!fs.existsSync(indexPath)) return;
 
-  for (const route of ["p", "trip", "list", "r", "u"]) {
+  for (const route of ["p", "trip", "list", "r", "u", "my"]) {
     const routeDir = path.join(distRoot, route);
     fs.mkdirSync(routeDir, { recursive: true });
     fs.copyFileSync(indexPath, path.join(routeDir, "index.html"));
@@ -167,6 +167,10 @@ function buildEnabledAssociation(teamId) {
             {
               "/": "/u/*",
               comment: "SAV-E referral profile preview links",
+            },
+            {
+              "/": "/my/*",
+              comment: "Private My SAV-E token links",
             },
           ],
         },

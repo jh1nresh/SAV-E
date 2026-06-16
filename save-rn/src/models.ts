@@ -68,6 +68,39 @@ export type SharedPlaceData = {
   note?: string | null;
 };
 
+export type MySavesPayload = {
+  places: MySavedPlace[];
+  visits: MyVerifiedVisit[];
+  reviews: MyStoredReview[];
+  counts: {
+    places: number;
+    visits: number;
+    reviews: number;
+  };
+};
+
+export type MySavedPlace = {
+  name: string;
+  area?: string;
+  category?: string;
+  sourceUrl?: string;
+  createdAt?: string;
+};
+
+export type MyVerifiedVisit = {
+  merchant: string;
+  total?: string;
+  visitDate?: string;
+  createdAt?: string;
+};
+
+export type MyStoredReview = {
+  merchant: string;
+  rating?: number;
+  text?: string;
+  createdAt?: string;
+};
+
 export type TripStop = {
   id: string;
   placeId?: string | null;

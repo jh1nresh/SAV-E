@@ -1,4 +1,4 @@
-import { Place, SharedPlaceData, TripRecord } from "./models";
+import { MySavesPayload, Place, SharedPlaceData, TripRecord } from "./models";
 
 const apiBaseUrl =
   normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_API_URL) ??
@@ -238,6 +238,15 @@ export async function resolveSharedPlaceLink(code: string): Promise<SharedPlaceD
   }
   const link = (await response.json()) as SharedPlaceLink;
   return link.payload;
+}
+
+export async function resolveMySaves(token: string): Promise<MySavesPayload> {
+  const response = await fetch(`${requireApiBaseUrl()}/v0/my/${encodeURIComponent(token)}`);
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `My SAV-E link failed: ${response.status}`);
+  }
+  return (await response.json()) as MySavesPayload;
 }
 
 function mapTrip(trip: BackendTrip): TripRecord {

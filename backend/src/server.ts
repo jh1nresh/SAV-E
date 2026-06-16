@@ -816,8 +816,7 @@ async function handleMySavesPage(response: ServerResponse, token: string): Promi
 function mySavesLink(phone: string): string {
   const configuredBase =
     process.env.SAVE_MY_SAVES_BASE_URL?.trim() ||
-    process.env.SAVE_API_URL?.trim() ||
-    "https://wanderly-api-production.up.railway.app";
+    "https://sav-e-app.vercel.app";
   return `${configuredBase.replace(/\/+$/, "")}/my/${signMyToken(phone)}`;
 }
 

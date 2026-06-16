@@ -154,6 +154,119 @@ private struct SharedPlaceLinkResponse: Codable {
     let payload: SharedPlaceData
 }
 
+struct SharedMySavesData: Codable {
+    let places: [SavedPlace]
+    let visits: [VerifiedVisit]
+    let reviews: [StoredReview]
+    let counts: Counts
+
+    struct SavedPlace: Codable, Identifiable {
+        let name: String
+        let area: String?
+        let category: String?
+        let sourceUrl: String?
+        let createdAt: String?
+
+        var id: String {
+            [name, area ?? "", sourceUrl ?? ""].joined(separator: "|")
+        }
+
+        var mapURL: URL? {
+            let query = [name, area].compactMap { $0 }.joined(separator: " ")
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            return URL(string: "https://maps.apple.com/?q=\(query.urlQueryEncoded)")
+        }
+
+        var safeSourceURL: URL? {
+            guard let sourceUrl,
+                  let url = URL(string: sourceUrl),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+                return nil
+            }
+            return url
+        }
+    }
+
+    struct VerifiedVisit: Codable, Identifiable {
+        let merchant: String
+        let total: String?
+        let visitDate: String?
+        let createdAt: String?
+
+        var id: String {
+            [merchant, total ?? "", visitDate ?? "", createdAt ?? ""].joined(separator: "|")
+        }
+    }
+
+    struct StoredReview: Codable, Identifiable {
+        let merchant: String
+        let rating: Int?
+        let text: String?
+        let createdAt: String?
+
+        var id: String {
+            [merchant, rating.map(String.init) ?? "", text ?? "", createdAt ?? ""].joined(separator: "|")
+        }
+    }
+
+    struct Counts: Codable {
+        let places: Int
+        let visits: Int
+        let reviews: Int
+    }
+
+    static func isMySavesLink(_ url: URL) -> Bool {
+        if url.scheme == "wanderly", url.host == "my" {
+            return token(from: url) != nil
+        }
+        guard url.scheme == "https",
+              ["sav-e-app.vercel.app", "sav-e.app", "wanderly.app", "wanderly-api-production.up.railway.app"].contains(url.host ?? "") else {
+            return false
+        }
+        return token(from: url) != nil
+    }
+
+    static func token(from url: URL) -> String? {
+        let pathParts = url.path.split(separator: "/").map(String.init)
+        if let routeIndex = pathParts.firstIndex(of: "my"),
+           pathParts.indices.contains(routeIndex + 1) {
+            return pathParts[routeIndex + 1]
+        }
+        if url.scheme == "wanderly", url.host == "my" {
+            return pathParts.first
+        }
+        return nil
+    }
+
+    static func resolve(from url: URL, apiBaseURL: String? = nil) async -> SharedMySavesData? {
+        guard let token = token(from: url),
+              let requestURL = URL(string: "\(resolvedAPIBaseURL(for: url, override: apiBaseURL))/v0/my/\(token)") else {
+            return nil
+        }
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: requestURL)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(SharedMySavesData.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func resolvedAPIBaseURL(for url: URL, override: String?) -> String {
+        if let override, !override.isEmpty {
+            return SAVEProductionConfig.removingTrailingSlashes(from: override)
+        }
+        if url.host?.hasSuffix("up.railway.app") == true,
+           let scheme = url.scheme,
+           let host = url.host {
+            return "\(scheme)://\(host)"
+        }
+        return SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"])
+            ?? SAVEProductionConfig.defaultAPIBaseURL
+    }
+}
+
 struct SharedListPayload: Codable {
     var list: SharedListData
     var role: String
@@ -180,6 +293,12 @@ struct SharedListPayload: Codable {
         return url.scheme == "https" &&
             ["sav-e-app.vercel.app", "sav-e.app", "wanderly.app"].contains(url.host ?? "") &&
             url.path == "/list"
+    }
+}
+
+private extension String {
+    var urlQueryEncoded: String {
+        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
     }
 }
 

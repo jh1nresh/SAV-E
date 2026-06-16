@@ -15,12 +15,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { createGuestSession, createPlace, createTrip, fetchPlaces, fetchTrips, GuestSession, hasApiConfig, SaveAuth } from "./src/api";
+import { createGuestSession, createPlace, createTrip, fetchPlaces, fetchTrips, GuestSession, hasApiConfig, resolveMySaves, SaveAuth } from "./src/api";
 import { parseSharedLink } from "./src/importLink";
 import {
   categoryLabel,
   Place,
   PlaceCategory,
+  MySavesPayload,
   SharedPlaceData,
   SharedTripData,
   TripRecord,
@@ -34,7 +35,9 @@ import {
   buildTripLink,
   decodeTripLink,
   isSavePlaceLink,
+  isSaveMySavesLink,
   isSaveTripLink,
+  mySavesToken,
   sharedPlaceToBookmark,
 } from "./src/sharedTrip";
 
@@ -82,6 +85,7 @@ function SaveApp() {
   const [pendingImport, setPendingImport] = useState<Place | null>(null);
   const [incomingPlace, setIncomingPlace] = useState<SharedPlaceData | null>(null);
   const [incomingTrip, setIncomingTrip] = useState<SharedTripData | null>(null);
+  const [incomingMySaves, setIncomingMySaves] = useState<MySavesPayload | null>(null);
   const [guestSession, setGuestSession] = useState<GuestSession | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -132,6 +136,23 @@ function SaveApp() {
   }
 
   function applyIncomingShareLink(url: string) {
+    if (isSaveMySavesLink(url)) {
+      const token = mySavesToken(url);
+      if (!token) return;
+      setIncomingMySaves(null);
+      setActiveTab("share");
+      setImportMessage("Opening My SAV-E...");
+      void resolveMySaves(token)
+        .then((payload) => {
+          setIncomingMySaves(payload);
+          setImportMessage(`Opened My SAV-E: ${payload.counts.places} saved places`);
+        })
+        .catch((error) => {
+          setImportMessage(error instanceof Error ? `My SAV-E link failed: ${error.message}` : "My SAV-E link failed.");
+        });
+      return;
+    }
+
     if (isSavePlaceLink(url)) {
       const place = decodePlaceLink(url);
       if (!place) {
@@ -650,7 +671,16 @@ function SaveApp() {
 
           {activeTab === "share" ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{incomingPlace ? "Shared place" : "Tesla handoff"}</Text>
+              <Text style={styles.sectionTitle}>
+                {incomingMySaves ? "My SAV-E" : incomingPlace ? "Shared place" : "Tesla handoff"}
+              </Text>
+
+              {incomingMySaves ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Opened My SAV-E</Text>
+                  <DecodedMySaves payload={incomingMySaves} />
+                </View>
+              ) : null}
 
               {incomingPlace ? (
                 <View style={styles.card}>
@@ -833,6 +863,44 @@ function DecodedPlace({ place }: { place: SharedPlaceData }) {
       {place.hours ? <Text style={styles.stopMeta}>Hours: {place.hours}</Text> : null}
       {place.sourceURL ? <Text style={styles.stopMeta}>Source: {place.sourceURL}</Text> : null}
       {place.note ? <Text style={styles.placeNote}>{place.note}</Text> : null}
+    </View>
+  );
+}
+
+function DecodedMySaves({ payload }: { payload: MySavesPayload }) {
+  return (
+    <View>
+      <Text style={styles.previewHeadline}>
+        {payload.counts.places} places · {payload.counts.visits} visits · {payload.counts.reviews} reviews
+      </Text>
+      <Text style={styles.helperText}>Private to the phone account that created this SAV-E link.</Text>
+
+      {payload.places.length > 0 ? (
+        <View style={styles.previewList}>
+          {payload.places.slice(0, 12).map((place, index) => (
+            <View key={`${place.name}-${place.area ?? ""}-${index}`} style={styles.previewStop}>
+              <Text style={styles.previewStopTitle}>
+                {index + 1}. {place.name}
+              </Text>
+              <Text style={styles.previewStopMeta}>{place.area || "No area saved"}</Text>
+              {place.category ? <Text style={styles.previewStopMeta}>{place.category}</Text> : null}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyText}>No saved places yet.</Text>
+      )}
+
+      {payload.visits.length > 0 ? (
+        <Text style={styles.stopMeta}>
+          Recent visits: {payload.visits.slice(0, 3).map((visit) => visit.merchant).join(", ")}
+        </Text>
+      ) : null}
+      {payload.reviews.length > 0 ? (
+        <Text style={styles.stopMeta}>
+          Reviews: {payload.reviews.slice(0, 3).map((review) => review.merchant).join(", ")}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -1088,6 +1156,7 @@ const styles = StyleSheet.create({
   sharedPlaceCard: { gap: 6 },
   previewHeadline: { fontSize: 18, fontWeight: "900", color: palette.ink, marginBottom: 4 },
   previewSubhead: { fontSize: 13, color: palette.muted, marginBottom: 12 },
+  previewList: { marginTop: 10 },
   previewStop: { paddingVertical: 10, borderTopWidth: 2, borderTopColor: palette.border },
   previewStopTitle: { fontSize: 15, fontWeight: "800", color: palette.ink, marginBottom: 4 },
   previewStopMeta: { fontSize: 12, lineHeight: 18, color: palette.muted },

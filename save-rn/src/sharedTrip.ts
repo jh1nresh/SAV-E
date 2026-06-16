@@ -76,6 +76,25 @@ export function isSaveTripLink(value: string): boolean {
   }
 }
 
+export function isSaveMySavesLink(value: string): boolean {
+  return Boolean(mySavesToken(value));
+}
+
+export function mySavesToken(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      (!acceptedShareHosts.has(url.hostname) && !url.hostname.endsWith("up.railway.app"))
+    ) {
+      return null;
+    }
+    return routeToken(url, "my");
+  } catch {
+    return null;
+  }
+}
+
 export function decodePlaceLink(link: string): SharedPlaceData | null {
   try {
     const url = new URL(link);

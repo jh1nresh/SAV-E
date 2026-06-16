@@ -183,7 +183,13 @@ https://sav-e-app.vercel.app/r/<code>
 https://sav-e-app.vercel.app/u/<handle>?ref=<code>
 ```
 
-The App Clip target can preview place payloads with photo, rating, hours, address, source, and save/open actions. Full trip import, list previews, and referral previews are still later surfaces. The full app handles `https://sav-e-app.vercel.app/p/...` and `https://sav-e-app.vercel.app/trip/...` links when installed. Legacy `https://wanderly.app/trip?d=...` links remain readable during migration.
+Private My SAV-E links use this shape:
+
+```text
+https://sav-e-app.vercel.app/my/<signedToken>
+```
+
+The App Clip target can preview place payloads with photo, rating, hours, address, source, and save/open actions. It can also preview private My SAV-E links as native saved-place cards, verified visits, and receipt-gated reviews. Full trip import, list previews, and referral previews are still later surfaces. The full app handles `https://sav-e-app.vercel.app/p/...` and `https://sav-e-app.vercel.app/trip/...` links when installed. Legacy `https://wanderly.app/trip?d=...` links remain readable during migration.
 
 Before this works for friends without the full app installed:
 
@@ -193,8 +199,8 @@ Before this works for friends without the full app installed:
 - keep `appclips:sav-e-app.vercel.app` and `com.apple.developer.associated-appclip-app-identifiers` in the main app entitlement
 - set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
 - keep `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` configured for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
-- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/trip*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
-- create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, and `https://sav-e-app.vercel.app/u`
+- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/trip*`, `https://sav-e-app.vercel.app/my*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
+- create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, `https://sav-e-app.vercel.app/u`, and `https://sav-e-app.vercel.app/my`
 - wait for Apple's associated-domain CDN to pick up the AASA file
 
 Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip. If `APPLE_TEAM_ID` is missing, the web build writes a disabled AASA placeholder with no app IDs so Vercel does not serve the SPA shell as Apple association data.

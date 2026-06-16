@@ -7,6 +7,8 @@ struct ClipContentView: View {
     @State private var tripData: SharedTripData?
     @State private var listData: SharedListData?
     @State private var referralData: SharedReferralProfile?
+    @State private var mySavesData: SharedMySavesData?
+    @State private var mySavesSourceURL: URL?
     @State private var isLoading = true
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
@@ -18,6 +20,8 @@ struct ClipContentView: View {
             Group {
                 if isLoading {
                     loadingView
+                } else if let mySaves = mySavesData {
+                    mySavesContentView(mySaves)
                 } else if let referral = referralData {
                     referralContentView(referral)
                 } else if let list = listData {
@@ -42,10 +46,254 @@ struct ClipContentView: View {
         }
         .task {
             try? await Task.sleep(for: .seconds(1))
-            if placeData == nil && tripData == nil && listData == nil && referralData == nil {
+            if placeData == nil && tripData == nil && listData == nil && referralData == nil && mySavesData == nil {
                 isLoading = false
             }
         }
+    }
+
+    // MARK: - My SAV-E Content
+
+    private func mySavesContentView(_ payload: SharedMySavesData) -> some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("My SAV-E")
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundColor(Color.saveInk)
+
+                    Text("Your texted places, verified visits, and receipt-gated reviews.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        statPill(value: payload.counts.places, label: "places")
+                        statPill(value: payload.counts.visits, label: "visits")
+                        statPill(value: payload.counts.reviews, label: "reviews")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+                .background(Color.savePaper)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                )
+                .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                .padding(.horizontal)
+
+                if payload.places.isEmpty {
+                    emptyMySavesSection
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeading("Saved places")
+                        ForEach(payload.places) { place in
+                            mySavedPlaceRow(place)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                if !payload.visits.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeading("Verified visits")
+                        ForEach(payload.visits) { visit in
+                            myVisitRow(visit)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                if !payload.reviews.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        sectionHeading("Reviews")
+                        ForEach(payload.reviews) { review in
+                            myReviewRow(review)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                Button(action: openInFullApp) {
+                    Text("Open in SAV-E")
+                        .font(.headline)
+                        .foregroundColor(Color.saveInk)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.saveHoney)
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        )
+                        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 32)
+            }
+            .padding(.top, 16)
+        }
+    }
+
+    private func statPill(value: Int, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.title3.weight(.bold))
+                .foregroundColor(Color.saveInk)
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color.saveCream)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.5)
+        )
+    }
+
+    private var emptyMySavesSection: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "tray")
+                .font(.title2)
+                .foregroundColor(Color.saveCoral)
+            Text("No saved places yet")
+                .font(.headline)
+                .foregroundColor(Color.saveInk)
+            Text("Text SAV-E a place link to start building your private map.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(18)
+        .background(Color.savePaper)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .padding(.horizontal)
+    }
+
+    private func sectionHeading(_ title: String) -> some View {
+        Text(title)
+            .font(.headline.weight(.bold))
+            .foregroundColor(Color.saveInk)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func mySavedPlaceRow(_ place: SharedMySavesData.SavedPlace) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(Color.saveCoral)
+                    .frame(width: 34, height: 34)
+                    .background(Color.saveCream)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(Color.saveInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let area = place.area, !area.isEmpty {
+                        Text(area)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if let category = place.category, !category.isEmpty {
+                        Text(category)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(Color.saveCoral)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 8) {
+                if let mapURL = place.mapURL {
+                    Button {
+                        UIApplication.shared.open(mapURL)
+                    } label: {
+                        Label("Map", systemImage: "map")
+                    }
+                    .buttonStyle(MySavesActionButtonStyle())
+                }
+                if let sourceURL = place.safeSourceURL {
+                    Button {
+                        UIApplication.shared.open(sourceURL)
+                    } label: {
+                        Label("Source", systemImage: "link")
+                    }
+                    .buttonStyle(MySavesActionButtonStyle())
+                }
+            }
+        }
+        .padding(14)
+        .background(Color.savePaper)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
+        .shadow(color: Color.saveNotebookLine.opacity(0.16), radius: 0, x: 3, y: 3)
+    }
+
+    private func myVisitRow(_ visit: SharedMySavesData.VerifiedVisit) -> some View {
+        compactMySavesRow(
+            icon: "checkmark.seal.fill",
+            title: visit.merchant,
+            subtitle: [visit.total, visit.visitDate].compactMap { $0 }.joined(separator: " · "),
+            accent: Color.saveMint
+        )
+    }
+
+    private func myReviewRow(_ review: SharedMySavesData.StoredReview) -> some View {
+        let rating = review.rating.map { "\($0)★" }
+        let subtitle = [rating, review.text].compactMap { $0 }.joined(separator: " · ")
+        return compactMySavesRow(
+            icon: "star.fill",
+            title: review.merchant,
+            subtitle: subtitle,
+            accent: Color.saveHoney
+        )
+    }
+
+    private func compactMySavesRow(icon: String, title: String, subtitle: String, accent: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundColor(Color.saveInk)
+                .frame(width: 34, height: 34)
+                .background(accent)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(Color.saveInk)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.savePaper)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveNotebookLine, lineWidth: 2)
+        )
     }
 
     // MARK: - Place Content
@@ -484,6 +732,11 @@ struct ClipContentView: View {
 
         if let referral = SharedReferralProfile.from(url: url) {
             referralData = referral
+            mySavesData = nil
+            mySavesSourceURL = nil
+            placeData = nil
+            tripData = nil
+            listData = nil
             updateCamera(for: referral.featuredPlaces.map {
                 SharedTripData.SharedStop(id: $0.id, name: $0.name, address: $0.address, lat: $0.lat, lng: $0.lng, time: nil, note: $0.signal)
             })
@@ -494,19 +747,42 @@ struct ClipContentView: View {
         if SharedListPayload.isListLink(url) {
             if let payload = SharedListPayload.from(url: url) {
                 listData = payload.list
+                mySavesData = nil
+                mySavesSourceURL = nil
                 placeData = nil
                 tripData = nil
+                referralData = nil
                 updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note) })
             }
             isLoading = false
             return
         }
 
+        if SharedMySavesData.isMySavesLink(url) {
+            isLoading = true
+            Task {
+                let resolved = await SharedMySavesData.resolve(from: url)
+                await MainActor.run {
+                    mySavesData = resolved
+                    mySavesSourceURL = url
+                    placeData = nil
+                    tripData = nil
+                    listData = nil
+                    referralData = nil
+                    isLoading = false
+                }
+            }
+            return
+        }
+
         if isPlaceLink(url) {
             if let data = SharedPlaceData.from(url: url) {
                 placeData = data
+                mySavesData = nil
+                mySavesSourceURL = nil
                 tripData = nil
                 listData = nil
+                referralData = nil
                 updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
                 isLoading = false
                 return
@@ -517,8 +793,11 @@ struct ClipContentView: View {
                     await MainActor.run {
                         if let data = resolved {
                             placeData = data
+                            mySavesData = nil
+                            mySavesSourceURL = nil
                             tripData = nil
                             listData = nil
+                            referralData = nil
                             updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
                         }
                         isLoading = false
@@ -535,6 +814,8 @@ struct ClipContentView: View {
             tripData = nil
             listData = nil
             referralData = nil
+            mySavesData = nil
+            mySavesSourceURL = nil
             isLoading = false
             return
         }
@@ -543,6 +824,9 @@ struct ClipContentView: View {
             tripData = data
             placeData = nil
             listData = nil
+            referralData = nil
+            mySavesData = nil
+            mySavesSourceURL = nil
             updateCamera(for: data.stops)
         }
         // Invalid URL data → tripData stays nil → errorView shown
@@ -550,6 +834,7 @@ struct ClipContentView: View {
     }
 
     private var navigationTitle: String {
+        if mySavesData != nil { return "My SAV-E" }
         if referralData != nil { return "Referral Preview" }
         if listData != nil { return "List Preview" }
         if placeData != nil { return "Place Preview" }
@@ -652,7 +937,9 @@ struct ClipContentView: View {
 
     private func openInFullApp() {
         let url: URL?
-        if listData != nil {
+        if mySavesData != nil {
+            url = mySavesSourceURL
+        } else if listData != nil {
             url = currentListAppURL()
         } else if let referralData {
             url = referralData.fullAppURL()
@@ -740,5 +1027,21 @@ private struct ClipDottedBackground: View {
                 }
                 .allowsHitTesting(false)
             }
+    }
+}
+
+private struct MySavesActionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.bold))
+            .foregroundColor(Color.saveInk)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(configuration.isPressed ? Color.saveHoney.opacity(0.65) : Color.saveCream)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.5)
+            )
     }
 }
