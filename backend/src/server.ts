@@ -701,6 +701,7 @@ createServer(async (request, response) => {
 async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
   const normalized = normalizeChannelUserId(fromNumber);
   if (!normalized) return fromNumber;
+  // 1. Already bound to a SAV-E profile? Use it.
   const { rows } = await pool.query(
     `select profile_id
      from user_channels
@@ -711,7 +712,31 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
      limit 1`,
     [normalized],
   );
-  return typeof rows[0]?.profile_id === "string" ? rows[0].profile_id : fromNumber;
+  if (typeof rows[0]?.profile_id === "string") return rows[0].profile_id;
+
+  // 2. First time this number texts us → texting IS registration. Auto-create a
+  //    SAV-E profile + a VERIFIED iMessage binding (the message was delivered
+  //    FROM this number via Sendblue, so the channel is verified by possession).
+  //    The profile id is the normalized phone, so the memory key is UNCHANGED
+  //    (no re-keying of existing sendblue_* data) — we just give the number a
+  //    real account it previously lacked. Zero login. Merging into a pre-existing
+  //    app (Privy) account is a separate, opt-in step.
+  try {
+    await ensureProfile(normalized);
+    await pool.query(
+      `insert into user_channels (profile_id, channel, channel_user_id, phone_e164, verified_at, updated_at)
+       values ($1, 'imessage', $1, $1, now(), now())
+       on conflict (channel, channel_user_id)
+       do update set verified_at = coalesce(user_channels.verified_at, now()), updated_at = now()`,
+      [normalized],
+    );
+    console.log(`[sendblue] auto-created SAV-E account for inbound number`);
+  } catch (error) {
+    console.error("[sendblue] auto-create account failed", error);
+  }
+  // Memory key is the phone either way (profile id == phone), so existing memory
+  // is preserved even if the insert above raced or failed.
+  return normalized;
 }
 
 function normalizeChannelUserId(value: unknown): string {
