@@ -20,6 +20,7 @@ import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSea
 import {
   defaultGeminiText,
   defaultPlacesSearch,
+  defaultPlacesReviews,
   processSendblueInbound,
   PgBackedConversationStore,
   conversationStateTableSql,
@@ -808,6 +809,7 @@ async function handleSendblueWebhook(
         conversation: sendblueConversationStore,
         gemini: defaultGeminiText,
         placesSearch: defaultPlacesSearch,
+        placesReviews: defaultPlacesReviews,
         order: placeSllrOrder,
         setRecurring: setSllrRecurring,
         confirmRecurring: confirmSllrRecurring,

@@ -901,6 +901,45 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
     .filter((p) => p.name.length > 0);
 }
 
+/** Google reviews + editorial summary for one place — evidence for "what to order". */
+export type PlaceReviewEvidence = { name: string; editorial?: string; reviews: string[] };
+export type PlacesReviews = (query: string) => Promise<PlaceReviewEvidence | null>;
+
+/**
+ * Fetch a place's editorial summary + recent review text (the "what to order"
+ * evidence for a place the user did NOT save — e.g. one the bot just
+ * recommended). Reviews are a pricier Places SKU, so this is only called on an
+ * explicit "what should I order" question, never on every search.
+ */
+export async function defaultPlacesReviews(query: string): Promise<PlaceReviewEvidence | null> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) throw new Error("Missing GOOGLE_PLACES_API_KEY");
+  const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "places.displayName,places.editorialSummary,places.reviews",
+    },
+    body: JSON.stringify({ textQuery: query, maxResultCount: 1 }),
+  });
+  if (!response.ok) throw new Error(`Places reviews failed: ${response.status}`);
+  const body = (await response.json()) as {
+    places?: {
+      displayName?: { text?: string };
+      editorialSummary?: { text?: string };
+      reviews?: { text?: { text?: string }; originalText?: { text?: string } }[];
+    }[];
+  };
+  const p = body.places?.[0];
+  if (!p) return null;
+  const reviews = (p.reviews ?? [])
+    .map((r) => r.text?.text ?? r.originalText?.text ?? "")
+    .filter((t) => t.trim().length > 0)
+    .slice(0, 5);
+  return { name: p.displayName?.text ?? query, editorial: p.editorialSummary?.text, reviews };
+}
+
 /**
  * Per-phone conversation memory. Two things:
  *  - `pendingQuery`: when we ask "where are you?", the search we'll resume once
@@ -1422,6 +1461,37 @@ Return STRICT JSON only: {"reply": string|null}`;
   return reply.length > 0 ? reply : null;
 }
 
+/**
+ * "What should I order?" for a place the user did NOT save (e.g. one the bot just
+ * recommended) — grounded in Google reviews + editorial summary. Suggests only
+ * what reviewers actually mention; returns null when nothing clear surfaces.
+ */
+export async function suggestOrderFromReviews(
+  placeName: string,
+  evidence: PlaceReviewEvidence,
+  gemini: GeminiCaller = defaultGeminiText,
+  chinese = false,
+): Promise<string | null> {
+  const corpus = [evidence.editorial ?? "", ...evidence.reviews].filter(Boolean).join("\n").slice(0, 4000);
+  if (!corpus.trim()) return null;
+  const lang = chinese ? "繁體中文" : "the same language the user wrote in";
+  const prompt = `Based ONLY on these Google reviews / editorial summary for "${placeName}", what should the user order — the dishes or drinks reviewers actually rave about? If the text doesn't clearly name a specific item, return {"reply": null}. Never invent a menu item. 1-2 short sentences, ${lang}, frame it as "reviewers love…" / "people order…". At most one emoji.
+
+Reviews / summary:
+${corpus}
+
+Return STRICT JSON only: {"reply": string|null}`;
+  try {
+    const raw = await gemini(prompt);
+    const parsed = parseReplyJson(raw);
+    const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+    return reply.length > 0 ? reply : null;
+  } catch (error) {
+    console.error("[sendblue] suggestOrderFromReviews gemini error", error);
+    return null;
+  }
+}
+
 export async function phrasePlaceRec(
   place: DiscoveredPlace,
   area: string,
@@ -1493,6 +1563,8 @@ export type ProcessDeps = {
   gemini?: GeminiCaller;
   /** Google Places search for nearby DISCOVERY. Defaults to defaultPlacesSearch. */
   placesSearch?: PlacesSearch;
+  /** Google reviews/editorial for "what to order" at an unsaved place. Defaults to defaultPlacesReviews. */
+  placesReviews?: PlacesReviews;
   /** Conversation memory (pending location + last recommended places). Defaults to the module singleton. */
   conversation?: ConversationStore;
   /** Verified-visit memory: forwarded receipts → proof-of-visit. Omitted = receipts disabled. */
@@ -1875,30 +1947,38 @@ export async function processSendblueInbound(
             p.name.toLowerCase().includes(decision.placeName.toLowerCase()) ||
             decision.placeName.toLowerCase().includes(p.name.toLowerCase()),
         );
-        let caption = "";
-        if (match?.sourceUrl) {
+        let advice: string | null = null;
+        let source = "none";
+        // 1. If they SAVED this place, ground it in the post they saved it from
+        //    (the most personal signal — usually why they saved it).
+        if (match?.sourceUrl && deps.gemini) {
           try {
-            caption = (await fetchLinkCaption(match.sourceUrl, deps.fetchText)).caption;
+            const caption = (await fetchLinkCaption(match.sourceUrl, deps.fetchText)).caption;
+            if (caption) advice = await suggestOrderFromCaption(decision.placeName, caption, deps.gemini, chinese);
+            if (advice) source = "saved-post";
           } catch (fetchErr) {
             console.error("[sendblue] order_advice caption fetch error", fetchErr);
           }
         }
-        const advice = caption
-          ? await suggestOrderFromCaption(decision.placeName, caption, deps.gemini, chinese)
-          : null;
-        console.log(
-          `[sendblue] order_advice "${decision.placeName}" saved=${!!match} captionLen=${caption.length} hasAdvice=${!!advice}`,
-        );
+        // 2. Otherwise (e.g. a place the bot just RECOMMENDED, not saved) ground it
+        //    in Google reviews / editorial summary.
+        if (!advice && deps.gemini) {
+          const reviewsFn = deps.placesReviews ?? defaultPlacesReviews;
+          try {
+            const evidence = await reviewsFn(decision.placeName);
+            if (evidence) advice = await suggestOrderFromReviews(decision.placeName, evidence, deps.gemini, chinese);
+            if (advice) source = "reviews";
+          } catch (reviewsErr) {
+            console.error("[sendblue] order_advice reviews error", reviewsErr);
+          }
+        }
+        console.log(`[sendblue] order_advice "${decision.placeName}" source=${source} hasAdvice=${!!advice}`);
         if (advice) {
           reply = advice;
-        } else if (match) {
-          reply = chinese
-            ? `你存的那則貼文沒明講要點什麼 😅 ${match.name} 是${match.category ?? "個地點"},要不要我幫你查地址/card?`
-            : `The post you saved doesn't name a specific dish 😅 — ${match.name} is a ${match.category ?? "place"}. Want its address/card instead?`;
         } else {
           reply = chinese
-            ? `我還沒存過「${decision.placeName}」,所以沒有它的貼文可以參考 — 傳個連結給我?`
-            : `I haven't saved "${decision.placeName}" yet, so I have no post to go by — send me a link?`;
+            ? `${decision.placeName} 我目前找不到明確的招牌餐 😅 要不要我幫你查地址/card?`
+            : `I couldn't find a clear must-order for ${decision.placeName} 😅 — want its address/card instead?`;
         }
       } else if (decision.kind === "location") {
         // Pure location, nothing pending → store it and ask what they want,

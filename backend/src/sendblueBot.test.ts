@@ -25,6 +25,7 @@ import {
   formatPlaceCard,
   appleMapsUrl,
   suggestOrderFromCaption,
+  suggestOrderFromReviews,
   looksLikeReview,
   extractReceipt,
   type GeminiCaller,
@@ -1461,16 +1462,17 @@ test("webhook flow: 'what to order' grounds the answer in the saved post's capti
   assert.match(client.calls.at(-1)?.content ?? "", /抹茶甜點/); // grounded in their saved post
 });
 
-test("webhook flow: 'what to order' for an unsaved place admits it has no post to go by", async () => {
+test("webhook flow: 'what to order' for an unsaved place with no review source declines honestly", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore(); // nothing saved
   const gemini: GeminiCaller = async () => JSON.stringify({ order_advice: { placeName: "Some Diner" } });
 
+  // No placesReviews injected → reviews fallback is unavailable → honest decline.
   await processSendblueInbound(
     { from_number: "+15550000777", content: "what should I order at Some Diner" },
-    { client, store, gemini },
+    { client, store, gemini, placesReviews: async () => null },
   );
-  assert.match(client.calls.at(-1)?.content ?? "", /haven't saved|沒有它的貼文|沒存過/);
+  assert.match(client.calls.at(-1)?.content ?? "", /couldn't find a clear must-order|找不到明確的招牌餐/);
 });
 
 // --- Never recommend the user's own address back -------------------------
@@ -1585,4 +1587,54 @@ test("webhook flow: discovery recommends a few places with a history-based reaso
   assert.match(out, /Tea Lab/);
   assert.match(out, /Boba King/); // more than one place
   assert.match(recPrompt, /Mendocino Farms/); // visit history passed in for the reason
+});
+
+// --- "What to order" for an UNSAVED (recommended) place via Google reviews ---
+
+test("suggestOrderFromReviews recommends from reviews/editorial, null when no item named", async () => {
+  const yes: GeminiCaller = async () => JSON.stringify({ reply: "Reviewers love the silog plates 🍳" });
+  assert.match(
+    (await suggestOrderFromReviews("Cafe 86", { name: "Cafe 86", reviews: ["The silog is amazing", "great ube"] }, yes, false)) ?? "",
+    /silog/,
+  );
+  const no: GeminiCaller = async () => JSON.stringify({ reply: null });
+  assert.equal(await suggestOrderFromReviews("X", { name: "X", reviews: ["nice place"] }, no, false), null);
+  // No evidence at all → null without calling the model.
+  assert.equal(await suggestOrderFromReviews("X", { name: "X", reviews: [] }, async () => "x", false), null);
+});
+
+test("webhook flow: 'what to order' at a RECOMMENDED (unsaved) place uses Google reviews", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore(); // Cafe 86 is NOT saved
+  const placesReviews = async (): Promise<{ name: string; editorial?: string; reviews: string[] }> => ({
+    name: "Cafe 86 - Tustin",
+    editorial: "Filipino comfort food",
+    reviews: ["the tocilog is the move", "ube everything"],
+  });
+  const gemini: GeminiCaller = async (p) => {
+    if (p.includes("Google reviews")) return JSON.stringify({ reply: "Reviewers love the tocilog 🍳" });
+    return JSON.stringify({ order_advice: { placeName: "Cafe 86 - Tustin" } });
+  };
+
+  const result = await processSendblueInbound(
+    { from_number: "+15558881111", content: "what can I get at Cafe 86" },
+    { client, store, gemini, placesReviews },
+  );
+  assert.equal(result.replied, true);
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /tocilog/); // grounded in real Google reviews
+  assert.doesNotMatch(out, /haven't saved|no post to go by/); // no longer dead-ends
+});
+
+test("webhook flow: 'what to order' with no caption AND no review signal declines honestly", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const placesReviews = async () => ({ name: "Bland Spot", reviews: [] as string[] });
+  const gemini: GeminiCaller = async () => JSON.stringify({ order_advice: { placeName: "Bland Spot" } });
+
+  await processSendblueInbound(
+    { from_number: "+15558882222", content: "what should I order at Bland Spot" },
+    { client, store, gemini, placesReviews },
+  );
+  assert.match(client.calls.at(-1)?.content ?? "", /couldn't find a clear must-order|找不到明確的招牌餐/);
 });
