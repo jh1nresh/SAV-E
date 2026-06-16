@@ -29,6 +29,7 @@ import { issueBuyerSession, placeOrder, nearby, createRecurring, pendingRuns, co
 import { defaultGeocode, parseRecurringSchedule, recurringQuery } from "./sendblueBot.js";
 import type { StoredLocation } from "./sendbluePlaceStore.js";
 import { SllrBuyerStore, sllrBuyerTableSql, type NumberBuyer } from "./sllrBuyerStore.js";
+import { guardReply, claimLevelForOrderStatus } from "./claimGuard.js";
 import {
   PgSendbluePlaceStore,
   sendblueSavedPlacesTableSql,
@@ -164,7 +165,12 @@ async function placeSllrOrder(query: string, fromNumber: string, location?: Stor
   }
   try {
     const order = await placeOrder(merchantId, query, buyer, { customerLabel: "SAV-E" });
-    let reply = `✅ Ordered ${order.item.name} ($${order.item.subtotalUsd}) at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`;
+    // Post-check: the reply may not claim more than the order's real state.
+    let reply = guardReply(
+      `✅ Ordered ${order.item.name} ($${order.item.subtotalUsd}) at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`,
+      claimLevelForOrderStatus(order.status),
+      `✅ Order received at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`,
+    );
     // "SLL-R asks": offer to make this a recurring order.
     if (order.suggestRecurring?.eligible) {
       reply += `\n\n🔁 Want this regularly? Text e.g. "每天早上 8點 ${order.item.name}" and I'll ask before each one.`;
@@ -216,7 +222,11 @@ async function confirmSllrRecurring(fromNumber: string): Promise<string> {
     if (!runs.length) return "Nothing to confirm right now — no recurring order is pending.";
     const result = await confirmRecurringRun(buyer, runs[0].id);
     if (result.status === "charged" && result.order) {
-      return `✅ Done — ordered ${result.order.item.name} ($${result.order.item.subtotalUsd}). Receipt on the way.`;
+      return guardReply(
+        `✅ Done — ordered ${result.order.item.name} ($${result.order.item.subtotalUsd}). Receipt on the way.`,
+        claimLevelForOrderStatus(result.order.status),
+        `✅ Recurring order placed.`,
+      );
     }
     if (result.status === "no_card") return "I don't have a saved card yet — pay an order with the Stripe link once and I'll remember it.";
     if (result.status === "over_cap") return "That order is over your per-run limit, so I didn't charge it.";
