@@ -740,30 +740,30 @@ private struct SignInProofMark: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(Color.saveNotebookPage.opacity(0.82))
-                .frame(width: isCompactHeight ? 116 : 136, height: isCompactHeight ? 88 : 104)
+                .frame(width: isCompactHeight ? 140 : 166, height: isCompactHeight ? 106 : 126)
                 .rotationEffect(.degrees(-4))
 
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(Color.saveSky.opacity(0.22))
-                .frame(width: isCompactHeight ? 94 : 112, height: isCompactHeight ? 70 : 82)
-                .offset(x: 18, y: 10)
+                .frame(width: isCompactHeight ? 114 : 138, height: isCompactHeight ? 84 : 100)
+                .offset(x: 22, y: 12)
 
-            MemoMascotMark(size: isCompactHeight ? 78 : 92, framed: false)
-                .offset(y: isCompactHeight ? -2 : -4)
+            MemoMascotMark(size: isCompactHeight ? 98 : 118, framed: false)
+                .offset(y: isCompactHeight ? -3 : -5)
 
             Label(label, systemImage: "link")
-                .font(.caption2.weight(.black))
+                .font((isCompactHeight ? Font.caption2 : Font.caption).weight(.black))
                 .foregroundColor(.saveInk)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
+                .padding(.horizontal, isCompactHeight ? 9 : 11)
+                .padding(.vertical, isCompactHeight ? 6 : 7)
                 .background(Color.saveHoney.opacity(0.92))
                 .clipShape(Capsule())
                 .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.52), lineWidth: 1))
-                .offset(x: 48, y: 38)
+                .offset(x: isCompactHeight ? 54 : 66, y: isCompactHeight ? 44 : 52)
         }
-        .frame(height: isCompactHeight ? 104 : 122)
+        .frame(height: isCompactHeight ? 126 : 152)
         .accessibilityHidden(true)
     }
 }
