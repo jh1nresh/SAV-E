@@ -1108,7 +1108,9 @@ export type RecallDecision =
   // The user stated WHERE they are with no specific request — remember it.
   | { kind: "location"; area: string }
   // The user wants the address / map / "card" of a specific place — look it up.
-  | { kind: "details"; placeName: string };
+  | { kind: "details"; placeName: string }
+  // The user wants to know WHAT TO ORDER at a place — ground it in the saved post.
+  | { kind: "order_advice"; placeName: string };
 
 /**
  * Agentic router: hand the user's message + their saved places to the LLM and
@@ -1176,6 +1178,7 @@ export async function decideRecall(
 3. They want something nearby but gave NO location yet. Return {"search":{"query":"<2-4 word search>","area":null}} — a null area signals we still need their location. Do NOT phrase this as a reply.
 4. The message is ONLY a location (a bare address, city, neighborhood, or ZIP) with no request, AND there is no pending search to resume. Return {"location":{"area":"<that location>"}} — never just acknowledge it in a reply; this records where they are for next time.
 5. The user wants the ADDRESS, exact location, map link, or "card" of a SPECIFIC place — either named (e.g. "where is 菊乃井's address", "give me X's card") or referenced ("it", "他", "that place" = the place you recently recommended/discussed above). Return {"details":{"placeName":"<the place's name>"}}. Do NOT answer the address from memory — this triggers a real lookup. Resolve pronouns to the recommended/last place above.
+6. The user asks WHAT TO ORDER / what's good to eat / what's the must-try at a specific place ("要點什麼", "what should I order", "what's good here", "推薦什麼餐", "他們招牌是什麼"). Return {"order_advice":{"placeName":"<the place's name>"}}. Resolve pronouns to the recommended/last place above. Do NOT make up a dish — this triggers grounding in the post they saved.
 ${pendingBlock}${recentBlock}${
     lastArea
       ? `\nLAST KNOWN LOCATION: the user is already near "${lastArea}". For ANY nearby request — "recommend a boba place", "find me coffee", "something else", "anything closer", "what else" — REUSE this location: return {"search":{"query":"<what they want>","area":"${lastArea}"}}. Do NOT ask where they are again (do NOT return a null area) unless they give a new place or say they moved.\n`
@@ -1211,6 +1214,13 @@ Return STRICT JSON only, no markdown.`;
   if (parsed.details && typeof parsed.details.placeName === "string" && parsed.details.placeName.trim()) {
     return { kind: "details", placeName: parsed.details.placeName.trim() };
   }
+  if (
+    parsed.order_advice &&
+    typeof parsed.order_advice.placeName === "string" &&
+    parsed.order_advice.placeName.trim()
+  ) {
+    return { kind: "order_advice", placeName: parsed.order_advice.placeName.trim() };
+  }
   if (typeof parsed.reply === "string" && parsed.reply.trim()) {
     return { kind: "reply", reply: parsed.reply.trim() };
   }
@@ -1222,6 +1232,7 @@ type ParsedRecall = {
   search?: { query?: unknown; area?: unknown };
   location?: { area?: unknown };
   details?: { placeName?: unknown };
+  order_advice?: { placeName?: unknown };
 };
 
 function parseRecallJson(text: string): ParsedRecall | null {
@@ -1276,14 +1287,48 @@ export function pickBestPlace(
  * just because phrasing did.
  */
 /**
- * A compact place "card": name, rating, real address, and an Apple Maps link —
- * which iMessage renders as a rich native map card (vs a bare google.com link).
+ * A compact place "card": name, rating, real address, and a Google Maps link.
+ * Google is kept (over Apple Maps) because its iMessage preview surfaces the
+ * business PHOTO — telling the user what the place actually looks like — whereas
+ * an Apple Maps link only shows a map pin.
  */
 export function formatPlaceCard(place: DiscoveredPlace, chinese: boolean): string {
   const lines = [place.name + (place.rating ? ` — ${place.rating}★` : "")];
   if (place.address) lines.push(`📍 ${place.address}`);
-  lines.push(appleMapsUrl(place));
+  lines.push(place.mapsUri ?? appleMapsUrl(place));
   return lines.join("\n");
+}
+
+/**
+ * "What should I order?" answered from the social post the user SAVED this place
+ * from (the caption that made them save it usually names the standout dish).
+ * Grounded: only suggests what the caption actually mentions; returns null when
+ * the caption names no specific dish, so the caller can decline honestly.
+ */
+export async function suggestOrderFromCaption(
+  placeName: string,
+  caption: string,
+  gemini: GeminiCaller = defaultGeminiText,
+  chinese = false,
+): Promise<string | null> {
+  if (!caption.trim()) return null;
+  const lang = chinese ? "繁體中文" : "the same language the user wrote in";
+  const prompt = `The user saved "${placeName}" from this social post. Based ONLY on the post's caption, what is the standout dish / drink / item to order there? If the caption does NOT name a specific dish or item, return {"reply": null}. Never invent a menu item. 1-2 short sentences, ${lang}, frame it as "from the post you saved…". At most one emoji.
+
+Caption:
+${caption}
+
+Return STRICT JSON only: {"reply": string|null}`;
+  let raw: string;
+  try {
+    raw = await gemini(prompt);
+  } catch (error) {
+    console.error("[sendblue] suggestOrderFromCaption gemini error", error);
+    return null;
+  }
+  const parsed = parseReplyJson(raw);
+  const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+  return reply.length > 0 ? reply : null;
 }
 
 export async function phrasePlaceRec(
@@ -1731,6 +1776,38 @@ export async function processSendblueInbound(
           reply = chinese
             ? `我查不到「${decision.placeName}」的地點資料 — 名字再給我精確一點?`
             : `I couldn't find details for "${decision.placeName}" — got a more exact name?`;
+        }
+      } else if (decision.kind === "order_advice") {
+        // What to order: ground it in the post the user saved this place from.
+        const match = places.find(
+          (p) =>
+            p.name.toLowerCase().includes(decision.placeName.toLowerCase()) ||
+            decision.placeName.toLowerCase().includes(p.name.toLowerCase()),
+        );
+        let caption = "";
+        if (match?.sourceUrl) {
+          try {
+            caption = (await fetchLinkCaption(match.sourceUrl, deps.fetchText)).caption;
+          } catch (fetchErr) {
+            console.error("[sendblue] order_advice caption fetch error", fetchErr);
+          }
+        }
+        const advice = caption
+          ? await suggestOrderFromCaption(decision.placeName, caption, deps.gemini, chinese)
+          : null;
+        console.log(
+          `[sendblue] order_advice "${decision.placeName}" saved=${!!match} captionLen=${caption.length} hasAdvice=${!!advice}`,
+        );
+        if (advice) {
+          reply = advice;
+        } else if (match) {
+          reply = chinese
+            ? `你存的那則貼文沒明講要點什麼 😅 ${match.name} 是${match.category ?? "個地點"},要不要我幫你查地址/card?`
+            : `The post you saved doesn't name a specific dish 😅 — ${match.name} is a ${match.category ?? "place"}. Want its address/card instead?`;
+        } else {
+          reply = chinese
+            ? `我還沒存過「${decision.placeName}」,所以沒有它的貼文可以參考 — 傳個連結給我?`
+            : `I haven't saved "${decision.placeName}" yet, so I have no post to go by — send me a link?`;
         }
       } else if (decision.kind === "location") {
         // Pure location, nothing pending → store it and ask what they want,

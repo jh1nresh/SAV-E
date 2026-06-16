@@ -21,6 +21,7 @@ import {
   isReceiptLink,
   formatPlaceCard,
   appleMapsUrl,
+  suggestOrderFromCaption,
   looksLikeReview,
   extractReceipt,
   type GeminiCaller,
@@ -1347,15 +1348,22 @@ test("webhook flow: saving a link sets the saved place as conversation focus wit
 
 // --- Place "card" / address details (live Google Places lookup) -----------
 
-test("formatPlaceCard shows name, rating, address, and an Apple Maps link from coords", () => {
+test("formatPlaceCard shows name, rating, address, and the Google Maps link (business photo preview)", () => {
   const card = formatPlaceCard(
-    { name: "菊乃井 無碍山房", rating: 4.5, address: "京都市東山区下河原通", lat: 35.0, lng: 135.78 },
+    {
+      name: "菊乃井 無碍山房",
+      rating: 4.5,
+      address: "京都市東山区下河原通",
+      mapsUri: "https://maps.google.com/?cid=9",
+      lat: 35.0,
+      lng: 135.78,
+    },
     true,
   );
   assert.match(card, /菊乃井 無碍山房/);
   assert.match(card, /4\.5★/);
   assert.match(card, /京都市東山区下河原通/);
-  assert.match(card, /maps\.apple\.com\/\?ll=35,135\.78/);
+  assert.match(card, /maps\.google\.com/); // Google kept for its business-photo preview
 });
 
 test("appleMapsUrl prefers coordinates, falls back to a name/address query", () => {
@@ -1379,6 +1387,7 @@ test("webhook flow: 'where is X's address' returns a real address card (not just
       name: "菊乃井 無碍山房",
       rating: 4.5,
       address: "京都市東山区下河原通",
+      mapsUri: "https://maps.google.com/?cid=9",
       lat: 35.0,
       lng: 135.78,
     },
@@ -1392,7 +1401,7 @@ test("webhook flow: 'where is X's address' returns a real address card (not just
   );
   const out = client.calls.at(-1)?.content ?? "";
   assert.match(out, /京都市東山区下河原通/); // real street address, not just "京都"
-  assert.match(out, /maps\.apple\.com/); // iMessage-native rich map card
+  assert.match(out, /maps\.google\.com/); // Google kept for its business-photo preview
   // The looked-up place becomes the conversation focus.
   assert.equal(map.get("+15558123456")?.lastRecommended?.name, "菊乃井 無碍山房");
   assert.equal(result.replied, true);
@@ -1409,4 +1418,54 @@ test("webhook flow: a details lookup that finds nothing asks for a more exact na
     { client, store, gemini, placesSearch },
   );
   assert.match(client.calls.at(-1)?.content ?? "", /couldn't find|查不到/);
+});
+
+// --- "What to order" grounded in the saved post -----------------------------
+
+test("decideRecall: 'what should I order' returns an order_advice decision", async () => {
+  const gemini: GeminiCaller = async () =>
+    JSON.stringify({ order_advice: { placeName: "菊乃井 無碍山房" } });
+  const decision = await decideRecall("菊乃井 要點什麼", [], gemini, true, {});
+  assert.deepEqual(decision, { kind: "order_advice", placeName: "菊乃井 無碍山房" });
+});
+
+test("suggestOrderFromCaption recommends only what the caption names, else null", async () => {
+  const yes: GeminiCaller = async () =>
+    JSON.stringify({ reply: "從你存的貼文看,招牌是抹茶甜點 🍵" });
+  assert.match(
+    (await suggestOrderFromCaption("菊乃井", "京都第一名抹茶甜點就是這家", yes, true)) ?? "",
+    /抹茶甜點/,
+  );
+  const no: GeminiCaller = async () => JSON.stringify({ reply: null });
+  assert.equal(await suggestOrderFromCaption("X", "nice vibes today", no, false), null);
+});
+
+test("webhook flow: 'what to order' grounds the answer in the saved post's caption", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save("+15557654321", { name: "菊乃井 無碍山房", area: "京都", category: "cafe" }, "https://www.instagram.com/p/ABC/");
+  const fetchText = async () => htmlWithOG("目前的京都第一名抹茶甜點就是這家 菊乃井 無碍山房");
+  const gemini: GeminiCaller = async (prompt) => {
+    if (prompt.includes("standout dish")) return JSON.stringify({ reply: "從你存的貼文看,必點抹茶甜點 🍵" });
+    return JSON.stringify({ order_advice: { placeName: "菊乃井 無碍山房" } });
+  };
+
+  const result = await processSendblueInbound(
+    { from_number: "+15557654321", content: "菊乃井 要點什麼餐" },
+    { client, store, gemini, fetchText },
+  );
+  assert.equal(result.replied, true);
+  assert.match(client.calls.at(-1)?.content ?? "", /抹茶甜點/); // grounded in their saved post
+});
+
+test("webhook flow: 'what to order' for an unsaved place admits it has no post to go by", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore(); // nothing saved
+  const gemini: GeminiCaller = async () => JSON.stringify({ order_advice: { placeName: "Some Diner" } });
+
+  await processSendblueInbound(
+    { from_number: "+15550000777", content: "what should I order at Some Diner" },
+    { client, store, gemini },
+  );
+  assert.match(client.calls.at(-1)?.content ?? "", /haven't saved|沒有它的貼文|沒存過/);
 });
