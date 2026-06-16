@@ -20,6 +20,7 @@ import {
   looksLikeReceipt,
   isReceiptLink,
   formatPlaceCard,
+  appleMapsUrl,
   looksLikeReview,
   extractReceipt,
   type GeminiCaller,
@@ -1346,15 +1347,20 @@ test("webhook flow: saving a link sets the saved place as conversation focus wit
 
 // --- Place "card" / address details (live Google Places lookup) -----------
 
-test("formatPlaceCard shows name, rating, address, and a maps link", () => {
+test("formatPlaceCard shows name, rating, address, and an Apple Maps link from coords", () => {
   const card = formatPlaceCard(
-    { name: "菊乃井 無碍山房", rating: 4.5, address: "京都市東山区下河原通", mapsUri: "https://maps.google.com/?cid=1" },
+    { name: "菊乃井 無碍山房", rating: 4.5, address: "京都市東山区下河原通", lat: 35.0, lng: 135.78 },
     true,
   );
   assert.match(card, /菊乃井 無碍山房/);
   assert.match(card, /4\.5★/);
   assert.match(card, /京都市東山区下河原通/);
-  assert.match(card, /maps\.google\.com/);
+  assert.match(card, /maps\.apple\.com\/\?ll=35,135\.78/);
+});
+
+test("appleMapsUrl prefers coordinates, falls back to a name/address query", () => {
+  assert.match(appleMapsUrl({ name: "Maru", lat: 34.1, lng: -118.3 }), /maps\.apple\.com\/\?ll=34\.1,-118\.3&q=Maru/);
+  assert.match(appleMapsUrl({ name: "Maru", address: "LA" }), /maps\.apple\.com\/\?q=Maru%20LA/);
 });
 
 test("decideRecall: asking a place's address returns a details decision", async () => {
@@ -1373,7 +1379,8 @@ test("webhook flow: 'where is X's address' returns a real address card (not just
       name: "菊乃井 無碍山房",
       rating: 4.5,
       address: "京都市東山区下河原通",
-      mapsUri: "https://maps.google.com/?cid=9",
+      lat: 35.0,
+      lng: 135.78,
     },
   ];
   const gemini: GeminiCaller = async () =>
@@ -1385,7 +1392,7 @@ test("webhook flow: 'where is X's address' returns a real address card (not just
   );
   const out = client.calls.at(-1)?.content ?? "";
   assert.match(out, /京都市東山区下河原通/); // real street address, not just "京都"
-  assert.match(out, /maps\.google\.com/);
+  assert.match(out, /maps\.apple\.com/); // iMessage-native rich map card
   // The looked-up place becomes the conversation focus.
   assert.equal(map.get("+15558123456")?.lastRecommended?.name, "菊乃井 無碍山房");
   assert.equal(result.replied, true);

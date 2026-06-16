@@ -839,7 +839,23 @@ export type DiscoveredPlace = {
   rating?: number;
   category?: string;
   mapsUri?: string;
+  lat?: number;
+  lng?: number;
 };
+
+/**
+ * Apple Maps deep link. On iMessage these render as a RICH native map card
+ * (thumbnail + pin), unlike a bare google.com link. Prefer coordinates; fall
+ * back to a name/address query.
+ */
+export function appleMapsUrl(place: DiscoveredPlace): string {
+  const label = encodeURIComponent(place.name);
+  if (typeof place.lat === "number" && typeof place.lng === "number") {
+    return `https://maps.apple.com/?ll=${place.lat},${place.lng}&q=${label}`;
+  }
+  const q = encodeURIComponent([place.name, place.address].filter(Boolean).join(" "));
+  return `https://maps.apple.com/?q=${q}`;
+}
 
 /** Injectable Google Places text search (so tests don't hit the network). */
 export type PlacesSearch = (query: string) => Promise<DiscoveredPlace[]>;
@@ -857,7 +873,7 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       "content-type": "application/json",
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask":
-        "places.displayName,places.formattedAddress,places.rating,places.primaryType,places.googleMapsUri",
+        "places.displayName,places.formattedAddress,places.rating,places.primaryType,places.googleMapsUri,places.location",
     },
     body: JSON.stringify({ textQuery: query, maxResultCount: 8 }),
   });
@@ -869,6 +885,7 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       rating?: number;
       primaryType?: string;
       googleMapsUri?: string;
+      location?: { latitude?: number; longitude?: number };
     }[];
   };
   return (body.places ?? [])
@@ -878,6 +895,8 @@ export async function defaultPlacesSearch(query: string): Promise<DiscoveredPlac
       rating: typeof p.rating === "number" ? p.rating : undefined,
       category: p.primaryType?.replace(/_/g, " "),
       mapsUri: p.googleMapsUri,
+      lat: typeof p.location?.latitude === "number" ? p.location.latitude : undefined,
+      lng: typeof p.location?.longitude === "number" ? p.location.longitude : undefined,
     }))
     .filter((p) => p.name.length > 0);
 }
@@ -1256,14 +1275,14 @@ export function pickBestPlace(
  * data), with a deterministic template fallback so a recommendation never fails
  * just because phrasing did.
  */
-/** A compact place "card": name, rating, real address, Google Maps link. */
+/**
+ * A compact place "card": name, rating, real address, and an Apple Maps link —
+ * which iMessage renders as a rich native map card (vs a bare google.com link).
+ */
 export function formatPlaceCard(place: DiscoveredPlace, chinese: boolean): string {
   const lines = [place.name + (place.rating ? ` — ${place.rating}★` : "")];
   if (place.address) lines.push(`📍 ${place.address}`);
-  if (place.mapsUri) lines.push(place.mapsUri);
-  if (lines.length === 1) {
-    lines.push(chinese ? "(只查到名字,沒有更多資料)" : "(only the name — no further details found)");
-  }
+  lines.push(appleMapsUrl(place));
   return lines.join("\n");
 }
 
