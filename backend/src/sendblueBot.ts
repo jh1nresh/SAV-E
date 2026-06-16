@@ -177,6 +177,45 @@ function foldText(value: string): string {
     .trim();
 }
 
+function compactPlaceText(value: string): string {
+  return foldText(value).replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function findSavedPlaceMatch(query: string, places: SavedPlace[]): SavedPlace | undefined {
+  const needle = compactPlaceText(query);
+  if (!needle) return undefined;
+  return places
+    .filter((place) => {
+      const haystack = compactPlaceText(place.name);
+      if (!haystack) return false;
+      return haystack.includes(needle) || needle.includes(haystack);
+    })
+    .sort((a, b) => b.name.length - a.name.length)[0];
+}
+
+function savedPlaceLookupQuery(place: SavedPlace): string {
+  return [place.name, place.area].filter(Boolean).join(" ").trim();
+}
+
+function savedPlaceAreaFallback(place: SavedPlace, chinese: boolean): string {
+  // Google Places textSearch can miss a place (e.g. a Japanese-named shop in
+  // Taiwan), but a Google Maps SEARCH link still resolves it on tap - strictly
+  // more useful than asking the user for a map link. Add the post they saved it
+  // from when we have it.
+  const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    [place.name, place.area].filter(Boolean).join(" ").trim(),
+  )}`;
+  const area = place.area ? (chinese ? `（${place.area}）` : ` in ${place.area}`) : "";
+  const src = place.sourceUrl
+    ? chinese
+      ? `\n你存它的貼文：${place.sourceUrl}`
+      : `\nWhere you saved it: ${place.sourceUrl}`
+    : "";
+  return chinese
+    ? `「${place.name}」${area}：我這邊查不到精確地址，在地圖上搜：\n${mapsSearch}${src}`
+    : `"${place.name}"${area}: I don't have an exact address; find it on the map:\n${mapsSearch}${src}`;
+}
+
 // ---------------------------------------------------------------------------
 // Receipts → verified visits (the receipt-gated-review primitive).
 // A user forwards/texts a purchase receipt; we confirm it's a receipt, extract
@@ -1935,17 +1974,21 @@ export async function processSendblueInbound(
         // The user wants a specific place's address / map / "card" → look it up
         // live (Google Places) instead of answering "it's in <city>" from memory.
         const search = deps.placesSearch ?? defaultPlacesSearch;
+        const savedMatch = findSavedPlaceMatch(decision.placeName, places);
+        const lookupQuery = savedMatch ? savedPlaceLookupQuery(savedMatch) : decision.placeName;
         let found: DiscoveredPlace[] = [];
         try {
-          found = await search(decision.placeName);
+          found = await search(lookupQuery);
         } catch (searchError) {
           console.error("[sendblue] details lookup error", searchError);
         }
         const place = found[0];
-        console.log(`[sendblue] details "${decision.placeName}" → ${place?.name ?? "(none)"}`);
+        console.log(`[sendblue] details "${lookupQuery}" → ${place?.name ?? "(none)"}`);
         if (place) {
           convoStore.setRecommended(memoryKey, place); // make it the conversation focus
           reply = formatPlaceCard(place, chinese);
+        } else if (savedMatch) {
+          reply = savedPlaceAreaFallback(savedMatch, chinese);
         } else {
           reply = chinese
             ? `我查不到「${decision.placeName}」的地點資料 — 名字再給我精確一點?`

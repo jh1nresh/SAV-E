@@ -1460,6 +1460,61 @@ test("webhook flow: 'where is X's address' returns a real address card (not just
   assert.equal(result.replied, true);
 });
 
+test("webhook flow: details lookup expands a partial saved place name before Google search", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const phone = "+15550138888";
+  await store.save(phone, {
+    name: "挽肉と米 台中公益店",
+    area: "台中",
+    category: "restaurant",
+  });
+  let searched = "";
+  const placesSearch = async (query: string): Promise<DiscoveredPlace[]> => {
+    searched = query;
+    return [{
+      name: "挽肉と米 台中公益店",
+      rating: 4.7,
+      address: "台中市西區公益路 68 號",
+      mapsUri: "https://maps.google.com/?cid=138888",
+    }];
+  };
+  const gemini: GeminiCaller = async () => JSON.stringify({ details: { placeName: "挽肉" } });
+
+  await processSendblueInbound(
+    { from_number: phone, content: "What's the actual address of 挽肉" },
+    { client, store, gemini, placesSearch },
+  );
+
+  assert.equal(searched, "挽肉と米 台中公益店 台中");
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /台中市西區公益路 68 號/);
+  assert.doesNotMatch(out, /查不到/);
+});
+
+test("webhook flow: details lookup gives saved context when Google misses a partial saved name", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const phone = "+15550138889";
+  await store.save(phone, {
+    name: "挽肉と米 台中公益店",
+    area: "台中",
+    category: "restaurant",
+  });
+  const placesSearch = async (): Promise<DiscoveredPlace[]> => [];
+  const gemini: GeminiCaller = async () => JSON.stringify({ details: { placeName: "挽肉" } });
+
+  await processSendblueInbound(
+    { from_number: phone, content: "挽肉地址在哪" },
+    { client, store, gemini, placesSearch },
+  );
+
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /挽肉と米 台中公益店/);
+  assert.match(out, /查不到精確地址/);
+  assert.match(out, /google\.com\/maps\/search/);
+});
+
 test("webhook flow: a details lookup that finds nothing asks for a more exact name", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
@@ -1686,4 +1741,25 @@ test("webhook flow: 'what to order' with no caption AND no review signal decline
     { client, store, gemini, placesReviews },
   );
   assert.match(client.calls.at(-1)?.content ?? "", /couldn't find a clear must-order|找不到明確的招牌餐/);
+});
+
+test("webhook flow: address of a saved place Google can't find gives a Maps search link, not a dead-end", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  await store.save(
+    "+15551112000",
+    { name: "挽肉と米 台中公益店", area: "台中", category: "restaurant" },
+    "https://www.instagram.com/p/XYZ/",
+  );
+  const placesSearch = async (): Promise<DiscoveredPlace[]> => []; // Google can't resolve it
+  const gemini: GeminiCaller = async () => JSON.stringify({ details: { placeName: "挽肉と米 台中公益店" } });
+
+  await processSendblueInbound(
+    { from_number: "+15551112000", content: "挽肉と米 地址在哪" },
+    { client, store, gemini, placesSearch },
+  );
+  const out = client.calls.at(-1)?.content ?? "";
+  assert.match(out, /google\.com\/maps\/search/); // a tappable Maps search instead of a dead-end
+  assert.match(out, /instagram\.com\/p\/XYZ/); // the post they saved it from
+  assert.doesNotMatch(out, /名字再給我精確一點|more exact name/);
 });
