@@ -13,7 +13,8 @@ struct MapView: View {
                     ForEach(viewModel.filteredPlaces) { place in
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(
-                                place: place
+                                place: place,
+                                isSelected: viewModel.selectedPlace?.id == place.id
                             ) {
                                 viewModel.selectPlace(place)
                             }
@@ -173,6 +174,7 @@ private struct CurrentLocationButton: View {
 struct PlaceMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
+    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
@@ -185,8 +187,19 @@ struct PlaceMapPin: View {
                 tint: place.category.mapMarkerTint,
                 state: .saved
             )
+            .scaleEffect(isSelected ? 1.24 : 1)
+            .overlay {
+                if isSelected {
+                    Circle()
+                        .stroke(Color.saveSignal.opacity(0.86), lineWidth: 3)
+                        .frame(width: 46, height: 46)
+                        .shadow(color: Color.saveSignal.opacity(0.28), radius: 5)
+                }
+            }
+            .animation(SaveTheme.Motion.standardSpring, value: isSelected)
         }
         .buttonStyle(.plain)
+        .zIndex(isSelected ? 10 : 0)
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
     }
 }

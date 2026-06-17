@@ -716,7 +716,7 @@ function mediaEvidenceTextEvidence(mediaEvidence: SourceMediaEvidence[]): string
 }
 
 function sourceMetadataPlaceName(text: string, address: string): string | undefined {
-  const addressIndex = text.indexOf(address);
+  const addressIndex = metadataAddressIndex(text, address);
   if (addressIndex < 0) return undefined;
 
   const beforeAddress = text.slice(0, addressIndex);
@@ -725,7 +725,51 @@ function sourceMetadataPlaceName(text: string, address: string): string | undefi
     .map(cleanMetadataPlaceLine)
     .filter((line) => line && isUsableCandidateName(line) && !looksLikeHours(line));
 
-  return candidates.at(-1);
+  const candidate = candidates.at(-1);
+  const handleName = instagramCaptionVenueHandleName(beforeAddress);
+  if (handleName && (!candidate || looksLikeContextCandidateLine(candidate))) return handleName;
+  return candidate;
+}
+
+function metadataAddressIndex(text: string, address: string): number {
+  const exact = text.indexOf(address);
+  if (exact >= 0) return exact;
+  const firstAddressLine = address.split(/\n|\r|,/)[0]?.trim();
+  return firstAddressLine ? text.indexOf(firstAddressLine) : -1;
+}
+
+function instagramCaptionVenueHandleName(beforeAddress: string): string | undefined {
+  const caption = beforeAddress.match(/\bon\s+Instagram:\s*["“]?([\s\S]*)/i)?.[1];
+  if (!caption) return undefined;
+
+  const firstHandle = [...caption.matchAll(/@([A-Za-z0-9._]{3,30})/g)]
+    .map((match) => match[1])
+    .find((handle) => !isContextSocialHandle(handle));
+  return firstHandle ? venueNameFromHandle(firstHandle) : undefined;
+}
+
+function isContextSocialHandle(handle: string): boolean {
+  const lowered = handle.toLowerCase();
+  if (["instagram", "reels", "reel", "explore", "threads", "tiktok"].includes(lowered)) return true;
+  if (/\d{5,}/.test(lowered)) return true;
+  return false;
+}
+
+function venueNameFromHandle(handle: string): string | undefined {
+  const localitySuffixes = new Set(["la", "nyc", "oc", "sf", "sd", "usa", "us"]);
+  const parts = handle
+    .toLowerCase()
+    .split(/[._-]+/)
+    .filter(Boolean);
+  if (parts.length > 1 && localitySuffixes.has(parts.at(-1) ?? "")) parts.pop();
+  const name = parts.join(" ");
+  if (!name || name.length < 3) return undefined;
+  return name.replace(/\b[a-z]/g, (char) => char.toUpperCase());
+}
+
+function looksLikeContextCandidateLine(value: string): boolean {
+  return /^(located|inside|on the|at the)\b/i.test(value) ||
+    /\b(operated by|chef|hotel|koreatown|second floor|culinary haven)\b/i.test(value);
 }
 
 function cleanMetadataPlaceLine(value: string): string {
@@ -832,11 +876,27 @@ const blockedOfficialHosts = new Set([
 ]);
 
 function addressFromText(text: string): string | undefined {
+  const lineAddress = usAddressFromLines(text);
+  if (lineAddress) return lineAddress;
+
   const patterns = [
     /\b\d{1,6}\s+[A-Za-z0-9 .'-]{2,80}\b(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Highway|Hwy\.?|Coast Hwy)\b(?:,\s*[A-Za-z .'-]{2,40})?/i,
     /[\u4e00-\u9fff]{2,}(?:市|区|區|路|街|道)[\u4e00-\u9fffA-Za-z0-9\-－\s]{0,40}\d{1,6}\s*(?:号|號)?(?:B\d|[0-9一二三四五六七八九十]+樓)?/,
   ];
   return patterns.map((pattern) => text.match(pattern)?.[0]?.trim()).find(Boolean);
+}
+
+function usAddressFromLines(text: string): string | undefined {
+  const lines = text.split(/\n|\r/).map(cleanText).filter(Boolean);
+  const streetPattern = /\b\d{1,6}\s+[A-Za-z0-9 .'-]{2,80}\b(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Boulevard|Blvd\.?|Lane|Ln\.?|Drive|Dr\.?|Way|Highway|Hwy\.?|Coast Hwy)\b/i;
+  const cityStatePattern = /^[A-Za-z .'-]{2,40},?\s+[A-Z]{2}(?:\s+\d{5})?$/;
+  for (let index = 0; index < lines.length; index += 1) {
+    const street = lines[index].match(streetPattern)?.[0]?.trim();
+    if (!street) continue;
+    const cityState = lines[index + 1]?.match(cityStatePattern)?.[0]?.trim();
+    if (cityState) return `${street}, ${cityState}`;
+  }
+  return undefined;
 }
 
 function looksLikeAddress(value: string): boolean {

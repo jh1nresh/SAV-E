@@ -436,12 +436,71 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     var refinementQuery: String {
-        [name, address, city]
-            .compactMap { value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed?.isEmpty == false ? trimmed : nil
+        let directParts = [name, address, city]
+            .compactMap(Self.nonEmptyTrimmed)
+        let evidenceParts = refinementEvidenceClues
+        return Self.compactSearchQuery(directParts + evidenceParts)
+    }
+
+    private var refinementEvidenceClues: [String] {
+        var clues: [String] = []
+        for line in evidence.flatMap({ $0.components(separatedBy: .newlines) }) {
+            if let value = Self.value(after: "Recovered address evidence:", in: line) ??
+                Self.value(after: "Address/location clue:", in: line) ??
+                Self.value(after: "Address clue:", in: line) ??
+                Self.value(after: "Caption area clue:", in: line) ??
+                Self.value(after: "Region clue:", in: line) ??
+                Self.value(after: "Suggested public search:", in: line) {
+                clues.append(value)
+            } else if let recoveryHint = Self.recoveryHintValue(in: line) {
+                clues.append(recoveryHint)
             }
-            .joined(separator: " ")
+        }
+        return clues
+    }
+
+    private static func nonEmptyTrimmed(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
+    private static func value(after prefix: String, in line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.localizedCaseInsensitiveContains(prefix),
+              let range = trimmed.range(of: prefix, options: .caseInsensitive) else {
+            return nil
+        }
+        return nonEmptyTrimmed(String(trimmed[range.upperBound...]))
+    }
+
+    private static func recoveryHintValue(in line: String) -> String? {
+        guard let raw = value(after: "Recovery hint:", in: line),
+              let separator = raw.firstIndex(of: "=") else {
+            return nil
+        }
+        let label = raw[..<separator].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard label == "region" || label == "address" || label == "location" || label == "area" else {
+            return nil
+        }
+        return nonEmptyTrimmed(String(raw[raw.index(after: separator)...]))
+    }
+
+    private static func compactSearchQuery(_ values: [String]) -> String {
+        var seen = Set<String>()
+        let parts = values.compactMap { value -> String? in
+            let trimmed = value
+                .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  URL(string: trimmed)?.scheme == nil,
+                  seen.insert(trimmed.lowercased()).inserted else {
+                return nil
+            }
+            return trimmed
+        }
+        let query = parts.joined(separator: " ")
+        guard query.count > 180 else { return query }
+        return String(query.prefix(180)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var shareSubject: String {

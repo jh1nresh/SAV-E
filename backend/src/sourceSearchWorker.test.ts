@@ -255,6 +255,44 @@ test("runSourceSearchRecovery creates review candidate from explicit source meta
   assert.ok(output.receipt.found.includes("explicit_address"));
 });
 
+test("runSourceSearchRecovery binds Instagram caption venue handle to explicit address", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/DOpenaireLA/",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="michelle rome on Instagram: &quot;&#064;openaire_la 🌿 LA’s Greenhouse Culinary Haven
+operated by Two Michelin-starred chef Josiah Citrin.
+
+Located on the second floor of The LINE Hotel in Koreatown &#064;thelinehotel
+
+📍3515 Wilshire Blvd
+Los Angeles, CA 90010
+United States&quot;">
+        `;
+      }
+
+      return `
+        <div class="result">
+          <a class="result__a" href="https://www.instagram.com/reels/">Instagram</a>
+        </div>
+      `;
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "Openaire");
+  assert.equal(output.candidates[0].address, "3515 Wilshire Blvd, Los Angeles, CA 90010");
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("@openaire_la")));
+  assert.doesNotMatch(output.candidates[0].name, /michelle/i);
+  assert.doesNotMatch(output.candidates[0].name, /line hotel/i);
+  assert.equal(output.receipt.output, "review_candidate");
+  assert.ok(output.receipt.found.includes("explicit_address"));
+});
+
 test("runSourceSearchRecovery blocks private source metadata URLs before fetch", async () => {
   const fetchedURLs: string[] = [];
   const output = await runSourceSearchRecovery(

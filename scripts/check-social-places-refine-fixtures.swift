@@ -93,6 +93,34 @@ struct SocialPlacesRefineFixtureCheck {
         expect(addressedRefined.latitude == 24.2, "expected addressed candidate to use acceptable match latitude")
         expect(addressedRefined.longitude == 120.7, "expected addressed candidate to use acceptable match longitude")
 
+        let persistedReviewCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Wagyu Tenderloin Sukiyaki",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Source URL: https://www.instagram.com/reel/example/",
+                "Caption area clue: KYOTO",
+                "Recovered address evidence: 先斗町, 京都",
+                "Suggested public search: Wagyu Tenderloin Sukiyaki Kyoto"
+            ],
+            confidence: 0.58,
+            missingInfo: ["Verified address", "Verified coordinates"],
+            status: "review",
+            createdAt: Date()
+        )
+        expect(
+            persistedReviewCandidate.refinementQuery.contains("先斗町, 京都"),
+            "persisted review candidate exact-place query should keep recovered address evidence"
+        )
+        expect(
+            persistedReviewCandidate.refinementQuery.contains("KYOTO"),
+            "persisted review candidate exact-place query should keep caption area clue"
+        )
+
         print("Validated social Places refine fixtures.")
     }
 

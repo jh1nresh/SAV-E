@@ -4,11 +4,14 @@ import SwiftUI
 
 enum ReviewCandidateError: LocalizedError {
     case needsReliableCoordinates
+    case alreadySavedMapStamp(String)
 
     var errorDescription: String? {
         switch self {
         case .needsReliableCoordinates:
             return "This candidate needs Google Places refinement or a map link before it can be saved."
+        case .alreadySavedMapStamp(let name):
+            return "\(name) is already saved as a Map Stamp."
         }
     }
 }
@@ -713,6 +716,22 @@ final class MapViewModel: ObservableObject {
             throw ReviewCandidateError.needsReliableCoordinates
         }
 
+        if let existing = existingSavedPlace(matching: place) {
+            try? await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: existing.id)
+            await recordPlaceRecoveryDecision(
+                for: candidate,
+                action: "confirm_duplicate",
+                editedPayload: ["place_id": existing.id.uuidString],
+                reason: "User confirmed review candidate, but matching Map Stamp already exists."
+            )
+            reviewCandidates.removeAll { $0.id == candidate.id }
+            if selectedReviewCandidate?.id == candidate.id {
+                selectedReviewCandidate = nil
+            }
+            focusSavedPlace(existing, showStampMoment: false)
+            throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
+        }
+
         try await supabaseService.savePlace(place, userId: userId)
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: place.id)
         await recordPlaceRecoveryDecision(
@@ -746,6 +765,13 @@ final class MapViewModel: ObservableObject {
         var place = try await saveSearchController.saveMapCandidate(draft)
         place.sourceImageUrl = candidate.photoURL
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
+
+        if let existing = existingSavedPlace(matching: place) {
+            mapCandidates.removeAll { $0.id == candidate.id }
+            selectedMapCandidate = nil
+            focusSavedPlace(existing, showStampMoment: false)
+            throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
+        }
 
         if let userId = authService.currentUserId {
             do {
@@ -1031,22 +1057,37 @@ final class MapViewModel: ObservableObject {
 
     private func revealImportedPlaces(_ importedPlaces: [Place]) {
         guard let first = importedPlaces.first else { return }
+        focusSavedPlace(first, extraCount: importedPlaces.count - 1)
+    }
+
+    private func focusSavedPlace(_ place: Place, extraCount: Int = 0, showStampMoment: Bool = true) {
         activeFilter = nil
         selectedCategories.removeAll()
-        selectedPlace = first
+        selectedPlace = place
         selectedSocialPlace = nil
         selectedMapCandidate = nil
-        if first.latitude != 0 || first.longitude != 0 {
+        selectedReviewCandidate = nil
+        if place.latitude != 0 || place.longitude != 0 {
             cameraPosition = .region(MKCoordinateRegion(
-                center: first.coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+                center: place.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
             ))
         }
-        stampMoment = SaveStampMoment(
-            title: first.name,
-            category: first.category,
-            extraCount: importedPlaces.count - 1
-        )
+        if showStampMoment {
+            stampMoment = SaveStampMoment(
+                title: place.name,
+                category: place.category,
+                extraCount: extraCount
+            )
+        }
+    }
+
+    private func existingSavedPlace(matching place: Place) -> Place? {
+        places.first { existing in
+            existing.matches(place) ||
+                existing.matchesMapFeature(title: place.name, coordinate: place.coordinate) ||
+                place.matchesMapFeature(title: existing.name, coordinate: existing.coordinate)
+        }
     }
 
     private func completeReferralHandoffIfNeeded() async {
