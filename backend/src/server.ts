@@ -67,6 +67,7 @@ import {
   recommendationAnalysisReceiptPayloadMaxBytes,
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
+import { createPrivyUserProvisioner } from "./privyUsers.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -76,6 +77,7 @@ const { Pool } = pg;
 const databaseUrl = requireEnv("DATABASE_URL");
 const privyAppId = requireEnv("PRIVY_APP_ID");
 const privyVerificationKey = requireEnv("PRIVY_VERIFICATION_KEY");
+const privyAppSecret = process.env.PRIVY_APP_SECRET?.trim();
 const guestSessionSecret = process.env.SAVE_GUEST_SESSION_SECRET?.trim() || randomBytes(32).toString("hex");
 const defaultJsonBodyMaxBytes = 256 * 1024;
 const geminiProxyRequestMaxBytes = 64 * 1024;
@@ -87,6 +89,10 @@ const pool = new Pool({
 });
 
 let verificationKeyPromise: Promise<KeyLike> | undefined;
+const privyUserProvisioner = createPrivyUserProvisioner({
+  appId: privyAppId,
+  appSecret: privyAppSecret,
+});
 
 // Per-number place memory for the Sendblue bot. Backed by pool.query (injected,
 // not the pool itself, to avoid a circular import in the bot module).
@@ -111,6 +117,10 @@ const sendblueConversationStore = new PgBackedConversationStore({
 });
 
 export const userChannelsTableSql = `
+alter table profiles add column if not exists privy_user_id text;
+create unique index if not exists idx_profiles_privy_user_id
+  on profiles (privy_user_id) where privy_user_id is not null;
+
 create table if not exists user_channels (
   id uuid primary key default gen_random_uuid(),
   profile_id text references profiles(id) on delete cascade not null,
@@ -715,16 +725,20 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
   if (!normalized) return fromNumber;
   // 1. Already bound to a SAV-E profile? Use it.
   const { rows } = await pool.query(
-    `select profile_id
-     from user_channels
-     where channel in ('sendblue', 'imessage', 'sms')
-       and verified_at is not null
-       and (channel_user_id = $1 or phone_e164 = $1)
-     order by case channel when 'sendblue' then 0 when 'imessage' then 1 else 2 end
+    `select uc.profile_id, p.privy_user_id
+     from user_channels uc
+     join profiles p on p.id = uc.profile_id
+     where uc.channel in ('sendblue', 'imessage', 'sms')
+       and uc.verified_at is not null
+       and (uc.channel_user_id = $1 or uc.phone_e164 = $1)
+     order by case uc.channel when 'sendblue' then 0 when 'imessage' then 1 else 2 end
      limit 1`,
     [normalized],
   );
-  if (typeof rows[0]?.profile_id === "string") return rows[0].profile_id;
+  if (typeof rows[0]?.profile_id === "string") {
+    await ensurePrivyPhoneProfile(normalized, rows[0].profile_id, rows[0].privy_user_id);
+    return rows[0].profile_id;
+  }
 
   // 2. First time this number texts us → texting IS registration. Auto-create a
   //    SAV-E profile + a VERIFIED iMessage binding (the message was delivered
@@ -742,6 +756,7 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
        do update set verified_at = coalesce(user_channels.verified_at, now()), updated_at = now()`,
       [normalized],
     );
+    await ensurePrivyPhoneProfile(normalized, normalized, null);
     console.log(`[sendblue] auto-created SAV-E account for inbound number`);
   } catch (error) {
     console.error("[sendblue] auto-create account failed", error);
@@ -2874,10 +2889,39 @@ async function ensureProfile(userId: string): Promise<void> {
   );
 }
 
+async function linkPrivyUserToProfile(profileId: string, privyUserId: string): Promise<void> {
+  await pool.query(
+    `update profiles
+     set privy_user_id = $2, updated_at = now()
+     where id = $1 and (privy_user_id is null or privy_user_id = $2)`,
+    [profileId, privyUserId],
+  );
+}
+
+async function ensurePrivyPhoneProfile(
+  phoneE164: string,
+  profileId: string,
+  existingPrivyUserId: unknown,
+): Promise<void> {
+  if (typeof existingPrivyUserId === "string" && existingPrivyUserId.trim()) return;
+  if (!privyUserProvisioner) return;
+  try {
+    const privyUser = await privyUserProvisioner.ensureUserForPhone(phoneE164);
+    if (privyUser?.id) {
+      await linkPrivyUserToProfile(profileId, privyUser.id);
+    }
+  } catch (error) {
+    console.error("[sendblue] privy phone provisioning failed", error);
+  }
+}
+
 async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (token) return verifiedPrivySubject(token);
+  if (token) {
+    const privySubject = await verifiedPrivySubject(token);
+    return await profileIdForPrivySubject(privySubject);
+  }
 
   const guestToken = request.headers["x-save-guest-token"] ?? request.headers["x-wanderly-guest-token"];
   const normalizedGuestToken = Array.isArray(guestToken) ? guestToken[0] : guestToken;
@@ -2887,6 +2931,11 @@ async function resolveUserId(request: IncomingMessage): Promise<string> {
   }
 
   throw new ApiError(401, "Missing bearer token or guest session");
+}
+
+async function profileIdForPrivySubject(privySubject: string): Promise<string> {
+  const { rows } = await pool.query("select id from profiles where privy_user_id = $1 limit 1", [privySubject]);
+  return typeof rows[0]?.id === "string" ? rows[0].id : privySubject;
 }
 
 async function verifiedPrivySubject(token: string): Promise<string> {

@@ -9,6 +9,7 @@ DATABASE_URL=postgresql://...
 DATABASE_CA_CERT=
 PGSSLMODE=
 PRIVY_APP_ID=...
+PRIVY_APP_SECRET=...
 PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
 SAVE_GUEST_SESSION_SECRET=...
 PORT=3000
@@ -28,7 +29,7 @@ SAVE_MAAT_GEMINI_MODEL=gemini-3.5-flash
 YELP_API_KEY=
 ```
 
-Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
+Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get SAV-E backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
 
 Source recovery can run with metadata and public search only. Set `GOOGLE_PLACES_API_KEY` to let the worker corroborate Review Candidates with Places address/coordinates. Set `SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=true` to allow bounded public video fetch plus one keyframe sample, and set `SAVE_ENABLE_SERVER_OCR=true` only on workers that have `tesseract` installed. Set `SAVE_ENABLE_SERVER_ASR=true` only on workers that have a local Whisper-compatible CLI available through `SAVE_SERVER_ASR_COMMAND`; transcripts are attached as cited evidence and never used to invent address/coordinates. Set `SAVE_EVIDENCE_RUBRIC_URL` to an HTTPS public rubric service endpoint when you want an external LLM rubric; the worker sends a bounded projection of metadata/candidate/search/media text, validates the response schema, blocks redirects/private hosts, and falls back to the deterministic rubric when unavailable. If these toggles are off or unavailable, recovery keeps the source as a cited clue instead of inventing place details.
 

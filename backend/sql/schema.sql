@@ -16,9 +16,11 @@ alter table profiles add column if not exists referral_code text;
 alter table profiles add column if not exists trusted_guide_count integer not null default 0;
 alter table profiles add column if not exists ai_planning_credits integer not null default 0;
 alter table profiles add column if not exists profile_stamp_unlocked_at timestamptz;
+alter table profiles add column if not exists privy_user_id text;
 
 create unique index if not exists idx_profiles_handle on profiles(lower(handle)) where handle is not null;
 create unique index if not exists idx_profiles_referral_code on profiles(referral_code) where referral_code is not null;
+create unique index if not exists idx_profiles_privy_user_id on profiles(privy_user_id) where privy_user_id is not null;
 
 create table if not exists user_channels (
     id uuid primary key default gen_random_uuid(),
