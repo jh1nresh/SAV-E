@@ -57,7 +57,6 @@ const storageKey = "@save-rn/bookmarks";
 const legacyStorageKey = "@wanderly-rn/bookmarks";
 const guestSessionStorageKey = "@save-rn/guest-session";
 const seededSamplePlaceIds = new Set(["tartine", "ramen-nagi", "the-interval", "palace-of-fine-arts"]);
-const saveTestFlightUrl = "https://testflight.apple.com/join/aSVm9hRJ";
 
 export default function App() {
   return (
@@ -434,10 +433,6 @@ function SaveApp() {
     await Linking.openURL(tripLink);
   }
 
-  async function openTestFlight() {
-    await Linking.openURL(saveTestFlightUrl);
-  }
-
   async function saveIncomingPlace() {
     if (!incomingPlace) return;
     await saveBookmark(sharedPlaceToBookmark(incomingPlace), `Saved shared place: ${incomingPlace.name}`);
@@ -477,9 +472,6 @@ function SaveApp() {
           <Text style={styles.subtitle}>
             Save places, refine event stops, and turn bookmarks into a trip you can share or hand off.
           </Text>
-          <Pressable onPress={openTestFlight} style={styles.testFlightButton}>
-            <Text style={styles.testFlightButtonText}>Join SAV-E TestFlight</Text>
-          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -1013,18 +1005,6 @@ const styles = StyleSheet.create({
   header: { marginBottom: 16, gap: 6 },
   brand: { fontSize: 32, fontWeight: "900", color: palette.ink },
   subtitle: { fontSize: 14, lineHeight: 20, color: palette.muted, fontWeight: "600" },
-  testFlightButton: {
-    alignSelf: "flex-start",
-    borderRadius: 16,
-    backgroundColor: palette.yellow,
-    borderWidth: 2,
-    borderColor: palette.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 8,
-    ...smallShadow,
-  },
-  testFlightButtonText: { color: palette.ink, fontWeight: "900", fontSize: 14 },
   tabRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
   tabButton: {
     flex: 1,
