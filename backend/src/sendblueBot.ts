@@ -1398,7 +1398,13 @@ Return STRICT JSON only, no markdown.`;
     return { kind: "search", query: parsed.search.query.trim(), area };
   }
   if (parsed.location && typeof parsed.location.area === "string" && parsed.location.area.trim()) {
-    return { kind: "location", area: parsed.location.area.trim() };
+    const area = parsed.location.area.trim();
+    // If the previous turn asked for location to complete a nearby search, a
+    // model that classifies the reply as a plain location should still resume
+    // the pending search. This avoids the dead-end loop: "recommend coffee" →
+    // "where are you?" → "Disneyland" → "what are you looking for?".
+    if (pendingQuery) return { kind: "search", query: pendingQuery, area };
+    return { kind: "location", area };
   }
   if (parsed.details && typeof parsed.details.placeName === "string" && parsed.details.placeName.trim()) {
     return { kind: "details", placeName: parsed.details.placeName.trim() };

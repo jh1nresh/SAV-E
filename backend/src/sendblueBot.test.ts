@@ -787,6 +787,46 @@ test("webhook flow: ask location → bare place name resumes search (conversatio
   assert.equal(map.get("+15557779999")?.lastPlaces?.[0]?.name, "Kean Coffee"); // remembered
 });
 
+test("webhook flow: pending coffee search resumes even when model labels the area reply as location", async () => {
+  const client = new FakeSendblueClient();
+  const store = new FakeStore();
+  const { store: conversation, map } = fakeConversation();
+  let searched = "";
+  const placesSearch = async (q: string): Promise<DiscoveredPlace[]> => {
+    searched = q;
+    return [{ name: "Aunt Cass Cafe", address: "1313 Disneyland Dr", rating: 4.5 }];
+  };
+  const gemini: GeminiCaller = async (prompt) => {
+    if (prompt.includes("Recommend 2-3")) {
+      return JSON.stringify({ reply: "加州迪士尼樂園附近可以試試 Aunt Cass Cafe，4.5★ ☕" });
+    }
+    if (prompt.includes("LOCATION FOLLOW-UP")) {
+      // Screenshot regression: the model may classify a bare area as a location
+      // instead of the intended pending search. Code must still resume coffee.
+      return JSON.stringify({ location: { area: "加州迪士尼樂園" } });
+    }
+    return JSON.stringify({ search: { query: "咖啡", area: null } });
+  };
+
+  const t1 = await processSendblueInbound(
+    { from_number: "+155****4242", content: "推薦我一杯咖啡" },
+    { client, store, gemini, placesSearch, conversation },
+  );
+  assert.match(t1.reply ?? "", /你現在在哪|Where are you/);
+  assert.equal(map.get("+155****4242")?.pendingQuery, "咖啡");
+
+  const t2 = await processSendblueInbound(
+    { from_number: "+155****4242", content: "加州迪士尼樂園" },
+    { client, store, gemini, placesSearch, conversation },
+  );
+
+  assert.equal(searched, "咖啡 in 加州迪士尼樂園");
+  assert.equal(t2.reply, "加州迪士尼樂園附近可以試試 Aunt Cass Cafe，4.5★ ☕");
+  assert.equal(map.get("+155****4242")?.pendingQuery, undefined);
+  assert.equal(map.get("+155****4242")?.lastArea, "加州迪士尼樂園");
+  assert.equal(map.get("+155****4242")?.lastRecommended?.name, "Aunt Cass Cafe");
+});
+
 test("webhook flow: follow-up about the recommended place is answered (not 'not saved')", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
