@@ -1289,38 +1289,70 @@ final class SocialLinkReviewCandidateService {
         let mapURLStrings = ([sourceURL] + embeddedURLStrings(in: evidenceText))
             .filter { !$0.isEmpty }
         for urlString in mapURLStrings {
-            guard let match = westernMapLinkMatch(in: urlString) else { continue }
-            let diagnostic = SocialPlaceEvidenceDiagnostic(
-                found: appendUnique(
-                    [],
-                    [
-                        "Source URL: \(sourceURL)",
-                        "Structured \(match.providerName) place link: \(match.name)",
-                        "Verified coordinates: \(match.latitude), \(match.longitude)"
-                    ]
-                ),
-                attempts: appendUnique(
-                    analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
-                    ["Parsed structured map place link before public metadata recovery"]
-                ),
-                missingFields: [],
-                nextBestClue: "Confirm this \(match.providerName) match before saving it as a Map Stamp."
-            )
-            return PendingReviewCandidate(
-                candidateName: match.name,
-                address: "",
-                category: category(from: "\(match.name) \(evidenceText)"),
-                latitude: match.latitude,
-                longitude: match.longitude,
-                sourceURL: sourceURL,
-                sourceText: evidenceText.isEmpty ? nil : evidenceText,
-                evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.providerName)"],
-                confidence: 0.84,
-                missingInfo: ["User confirmation required"],
-                savedAt: Date(),
-                evidenceDiagnostic: diagnostic,
-                reviewState: "map_match_ready"
-            )
+            if let match = westernMapLinkMatch(in: urlString) {
+                let diagnostic = SocialPlaceEvidenceDiagnostic(
+                    found: appendUnique(
+                        [],
+                        [
+                            "Source URL: \(sourceURL)",
+                            "Structured \(match.providerName) place link: \(match.name)",
+                            "Verified coordinates: \(match.latitude), \(match.longitude)"
+                        ]
+                    ),
+                    attempts: appendUnique(
+                        analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
+                        ["Parsed structured map place link before public metadata recovery"]
+                    ),
+                    missingFields: [],
+                    nextBestClue: "Confirm this \(match.providerName) match before saving it as a Map Stamp."
+                )
+                return PendingReviewCandidate(
+                    candidateName: match.name,
+                    address: "",
+                    category: category(from: "\(match.name) \(evidenceText)"),
+                    latitude: match.latitude,
+                    longitude: match.longitude,
+                    sourceURL: sourceURL,
+                    sourceText: evidenceText.isEmpty ? nil : evidenceText,
+                    evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.providerName)"],
+                    confidence: 0.84,
+                    missingInfo: ["User confirmation required"],
+                    savedAt: Date(),
+                    evidenceDiagnostic: diagnostic,
+                    reviewState: "map_match_ready"
+                )
+            }
+            if let queryMatch = googleMapsQueryLinkMatch(in: urlString) {
+                let diagnostic = SocialPlaceEvidenceDiagnostic(
+                    found: appendUnique(
+                        [],
+                        [
+                            "Source URL: \(sourceURL)",
+                            "Structured Google Maps query link: \(queryMatch.name)",
+                            queryMatch.address.isEmpty ? "" : "Address clue: \(queryMatch.address)"
+                        ]
+                    ),
+                    attempts: appendUnique(
+                        analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
+                        ["Parsed Google Maps query link before public metadata recovery"]
+                    ),
+                    missingFields: ["Verified coordinates"],
+                    nextBestClue: "Confirm this Google Maps query match before saving it as a Map Stamp."
+                )
+                return PendingReviewCandidate(
+                    candidateName: queryMatch.name,
+                    address: queryMatch.address,
+                    category: category(from: "\(queryMatch.name) \(queryMatch.address) \(evidenceText)"),
+                    sourceURL: sourceURL,
+                    sourceText: evidenceText.isEmpty ? nil : evidenceText,
+                    evidence: diagnostic.found + diagnostic.attempts + ["Map provider: Google Maps"],
+                    confidence: 0.78,
+                    missingInfo: ["Verified coordinates", "User confirmation required"],
+                    savedAt: Date(),
+                    evidenceDiagnostic: diagnostic,
+                    reviewState: "map_query_ready"
+                )
+            }
         }
         return nil
     }
@@ -1331,6 +1363,27 @@ final class SocialLinkReviewCandidateService {
             && abs(latitude) <= 90
             && abs(longitude) <= 180
             && (latitude != 0 || longitude != 0)
+    }
+
+    private func googleMapsQueryLinkMatch(in urlString: String) -> (name: String, address: String)? {
+        guard let url = URL(string: urlString), let host = url.host?.lowercased() else { return nil }
+        let isGoogleMapsHost = host.matchesSocialDomain("google.com") || host.matchesSocialDomain("maps.google.com")
+        guard isGoogleMapsHost else { return nil }
+        let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard let rawQuery = queryItems.first(where: { $0.name == "q" })?.value else { return nil }
+        let query = decodedMapPlaceName(rawQuery)
+        guard !query.isEmpty else { return nil }
+
+        let cleanedQuery = query
+            .replacingOccurrences(of: #"\s*(?:美國|美国|United States|USA)\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ,，").union(.whitespacesAndNewlines))
+        let parts = cleanedQuery
+            .split(separator: ",", omittingEmptySubsequences: true)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let name = parts.first, isUsableCandidateName(name) else { return nil }
+        let address = parts.dropFirst().joined(separator: ", ")
+        return (name, address)
     }
 
     private func westernMapLinkMatch(in urlString: String) -> (providerName: String, name: String, latitude: Double, longitude: Double)? {

@@ -3148,6 +3148,21 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(apple.first?.reviewState, "map_match_ready")
     }
 
+    func testGoogleMapsQueryLinkBecomesReviewCandidateWithDecodedNameAndAddress() {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
+
+        let shared = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://www.google.com/maps?q=Bi%E1%BB%83n+H%E1%BA%B9n+Seafood+%26+L%E1%BA%A9u,+14092+Magnolia+St,+Westminster,+CA+92683%E7%BE%8E%E5%9C%8B&ftid=0x80dd262cd56de8e7:0x1420cfe57a67973c&entry=gps"
+        )
+
+        XCTAssertEqual(shared.count, 1)
+        XCTAssertEqual(shared.first?.candidateName, "Biển Hẹn Seafood & Lẩu")
+        XCTAssertEqual(shared.first?.address, "14092 Magnolia St, Westminster, CA 92683")
+        XCTAssertEqual(shared.first?.reviewState, "map_query_ready")
+        XCTAssertTrue(shared.first?.missingInfo.contains("Verified coordinates") == true)
+    }
+
     func testWesternMapLinkRejectsInvalidCoordinatesAndLookalikeHosts() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
 
