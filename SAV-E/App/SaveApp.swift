@@ -487,6 +487,14 @@ struct SignInView: View {
     @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
+    private var trimmedEmail: String {
+        email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private var canSendEmailCode: Bool {
+        trimmedEmail.contains("@") && trimmedEmail.contains(".") && !isLoading
+    }
+
     var body: some View {
         GeometryReader { proxy in
             let isCompactHeight = proxy.size.height < 760
@@ -522,6 +530,7 @@ struct SignInView: View {
                 }
             }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .overlay(alignment: .bottom) {
             if isLoading {
                 ProgressView()
@@ -667,13 +676,14 @@ struct SignInView: View {
                     text: $email,
                     buttonTitle: languageSettings.text(.sendCode),
                     keyboardType: .emailAddress,
-                    isDisabled: email.isEmpty || isLoading
+                    isDisabled: !canSendEmailCode
                 ) {
                     Task {
                         isLoading = true
                         defer { isLoading = false }
                         do {
-                            try await authService.signInWithEmail(email)
+                            email = trimmedEmail
+                            try await authService.signInWithEmail(trimmedEmail)
                             showEmailCode = true
                         } catch {
                             presentAuthError(error)
@@ -853,6 +863,7 @@ private struct SignInInputRow: View {
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
+                .submitLabel(.done)
                 .foregroundColor(.saveInk)
 
             Button(buttonTitle, action: action)

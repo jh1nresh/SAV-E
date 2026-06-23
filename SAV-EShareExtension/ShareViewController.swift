@@ -1156,6 +1156,13 @@ struct ShareExtensionView: View {
             return
         }
 
+        if let mapCandidate = deterministicMapReviewCandidate(from: parseContent, title: sharedTitle, text: sharedText) {
+            reviewCandidates = [mapCandidate]
+            selectedCategory = mapCandidate.category
+            isParsing = false
+            return
+        }
+
         if let sourceURL = URL(string: parseContent),
            isSocialURL(sourceURL) {
             let candidates = await socialAnalysisReviewCandidates(
@@ -3105,6 +3112,67 @@ struct ShareExtensionView: View {
             dishes: [],
             priceRange: nil
         )
+    }
+
+    private func deterministicMapReviewCandidate(from content: String, title: String, text: String) -> PendingReviewCandidate? {
+        guard let url = URL(string: content), isMapURL(url), mapCoordinates(from: url) == nil else {
+            return nil
+        }
+
+        let match = mapQueryPlaceMatch(from: url, title: title, text: text)
+        let name = match.name
+        guard !name.isEmpty else { return nil }
+        let address = match.address
+        let evidence = appendUniqueEvidence([], [
+            "Source URL: \(content)",
+            "Map share query: \(name)",
+            address.isEmpty ? nil : "Address clue: \(address)",
+            "Saved as a Review Candidate because this map share did not include verified coordinates"
+        ].compactMap { $0 })
+        let diagnostic = SocialPlaceEvidenceDiagnostic(
+            found: evidence,
+            attempts: ["Parsed map q/search text without Gemini direct fallback"],
+            missingFields: ["Verified coordinates", "User confirmation required"],
+            nextBestClue: "Open SAV-E Review to confirm the address or match Google Places before saving this as a Map Stamp."
+        )
+        let category = fallbackCategory(from: [name, address, text].joined(separator: " "))
+
+        return PendingReviewCandidate(
+            candidateName: name,
+            address: address,
+            category: category,
+            sourceURL: content,
+            sourceText: text.isEmpty ? nil : text,
+            evidence: evidence,
+            confidence: address.isEmpty ? 0.68 : 0.78,
+            missingInfo: ["Verified coordinates", "User confirmation required"],
+            savedAt: Date(),
+            evidenceDiagnostic: diagnostic,
+            reviewState: "map_query_ready"
+        )
+    }
+
+    private func mapQueryPlaceMatch(from url: URL, title: String, text: String) -> (name: String, address: String) {
+        let rawQuery = queryName(from: url.absoluteString)
+        let query = cleanMapQuery(rawQuery)
+        let titleName = cleanFallbackName(title)
+        let textName = cleanFallbackName(text)
+        let candidate = [query, titleName, textName]
+            .map(cleanFallbackName)
+            .first { !$0.isEmpty && !$0.hasPrefix("http://") && !$0.hasPrefix("https://") && !$0.contains("@") } ?? ""
+
+        let parts = candidate
+            .split(separator: ",", omittingEmptySubsequences: true)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let first = parts.first else { return (candidate, "") }
+        return (first, parts.dropFirst().joined(separator: ", "))
+    }
+
+    private func cleanMapQuery(_ value: String) -> String {
+        cleanFallbackName(value)
+            .replacingOccurrences(of: #"\s*(?:美國|美国|United States|USA)\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ,，").union(.whitespacesAndNewlines))
     }
 
     private func isMapURL(_ url: URL) -> Bool {

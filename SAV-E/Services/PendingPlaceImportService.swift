@@ -974,6 +974,7 @@ extension SourcePlatform {
         if host.matchesDomain("douyin.com") || host.matchesDomain("iesdouyin.com") { return .douyin }
         if host.matchesDomain("dianping.com") || host.matchesDomain("dpurl.cn") { return .dianping }
         if host.matchesDomain("amap.com") { return .amap }
+        if host.matchesDomain("maps.apple.com") { return .appleMaps }
         if host.isGoogleMapsHost(path: url.path, queryItems: URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems) {
             return .googleMaps
         }

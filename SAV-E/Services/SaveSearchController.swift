@@ -490,6 +490,7 @@ struct SaveSearchController {
         if host.matchesDomain("douyin.com") || host.matchesDomain("iesdouyin.com") { return .douyin }
         if host.matchesDomain("dianping.com") || host.matchesDomain("dpurl.cn") { return .dianping }
         if host.matchesDomain("amap.com") { return .amap }
+        if host.matchesDomain("maps.apple.com") { return .appleMaps }
         if host.matchesDomain("google.com") || host.matchesDomain("goo.gl") || host.matchesDomain("maps.app.goo.gl") {
             return .googleMaps
         }
