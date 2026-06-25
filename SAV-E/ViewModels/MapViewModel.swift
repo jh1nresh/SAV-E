@@ -569,10 +569,10 @@ final class MapViewModel: ObservableObject {
 
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
+            mirrorToLocalVault(place)
 
             do {
                 try await supabaseService.savePlace(place, userId: userId)
-                mirrorToLocalVault(place)
                 importedPlaces.append(place)
             } catch {
                 failedImports.append(pendingPlace)

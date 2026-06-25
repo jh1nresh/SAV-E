@@ -118,7 +118,16 @@ final class SaveLocalVaultService {
             sourceImageUrl: place.sourceImageUrl,
             businessPhotoUrls: place.businessPhotoUrls
         )
-        try append(record)
+        var records = try loadRecords()
+        records.removeAll { existingRecord in
+            guard existingRecord.state == .confirmedPlace,
+                  let existingPlace = existingRecord.confirmedPlace else {
+                return false
+            }
+            return existingPlace.id == place.id || existingPlace.matches(place)
+        }
+        records.insert(record, at: 0)
+        try save(records)
         return record
     }
 

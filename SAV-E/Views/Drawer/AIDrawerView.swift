@@ -3668,7 +3668,7 @@ private struct ReviewCandidateDetailCard: View {
                 HStack(alignment: .top, spacing: 11) {
                     ReviewCandidateDetailIcon(candidate: candidate)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
                         Text(presentationEyebrow)
                             .font(.caption2.weight(.black))
                             .foregroundColor(.saveCocoa)
@@ -3684,25 +3684,6 @@ private struct ReviewCandidateDetailCard: View {
                             .font(.caption)
                             .foregroundColor(.saveCocoa.opacity(0.74))
                             .lineLimit(2)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(languageSettings.localized(english: "Display name", traditionalChinese: "顯示名稱"))
-                                .font(.caption2.weight(.black))
-                                .foregroundColor(.saveCocoa.opacity(0.72))
-                            TextField(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"), text: $displayNameDraft)
-                                .textFieldStyle(.plain)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.saveInk)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(Color.saveNotebookPage.opacity(0.72))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                        .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                .accessibilityLabel(languageSettings.localized(english: "Review candidate display name", traditionalChinese: "待確認地點顯示名稱"))
-                        }
 
                         HStack(spacing: 6) {
                             if let confidence = candidate.confidence {
@@ -3726,12 +3707,7 @@ private struct ReviewCandidateDetailCard: View {
                     Spacer(minLength: 0)
                 }
 
-                Text(presentationTrustLine)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ReviewCandidateProofPanel(candidate: candidate)
+                ReviewCandidateNextStepPanel(candidate: candidate)
 
                 HStack(spacing: 8) {
                     CandidateActionButton(
@@ -3818,6 +3794,126 @@ private struct ReviewCandidateDetailIcon: View {
             .foregroundStyle(.red)
             .frame(width: 40, height: 40)
             .accessibilityHidden(true)
+    }
+}
+
+private struct ReviewCandidateNextStepPanel: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.openURL) private var openURL
+    var candidate: PlaceReviewCandidate
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "sparkle.magnifyingglass")
+                    .font(.caption.weight(.black))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 24, height: 24)
+                    .background(Color.saveHoney.opacity(0.72))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(languageSettings.localized(english: "Next step", traditionalChinese: "下一步"))
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveCocoa.opacity(0.72))
+                    Text(nextStepText)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.saveInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Text(summaryText)
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let sourceURL {
+                Button {
+                    openURL(sourceURL)
+                } label: {
+                    Label(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"), systemImage: "link")
+                        .font(.caption2.weight(.black))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.saveNotebookPage.opacity(0.74))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(english: "Open review candidate source", traditionalChinese: "打開待確認地點來源"))
+            }
+        }
+        .padding(10)
+        .background(Color.saveNotebookPage.opacity(0.42))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
+        )
+    }
+
+    private var nextStepText: String {
+        if candidate.hasReliableCoordinates {
+            return languageSettings.localized(
+                english: "Check the name/address. If it is correct, tap Save Map Stamp.",
+                traditionalChinese: "確認名稱和地址正確後，點「存成地圖章」。"
+            )
+        }
+        return languageSettings.localized(
+            english: "Tap Find exact place. If no match appears, add one more clue.",
+            traditionalChinese: "先點「找精確地點」。找不到時，再補一個線索。"
+        )
+    }
+
+    private var summaryText: String {
+        if candidate.hasReliableCoordinates {
+            let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !address.isEmpty {
+                return languageSettings.localized(
+                    english: "SAV-E found \(candidate.name) at \(address).",
+                    traditionalChinese: "SAV-E 找到「\(candidate.name)」：\(address)。"
+                )
+            }
+            return languageSettings.localized(
+                english: "SAV-E found a likely map match for \(candidate.name).",
+                traditionalChinese: "SAV-E 找到「\(candidate.name)」的可能地圖結果。"
+            )
+        }
+
+        let missing = candidate.missingInfo
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(2)
+            .joined(separator: "、")
+        if !missing.isEmpty {
+            return languageSettings.localized(
+                english: "Still missing: \(missing).",
+                traditionalChinese: "還缺：\(missing)。"
+            )
+        }
+        return languageSettings.localized(
+            english: "SAV-E saved the source clue, but still needs an exact place before saving.",
+            traditionalChinese: "SAV-E 已保存來源線索，但保存前仍需要精確地點。"
+        )
+    }
+
+    private var sourceURL: URL? {
+        candidate.evidence.compactMap(Self.firstURL(in:)).first
+    }
+
+    private static func firstURL(in line: String) -> URL? {
+        line
+            .split(whereSeparator: \.isWhitespace)
+            .compactMap { rawToken -> URL? in
+                let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "<>()[]{}.,;\"'"))
+                if token.hasPrefix("http://") || token.hasPrefix("https://") {
+                    return URL(string: token)
+                }
+                return nil
+            }
+            .first
     }
 }
 
