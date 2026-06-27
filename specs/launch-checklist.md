@@ -1,4 +1,4 @@
-# SAV-E — App Store Launch Checklist (1.0.0 / build 79)
+# SAV-E — App Store Launch Checklist (1.0.0 / build 80)
 
 What's done in-repo vs. what only **you** can do (anything needing your Apple ID,
 passwords, or App Store Connect — Claude can't sign in on your behalf).
@@ -8,7 +8,7 @@ Legend: ✅ done · 🟡 ready, needs you · ⛔ blocker
 ---
 
 ## 1. Build & signing
-- ✅ Version `1.0.0`, build `79`, bundle `com.wanderly.app`, team `JC6858UYM9`.
+- ✅ Version `1.0.0`, build `80`, bundle `com.wanderly.app`, team `JC6858UYM9`.
 - ✅ App icon present (`Assets.xcassets/AppIcon`).
 - ✅ Release configuration compiles (verified via `xcodebuild ... -configuration Release`).
 - ⛔ **Sign into Xcode** → Settings → Accounts → add the Apple ID that owns team `JC6858UYM9`. *(Organizer currently shows "No Accounts" — this is the upload blocker. Only you can do this.)*

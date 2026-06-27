@@ -2,7 +2,7 @@
 
 Ready-to-paste App Store Connect metadata. Voice: warm, practical, not hypey
 (see `app-store-screenshots/SAVE-App-Store-Screenshot-Design-Spec.md` §10).
-Bundle `com.wanderly.app` · version `1.0.0` · build `79`.
+Bundle `com.wanderly.app` · version `1.0.0` · build `80`.
 
 > Char limits: App Name 30 · Subtitle 30 · Promotional Text 170 · Keywords 100 · Description 4000.
 

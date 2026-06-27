@@ -200,6 +200,7 @@ Before this works for friends without the full app installed:
 - set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
 - keep `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` configured for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
 - disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/trip*`, `https://sav-e-app.vercel.app/my*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
+- keep App Store Connect App Clip Experiences on `https://sav-e-app.vercel.app/...` routes until `wanderly.app` serves Apple association files without Cloudflare challenge responses
 - create App Clip Experiences in App Store Connect for `https://sav-e-app.vercel.app/p`, `https://sav-e-app.vercel.app/trip`, `https://sav-e-app.vercel.app/list`, `https://sav-e-app.vercel.app/r`, `https://sav-e-app.vercel.app/u`, and `https://sav-e-app.vercel.app/my`
 - wait for Apple's associated-domain CDN to pick up the AASA file
 
