@@ -140,8 +140,9 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `GET /v0/shared-place-links/:code` — public resolver for `/p/<shortCode>` App Clip/web previews.
 - `POST /v0/shared-place-links` — authenticated creation of a short public place preview link from a sanitized `SharedPlaceData` payload.
 - `GET /v0/workflows/place-recovery/runs` — authenticated list of SAV-E Place Recovery Agent workflow runs.
+- `GET /v0/workflows/place-recovery/runs/summary` — authenticated aggregate counts for runs, Instagram reels, source URL runs, analysis receipts, decision receipts, and user-feedback receipts.
 - `POST /v0/workflows/place-recovery/runs` — authenticated workflow run creation with internal credit reservation.
-- `POST /v0/workflows/place-recovery/runs/:id/result` — records bounded worker/classifier result type and evidence tier, creates an off-chain **analysis** workflow receipt (`receipt_type=analysis`) with `agent_id`, optional `job_id`, and `model_provenance`, then points `workflow_runs.receipt_id` at that receipt.
-- `POST /v0/workflows/place-recovery/runs/:id/decision` — records user confirm/edit/reject and creates an off-chain **decision** workflow receipt with credit settlement.
+- `POST /v0/workflows/place-recovery/runs/:id/result` — records bounded worker/classifier result type and evidence tier, creates an off-chain **analysis** workflow receipt (`receipt_type=analysis`) with `workflow_version`, `operator_id`, `requester_id`, `agent_id`, optional `job_id`, `model_provenance`, input/output hashes, permission snapshot, tool trace refs, latency/cost/failure fields, then points `workflow_runs.receipt_id` at that receipt.
+- `POST /v0/workflows/place-recovery/runs/:id/decision` — records user confirm/edit/reject and creates an off-chain **decision** workflow receipt with credit settlement plus `user_feedback_action`, `quality_delta`, and `reputation_delta`.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.

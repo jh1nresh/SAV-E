@@ -1,6 +1,7 @@
 export type JsonObject = Record<string, unknown>;
 
 export const placeRecoveryWorkflowId = "save_place_recovery_v0";
+export const placeRecoveryWorkflowVersion = "v0";
 export const placeRecoveryListingId = "save-place-recovery-agent";
 
 export const workflowStatuses = ["queued", "running", "completed", "failed", "needs_review"] as const;
@@ -58,6 +59,15 @@ export interface PlaceRecoveryWorkerResult {
   technicalFailure: boolean;
   jobId?: string;
   agentId: string;
+  operatorId?: string;
+  requesterId?: string;
+  inputHash?: string;
+  outputHash?: string;
+  permissionSnapshot: JsonObject;
+  toolTraceRefs: string[];
+  latencyMs?: number;
+  costEstimate?: JsonObject;
+  failureReason?: string;
   modelProvenance: JsonObject;
 }
 
@@ -66,6 +76,8 @@ export interface UserDecisionInput {
   action: UserDecisionAction;
   editedPayload: JsonObject;
   reason?: string;
+  qualityDelta: number;
+  reputationDelta: number;
 }
 
 export interface WorkflowReceiptDraft {
@@ -76,8 +88,21 @@ export interface WorkflowReceiptDraft {
   evidenceRefs: string[];
   candidateRefs: string[];
   receiptType: "analysis" | "decision";
+  workflowVersion: typeof placeRecoveryWorkflowVersion;
   jobId?: string;
   agentId: string;
+  operatorId?: string;
+  requesterId?: string;
+  inputHash?: string;
+  outputHash?: string;
+  permissionSnapshot: JsonObject;
+  toolTraceRefs: string[];
+  latencyMs?: number;
+  costEstimate?: JsonObject;
+  failureReason?: string;
+  userFeedbackAction?: UserDecisionAction;
+  qualityDelta: number;
+  reputationDelta: number;
   modelProvenance: JsonObject;
 }
 
@@ -126,16 +151,28 @@ export function normalizePlaceRecoveryWorkerResult(body: JsonObject): PlaceRecov
     technicalFailure,
     jobId: trimmedString(body.job_id ?? body.jobId),
     agentId: trimmedString(body.agent_id ?? body.agentId) ?? "SAV-E",
+    operatorId: trimmedString(body.operator_id ?? body.operatorId),
+    requesterId: trimmedString(body.requester_id ?? body.requesterId),
+    inputHash: trimmedString(body.input_hash ?? body.inputHash),
+    outputHash: trimmedString(body.output_hash ?? body.outputHash),
+    permissionSnapshot: objectValue(body.permission_snapshot ?? body.permissionSnapshot) ?? {},
+    toolTraceRefs: stringArray(body.tool_trace_refs ?? body.toolTraceRefs),
+    latencyMs: boundedOptionalNumber(body.latency_ms ?? body.latencyMs),
+    costEstimate: objectValue(body.cost_estimate ?? body.costEstimate),
+    failureReason: trimmedString(body.failure_reason ?? body.failureReason),
     modelProvenance: normalizeModelProvenance(body.model_provenance ?? body.modelProvenance ?? body.model),
   };
 }
 
 export function normalizeUserDecision(body: JsonObject, runId: string): UserDecisionInput {
+  const action = parseEnum(body.action, userDecisionActions, "needs_more_evidence");
   return {
     runId,
-    action: parseEnum(body.action, userDecisionActions, "needs_more_evidence"),
+    action,
     editedPayload: objectValue(body.edited_payload ?? body.editedPayload) ?? {},
     reason: trimmedString(body.reason),
+    qualityDelta: boundedDelta(body.quality_delta ?? body.qualityDelta) ?? qualityDeltaForDecision(action),
+    reputationDelta: boundedDelta(body.reputation_delta ?? body.reputationDelta) ?? reputationDeltaForDecision(action),
   };
 }
 
@@ -184,7 +221,7 @@ export function receiptForResult(
   decision?: UserDecisionInput,
 ): WorkflowReceiptDraft {
   if (result.technicalFailure || result.resultType === "technical_failure") {
-    return receiptDraft(result, {
+    return decisionReceiptDraft(result, decision, {
       receiptType: "decision",
       verdict: "refund",
       settlement: "credit_refunded",
@@ -194,7 +231,7 @@ export function receiptForResult(
   }
 
   if (decision?.action === "reject" && result.resultType === "confirmed_map_stamp") {
-    return receiptDraft(result, {
+    return decisionReceiptDraft(result, decision, {
       receiptType: "decision",
       verdict: "fail",
       settlement: "credit_refunded",
@@ -204,7 +241,7 @@ export function receiptForResult(
   }
 
   if (decision?.action === "confirm" || result.resultType === "confirmed_map_stamp") {
-    return receiptDraft(result, {
+    return decisionReceiptDraft(result, decision, {
       receiptType: "decision",
       verdict: "pass",
       settlement: "credit_consumed",
@@ -214,7 +251,7 @@ export function receiptForResult(
   }
 
   if (result.resultType === "review_candidate") {
-    return receiptDraft(result, {
+    return decisionReceiptDraft(result, decision, {
       receiptType: "decision",
       verdict: "pass",
       settlement: "credit_consumed",
@@ -223,13 +260,26 @@ export function receiptForResult(
     });
   }
 
-  return receiptDraft(result, {
+  return decisionReceiptDraft(result, decision, {
     receiptType: "decision",
     verdict: "partial",
     settlement: "partial",
     creditSettlement: "partial",
     evaluatorSummary: "Source produced useful clues but not enough evidence for a place candidate.",
   });
+}
+
+function decisionReceiptDraft(
+  result: PlaceRecoveryWorkerResult,
+  decision: UserDecisionInput | undefined,
+  values: Pick<WorkflowReceiptDraft, "receiptType" | "verdict" | "settlement" | "creditSettlement" | "evaluatorSummary">,
+): WorkflowReceiptDraft {
+  return {
+    ...receiptDraft(result, values),
+    userFeedbackAction: decision?.action,
+    qualityDelta: decision?.qualityDelta ?? 0,
+    reputationDelta: decision?.reputationDelta ?? 0,
+  };
 }
 
 function receiptDraft(
@@ -240,8 +290,21 @@ function receiptDraft(
     ...values,
     evidenceRefs: result.evidenceRefs,
     candidateRefs: result.candidateRefs,
+    workflowVersion: placeRecoveryWorkflowVersion,
     jobId: result.jobId,
     agentId: result.agentId,
+    operatorId: result.operatorId,
+    requesterId: result.requesterId,
+    inputHash: result.inputHash,
+    outputHash: result.outputHash,
+    permissionSnapshot: result.permissionSnapshot,
+    toolTraceRefs: result.toolTraceRefs,
+    latencyMs: result.latencyMs,
+    costEstimate: result.costEstimate,
+    failureReason: result.failureReason,
+    userFeedbackAction: undefined,
+    qualityDelta: 0,
+    reputationDelta: 0,
     modelProvenance: result.modelProvenance,
   };
 }
@@ -292,6 +355,30 @@ function boundedCredits(value: unknown): number {
 function boundedConfidence(value: unknown): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
+}
+
+function qualityDeltaForDecision(action: UserDecisionAction): number {
+  if (action === "confirm") return 1;
+  if (action === "edit") return 0.5;
+  if (action === "reject") return -1;
+  return 0;
+}
+
+function reputationDeltaForDecision(action: UserDecisionAction): number {
+  if (action === "confirm") return 1;
+  if (action === "edit") return 0.25;
+  if (action === "reject") return -1;
+  return 0;
+}
+
+function boundedOptionalNumber(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return value;
+}
+
+function boundedDelta(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.max(-1, Math.min(1, value));
 }
 
 function parseEnum<const T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {

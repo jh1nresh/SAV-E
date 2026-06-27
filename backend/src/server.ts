@@ -545,10 +545,23 @@ const userDecisionFields = [
 const workflowReceiptFields = [
   "run_id",
   "workflow_id",
+  "workflow_version",
+  "operator_id",
+  "requester_id",
   "receipt_type",
   "job_id",
   "agent_id",
   "model_provenance",
+  "input_hash",
+  "output_hash",
+  "permission_snapshot",
+  "tool_trace_refs",
+  "latency_ms",
+  "cost_estimate",
+  "failure_reason",
+  "user_feedback_action",
+  "quality_delta",
+  "reputation_delta",
   "verdict",
   "settlement",
   "evaluator_summary",
@@ -591,6 +604,8 @@ const creditLedgerFields = [
 
 const jsonbFields = new Set([
   "model_provenance",
+  "permission_snapshot",
+  "cost_estimate",
   "context",
   "evidence",
   "edited_payload",
@@ -1776,6 +1791,36 @@ async function handleWorkflows(
 
   const runId = id;
 
+  if (request.method === "GET" && runId === "summary") {
+    const { rows } = await pool.query(
+      `select
+         count(*)::int as total_runs,
+         count(*) filter (where source_url ilike '%instagram.com/reel%')::int as instagram_reels,
+         count(*) filter (where source_url is not null)::int as source_url_runs,
+         count(*) filter (where receipt_id is not null)::int as runs_with_current_receipt,
+         count(*) filter (where status = 'completed')::int as completed_runs,
+         count(*) filter (where status = 'failed')::int as failed_runs,
+         count(*) filter (where status = 'needs_review')::int as needs_review_runs
+       from workflow_runs
+       where user_id = $1 and workflow_id = $2`,
+      [userId, placeRecoveryWorkflowId],
+    );
+    const { rows: receiptRows } = await pool.query(
+      `select
+         count(*)::int as total_receipts,
+         count(*) filter (where receipt_type = 'analysis')::int as analysis_receipts,
+         count(*) filter (where receipt_type = 'decision')::int as decision_receipts,
+         count(*) filter (where user_feedback_action is not null)::int as user_feedback_receipts
+       from workflow_receipts
+       where requester_id = $1 and workflow_id = $2`,
+      [userId, placeRecoveryWorkflowId],
+    );
+    return sendJson(response, {
+      runs: asObject(rows[0]),
+      receipts: asObject(receiptRows[0]),
+    });
+  }
+
   if (request.method === "GET" && !runId) {
     const { rows } = await pool.query(
       `select *
@@ -1871,7 +1916,18 @@ async function handleWorkflows(
         ],
       );
       const updatedRun = asObject(rows[0]);
-      const receiptBody = workflowReceiptBody(runId, analysisReceipt);
+      const receiptBody = workflowReceiptBody(runId, analysisReceipt, {
+        run: updatedRun,
+        userId,
+        output: {
+          resultType: result.resultType,
+          evidenceTier: result.evidenceTier,
+          confidence: result.confidence,
+          evidenceRefs: result.evidenceRefs,
+          candidateRefs: result.candidateRefs,
+          technicalFailure: result.technicalFailure,
+        },
+      });
       const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
       const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
       const receiptRow = asObject(receiptRows[0]);
@@ -1925,7 +1981,15 @@ async function handleWorkflows(
       }, userDecisionFields);
       await client.query(decisionInsert.sql, decisionInsert.values);
 
-      const receiptBody = workflowReceiptBody(runId, receipt);
+      const receiptBody = workflowReceiptBody(runId, receipt, {
+        run,
+        userId,
+        output: {
+          decision: decision.action,
+          editedPayload: decision.editedPayload,
+          reason: decision.reason ?? null,
+        },
+      });
       const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
       const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
       const receiptRow = asObject(receiptRows[0]);
@@ -2885,22 +2949,58 @@ async function insertCreditLedger(client: PoolClient, body: JsonBody): Promise<v
 
 function workflowReceiptBody(runId: string, receipt: {
   receiptType: string;
+  workflowVersion: string;
   jobId?: string;
   agentId: string;
+  operatorId?: string;
+  requesterId?: string;
+  inputHash?: string;
+  outputHash?: string;
+  permissionSnapshot: JsonBody;
+  toolTraceRefs: string[];
+  latencyMs?: number;
+  costEstimate?: JsonBody;
+  failureReason?: string;
+  userFeedbackAction?: string;
+  qualityDelta: number;
+  reputationDelta: number;
   modelProvenance: JsonBody;
   verdict: string;
   settlement: string;
   evaluatorSummary: string;
   evidenceRefs: string[];
   candidateRefs: string[];
-}): JsonBody {
+}, context: { run?: JsonBody; userId?: string; output?: unknown } = {}): JsonBody {
+  const inputHash = receipt.inputHash ?? hashPayload({
+    sourceUrl: context.run?.source_url ?? null,
+    sourceType: context.run?.source_type ?? null,
+    workOrderId: context.run?.work_order_id ?? null,
+  });
+  const outputHash = receipt.outputHash ?? hashPayload(context.output ?? {
+    verdict: receipt.verdict,
+    evidenceRefs: receipt.evidenceRefs,
+    candidateRefs: receipt.candidateRefs,
+  });
   return {
     run_id: runId,
     workflow_id: placeRecoveryWorkflowId,
+    workflow_version: receipt.workflowVersion,
+    operator_id: receipt.operatorId ?? receipt.agentId,
+    requester_id: receipt.requesterId ?? context.userId ?? context.run?.user_id ?? null,
     receipt_type: receipt.receiptType,
     job_id: receipt.jobId ?? null,
     agent_id: receipt.agentId,
     model_provenance: receipt.modelProvenance,
+    input_hash: inputHash,
+    output_hash: outputHash,
+    permission_snapshot: receipt.permissionSnapshot,
+    tool_trace_refs: receipt.toolTraceRefs,
+    latency_ms: receipt.latencyMs ?? null,
+    cost_estimate: receipt.costEstimate ?? null,
+    failure_reason: receipt.failureReason ?? null,
+    user_feedback_action: receipt.userFeedbackAction ?? null,
+    quality_delta: receipt.qualityDelta,
+    reputation_delta: receipt.reputationDelta,
     verdict: receipt.verdict,
     settlement: receipt.settlement,
     evaluator_summary: receipt.evaluatorSummary,
@@ -2910,6 +3010,12 @@ function workflowReceiptBody(runId: string, receipt: {
     anchor_status: "offchain",
     private_url: null,
   };
+}
+
+function hashPayload(payload: unknown): string {
+  return createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
 }
 
 function receiptHash(runId: string, receipt: unknown): string {

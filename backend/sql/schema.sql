@@ -507,10 +507,23 @@ create table if not exists workflow_receipts (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete cascade not null,
     workflow_id text not null,
+    workflow_version text not null default 'v0',
+    operator_id text,
+    requester_id uuid references profiles(id) on delete set null,
     receipt_type text not null default 'decision',
     job_id text,
     agent_id text not null default 'SAV-E',
     model_provenance jsonb not null default '{}'::jsonb,
+    input_hash text,
+    output_hash text,
+    permission_snapshot jsonb not null default '{}'::jsonb,
+    tool_trace_refs text[] not null default '{}',
+    latency_ms integer,
+    cost_estimate jsonb,
+    failure_reason text,
+    user_feedback_action text,
+    quality_delta numeric not null default 0,
+    reputation_delta numeric not null default 0,
     verdict text not null,
     settlement text not null,
     evaluator_summary text not null default '',
@@ -527,9 +540,22 @@ create table if not exists workflow_receipts (
 );
 
 alter table workflow_receipts add column if not exists receipt_type text not null default 'decision';
+alter table workflow_receipts add column if not exists workflow_version text not null default 'v0';
+alter table workflow_receipts add column if not exists operator_id text;
+alter table workflow_receipts add column if not exists requester_id uuid references profiles(id) on delete set null;
 alter table workflow_receipts add column if not exists job_id text;
 alter table workflow_receipts add column if not exists agent_id text not null default 'SAV-E';
 alter table workflow_receipts add column if not exists model_provenance jsonb not null default '{}'::jsonb;
+alter table workflow_receipts add column if not exists input_hash text;
+alter table workflow_receipts add column if not exists output_hash text;
+alter table workflow_receipts add column if not exists permission_snapshot jsonb not null default '{}'::jsonb;
+alter table workflow_receipts add column if not exists tool_trace_refs text[] not null default '{}';
+alter table workflow_receipts add column if not exists latency_ms integer;
+alter table workflow_receipts add column if not exists cost_estimate jsonb;
+alter table workflow_receipts add column if not exists failure_reason text;
+alter table workflow_receipts add column if not exists user_feedback_action text;
+alter table workflow_receipts add column if not exists quality_delta numeric not null default 0;
+alter table workflow_receipts add column if not exists reputation_delta numeric not null default 0;
 
 create unique index if not exists idx_workflow_receipts_hash on workflow_receipts(receipt_hash);
 create index if not exists idx_workflow_receipts_run_id on workflow_receipts(run_id, created_at desc);

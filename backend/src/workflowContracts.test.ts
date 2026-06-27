@@ -70,6 +70,15 @@ test("worker result preserves job id, agent id, and model provenance", () => {
     confidence: 0.74,
     job_id: "job_123",
     agent_id: "SAV-E",
+    operator_id: "save-worker",
+    requester_id: "00000000-0000-0000-0000-000000000001",
+    input_hash: "input_hash_123",
+    output_hash: "output_hash_123",
+    permission_snapshot: { scopes: ["source_url.read", "place_candidate.write"] },
+    tool_trace_refs: ["tool:source-search"],
+    latency_ms: 1234,
+    cost_estimate: { usd: 0.002 },
+    failure_reason: "missing_coordinates",
     model_provenance: {
       claimed_provider: "google",
       claimed_model: "gemini-3.5-flash",
@@ -83,6 +92,15 @@ test("worker result preserves job id, agent id, and model provenance", () => {
 
   assert.equal(result.jobId, "job_123");
   assert.equal(result.agentId, "SAV-E");
+  assert.equal(result.operatorId, "save-worker");
+  assert.equal(result.requesterId, "00000000-0000-0000-0000-000000000001");
+  assert.equal(result.inputHash, "input_hash_123");
+  assert.equal(result.outputHash, "output_hash_123");
+  assert.deepEqual(result.permissionSnapshot, { scopes: ["source_url.read", "place_candidate.write"] });
+  assert.deepEqual(result.toolTraceRefs, ["tool:source-search"]);
+  assert.equal(result.latencyMs, 1234);
+  assert.deepEqual(result.costEstimate, { usd: 0.002 });
+  assert.equal(result.failureReason, "missing_coordinates");
   assert.deepEqual(result.modelProvenance, {
     claimedProvider: "google",
     claimedModel: "gemini-3.5-flash",
@@ -111,6 +129,7 @@ test("analysis receipt records review candidate before user decision", () => {
   const receipt = analysisReceiptForResult(result);
 
   assert.equal(receipt.receiptType, "analysis");
+  assert.equal(receipt.workflowVersion, "v0");
   assert.equal(receipt.verdict, "pass");
   assert.equal(receipt.settlement, "manual_review");
   assert.equal(receipt.creditSettlement, "pending");
@@ -133,6 +152,9 @@ test("user confirmation creates final decision receipt", () => {
   assert.equal(receipt.verdict, "pass");
   assert.equal(receipt.settlement, "credit_consumed");
   assert.equal(receipt.creditSettlement, "consumed");
+  assert.equal(receipt.userFeedbackAction, "confirm");
+  assert.equal(receipt.qualityDelta, 1);
+  assert.equal(receipt.reputationDelta, 1);
 });
 
 test("technical failure refunds reserved credit", () => {
