@@ -1,4 +1,4 @@
-# SAV-E — App Store Launch Checklist (1.0.0 / build 80)
+# SAV-E — App Store Launch Checklist (1.0.0 / build 81)
 
 What's done in-repo vs. what only **you** can do (anything needing your Apple ID,
 passwords, or App Store Connect — Claude can't sign in on your behalf).

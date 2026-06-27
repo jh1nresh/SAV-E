@@ -1,101 +1,209 @@
 # SAV-E iOS
 
-Private place-memory app for iOS.
+SAV-E is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
 
-Save places from links shared from Instagram, Threads, Xiaohongshu, Maps, or the web. SAV-E keeps uncertain places in Review first, then turns confirmed places into private Map Stamps.
+Current app version in this repo: **1.0.0 (build 81)**.
 
-## Features
+## Current product shape
 
-- **Map View** — MapKit with custom category-colored pins, clustering, and bottom sheet details
-- **Place List** — Filterable (Want to Go / Visited / All), sortable (Nearest / Recent / Rating), swipe actions
-- **Share Extension** — Accept URLs and text from other apps, parse them into Review, and save confirmed places to the map
-- **Profile** — Stats, world map visualization, collections, subscription management
-- **Onboarding** — 3-step carousel
-- **Place Detail** — Photo carousel, info grid, notes, navigate button, source link
-- **Second-wave surfaces** — Google Takeout import, collaborative lists, and full trip import stay out of the first public-test gate
+SAV-E is no longer a generic map/list/trip app. The current app is:
 
-## Tech Stack
+```text
+source clue → Review receipt → confirmed Map Stamp → private passport / shareable proof / plan
+```
 
-- **SwiftUI** + **MapKit** for UI
-- **Privy iOS SDK** for auth (Sign in with Apple / Google / Email + embedded wallet)
-- **Railway Node API + Railway Postgres** for backend persistence
-- **Gemini API** for AI content parsing
-- **Google Places API** for place matching and details
-- **App Clip** target embedded in the iOS app for shareable-link previews once App Store Connect App Clip Experiences are configured
-- **Share Extension** target for cross-app saving
+The core judgment is conservative: SAV-E should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
+
+## What ships in the iOS app
+
+- **Map-first home** — SwiftUI + MapKit map with saved stamps, review candidates, search candidates, and social/referral places.
+- **AI command drawer** — persistent bottom drawer for search, “plan around this”, order/recommendation analysis, URL import, voice input, and place actions.
+- **Review inbox** — imported social/web clues become review candidates with evidence, rejected evidence, confidence, and source-recovery receipts before saving.
+- **Map Stamps** — confirmed places support categories, visibility, detail cards, source links, notes, navigation, deletion, and list membership.
+- **Place recovery pipeline** — deterministic parser + public source-search fallback for Instagram/Threads/Xiaohongshu/web clues. Source-only clues remain source-only instead of creating fake places.
+- **Google Takeout import** — bulk import saved Google Maps places into reviewable drafts with duplicate handling.
+- **Collaborative lists** — create lists, add places, share viewer/editor list links, join list links, and plan from list items.
+- **Referral/friends layer** — referral/profile links can hand off starter map packs and complete follow intent after install/open.
+- **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, and receipt-style progress surfaces.
+- **App Intents / shortcuts** — local app intents for saving a URL and asking SAV-E memory.
+- **Bilingual UI path** — English and Traditional Chinese app-language settings for user-visible surfaces.
+
+## Companion surfaces
+
+- **Share Extension** (`SAVEShareExtension`) accepts URLs/text from other apps and queues review candidates.
+- **App Clip** (`SAVEClip`) previews SAV-E place links and private/share links on `sav-e-app.vercel.app` when Apple App Clip Experience + Associated Domains are configured.
+- **Web fallback** (`save-rn/`) serves public share previews, referral/list routes, and Apple association files through Vercel.
+- **Railway backend** (`backend/`) stores places/profiles/receipts/share links, verifies Privy auth, resolves short links, runs source recovery, and powers Sendblue/SLL-R experiments.
+- **iMessage extension** (`SAVEiMessageExtension`) exists as a parked spike. It is not embedded in shipping builds until icons and validation are complete.
+
+## Current non-goals / boundaries
+
+- Do not direct-save weak social metadata as a real place.
+- Do not configure `wanderly.app` for Universal Links/App Clips until its AASA endpoint returns raw Apple association JSON without Cloudflare/WAF challenge responses.
+- Do not ship `GEMINI_API_KEY` in app bundles. Gemini is a backend secret; client-side Gemini is private-development only.
+- Do not treat the iMessage target as production until it has app icons, reviewable UX, and validated build settings.
+- Full trip import, full referral App Clip profile previews, and production paywall/credits are not the current TestFlight boundary unless a later PR explicitly lands them.
+
+## Tech stack
+
+| Layer | Stack |
+|---|---|
+| iOS app | SwiftUI, MapKit, App Intents, Speech/AVFoundation voice input |
+| Auth | Privy iOS SDK |
+| Backend | Railway Node/TypeScript API + Railway Postgres |
+| Place intelligence | Deterministic parsers, Google Places API, Gemini via backend, public source recovery |
+| Share surfaces | iOS Share Extension, App Clip, Expo/React Native web fallback |
+| Web | Expo 54 / React Native Web / Vercel |
+| Tests | Swift unit/UI tests, Node backend tests, parser fixture scripts |
+
+## Repository structure
+
+```text
+SAV-E/                       SwiftUI iOS app
+├── App/                     App entry, auth/onboarding/link handling
+├── Views/                   Map, drawer, review, profile, import, trips, shared UI
+├── Models/                  Places, review candidates, lists, guides, social/referral models
+├── ViewModels/              Map, drawer, profile, trip state
+├── Services/                Parsing, search, persistence, local vault, AI, imports, location
+├── Intents/                 App Shortcuts / App Intents
+└── Resources/               Assets + local Secrets.plist template
+
+SAV-EShareExtension/         iOS share extension target
+SAV-EClip/                   App Clip target
+SAV-EShared/                 Shared parsers/config used by app, clip, extension
+SAV-EiMessage/               Parked iMessage extension spike
+backend/                     Railway TypeScript API + Postgres schema/tests
+save-rn/                     Expo web fallback for share/referral/list routes
+Tests/                       Swift unit and UI tests
+scripts/                     Build, config, parser, and fixture checks
+project.yml                  XcodeGen project definition
+```
 
 ## Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/JhiNResH/SAV-E.git
-   cd SAV-E
-   ```
+### 1. Clone
 
-2. Bootstrap local secrets:
-   ```bash
-   cp -n SAV-E/Resources/Secrets.plist.template SAV-E/Resources/Secrets.plist
-   cp -n SAV-EShareExtension/Secrets.plist.template SAV-EShareExtension/Secrets.plist
-   ```
+```bash
+git clone https://github.com/JhiNResH/SAV-E.git
+cd SAV-E
+```
 
-   Xcode also creates these local files from the templates during build if they are missing. It does not overwrite existing local `Secrets.plist` files; when templates change, compare them manually and add any new keys to your local files. Fill in your local API keys in `SAV-E/Resources/Secrets.plist` and `SAV-EShareExtension/Secrets.plist`:
-   - `GOOGLE_PLACES_API_KEY` — from [Google Cloud Console](https://console.cloud.google.com/)
-   - `SAVE_API_URL` — Railway backend service URL, currently `https://wanderly-api-production.up.railway.app`
-   - `SAVE_PLACE_SHARE_BASE_URL` — production place share route, currently `https://sav-e-app.vercel.app/p`
-   - `SAVE_TRIP_SHARE_BASE_URL` — production trip share route, currently `https://sav-e-app.vercel.app/trip`
-   - `SAVE_SHARE_BASE_URL` — legacy trip share route fallback, currently `https://sav-e-app.vercel.app/trip`
-   - `SAVE_LIST_SHARE_BASE_URL` — production collaborative list share route, currently `https://sav-e-app.vercel.app/list`
-   - `PRIVY_APP_ID` — from Privy Dashboard → App Settings → Basics
-   - `PRIVY_APP_CLIENT_ID` — from Privy Dashboard → App Settings → Clients. The iOS app client must allow bundle id `com.wanderly.app` and URL scheme `wanderly`.
-   - `GEMINI_API_KEY` is a backend secret. Do not ship it in app `Secrets.plist`; only set `SAVE_ALLOW_CLIENT_GEMINI=true` with a local Gemini key for private development.
+### 2. Bootstrap local secrets
 
-   New production config should use the `SAVE_*` keys above. The app still reads legacy `WANDERLY_*` keys as a migration fallback when present in an older local `Secrets.plist`, but the templates and release docs are SAV-E-first.
-   - Keep real values out of commits.
+```bash
+cp -n SAV-E/Resources/Secrets.plist.template SAV-E/Resources/Secrets.plist
+cp -n SAV-EShareExtension/Secrets.plist.template SAV-EShareExtension/Secrets.plist
+```
 
-3. Configure the Railway backend:
-   ```bash
-   cd backend
-   npm install
-   npm run build
-   ```
+Xcode also creates these local files from templates during build if they are missing. It does not overwrite existing `Secrets.plist` files; when templates change, compare manually and add new keys.
 
-   Railway service variables:
-   ```bash
-   DATABASE_URL=${{Postgres.DATABASE_URL}}
-   PRIVY_APP_ID=...
-   PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
-   ```
+Fill local values in `SAV-E/Resources/Secrets.plist` and `SAV-EShareExtension/Secrets.plist`:
 
-   Apply the schema to Railway Postgres:
-   ```bash
-   psql "$DATABASE_URL" -f sql/schema.sql
-   ```
+| Key | Purpose |
+|---|---|
+| `GOOGLE_PLACES_API_KEY` | Google Places lookup/details |
+| `SAVE_API_URL` | Railway backend URL, currently `https://wanderly-api-production.up.railway.app` |
+| `SAVE_PLACE_SHARE_BASE_URL` | Place share route, currently `https://sav-e-app.vercel.app/p` |
+| `SAVE_TRIP_SHARE_BASE_URL` | Trip share route, currently `https://sav-e-app.vercel.app/trip` |
+| `SAVE_SHARE_BASE_URL` | Legacy trip fallback, currently `https://sav-e-app.vercel.app/trip` |
+| `SAVE_LIST_SHARE_BASE_URL` | Collaborative list route, currently `https://sav-e-app.vercel.app/list` |
+| `PRIVY_APP_ID` | Privy Dashboard → App Settings → Basics |
+| `PRIVY_APP_CLIENT_ID` | Privy iOS client. Must allow bundle id `com.wanderly.app` and URL scheme `wanderly`. |
 
-4. Generate the Xcode project:
-   ```bash
-   xcodegen generate
-   ```
+The app still reads legacy `WANDERLY_*` keys as a migration fallback for older local secrets, but new production config should use `SAVE_*` keys.
 
-5. Open the project in Xcode:
-   ```bash
-   open SAV-E.xcodeproj
-   ```
+Keep real values out of commits.
 
-6. Build and run on simulator or device. Simulator builds do not need signing; device builds and archives require either passing `APPLE_TEAM_ID` through the CLI or selecting your Apple Developer Team in Xcode locally.
+### 3. Install backend dependencies
 
-For local simulator verification, use the wrapper so Xcode's benign locked-device discovery warnings do not bury the real build output:
+```bash
+cd backend
+npm install
+npm run build
+```
+
+Railway service variables include:
+
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+PRIVY_APP_ID=...
+PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
+PRIVY_APP_SECRET=...                 # needed for Privy user provisioning flows
+SAVE_GUEST_SESSION_SECRET=...        # stable guest sessions across restarts
+GEMINI_API_KEY=...                   # backend-only AI parsing/analysis
+GOOGLE_PLACES_API_KEY=...            # backend source recovery / place enrichment
+```
+
+Apply/update the schema against Railway Postgres when migrations/schema change:
+
+```bash
+psql "$DATABASE_URL" -f backend/sql/schema.sql
+```
+
+### 4. Generate and open the Xcode project
+
+```bash
+xcodegen generate
+open SAV-E.xcodeproj
+```
+
+Use the **SAV-E** scheme for the shipping app. The app target is named `SAVE`; bundle IDs stay under `com.wanderly.*` for production compatibility.
+
+## Local verification
+
+### iOS simulator build
+
+Use the wrapper so benign locked-device discovery warnings do not bury the real build output:
 
 ```bash
 scripts/xcodebuild-clean.sh \
   -project SAV-E.xcodeproj \
   -scheme SAV-E \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,id=53A8DA29-D4F6-43AF-A81E-47929D1DF97D' \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
 
-## TestFlight Archive
+### Swift tests
+
+```bash
+scripts/xcodebuild-clean.sh \
+  -project SAV-E.xcodeproj \
+  -scheme SAV-E \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+```
+
+### Backend tests
+
+```bash
+cd backend
+npm test
+```
+
+### Web fallback checks
+
+```bash
+cd save-rn
+npm install
+npm run check:import-links
+npm run check:save-cards
+npm run check:save-actions
+npm run export:web
+```
+
+### Focused parser / fixture scripts
+
+```bash
+swift scripts/social_place_regression.swift
+swift scripts/check-social-link-parser.swift
+swift scripts/check-social-ocr-fixtures.swift
+swift scripts/check-social-places-refine-fixtures.swift
+```
+
+## TestFlight archive
 
 Set `APPLE_TEAM_ID` to the 10-character Apple Developer Team ID for the account that owns the App IDs. XcodeGen passes it into all iOS targets as `DEVELOPMENT_TEAM`.
 
@@ -113,14 +221,14 @@ xcodebuild \
   archive
 ```
 
-Prepare an App Store Connect upload options plist. The generated options are external-TestFlight ready by default. Set `TESTFLIGHT_SCOPE=internal` only when producing an internal-only review build.
+Prepare App Store Connect upload options. The generated options are external-TestFlight ready by default. Set `TESTFLIGHT_SCOPE=internal` only for internal-only review builds.
 
 ```bash
 APPLE_TEAM_ID="$APPLE_TEAM_ID" scripts/prepare-testflight-export-options.sh
 TESTFLIGHT_SCOPE=internal APPLE_TEAM_ID="$APPLE_TEAM_ID" scripts/prepare-testflight-export-options.sh build/ExportOptions.TestFlight.Internal.plist
 ```
 
-Upload the archive to App Store Connect for TestFlight processing:
+Upload:
 
 ```bash
 xcodebuild \
@@ -132,133 +240,70 @@ xcodebuild \
   APPLE_TEAM_ID="$APPLE_TEAM_ID"
 ```
 
-## First TestFlight Boundary
+## First TestFlight boundary
 
-Ship the native iOS app, Share Extension, and embedded App Clip for SAV-E share links. App Clip invocation still depends on Apple Developer associated-domain capabilities, the production AASA file, App Store Connect App Clip Experiences, and Apple's associated-domain CDN.
+Ship the native iOS app, Share Extension, and embedded App Clip for SAV-E share links.
 
-Before uploading a build:
+Before upload:
 
 - register App IDs for `com.wanderly.app`, `com.wanderly.app.ShareExtension`, and `com.wanderly.app.Clip`
-- enable the App Group `group.com.wanderly.app` for the app and Share Extension
-
-These Apple identifiers are the existing production compatibility layer. The user-facing product, Xcode targets, release config keys, and share URLs should use SAV-E / SAVE naming.
+- enable App Group `group.com.wanderly.app` for app and Share Extension
 - configure signing team/profiles in Xcode or release xcconfig
-- confirm the App Store icon and privacy manifest are included
+- confirm App Store icon and privacy manifest are included
 - keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
 
-## App Clip Share Routes
+These Apple identifiers are the existing production compatibility layer. User-facing naming, target display names, release config keys, and share URLs should use SAV-E / SAVE naming.
 
-App Clip support is enabled for SAV-E share links. If the full app is installed, Universal Links should open the app. If the full app is not installed and the App Clip Experience is configured in App Store Connect, iOS should show the App Clip card instead of relying on the web fallback.
+## Share, App Clip, and Universal Link routes
 
 SAV-E separates share actions from map actions:
 
 - Share = SAV-E link
-- Maps = Apple Maps link
+- Maps = Apple Maps / Google Maps link
 
-SAV-E place links use this shape:
+Production host: `sav-e-app.vercel.app`.
 
-```text
-https://sav-e-app.vercel.app/p/<shortCode>
-```
-
-New place links should use backend-created short codes. The backend resolver
-returns the public `SharedPlaceData` payload for the App Clip, full app, and web
-preview. Legacy embedded-payload links remain readable:
+Current public route shapes:
 
 ```text
-https://sav-e-app.vercel.app/p/<base64-url-encoded SharedPlaceData JSON>
+/p/{shortCode}
+/p/{base64urlSharedPlaceDataJson}     # legacy readable
+/trip/{base64urlSharedTripDataJson}
+/list?d={base64SharedListPayloadJson}&r={viewer|editor}
+/r/{code}
+/u/{handle}?ref={code}
+/my/{signedToken}
 ```
 
-SAV-E trip links use this shape:
+The full app handles installed-app Universal Links and `wanderly://` deep links. The App Clip target can preview SAV-E place payloads and private/share cards. Full trip import, full list previews, and full referral previews are later surfaces unless a newer release explicitly changes that boundary.
 
-```text
-https://sav-e-app.vercel.app/trip/<base64-url-encoded SharedTripData JSON>
-```
+For build 81 / first App Review:
 
-SAV-E collaborative list and referral links use these shapes:
-
-```text
-https://sav-e-app.vercel.app/list?d=<base64 SharedListPayload JSON>&r=<viewer|editor>
-https://sav-e-app.vercel.app/r/<code>
-https://sav-e-app.vercel.app/u/<handle>?ref=<code>
-```
-
-Private My SAV-E links use this shape:
-
-```text
-https://sav-e-app.vercel.app/my/<signedToken>
-```
-
-The App Clip target can preview place payloads with photo, rating, hours, address, source, and save/open actions. It can also preview private My SAV-E links as native saved-place cards, verified visits, and receipt-gated reviews. Full trip import, list previews, and referral previews are still later surfaces. The full app handles `https://sav-e-app.vercel.app/p/...` and `https://sav-e-app.vercel.app/trip/...` links when installed. For build 80, do not configure `wanderly.app` as an App Clip or Universal Link domain; add it back only after Cloudflare/WAF bypasses Apple association requests.
-
-Before this works for friends without the full app installed:
-
-- enable Associated Domains on `com.wanderly.app` and `com.wanderly.app.Clip` in Apple Developer
 - keep `applinks:sav-e-app.vercel.app` in the app entitlement
 - keep `appclips:sav-e-app.vercel.app` in the App Clip entitlement
 - keep `appclips:sav-e-app.vercel.app` and `com.apple.developer.associated-appclip-app-identifiers` in the main app entitlement
-- set `APPLE_TEAM_ID` in the Vercel build environment so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
-- keep `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` configured for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
-- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/r*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`; iOS cannot complete App Clip or Universal Link association through an HTML challenge page
-- for build 80 / first App Review, keep App Store Connect App Clip Experiences on `sav-e-app.vercel.app` only
-- create the first App Store Connect App Clip Experiences for `https://sav-e-app.vercel.app/p/*` and, if referral preview is needed, `https://sav-e-app.vercel.app/r/*`; avoid `wanderly.app` until `https://wanderly.app/.well-known/apple-app-site-association` returns the Apple association JSON without Cloudflare challenge responses
-- wait for Apple's associated-domain CDN to pick up the AASA file
+- set `APPLE_TEAM_ID` in Vercel so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
+- set `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
+- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/r*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`
+- configure App Store Connect App Clip Experiences on `sav-e-app.vercel.app` only
+- avoid `wanderly.app` until `https://wanderly.app/.well-known/apple-app-site-association` returns Apple association JSON without a challenge page
 
-Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip. If `APPLE_TEAM_ID` is missing, the web build writes a disabled AASA placeholder with no app IDs so Vercel does not serve the SPA shell as Apple association data.
+Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip.
 
-## Referral Profile Links
+## Design direction
 
-SAV-E referral links use these shapes:
+SAV-E should feel like a warm private travel notebook, not a generic data table:
 
-```text
-https://sav-e-app.vercel.app/r/<code>
-https://sav-e-app.vercel.app/u/<handle>?ref=<code>
-```
+| Token | Light | Dark |
+|---|---|---|
+| Background | `#FFF8F0` cream | `#1C1C1E` charcoal |
+| Accent | `#C75B39` terracotta | `#E8A87C` amber |
+| Secondary | `#A8B5A0` sage | `#A8B5A0` sage |
+| Text | `#2C2C2E` charcoal | `#FFFFFF` |
+| Radius | 16–32 px depending on surface | 16–32 px |
+| Font | SF Pro | SF Pro |
 
-The App Clip preview can later show the referrer's profile, a starter map pack, and a follow CTA. The handoff opens the full app through `wanderly://referral?code=<code>&handle=<handle>&lens=friends`, where the full app stores the referrer and intended follow lens before completing follow after install/open.
-
-Before production referral App Clips work, keep the App Clip Experience on `sav-e-app.vercel.app`. Add `wanderly.app` only after its AASA endpoint returns Apple association JSON without a Cloudflare/WAF challenge.
-
-## Project Structure
-
-```
-SAV-E/
-├── App/                    Main app entry + tab-based root
-├── Views/
-│   ├── Map/                Map view with annotations
-│   ├── List/               Filterable place list with cards
-│   ├── Trips/              Trip planner with timeline
-│   ├── Profile/            User profile and stats
-│   ├── Detail/             Place detail view
-│   ├── Onboarding/         3-step onboarding carousel
-│   └── Shared/             Reusable components
-├── Models/                 Data models (Place, Trip, UserProfile)
-├── ViewModels/             MVVM view models
-├── Services/               API service protocols + stubs
-├── Extensions/             Color theme + utilities
-└── Resources/              Assets
-SAV-EShareExtension/     Share Extension target
-SAV-EClip/               App Clip target
-backend/                    Railway API + Postgres schema
-```
-
-## Design Theme
-
-| Token              | Light           | Dark            |
-|---------------------|-----------------|-----------------|
-| Background          | #FFF8F0 (Cream) | #1C1C1E (Charcoal) |
-| Accent              | #C75B39 (Terracotta) | #E8A87C (Amber) |
-| Secondary           | #A8B5A0 (Sage)  | #A8B5A0 (Sage)  |
-| Text                | #2C2C2E (Charcoal) | #FFFFFF         |
-| Corner Radius       | 16px            | 16px            |
-| Font                | SF Pro (system) | SF Pro (system) |
-
-## Dependencies (Swift Package Manager)
-
-- [privy-io/privy-ios](https://github.com/privy-io/privy-ios) — Authentication
-- Railway — Backend hosting + Postgres
-- Google Places API — REST via URLSession
-- Gemini API — REST via URLSession
+UX rule: show the receipt behind a recommendation, but keep the main action simple — “what should I do next?”
 
 ## License
 
