@@ -509,7 +509,7 @@ create table if not exists workflow_receipts (
     workflow_id text not null,
     workflow_version text not null default 'v0',
     operator_id text,
-    requester_id uuid references profiles(id) on delete set null,
+    requester_id text references profiles(id) on delete set null,
     receipt_type text not null default 'decision',
     job_id text,
     agent_id text not null default 'SAV-E',
@@ -542,7 +542,7 @@ create table if not exists workflow_receipts (
 alter table workflow_receipts add column if not exists receipt_type text not null default 'decision';
 alter table workflow_receipts add column if not exists workflow_version text not null default 'v0';
 alter table workflow_receipts add column if not exists operator_id text;
-alter table workflow_receipts add column if not exists requester_id uuid references profiles(id) on delete set null;
+alter table workflow_receipts add column if not exists requester_id text references profiles(id) on delete set null;
 alter table workflow_receipts add column if not exists job_id text;
 alter table workflow_receipts add column if not exists agent_id text not null default 'SAV-E';
 alter table workflow_receipts add column if not exists model_provenance jsonb not null default '{}'::jsonb;
