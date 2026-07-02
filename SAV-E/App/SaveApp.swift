@@ -629,13 +629,13 @@ struct SignInView: View {
                     .font(.headline.weight(.black))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(languageSettings.localized(
-                        english: "Try a sample place clue",
-                        traditionalChinese: "用範例線索試一次"
+                        english: "See how it works — no sign-in",
+                        traditionalChinese: "先試試看 — 不用登入"
                     ))
                     .font(.subheadline.weight(.black))
                     Text(languageSettings.localized(
-                        english: "See evidence, Review Candidate, then Map Stamp.",
-                        traditionalChinese: "看證據、待確認地點，再確認成地圖章。"
+                        english: "Drop a sample clue and watch it land on a map.",
+                        traditionalChinese: "丟一個範例線索，看它變成地圖上的地點。"
                     ))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveMutedText)
