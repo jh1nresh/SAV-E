@@ -1189,6 +1189,18 @@ struct AIDrawerView: View {
     private var savedPlacesView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if viewModel.places.isEmpty && reviewCandidates.isEmpty {
+                    EmptyStateView(
+                        icon: "mappin.and.ellipse",
+                        title: languageSettings.localized(english: "No Map Stamps yet", traditionalChinese: "還沒有地圖章"),
+                        subtitle: languageSettings.localized(
+                            english: "Paste a link from Instagram, Maps, or a friend's message — SAV-E finds the place for you.",
+                            traditionalChinese: "貼上 Instagram、地圖或朋友訊息裡的連結，SAV-E 會幫你找出地點。"
+                        ),
+                        actionTitle: languageSettings.localized(english: "Paste a link", traditionalChinese: "貼上連結"),
+                        action: { searchFocused = true }
+                    )
+                } else {
                 MemoryFlowCTA(
                     reviewCount: reviewCandidates.count,
                     stampCount: viewModel.places.count,
@@ -1222,6 +1234,7 @@ struct AIDrawerView: View {
                         .foregroundColor(.saveCocoa.opacity(0.74))
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                }
             }
             .padding(.horizontal, SaveTheme.Spacing.lg)
             .padding(.top, SaveTheme.Spacing.lg)
@@ -1251,11 +1264,24 @@ struct AIDrawerView: View {
     private var reviewInboxView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if reviewCandidates.isEmpty {
+                    EmptyStateView(
+                        icon: "checklist.unchecked",
+                        title: languageSettings.localized(english: "Nothing to review", traditionalChinese: "沒有待確認的地點"),
+                        subtitle: languageSettings.localized(
+                            english: "When SAV-E isn't sure about a place, it waits here for your confirmation — your map never fills up with guesses.",
+                            traditionalChinese: "SAV-E 不確定的地點會先在這裡等你確認，你的地圖不會被亂猜的地點塞滿。"
+                        ),
+                        actionTitle: languageSettings.localized(english: "Paste a link", traditionalChinese: "貼上連結"),
+                        action: { searchFocused = true }
+                    )
+                } else {
                 ReviewCandidatesSection(
                     candidates: reviewCandidates,
                     limit: nil,
                     onSelect: openReviewCandidateDetail
                 )
+                }
 
                 if let addSpotStatus {
                     Text(addSpotStatus)
