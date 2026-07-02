@@ -972,7 +972,6 @@ struct AIDrawerView: View {
                 .padding(.horizontal, SaveTheme.Spacing.lg)
 
                 categoryFilterStrip
-                publicTestFocusNote
 
                 if !viewModel.chatHistory.isEmpty {
                     NotebookBandLabel(languageSettings.localized(english: "Recent", traditionalChinese: "最近"))
@@ -1039,19 +1038,6 @@ struct AIDrawerView: View {
                 .padding(.horizontal, SaveTheme.Spacing.lg)
                 .padding(.vertical, 2)
             }
-        }
-    }
-
-    private var publicTestFocusNote: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            NotebookBandLabel(languageSettings.localized(english: "Public test focus", traditionalChinese: "Public test 主線"))
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            Text(SaveMVPDrawerEntryCopy.focusNote(language: languageSettings.language))
-            .font(.caption.weight(.semibold))
-            .foregroundColor(.saveCocoa.opacity(0.74))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, SaveTheme.Spacing.lg)
         }
     }
 
