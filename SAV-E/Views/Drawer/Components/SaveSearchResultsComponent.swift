@@ -328,7 +328,7 @@ private struct SaveSearchResultNotebookRow: View {
         .background(Color.saveCream.opacity(0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -351,7 +351,7 @@ private struct SaveSearchResultNotebookRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.5)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1)
             )
         } else {
             fallbackIcon
@@ -366,7 +366,7 @@ private struct SaveSearchResultNotebookRow: View {
             .background(iconFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.5)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
