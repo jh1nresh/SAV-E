@@ -168,3 +168,10 @@ create index idx_places_fts on public.places
 
 -- Status filter (wantToGo / visited)
 create index idx_places_status on public.places(user_id, status);
+
+-- One row per (user, Google place). Partial: unresolved/manual places
+-- without a google_place_id stay unconstrained. See migration
+-- 20260702120000_places_dedup_google_place_id.sql.
+create unique index if not exists places_user_google_place_id_unique
+  on public.places (user_id, google_place_id)
+  where google_place_id is not null and google_place_id <> '';
