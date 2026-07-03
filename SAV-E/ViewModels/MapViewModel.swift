@@ -357,6 +357,9 @@ final class MapViewModel: ObservableObject {
     @Published var selectedMapCandidate: SaveMapCandidate?
     @Published var selectedMapFeature: MapFeature?
     @Published var isLoadingMapCandidates = false
+    /// Set when a place saved locally but failed to sync to the account —
+    /// surfaced as an alert so the failure isn't console-only.
+    @Published var syncFailedPlaceName: String?
     @Published var collaborativeLists: [SaveCollaborativeList] = []
     @Published var socialLens: SaveSocialLens = .forYou
     @Published var socialPlaces: [Place] = []
@@ -578,6 +581,7 @@ final class MapViewModel: ObservableObject {
                 failedImports.append(pendingPlace)
                 importedPlaces.append(place)
                 print("MapViewModel: failed to import shared place \(pendingPlace.name): \(error)")
+                syncFailedPlaceName = pendingPlace.name
             }
         }
 
@@ -778,6 +782,7 @@ final class MapViewModel: ObservableObject {
                 try await supabaseService.savePlace(place, userId: userId)
             } catch {
                 print("MapViewModel: failed to sync saved map candidate \(place.name): \(error)")
+                syncFailedPlaceName = place.name
             }
         }
 

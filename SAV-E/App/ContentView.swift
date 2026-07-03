@@ -12,6 +12,20 @@ struct ContentView: View {
     var body: some View {
         MapView(viewModel: mapVM)
             .environment(\.appLanguageSettings, languageSettings)
+            .alert(
+                languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
+                isPresented: Binding(
+                    get: { mapVM.syncFailedPlaceName != nil },
+                    set: { if !$0 { mapVM.syncFailedPlaceName = nil } }
+                )
+            ) {
+                Button(languageSettings.text(.ok)) { mapVM.syncFailedPlaceName = nil }
+            } message: {
+                Text(languageSettings.localized(
+                    english: "\"\(mapVM.syncFailedPlaceName ?? "")\" couldn't sync to your account — check your connection. It stays saved locally.",
+                    traditionalChinese: "「\(mapVM.syncFailedPlaceName ?? "")」沒能同步到你的帳號——請檢查網路。它仍保存在本機。"
+                ))
+            }
             .sheet(isPresented: .constant(true)) {
                 AIDrawerView(
                     viewModel: drawerVM,
