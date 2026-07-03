@@ -196,7 +196,7 @@ extension View {
         background(Color.saveNotebookPage)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                    .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
@@ -205,8 +205,8 @@ extension View {
         cornerRadius: CGFloat = 16,
         fill: Color = .saveNotebookPage,
         opacity: Double = 0.76,
-        strokeOpacity: Double = 0.58,
-        lineWidth: CGFloat = 1.2
+        strokeOpacity: Double = 0.35,
+        lineWidth: CGFloat = 1
     ) -> some View {
         background(fill.opacity(opacity))
             .overlay(
@@ -228,7 +228,7 @@ extension View {
             .background(fill)
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }

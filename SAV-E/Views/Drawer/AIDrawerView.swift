@@ -745,7 +745,7 @@ struct AIDrawerView: View {
                     .background(Color.saveNotebookPage.opacity(0.62))
                     .overlay(
                         Circle()
-                            .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                     )
                     .clipShape(Circle())
             }
@@ -4859,7 +4859,7 @@ private struct AIResultActionBar: View {
         .background(Color.saveNotebookPage.opacity(0.94))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }

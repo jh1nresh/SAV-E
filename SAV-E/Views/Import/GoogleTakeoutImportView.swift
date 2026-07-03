@@ -92,7 +92,7 @@ struct GoogleTakeoutImportView: View {
                 .background(Color.saveHoney)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.6)
+                        .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
@@ -251,7 +251,7 @@ struct GoogleTakeoutImportView: View {
                 .background(selectedDraftIds.isEmpty ? Color.saveDisabled : Color.saveHoney)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(selectedDraftIds.isEmpty ? 0.42 : 1), lineWidth: 1.6)
+                        .stroke(Color.saveNotebookLine.opacity(selectedDraftIds.isEmpty ? 0.42 : 1), lineWidth: 1.4)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }

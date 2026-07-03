@@ -29,7 +29,7 @@ struct CategoryPill: View {
         .foregroundColor(.saveInk)
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: isSelected ? 1.8 : 1.2)
+                .stroke(Color.saveNotebookLine, lineWidth: isSelected ? 1.4 : 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityLabel(category.displayName(language: languageSettings.language))

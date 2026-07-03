@@ -126,7 +126,7 @@ struct OnboardingView: View {
                 .background(primaryDisabled ? Color.saveDisabled.opacity(0.6) : step.tint)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -478,7 +478,6 @@ private struct LanguageStepView: View {
             Spacer(minLength: 0)
 
             MemoMascotMark(size: isCompactHeight ? 96 : 124, framed: false)
-                .shadow(color: Color.saveInk.opacity(0.12), radius: 16, x: 0, y: 9)
 
             OnboardingStepTitle(
                 eyebrow: OnboardingStep.language.eyebrow(language: language),
@@ -545,7 +544,7 @@ private struct LanguageChoiceCard: View {
             .background(isSelected ? Color.saveHoney.opacity(0.34) : Color.saveNotebookPage.opacity(0.86))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 1 : 0.4), lineWidth: isSelected ? 2 : 1.3)
+                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 1 : 0.4), lineWidth: isSelected ? 1.4 : 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
@@ -753,7 +752,7 @@ private struct ProofDemoCanvas: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1.6)
+                        .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
                 )
 
             sceneContent
@@ -763,7 +762,6 @@ private struct ProofDemoCanvas: View {
         }
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Color.saveInk.opacity(0.08), radius: 16, x: 0, y: 10)
         .task(id: step) {
             await runPhaseScript()
         }
@@ -1109,7 +1107,7 @@ private struct OnboardingMiniMap: View {
                 .background(Color.saveHoney.opacity(0.94))
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.8))
                 .clipShape(Circle())
-                .shadow(color: Color.saveInk.opacity(0.18), radius: 7, x: 0, y: 4)
+                .shadow(color: Color.saveInk.opacity(0.15), radius: 7, x: 0, y: 4)
         }
         .scaleEffect(stampVisible ? 1 : (reduceMotion ? 1 : 2.1))
         .opacity(stampVisible ? 1 : 0)

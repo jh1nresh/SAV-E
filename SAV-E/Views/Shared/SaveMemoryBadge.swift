@@ -165,7 +165,7 @@ struct SaveStampMomentView: View {
         .padding(.vertical, SaveTheme.Spacing.lg)
         .frame(maxWidth: 320)
         .saveNotebookPage(cornerRadius: 20)
-        .shadow(color: Color.saveCocoa.opacity(0.18), radius: 14, x: 0, y: 6)
+        .shadow(color: Color.saveCocoa.opacity(0.15), radius: 12, x: 0, y: 6)
         .onAppear {
             SaveHaptics.stamp()
             withAnimation(SaveTheme.Motion.stampSpring) {

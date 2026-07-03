@@ -396,7 +396,6 @@ private struct SaveOpeningScrapbookCard: View {
             )
             .rotationEffect(.degrees(rotation))
             .offset(offset)
-            .shadow(color: Color.saveInk.opacity(0.10), radius: 0, x: 3, y: 4)
     }
 }
 
@@ -618,7 +617,7 @@ struct SignInView: View {
             .background(Color.saveNotebookPage)
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -851,7 +850,7 @@ private struct WorkflowStepCard: View {
         .background(Color.saveNotebookPage.opacity(0.96))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
@@ -911,7 +910,7 @@ private struct SignInInputRow: View {
         .background(Color.saveNotebookPage.opacity(0.96))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }

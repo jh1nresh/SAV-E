@@ -5,7 +5,6 @@ import UIKit
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
@@ -110,14 +109,13 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.signOut")
                     }
                     .padding(SaveTheme.Spacing.md)
-                    .profileGlassSurface(cornerRadius: 18, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1.1)
+                    .saveNotebookSurface(cornerRadius: 18)
                     .padding(.horizontal)
                 }
                 .padding(.bottom, SaveTheme.Spacing.xl)
-                .profileGlassGroup(spacing: SaveTheme.Spacing.lg)
                 .padding(.top, 2)
             }
-            .background(ProfileGlassBackground(colorScheme: colorScheme))
+            .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
         .task {
@@ -172,7 +170,6 @@ struct ProfileView: View {
 
 private struct EditProfileSheet: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var displayName: String
     let avatarURLString: String?
     @Binding var selectedAvatarData: Data?
@@ -199,7 +196,7 @@ private struct EditProfileSheet: View {
                             .background(Color.saveNotebookPage)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
@@ -229,7 +226,7 @@ private struct EditProfileSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                             )
                     }
                     .disabled(isSaving)
@@ -281,7 +278,7 @@ private struct EditProfileSheet: View {
                         .textInputAutocapitalization(.words)
                         .focused($isNameFocused)
                         .padding(SaveTheme.Spacing.md)
-                        .profileGlassSurface(cornerRadius: 14, tint: .saveCream, fillOpacity: 0.12, strokeOpacity: 0.24, lineWidth: 1, isInteractive: true)
+                        .saveNotebookSurface(cornerRadius: 14)
 
                     if let errorMessage {
                         Text(errorMessage)
@@ -294,15 +291,14 @@ private struct EditProfileSheet: View {
                     }
                 }
                 .padding(SaveTheme.Spacing.lg)
-                .profileGlassSurface(cornerRadius: 20, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
+                .saveNotebookSurface(cornerRadius: 20)
                 .padding(.horizontal)
 
                 Spacer()
             }
-            .background(ProfileGlassBackground(colorScheme: colorScheme))
+            .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
         }
-        .presentationBackground(.clear)
         .onAppear {
             isNameFocused = true
         }
@@ -359,13 +355,13 @@ private struct PassportTopBar: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, SaveTheme.Spacing.md)
                     .frame(height: 38)
-                    .profileGlassSurface(cornerRadius: 14, tint: .saveHoney, fillOpacity: 0.34, strokeOpacity: 0.42, lineWidth: 1.1, isInteractive: true)
+                    .saveNotebookSurface(cornerRadius: 14, fill: .saveHoney, opacity: 0.42, lineWidth: 1.4)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.edit")
         }
         .padding(SaveTheme.Spacing.sm)
-        .profileGlassSurface(cornerRadius: 22, tint: .saveCream, fillOpacity: 0.16, strokeOpacity: 0.28)
+        .saveNotebookSurface(cornerRadius: 22)
     }
 }
 
@@ -406,8 +402,9 @@ private struct PassportHero: View {
                                 .font(.system(size: 18, weight: .black))
                                 .foregroundColor(.saveInk)
                                 .frame(width: 28, height: 28)
-                                .profileGlassCapsule(tint: .saveCream, fillOpacity: 0.12, strokeOpacity: 0.34, lineWidth: 1)
+                                .background(Color.saveNotebookPage)
                                 .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
                                 .offset(x: 6, y: 6)
                         }
 
@@ -437,7 +434,7 @@ private struct PassportHero: View {
             }
             .padding(SaveTheme.Spacing.lg)
         }
-        .profileGlassSurface(cornerRadius: 22, tint: .saveCream, fillOpacity: 0.18, strokeOpacity: 0.32, lineWidth: 1.2)
+        .saveNotebookPage(cornerRadius: 22)
     }
 
     private var visitedBadgeText: String {
@@ -474,7 +471,6 @@ private struct EditableProfileAvatar: View {
         .frame(width: 92, height: 92)
         .clipShape(Circle())
         .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 2))
-        .shadow(color: Color.saveCocoa.opacity(0.12), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -612,7 +608,7 @@ private struct PassportStampSection: View {
             PassportStampRow(icon: "calendar", title: languageSettings.text(.memberSince), value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
         }
         .padding(SaveTheme.Spacing.lg)
-        .profileGlassSurface(cornerRadius: 18, tint: .saveCream, fillOpacity: 0.16, strokeOpacity: 0.28)
+        .saveNotebookSurface(cornerRadius: 18)
         .padding(.horizontal)
     }
 
@@ -729,7 +725,7 @@ private struct PassportCountingRulesPanel: View {
             }
         }
         .padding(SaveTheme.Spacing.md)
-        .profileGlassSurface(cornerRadius: 16, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
+        .saveNotebookSurface(cornerRadius: 16)
         .padding(.horizontal)
     }
 
@@ -795,7 +791,7 @@ private struct PassportVisibilityPanel: View {
             }
         }
         .padding(SaveTheme.Spacing.md)
-        .profileGlassSurface(cornerRadius: 16, tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, lineWidth: 1)
+        .saveNotebookSurface(cornerRadius: 16)
         .padding(.horizontal)
     }
 }
@@ -853,13 +849,15 @@ private struct PassportVisibilityRow: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, SaveTheme.Spacing.sm)
                 .padding(.vertical, SaveTheme.Spacing.xs)
-                .profileGlassCapsule(tint: .saveCream, fillOpacity: 0.14, strokeOpacity: 0.24, isInteractive: true)
+                .background(Color.saveNotebookPage.opacity(0.76))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
             }
             .disabled(isUpdating)
             .accessibilityIdentifier("profile.visibility.\(place.id)")
         }
         .padding(SaveTheme.Spacing.sm)
-        .profileGlassSurface(cornerRadius: 12, tint: .saveCream, fillOpacity: 0.10, strokeOpacity: 0.18, lineWidth: 1)
+        .saveNotebookSurface(cornerRadius: 12, opacity: 0.6)
         .onChange(of: place.effectiveVisibility) { _, visibility in
             selectedVisibility = visibility
         }
@@ -955,7 +953,7 @@ struct SettingsRow: View {
             }
             .padding(.vertical, SaveTheme.Spacing.md)
             .padding(.horizontal, SaveTheme.Spacing.sm)
-            .profileGlassSurface(cornerRadius: 14, tint: color, fillOpacity: 0.10, strokeOpacity: 0.18, lineWidth: 1, isInteractive: true)
+            .saveNotebookSurface(cornerRadius: 14, fill: color, opacity: 0.10)
         }
         .buttonStyle(.plain)
     }
@@ -964,7 +962,6 @@ struct SettingsRow: View {
 private struct LanguageSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -981,7 +978,7 @@ private struct LanguageSettingsSheet: View {
                             .background(Color.saveNotebookPage)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
@@ -1038,134 +1035,8 @@ private struct LanguageSettingsSheet: View {
                 Spacer()
             }
             .padding(.horizontal, SaveTheme.Spacing.lg)
-            .background(ProfileGlassBackground(colorScheme: colorScheme))
+            .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-        }
-        .presentationBackground(.clear)
-    }
-}
-
-struct ProfileGlassBackground: View {
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .opacity(materialOpacity)
-            .background(baseTint)
-            .overlay {
-                LinearGradient(
-                    colors: tintStops,
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(topStroke)
-                    .frame(height: 1)
-            }
-            .ignoresSafeArea()
-    }
-
-    private var tintStops: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color.black.opacity(0.01),
-                Color.black.opacity(0.035)
-            ]
-        }
-        return [
-            Color.white.opacity(0.01),
-            Color.saveCream.opacity(0.025)
-        ]
-    }
-
-    private var baseTint: Color {
-        colorScheme == .dark ? Color.black.opacity(0.04) : Color.white.opacity(0.03)
-    }
-
-    private var materialOpacity: Double {
-        0.24
-    }
-
-    private var topStroke: Color {
-        colorScheme == .dark ? Color.white.opacity(0.10) : Color.white.opacity(0.24)
-    }
-}
-
-extension View {
-    @ViewBuilder
-    func profileGlassGroup(spacing: CGFloat) -> some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) {
-                self
-            }
-        } else {
-            self
-        }
-    }
-
-    @ViewBuilder
-    func profileGlassSurface(
-        cornerRadius: CGFloat,
-        tint: Color = .saveCream,
-        fillOpacity: Double = 0.14,
-        strokeOpacity: Double = 0.26,
-        lineWidth: CGFloat = 1,
-        isInteractive: Bool = false
-    ) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .background(tint.opacity(fillOpacity))
-                .glassEffect(
-                    .regular
-                        .tint(tint.opacity(0.18))
-                        .interactive(isInteractive),
-                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(strokeOpacity), lineWidth: lineWidth)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .background(tint.opacity(fillOpacity), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(strokeOpacity), lineWidth: lineWidth)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        }
-    }
-
-    @ViewBuilder
-    func profileGlassCapsule(
-        tint: Color = .saveCream,
-        fillOpacity: Double = 0.14,
-        strokeOpacity: Double = 0.26,
-        lineWidth: CGFloat = 1,
-        isInteractive: Bool = false
-    ) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .background(tint.opacity(fillOpacity))
-                .glassEffect(
-                    .regular
-                        .tint(tint.opacity(0.18))
-                        .interactive(isInteractive),
-                    in: Capsule()
-                )
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(strokeOpacity), lineWidth: lineWidth))
-                .clipShape(Capsule())
-        } else {
-            self
-                .background(.ultraThinMaterial, in: Capsule())
-                .background(tint.opacity(fillOpacity), in: Capsule())
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(strokeOpacity), lineWidth: lineWidth))
-                .clipShape(Capsule())
         }
     }
 }

@@ -116,7 +116,7 @@ struct TripItineraryComponent: View {
         .background(Color.saveNotebookPage.opacity(0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: canvasInputID) { _, _ in
