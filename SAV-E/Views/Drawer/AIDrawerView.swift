@@ -112,6 +112,7 @@ struct AIDrawerView: View {
     @State private var showReviewInbox = false
     @State private var showSavedCategories = false
     @State private var isImportingURL = false
+    @State private var showsSlowLoadingHint = false
     @State private var showProfile = false
     @State private var showLists = false
     @State private var activeCommandTab: CommandDrawerTab = .saved
@@ -680,6 +681,27 @@ struct AIDrawerView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.saveCocoa.opacity(0.78))
                     .multilineTextAlignment(.center)
+
+                // Long requests (5-10s) read as frozen and get cancelled —
+                // reassure after a beat that work is still happening.
+                if showsSlowLoadingHint {
+                    Text(languageSettings.localized(
+                        english: "Still on it — checking your saved places…",
+                        traditionalChinese: "還在弄——正在翻你存過的地點…"
+                    ))
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveMutedText)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+                }
+            }
+            .task {
+                showsSlowLoadingHint = false
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(SaveTheme.Motion.standardSpring) {
+                    showsSlowLoadingHint = true
+                }
             }
 
             Button(action: {
