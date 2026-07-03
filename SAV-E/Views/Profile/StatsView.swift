@@ -30,7 +30,7 @@ struct StatItem: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Image(systemName: icon)
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .frame(width: 24, height: 24)
                     .background(color.opacity(0.18))
@@ -41,7 +41,7 @@ struct StatItem: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 Spacer()
                 Text(value)
-                    .font(.title3.monospacedDigit().weight(.black))
+                    .font(.title3.monospacedDigit().weight(.bold))
                     .foregroundColor(.saveInk)
             }
             Text(label)

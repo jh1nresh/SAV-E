@@ -300,7 +300,7 @@ struct AuthLoadingView: View {
 
                 VStack(spacing: 12) {
                     Text(languageSettings.text(.opening))
-                        .font(.title3.weight(.black))
+                        .font(.title3.weight(.bold))
                         .foregroundColor(.saveInk)
 
                     SaveOpeningStepRail(steps: loadingSteps, activeStep: activeStep)
@@ -407,7 +407,7 @@ private struct SaveOpeningSpark: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.caption.weight(.black))
+            .font(.caption.weight(.bold))
             .foregroundColor(.saveInk)
             .frame(width: 34, height: 34)
             .background(fill)
@@ -441,9 +441,9 @@ private struct SaveOpeningStepChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: step.icon)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
             Text(step.label)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
         }
         .foregroundColor(.saveInk)
         .padding(.horizontal, 10)
@@ -631,13 +631,13 @@ struct SignInView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(languageSettings.localized(
                         english: "See how it works — no sign-in",
                         traditionalChinese: "先試試看 — 不用登入"
                     ))
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     Text(languageSettings.localized(
                         english: "Drop a sample clue and watch it land on a map.",
                         traditionalChinese: "丟一個範例線索，看它變成地圖上的地點。"
@@ -647,7 +647,7 @@ struct SignInView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
             }
             .foregroundColor(.saveInk)
             .padding(14)
@@ -736,7 +736,7 @@ private struct SignInHero: View {
                     .foregroundColor(.saveInk)
 
                 Text(languageSettings.text(.signInTagline))
-                    .font(isCompactHeight ? .headline.weight(.black) : .title3.weight(.semibold))
+                    .font(isCompactHeight ? .headline.weight(.bold) : .title3.weight(.semibold))
                     .foregroundColor(.saveInk)
                     .multilineTextAlignment(.center)
 
@@ -773,7 +773,7 @@ private struct SignInProofMark: View {
                 .offset(y: isCompactHeight ? -3 : -5)
 
             Label(label, systemImage: "link")
-                .font((isCompactHeight ? Font.caption2 : Font.caption).weight(.black))
+                .font((isCompactHeight ? Font.caption2 : Font.caption).weight(.bold))
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, isCompactHeight ? 9 : 11)
                 .padding(.vertical, isCompactHeight ? 6 : 7)
@@ -898,7 +898,7 @@ private struct SignInInputRow: View {
 
             Button(buttonTitle, action: action)
                 .accessibilityIdentifier(buttonAccessibilityID)
-                .font(.subheadline.weight(.black))
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(isDisabled ? Color.saveCocoa.opacity(0.42) : .saveInk)
                 .padding(.horizontal, 10)
                 .frame(height: 34)

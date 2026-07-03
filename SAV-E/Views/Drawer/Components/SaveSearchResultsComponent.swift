@@ -62,7 +62,7 @@ struct SaveSearchResultsComponent: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(label)
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -73,7 +73,7 @@ struct SaveSearchResultsComponent: View {
                 Spacer(minLength: 0)
 
                 Text("\(section.results.count)")
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -84,7 +84,7 @@ struct SaveSearchResultsComponent: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(section.title)
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.saveInk)
                 Text(section.subtitle)
                     .font(.caption.weight(.semibold))
@@ -175,9 +175,9 @@ struct SaveSearchFollowUpChoiceGrid: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 7) {
                 Image(systemName: "square.grid.2x2")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Text(title ?? languageSettings.localized(english: "Narrow with one tap", traditionalChinese: "點一下繼續縮小"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Spacer(minLength: 0)
             }
             .foregroundColor(.saveCocoa.opacity(0.82))
@@ -189,10 +189,10 @@ struct SaveSearchFollowUpChoiceGrid: View {
                     } label: {
                         HStack(spacing: 7) {
                             Image(systemName: choice.systemImage)
-                                .font(.caption.weight(.black))
+                                .font(.caption.weight(.bold))
                                 .frame(width: 18, height: 18)
                             Text(choice.label)
-                                .font(.caption.weight(.black))
+                                .font(.caption.weight(.bold))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.76)
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,7 +230,7 @@ private struct SaveSearchAssistantMessage: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "sparkles")
-                .font(.subheadline.weight(.black))
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 34, height: 34)
                 .background(Color.saveMint.opacity(0.82))
@@ -239,7 +239,7 @@ private struct SaveSearchAssistantMessage: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(languageSettings.localized(english: "SAV-E answer", traditionalChinese: "SAV-E 回答"))
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .textCase(.uppercase)
 
@@ -275,7 +275,7 @@ private struct SaveSearchResultNotebookRow: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(result.title)
-                            .font(.subheadline.weight(.black))
+                            .font(.subheadline.weight(.bold))
                             .foregroundColor(.saveInk)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(result.subtitle)
@@ -286,7 +286,7 @@ private struct SaveSearchResultNotebookRow: View {
 
                     Spacer(minLength: 0)
                     Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveCocoa.opacity(0.8))
                 }
             }
@@ -360,7 +360,7 @@ private struct SaveSearchResultNotebookRow: View {
 
     private var fallbackIcon: some View {
         Image(systemName: iconName)
-            .font(.subheadline.weight(.black))
+            .font(.subheadline.weight(.bold))
             .foregroundColor(.saveInk)
             .frame(width: 36, height: 36)
             .background(iconFill)
@@ -473,7 +473,7 @@ private struct SaveSearchStateChip: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.black))
+            .font(.caption2.weight(.bold))
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
@@ -487,7 +487,7 @@ private struct SaveSearchStateChip: View {
 
 private extension View {
     func saveSearchActionPill(isPrimary: Bool) -> some View {
-        font(.caption2.weight(.black))
+        font(.caption2.weight(.bold))
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.75)

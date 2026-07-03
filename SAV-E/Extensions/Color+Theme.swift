@@ -43,21 +43,27 @@ enum SaveTheme {
         }
     }
 
+    // Weight ladder — exactly one loud level per screen:
+    //   black    → brand hero only (wordmark moments)
+    //   bold     → titles, CTAs, stamps
+    //   semibold → rows, section labels, eyebrows
+    //   medium   → supporting / muted copy
+    // When everything is black nothing is emphasized.
     enum Typography {
         static let brandTitle = Font.system(size: 64, weight: .black, design: .rounded)
-        static let entryTitle = Font.title3.weight(.black)
-        static let cta = Font.caption.weight(.black)
-        static let eyebrow = Font.caption2.weight(.black)
-        /// Card titles per DESIGN.md: `.headline.weight(.black)`.
-        static let cardTitle = Font.headline.weight(.black)
+        static let entryTitle = Font.title3.weight(.bold)
+        static let cta = Font.caption.weight(.bold)
+        static let eyebrow = Font.caption2.weight(.semibold)
+        /// Card titles: the one bold element inside a card.
+        static let cardTitle = Font.headline.weight(.bold)
         /// Compact list-row titles.
-        static let rowTitle = Font.subheadline.weight(.black)
+        static let rowTitle = Font.subheadline.weight(.semibold)
         /// Section labels inside cards and panels.
-        static let sectionLabel = Font.caption.weight(.black)
-        /// Status stamps per DESIGN.md: `.caption2.weight(.black)`.
-        static let stamp = Font.caption2.weight(.black)
+        static let sectionLabel = Font.caption.weight(.semibold)
+        /// Status stamps — brand moment, keeps punch at tiny size.
+        static let stamp = Font.caption2.weight(.bold)
         /// Supporting / muted copy.
-        static let supporting = Font.caption.weight(.semibold)
+        static let supporting = Font.caption.weight(.medium)
     }
 }
 

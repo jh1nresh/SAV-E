@@ -30,7 +30,7 @@ struct EmptyStateView: View {
 
             VStack(spacing: SaveTheme.Spacing.sm) {
                 Text(title)
-                    .font(.system(.title3, design: .rounded).weight(.black))
+                    .font(.system(.title3, design: .rounded).weight(.bold))
                     .foregroundColor(.saveInk)
                     .multilineTextAlignment(.center)
 
@@ -48,7 +48,7 @@ struct EmptyStateView: View {
                     action()
                 } label: {
                     Text(actionTitle)
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, SaveTheme.Spacing.xl)
                         .frame(minHeight: 44)

@@ -18,7 +18,7 @@ struct CategoryPill: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             Text(category.displayName(language: languageSettings.language))
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }

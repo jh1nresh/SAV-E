@@ -26,7 +26,7 @@ struct PlaceBottomSheet: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(place.status.memoryCardLabel(language: languageSettings.language).uppercased())
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveCocoa)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -220,9 +220,9 @@ struct PlaceBasicInfoPanel: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle.fill")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Text(languageSettings.localized(english: "Basic info", traditionalChinese: "基本資訊"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Spacer()
             }
             .foregroundColor(.saveCocoa)
@@ -286,7 +286,7 @@ private struct PlaceInfoRow: View {
             .padding(.top, 1)
 
             Text(title)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa)
                 .frame(width: 58, alignment: .leading)
 
@@ -320,7 +320,7 @@ private struct PlaceMemoryChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
             Text(text)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -539,7 +539,7 @@ struct PlaceDetailActionLabel: View {
 
     var body: some View {
         Label(title, systemImage: systemImage)
-            .font(.caption.weight(.black))
+            .font(.caption.weight(.bold))
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
@@ -562,9 +562,9 @@ struct PlaceInsightSummaryPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "text.badge.checkmark")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Text(languageSettings.localized(english: "Memory summary", traditionalChinese: "記憶摘要"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Spacer()
             }
             .foregroundColor(.saveCocoa)
@@ -718,7 +718,7 @@ private struct PlaceSummaryLine: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa)
                 .frame(width: 16)
                 .padding(.top, 2)
@@ -769,9 +769,9 @@ struct PlaceBusinessPhotoCarousel: View {
 
             HStack(spacing: 6) {
                 Image(systemName: photoURLs.isEmpty ? "photo" : "camera.fill")
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                 Text(photoURLs.isEmpty ? "Finding business photo" : photoLabel)
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }

@@ -20,7 +20,7 @@ struct NavigationCardComponent: View {
 
             VStack(spacing: 7) {
                 Text("ROUTE READY")
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -29,7 +29,7 @@ struct NavigationCardComponent: View {
                     .clipShape(Capsule())
 
                 Text(place.name)
-                    .font(.title3.weight(.black))
+                    .font(.title3.weight(.bold))
                     .foregroundColor(.saveInk)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)

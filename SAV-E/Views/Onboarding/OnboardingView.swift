@@ -115,9 +115,9 @@ struct OnboardingView: View {
                 HStack(spacing: 8) {
                     Text(step.primaryTitle(language: language))
                     Image(systemName: step == .mapStamp ? "arrow.right" : "chevron.right")
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                 }
-                .font(isCompactHeight ? .subheadline.weight(.black) : .headline.weight(.black))
+                .font(isCompactHeight ? .subheadline.weight(.bold) : .headline.weight(.bold))
                 .foregroundColor(.saveInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
@@ -354,7 +354,7 @@ private struct OnboardingTopBar: View {
         HStack(spacing: 12) {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.saveInk)
                     .frame(width: 38, height: 38)
                     .background(Color.saveNotebookPage.opacity(step == .language ? 0.24 : 0.78))
@@ -392,7 +392,7 @@ private struct OnboardingProgressRail: View {
                             .fill(Color.saveInk)
                             .frame(width: 6, height: 6)
                         Text(item.railLabel(language: language))
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.saveInk)
                             .lineLimit(1)
                             .fixedSize()
@@ -439,7 +439,7 @@ private struct OnboardingStepTitle: View {
     var body: some View {
         VStack(spacing: isCompactHeight ? 6 : 10) {
             Text(eyebrow)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 6)
@@ -513,7 +513,7 @@ private struct LanguageChoiceCard: View {
         Button(action: onChoose) {
             HStack(spacing: 12) {
                 Text(option == .english ? "EN" : "繁")
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.saveInk)
                     .frame(width: 42, height: 42)
                     .background(isSelected ? Color.saveHoney.opacity(0.85) : Color.saveNotebookPage.opacity(0.9))
@@ -525,7 +525,7 @@ private struct LanguageChoiceCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.displayName)
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.bold))
                         .foregroundColor(.saveInk)
 
                     Text(caption)
@@ -538,7 +538,7 @@ private struct LanguageChoiceCard: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.black))
+                    .font(.title3.weight(.bold))
                     .foregroundColor(isSelected ? .saveInk : .saveMutedText.opacity(0.5))
             }
             .padding(14)
@@ -633,7 +633,7 @@ private struct ClueStepView: View {
                             language.localized(english: "Try sample clue", traditionalChinese: "試用範例線索"),
                             systemImage: "wand.and.stars"
                         )
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
@@ -675,7 +675,7 @@ private struct ClueStepView: View {
     private func sourceChip(label: String, icon: String, tint: Color, restingOffset: CGFloat, order: Int) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.subheadline.weight(.black))
+                .font(.subheadline.weight(.bold))
             Text(label)
                 .font(.system(size: 9, weight: .black))
         }
@@ -702,7 +702,7 @@ private struct ClueStepView: View {
     private var trustNote: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
 
             Text(language.localized(
@@ -814,10 +814,10 @@ private struct ProofDemoCanvas: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "arrow.down")
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveInk.opacity(0.5))
                 Image(systemName: "sparkles")
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveHoney)
             }
             .opacity(phase >= 1 ? 1 : 0)
@@ -833,7 +833,7 @@ private struct ProofDemoCanvas: View {
     private var clueNote: some View {
         HStack(spacing: 9) {
             Image(systemName: "paperclip")
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveMutedText)
 
             Text(clueLine)
@@ -859,11 +859,11 @@ private struct ProofDemoCanvas: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點"))
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveMutedText)
 
                 Text("Hidden Moon Cafe?")
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.saveInk)
 
                 evidenceLine(
@@ -901,14 +901,14 @@ private struct ProofDemoCanvas: View {
     private func evidenceLine(icon: String, text: String, tint: Color, visibleAt: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 21, height: 21)
                 .background(tint.opacity(0.62))
                 .clipShape(Circle())
 
             Text(text)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
@@ -941,7 +941,7 @@ private struct ProofDemoCanvas: View {
             language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
             systemImage: "hand.thumbsup.fill"
         )
-        .font(.caption.weight(.black))
+        .font(.caption.weight(.bold))
         .foregroundColor(.saveInk)
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
@@ -956,7 +956,7 @@ private struct ProofDemoCanvas: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Hidden Moon Cafe")
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveInk)
 
                 Text(language.localized(
@@ -990,7 +990,7 @@ private struct ProofDemoCanvas: View {
 
                 if step != .mapStamp {
                     Text(memoLine)
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 6)
@@ -1086,7 +1086,7 @@ private struct OnboardingMiniMap: View {
 
     private func ghostPin(icon: String, tint: Color) -> some View {
         Image(systemName: icon)
-            .font(.caption.weight(.black))
+            .font(.caption.weight(.bold))
             .foregroundColor(.saveInk)
             .frame(width: 30, height: 30)
             .background(tint.opacity(0.8))
@@ -1103,7 +1103,7 @@ private struct OnboardingMiniMap: View {
                 .opacity(stampVisible ? 1 : 0)
 
             Image(systemName: "cup.and.saucer.fill")
-                .font(.headline.weight(.black))
+                .font(.headline.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 44, height: 44)
                 .background(Color.saveHoney.opacity(0.94))

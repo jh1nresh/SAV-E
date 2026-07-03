@@ -193,7 +193,7 @@ private struct EditProfileSheet: View {
                         onCancel()
                     }) {
                         Image(systemName: "xmark")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .frame(width: 38, height: 38)
                             .background(Color.saveNotebookPage)
@@ -221,7 +221,7 @@ private struct EditProfileSheet: View {
                         Task { await onSave() }
                     } label: {
                         Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 38)
@@ -246,7 +246,7 @@ private struct EditProfileSheet: View {
 
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                         Label(languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片"), systemImage: "camera.fill")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 36)
@@ -352,9 +352,9 @@ private struct PassportTopBar: View {
             Button(action: onEdit) {
                 HStack(spacing: SaveTheme.Spacing.xs) {
                     Image(systemName: "pencil")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                     Text(languageSettings.text(.edit))
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                 }
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, SaveTheme.Spacing.md)
@@ -417,7 +417,7 @@ private struct PassportHero: View {
                             .foregroundColor(.saveCocoa)
                         Text(profile.displayName)
                             // Intentional large display name; .title2 is the hero size, no token.
-                            .font(.title2.weight(.black))
+                            .font(.title2.weight(.bold))
                             .foregroundColor(.saveInk)
                             .lineLimit(2)
                         Text(profile.email ?? languageSettings.text(.localMemoHelper))
@@ -463,7 +463,7 @@ private struct EditableProfileAvatar: View {
             }
 
             Image(systemName: "camera.fill")
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 28, height: 28)
                 .background(Color.saveHoney)
@@ -975,7 +975,7 @@ private struct LanguageSettingsSheet: View {
                         dismiss()
                     }) {
                         Image(systemName: "xmark")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .frame(width: 38, height: 38)
                             .background(Color.saveNotebookPage)
@@ -1014,7 +1014,7 @@ private struct LanguageSettingsSheet: View {
 
                                 if languageSettings.language == language {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .font(.title3.weight(.black))
+                                        .font(.title3.weight(.bold))
                                         .foregroundColor(.saveSuccess)
                                 }
                             }

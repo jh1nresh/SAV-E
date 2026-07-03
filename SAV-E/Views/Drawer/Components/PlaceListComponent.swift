@@ -11,7 +11,7 @@ struct PlaceListComponent: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MAP STAMP MATCHES")
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -20,7 +20,7 @@ struct PlaceListComponent: View {
                         .clipShape(Capsule())
 
                     Text(title)
-                        .font(.title3.weight(.black))
+                        .font(.title3.weight(.bold))
                         .foregroundColor(.saveInk)
                         .lineLimit(2)
                     if let msg = aiMessage {
@@ -109,7 +109,7 @@ private struct PlaceListMatchRow: View {
             Spacer(minLength: 8)
 
             Text("SAVED")
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

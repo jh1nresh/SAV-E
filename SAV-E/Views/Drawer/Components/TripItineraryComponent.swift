@@ -30,7 +30,7 @@ struct TripItineraryComponent: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(languageSettings.localized(english: "PLAN DRAFT", traditionalChinese: "行程草稿"))
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -39,7 +39,7 @@ struct TripItineraryComponent: View {
                         .clipShape(Capsule())
 
                     Text(title)
-                        .font(.title3.weight(.black))
+                        .font(.title3.weight(.bold))
                         .foregroundColor(.saveInk)
                         .lineLimit(2)
                     if let msg = aiMessage {
@@ -59,7 +59,7 @@ struct TripItineraryComponent: View {
 
                 Button(action: { showShareSheet = true }) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .frame(width: 34, height: 34)
                         .background(Color.saveMint.opacity(0.74))
@@ -77,7 +77,7 @@ struct TripItineraryComponent: View {
                 }
 
                 Label(dayCountText, systemImage: "calendar")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
@@ -183,13 +183,13 @@ private struct TripHealthSummaryCard: View {
                     languageSettings.localized(english: "Trip Health", traditionalChinese: "行程健康度"),
                     systemImage: "checklist.checked"
                 )
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
 
                 Spacer()
 
                 Text("\(health.score)/100")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -218,7 +218,7 @@ private struct TripHealthSummaryCard: View {
                                     Button(action: { onAddSuggestion(gap, option) }) {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Label(optionButtonTitle(for: option), systemImage: iconName(for: option.source))
-                                                .font(.caption2.weight(.black))
+                                                .font(.caption2.weight(.bold))
                                             Text(option.reason)
                                                 .font(.caption2.weight(.semibold))
                                                 .lineLimit(2)
@@ -303,7 +303,7 @@ private struct TripHealthLine: View {
     var body: some View {
         HStack(alignment: .top, spacing: 7) {
             Image(systemName: icon)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 18, height: 18)
                 .background(tint.opacity(0.52))
@@ -382,7 +382,7 @@ private struct DaySection: View {
                             Spacer()
                             if let time = stop.time {
                                 Text(time)
-                                    .font(.caption2.weight(.black))
+                                    .font(.caption2.weight(.bold))
                                     .foregroundColor(.saveInk)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
@@ -544,7 +544,7 @@ private struct StopCanvasControls: View {
         HStack(spacing: 7) {
             Button(action: { onMoveEarlier(stop.id) }) {
                 Image(systemName: "arrow.up")
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .frame(width: 28, height: 26)
                     .background(Color.saveNotebookPage.opacity(0.74))
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
@@ -555,7 +555,7 @@ private struct StopCanvasControls: View {
 
             Button(action: { onMoveLater(stop.id) }) {
                 Image(systemName: "arrow.down")
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .frame(width: 28, height: 26)
                     .background(Color.saveNotebookPage.opacity(0.74))
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
@@ -567,7 +567,7 @@ private struct StopCanvasControls: View {
             if stop.placeState == .externalSuggestion {
                 Button(action: { onApproveExternalStop(stop.id) }) {
                     Label(approveText, systemImage: isApprovedExternalStop ? "checkmark.circle.fill" : "checkmark")
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
                         .frame(height: 26)
                         .background((isApprovedExternalStop ? Color.saveMint : Color.saveHoney).opacity(0.58))
@@ -577,7 +577,7 @@ private struct StopCanvasControls: View {
 
                 Button(action: { onSkipStop(stop.id) }) {
                     Label(skipText, systemImage: "xmark")
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
                         .frame(height: 26)
                         .background(Color.saveCoral.opacity(0.22))
@@ -607,7 +607,7 @@ private struct StopBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.black))
+            .font(.caption2.weight(.bold))
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .padding(.horizontal, 7)

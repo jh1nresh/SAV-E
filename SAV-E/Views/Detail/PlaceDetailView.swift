@@ -130,7 +130,7 @@ struct PlaceDetailView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(detailPlace.status.memoryCardLabel(language: languageSettings.language).uppercased())
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveCocoa)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)

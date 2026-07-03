@@ -267,7 +267,7 @@ struct AIDrawerView: View {
         HStack(spacing: SaveTheme.Spacing.sm) {
             Image(systemName: commandBarIcon)
                 .foregroundColor(commandBarTextColor)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .frame(width: commandIconDimension, height: commandIconDimension)
                 .background(commandIconFill)
                 .overlay(
@@ -385,14 +385,14 @@ struct AIDrawerView: View {
 
             Button(action: submitSearchField) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.title3.weight(.black))
+                    .font(.title3.weight(.bold))
                     .foregroundColor(commandBarTextColor)
             }
             .accessibilityLabel(languageSettings.localized(english: "Ask SAV-E", traditionalChinese: "詢問 SAV-E"))
         } else {
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(commandBarTextColor)
                     .frame(width: 30, height: 30)
                     .background(voiceQuery.isListening ? Color.saveSignal.opacity(0.82) : commandIconFill)
@@ -946,9 +946,9 @@ struct AIDrawerView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: tab.systemImage)
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.bold))
                         Text(tab.title(language: languageSettings.language))
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .lineLimit(1)
                             .minimumScaleFactor(0.76)
                     }
@@ -1079,9 +1079,9 @@ struct AIDrawerView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: lens.systemImage)
-                                .font(.caption2.weight(.black))
+                                .font(.caption2.weight(.bold))
                             Text(lens.title(language: languageSettings.language))
-                                .font(.caption.weight(.black))
+                                .font(.caption.weight(.bold))
                         }
                         .foregroundColor(socialLens == lens ? .saveInk : .saveCocoa.opacity(0.78))
                         .padding(.horizontal, 10)
@@ -1138,7 +1138,7 @@ struct AIDrawerView: View {
                             .frame(width: 74, height: 38)
                     } else {
                         Text(languageSettings.localized(english: "Follow", traditionalChinese: "追蹤"))
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .frame(width: 74, height: 38)
                     }
                 }
@@ -1352,7 +1352,7 @@ struct AIDrawerView: View {
 
                     Button(action: createCollaborativeList) {
                         Label(languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"), systemImage: "plus")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -1949,13 +1949,13 @@ private struct MapDetailDrawerView: View {
 
             VStack(spacing: 4) {
                 Text(item.presentation.title)
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
 
                 Text(itemEyebrow)
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveCocoa.opacity(0.76))
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
@@ -2079,7 +2079,7 @@ private struct SelectedPlaceCapsule: View {
             Button(action: onExpand) {
                 VStack(spacing: 2) {
                     Text(item.presentation.title)
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
@@ -2294,12 +2294,12 @@ private struct SocialPlaceRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(place.name)
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.saveInk)
                         .lineLimit(1)
                     Spacer(minLength: 8)
                     Text(place.category.displayName(language: languageSettings.language))
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveCocoa.opacity(0.74))
                 }
 
@@ -2318,7 +2318,7 @@ private struct SocialPlaceRow: View {
 
             Button(action: onSave) {
                 Text(languageSettings.localized(english: "Save", traditionalChinese: "保存"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
@@ -2467,7 +2467,7 @@ private struct SavedMapDetailDrawerContent: View {
                 }
             } label: {
                 Label(languageSettings.localized(english: "More", traditionalChinese: "更多"), systemImage: "ellipsis.circle")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -2701,7 +2701,7 @@ private struct SocialPlaceDetailCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(place.name)
-                        .font(.title3.weight(.black))
+                        .font(.title3.weight(.bold))
                         .foregroundColor(.saveInk)
                     Spacer()
                     CategoryPill(category: place.category, isSelected: true)
@@ -2715,7 +2715,7 @@ private struct SocialPlaceDetailCard: View {
             if let signal = place.socialSignal {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(signal.displayText, systemImage: signal.kind.pinSystemImage)
-                        .font(.subheadline.weight(.black))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.saveInk)
                     Text(signal.detailText)
                         .font(.caption.weight(.semibold))
@@ -2737,7 +2737,7 @@ private struct SocialPlaceDetailCard: View {
 
             Button(action: onSave) {
                 Label(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"), systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.black))
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.saveInk)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -2767,7 +2767,7 @@ private struct MapDetailChip: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
             Text(text)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
@@ -2792,7 +2792,7 @@ private struct AddToListPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(title, systemImage: "person.2.wave.2.fill")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                 Spacer()
             }
@@ -2803,7 +2803,7 @@ private struct AddToListPanel: View {
                     onAddToList(list.id)
                 }) {
                     Label(languageSettings.localized(english: "Create list and add", traditionalChinese: "建立清單並加入"), systemImage: "plus")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -2829,7 +2829,7 @@ private struct AddToListPanel: View {
                     }
                 } label: {
                     Label(languageSettings.localized(english: "Choose list", traditionalChinese: "選擇清單"), systemImage: "list.bullet.rectangle")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -2876,7 +2876,7 @@ private struct CollaborativeListCard: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(list.title)
-                            .font(.subheadline.weight(.black))
+                            .font(.subheadline.weight(.bold))
                             .foregroundColor(.saveInk)
                             .lineLimit(2)
                         Text("\(list.placeCountLabel) · \(list.viewerRole.displayName)")
@@ -2916,7 +2916,7 @@ private struct CollaborativeListCard: View {
         HStack(spacing: 8) {
             Button(action: onPlan) {
                 Label(languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
@@ -2929,7 +2929,7 @@ private struct CollaborativeListCard: View {
             if let viewerURL {
                 ShareLink(item: viewerURL) {
                     Label(languageSettings.localized(english: "Viewer", traditionalChinese: "檢視者"), systemImage: "square.and.arrow.up")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -2941,7 +2941,7 @@ private struct CollaborativeListCard: View {
             if list.canEdit, let editorURL {
                 ShareLink(item: editorURL) {
                     Label(languageSettings.localized(english: "Editor", traditionalChinese: "編輯者"), systemImage: "person.badge.plus")
-                        .font(.caption.weight(.black))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -3192,7 +3192,7 @@ private struct NotebookBandLabel: View {
     var body: some View {
         HStack(spacing: 7) {
             Text(title.uppercased())
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -3304,20 +3304,20 @@ private struct SavedCategorySectionHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: category.iconName)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.white)
                 .frame(width: 24, height: 24)
                 .background(category.poiIconColor)
                 .clipShape(Circle())
 
             Text(category.displayName(language: languageSettings.language))
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
 
             Spacer(minLength: 0)
 
             Text("\(count)")
-                .font(.caption2.monospacedDigit().weight(.black))
+                .font(.caption2.monospacedDigit().weight(.bold))
                 .foregroundColor(.saveCocoa.opacity(0.78))
         }
         .padding(.horizontal, 4)
@@ -3424,7 +3424,7 @@ private struct SavedPlacesEmptyState: View {
                     Text(isFiltered
                          ? languageSettings.localized(english: "No matching Map Stamps", traditionalChinese: "沒有符合條件的地圖章")
                          : languageSettings.localized(english: "Memo is ready to start your map", traditionalChinese: "Memo 準備好開始你的地圖了"))
-                        .font(.headline.weight(.black))
+                        .font(.headline.weight(.bold))
                         .foregroundColor(SaveTheme.Colors.cream)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -3451,14 +3451,14 @@ private struct SavedPlacesEmptyState: View {
                             } label: {
                                 HStack(spacing: SaveTheme.Spacing.sm) {
                                     Image(systemName: "sparkle")
-                                        .font(.caption2.weight(.black))
+                                        .font(.caption2.weight(.bold))
                                     Text(suggestion)
                                         .font(.caption.weight(.semibold))
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.82)
                                     Spacer(minLength: 0)
                                     Image(systemName: "arrow.up.left")
-                                        .font(.caption2.weight(.black))
+                                        .font(.caption2.weight(.bold))
                                         .foregroundColor(SaveTheme.Colors.cream.opacity(0.6))
                                 }
                                 .foregroundColor(SaveTheme.Colors.cream)
@@ -3707,7 +3707,7 @@ private struct ReviewCandidateDetailCard: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(presentationEyebrow)
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.saveCocoa)
                             .lineLimit(1)
 
@@ -3843,7 +3843,7 @@ private struct ReviewCandidateNextStepPanel: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "sparkle.magnifyingglass")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .frame(width: 24, height: 24)
                     .background(Color.saveHoney.opacity(0.72))
@@ -3851,7 +3851,7 @@ private struct ReviewCandidateNextStepPanel: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(languageSettings.localized(english: "Next step", traditionalChinese: "下一步"))
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveCocoa.opacity(0.72))
                     Text(nextStepText)
                         .font(.caption.weight(.bold))
@@ -3870,7 +3870,7 @@ private struct ReviewCandidateNextStepPanel: View {
                     openURL(sourceURL)
                 } label: {
                     Label(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"), systemImage: "link")
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 5)
@@ -3963,18 +3963,18 @@ private struct ReviewCandidateProofPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
                 Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Text(candidate.hasReliableCoordinates
                      ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
                      : languageSettings.localized(english: "Needs one more clue", traditionalChinese: "還需要一個線索"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Spacer(minLength: 0)
                 if let sourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
                         Text(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"))
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -4005,13 +4005,13 @@ private struct ReviewCandidateProofPanel: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveInk)
                     .frame(width: 18, height: 18)
                     .background(tone.opacity(0.64))
                     .clipShape(Circle())
                 Text(title)
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveCocoa.opacity(0.72))
             }
 
@@ -4027,7 +4027,7 @@ private struct ReviewCandidateProofPanel: View {
     private var nextActionRow: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass")
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 22, height: 22)
                 .background(Color.savePink.opacity(0.72))
@@ -4035,7 +4035,7 @@ private struct ReviewCandidateProofPanel: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(languageSettings.localized(english: "Next action", traditionalChinese: "下一步"))
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveCocoa.opacity(0.72))
                 Text(nextActionText)
                     .font(.caption.weight(.semibold))
@@ -4351,9 +4351,9 @@ private struct UnsavedCandidateGlassSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
                 Image(systemName: systemImage)
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Text(title)
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                 Spacer(minLength: 0)
             }
             .foregroundColor(.saveCocoa.opacity(0.86))
@@ -4385,7 +4385,7 @@ private struct UnsavedCandidateInfoRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa.opacity(0.72))
                 .frame(width: 58, alignment: .leading)
 
@@ -4430,7 +4430,7 @@ private struct UnsavedCandidateFact: View {
                 .lineLimit(1)
 
             Text(value)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(valueColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.70)
@@ -4458,7 +4458,7 @@ private struct StampChip: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.caption2.weight(.black))
+            .font(.caption2.weight(.bold))
             .foregroundColor(.saveInk)
             .lineLimit(1)
             .minimumScaleFactor(0.72)
@@ -4500,7 +4500,7 @@ private struct CandidateActionLabel: View {
 
     var body: some View {
         Label(title, systemImage: systemImage)
-            .font(.caption.weight(.black))
+            .font(.caption.weight(.bold))
             .foregroundColor(foreground)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
@@ -4524,7 +4524,7 @@ private struct PassportDrawerButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "person.crop.circle.fill")
-                .font(.title3.weight(.black))
+                .font(.title3.weight(.bold))
                 .foregroundColor(foreground)
                 .frame(width: 30, height: 30)
                 .background(fill)
@@ -4548,7 +4548,7 @@ private struct MemoryFlowCTA: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(languageSettings.localized(english: "PLACE MEMORY", traditionalChinese: "地點記憶"))
-                    .font(.caption2.weight(.black))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
@@ -4560,7 +4560,7 @@ private struct MemoryFlowCTA: View {
                     english: "Save what friends send. Ask when it matters.",
                     traditionalChinese: "存下朋友傳來的地點，需要時再問。"
                 ))
-                    .font(.headline.weight(.black))
+                    .font(.headline.weight(.bold))
                     .foregroundColor(.saveInk)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -4583,9 +4583,9 @@ private struct MemoryFlowCTA: View {
                 Button(action: onReview) {
                     HStack(spacing: 7) {
                         Image(systemName: "checklist.unchecked")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                         Text(reviewButtonTitle)
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                     }
                     .foregroundColor(.saveInk)
                     .frame(maxWidth: .infinity)
@@ -4602,9 +4602,9 @@ private struct MemoryFlowCTA: View {
                 Button(action: onAsk) {
                     HStack(spacing: 7) {
                         Image(systemName: "sparkles")
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                         Text(languageSettings.localized(english: "Ask saved", traditionalChinese: "問已保存"))
-                            .font(.caption.weight(.black))
+                            .font(.caption.weight(.bold))
                     }
                     .foregroundColor(.saveInk)
                     .frame(maxWidth: .infinity)
@@ -4647,20 +4647,20 @@ private struct MemoryFlowCTA: View {
     private func flowStep(number: String, title: String, count: Int?, tint: Color) -> some View {
         HStack(spacing: 6) {
             Text(number)
-                .font(.caption2.monospacedDigit().weight(.black))
+                .font(.caption2.monospacedDigit().weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 18, height: 18)
                 .background(tint.opacity(colorScheme == .dark ? 0.34 : 0.52))
                 .clipShape(Circle())
 
             Text(title)
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa.opacity(0.78))
                 .lineLimit(1)
 
             if let count, count > 0 {
                 Text("\(count)")
-                    .font(.caption2.monospacedDigit().weight(.black))
+                    .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
             }
@@ -4683,7 +4683,7 @@ private struct SavedCategoryGrid: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(languageSettings.localized(english: "Categories", traditionalChinese: "分類"))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa.opacity(0.72))
 
                 Spacer()
@@ -4691,7 +4691,7 @@ private struct SavedCategoryGrid: View {
                 if !selectedCategories.isEmpty {
                     Button(action: onClear) {
                         Text(languageSettings.localized(english: "All", traditionalChinese: "全部"))
-                            .font(.caption2.weight(.black))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -4730,14 +4730,14 @@ private struct SavedCategoryGridButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: category.iconName)
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.white)
                     .frame(width: 28, height: 28)
                     .background(category.poiIconColor.opacity(isSelected ? 1 : 0.72))
                     .clipShape(Circle())
 
                 Text(category.displayName(language: languageSettings.language))
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -4745,7 +4745,7 @@ private struct SavedCategoryGridButton: View {
                 Spacer(minLength: 4)
 
                 Text("\(count)")
-                    .font(.caption2.monospacedDigit().weight(.black))
+                    .font(.caption2.monospacedDigit().weight(.bold))
                     .foregroundColor(.saveCocoa.opacity(0.74))
             }
             .frame(height: 38)
@@ -4776,7 +4776,7 @@ private struct DrawerSuggestionRow: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(systemName: icon)
-                .font(.caption.weight(.black))
+                .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 28, height: 28)
                 .background(Color.saveMint.opacity(0.7))
@@ -4796,7 +4796,7 @@ private struct DrawerSuggestionRow: View {
             Spacer(minLength: 0)
 
             Image(systemName: "arrow.up.right")
-                .font(.caption2.weight(.black))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(.saveCocoa.opacity(0.7))
         }
         .padding(.horizontal, 10)
@@ -4823,7 +4823,7 @@ private struct AIResultActionBar: View {
         HStack(spacing: 9) {
             Button(action: onFollowUp) {
                 Label(languageSettings.localized(english: "Follow up", traditionalChinese: "追問"), systemImage: "text.bubble")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -4840,7 +4840,7 @@ private struct AIResultActionBar: View {
 
             Button(action: onNewQuestion) {
                 Label(languageSettings.localized(english: "New", traditionalChinese: "新的"), systemImage: "plus.bubble")
-                    .font(.caption.weight(.black))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.saveInk)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -4943,14 +4943,14 @@ private struct AgentCommandRow: View {
 
                 VStack(alignment: .trailing, spacing: 8) {
                     Image(systemName: "arrow.up.right")
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(.saveInk)
                         .padding(5)
                         .background(tone.chipFill)
                         .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
                         .clipShape(Circle())
                     Text(commandLabel.uppercased())
-                        .font(.caption2.weight(.black))
+                        .font(.caption2.weight(.bold))
                         .foregroundColor(tone.textColor)
                         .lineLimit(2)
                         .multilineTextAlignment(.trailing)
