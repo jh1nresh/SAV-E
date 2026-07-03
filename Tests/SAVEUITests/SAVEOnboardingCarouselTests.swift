@@ -23,17 +23,8 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
         primary.tap()
 
-        // Map Stamp demo.
+        // Map Stamp demo is the final step; its CTA exits onboarding.
         XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
-        primary.tap()
-
-        // Ask demo.
-        XCTAssertTrue(app.staticTexts["Ask your own map"].waitForExistence(timeout: 5))
-        primary.tap()
-
-        // Optional tags, then the final CTA exits onboarding.
-        XCTAssertTrue(app.staticTexts["Why did it matter?"].waitForExistence(timeout: 5))
-        app.buttons["onboarding.tag.coffee"].tap()
         primary.tap()
 
         waitForDisappearance(of: primary)
@@ -55,14 +46,8 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
         skip.tap()
 
+        // Skipping the final Map Stamp step exits onboarding.
         XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
-        skip.tap()
-
-        XCTAssertTrue(app.staticTexts["Ask your own map"].waitForExistence(timeout: 5))
-        skip.tap()
-
-        // Skipping the last optional step exits onboarding.
-        XCTAssertTrue(app.staticTexts["Why did it matter?"].waitForExistence(timeout: 5))
         skip.tap()
 
         waitForDisappearance(of: primary)

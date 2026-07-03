@@ -3,14 +3,13 @@ import SwiftUI
 /// Proof-first onboarding.
 ///
 /// Instead of a feature carousel, the first run walks one scripted clue through
-/// the real product loop: Language -> Clue -> Review Candidate -> Map Stamp ->
-/// Ask -> optional intent tags. All demo data is local; no parsing or network.
+/// the real product loop: Language -> Clue -> Review Candidate -> Map Stamp.
+/// All demo data is local; no parsing or network.
 struct OnboardingView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step: OnboardingStep
     @State private var clueText = ""
-    @State private var selectedTags: Set<ProofIntentTag> = []
     private let autoUseSampleClue: Bool
     var onComplete: (String?) -> Void
 
@@ -77,7 +76,7 @@ struct OnboardingView: View {
                 onUseSample: useSampleClue
             )
             .transition(stepTransition)
-        case .candidate, .mapStamp, .ask, .tag:
+        case .candidate, .mapStamp:
             proofSection(isCompactHeight: isCompactHeight)
                 .transition(stepTransition)
         }
@@ -97,20 +96,12 @@ struct OnboardingView: View {
             .id(step)
             .transition(.opacity)
 
-            if !(isCompactHeight && step == .tag) {
-                ProofDemoCanvas(
-                    step: step,
-                    clueText: trimmedClue,
-                    language: language,
-                    selectedTagCount: selectedTags.count,
-                    height: isCompactHeight ? 218 : 268
-                )
-            }
-
-            if step == .tag {
-                TagGrid(selectedTags: $selectedTags, language: language)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
+            ProofDemoCanvas(
+                step: step,
+                clueText: trimmedClue,
+                language: language,
+                height: isCompactHeight ? 218 : 268
+            )
 
             Spacer(minLength: 0)
         }
@@ -123,7 +114,7 @@ struct OnboardingView: View {
             Button(action: advance) {
                 HStack(spacing: 8) {
                     Text(step.primaryTitle(language: language))
-                    Image(systemName: step == .tag ? "arrow.right" : "chevron.right")
+                    Image(systemName: step == .mapStamp ? "arrow.right" : "chevron.right")
                         .font(.subheadline.weight(.black))
                 }
                 .font(isCompactHeight ? .subheadline.weight(.black) : .headline.weight(.black))
@@ -189,10 +180,6 @@ struct OnboardingView: View {
         case .candidate:
             move(to: .mapStamp)
         case .mapStamp:
-            move(to: .ask)
-        case .ask:
-            move(to: .tag)
-        case .tag:
             finish()
         }
     }
@@ -206,10 +193,6 @@ struct OnboardingView: View {
         case .candidate:
             move(to: .mapStamp)
         case .mapStamp:
-            move(to: .ask)
-        case .ask:
-            move(to: .tag)
-        case .tag:
             finish()
         }
     }
@@ -224,10 +207,6 @@ struct OnboardingView: View {
             move(to: .clue)
         case .mapStamp:
             move(to: .candidate)
-        case .ask:
-            move(to: .mapStamp)
-        case .tag:
-            move(to: .ask)
         }
     }
 
@@ -262,8 +241,6 @@ private enum OnboardingStep: Int, CaseIterable {
     case clue
     case candidate
     case mapStamp
-    case ask
-    case tag
 
     var isSkippable: Bool {
         self != .language
@@ -275,8 +252,6 @@ private enum OnboardingStep: Int, CaseIterable {
         case .clue: return .saveHoney
         case .candidate: return .saveSky
         case .mapStamp: return .saveMint
-        case .ask: return .saveSky
-        case .tag: return .saveHoney
         }
     }
 
@@ -286,8 +261,6 @@ private enum OnboardingStep: Int, CaseIterable {
         case .clue: return language.localized(english: "Clue", traditionalChinese: "線索")
         case .candidate: return language.localized(english: "Review", traditionalChinese: "確認")
         case .mapStamp: return language.localized(english: "Stamp", traditionalChinese: "蓋章")
-        case .ask: return language.localized(english: "Ask", traditionalChinese: "提問")
-        case .tag: return language.localized(english: "Tags", traditionalChinese: "標籤")
         }
     }
 
@@ -297,8 +270,6 @@ private enum OnboardingStep: Int, CaseIterable {
         case .clue: return language.localized(english: "Source Clue", traditionalChinese: "來源線索")
         case .candidate: return language.localized(english: "Review Candidate", traditionalChinese: "待確認地點")
         case .mapStamp: return language.localized(english: "Map Stamp", traditionalChinese: "地圖章")
-        case .ask: return language.localized(english: "Ask", traditionalChinese: "提問")
-        case .tag: return language.localized(english: "Optional", traditionalChinese: "可選")
         }
     }
 
@@ -312,10 +283,6 @@ private enum OnboardingStep: Int, CaseIterable {
             return language.localized(english: "Memo found a likely place", traditionalChinese: "Memo 找到一個可能地點")
         case .mapStamp:
             return language.localized(english: "You confirmed it. Stamped.", traditionalChinese: "你確認了，蓋章。")
-        case .ask:
-            return language.localized(english: "Ask your own map", traditionalChinese: "問你自己的地圖")
-        case .tag:
-            return language.localized(english: "Why did it matter?", traditionalChinese: "為什麼想存它？")
         }
     }
 
@@ -338,18 +305,8 @@ private enum OnboardingStep: Int, CaseIterable {
             )
         case .mapStamp:
             return language.localized(
-                english: "Only places you confirm become private Map Stamps.",
-                traditionalChinese: "只有你確認過的地點，才會變成私人地圖章。"
-            )
-        case .ask:
-            return language.localized(
-                english: "Memo answers from places you saved first. Public noise stays out.",
-                traditionalChinese: "Memo 會先用你存過的地點回答，公開雜訊不混進來。"
-            )
-        case .tag:
-            return language.localized(
-                english: "A few tags help future answers. Skip if you want.",
-                traditionalChinese: "幾個標籤能讓之後的回答更準，想跳過也可以。"
+                english: "Only places you confirm become private Map Stamps — then just ask Memo anytime.",
+                traditionalChinese: "只有你確認的地點會變成私人地圖章——之後隨時問 Memo 就好。"
             )
         }
     }
@@ -363,17 +320,13 @@ private enum OnboardingStep: Int, CaseIterable {
         case .candidate:
             return language.localized(english: "Stamp it on my map", traditionalChinese: "蓋上我的地圖")
         case .mapStamp:
-            return language.localized(english: "Ask my saved places", traditionalChinese: "問我存過的地點")
-        case .ask:
-            return language.localized(english: "Pick a few tags", traditionalChinese: "挑幾個標籤")
-        case .tag:
             return language.localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
         }
     }
 
     func primaryHint(language: AppLanguage) -> String {
         switch self {
-        case .tag:
+        case .mapStamp:
             return language.localized(english: "Finishes onboarding and opens the app", traditionalChinese: "完成新手引導並打開 App")
         default:
             return language.localized(english: "Goes to the next onboarding step", traditionalChinese: "前往下一個引導步驟")
@@ -382,30 +335,10 @@ private enum OnboardingStep: Int, CaseIterable {
 
     func skipTitle(language: AppLanguage) -> String {
         switch self {
-        case .tag:
-            return language.localized(english: "Skip tags and open SAV-E", traditionalChinese: "跳過標籤，直接打開")
+        case .mapStamp:
+            return language.localized(english: "Skip and open SAV-E", traditionalChinese: "跳過，直接打開")
         default:
             return language.localized(english: "Skip this step", traditionalChinese: "跳過這一步")
-        }
-    }
-}
-
-private enum ProofIntentTag: String, CaseIterable {
-    case coffee
-    case dateNight
-    case cheapEats
-    case quiet
-    case travel
-    case friends
-
-    func title(language: AppLanguage) -> String {
-        switch self {
-        case .coffee: return language.localized(english: "Coffee", traditionalChinese: "咖啡")
-        case .dateNight: return language.localized(english: "Date night", traditionalChinese: "約會")
-        case .cheapEats: return language.localized(english: "Cheap eats", traditionalChinese: "平價美食")
-        case .quiet: return language.localized(english: "Quiet spot", traditionalChinese: "安靜地點")
-        case .travel: return language.localized(english: "Trip idea", traditionalChinese: "旅行靈感")
-        case .friends: return language.localized(english: "Friend sent", traditionalChinese: "朋友推薦")
         }
     }
 }
@@ -793,12 +726,11 @@ private struct ClueStepView: View {
 // MARK: - Proof Demo Canvas
 
 /// Animated scripted demo: one clue card becomes a Review Candidate, then a
-/// stamped place on a mini map, then an answer from saved memory. No network.
+/// stamped place on a mini map. No network.
 private struct ProofDemoCanvas: View {
     let step: OnboardingStep
     let clueText: String
     let language: AppLanguage
-    let selectedTagCount: Int
     let height: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -863,12 +795,6 @@ private struct ProofDemoCanvas: View {
                 .transition(sceneTransition)
         case .mapStamp:
             mapStampScene
-                .transition(sceneTransition)
-        case .ask:
-            askScene
-                .transition(sceneTransition)
-        case .tag:
-            tagScene
                 .transition(sceneTransition)
         default:
             EmptyView()
@@ -1054,87 +980,6 @@ private struct ProofDemoCanvas: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: Ask scene
-
-    private var askScene: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            chatBubble(
-                language.localized(english: "Quiet cafe for Sunday?", traditionalChinese: "週日想去安靜咖啡店？"),
-                isUser: true
-            )
-
-            chatBubble(
-                language.localized(
-                    english: "Hidden Moon Cafe — you stamped it from that Reel. Source is attached.",
-                    traditionalChinese: "Hidden Moon Cafe——你從那支 Reel 蓋章存的，來源都還在。"
-                ),
-                isUser: false
-            )
-            .opacity(phase >= 1 ? 1 : 0)
-            .offset(y: phase >= 1 || reduceMotion ? 0 : 9)
-
-            if phase >= 2 {
-                Label(
-                    language.localized(english: "Answered from your map", traditionalChinese: "從你的地圖回答"),
-                    systemImage: "mappin.and.ellipse"
-                )
-                .font(.caption.weight(.black))
-                .foregroundColor(.saveInk)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color.saveMint.opacity(0.6))
-                .clipShape(Capsule())
-                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.9)))
-            }
-
-            Spacer(minLength: 30)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func chatBubble(_ text: String, isUser: Bool) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
-            .foregroundColor(.saveInk)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(12)
-            .background(isUser ? Color.saveHoney.opacity(0.46) : Color.saveSky.opacity(0.36))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-    }
-
-    // MARK: Tag scene
-
-    private var tagScene: some View {
-        ZStack(alignment: .bottomLeading) {
-            OnboardingMiniMap(stampVisible: true, reduceMotion: true)
-
-            Label(tagCountText, systemImage: "tag.fill")
-                .font(.caption.weight(.black))
-                .foregroundColor(.saveInk)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 8)
-                .background(Color.saveHoney.opacity(0.88))
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1))
-                .clipShape(Capsule())
-                .padding(12)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private var tagCountText: String {
-        switch language {
-        case .english:
-            return selectedTagCount == 1 ? "1 tag on this stamp" : "\(selectedTagCount) tags on this stamp"
-        case .traditionalChinese:
-            return "這個地圖章有 \(selectedTagCount) 個標籤"
-        }
-    }
-
     // MARK: Memo guide
 
     private var memoGuide: some View {
@@ -1143,7 +988,7 @@ private struct ProofDemoCanvas: View {
             HStack(alignment: .bottom, spacing: 6) {
                 Spacer()
 
-                if step != .mapStamp && step != .tag {
+                if step != .mapStamp {
                     Text(memoLine)
                         .font(.caption2.weight(.black))
                         .foregroundColor(.saveInk)
@@ -1168,8 +1013,6 @@ private struct ProofDemoCanvas: View {
         switch step {
         case .candidate:
             return language.localized(english: "I found this — your call.", traditionalChinese: "我找到這個——由你決定。")
-        case .ask:
-            return language.localized(english: "Ask me anytime.", traditionalChinese: "隨時問我。")
         default:
             return ""
         }
@@ -1197,14 +1040,6 @@ private struct ProofDemoCanvas: View {
             return "Demo: Hidden Moon Cafe is confirmed and stamped onto your private map."
         case (.mapStamp, .traditionalChinese):
             return "示範：Hidden Moon Cafe 已確認，蓋章到你的私人地圖。"
-        case (.ask, .english):
-            return "Demo: you ask for a quiet Sunday cafe, and Memo answers with the place you stamped, source attached."
-        case (.ask, .traditionalChinese):
-            return "示範：你問週日的安靜咖啡店，Memo 用你蓋章的地點回答，來源都在。"
-        case (.tag, .english):
-            return "Demo map showing your stamped place with \(selectedTagCount) tags."
-        case (.tag, .traditionalChinese):
-            return "示範地圖：你蓋章的地點目前有 \(selectedTagCount) 個標籤。"
         default:
             return ""
         }
@@ -1282,49 +1117,6 @@ private struct OnboardingMiniMap: View {
             reduceMotion ? .easeInOut(duration: 0.18) : .spring(response: 0.38, dampingFraction: 0.6),
             value: stampVisible
         )
-    }
-}
-
-// MARK: - Tag Step
-
-private struct TagGrid: View {
-    @Binding var selectedTags: Set<ProofIntentTag>
-    let language: AppLanguage
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 118), spacing: 10)], spacing: 10) {
-            ForEach(ProofIntentTag.allCases, id: \.self) { tag in
-                Button {
-                    if selectedTags.contains(tag) {
-                        selectedTags.remove(tag)
-                    } else {
-                        selectedTags.insert(tag)
-                    }
-                } label: {
-                    Label(
-                        tag.title(language: language),
-                        systemImage: selectedTags.contains(tag) ? "checkmark.circle.fill" : "circle"
-                    )
-                    .font(.subheadline.weight(.black))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 11)
-                    .background(selectedTags.contains(tag) ? Color.saveHoney.opacity(0.64) : Color.saveNotebookPage.opacity(0.86))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(selectedTags.contains(tag) ? 0.9 : 0.42), lineWidth: 1.3)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("onboarding.tag.\(tag.rawValue)")
-                .accessibilityLabel(tag.title(language: language))
-                .accessibilityAddTraits(selectedTags.contains(tag) ? [.isSelected] : [])
-            }
-        }
     }
 }
 
