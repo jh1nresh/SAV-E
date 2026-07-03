@@ -34,7 +34,7 @@ struct TripItineraryComponent: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.saveSky.opacity(0.48))
+                        .background(Color.saveCream.opacity(0.48))
                         .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                         .clipShape(Capsule())
 
@@ -62,7 +62,7 @@ struct TripItineraryComponent: View {
                         .font(.caption.weight(.bold))
                         .foregroundColor(.saveInk)
                         .frame(width: 34, height: 34)
-                        .background(Color.saveMint.opacity(0.74))
+                        .background(Color.saveNotebookPage.opacity(0.74))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10, style: .continuous)
                                 .stroke(Color.saveNotebookLine, lineWidth: 1.2)
@@ -208,11 +208,11 @@ private struct TripHealthSummaryCard: View {
             if !health.warnings.isEmpty || !health.gaps.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(health.warnings.prefix(2)) { warning in
-                        TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: .saveHoney)
+                        TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: .saveCoral)
                     }
                     ForEach(health.gaps.prefix(3)) { gap in
                         VStack(alignment: .leading, spacing: 6) {
-                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: .saveSky)
+                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: .saveCream)
                             if let suggestion = suggestionsByGapID[gap.id], let onAddSuggestion {
                                 ForEach(suggestion.options.prefix(3)) { option in
                                     Button(action: { onAddSuggestion(gap, option) }) {
@@ -241,7 +241,7 @@ private struct TripHealthSummaryCard: View {
             }
         }
         .padding(12)
-        .background(Color.saveSky.opacity(0.14))
+        .background(Color.saveCream.opacity(0.45))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.saveNotebookLine, lineWidth: 1.2)
@@ -286,9 +286,9 @@ private struct TripHealthSummaryCard: View {
         case .confirmedSaved:
             return .saveMint.opacity(0.52)
         case .reviewCandidate:
-            return .saveSky.opacity(0.42)
+            return .saveSignal.opacity(0.42)
         case .sourceClue:
-            return .saveHoney.opacity(0.42)
+            return .saveSignal.opacity(0.42)
         case .externalSuggestion:
             return .saveCoral.opacity(0.24)
         }
@@ -386,7 +386,7 @@ private struct DaySection: View {
                                     .foregroundColor(.saveInk)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
-                                    .background(Color.saveMint.opacity(0.74))
+                                    .background(Color.saveNotebookPage.opacity(0.74))
                                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                                     .clipShape(Capsule())
                             }
@@ -401,7 +401,7 @@ private struct DaySection: View {
                                 StopBadge(text: stateLabel(placeState), tint: stateTint(placeState))
                             }
                             ForEach(stop.risks.prefix(2), id: \.self) { risk in
-                                StopBadge(text: riskLabel(risk), tint: .saveHoney)
+                                StopBadge(text: riskLabel(risk), tint: .saveCoral)
                             }
                         }
                         if let note = stop.note {
@@ -486,8 +486,8 @@ private struct DaySection: View {
 
     private func stateTint(_ state: ItineraryPlaceState) -> Color {
         switch state {
-        case .sourceOnly: return .saveSky
-        case .reviewCandidate: return .saveHoney
+        case .sourceOnly: return .saveSignal
+        case .reviewCandidate: return .saveSignal
         case .confirmedMapStamp: return .saveMint
         case .externalSuggestion: return .saveCoral
         }

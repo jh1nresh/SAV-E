@@ -11,7 +11,7 @@ struct NavigationCardComponent: View {
                 .font(.system(size: 26, weight: .black))
                 .foregroundColor(.saveInk)
                 .frame(width: 58, height: 58)
-                .background(Color.saveSky.opacity(0.54))
+                .background(Color.saveCream.opacity(0.54))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color.saveNotebookLine, lineWidth: 2)
@@ -48,7 +48,7 @@ struct NavigationCardComponent: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(Color.saveMint.opacity(0.74))
+                .background(Color.saveCream.opacity(0.74))
                 .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                 .clipShape(Capsule())
 

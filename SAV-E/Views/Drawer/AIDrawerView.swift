@@ -1156,7 +1156,7 @@ struct AIDrawerView: View {
             if let followReferralMessage {
                 Text(followReferralMessage)
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(isFollowReferralSuccessMessage(followReferralMessage) ? .saveSignal : .saveCocoa.opacity(0.78))
+                    .foregroundColor(isFollowReferralSuccessMessage(followReferralMessage) ? .saveMint : .saveCocoa.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -2430,20 +2430,20 @@ private struct SavedMapDetailDrawerContent: View {
 
             HStack(spacing: 8) {
                 Button(action: onPlanAroundPlace) {
-                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveSignal.opacity(0.56))
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveHoney.opacity(0.56))
                 }
 
                 Button {
                     NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name)
                 } label: {
-                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"), systemImage: "map.fill", fill: Color.saveMint.opacity(0.32))
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"), systemImage: "map.fill", fill: Color.saveNotebookPage)
                 }
 
                 if let sourceURL = detailPlace.primarySourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        PlaceDetailActionLabel(title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), systemImage: "link", fill: Color.saveSky.opacity(0.20))
+                        PlaceDetailActionLabel(title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), systemImage: "link", fill: Color.saveNotebookPage)
                     }
                 }
             }
@@ -2722,7 +2722,7 @@ private struct SocialPlaceDetailCard: View {
                         .foregroundColor(.saveCocoa.opacity(0.78))
                 }
                 .padding(12)
-                .background(Color.saveSky.opacity(signal.kind == .trending ? 0.16 : 0.24))
+                .background(Color.saveCream.opacity(signal.kind == .trending ? 0.40 : 0.56))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
@@ -2807,7 +2807,7 @@ private struct AddToListPanel: View {
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.savePink.opacity(0.72))
+                        .background(Color.saveHoney.opacity(0.72))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .stroke(Color.saveNotebookLine, lineWidth: 1.4)
@@ -2833,7 +2833,7 @@ private struct AddToListPanel: View {
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.savePink.opacity(0.72))
+                        .background(Color.saveHoney.opacity(0.72))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
                                 .stroke(Color.saveNotebookLine, lineWidth: 1.4)
@@ -2871,7 +2871,7 @@ private struct CollaborativeListCard: View {
                         .font(.title3)
                         .foregroundColor(.saveInk)
                         .frame(width: 32, height: 32)
-                        .background(Color.savePink.opacity(0.76))
+                        .background(Color.saveCream.opacity(0.76))
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -2920,7 +2920,7 @@ private struct CollaborativeListCard: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
-                    .background(Color.saveSignal.opacity(0.56))
+                    .background(Color.saveHoney.opacity(0.56))
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -2933,7 +2933,7 @@ private struct CollaborativeListCard: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(Color.saveHoney.opacity(0.72))
+                        .background(Color.saveNotebookPage.opacity(0.72))
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
@@ -2945,7 +2945,7 @@ private struct CollaborativeListCard: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(Color.saveMint.opacity(0.72))
+                        .background(Color.saveNotebookPage.opacity(0.72))
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
@@ -2995,7 +2995,7 @@ private struct CollaborativeListCard: View {
                         if item.alreadySaved(in: existingPlaces) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.subheadline)
-                                .foregroundColor(.saveSignal)
+                                .foregroundColor(.saveMint)
                                 .accessibilityLabel(languageSettings.localized(english: "Already saved", traditionalChinese: "已保存"))
                         } else {
                             Button(action: { onSaveItem(item) }) {
@@ -3384,12 +3384,12 @@ private struct SavedPlaceRow: View {
 private extension PlaceCategory {
     var poiIconColor: Color {
         switch self {
-        case .food: return .saveSignal
+        case .food: return .saveCocoa
         case .cafe: return .saveCocoa
-        case .bar: return .savePink
-        case .attraction: return .saveHoney
-        case .stay: return .saveSky
-        case .shopping: return .saveMint
+        case .bar: return .saveCocoa
+        case .attraction: return .saveCocoa
+        case .stay: return .saveCocoa
+        case .shopping: return .saveCocoa
         }
     }
 }
@@ -3644,7 +3644,7 @@ private struct ReviewCandidatesEmptyState: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.saveInk)
                 .frame(width: 34, height: 34)
-                .background(Color.saveSky.opacity(0.54))
+                .background(Color.saveCream.opacity(0.54))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .stroke(Color.saveNotebookLine, lineWidth: 1.2)
@@ -3988,8 +3988,8 @@ private struct ReviewCandidateProofPanel: View {
             .foregroundColor(.saveInk)
 
             proofSection(title: languageSettings.localized(english: "Found", traditionalChinese: "找到"), systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
-            proofSection(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveHoney)
-            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: .saveSky)
+            proofSection(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveCoral)
+            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: .saveCream)
             nextActionRow
         }
         .padding(10)
@@ -4030,7 +4030,7 @@ private struct ReviewCandidateProofPanel: View {
                 .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 22, height: 22)
-                .background(Color.savePink.opacity(0.72))
+                .background(Color.saveHoney.opacity(0.72))
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
@@ -4576,7 +4576,7 @@ private struct MemoryFlowCTA: View {
             HStack(spacing: 8) {
                 flowStep(number: "1", title: languageSettings.localized(english: "Review", traditionalChinese: "確認"), count: reviewCount, tint: .saveHoney)
                 flowStep(number: "2", title: languageSettings.localized(english: "Stamp", traditionalChinese: "地圖章"), count: stampCount, tint: .saveMint)
-                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: .saveSky)
+                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: .saveCream)
             }
 
             HStack(spacing: 10) {
@@ -4779,7 +4779,7 @@ private struct DrawerSuggestionRow: View {
                 .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 28, height: 28)
-                .background(Color.saveMint.opacity(0.7))
+                .background(Color.saveCream.opacity(0.7))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .stroke(Color.saveNotebookLine, lineWidth: 1.1)
@@ -4846,7 +4846,7 @@ private struct AIResultActionBar: View {
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.saveMint.opacity(0.74))
+                    .background(Color.saveCream.opacity(0.74))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.saveNotebookLine, lineWidth: 1.4)
@@ -4872,8 +4872,8 @@ private enum AgentCommandTone {
         switch self {
         case .signal: return .saveSignal
         case .honey: return .saveHoney
-        case .sky: return .saveSky
-        case .cocoa: return .saveMint
+        case .sky: return .saveCream
+        case .cocoa: return .saveCream
         }
     }
 
@@ -4890,8 +4890,8 @@ private enum AgentCommandTone {
         switch self {
         case .signal: return .saveSignal.opacity(0.18)
         case .honey: return .saveHoney.opacity(0.58)
-        case .sky: return .saveSky.opacity(0.46)
-        case .cocoa: return .saveMint.opacity(0.54)
+        case .sky: return .saveCream.opacity(0.46)
+        case .cocoa: return .saveCream.opacity(0.54)
         }
     }
 }

@@ -191,9 +191,9 @@ struct PlaceMapPin: View {
             .overlay {
                 if isSelected {
                     Circle()
-                        .stroke(Color.saveSignal.opacity(0.86), lineWidth: 3)
+                        .stroke(Color.saveHoney.opacity(0.86), lineWidth: 3)
                         .frame(width: 46, height: 46)
-                        .shadow(color: Color.saveSignal.opacity(0.28), radius: 5)
+                        .shadow(color: Color.saveHoney.opacity(0.28), radius: 5)
                 }
             }
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
@@ -238,7 +238,7 @@ private struct ReviewCandidateMapPin: View {
         } label: {
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
-                tint: .saveHoney,
+                tint: .saveSignal,
                 state: .review
             )
         }
@@ -261,7 +261,7 @@ private struct UnsavedMapCandidatePin: View {
         } label: {
             DefaultPOIMarker(
                 systemName: candidate.category?.iconName ?? "mappin.circle.fill",
-                tint: candidate.category?.mapMarkerTint ?? .saveSky,
+                tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
                 state: .publicResult
             )
             .scaleEffect(isSelected ? 1.18 : 1)
@@ -316,11 +316,11 @@ private enum MapMarkerState {
     var strokeColor: Color {
         switch self {
         case .saved:
-            return .saveSignal.opacity(0.74)
-        case .shared:
             return .saveMint.opacity(0.74)
+        case .shared:
+            return .saveCocoa.opacity(0.74)
         case .review:
-            return .saveHoney.opacity(0.80)
+            return .saveSignal.opacity(0.80)
         case .publicResult:
             return Color.white.opacity(0.86)
         }
@@ -343,8 +343,8 @@ private enum MapMarkerState {
 
     var badgeColor: Color {
         switch self {
-        case .saved: return .saveSignal
-        case .shared: return .saveMint
+        case .saved: return .saveMint
+        case .shared: return .saveCocoa
         case .review, .publicResult: return .clear
         }
     }
@@ -353,12 +353,12 @@ private enum MapMarkerState {
 private extension PlaceCategory {
     var mapMarkerTint: Color {
         switch self {
-        case .food: return .saveSignal
+        case .food: return .saveCocoa
         case .cafe: return .saveCocoa
-        case .bar: return .savePink
-        case .attraction: return .saveHoney
-        case .stay: return .saveSky
-        case .shopping: return .saveMint
+        case .bar: return .saveCocoa
+        case .attraction: return .saveCocoa
+        case .stay: return .saveCocoa
+        case .shopping: return .saveCocoa
         }
     }
 }

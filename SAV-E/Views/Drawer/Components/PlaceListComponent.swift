@@ -15,7 +15,7 @@ struct PlaceListComponent: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.saveMint.opacity(0.72))
+                        .background(Color.saveCream.opacity(0.72))
                         .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                         .clipShape(Capsule())
 

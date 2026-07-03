@@ -284,7 +284,7 @@ struct AuthLoadingView: View {
 
     private var loadingSteps: [SaveOpeningStep] {
         [
-            SaveOpeningStep(icon: "link", label: openingStepClues, tint: .saveSky),
+            SaveOpeningStep(icon: "link", label: openingStepClues, tint: .saveSignal),
             SaveOpeningStep(icon: "checklist", label: languageSettings.text(.review), tint: .saveHoney),
             SaveOpeningStep(icon: "mappin.and.ellipse", label: openingStepMap, tint: .saveMint)
         ]
@@ -357,9 +357,9 @@ private struct SaveOpeningLogoMark: View {
 
     var body: some View {
         ZStack {
-            SaveOpeningScrapbookCard(fill: .saveSky, rotation: -10, offset: CGSize(width: -42, height: 28))
+            SaveOpeningScrapbookCard(fill: .saveCream, rotation: -10, offset: CGSize(width: -42, height: 28))
             SaveOpeningScrapbookCard(fill: .saveHoney, rotation: 9, offset: CGSize(width: 38, height: 18))
-            SaveOpeningScrapbookCard(fill: .savePink, rotation: 3, offset: CGSize(width: 8, height: 42))
+            SaveOpeningScrapbookCard(fill: .saveNotebookPage, rotation: 3, offset: CGSize(width: 8, height: 42))
 
             Circle()
                 .stroke(Color.saveHoney.opacity(0.42), lineWidth: 9)
@@ -373,8 +373,8 @@ private struct SaveOpeningLogoMark: View {
                 .shadow(color: Color.saveInk.opacity(0.16), radius: 0, x: 0, y: 7)
 
             SaveOpeningSpark(systemImage: "sparkles", fill: .saveHoney, offset: CGSize(width: 72, height: -54))
-            SaveOpeningSpark(systemImage: "link", fill: .saveSky, offset: CGSize(width: -76, height: -34))
-            SaveOpeningSpark(systemImage: "heart.fill", fill: .savePink, offset: CGSize(width: 76, height: 50))
+            SaveOpeningSpark(systemImage: "link", fill: .saveCream, offset: CGSize(width: -76, height: -34))
+            SaveOpeningSpark(systemImage: "heart.fill", fill: .saveCream, offset: CGSize(width: 76, height: 50))
         }
         .frame(width: 210, height: 190)
         .accessibilityHidden(true)
@@ -461,7 +461,7 @@ private struct SaveOpeningHintPill: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color.saveCoral)
+                .fill(Color.saveHoney)
                 .frame(width: 7, height: 7)
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 0.8))
 
@@ -765,7 +765,7 @@ private struct SignInProofMark: View {
                 .rotationEffect(.degrees(-4))
 
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.saveSky.opacity(0.22))
+                .fill(Color.saveHoney.opacity(0.22))
                 .frame(width: isCompactHeight ? 114 : 138, height: isCompactHeight ? 84 : 100)
                 .offset(x: 22, y: 12)
 
@@ -794,7 +794,7 @@ private struct SignInWorkflowStrip: View {
     private var steps: [(String, String, Color)] {
         [
             (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), .saveHoney),
-            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), .saveSky),
+            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), .saveSignal),
             (languageSettings.text(.save), languageSettings.text(.saveSubtitle), .saveMint),
         ]
     }

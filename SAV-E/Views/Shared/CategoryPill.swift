@@ -11,7 +11,7 @@ struct CategoryPill: View {
                 .font(.system(size: 10, weight: .black))
                 .foregroundColor(.saveInk)
                 .frame(width: 21, height: 21)
-                .background(isSelected ? Color.saveMint : Color.saveNotebookPage)
+                .background(isSelected ? Color.saveCream : Color.saveNotebookPage)
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .stroke(Color.saveNotebookLine, lineWidth: 1.1)

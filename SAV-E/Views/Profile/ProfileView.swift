@@ -80,7 +80,7 @@ struct ProfileView: View {
                             icon: "globe.asia.australia",
                             title: languageSettings.text(.language),
                             detail: languageSettings.language.displayName,
-                            color: .saveSky
+                            color: .saveCocoa
                         ) {
                             SaveHaptics.tap()
                             showLanguageSettings = true
@@ -250,7 +250,7 @@ private struct EditProfileSheet: View {
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 36)
-                            .background(Color.saveSky.opacity(0.42))
+                            .background(Color.saveHoney.opacity(0.42))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(Color.saveNotebookLine, lineWidth: 1.4)

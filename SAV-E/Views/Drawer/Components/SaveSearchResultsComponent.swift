@@ -66,7 +66,7 @@ struct SaveSearchResultsComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(isPublicSection ? Color.saveSky.opacity(0.72) : Color.saveMint.opacity(0.72))
+                    .background(isPublicSection ? Color.saveCream.opacity(0.72) : Color.saveMint.opacity(0.72))
                     .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
                     .clipShape(Capsule())
 
@@ -233,7 +233,7 @@ private struct SaveSearchAssistantMessage: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 34, height: 34)
-                .background(Color.saveMint.opacity(0.82))
+                .background(Color.saveHoney.opacity(0.82))
                 .clipShape(Circle())
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.1))
 
@@ -296,9 +296,9 @@ private struct SaveSearchResultNotebookRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     SaveSearchStateChip(text: result.objectType.displayName(language: languageSettings.language), fill: typeFill)
-                    SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveSky : .saveMint)
+                    SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveNotebookPage : .saveMint)
                     if let category = result.category {
-                        SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveSignal)
+                        SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveNotebookPage)
                     }
                 }
 
@@ -450,19 +450,21 @@ private struct SaveSearchResultNotebookRow: View {
     private var iconFill: Color {
         switch result.objectType {
         case .savedPlace, .triedMemory: return .saveMint
-        case .pendingCandidate, .sourceOnlyClue: return .saveHoney
-        case .review, .mapVisibleUnsavedPlace: return .saveSignal
-        case .tripStop: return .saveSky
-        case .newRecommendation: return .saveSky.opacity(0.72)
+        case .pendingCandidate, .sourceOnlyClue: return .saveSignal
+        case .review: return .saveSignal
+        case .mapVisibleUnsavedPlace: return .saveNotebookPage
+        case .tripStop: return .saveNotebookPage
+        case .newRecommendation: return .saveNotebookPage
         }
     }
 
     private var typeFill: Color {
         switch result.objectType {
         case .savedPlace, .triedMemory: return .saveMint
-        case .pendingCandidate, .sourceOnlyClue: return .saveHoney
-        case .mapVisibleUnsavedPlace, .newRecommendation: return .saveSky
-        case .review, .tripStop: return .saveSignal
+        case .pendingCandidate, .sourceOnlyClue: return .saveSignal
+        case .mapVisibleUnsavedPlace, .newRecommendation: return .saveNotebookPage
+        case .review: return .saveSignal
+        case .tripStop: return .saveNotebookPage
         }
     }
 }

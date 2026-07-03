@@ -103,7 +103,7 @@ struct PlaceBottomSheet: View {
                     PlaceDetailActionLabel(
                         title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"),
                         systemImage: "point.topleft.down.curvedto.point.bottomright.up",
-                        fill: Color.saveSignal.opacity(0.56)
+                        fill: Color.saveHoney.opacity(0.56)
                     )
                 }
                 .disabled(onPlanAround == nil)
@@ -116,7 +116,7 @@ struct PlaceBottomSheet: View {
                     PlaceDetailActionLabel(
                         title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
                         systemImage: "map.fill",
-                        fill: Color.saveMint.opacity(0.36)
+                        fill: Color.saveNotebookPage
                     )
                 }
 
@@ -135,7 +135,7 @@ struct PlaceBottomSheet: View {
                         PlaceDetailActionLabel(
                             title: languageSettings.localized(english: "Source", traditionalChinese: "來源"),
                             systemImage: "link",
-                            fill: Color.saveSky.opacity(0.22)
+                            fill: Color.saveNotebookPage
                         )
                     }
                 }
