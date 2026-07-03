@@ -53,6 +53,9 @@ struct MapCoachmarkTour: View {
 
     @State private var stepIndex = 0
 
+    // Two interaction-focused steps only. The concepts (review-first, private
+    // map) were just taught in onboarding — repeating them here doubled the
+    // tour length and drove skips. The tour now only shows WHERE to act.
     private var steps: [MapCoachmarkStep] {
         [
             MapCoachmarkStep(
@@ -62,8 +65,8 @@ struct MapCoachmarkTour: View {
                     traditionalChinese: "這是你的地圖"
                 ),
                 body: languageSettings.localized(
-                    english: "Every place you save lands here as a Map Stamp — your own private map.",
-                    traditionalChinese: "你存的每個地點都會變成地圖章，落在這裡——這是你的私人地圖。"
+                    english: "Saved places land here as Map Stamps — tap one to see its details and source.",
+                    traditionalChinese: "存的地點會變成地圖章落在這裡——點一下就能看細節和來源。"
                 ),
                 target: .map,
                 showsMascot: true
@@ -80,32 +83,6 @@ struct MapCoachmarkTour: View {
                 ),
                 target: .drawer,
                 showsMascot: false
-            ),
-            MapCoachmarkStep(
-                id: 2,
-                title: languageSettings.localized(
-                    english: "Review before you keep",
-                    traditionalChinese: "先確認再保留"
-                ),
-                body: languageSettings.localized(
-                    english: "Unsure finds wait as Review Candidates — you confirm before they become Map Stamps.",
-                    traditionalChinese: "不確定的會先當成待確認地點等你——你確認後才會變成地圖章。"
-                ),
-                target: .drawer,
-                showsMascot: false
-            ),
-            MapCoachmarkStep(
-                id: 3,
-                title: languageSettings.localized(
-                    english: "You're all set",
-                    traditionalChinese: "都準備好了"
-                ),
-                body: languageSettings.localized(
-                    english: "Drop a clue, confirm it, watch your map fill up. Memo's got your back.",
-                    traditionalChinese: "丟個線索、確認它，看著地圖慢慢長滿。Memo 會陪著你。"
-                ),
-                target: .map,
-                showsMascot: true
             )
         ]
     }
