@@ -15,6 +15,7 @@
 		1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */; };
 		20EE991C2D2D42E045F23CA5 /* SavePlanAroundControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */; };
 		23F27DF2E5652340485DE6A3 /* SaveLocalVaultServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAE0D2F9B15DB6C5183415B /* SaveLocalVaultServiceTests.swift */; };
+		243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */; };
 		283787AE9627CB588A26B5A1 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E1CAB36A11288E7007AEBF7 /* ProfileView.swift */; };
 		2CB40725EFEDED4A9B1275C9 /* SaveSearchIntentParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */; };
 		2E13EB2E4D0C170AF6B107F5 /* SAVEProductionConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */; };
@@ -194,6 +195,7 @@
 		2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaatAnalysisCache.swift; sourceTree = "<group>"; };
 		242AE991A2AD504072657488 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRouteCodecTests.swift; sourceTree = "<group>"; };
+		2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEScreenshotRailTests.swift; sourceTree = "<group>"; };
 		2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchIntentEvalTests.swift; sourceTree = "<group>"; };
 		2BF2F96FC1EA2FD6AEF8E767 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		2C0D3A7A18E473C94F819125 /* SaveMemoryRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryRecord.swift; sourceTree = "<group>"; };
@@ -571,6 +573,7 @@
 			isa = PBXGroup;
 			children = (
 				7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */,
+				2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */,
 				33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */,
 			);
 			name = SAVEUITests;
@@ -1069,6 +1072,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */,
+				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
 				B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1112,7 +1116,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1320,7 +1324,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (

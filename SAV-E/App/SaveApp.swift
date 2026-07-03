@@ -36,6 +36,11 @@ struct SaveApp: App {
         if ProcessInfo.processInfo.arguments.contains("--skip-map-tour") {
             UserDefaults.standard.set(true, forKey: "hasSeenMapTour")
         }
+        // Screenshot/UI-test rail: jump straight past onboarding so the sign-in
+        // screen (and the review-demo flow behind it) is immediately reachable.
+        if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
+            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+        }
 #endif
     }
 
@@ -676,7 +681,9 @@ struct SignInView: View {
                     text: $email,
                     buttonTitle: languageSettings.text(.sendCode),
                     keyboardType: .emailAddress,
-                    isDisabled: !canSendEmailCode
+                    isDisabled: !canSendEmailCode,
+                    fieldAccessibilityID: "signin.emailField",
+                    buttonAccessibilityID: "signin.sendCode"
                 ) {
                     Task {
                         isLoading = true
@@ -696,7 +703,9 @@ struct SignInView: View {
                     text: $verificationCode,
                     buttonTitle: languageSettings.text(.verify),
                     keyboardType: .numberPad,
-                    isDisabled: verificationCode.isEmpty || isLoading
+                    isDisabled: verificationCode.isEmpty || isLoading,
+                    fieldAccessibilityID: "signin.codeField",
+                    buttonAccessibilityID: "signin.verify"
                 ) {
                     Task {
                         isLoading = true
@@ -849,12 +858,18 @@ private struct WorkflowStepCard: View {
 }
 
 private struct SignInInputRow: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     let placeholder: String
     @Binding var text: String
     let buttonTitle: String
     let keyboardType: UIKeyboardType
     let isDisabled: Bool
+    // Stable hooks for UI tests / the App Store screenshot rail — the demo
+    // sign-in flow types into these fields (see Tests/SAVEUITests).
+    var fieldAccessibilityID: String = ""
+    var buttonAccessibilityID: String = ""
     let action: () -> Void
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -865,8 +880,24 @@ private struct SignInInputRow: View {
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .foregroundColor(.saveInk)
+                .accessibilityIdentifier(fieldAccessibilityID)
+                .focused($isFocused)
+                // The sign-in layout ignores the keyboard safe area, so the
+                // keyboard covers the Send/Verify button while typing. The
+                // number pad has no return key, so without this Done button a
+                // reviewer typing the demo code could never reach "Verify".
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) {
+                            isFocused = false
+                        }
+                        .accessibilityIdentifier("signin.keyboardDone")
+                    }
+                }
 
             Button(buttonTitle, action: action)
+                .accessibilityIdentifier(buttonAccessibilityID)
                 .font(.subheadline.weight(.black))
                 .foregroundColor(isDisabled ? Color.saveCocoa.opacity(0.42) : .saveInk)
                 .padding(.horizontal, 10)
