@@ -1728,35 +1728,6 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testPlaceListPublicNearbyActionFetchesMapCandidates() async {
-        let candidate = SaveMapCandidate(
-            title: "Boba Harmony",
-            subtitle: "Santa Ana, CA",
-            latitude: 33.744,
-            longitude: -117.867,
-            category: .cafe,
-            rating: 4.9,
-            reviewCount: 81,
-            distanceMeters: 8_700,
-            evidence: ["Apple Maps result"]
-        )
-        let mapSearch = RecordingMapCandidateSearchService(candidates: [candidate])
-        let viewModel = PlaceListViewModel(mapCandidateSearchService: mapSearch)
-        viewModel.places = []
-        viewModel.searchText = "幫我找附近的珍珠奶茶 推薦我一家"
-
-        viewModel.searchPublicNearbyNow()
-        for _ in 0..<20 {
-            if !viewModel.mapCandidates.isEmpty { break }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-
-        XCTAssertEqual(mapSearch.matchingRequests.map(\.query), ["boba milk tea"])
-        XCTAssertEqual(viewModel.mapCandidates.map(\.title), ["Boba Harmony"])
-        XCTAssertEqual(viewModel.saveSearchResponse.newRecommendations.results.map(\.title), ["Boba Harmony"])
-    }
-
-    @MainActor
     func testMapSearchClearRemovesUnsavedPinsAndCategoryFilter() {
         let map = MapViewModel()
         let candidate = SaveMapCandidate(
@@ -2887,57 +2858,6 @@ final class SaveSearchControllerTests: XCTestCase {
         map.apply(MapActionData(type: .filterPins, placeIds: [focusedPlace.id.uuidString], lat: nil, lng: nil, span: nil))
 
         XCTAssertEqual(Set(map.filteredPlaces.map(\.id)), Set([focusedPlace.id, otherSavedPlace.id]))
-    }
-
-    @MainActor
-    func testPlaceListNearestSortUsesCurrentLocation() {
-        let near = place(
-            name: "Near Milk Tea",
-            address: "Irvine, CA",
-            category: .cafe,
-            latitude: 33.6848,
-            longitude: -117.8267
-        )
-        let far = place(
-            name: "Taipei Milk Tea",
-            address: "Taipei, Taiwan",
-            category: .cafe,
-            latitude: 25.0330,
-            longitude: 121.5654
-        )
-        let viewModel = PlaceListViewModel()
-        viewModel.places = [far, near]
-        viewModel.sort = .nearest
-        viewModel.updateCurrentLocation(CLLocation(latitude: 33.6846, longitude: -117.8265))
-
-        XCTAssertEqual(viewModel.filteredPlaces.map(\.id), [near.id, far.id])
-    }
-
-    @MainActor
-    func testTripRouteOptimizationNormalizesTimelineWithoutFakeDelay() async throws {
-        let trip = Trip(
-            id: UUID(),
-            name: "LA Day",
-            city: "Los Angeles",
-            startDate: nil,
-            endDate: nil,
-            places: [
-                TripStop(id: UUID(), placeId: UUID(), placeName: "Dinner", day: 2, orderIndex: 7, startTime: nil, duration: nil, note: nil),
-                TripStop(id: UUID(), placeId: UUID(), placeName: "Coffee", day: 1, orderIndex: 4, startTime: nil, duration: nil, note: nil),
-                TripStop(id: UUID(), placeId: UUID(), placeName: "Museum", day: 1, orderIndex: 9, startTime: nil, duration: nil, note: nil)
-            ],
-            isOptimized: false,
-            createdAt: Date()
-        )
-        let viewModel = TripViewModel()
-        viewModel.trips = [trip]
-
-        await viewModel.optimizeRoute(for: trip)
-
-        let updated = try XCTUnwrap(viewModel.trips.first)
-        XCTAssertTrue(updated.isOptimized)
-        XCTAssertEqual(updated.places.map(\.placeName), ["Coffee", "Museum", "Dinner"])
-        XCTAssertEqual(updated.places.map(\.orderIndex), [0, 1, 0])
     }
 
     private func place(
