@@ -198,6 +198,11 @@ create table if not exists place_candidates (
 create index if not exists idx_place_candidates_capture_id on place_candidates(capture_id);
 create index if not exists idx_place_candidates_status on place_candidates(status);
 
+alter table place_candidates drop constraint if exists place_candidates_status_check;
+alter table place_candidates add constraint place_candidates_status_check check (
+    status in ('review', 'confirmed', 'rejected', 'saved', 'needs_more_evidence', 'source_only')
+);
+
 create table if not exists place_claims (
     id uuid primary key default gen_random_uuid(),
     user_id text references profiles(id) on delete cascade not null,
@@ -502,6 +507,11 @@ create table if not exists user_decisions (
 );
 
 create index if not exists idx_user_decisions_run_id on user_decisions(run_id, created_at desc);
+
+alter table user_decisions drop constraint if exists user_decisions_action_check;
+alter table user_decisions add constraint user_decisions_action_check check (
+    action in ('confirm', 'edit', 'reject', 'save_source_only', 'needs_more_evidence')
+);
 
 create table if not exists workflow_receipts (
     id uuid primary key default gen_random_uuid(),

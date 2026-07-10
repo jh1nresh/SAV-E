@@ -364,6 +364,7 @@ final class MapViewModel: ObservableObject {
     @Published var socialLens: SaveSocialLens = .forYou
     @Published var socialPlaces: [Place] = []
     @Published var selectedSocialPlace: Place?
+    @Published private(set) var showsSocialMapLayer = false
     /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
     @Published var stampMoment: SaveStampMoment?
 
@@ -374,6 +375,7 @@ final class MapViewModel: ObservableObject {
     private let googlePlacesService: GooglePlacesServiceProtocol
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private let saveLocalVaultService: SaveLocalVaultService
+    private let correctionEventStore: SavePlaceCorrectionEventStore
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let saveSearchController: SaveSearchController
     private let saveSearchIntentParser: SaveSearchIntentParser
@@ -391,6 +393,7 @@ final class MapViewModel: ObservableObject {
         googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
+        correctionEventStore: SavePlaceCorrectionEventStore = .shared,
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         saveSearchController: SaveSearchController = SaveSearchController(),
         saveSearchIntentParser: SaveSearchIntentParser = SaveSearchIntentParser(),
@@ -403,6 +406,7 @@ final class MapViewModel: ObservableObject {
         self.googlePlacesService = googlePlacesService
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
         self.saveLocalVaultService = saveLocalVaultService
+        self.correctionEventStore = correctionEventStore
         self.mapCandidateSearchService = mapCandidateSearchService
         self.saveSearchController = saveSearchController
         self.saveSearchIntentParser = saveSearchIntentParser
@@ -430,7 +434,8 @@ final class MapViewModel: ObservableObject {
     }
 
     var reviewCandidatesOnMap: [PlaceReviewCandidate] {
-        reviewCandidates.filter(\.hasReliableCoordinates)
+        // Inbox-first invariant: unresolved candidates never appear as default map pins.
+        []
     }
 
     var visibleMapCandidates: [SaveMapCandidate] {
@@ -442,6 +447,7 @@ final class MapViewModel: ObservableObject {
     }
 
     var visibleSocialPlaces: [Place] {
+        guard showsSocialMapLayer else { return [] }
         var result = socialPlaces.filter { place in
             guard let signal = place.socialSignal else { return false }
             return socialLens == .forYou || signal.lens == socialLens
@@ -650,7 +656,8 @@ final class MapViewModel: ObservableObject {
     func refreshReviewCandidates() async throws {
         let candidates = try await supabaseService.fetchReviewCandidates()
         reviewCandidates = candidates.filter { candidate in
-            candidate.status == "review" || candidate.status == "confirmed"
+            candidate.status == "review" || candidate.status == "confirmed" ||
+                candidate.status == "needs_more_evidence" || candidate.status == "source_only"
         }
     }
 
@@ -693,19 +700,49 @@ final class MapViewModel: ObservableObject {
         return importedCount
     }
 
-    func confirmReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
-        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "confirmed", placeId: nil)
-        await recordPlaceRecoveryDecision(for: candidate, action: "confirm", reason: "User confirmed review candidate.")
-        updateLocalCandidate(candidate.id, status: "confirmed")
-    }
-
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "rejected", placeId: nil)
-        await recordPlaceRecoveryDecision(for: candidate, action: "reject", reason: "User rejected review candidate.")
+        var updatedCandidate = candidate
+        updatedCandidate.status = "rejected"
+        await recordCorrectionEvent(
+            for: candidate,
+            eventType: .rejectCandidate,
+            afterCandidate: updatedCandidate,
+            reason: "User rejected review candidate."
+        )
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
         }
+    }
+
+    func saveReviewCandidateAsSourceOnly(_ candidate: PlaceReviewCandidate) async throws {
+        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "source_only", placeId: nil)
+        var updatedCandidate = candidate
+        updatedCandidate.status = "source_only"
+        await recordCorrectionEvent(
+            for: candidate,
+            eventType: .saveSourceOnly,
+            afterCandidate: updatedCandidate,
+            reason: "User kept the source without confirming a place."
+        )
+        updateLocalCandidate(candidate.id, status: "source_only")
+    }
+
+    func markReviewCandidateWrongBranch(_ candidate: PlaceReviewCandidate) async throws {
+        try await markReviewCandidateNeedsMoreEvidence(
+            candidate,
+            eventType: .wrongBranch,
+            reason: "User marked the suggested branch as incorrect."
+        )
+    }
+
+    func investigateReviewCandidateMore(_ candidate: PlaceReviewCandidate) async throws {
+        try await markReviewCandidateNeedsMoreEvidence(
+            candidate,
+            eventType: .investigateMore,
+            reason: "User asked SAV-E to investigate this clue further."
+        )
     }
 
     func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate, nameOverride: String? = nil) async throws {
@@ -722,10 +759,17 @@ final class MapViewModel: ObservableObject {
 
         if let existing = existingSavedPlace(matching: place) {
             try? await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: existing.id)
-            await recordPlaceRecoveryDecision(
+            var updatedCandidate = candidate
+            updatedCandidate.name = existing.name
+            updatedCandidate.address = existing.address
+            updatedCandidate.latitude = existing.latitude
+            updatedCandidate.longitude = existing.longitude
+            updatedCandidate.status = "saved"
+            await recordCorrectionEvent(
                 for: candidate,
-                action: "confirm_duplicate",
-                editedPayload: ["place_id": existing.id.uuidString],
+                eventType: .mergeExisting,
+                afterCandidate: updatedCandidate,
+                userFinalPlaceId: existing.id,
                 reason: "User confirmed review candidate, but matching Map Stamp already exists."
             )
             reviewCandidates.removeAll { $0.id == candidate.id }
@@ -738,10 +782,17 @@ final class MapViewModel: ObservableObject {
 
         try await supabaseService.savePlace(place, userId: userId)
         try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: place.id)
-        await recordPlaceRecoveryDecision(
+        var updatedCandidate = candidate
+        updatedCandidate.name = place.name
+        updatedCandidate.address = place.address
+        updatedCandidate.latitude = place.latitude
+        updatedCandidate.longitude = place.longitude
+        updatedCandidate.status = "saved"
+        await recordCorrectionEvent(
             for: candidate,
-            action: "confirm",
-            editedPayload: ["place_id": place.id.uuidString],
+            eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
+            afterCandidate: updatedCandidate,
+            userFinalPlaceId: place.id,
             reason: "User saved review candidate as confirmed Map Stamp."
         )
         mirrorToLocalVault(place)
@@ -883,6 +934,7 @@ final class MapViewModel: ObservableObject {
 
     func selectSocialLens(_ lens: SaveSocialLens) {
         socialLens = lens
+        showsSocialMapLayer = true
         if selectedSocialPlace?.socialSignal?.lens != lens {
             selectedSocialPlace = nil
         }
@@ -977,20 +1029,56 @@ final class MapViewModel: ObservableObject {
         return Array(refs.prefix(5))
     }
 
-    private func recordPlaceRecoveryDecision(
+    private func markReviewCandidateNeedsMoreEvidence(
+        _ candidate: PlaceReviewCandidate,
+        eventType: SavePlaceCorrectionEventType,
+        reason: String
+    ) async throws {
+        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "needs_more_evidence", placeId: nil)
+        var updatedCandidate = candidate
+        updatedCandidate.status = "needs_more_evidence"
+        await recordCorrectionEvent(
+            for: candidate,
+            eventType: eventType,
+            afterCandidate: updatedCandidate,
+            reason: reason
+        )
+        updateLocalCandidate(candidate.id, status: "needs_more_evidence")
+    }
+
+    private func recordCorrectionEvent(
         for candidate: PlaceReviewCandidate,
-        action: String,
-        editedPayload: [String: Any] = [:],
+        eventType: SavePlaceCorrectionEventType,
+        afterCandidate: PlaceReviewCandidate? = nil,
+        userFinalPlaceId: UUID? = nil,
         reason: String
     ) async {
+        let event = SavePlaceCorrectionEvent(
+            userId: authService.currentUserId,
+            candidate: candidate,
+            eventType: eventType,
+            afterSnapshot: afterCandidate.map { SavePlaceCorrectionSnapshot(candidate: $0) },
+            userFinalPlaceId: userFinalPlaceId,
+            userReasonText: reason
+        )
+        do {
+            try correctionEventStore.append(event)
+        } catch {
+            print("MapViewModel: failed to persist local correction event for \(candidate.name): \(error)")
+        }
+
         guard let runId = candidate.workflowRunId else { return }
         do {
             _ = try await supabaseService.recordPlaceRecoveryDecision(
-                PlaceRecoveryDecisionDraft(action: action, editedPayload: editedPayload, reason: reason),
+                PlaceRecoveryDecisionDraft(
+                    action: eventType.workflowAction,
+                    editedPayload: event.workflowPayload,
+                    reason: reason
+                ),
                 for: runId
             )
         } catch {
-            print("MapViewModel: failed to record place recovery decision receipt for \(candidate.name): \(error)")
+            print("MapViewModel: failed to sync correction event for \(candidate.name): \(error)")
         }
     }
 

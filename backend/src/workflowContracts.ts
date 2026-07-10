@@ -15,7 +15,7 @@ export const evidenceTiers = ["none", "weak", "likely", "confirmed"] as const;
 export const creditSettlements = ["pending", "consumed", "refunded", "partial"] as const;
 export const receiptVerdicts = ["pass", "partial", "fail", "refund", "dispute"] as const;
 export const receiptSettlements = ["credit_consumed", "credit_refunded", "partial", "manual_review"] as const;
-export const userDecisionActions = ["confirm", "edit", "reject", "needs_more_evidence"] as const;
+export const userDecisionActions = ["confirm", "edit", "reject", "save_source_only", "needs_more_evidence"] as const;
 export const placeRecoveryWorkOrderIntent = "recover_place_from_source";
 export const placeRecoveryEvaluatorPolicyId = "save_place_recovery_v0";
 export const placeRecoverySettlementMode = "credit_after_decision";
@@ -176,6 +176,10 @@ export function normalizeUserDecision(body: JsonObject, runId: string): UserDeci
   };
 }
 
+export function isFinalUserDecision(action: UserDecisionAction): boolean {
+  return action !== "needs_more_evidence";
+}
+
 export function analysisReceiptForResult(result: PlaceRecoveryWorkerResult): WorkflowReceiptDraft {
   if (result.technicalFailure || result.resultType === "technical_failure") {
     return receiptDraft(result, {
@@ -230,7 +234,27 @@ export function receiptForResult(
     });
   }
 
-  if (decision?.action === "reject" && result.resultType === "confirmed_map_stamp") {
+  if (decision?.action === "needs_more_evidence") {
+    return decisionReceiptDraft(result, decision, {
+      receiptType: "decision",
+      verdict: "partial",
+      settlement: "manual_review",
+      creditSettlement: "pending",
+      evaluatorSummary: "User requested more evidence; keep the run open without settling reserved credit.",
+    });
+  }
+
+  if (decision?.action === "save_source_only") {
+    return decisionReceiptDraft(result, decision, {
+      receiptType: "decision",
+      verdict: "partial",
+      settlement: "partial",
+      creditSettlement: "partial",
+      evaluatorSummary: "User kept the source as useful private memory without confirming a map place.",
+    });
+  }
+
+  if (decision?.action === "reject") {
     return decisionReceiptDraft(result, decision, {
       receiptType: "decision",
       verdict: "fail",

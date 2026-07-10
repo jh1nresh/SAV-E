@@ -69,6 +69,7 @@
 		8F831A3D5B6DDC849A75F123 /* GoogleTakeoutImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */; };
 		8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */; };
 		8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146D4B13678DF31140133614 /* SaveCard.swift */; };
+		9214690FCE4C303443620FFE /* SavePlaceCorrectionEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */; };
 		92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */; };
 		973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA9A731A432A325621A34E63 /* NavigationCardComponent.swift */; };
 		97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DCE926696754031AE2C514 /* MapViewModel.swift */; };
@@ -114,6 +115,7 @@
 		E962B07677F83EC27DB285FB /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1974222FBD914DA6249A96E /* LocationService.swift */; };
 		EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
 		F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8165C7FCD4C17E50EFFC6532 /* ContentView.swift */; };
+		F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */; };
 		F53F17B082DBB81DCC487486 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A0F64C102747295852D0AA /* OnboardingView.swift */; };
 		F6BB8B9B625606BB8C917B5C /* TripItineraryComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF89D27BB41CF8DAC9C08D5 /* TripItineraryComponent.swift */; };
 		F7BD41AE9368769E22D71E33 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */; };
@@ -183,6 +185,7 @@
 
 /* Begin PBXFileReference section */
 		088DFD7077650B834811C66B /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
+		0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceCorrectionEventTests.swift; sourceTree = "<group>"; };
 		13D83106043E5C1B4CBF0496 /* AskSaveMemoryIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskSaveMemoryIntent.swift; sourceTree = "<group>"; };
 		146D4B13678DF31140133614 /* SaveCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCard.swift; sourceTree = "<group>"; };
 		14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialOCRCandidateHeuristics.swift; sourceTree = "<group>"; };
@@ -212,6 +215,7 @@
 		482E0F42191576E75DFAA558 /* SAV-EClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SAV-EClip.entitlements"; sourceTree = "<group>"; };
 		48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifiedPlaceClaimsClientTests.swift; sourceTree = "<group>"; };
 		4CF89D27BB41CF8DAC9C08D5 /* TripItineraryComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripItineraryComponent.swift; sourceTree = "<group>"; };
+		4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceCorrectionEvent.swift; sourceTree = "<group>"; };
 		4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesVaultReader.swift; sourceTree = "<group>"; };
 		4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImport.swift; sourceTree = "<group>"; };
 		51DF55BE93F14D29CE673F5D /* SaveAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAIService.swift; sourceTree = "<group>"; };
@@ -600,6 +604,7 @@
 				D7341CE0888D59F87FF9795A /* SaveGuideCustomizationControllerTests.swift */,
 				7EAE0D2F9B15DB6C5183415B /* SaveLocalVaultServiceTests.swift */,
 				7D404A68838FF556ADEBC2D7 /* SaveLocationIntentRecommendationServiceTests.swift */,
+				0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */,
 				7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */,
 				A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */,
 				314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */,
@@ -661,6 +666,7 @@
 				9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */,
 				468D23D10B68903C13C10154 /* SaveGuideModels.swift */,
 				2C0D3A7A18E473C94F819125 /* SaveMemoryRecord.swift */,
+				4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */,
 				4029203B816A870C920B8924 /* SavePlanAroundModels.swift */,
 				DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */,
 				85338A305203F41DF18FAE27 /* SharedTripData.swift */,
@@ -952,6 +958,7 @@
 				66F4520897870F795E6E3FD7 /* SaveGuideCustomizationControllerTests.swift in Sources */,
 				23F27DF2E5652340485DE6A3 /* SaveLocalVaultServiceTests.swift in Sources */,
 				CAC07FED23417B9E3A51D005 /* SaveLocationIntentRecommendationServiceTests.swift in Sources */,
+				9214690FCE4C303443620FFE /* SavePlaceCorrectionEventTests.swift in Sources */,
 				20EE991C2D2D42E045F23CA5 /* SavePlanAroundControllerTests.swift in Sources */,
 				BCB68390F26FDDB75ADF5ED1 /* SaveSearchControllerTests.swift in Sources */,
 				BC55C57A6C88072A588A5531 /* SaveSearchIntentEvalTests.swift in Sources */,
@@ -1042,6 +1049,7 @@
 				6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */,
 				593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */,
 				3EA497DD9126B572939E0D11 /* SaveMemoryRecord.swift in Sources */,
+				F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */,
 				9B89D237E9E3B0347D707D58 /* SavePlaceFromURLIntent.swift in Sources */,
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,
 				11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */,

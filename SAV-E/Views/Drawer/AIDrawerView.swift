@@ -45,7 +45,7 @@ private enum CommandDrawerTab: String, CaseIterable, Hashable {
         case .saved:
             return language.localized(english: "Stamps", traditionalChinese: "地圖章")
         case .review:
-            return language.localized(english: "Review", traditionalChinese: "確認")
+            return language.localized(english: "Inbox", traditionalChinese: "收件匣")
         case .lists:
             return language.localized(english: "Lists", traditionalChinese: "清單")
         case .friends:
@@ -77,6 +77,10 @@ struct AIDrawerView: View {
     }
     var onDeletePlace: (Place) async throws -> Void = { _ in }
     var onSaveCandidate: (PlaceReviewCandidate, String?) async throws -> Void = { _, _ in }
+    var onRejectCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
+    var onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) async throws -> Void = { _ in }
+    var onMarkCandidateWrongBranch: (PlaceReviewCandidate) async throws -> Void = { _ in }
+    var onInvestigateCandidateMore: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
@@ -115,7 +119,8 @@ struct AIDrawerView: View {
     @State private var showsSlowLoadingHint = false
     @State private var showProfile = false
     @State private var showLists = false
-    @State private var activeCommandTab: CommandDrawerTab = .saved
+    @State private var activeCommandTab: CommandDrawerTab = .review
+    @State private var didAutoPresentPendingInbox = false
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
     @State private var newListNote = ""
@@ -195,6 +200,14 @@ struct AIDrawerView: View {
                 break
             }
         }
+        .onChange(of: needsReviewCandidates.count, initial: true) { _, count in
+            guard count > 0, !didAutoPresentPendingInbox else { return }
+            didAutoPresentPendingInbox = true
+            activeCommandTab = .review
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .large
+            }
+        }
     }
 
     private func mapDetailDrawer(for item: MapDetailDrawerItem) -> some View {
@@ -229,9 +242,6 @@ struct AIDrawerView: View {
                     )
                 }
             },
-            onAddMoreClueCandidate: { candidate in
-                addMoreClue(for: candidate)
-            },
             onFindExactPlaceCandidate: { candidate in
                 findExactPlace(for: candidate)
             },
@@ -239,6 +249,43 @@ struct AIDrawerView: View {
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
                     try await onSaveCandidate(candidate, nameOverride)
                     closeMapDetail()
+                }
+            },
+            onRejectCandidate: { candidate in
+                performCandidateAction(
+                    candidate,
+                    successMessage: languageSettings.localized(english: "Removed from Inbox.", traditionalChinese: "已從收件匣移除。")
+                ) {
+                    try await onRejectCandidate(candidate)
+                    closeMapDetail()
+                }
+            },
+            onSaveCandidateAsSourceOnly: { candidate in
+                performCandidateAction(
+                    candidate,
+                    successMessage: languageSettings.localized(english: "Source kept without creating a Map Stamp.", traditionalChinese: "已保留來源，不會建立地圖章。")
+                ) {
+                    try await onSaveCandidateAsSourceOnly(candidate)
+                    closeMapDetail()
+                    openReviewInbox()
+                }
+            },
+            onMarkCandidateWrongBranch: { candidate in
+                performCandidateAction(
+                    candidate,
+                    successMessage: languageSettings.localized(english: "Marked as the wrong branch. Add the right city or address next.", traditionalChinese: "已標記為錯誤分店，接著請補上正確城市或地址。")
+                ) {
+                    try await onMarkCandidateWrongBranch(candidate)
+                    findExactPlace(for: candidate)
+                }
+            },
+            onInvestigateCandidateMore: { candidate in
+                performCandidateAction(
+                    candidate,
+                    successMessage: languageSettings.localized(english: "Kept in Inbox for more investigation.", traditionalChinese: "已留在收件匣，等待進一步調查。")
+                ) {
+                    try await onInvestigateCandidateMore(candidate)
+                    addMoreClue(for: candidate)
                 }
             },
             onSaveMapCandidate: { candidate in
@@ -583,9 +630,6 @@ struct AIDrawerView: View {
                     onFindExactPlace: {
                         findExactPlace(for: candidate)
                     },
-                    onAddMoreClue: {
-                        addMoreClue(for: candidate)
-                    },
                     onSave: { nameOverride in
                         performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
                             try await onSaveCandidate(candidate, nameOverride)
@@ -594,8 +638,33 @@ struct AIDrawerView: View {
                             showReviewInbox = false
                             showLists = false
                         }
+                    },
+                    onReject: {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Removed from Inbox.", traditionalChinese: "已從收件匣移除。")) {
+                            try await onRejectCandidate(candidate)
+                            viewModel.returnToCommands()
+                        }
+                    },
+                    onSaveSourceOnly: {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Source kept without creating a Map Stamp.", traditionalChinese: "已保留來源，不會建立地圖章。")) {
+                            try await onSaveCandidateAsSourceOnly(candidate)
+                            openReviewInbox()
+                        }
+                    },
+                    onWrongBranch: {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Marked as the wrong branch.", traditionalChinese: "已標記為錯誤分店。")) {
+                            try await onMarkCandidateWrongBranch(candidate)
+                            findExactPlace(for: candidate)
+                        }
+                    },
+                    onInvestigateMore: {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Kept in Inbox for more investigation.", traditionalChinese: "已留在收件匣，等待進一步調查。")) {
+                            try await onInvestigateCandidateMore(candidate)
+                            addMoreClue(for: candidate)
+                        }
                     }
                 )
+                .id(candidate.id)
                 .padding(SaveTheme.Spacing.lg)
             }
 
@@ -1301,11 +1370,22 @@ struct AIDrawerView: View {
                         action: { searchFocused = true }
                     )
                 } else {
-                ReviewCandidatesSection(
-                    candidates: reviewCandidates,
-                    limit: nil,
-                    onSelect: openReviewCandidateDetail
-                )
+                    if !needsReviewCandidates.isEmpty {
+                        ReviewCandidatesSection(
+                            title: languageSettings.localized(english: "Needs Review", traditionalChinese: "需要確認"),
+                            candidates: needsReviewCandidates,
+                            limit: nil,
+                            onSelect: openReviewCandidateDetail
+                        )
+                    }
+                    if !sourceOnlyCandidates.isEmpty {
+                        ReviewCandidatesSection(
+                            title: languageSettings.localized(english: "Source-only Clues", traditionalChinese: "只留來源的線索"),
+                            candidates: sourceOnlyCandidates,
+                            limit: nil,
+                            onSelect: openReviewCandidateDetail
+                        )
+                    }
                 }
 
                 if let addSpotStatus {
@@ -1319,6 +1399,14 @@ struct AIDrawerView: View {
             .padding(.top, SaveTheme.Spacing.lg)
             .padding(.bottom, 24)
         }
+    }
+
+    private var needsReviewCandidates: [PlaceReviewCandidate] {
+        reviewCandidates.filter { $0.status != "source_only" }
+    }
+
+    private var sourceOnlyCandidates: [PlaceReviewCandidate] {
+        reviewCandidates.filter { $0.status == "source_only" }
     }
 
     private var collaborativeListsView: some View {
@@ -1902,9 +1990,12 @@ private struct MapDetailDrawerView: View {
     let onDeletePlace: (Place) async throws -> Void
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
-    let onAddMoreClueCandidate: (PlaceReviewCandidate) -> Void
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
+    let onRejectCandidate: (PlaceReviewCandidate) -> Void
+    let onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) -> Void
+    let onMarkCandidateWrongBranch: (PlaceReviewCandidate) -> Void
+    let onInvestigateCandidateMore: (PlaceReviewCandidate) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
@@ -2032,9 +2123,13 @@ private struct MapDetailDrawerView: View {
                         candidate: candidate,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
-                        onAddMoreClue: { onAddMoreClueCandidate(candidate) },
-                        onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) }
+                        onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
+                        onReject: { onRejectCandidate(candidate) },
+                        onSaveSourceOnly: { onSaveCandidateAsSourceOnly(candidate) },
+                        onWrongBranch: { onMarkCandidateWrongBranch(candidate) },
+                        onInvestigateMore: { onInvestigateCandidateMore(candidate) }
                     )
+                    .id(candidate.id)
 
                 case .unsavedCandidate(let candidate):
                     UnsavedMapCandidateCard(
@@ -3514,6 +3609,7 @@ private struct SavedPlacesEmptyState: View {
 private struct ReviewCandidatesSection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
+    var title: String? = nil
     var candidates: [PlaceReviewCandidate]
     var limit: Int? = 4
     var onSelect: (PlaceReviewCandidate) -> Void
@@ -3553,7 +3649,7 @@ private struct ReviewCandidatesSection: View {
 
     private var reviewHeader: some View {
         HStack(spacing: 5) {
-            Text(languageSettings.localized(english: "Review", traditionalChinese: "待確認"))
+            Text(title ?? languageSettings.localized(english: "Review", traditionalChinese: "待確認"))
                 .font(.title3.weight(.bold))
                 .foregroundColor(.saveInk)
             Image(systemName: "chevron.right")
@@ -3591,7 +3687,10 @@ private struct ReviewCandidatePlaceRow: View {
     }
 
     private var statusText: String {
-        candidate.hasReliableCoordinates
+        if candidate.status == "source_only" {
+            return languageSettings.localized(english: "Source kept", traditionalChinese: "已保留來源")
+        }
+        return candidate.hasReliableCoordinates
             ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
             : languageSettings.localized(english: "Needs info", traditionalChinese: "需要更多資訊")
     }
@@ -3599,7 +3698,7 @@ private struct ReviewCandidatePlaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                Image(systemName: "mappin.circle.fill")
+                Image(systemName: candidate.status == "source_only" ? "tray.full.fill" : "mappin.circle.fill")
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(.red)
                     .frame(width: 42, height: 42)
@@ -3678,22 +3777,31 @@ private struct ReviewCandidateDetailCard: View {
     var candidate: PlaceReviewCandidate
     var isWorking: Bool
     var onFindExactPlace: () -> Void
-    var onAddMoreClue: () -> Void
     var onSave: (String?) -> Void
+    var onReject: () -> Void
+    var onSaveSourceOnly: () -> Void
+    var onWrongBranch: () -> Void
+    var onInvestigateMore: () -> Void
     @State private var displayNameDraft: String
 
     init(
         candidate: PlaceReviewCandidate,
         isWorking: Bool,
         onFindExactPlace: @escaping () -> Void,
-        onAddMoreClue: @escaping () -> Void,
-        onSave: @escaping (String?) -> Void
+        onSave: @escaping (String?) -> Void,
+        onReject: @escaping () -> Void,
+        onSaveSourceOnly: @escaping () -> Void,
+        onWrongBranch: @escaping () -> Void,
+        onInvestigateMore: @escaping () -> Void
     ) {
         self.candidate = candidate
         self.isWorking = isWorking
         self.onFindExactPlace = onFindExactPlace
-        self.onAddMoreClue = onAddMoreClue
         self.onSave = onSave
+        self.onReject = onReject
+        self.onSaveSourceOnly = onSaveSourceOnly
+        self.onWrongBranch = onWrongBranch
+        self.onInvestigateMore = onInvestigateMore
         _displayNameDraft = State(initialValue: candidate.name)
     }
 
@@ -3746,6 +3854,24 @@ private struct ReviewCandidateDetailCard: View {
 
                 ReviewCandidateNextStepPanel(candidate: candidate)
 
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.saveCocoa.opacity(0.74))
+                    TextField(candidate.name, text: $displayNameDraft)
+                        .textFieldStyle(.plain)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 44)
+                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1.2)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
                 HStack(spacing: 8) {
                     CandidateActionButton(
                         title: primaryAction.kind.displayName(language: languageSettings.language),
@@ -3755,11 +3881,35 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     CandidateActionButton(
-                        title: languageSettings.localized(english: "Add more clue", traditionalChinese: "補更多線索"),
-                        systemImage: "plus.bubble",
+                        title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
+                        systemImage: "sparkle.magnifyingglass",
                         fill: .saveNotebookPage,
                         disabled: isWorking,
-                        action: onAddMoreClue
+                        action: onInvestigateMore
+                    )
+                }
+
+                HStack(spacing: 7) {
+                    CandidateActionButton(
+                        title: languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"),
+                        systemImage: "arrow.triangle.branch",
+                        fill: .saveNotebookPage,
+                        disabled: isWorking,
+                        action: onWrongBranch
+                    )
+                    CandidateActionButton(
+                        title: languageSettings.localized(english: "Source only", traditionalChinese: "只留來源"),
+                        systemImage: "tray.and.arrow.down",
+                        fill: .saveMint.opacity(0.46),
+                        disabled: isWorking,
+                        action: onSaveSourceOnly
+                    )
+                    CandidateActionButton(
+                        title: languageSettings.localized(english: "Not this", traditionalChinese: "不是這間"),
+                        systemImage: "xmark",
+                        fill: .saveCoral.opacity(0.36),
+                        disabled: isWorking,
+                        action: onReject
                     )
                 }
             }
@@ -3778,7 +3928,10 @@ private struct ReviewCandidateDetailCard: View {
     }
 
     private var presentationEyebrow: String {
-        candidate.hasReliableCoordinates
+        if candidate.status == "source_only" {
+            return languageSettings.localized(english: "Source-only clue · Not on your map", traditionalChinese: "只留來源的線索 · 不會出現在地圖")
+        }
+        return candidate.hasReliableCoordinates
             ? languageSettings.localized(english: "Review Candidate · Check before saving", traditionalChinese: "待確認地點 · 保存前請先檢查")
             : languageSettings.localized(english: "Clue · Needs exact place", traditionalChinese: "線索 · 需要精確地點")
     }

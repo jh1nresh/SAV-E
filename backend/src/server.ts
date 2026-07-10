@@ -56,6 +56,7 @@ import {
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
+  isFinalUserDecision,
   placeRecoveryWorkflowId,
   receiptForResult,
   analysisReceiptForResult,
@@ -1961,6 +1962,9 @@ async function handleWorkflows(
   if (request.method === "POST" && action === "decision") {
     const decision = normalizeUserDecision(await readJson(request), runId);
     const run = await workflowRunForUser(runId, userId);
+    if (run.status === "completed") {
+      return sendJson(response, { error: "Workflow run already has a final decision" }, 409);
+    }
     const result = normalizePlaceRecoveryWorkerResult({
       result_type: run.result_type ?? "source_only_clue",
       evidence_tier: run.evidence_tier ?? "none",
@@ -1969,6 +1973,7 @@ async function handleWorkflows(
       candidate_refs: run.result_candidate_refs ?? [],
     });
     const receipt = receiptForResult(result, decision);
+    const isFinalDecision = isFinalUserDecision(decision.action);
     const client = await pool.connect();
     try {
       await client.query("begin");
@@ -1994,28 +1999,32 @@ async function handleWorkflows(
       const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
       const receiptRow = asObject(receiptRows[0]);
 
-      await insertCreditLedger(client, {
-        run_id: runId,
-        user_id: userId,
-        delta: settlementDelta(receipt.creditSettlement, Number(run.credit_reserved ?? 1)),
-        reason: receipt.creditSettlement,
-        settlement: receipt.creditSettlement,
-      });
+      if (isFinalDecision) {
+        await insertCreditLedger(client, {
+          run_id: runId,
+          user_id: userId,
+          delta: settlementDelta(receipt.creditSettlement, Number(run.credit_reserved ?? 1)),
+          reason: receipt.creditSettlement,
+          settlement: receipt.creditSettlement,
+        });
+      }
+
+      const nextStatus = isFinalDecision ? "completed" : "needs_review";
       const { rows } = await client.query(
         `update workflow_runs
-         set status = 'completed',
-             credit_settlement = $1,
-             receipt_id = $2,
-             completed_at = coalesce(completed_at, now())
-         where id = $3 and user_id = $4
+         set status = $1,
+             credit_settlement = $2,
+             receipt_id = $3,
+             completed_at = case when $4::boolean then coalesce(completed_at, now()) else null end
+         where id = $5 and user_id = $6
          returning *`,
-        [receipt.creditSettlement, receiptRow.id, runId, userId],
+        [nextStatus, receipt.creditSettlement, receiptRow.id, isFinalDecision, runId, userId],
       );
-      const completedRun = asObject(rows[0]);
-      if (completedRun.work_order_id) {
+      const updatedRun = asObject(rows[0]);
+      if (updatedRun.work_order_id) {
         await client.query(
-          "update work_orders set status = 'completed' where id = $1 and user_id = $2",
-          [completedRun.work_order_id, userId],
+          "update work_orders set status = $1 where id = $2 and user_id = $3",
+          [nextStatus, updatedRun.work_order_id, userId],
         );
       }
       await client.query("commit");

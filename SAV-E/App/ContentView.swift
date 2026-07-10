@@ -42,6 +42,18 @@ struct ContentView: View {
                     onSaveCandidate: { candidate, nameOverride in
                         try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
                     },
+                    onRejectCandidate: { candidate in
+                        try await mapVM.rejectReviewCandidate(candidate)
+                    },
+                    onSaveCandidateAsSourceOnly: { candidate in
+                        try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
+                    },
+                    onMarkCandidateWrongBranch: { candidate in
+                        try await mapVM.markReviewCandidateWrongBranch(candidate)
+                    },
+                    onInvestigateCandidateMore: { candidate in
+                        try await mapVM.investigateReviewCandidateMore(candidate)
+                    },
                     onSaveMapCandidate: { candidate in
                         try await mapVM.saveMapCandidateAsPlace(candidate)
                     },

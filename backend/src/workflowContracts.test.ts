@@ -5,6 +5,7 @@ import {
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
+  isFinalUserDecision,
   receiptForResult,
   analysisReceiptForResult,
 } from "./workflowContracts.js";
@@ -182,6 +183,51 @@ test("source-only clue settles as partial without pretending to be a failed plac
   assert.equal(receipt.verdict, "partial");
   assert.equal(receipt.settlement, "partial");
   assert.equal(receipt.creditSettlement, "partial");
+});
+
+test("requesting more evidence keeps credit pending", () => {
+  const result = normalizePlaceRecoveryWorkerResult({
+    result_type: "review_candidate",
+    evidence_tier: "likely",
+    confidence: 0.72,
+  });
+  const decision = normalizeUserDecision({ action: "needs_more_evidence" }, "run_123");
+  const receipt = receiptForResult(result, decision);
+
+  assert.equal(receipt.verdict, "partial");
+  assert.equal(receipt.settlement, "manual_review");
+  assert.equal(receipt.creditSettlement, "pending");
+  assert.equal(isFinalUserDecision(decision.action), false);
+});
+
+test("saving source only creates a final partial settlement", () => {
+  const result = normalizePlaceRecoveryWorkerResult({
+    result_type: "review_candidate",
+    evidence_tier: "weak",
+    confidence: 0.42,
+  });
+  const decision = normalizeUserDecision({ action: "save_source_only" }, "run_123");
+  const receipt = receiptForResult(result, decision);
+
+  assert.equal(receipt.verdict, "partial");
+  assert.equal(receipt.settlement, "partial");
+  assert.equal(receipt.creditSettlement, "partial");
+  assert.equal(receipt.userFeedbackAction, "save_source_only");
+  assert.equal(isFinalUserDecision(decision.action), true);
+});
+
+test("rejecting a review candidate refunds reserved credit", () => {
+  const result = normalizePlaceRecoveryWorkerResult({
+    result_type: "review_candidate",
+    evidence_tier: "likely",
+    confidence: 0.72,
+  });
+  const decision = normalizeUserDecision({ action: "reject" }, "run_123");
+  const receipt = receiptForResult(result, decision);
+
+  assert.equal(receipt.verdict, "fail");
+  assert.equal(receipt.settlement, "credit_refunded");
+  assert.equal(receipt.creditSettlement, "refunded");
 });
 
 test("user rejecting confirmed result becomes fail and refund", () => {
