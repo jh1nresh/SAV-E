@@ -52,21 +52,33 @@ import {
   parseLens,
 } from "./socialContracts.js";
 import {
+  WorkflowContractError,
   normalizePlaceRecoveryWorkOrderCreate,
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
-  isFinalUserDecision,
   placeRecoveryWorkflowId,
+  placeRecoveryWorkflowVersion,
   receiptForResult,
   analysisReceiptForResult,
+  type PlaceRecoveryWorkerResult,
+  type UserDecisionInput,
 } from "./workflowContracts.js";
+import {
+  WorkflowConflictError,
+  planDecisionTransition,
+  planResultTransition,
+  reconcileReputation,
+  safeOpaqueRefs,
+} from "./workflowLifecycle.js";
 import {
   buildRecommendationAnalysisReceiptDraft,
   envelopeForRecommendationAnalysisReceipt,
   normalizeRecommendationAnalysisReceiptPayload,
   RecommendationAnalysisReceiptPayloadError,
   recommendationAnalysisReceiptPayloadMaxBytes,
+  sha256CanonicalJson,
+  sha256ImmutableWorkflowReceipt,
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
 import { createPrivyUserProvisioner } from "./privyUsers.js";
@@ -515,6 +527,7 @@ const workflowRunFields = [
   "evidence_tier",
   "result_evidence_refs",
   "result_candidate_refs",
+  "current_attempt_no",
   "credit_reserved",
   "credit_settlement",
   "receipt_id",
@@ -536,11 +549,19 @@ const workOrderFields = [
 ] as const;
 
 const userDecisionFields = [
+  "id",
   "run_id",
   "user_id",
+  "attempt_no",
+  "candidate_id",
+  "final_place_id",
   "action",
   "edited_payload",
   "reason",
+  "reason_code",
+  "idempotency_key",
+  "before_hash",
+  "after_hash",
 ] as const;
 
 const workflowReceiptFields = [
@@ -550,9 +571,19 @@ const workflowReceiptFields = [
   "operator_id",
   "requester_id",
   "receipt_type",
+  "attempt_no",
+  "result_revision",
+  "idempotency_key",
+  "supersedes_receipt_id",
+  "is_current",
+  "failure_code",
+  "failed_step",
+  "retryable",
+  "decision_id",
   "job_id",
   "agent_id",
   "model_provenance",
+  "model_provenance_bucket",
   "input_hash",
   "output_hash",
   "permission_snapshot",
@@ -571,6 +602,7 @@ const workflowReceiptFields = [
   "receipt_hash",
   "anchor_status",
   "private_url",
+  "privacy_validated",
 ] as const;
 
 const clearingBlockFields = [
@@ -598,9 +630,45 @@ const clearingBlockItemFields = [
 const creditLedgerFields = [
   "run_id",
   "user_id",
+  "attempt_no",
+  "decision_id",
+  "settlement_key",
   "delta",
   "reason",
   "settlement",
+] as const;
+
+const workflowReputationSnapshotFields = [
+  "requester_id",
+  "listing_id",
+  "workflow_id",
+  "workflow_version",
+  "source_type",
+  "operator_id",
+  "model_provenance_bucket",
+  "policy_version",
+  "is_current",
+  "run_count",
+  "operational_success_count",
+  "technical_failure_count",
+  "confirmed_count",
+  "edited_count",
+  "rejected_count",
+  "source_only_count",
+  "refund_count",
+  "median_latency_ms",
+  "user_decision_coverage",
+  "operational_success_rate",
+  "confirmation_rate",
+  "edit_rate",
+  "rejection_rate",
+  "technical_failure_rate",
+  "pass_count",
+  "partial_count",
+  "fail_count",
+  "confirmed_save_count",
+  "user_rejection_count",
+  "hallucination_report_count",
 ] as const;
 
 const jsonbFields = new Set([
@@ -720,8 +788,20 @@ createServer(async (request, response) => {
 
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
-    const status = error instanceof ApiError ? error.status : 500;
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const status = error instanceof ApiError
+      ? error.status
+      : error instanceof WorkflowContractError
+        ? 400
+        : error instanceof WorkflowConflictError
+          ? 409
+          : error instanceof SyntaxError
+            ? 400
+            : 500;
+    const message = error instanceof SyntaxError
+      ? "Invalid JSON body"
+      : status < 500 && error instanceof Error
+        ? error.message
+        : "Internal server error";
     return sendJson(response, { error: message }, status);
   }
 }).listen(Number(process.env.PORT ?? 3000), () => {
@@ -1786,6 +1866,41 @@ async function handleWorkflows(
     return sendJson(response, { error: "Unsupported clearing block route" }, 405);
   }
 
+  if (kind === "reputation") {
+    if (request.method === "GET" && id === "summary") {
+      const { rows } = await pool.query(
+        `select
+           workflow_version,
+           source_type,
+           operator_id,
+           model_provenance_bucket,
+           policy_version,
+           run_count,
+           operational_success_count,
+           technical_failure_count,
+           confirmed_count,
+           edited_count,
+           rejected_count,
+           source_only_count,
+           refund_count,
+           median_latency_ms,
+           user_decision_coverage,
+           operational_success_rate,
+           confirmation_rate,
+           edit_rate,
+           rejection_rate,
+           technical_failure_rate,
+           created_at
+         from workflow_reputation_snapshots
+         where requester_id = $1 and workflow_id = $2 and is_current = true
+         order by source_type, operator_id, model_provenance_bucket`,
+        [userId, placeRecoveryWorkflowId],
+      );
+      return sendJson(response, rows.map((row) => formatDates(asObject(row))));
+    }
+    return sendJson(response, { error: "Unsupported reputation route" }, 405);
+  }
+
   if (kind !== "runs") {
     return sendJson(response, { error: "Unsupported workflows route" }, 405);
   }
@@ -1798,7 +1913,16 @@ async function handleWorkflows(
          count(*)::int as total_runs,
          count(*) filter (where source_url ilike '%instagram.com/reel%')::int as instagram_reels,
          count(*) filter (where source_url is not null)::int as source_url_runs,
-         count(*) filter (where receipt_id is not null)::int as runs_with_current_receipt,
+         count(*) filter (where exists (
+           select 1 from workflow_receipts wr
+           where wr.run_id = workflow_runs.id and wr.receipt_type = 'analysis' and wr.is_current = true
+         ))::int as runs_with_current_analysis_receipt,
+         count(*) filter (where exists (
+           select 1 from workflow_receipts wr
+           where wr.run_id = workflow_runs.id and wr.receipt_type = 'decision'
+         ))::int as runs_with_decision_receipt,
+         count(*) filter (where result_type = 'technical_failure')::int as technical_failure_runs,
+         count(*) filter (where credit_settlement = 'pending')::int as unsettled_runs,
          count(*) filter (where status = 'completed')::int as completed_runs,
          count(*) filter (where status = 'failed')::int as failed_runs,
          count(*) filter (where status = 'needs_review')::int as needs_review_runs
@@ -1807,13 +1931,41 @@ async function handleWorkflows(
       [userId, placeRecoveryWorkflowId],
     );
     const { rows: receiptRows } = await pool.query(
-      `select
-         count(*)::int as total_receipts,
-         count(*) filter (where receipt_type = 'analysis')::int as analysis_receipts,
-         count(*) filter (where receipt_type = 'decision')::int as decision_receipts,
-         count(*) filter (where user_feedback_action is not null)::int as user_feedback_receipts
-       from workflow_receipts
-       where requester_id = $1 and workflow_id = $2`,
+      `with receipt_counts as (
+         select
+           count(*)::int as total_receipts,
+           count(*) filter (where receipt_type = 'analysis')::int as analysis_receipts,
+           count(*) filter (where receipt_type = 'decision')::int as decision_receipts,
+           count(*) filter (where user_feedback_action is not null)::int as user_feedback_receipts
+         from workflow_receipts wr
+         join workflow_runs r on r.id = wr.run_id
+         where r.user_id = $1 and wr.workflow_id = $2
+       ), conflicts as (
+         select count(*)::int as analysis_receipt_duplicates_or_conflicts
+         from (
+           select wr.run_id, wr.attempt_no
+           from workflow_receipts wr
+           join workflow_runs r on r.id = wr.run_id
+           where r.user_id = $1 and wr.workflow_id = $2 and wr.receipt_type = 'analysis'
+           group by wr.run_id, wr.attempt_no
+           having count(*) filter (where wr.is_current) > 1 or count(distinct wr.output_hash) > 1
+         ) grouped
+       ), coverage as (
+         select coalesce(
+           count(*) filter (where r.result_type <> 'technical_failure' and exists (
+             select 1 from workflow_receipts wr
+             where wr.run_id = r.id
+               and wr.receipt_type = 'decision'
+               and wr.is_current = true
+               and wr.attempt_no = r.current_attempt_no
+           ))::double precision
+           / nullif(count(*) filter (where r.result_type <> 'technical_failure'), 0),
+           0
+         ) as user_decision_coverage
+         from workflow_runs r
+         where r.user_id = $1 and r.workflow_id = $2
+       )
+       select * from receipt_counts cross join conflicts cross join coverage`,
       [userId, placeRecoveryWorkflowId],
     );
     return sendJson(response, {
@@ -1857,6 +2009,7 @@ async function handleWorkflows(
         source_url: run.sourceUrl ?? null,
         source_type: run.sourceType,
         status: "queued",
+        current_attempt_no: 1,
         credit_reserved: run.creditReserved,
         credit_settlement: "pending",
       }, workflowRunFields);
@@ -1866,6 +2019,8 @@ async function handleWorkflows(
       await insertCreditLedger(client, {
         run_id: String(created.id),
         user_id: userId,
+        attempt_no: 1,
+        settlement_key: "reserve",
         delta: -run.creditReserved,
         reason: "reserve",
         settlement: "pending",
@@ -1881,163 +2036,61 @@ async function handleWorkflows(
   }
 
   if (!runId) return sendJson(response, { error: "Workflow run is required" }, 400);
+  if (!isUuid(runId)) return sendJson(response, { error: "Workflow run id must be a UUID" }, 400);
   await ensureWorkflowRunOwner(runId, userId);
+
+  if (request.method === "GET" && action === "receipts") {
+    const { rows } = await pool.query(
+      `select
+         wr.id,
+         wr.run_id,
+         wr.workflow_id,
+         wr.workflow_version,
+         wr.receipt_type,
+         wr.attempt_no,
+         wr.result_revision,
+         wr.supersedes_receipt_id,
+         wr.is_current,
+         wr.failure_code,
+         wr.failed_step,
+         wr.retryable,
+         wr.job_id,
+         wr.agent_id,
+         wr.operator_id,
+         wr.model_provenance_bucket,
+         wr.input_hash,
+         wr.output_hash,
+         wr.latency_ms,
+         wr.user_feedback_action,
+         wr.verdict,
+         wr.settlement,
+         wr.evaluator_summary,
+         wr.evidence_refs,
+         wr.candidate_refs,
+         wr.receipt_hash,
+         wr.anchor_status,
+         wr.created_at
+       from workflow_receipts wr
+       join workflow_runs r on r.id = wr.run_id
+       where wr.run_id = $1
+         and r.user_id = $2
+         and wr.workflow_id = $3
+       order by wr.attempt_no asc, wr.created_at asc, wr.id asc`,
+      [runId, userId, placeRecoveryWorkflowId],
+    );
+    return sendJson(response, rows.map(workflowReceiptResponse));
+  }
 
   if (request.method === "POST" && action === "result") {
     const result = normalizePlaceRecoveryWorkerResult(await readJson(request));
-    const status = result.resultType === "technical_failure"
-      ? "failed"
-      : result.resultType === "confirmed_map_stamp"
-        ? "completed"
-        : "needs_review";
-    const analysisReceipt = analysisReceiptForResult(result);
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      const { rows } = await client.query(
-        `update workflow_runs
-         set status = $1,
-             result_type = $2,
-             confidence = $3,
-             evidence_tier = $4,
-             result_evidence_refs = $5,
-             result_candidate_refs = $6,
-             completed_at = case when $1 in ('completed', 'failed') then now() else completed_at end
-         where id = $7 and user_id = $8
-         returning *`,
-        [
-          status,
-          result.resultType,
-          result.confidence,
-          result.evidenceTier,
-          result.evidenceRefs,
-          result.candidateRefs,
-          runId,
-          userId,
-        ],
-      );
-      const updatedRun = asObject(rows[0]);
-      const receiptBody = workflowReceiptBody(runId, analysisReceipt, {
-        run: updatedRun,
-        userId,
-        output: {
-          resultType: result.resultType,
-          evidenceTier: result.evidenceTier,
-          confidence: result.confidence,
-          evidenceRefs: result.evidenceRefs,
-          candidateRefs: result.candidateRefs,
-          technicalFailure: result.technicalFailure,
-        },
-      });
-      const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
-      const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
-      const receiptRow = asObject(receiptRows[0]);
-      const { rows: finalRows } = await client.query(
-        `update workflow_runs
-         set receipt_id = $1
-         where id = $2 and user_id = $3
-         returning *`,
-        [receiptRow.id, runId, userId],
-      );
-      const finalRun = asObject(finalRows[0] ?? updatedRun);
-      if (finalRun.work_order_id) {
-        await client.query(
-          "update work_orders set status = $1 where id = $2 and user_id = $3",
-          [status, finalRun.work_order_id, userId],
-        );
-      }
-      await client.query("commit");
-      return sendJson(response, {
-        run: formatDates(finalRun),
-        receipt: formatDates(receiptRow),
-      });
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    } finally {
-      client.release();
-    }
+    const recorded = await recordPlaceRecoveryResult(runId, userId, result);
+    return sendJson(response, recorded, recorded.created ? 201 : 200);
   }
 
   if (request.method === "POST" && action === "decision") {
     const decision = normalizeUserDecision(await readJson(request), runId);
-    const run = await workflowRunForUser(runId, userId);
-    if (run.status === "completed") {
-      return sendJson(response, { error: "Workflow run already has a final decision" }, 409);
-    }
-    const result = normalizePlaceRecoveryWorkerResult({
-      result_type: run.result_type ?? "source_only_clue",
-      evidence_tier: run.evidence_tier ?? "none",
-      confidence: run.confidence ?? 0,
-      evidence_refs: run.result_evidence_refs ?? [],
-      candidate_refs: run.result_candidate_refs ?? [],
-    });
-    const receipt = receiptForResult(result, decision);
-    const isFinalDecision = isFinalUserDecision(decision.action);
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      const decisionInsert = buildInsert("user_decisions", {
-        run_id: runId,
-        user_id: userId,
-        action: decision.action,
-        edited_payload: decision.editedPayload,
-        reason: decision.reason ?? null,
-      }, userDecisionFields);
-      await client.query(decisionInsert.sql, decisionInsert.values);
-
-      const receiptBody = workflowReceiptBody(runId, receipt, {
-        run,
-        userId,
-        output: {
-          decision: decision.action,
-          editedPayload: decision.editedPayload,
-          reason: decision.reason ?? null,
-        },
-      });
-      const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
-      const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
-      const receiptRow = asObject(receiptRows[0]);
-
-      if (isFinalDecision) {
-        await insertCreditLedger(client, {
-          run_id: runId,
-          user_id: userId,
-          delta: settlementDelta(receipt.creditSettlement, Number(run.credit_reserved ?? 1)),
-          reason: receipt.creditSettlement,
-          settlement: receipt.creditSettlement,
-        });
-      }
-
-      const nextStatus = isFinalDecision ? "completed" : "needs_review";
-      const { rows } = await client.query(
-        `update workflow_runs
-         set status = $1,
-             credit_settlement = $2,
-             receipt_id = $3,
-             completed_at = case when $4::boolean then coalesce(completed_at, now()) else null end
-         where id = $5 and user_id = $6
-         returning *`,
-        [nextStatus, receipt.creditSettlement, receiptRow.id, isFinalDecision, runId, userId],
-      );
-      const updatedRun = asObject(rows[0]);
-      if (updatedRun.work_order_id) {
-        await client.query(
-          "update work_orders set status = $1 where id = $2 and user_id = $3",
-          [nextStatus, updatedRun.work_order_id, userId],
-        );
-      }
-      await client.query("commit");
-      return sendJson(response, {
-        run: formatDates(rows[0]),
-        receipt: formatDates(receiptRow),
-      }, 201);
-    } catch (error) {
-      await client.query("rollback");
-      throw error;
-    } finally {
-      client.release();
-    }
+    const recorded = await recordPlaceRecoveryDecision(runId, userId, decision);
+    return sendJson(response, recorded, recorded.created ? 201 : 200);
   }
 
   return sendJson(response, { error: "Unsupported workflow run route" }, 405);
@@ -2823,6 +2876,847 @@ async function workflowRunForUser(runId: string, userId: string): Promise<JsonBo
   return asObject(rows[0]);
 }
 
+async function recordPlaceRecoveryResult(
+  runId: string,
+  userId: string,
+  result: PlaceRecoveryWorkerResult,
+): Promise<JsonBody & { created: boolean }> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const run = await lockedWorkflowRun(client, runId, userId);
+    const currentAttemptNo = Number(run.current_attempt_no ?? 1);
+    const attemptNo = result.attemptNo ?? currentAttemptNo;
+    const safeResult: PlaceRecoveryWorkerResult = {
+      ...result,
+      evidenceRefs: safeOpaqueRefs(result.evidenceRefs),
+      candidateRefs: safeOpaqueRefs(result.candidateRefs),
+      toolTraceRefs: safeOpaqueRefs(result.toolTraceRefs),
+      modelProvenance: safeModelProvenance(result.modelProvenance),
+      jobId: result.jobId ?? `run:${runId}:attempt:${attemptNo}`,
+    };
+    await validateResultCandidateRefs(client, runId, userId, safeResult);
+
+    const output = safeResultProjection(safeResult);
+    const outputHash = sha256CanonicalJson(output);
+    const idempotencyKey = result.idempotencyKey
+      ?? `result:${sha256CanonicalJson({ runId, attemptNo, resultRevision: result.resultRevision, outputHash })}`;
+
+    const { rows: replayRows } = await client.query(
+      `select *
+       from workflow_receipts
+       where run_id = $1 and receipt_type = 'analysis' and idempotency_key = $2
+       limit 1`,
+      [runId, idempotencyKey],
+    );
+    if (replayRows[0]) {
+      const replay = asObject(replayRows[0]);
+      const replayAttemptNo = result.attemptNo ?? Number(replay.attempt_no);
+      if (stringValue(replay.output_hash) !== outputHash
+        || Number(replay.attempt_no) !== replayAttemptNo
+        || Number(replay.result_revision) !== result.resultRevision
+      ) {
+        throw new WorkflowConflictError("Result idempotency key was already used with different identity or output");
+      }
+      await client.query("commit");
+      return {
+        created: false,
+        run: formatDates(run),
+        receipt: workflowReceiptResponse(replay),
+      };
+    }
+
+    const currentReceipt = await currentAnalysisReceipt(client, runId);
+    const plan = planResultTransition({
+      currentAttemptNo,
+      currentCreditSettlement: parseCreditSettlement(run.credit_settlement),
+      requestedAttemptNo: result.attemptNo,
+      resultRevision: result.resultRevision,
+      idempotencyKey,
+      outputHash,
+      explicitRetry: result.explicitRetry,
+      currentReceipt: currentReceipt ? {
+        id: String(currentReceipt.id),
+        attemptNo: Number(currentReceipt.attempt_no),
+        resultRevision: Number(currentReceipt.result_revision),
+        idempotencyKey: String(currentReceipt.idempotency_key),
+        outputHash: String(currentReceipt.output_hash),
+      } : undefined,
+    });
+    if (plan.kind === "idempotent") {
+      const { rows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
+      await client.query("commit");
+      return { created: false, run: formatDates(run), receipt: workflowReceiptResponse(rows[0]) };
+    }
+
+    if (plan.supersedeCurrent && plan.supersedesReceiptId) {
+      await client.query(
+        "update workflow_receipts set is_current = false where id = $1 and run_id = $2 and receipt_type = 'analysis'",
+        [plan.supersedesReceiptId, runId],
+      );
+    }
+
+    const status = safeResult.technicalFailure ? "failed" : "needs_review";
+    await persistWorkflowResultSteps(client, runId, plan.attemptNo, safeResult, outputHash);
+    const { rows: updatedRows } = await client.query(
+      `update workflow_runs
+       set status = $1,
+           current_attempt_no = $2,
+           result_type = $3,
+           confidence = $4,
+           evidence_tier = $5,
+           result_evidence_refs = $6,
+           result_candidate_refs = $7,
+           credit_settlement = $8,
+           completed_at = case when $1 = 'failed' then now() else null end
+       where id = $9 and user_id = $10
+       returning *`,
+      [
+        status,
+        plan.attemptNo,
+        safeResult.resultType,
+        safeResult.confidence,
+        safeResult.evidenceTier,
+        safeResult.evidenceRefs,
+        safeResult.candidateRefs,
+        safeResult.technicalFailure ? "refunded" : "pending",
+        runId,
+        userId,
+      ],
+    );
+    let updatedRun = asObject(updatedRows[0]);
+    const receiptDraft = analysisReceiptForResult(safeResult);
+    const receiptBody = workflowReceiptBody(runId, receiptDraft, {
+      run: updatedRun,
+      userId,
+      output,
+      attemptNo: plan.attemptNo,
+      resultRevision: plan.resultRevision,
+      idempotencyKey,
+      supersedesReceiptId: plan.supersedesReceiptId,
+      isCurrent: true,
+      outputHash,
+      decisionId: undefined,
+    });
+    const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
+    const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
+    const receipt = asObject(receiptRows[0]);
+
+    if (safeResult.technicalFailure) {
+      await insertCreditLedger(client, {
+        run_id: runId,
+        user_id: userId,
+        attempt_no: plan.attemptNo,
+        settlement_key: `technical_failure:${plan.attemptNo}`,
+        delta: Number(updatedRun.credit_reserved ?? 1),
+        reason: "technical_failure",
+        settlement: "refunded",
+      });
+    }
+
+    const { rows: finalRows } = await client.query(
+      `update workflow_runs
+       set receipt_id = $1
+       where id = $2 and user_id = $3
+       returning *`,
+      [receipt.id, runId, userId],
+    );
+    updatedRun = asObject(finalRows[0] ?? updatedRun);
+    if (updatedRun.work_order_id) {
+      await client.query(
+        "update work_orders set status = $1 where id = $2 and user_id = $3",
+        [status, updatedRun.work_order_id, userId],
+      );
+    }
+    await upsertWorkflowStep(client, {
+      runId,
+      attemptNo: plan.attemptNo,
+      stepKey: "write_analysis_receipt",
+      status: "succeeded",
+      inputHash: String(receipt.input_hash),
+      outputHash: String(receipt.output_hash),
+    });
+    await refreshWorkflowReputationSnapshot(client, userId, updatedRun, receipt);
+
+    await client.query("commit");
+    return {
+      created: true,
+      run: formatDates(updatedRun),
+      receipt: workflowReceiptResponse(receipt),
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function lockedWorkflowRun(client: PoolClient, runId: string, userId: string): Promise<JsonBody> {
+  const { rows } = await client.query(
+    "select * from workflow_runs where id = $1 and user_id = $2 for update",
+    [runId, userId],
+  );
+  if (!rows[0]) throw new ApiError(404, "Workflow run not found");
+  return asObject(rows[0]);
+}
+
+async function currentAnalysisReceipt(client: PoolClient, runId: string): Promise<JsonBody | undefined> {
+  const { rows } = await client.query(
+    `select *
+     from workflow_receipts
+     where run_id = $1 and receipt_type = 'analysis' and is_current = true
+     order by attempt_no desc, created_at desc, id desc
+     limit 1
+     for update`,
+    [runId],
+  );
+  return rows[0] ? asObject(rows[0]) : undefined;
+}
+
+async function validateResultCandidateRefs(
+  client: PoolClient,
+  runId: string,
+  userId: string,
+  result: PlaceRecoveryWorkerResult,
+): Promise<void> {
+  if (result.resultType === "review_candidate" && result.candidateRefs.length === 0) {
+    throw new WorkflowContractError("review_candidate requires an owned candidate reference");
+  }
+  if (!result.candidateRefs.length) return;
+  if (result.candidateRefs.some((ref) => !isUuid(ref))) {
+    throw new WorkflowContractError("candidate_refs must contain UUIDs owned by this run");
+  }
+  const { rows } = await client.query(
+    `select pc.id
+     from place_candidates pc
+     join captures c on c.id = pc.capture_id
+     where pc.id = any($1::uuid[])
+       and pc.workflow_run_id = $2
+       and c.user_id = $3`,
+    [result.candidateRefs, runId, userId],
+  );
+  if (rows.length !== new Set(result.candidateRefs).size) {
+    throw new ApiError(404, "Workflow candidate not found");
+  }
+}
+
+function safeResultProjection(result: PlaceRecoveryWorkerResult): JsonBody {
+  return {
+    resultType: result.resultType,
+    evidenceTier: result.evidenceTier,
+    confidence: result.confidence,
+    missingFields: result.missingFields,
+    evidenceRefs: result.evidenceRefs,
+    candidateRefs: result.candidateRefs,
+    technicalFailure: result.technicalFailure,
+    failureCode: result.failureCode ?? null,
+    failedStep: result.failedStep ?? null,
+    retryable: result.retryable ?? null,
+    jobId: result.jobId ?? null,
+    agentId: result.agentId,
+    operatorId: result.operatorId ?? "save-client",
+    permissionSnapshot: result.permissionSnapshot,
+    toolTraceRefs: result.toolTraceRefs,
+    latencyMs: result.latencyMs ?? null,
+    costEstimate: result.costEstimate ?? null,
+    modelProvenance: result.modelProvenance,
+  };
+}
+
+function workflowReceiptResponse(value: unknown): JsonBody {
+  const receipt = asObject(value);
+  return formatDates({
+    id: receipt.id,
+    run_id: receipt.run_id,
+    workflow_id: receipt.workflow_id,
+    workflow_version: receipt.workflow_version,
+    receipt_type: receipt.receipt_type,
+    attempt_no: receipt.attempt_no,
+    result_revision: receipt.result_revision,
+    supersedes_receipt_id: receipt.supersedes_receipt_id,
+    is_current: receipt.is_current,
+    failure_code: receipt.failure_code,
+    failed_step: receipt.failed_step,
+    retryable: receipt.retryable,
+    decision_id: receipt.decision_id,
+    job_id: safeOpaqueRefs([receipt.job_id], 1)[0] ?? null,
+    agent_id: receipt.agent_id,
+    operator_id: receipt.operator_id,
+    model_provenance_bucket: receipt.model_provenance_bucket,
+    input_hash: receipt.input_hash,
+    output_hash: receipt.output_hash,
+    latency_ms: receipt.latency_ms,
+    user_feedback_action: receipt.user_feedback_action,
+    verdict: receipt.verdict,
+    settlement: receipt.settlement,
+    evaluator_summary: receipt.evaluator_summary,
+    evidence_refs: safeOpaqueRefs(receipt.evidence_refs),
+    candidate_refs: safeOpaqueRefs(receipt.candidate_refs),
+    receipt_hash: receipt.receipt_hash,
+    anchor_status: receipt.anchor_status,
+    created_at: receipt.created_at,
+  });
+}
+
+function safeModelProvenance(value: JsonBody): JsonBody {
+  return {
+    claimedProvider: boundedSafeDimension(value.claimedProvider, 80),
+    claimedModel: boundedSafeDimension(value.claimedModel, 120),
+    observedProvider: null,
+    observedModel: null,
+    attestationLevel: "self_claim",
+    fallbackUsed: typeof value.fallbackUsed === "boolean" ? value.fallbackUsed : "unknown",
+    usage: asOptionalObject(value.usage),
+    evidenceRefs: safeOpaqueRefs(value.evidenceRefs, 16),
+  };
+}
+
+function modelProvenanceBucket(value: JsonBody): string {
+  const provider = boundedSafeDimension(value.claimedProvider, 40);
+  const providerBucket = ["openai", "google", "anthropic", "xai", "apple", "none", "unknown"].includes(provider)
+    ? provider
+    : "other";
+  const model = boundedSafeDimension(value.claimedModel, 80);
+  const modelBucket = model === "none" || model === "no-model"
+    ? "no-model"
+    : model.includes("gemini")
+      ? "gemini"
+      : model.includes("claude")
+        ? "claude"
+        : model.includes("gpt") || /^o[1-9]/.test(model)
+          ? "openai-model"
+          : model.includes("grok")
+            ? "grok"
+            : model === "unknown"
+              ? "unknown"
+              : "other";
+  return `self-claim-${providerBucket}-${modelBucket}`;
+}
+
+function boundedSafeDimension(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "unknown";
+  const safe = value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return safe.slice(0, maxLength) || "unknown";
+}
+
+function asOptionalObject(value: unknown): JsonBody | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonBody : null;
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function recordPlaceRecoveryDecision(
+  runId: string,
+  userId: string,
+  decisionInput: UserDecisionInput,
+): Promise<JsonBody & { created: boolean }> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const run = await lockedWorkflowRun(client, runId, userId);
+    const currentReceipt = await currentAnalysisReceipt(client, runId);
+    if (!currentReceipt) throw new WorkflowConflictError("A current analysis receipt is required before a decision");
+    if (run.result_type === "technical_failure") {
+      throw new WorkflowConflictError("Technical failures are refunded automatically and do not accept user decisions");
+    }
+
+    const currentAttemptNo = Number(run.current_attempt_no ?? 1);
+    const receiptAttemptNo = Number(currentReceipt.attempt_no ?? 1);
+    const attemptNo = decisionInput.attemptNo ?? currentAttemptNo;
+    const inferredCandidateId = (stringArray(run.result_candidate_refs) ?? []).find(isUuid);
+    const candidateId = decisionInput.candidateId ?? inferredCandidateId;
+    const editedPlaceId = stringValue(decisionInput.editedPayload.place_id);
+    const finalPlaceId = decisionInput.finalPlaceId ?? (editedPlaceId && isUuid(editedPlaceId) ? editedPlaceId : undefined);
+    const decision: UserDecisionInput = { ...decisionInput, attemptNo, candidateId, finalPlaceId };
+
+    const finalPlaceHash = sha256CanonicalJson(decision.finalPlace ?? null);
+    const fingerprint = sha256CanonicalJson({
+      runId,
+      attemptNo,
+      action: decision.action,
+      candidateId: candidateId ?? null,
+      finalPlaceId: finalPlaceId ?? null,
+      reasonCode: decision.reasonCode ?? null,
+      editedPayloadHash: sha256CanonicalJson(decision.editedPayload),
+      finalPlaceHash,
+    });
+    const idempotencyKey = decision.idempotencyKey ?? `decision:${fingerprint}`;
+
+    const { rows: existingRows } = await client.query(
+      `select ud.*, wr.id as receipt_id
+       from user_decisions ud
+       left join workflow_receipts wr on wr.decision_id = ud.id
+       where ud.run_id = $1
+         and ud.user_id = $2
+         and (ud.idempotency_key = $3 or ($4::uuid is not null and ud.id = $4::uuid))`,
+      [runId, userId, idempotencyKey, decision.decisionId ?? null],
+    );
+    if (existingRows.length > 1) {
+      throw new WorkflowConflictError("Decision id and idempotency key refer to different decisions");
+    }
+    const existing = existingRows[0] ? asObject(existingRows[0]) : undefined;
+    const plan = planDecisionTransition({
+      currentAttemptNo,
+      currentCreditSettlement: parseCreditSettlement(run.credit_settlement),
+      action: decision.action,
+      creditReserved: Number(run.credit_reserved ?? 1),
+      idempotencyKey,
+      fingerprint,
+      existingDecision: existing ? {
+        id: String(existing.id),
+        receiptId: String(existing.receipt_id),
+        idempotencyKey: String(existing.idempotency_key),
+        fingerprint: String(existing.after_hash),
+      } : undefined,
+    });
+    if (plan.kind === "idempotent") {
+      const { rows: receiptRows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
+      await client.query("commit");
+      return {
+        created: false,
+        run: formatDates(run),
+        receipt: workflowReceiptResponse(receiptRows[0]),
+      };
+    }
+
+    await insertFinalPlaceForDecision(client, userId, decision);
+    await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
+    if (attemptNo !== currentAttemptNo || receiptAttemptNo !== currentAttemptNo) {
+      throw new WorkflowConflictError("A retry is already pending or the decision targets a stale attempt");
+    }
+
+    const result = normalizePlaceRecoveryWorkerResult({
+      result_type: run.result_type ?? "source_only_clue",
+      evidence_tier: run.evidence_tier ?? "none",
+      confidence: run.confidence ?? 0,
+      evidence_refs: run.result_evidence_refs ?? [],
+      candidate_refs: run.result_candidate_refs ?? [],
+      job_id: currentReceipt.job_id ?? undefined,
+      model_provenance: currentReceipt.model_provenance ?? {},
+    });
+    const receiptDraft = receiptForResult(result, decision);
+    const beforeHash = String(currentReceipt.output_hash);
+    const decisionBody: JsonBody = {
+      id: decision.decisionId,
+      run_id: runId,
+      user_id: userId,
+      attempt_no: attemptNo,
+      candidate_id: candidateId ?? null,
+      final_place_id: finalPlaceId ?? null,
+      action: decision.action,
+      edited_payload: decision.editedPayload,
+      reason: decision.reason ?? null,
+      reason_code: decision.reasonCode ?? null,
+      idempotency_key: idempotencyKey,
+      before_hash: beforeHash,
+      after_hash: fingerprint,
+    };
+    const decisionInsert = buildInsert("user_decisions", decisionBody, userDecisionFields);
+    const { rows: decisionRows } = await client.query(`${decisionInsert.sql} returning *`, decisionInsert.values);
+    const decisionRow = asObject(decisionRows[0]);
+
+    await client.query(
+      "update workflow_receipts set is_current = false where run_id = $1 and receipt_type = 'decision' and is_current = true",
+      [runId],
+    );
+    const output = {
+      action: decision.action,
+      candidateId: candidateId ?? null,
+      finalPlaceId: finalPlaceId ?? null,
+      reasonCode: decision.reasonCode ?? null,
+      editedPayloadHash: sha256CanonicalJson(decision.editedPayload),
+      finalPlaceHash,
+    };
+    const outputHash = sha256CanonicalJson(output);
+    const receiptBody = workflowReceiptBody(runId, receiptDraft, {
+      run,
+      userId,
+      output,
+      attemptNo,
+      resultRevision: Number(currentReceipt.result_revision ?? 1),
+      idempotencyKey,
+      isCurrent: true,
+      outputHash,
+      decisionId: String(decisionRow.id),
+    });
+    const receiptInsert = buildInsert("workflow_receipts", receiptBody, workflowReceiptFields);
+    const { rows: receiptRows } = await client.query(`${receiptInsert.sql} returning *`, receiptInsert.values);
+    const receipt = asObject(receiptRows[0]);
+
+    if (plan.terminal) {
+      await insertCreditLedger(client, {
+        run_id: runId,
+        user_id: userId,
+        attempt_no: attemptNo,
+        decision_id: decisionRow.id,
+        settlement_key: `decision:${decisionRow.id}`,
+        delta: plan.refundDelta,
+        reason: plan.creditSettlement,
+        settlement: plan.creditSettlement,
+      });
+    }
+    await updateDecisionCandidateState(client, userId, decision);
+    const { rows: updatedRows } = await client.query(
+      `update workflow_runs
+       set status = $1,
+           current_attempt_no = $2,
+           credit_settlement = $3,
+           receipt_id = $4,
+           completed_at = case when $5 then coalesce(completed_at, now()) else null end
+       where id = $6 and user_id = $7
+       returning *`,
+      [
+        plan.nextStatus,
+        plan.nextAttemptNo,
+        plan.creditSettlement,
+        receipt.id,
+        plan.terminal,
+        runId,
+        userId,
+      ],
+    );
+    const updatedRun = asObject(updatedRows[0]);
+    if (updatedRun.work_order_id) {
+      await client.query(
+        "update work_orders set status = $1 where id = $2 and user_id = $3",
+        [plan.nextStatus, updatedRun.work_order_id, userId],
+      );
+    }
+    await refreshWorkflowReputationSnapshot(client, userId, updatedRun, currentReceipt);
+
+    await client.query("commit");
+    return {
+      created: true,
+      run: formatDates(updatedRun),
+      receipt: workflowReceiptResponse(receipt),
+    };
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function insertFinalPlaceForDecision(
+  client: PoolClient,
+  userId: string,
+  decision: UserDecisionInput,
+): Promise<void> {
+  if (!decision.finalPlace) return;
+  if (!decision.finalPlaceId || stringValue(decision.finalPlace.id) !== decision.finalPlaceId) {
+    throw new WorkflowContractError("final_place.id must match final_place_id");
+  }
+  if (!["confirm", "edit", "wrong_place", "wrong_city", "wrong_branch"].includes(decision.action)) {
+    throw new WorkflowContractError("final_place is only accepted for a newly saved or corrected place");
+  }
+  if (!stringValue(decision.finalPlace.name)
+    || typeof decision.finalPlace.address !== "string"
+    || numberValue(decision.finalPlace.latitude) === undefined
+    || numberValue(decision.finalPlace.longitude) === undefined
+  ) {
+    throw new WorkflowContractError("final_place requires name, address, latitude, and longitude");
+  }
+
+  const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
+  const insert = buildInsert("places", body, [...placeFields, "user_id"]);
+  const { rows } = await client.query(`${insert.sql} on conflict (id) do nothing returning id`, insert.values);
+  if (!rows[0]) throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
+}
+
+async function validateDecisionReferences(
+  client: PoolClient,
+  runId: string,
+  userId: string,
+  resultType: string | undefined,
+  decision: UserDecisionInput,
+): Promise<void> {
+  if (decision.candidateId) {
+    const { rows } = await client.query(
+      `select pc.id
+       from place_candidates pc
+       join captures c on c.id = pc.capture_id
+       where pc.id = $1 and pc.workflow_run_id = $2 and c.user_id = $3`,
+      [decision.candidateId, runId, userId],
+    );
+    if (!rows[0]) throw new ApiError(404, "Workflow candidate not found");
+  }
+  if (decision.finalPlaceId) {
+    const { rows } = await client.query("select id from places where id = $1 and user_id = $2", [decision.finalPlaceId, userId]);
+    if (!rows[0]) throw new ApiError(404, "Final place not found");
+  }
+  if (["edit", "wrong_place", "wrong_city", "wrong_branch", "merge_existing"].includes(decision.action)
+    && !decision.finalPlaceId
+  ) {
+    throw new WorkflowContractError(`${decision.action} requires a final_place_id owned by the requester`);
+  }
+  if (decision.action === "confirm" && !decision.candidateId && !decision.finalPlaceId) {
+    throw new WorkflowContractError("confirm requires an owned candidate or final_place_id");
+  }
+  if (resultType === "source_only_clue" && decision.action === "confirm" && !decision.finalPlaceId) {
+    throw new WorkflowContractError("source-only results require source_only or a resolved final_place_id");
+  }
+}
+
+async function updateDecisionCandidateState(
+  client: PoolClient,
+  userId: string,
+  decision: UserDecisionInput,
+): Promise<void> {
+  if (!decision.candidateId) return;
+  const status = decision.action === "reject"
+    ? "rejected"
+    : decision.action === "source_only"
+      ? "source_only"
+      : decision.action === "needs_more_evidence" || decision.action === "investigate_more"
+      ? "needs_more_evidence"
+      : decision.finalPlaceId
+        ? "saved"
+        : "confirmed";
+  await client.query(
+    `update place_candidates pc
+     set status = $1,
+         place_id = coalesce($2, pc.place_id),
+         updated_at = now()
+     from captures c
+     where pc.capture_id = c.id and pc.id = $3 and c.user_id = $4`,
+    [status, decision.finalPlaceId ?? null, decision.candidateId, userId],
+  );
+}
+
+async function persistWorkflowResultSteps(
+  client: PoolClient,
+  runId: string,
+  attemptNo: number,
+  result: PlaceRecoveryWorkerResult,
+  outputHash: string,
+): Promise<void> {
+  const requiredSteps = [
+    "validate_input",
+    "fetch_or_resolve_source",
+    "extract_or_recover_candidate",
+    "resolve_place_identity",
+    "persist_result",
+  ] as const;
+  const failedStepKey = result.failedStep ? workflowStepKeyForFailure(result.failedStep) : undefined;
+  const failedIndex = failedStepKey ? requiredSteps.indexOf(failedStepKey as typeof requiredSteps[number]) : -1;
+
+  for (const [index, stepKey] of requiredSteps.entries()) {
+    const status = result.technicalFailure
+      ? failedIndex === -1 || index < failedIndex
+        ? "succeeded"
+        : index === failedIndex
+          ? "failed"
+          : "skipped"
+      : result.resultType === "source_only_clue" && stepKey === "resolve_place_identity"
+        ? "skipped"
+        : "succeeded";
+    await upsertWorkflowStep(client, {
+      runId,
+      attemptNo,
+      stepKey,
+      status,
+      errorCode: status === "failed" ? result.failureCode : undefined,
+      outputHash,
+      metadata: status === "failed" ? { retryable: result.retryable === true } : undefined,
+    });
+  }
+  if (result.technicalFailure && result.failureCode && failedStepKey && failedIndex === -1) {
+    await upsertWorkflowStep(client, {
+      runId,
+      attemptNo,
+      stepKey: failedStepKey,
+      status: "failed",
+      errorCode: result.failureCode,
+      outputHash,
+      metadata: { retryable: result.retryable === true },
+    });
+  }
+}
+
+function workflowStepKeyForFailure(failedStep: string): string {
+  if (failedStep === "validate_input") return "validate_input";
+  if (failedStep === "fetch_source") return "fetch_or_resolve_source";
+  if (["extract_source", "classify_source", "recover_candidate"].includes(failedStep)) {
+    return "extract_or_recover_candidate";
+  }
+  if (failedStep === "resolve_map_identity") return "resolve_place_identity";
+  if (failedStep === "persist_candidate") return "persist_result";
+  return failedStep === "settle_credit" ? "settle_credit" : "write_receipt";
+}
+
+async function upsertWorkflowStep(client: PoolClient, input: {
+  runId: string;
+  attemptNo: number;
+  stepKey: string;
+  status: "succeeded" | "failed" | "skipped";
+  inputHash?: string;
+  outputHash?: string;
+  errorCode?: string;
+  metadata?: JsonBody;
+}): Promise<void> {
+  await client.query(
+    `insert into workflow_steps (
+       run_id, attempt_no, step_key, status, input, output, error,
+       error_code, input_hash, output_hash, metadata, completed_at
+     )
+     values ($1, $2, $3, $4, '{}'::jsonb, '{}'::jsonb, null, $5, $6, $7, $8::jsonb, now())
+     on conflict (run_id, attempt_no, step_key) do update set
+       status = excluded.status,
+       error_code = excluded.error_code,
+       input_hash = excluded.input_hash,
+       output_hash = excluded.output_hash,
+       metadata = excluded.metadata,
+       completed_at = excluded.completed_at`,
+    [
+      input.runId,
+      input.attemptNo,
+      input.stepKey,
+      input.status,
+      input.errorCode ?? null,
+      input.inputHash ?? null,
+      input.outputHash ?? null,
+      JSON.stringify(input.metadata ?? {}),
+    ],
+  );
+}
+
+async function refreshWorkflowReputationSnapshot(
+  client: PoolClient,
+  userId: string,
+  run: JsonBody,
+  analysisReceipt: JsonBody,
+): Promise<void> {
+  const sourceType = boundedSafeDimension(run.source_type, 80);
+  const operatorId = boundedSafeDimension(analysisReceipt.operator_id, 80);
+  const provenanceBucket = boundedSafeDimension(analysisReceipt.model_provenance_bucket, 120);
+  const subjectKey = [
+    userId,
+    placeRecoveryWorkflowId,
+    placeRecoveryWorkflowVersion,
+    sourceType,
+    operatorId,
+    provenanceBucket,
+  ].join("|");
+  await client.query("select pg_advisory_xact_lock(hashtext($1))", [subjectKey]);
+
+  const { rows } = await client.query(
+    `select
+       r.id as run_id,
+       r.result_type = 'technical_failure' as technical_failure,
+       r.credit_settlement,
+       ar.latency_ms,
+       dr.user_feedback_action as decision_action
+     from workflow_runs r
+     join lateral (
+       select wr.*
+       from workflow_receipts wr
+       where wr.run_id = r.id and wr.receipt_type = 'analysis' and wr.is_current = true
+       order by wr.attempt_no desc, wr.created_at desc
+       limit 1
+     ) ar on true
+     left join lateral (
+       select wr.user_feedback_action
+       from workflow_receipts wr
+       where wr.run_id = r.id
+         and wr.receipt_type = 'decision'
+         and wr.is_current = true
+         and wr.attempt_no = ar.attempt_no
+       order by wr.created_at desc
+       limit 1
+     ) dr on true
+     where r.user_id = $1
+       and r.workflow_id = $2
+       and ar.workflow_version = $3
+       and r.source_type = $4
+       and ar.operator_id = $5
+       and ar.model_provenance_bucket = $6`,
+    [
+      userId,
+      placeRecoveryWorkflowId,
+      placeRecoveryWorkflowVersion,
+      sourceType,
+      operatorId,
+      provenanceBucket,
+    ],
+  );
+  const outcomes = rows.map((row) => {
+    const value = asObject(row);
+    const action = stringValue(value.decision_action);
+    return {
+      runId: String(value.run_id),
+      isCurrent: true,
+      settled: parseCreditSettlement(value.credit_settlement) !== "pending",
+      technicalFailure: value.technical_failure === true,
+      decisionAction: action && isUserDecisionAction(action) ? action : undefined,
+      creditSettlement: parseCreditSettlement(value.credit_settlement),
+      latencyMs: value.latency_ms === null || value.latency_ms === undefined ? undefined : Number(value.latency_ms),
+    };
+  });
+  const counters = reconcileReputation(outcomes);
+
+  await client.query(
+    `update workflow_reputation_snapshots
+     set is_current = false
+     where requester_id = $1
+       and workflow_id = $2
+       and workflow_version = $3
+       and source_type = $4
+       and operator_id = $5
+       and model_provenance_bucket = $6
+       and policy_version = 'v0'
+       and is_current = true`,
+    [userId, placeRecoveryWorkflowId, placeRecoveryWorkflowVersion, sourceType, operatorId, provenanceBucket],
+  );
+  const snapshotInsert = buildInsert("workflow_reputation_snapshots", {
+    requester_id: userId,
+    listing_id: String(run.listing_id),
+    workflow_id: placeRecoveryWorkflowId,
+    workflow_version: placeRecoveryWorkflowVersion,
+    source_type: sourceType,
+    operator_id: operatorId,
+    model_provenance_bucket: provenanceBucket,
+    policy_version: "v0",
+    is_current: true,
+    run_count: counters.runCount,
+    operational_success_count: counters.operationalSuccessCount,
+    technical_failure_count: counters.technicalFailureCount,
+    confirmed_count: counters.confirmedCount,
+    edited_count: counters.editedCount,
+    rejected_count: counters.rejectedCount,
+    source_only_count: counters.sourceOnlyCount,
+    refund_count: counters.refundCount,
+    median_latency_ms: counters.medianLatencyMs,
+    user_decision_coverage: counters.userDecisionCoverage,
+    operational_success_rate: counters.operationalSuccessRate,
+    confirmation_rate: counters.confirmationRate,
+    edit_rate: counters.editRate,
+    rejection_rate: counters.rejectionRate,
+    technical_failure_rate: counters.technicalFailureRate,
+    pass_count: counters.confirmedCount,
+    partial_count: counters.editedCount + counters.sourceOnlyCount,
+    fail_count: counters.technicalFailureCount + counters.rejectedCount,
+    confirmed_save_count: counters.confirmedCount,
+    user_rejection_count: counters.rejectedCount,
+    hallucination_report_count: 0,
+  }, workflowReputationSnapshotFields);
+  await client.query(snapshotInsert.sql, snapshotInsert.values);
+}
+
+function parseCreditSettlement(value: unknown): "pending" | "consumed" | "refunded" | "partial" {
+  return value === "consumed" || value === "refunded" || value === "partial" ? value : "pending";
+}
+
+function isUserDecisionAction(value: string): value is UserDecisionInput["action"] {
+  return [
+    "confirm", "edit", "reject", "source_only", "wrong_place", "wrong_city",
+    "wrong_branch", "merge_existing", "needs_more_evidence", "investigate_more",
+  ].includes(value);
+}
+
 async function clearingBlockForUser(blockId: string, userId: string): Promise<JsonBody> {
   const { rows } = await pool.query(
     "select * from clearing_blocks where id = $1 and user_id = $2",
@@ -2837,12 +3731,29 @@ async function createClearingBlockForPendingReceipts(userId: string, body: JsonB
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${placeRecoveryWorkflowId}:${userId}:clearing`]);
     const { rows: receiptRows } = await client.query(
       `select wr.id, wr.receipt_hash
        from workflow_receipts wr
        join workflow_runs r on r.id = wr.run_id
        where r.user_id = $1
          and wr.workflow_id = $2
+         and wr.requester_id = $1
+         and wr.is_current = true
+         and wr.attempt_no = r.current_attempt_no
+         and wr.receipt_hash is not null
+         and wr.privacy_validated = true
+         and wr.anchor_status = 'offchain'
+         and (
+           wr.settlement in ('credit_consumed', 'credit_refunded', 'partial')
+           or (wr.receipt_type = 'analysis' and wr.settlement = 'manual_review')
+         )
+         and not exists (
+           select 1
+           from workflow_receipts superseding
+           where superseding.supersedes_receipt_id = wr.id
+             and superseding.is_current = true
+         )
          and not exists (
            select 1 from clearing_block_items cbi where cbi.receipt_id = wr.id
          )
@@ -2962,14 +3873,14 @@ function workflowReceiptBody(runId: string, receipt: {
   jobId?: string;
   agentId: string;
   operatorId?: string;
-  requesterId?: string;
-  inputHash?: string;
-  outputHash?: string;
   permissionSnapshot: JsonBody;
   toolTraceRefs: string[];
   latencyMs?: number;
   costEstimate?: JsonBody;
   failureReason?: string;
+  failureCode?: string;
+  failedStep?: string;
+  retryable?: boolean;
   userFeedbackAction?: string;
   qualityDelta: number;
   reputationDelta: number;
@@ -2979,64 +3890,67 @@ function workflowReceiptBody(runId: string, receipt: {
   evaluatorSummary: string;
   evidenceRefs: string[];
   candidateRefs: string[];
-}, context: { run?: JsonBody; userId?: string; output?: unknown } = {}): JsonBody {
-  const inputHash = receipt.inputHash ?? hashPayload({
+}, context: {
+  run: JsonBody;
+  userId: string;
+  output: unknown;
+  attemptNo: number;
+  resultRevision: number;
+  idempotencyKey: string;
+  supersedesReceiptId?: string;
+  isCurrent: boolean;
+  outputHash: string;
+  decisionId?: string;
+}): JsonBody {
+  const inputHash = sha256CanonicalJson({
     sourceUrl: context.run?.source_url ?? null,
     sourceType: context.run?.source_type ?? null,
     workOrderId: context.run?.work_order_id ?? null,
   });
-  const outputHash = receipt.outputHash ?? hashPayload(context.output ?? {
-    verdict: receipt.verdict,
-    evidenceRefs: receipt.evidenceRefs,
-    candidateRefs: receipt.candidateRefs,
-  });
-  return {
+  const modelProvenance = safeModelProvenance(receipt.modelProvenance);
+  const envelope: JsonBody = {
     run_id: runId,
     workflow_id: placeRecoveryWorkflowId,
     workflow_version: receipt.workflowVersion,
     operator_id: receipt.operatorId ?? receipt.agentId,
-    requester_id: receipt.requesterId ?? context.userId ?? context.run?.user_id ?? null,
+    requester_id: context.userId,
     receipt_type: receipt.receiptType,
+    attempt_no: context.attemptNo,
+    result_revision: context.resultRevision,
+    idempotency_key: context.idempotencyKey,
+    supersedes_receipt_id: context.supersedesReceiptId ?? null,
+    is_current: context.isCurrent,
+    failure_code: receipt.failureCode ?? null,
+    failed_step: receipt.failedStep ?? null,
+    retryable: receipt.retryable ?? null,
+    decision_id: context.decisionId ?? null,
     job_id: receipt.jobId ?? null,
     agent_id: receipt.agentId,
-    model_provenance: receipt.modelProvenance,
+    model_provenance: modelProvenance,
+    model_provenance_bucket: modelProvenanceBucket(modelProvenance),
     input_hash: inputHash,
-    output_hash: outputHash,
+    output_hash: context.outputHash,
     permission_snapshot: receipt.permissionSnapshot,
-    tool_trace_refs: receipt.toolTraceRefs,
+    tool_trace_refs: safeOpaqueRefs(receipt.toolTraceRefs),
     latency_ms: receipt.latencyMs ?? null,
     cost_estimate: receipt.costEstimate ?? null,
-    failure_reason: receipt.failureReason ?? null,
+    failure_reason: receipt.failureCode ?? null,
     user_feedback_action: receipt.userFeedbackAction ?? null,
     quality_delta: receipt.qualityDelta,
     reputation_delta: receipt.reputationDelta,
     verdict: receipt.verdict,
     settlement: receipt.settlement,
     evaluator_summary: receipt.evaluatorSummary,
-    evidence_refs: receipt.evidenceRefs,
-    candidate_refs: receipt.candidateRefs,
-    receipt_hash: receiptHash(runId, receipt),
+    evidence_refs: safeOpaqueRefs(receipt.evidenceRefs),
+    candidate_refs: safeOpaqueRefs(receipt.candidateRefs),
     anchor_status: "offchain",
     private_url: null,
+    privacy_validated: true,
   };
-}
-
-function hashPayload(payload: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(payload))
-    .digest("hex");
-}
-
-function receiptHash(runId: string, receipt: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify({ runId, receipt }))
-    .digest("hex");
-}
-
-function settlementDelta(settlement: string, creditReserved: number): number {
-  if (settlement === "refunded") return creditReserved;
-  if (settlement === "partial") return Math.ceil(creditReserved / 2);
-  return 0;
+  return {
+    ...envelope,
+    receipt_hash: sha256ImmutableWorkflowReceipt(envelope),
+  };
 }
 
 async function ensureRecommendationItemReferences(item: JsonBody, userId: string): Promise<void> {

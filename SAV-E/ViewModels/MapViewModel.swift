@@ -618,6 +618,7 @@ final class MapViewModel: ObservableObject {
             let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
             mirrorToLocalVault(refinedCandidate)
             var run: PlaceRecoveryWorkflowRun?
+            var failedStep = "validate_input"
             do {
                 let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
                     sourceURL: refinedCandidate.sourceURL,
@@ -629,6 +630,7 @@ final class MapViewModel: ObservableObject {
                     sourceType: nil
                 )
                 run = createdRun
+                failedStep = "persist_candidate"
                 let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
                 let candidateId = try await supabaseService.createPlaceCandidate(
                     refinedCandidate,
@@ -636,6 +638,7 @@ final class MapViewModel: ObservableObject {
                     userId: userId,
                     workflowRunId: createdRun.id
                 )
+                failedStep = "write_receipt"
                 _ = try await supabaseService.recordPlaceRecoveryResult(
                     placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
                     for: createdRun.id
@@ -644,7 +647,14 @@ final class MapViewModel: ObservableObject {
                     _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
                 }
             } catch {
-                await recordPlaceRecoveryFailureIfNeeded(run: run, candidate: refinedCandidate, error: error)
+                if failedStep != "write_receipt" {
+                    await recordPlaceRecoveryFailureIfNeeded(
+                        run: run,
+                        candidate: refinedCandidate,
+                        error: error,
+                        failedStep: failedStep
+                    )
+                }
                 failedCandidates.append(candidate)
                 print("MapViewModel: failed to import review candidate \(candidate.candidateName): \(error)")
             }
@@ -672,10 +682,12 @@ final class MapViewModel: ObservableObject {
         for candidate in candidates {
             mirrorToLocalVault(candidate)
             var run: PlaceRecoveryWorkflowRun?
+            var failedStep = "validate_input"
             do {
                 let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
                 let createdRun = try await supabaseService.createPlaceRecoveryRun(workOrderId: workOrder.id, sourceURL: candidate.sourceURL, sourceType: nil)
                 run = createdRun
+                failedStep = "persist_candidate"
                 let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
                 let candidateId = try await supabaseService.createPlaceCandidate(
                     candidate,
@@ -683,6 +695,7 @@ final class MapViewModel: ObservableObject {
                     userId: userId,
                     workflowRunId: createdRun.id
                 )
+                failedStep = "write_receipt"
                 _ = try await supabaseService.recordPlaceRecoveryResult(
                     placeRecoveryResult(for: candidate, candidateId: candidateId),
                     for: createdRun.id
@@ -692,7 +705,14 @@ final class MapViewModel: ObservableObject {
                     importedCount += recovered?.count ?? 0
                 }
             } catch {
-                await recordPlaceRecoveryFailureIfNeeded(run: run, candidate: candidate, error: error)
+                if failedStep != "write_receipt" {
+                    await recordPlaceRecoveryFailureIfNeeded(
+                        run: run,
+                        candidate: candidate,
+                        error: error,
+                        failedStep: failedStep
+                    )
+                }
                 throw error
             }
         }
@@ -701,10 +721,9 @@ final class MapViewModel: ObservableObject {
     }
 
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
-        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "rejected", placeId: nil)
         var updatedCandidate = candidate
         updatedCandidate.status = "rejected"
-        await recordCorrectionEvent(
+        try await recordCorrectionEvent(
             for: candidate,
             eventType: .rejectCandidate,
             afterCandidate: updatedCandidate,
@@ -717,10 +736,9 @@ final class MapViewModel: ObservableObject {
     }
 
     func saveReviewCandidateAsSourceOnly(_ candidate: PlaceReviewCandidate) async throws {
-        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "source_only", placeId: nil)
         var updatedCandidate = candidate
         updatedCandidate.status = "source_only"
-        await recordCorrectionEvent(
+        try await recordCorrectionEvent(
             for: candidate,
             eventType: .saveSourceOnly,
             afterCandidate: updatedCandidate,
@@ -758,14 +776,13 @@ final class MapViewModel: ObservableObject {
         }
 
         if let existing = existingSavedPlace(matching: place) {
-            try? await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: existing.id)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
             updatedCandidate.address = existing.address
             updatedCandidate.latitude = existing.latitude
             updatedCandidate.longitude = existing.longitude
             updatedCandidate.status = "saved"
-            await recordCorrectionEvent(
+            try await recordCorrectionEvent(
                 for: candidate,
                 eventType: .mergeExisting,
                 afterCandidate: updatedCandidate,
@@ -780,21 +797,36 @@ final class MapViewModel: ObservableObject {
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
 
-        try await supabaseService.savePlace(place, userId: userId)
-        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "saved", placeId: place.id)
         var updatedCandidate = candidate
         updatedCandidate.name = place.name
         updatedCandidate.address = place.address
         updatedCandidate.latitude = place.latitude
         updatedCandidate.longitude = place.longitude
         updatedCandidate.status = "saved"
-        await recordCorrectionEvent(
-            for: candidate,
-            eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
-            afterCandidate: updatedCandidate,
-            userFinalPlaceId: place.id,
-            reason: "User saved review candidate as confirmed Map Stamp."
-        )
+        if candidate.workflowRunId != nil {
+            try await recordCorrectionEvent(
+                for: candidate,
+                eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
+                afterCandidate: updatedCandidate,
+                userFinalPlaceId: place.id,
+                finalPlace: place,
+                reason: "User saved review candidate as confirmed Map Stamp."
+            )
+        } else {
+            try await supabaseService.savePlace(place, userId: userId)
+            do {
+                try await recordCorrectionEvent(
+                    for: candidate,
+                    eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
+                    afterCandidate: updatedCandidate,
+                    userFinalPlaceId: place.id,
+                    reason: "User saved legacy review candidate as confirmed Map Stamp."
+                )
+            } catch {
+                try? await supabaseService.deletePlace(place.id)
+                throw error
+            }
+        }
         mirrorToLocalVault(place)
         places = [place] + places
         reviewCandidates.removeAll { $0.id == candidate.id }
@@ -1034,10 +1066,9 @@ final class MapViewModel: ObservableObject {
         eventType: SavePlaceCorrectionEventType,
         reason: String
     ) async throws {
-        try await supabaseService.updatePlaceCandidateStatus(candidate.id, status: "needs_more_evidence", placeId: nil)
         var updatedCandidate = candidate
         updatedCandidate.status = "needs_more_evidence"
-        await recordCorrectionEvent(
+        try await recordCorrectionEvent(
             for: candidate,
             eventType: eventType,
             afterCandidate: updatedCandidate,
@@ -1051,8 +1082,9 @@ final class MapViewModel: ObservableObject {
         eventType: SavePlaceCorrectionEventType,
         afterCandidate: PlaceReviewCandidate? = nil,
         userFinalPlaceId: UUID? = nil,
+        finalPlace: Place? = nil,
         reason: String
-    ) async {
+    ) async throws {
         let event = SavePlaceCorrectionEvent(
             userId: authService.currentUserId,
             candidate: candidate,
@@ -1061,31 +1093,50 @@ final class MapViewModel: ObservableObject {
             userFinalPlaceId: userFinalPlaceId,
             userReasonText: reason
         )
-        do {
-            try correctionEventStore.append(event)
-        } catch {
-            print("MapViewModel: failed to persist local correction event for \(candidate.name): \(error)")
-        }
-
-        guard let runId = candidate.workflowRunId else { return }
-        do {
+        if let runId = candidate.workflowRunId {
             _ = try await supabaseService.recordPlaceRecoveryDecision(
                 PlaceRecoveryDecisionDraft(
                     action: eventType.workflowAction,
+                    candidateId: candidate.id,
+                    finalPlaceId: userFinalPlaceId,
+                    finalPlace: finalPlace,
+                    reasonCode: eventType.rawValue,
                     editedPayload: event.workflowPayload,
                     reason: reason
                 ),
                 for: runId
             )
+        } else {
+            try await supabaseService.updatePlaceCandidateStatus(
+                candidate.id,
+                status: Self.legacyCandidateStatus(for: eventType, finalPlaceId: userFinalPlaceId),
+                placeId: userFinalPlaceId
+            )
+        }
+        do {
+            try correctionEventStore.append(event)
         } catch {
-            print("MapViewModel: failed to sync correction event for \(candidate.name): \(error)")
+            print("MapViewModel: failed to persist local correction event for \(candidate.name): \(error)")
+        }
+    }
+
+    static func legacyCandidateStatus(
+        for eventType: SavePlaceCorrectionEventType,
+        finalPlaceId: UUID?
+    ) -> String {
+        switch eventType.workflowAction {
+        case "reject": return "rejected"
+        case "source_only": return "source_only"
+        case "needs_more_evidence", "investigate_more": return "needs_more_evidence"
+        default: return finalPlaceId == nil ? "confirmed" : "saved"
         }
     }
 
     private func recordPlaceRecoveryFailureIfNeeded(
         run: PlaceRecoveryWorkflowRun?,
         candidate: PendingReviewCandidate,
-        error: Error
+        error: Error,
+        failedStep: String
     ) async {
         guard let run, Self.shouldRecordPlaceRecoveryTechnicalFailure(for: error) else { return }
         do {
@@ -1094,9 +1145,14 @@ final class MapViewModel: ObservableObject {
                     resultType: "technical_failure",
                     evidenceTier: "none",
                     confidence: 0,
-                    evidenceRefs: placeRecoveryEvidenceRefs(for: candidate) + ["error:\(error.localizedDescription)"],
+                    evidenceRefs: placeRecoveryEvidenceRefs(for: candidate),
                     candidateRefs: [],
-                    technicalFailure: true
+                    technicalFailure: true,
+                    failureCode: failedStep == "persist_candidate"
+                        ? "candidate_persistence_failed"
+                        : "internal_error",
+                    failedStep: failedStep,
+                    retryable: true
                 ),
                 for: run.id
             )

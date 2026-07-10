@@ -6,6 +6,7 @@ import {
   normalizeRecommendationAnalysisReceiptPayload,
   RecommendationAnalysisReceiptPayloadError,
   sha256CanonicalJson,
+  sha256ImmutableWorkflowReceipt,
 } from "./receiptEnvelope.js";
 
 test("recommendation analysis receipt stores full payload and projects AgentShack-safe envelope", () => {
@@ -63,6 +64,37 @@ test("recommendation analysis hashes use canonical JSON key ordering", () => {
     sha256CanonicalJson({ b: 2, a: { d: 4, c: 3 } }),
     sha256CanonicalJson({ a: { c: 3, d: 4 }, b: 2 }),
   );
+});
+
+test("workflow receipt hash excludes mutable lifecycle projection", () => {
+  const receipt = {
+    run_id: "run-1",
+    output_hash: "output-1",
+    settlement: "manual_review",
+    quality_delta: 0.5,
+    reputation_delta: 1,
+    is_current: true,
+    anchor_status: "offchain",
+    privacy_validated: true,
+    private_url: null,
+  };
+  const hash = sha256ImmutableWorkflowReceipt(receipt);
+
+  assert.equal(sha256ImmutableWorkflowReceipt({
+    ...receipt,
+    is_current: false,
+    anchor_status: "batch_anchored",
+    privacy_validated: false,
+    private_url: "save://private/receipt-1",
+  }), hash);
+  assert.equal(sha256ImmutableWorkflowReceipt({
+    ...receipt,
+    id: "database-generated-id",
+    created_at: "2026-07-10T00:00:00.000Z",
+    quality_delta: "0.5",
+    reputation_delta: "1",
+  }), hash);
+  assert.notEqual(sha256ImmutableWorkflowReceipt({ ...receipt, output_hash: "output-2" }), hash);
 });
 
 test("client recommendation output projects mixed saved and public counts safely", () => {

@@ -1017,6 +1017,9 @@ struct PlaceRecoveryResultDraft: Equatable {
     var evidenceRefs: [String]
     var candidateRefs: [String]
     var technicalFailure: Bool
+    var failureCode: String? = nil
+    var failedStep: String? = nil
+    var retryable: Bool? = nil
 
     var body: [String: Any?] {
         [
@@ -1026,25 +1029,69 @@ struct PlaceRecoveryResultDraft: Equatable {
             "evidence_refs": evidenceRefs,
             "candidate_refs": candidateRefs,
             "technical_failure": technicalFailure,
+            "failure_code": failureCode,
+            "failed_step": failedStep,
+            "retryable": retryable,
         ]
     }
 }
 
 struct PlaceRecoveryDecisionDraft: Equatable {
     var action: String
+    var candidateId: UUID? = nil
+    var finalPlaceId: UUID? = nil
+    var finalPlace: Place? = nil
+    var reasonCode: String? = nil
     var editedPayload: [String: Any]
     var reason: String?
 
     var body: [String: Any?] {
         [
             "action": action,
+            "candidate_id": candidateId?.uuidString,
+            "final_place_id": finalPlaceId?.uuidString,
+            "final_place": finalPlacePayload,
+            "reason_code": reasonCode,
             "edited_payload": editedPayload,
             "reason": reason,
         ]
     }
 
     static func == (lhs: PlaceRecoveryDecisionDraft, rhs: PlaceRecoveryDecisionDraft) -> Bool {
-        lhs.action == rhs.action && lhs.reason == rhs.reason
+        lhs.action == rhs.action
+            && lhs.candidateId == rhs.candidateId
+            && lhs.finalPlaceId == rhs.finalPlaceId
+            && lhs.finalPlace == rhs.finalPlace
+            && lhs.reasonCode == rhs.reasonCode
+            && lhs.reason == rhs.reason
+    }
+
+    private var finalPlacePayload: [String: Any]? {
+        guard let finalPlace else { return nil }
+        var payload: [String: Any] = [
+            "id": finalPlace.id.uuidString,
+            "name": finalPlace.name,
+            "address": finalPlace.address,
+            "latitude": finalPlace.latitude,
+            "longitude": finalPlace.longitude,
+            "category": finalPlace.category.rawValue,
+            "status": finalPlace.status.rawValue,
+            "source_platform": finalPlace.sourcePlatform.rawValue,
+            "created_at": ISO8601DateFormatter().string(from: finalPlace.createdAt),
+        ]
+        if let value = finalPlace.googlePlaceId { payload["google_place_id"] = value }
+        if let value = finalPlace.rating { payload["rating"] = value }
+        if let value = finalPlace.note { payload["note"] = value }
+        if let value = finalPlace.sourceUrl { payload["source_url"] = value }
+        if let value = finalPlace.sourceImageUrl { payload["source_image_url"] = value }
+        if let value = finalPlace.businessPhotoUrls { payload["business_photo_urls"] = value }
+        if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
+        if let value = finalPlace.priceRange { payload["price_range"] = value }
+        if let value = finalPlace.recommender { payload["recommender"] = value }
+        if let value = finalPlace.googleRating { payload["google_rating"] = value }
+        if let value = finalPlace.googlePriceLevel { payload["google_price_level"] = value }
+        if let value = finalPlace.openingHours { payload["opening_hours"] = value }
+        return payload
     }
 }
 

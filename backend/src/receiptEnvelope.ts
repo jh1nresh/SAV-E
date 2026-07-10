@@ -153,6 +153,30 @@ export function sha256CanonicalJson(value: unknown): string {
   return createHash("sha256").update(canonicalJson(value)).digest("hex");
 }
 
+export function sha256ImmutableWorkflowReceipt(receipt: JsonObject): string {
+  const {
+    id: _databaseId,
+    is_current: _isCurrent,
+    anchor_status: _anchorStatus,
+    privacy_validated: _privacyValidated,
+    private_url: _privateUrl,
+    receipt_hash: _receiptHash,
+    created_at: _createdAt,
+    ...immutable
+  } = receipt;
+  return sha256CanonicalJson({
+    ...immutable,
+    quality_delta: canonicalNumeric(immutable.quality_delta),
+    reputation_delta: canonicalNumeric(immutable.reputation_delta),
+  });
+}
+
+function canonicalNumeric(value: unknown): unknown {
+  if (typeof value !== "string" || value.trim() === "") return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}
+
 function publicSummaryFor(request: JsonObject, output: JsonObject): RecommendationAnalysisPublicSummary {
   const results = Array.isArray(output.results) ? output.results : [];
   const receipt = objectValue(output.retrieval_receipt) ?? {};

@@ -5,9 +5,18 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
     func testCorrectionActionsMapToExistingWorkflowDecisionContract() {
         XCTAssertEqual(SavePlaceCorrectionEventType.confirmCandidate.workflowAction, "confirm")
         XCTAssertEqual(SavePlaceCorrectionEventType.wrongBranch.workflowAction, "needs_more_evidence")
-        XCTAssertEqual(SavePlaceCorrectionEventType.saveSourceOnly.workflowAction, "save_source_only")
+        XCTAssertEqual(SavePlaceCorrectionEventType.saveSourceOnly.workflowAction, "source_only")
+        XCTAssertEqual(SavePlaceCorrectionEventType.mergeExisting.workflowAction, "merge_existing")
         XCTAssertEqual(SavePlaceCorrectionEventType.rejectCandidate.workflowAction, "reject")
-        XCTAssertEqual(SavePlaceCorrectionEventType.investigateMore.workflowAction, "needs_more_evidence")
+        XCTAssertEqual(SavePlaceCorrectionEventType.investigateMore.workflowAction, "investigate_more")
+    }
+
+    @MainActor
+    func testLegacyCandidateStatusFallbackMirrorsBackendDecisionState() {
+        XCTAssertEqual(MapViewModel.legacyCandidateStatus(for: .rejectCandidate, finalPlaceId: nil), "rejected")
+        XCTAssertEqual(MapViewModel.legacyCandidateStatus(for: .saveSourceOnly, finalPlaceId: nil), "source_only")
+        XCTAssertEqual(MapViewModel.legacyCandidateStatus(for: .investigateMore, finalPlaceId: nil), "needs_more_evidence")
+        XCTAssertEqual(MapViewModel.legacyCandidateStatus(for: .confirmCandidate, finalPlaceId: UUID()), "saved")
     }
 
     func testCorrectionPayloadKeepsBeforeAfterAndLearningLabels() throws {

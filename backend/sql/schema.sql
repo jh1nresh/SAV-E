@@ -431,6 +431,7 @@ create table if not exists workflow_runs (
     evidence_tier text not null default 'none',
     result_evidence_refs text[] not null default '{}',
     result_candidate_refs text[] not null default '{}',
+    current_attempt_no integer not null default 1,
     credit_reserved integer not null default 1,
     credit_settlement text not null default 'pending',
     receipt_id uuid,
@@ -441,6 +442,7 @@ create table if not exists workflow_runs (
     constraint workflow_runs_result_type_check check (result_type is null or result_type in ('confirmed_map_stamp', 'review_candidate', 'source_only_clue', 'technical_failure')),
     constraint workflow_runs_evidence_tier_check check (evidence_tier in ('none', 'weak', 'likely', 'confirmed')),
     constraint workflow_runs_confidence_check check (confidence is null or (confidence >= 0 and confidence <= 1)),
+    constraint workflow_runs_attempt_check check (current_attempt_no > 0),
     constraint workflow_runs_credit_reserved_check check (credit_reserved > 0),
     constraint workflow_runs_credit_settlement_check check (credit_settlement in ('pending', 'consumed', 'refunded', 'partial'))
 );
@@ -448,39 +450,68 @@ create table if not exists workflow_runs (
 create index if not exists idx_workflow_runs_user_id on workflow_runs(user_id, created_at desc);
 create index if not exists idx_workflow_runs_listing on workflow_runs(listing_id, status, created_at desc);
 alter table workflow_runs add column if not exists work_order_id uuid references work_orders(id) on delete set null;
+alter table workflow_runs add column if not exists current_attempt_no integer not null default 1;
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'workflow_runs_attempt_check'
+          and conrelid = 'workflow_runs'::regclass
+    ) then
+        alter table workflow_runs add constraint workflow_runs_attempt_check check (current_attempt_no > 0);
+    end if;
+end $$;
 create index if not exists idx_workflow_runs_work_order_id on workflow_runs(work_order_id, created_at desc);
 
 create table if not exists workflow_steps (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete cascade not null,
+    attempt_no integer not null default 1,
     step_key text not null,
     status text not null default 'queued',
     input jsonb not null default '{}'::jsonb,
     output jsonb not null default '{}'::jsonb,
     error text,
+    error_code text,
+    input_hash text,
+    output_hash text,
+    metadata jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now(),
     completed_at timestamptz,
     constraint workflow_steps_status_check check (status in ('queued', 'running', 'succeeded', 'failed', 'skipped'))
 );
 
 create index if not exists idx_workflow_steps_run_id on workflow_steps(run_id, created_at);
+alter table workflow_steps add column if not exists attempt_no integer not null default 1;
+alter table workflow_steps add column if not exists error_code text;
+alter table workflow_steps add column if not exists input_hash text;
+alter table workflow_steps add column if not exists output_hash text;
+alter table workflow_steps add column if not exists metadata jsonb not null default '{}'::jsonb;
+create unique index if not exists idx_workflow_steps_attempt_key on workflow_steps(run_id, attempt_no, step_key);
 
 create table if not exists source_artifacts (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete cascade not null,
+    attempt_no integer not null default 1,
     artifact_type text not null,
     source_url text,
     storage_ref text,
     extracted_text text,
+    content_hash text,
+    privacy text not null default 'private',
     metadata jsonb not null default '{}'::jsonb,
     created_at timestamptz not null default now()
 );
 
 create index if not exists idx_source_artifacts_run_id on source_artifacts(run_id);
+alter table source_artifacts add column if not exists attempt_no integer not null default 1;
+alter table source_artifacts add column if not exists content_hash text;
+alter table source_artifacts add column if not exists privacy text not null default 'private';
 
 create table if not exists evidence_items (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete cascade not null,
+    attempt_no integer not null default 1,
     artifact_id uuid references source_artifacts(id) on delete set null,
     evidence_type text not null,
     summary text not null default '',
@@ -491,6 +522,7 @@ create table if not exists evidence_items (
 );
 
 create index if not exists idx_evidence_items_run_id on evidence_items(run_id);
+alter table evidence_items add column if not exists attempt_no integer not null default 1;
 
 alter table place_candidates add column if not exists workflow_run_id uuid references workflow_runs(id) on delete set null;
 create index if not exists idx_place_candidates_workflow_run_id on place_candidates(workflow_run_id);
@@ -499,19 +531,40 @@ create table if not exists user_decisions (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete cascade not null,
     user_id text references profiles(id) on delete cascade not null,
+    attempt_no integer not null default 1,
+    candidate_id uuid references place_candidates(id) on delete set null,
+    final_place_id uuid references places(id) on delete set null,
     action text not null,
     edited_payload jsonb not null default '{}'::jsonb,
     reason text,
+    reason_code text,
+    idempotency_key text not null,
+    before_hash text,
+    after_hash text,
     created_at timestamptz not null default now(),
-    constraint user_decisions_action_check check (action in ('confirm', 'edit', 'reject', 'needs_more_evidence'))
+    constraint user_decisions_action_check check (action in (
+        'confirm', 'edit', 'reject', 'source_only', 'wrong_place', 'wrong_city',
+        'wrong_branch', 'merge_existing', 'needs_more_evidence', 'investigate_more'
+    ))
 );
 
 create index if not exists idx_user_decisions_run_id on user_decisions(run_id, created_at desc);
-
+alter table user_decisions add column if not exists attempt_no integer not null default 1;
+alter table user_decisions add column if not exists candidate_id uuid references place_candidates(id) on delete set null;
+alter table user_decisions add column if not exists final_place_id uuid references places(id) on delete set null;
+alter table user_decisions add column if not exists reason_code text;
+alter table user_decisions add column if not exists idempotency_key text;
+alter table user_decisions add column if not exists before_hash text;
+alter table user_decisions add column if not exists after_hash text;
+update user_decisions set idempotency_key = 'legacy:' || id::text where idempotency_key is null;
+alter table user_decisions alter column idempotency_key set not null;
 alter table user_decisions drop constraint if exists user_decisions_action_check;
-alter table user_decisions add constraint user_decisions_action_check check (
-    action in ('confirm', 'edit', 'reject', 'save_source_only', 'needs_more_evidence')
-);
+update user_decisions set action = 'source_only' where action = 'save_source_only';
+alter table user_decisions add constraint user_decisions_action_check check (action in (
+    'confirm', 'edit', 'reject', 'source_only', 'wrong_place', 'wrong_city',
+    'wrong_branch', 'merge_existing', 'needs_more_evidence', 'investigate_more'
+));
+create unique index if not exists idx_user_decisions_idempotency on user_decisions(run_id, idempotency_key);
 
 create table if not exists workflow_receipts (
     id uuid primary key default gen_random_uuid(),
@@ -521,9 +574,19 @@ create table if not exists workflow_receipts (
     operator_id text,
     requester_id text references profiles(id) on delete set null,
     receipt_type text not null default 'decision',
+    attempt_no integer not null default 1,
+    result_revision integer not null default 1,
+    idempotency_key text not null,
+    supersedes_receipt_id uuid references workflow_receipts(id) on delete set null,
+    is_current boolean not null default true,
+    failure_code text,
+    failed_step text,
+    retryable boolean,
+    decision_id uuid references user_decisions(id) on delete set null,
     job_id text,
     agent_id text not null default 'SAV-E',
     model_provenance jsonb not null default '{}'::jsonb,
+    model_provenance_bucket text not null default 'unknown',
     input_hash text,
     output_hash text,
     permission_snapshot jsonb not null default '{}'::jsonb,
@@ -542,20 +605,32 @@ create table if not exists workflow_receipts (
     receipt_hash text not null,
     anchor_status text not null default 'offchain',
     private_url text,
+    privacy_validated boolean not null default false,
     created_at timestamptz not null default now(),
     constraint workflow_receipts_type_check check (receipt_type in ('analysis', 'decision')),
     constraint workflow_receipts_verdict_check check (verdict in ('pass', 'partial', 'fail', 'refund', 'dispute')),
     constraint workflow_receipts_settlement_check check (settlement in ('credit_consumed', 'credit_refunded', 'partial', 'manual_review')),
-    constraint workflow_receipts_anchor_status_check check (anchor_status in ('offchain', 'batch_anchored', 'onchain'))
+    constraint workflow_receipts_anchor_status_check check (anchor_status in ('offchain', 'batch_anchored', 'onchain')),
+    constraint workflow_receipts_attempt_check check (attempt_no > 0 and result_revision > 0)
 );
 
 alter table workflow_receipts add column if not exists receipt_type text not null default 'decision';
+alter table workflow_receipts add column if not exists attempt_no integer not null default 1;
+alter table workflow_receipts add column if not exists result_revision integer not null default 1;
+alter table workflow_receipts add column if not exists idempotency_key text;
+alter table workflow_receipts add column if not exists supersedes_receipt_id uuid references workflow_receipts(id) on delete set null;
+alter table workflow_receipts add column if not exists is_current boolean not null default true;
+alter table workflow_receipts add column if not exists failure_code text;
+alter table workflow_receipts add column if not exists failed_step text;
+alter table workflow_receipts add column if not exists retryable boolean;
+alter table workflow_receipts add column if not exists decision_id uuid references user_decisions(id) on delete set null;
 alter table workflow_receipts add column if not exists workflow_version text not null default 'v0';
 alter table workflow_receipts add column if not exists operator_id text;
 alter table workflow_receipts add column if not exists requester_id text references profiles(id) on delete set null;
 alter table workflow_receipts add column if not exists job_id text;
 alter table workflow_receipts add column if not exists agent_id text not null default 'SAV-E';
 alter table workflow_receipts add column if not exists model_provenance jsonb not null default '{}'::jsonb;
+alter table workflow_receipts add column if not exists model_provenance_bucket text not null default 'unknown';
 alter table workflow_receipts add column if not exists input_hash text;
 alter table workflow_receipts add column if not exists output_hash text;
 alter table workflow_receipts add column if not exists permission_snapshot jsonb not null default '{}'::jsonb;
@@ -566,9 +641,204 @@ alter table workflow_receipts add column if not exists failure_reason text;
 alter table workflow_receipts add column if not exists user_feedback_action text;
 alter table workflow_receipts add column if not exists quality_delta numeric not null default 0;
 alter table workflow_receipts add column if not exists reputation_delta numeric not null default 0;
+alter table workflow_receipts add column if not exists privacy_validated boolean not null default false;
+
+update workflow_receipts set user_feedback_action = 'source_only'
+where user_feedback_action = 'save_source_only';
+update workflow_receipts set idempotency_key = 'legacy:' || id::text where idempotency_key is null;
+alter table workflow_receipts alter column idempotency_key set not null;
+
+with original_decode_failure_pairs as (
+    select lr.run_id
+    from workflow_receipts lr
+    join workflow_runs r on r.id = lr.run_id
+    where lr.receipt_type = 'analysis'
+      and lr.idempotency_key like 'legacy:%'
+      and lr.idempotency_key not like 'legacy:decode-failure-duplicate:%'
+      and r.result_type = 'technical_failure'
+      and r.credit_settlement = 'pending'
+      and not exists (
+          select 1
+          from workflow_receipts current_generation
+          where current_generation.run_id = lr.run_id
+            and current_generation.receipt_type = 'analysis'
+            and current_generation.idempotency_key not like 'legacy:%'
+      )
+    group by lr.run_id
+    having count(*) = 2
+       and count(*) filter (where lr.verdict in ('pass', 'partial')) = 1
+       and count(*) filter (where lr.verdict in ('fail', 'refund')) = 1
+       and max(lr.created_at) filter (where lr.verdict in ('pass', 'partial'))
+           < max(lr.created_at) filter (where lr.verdict in ('fail', 'refund'))
+)
+update workflow_receipts wr
+set idempotency_key = 'legacy:decode-failure-duplicate:' || wr.id::text
+from original_decode_failure_pairs pair
+where wr.run_id = pair.run_id
+  and wr.receipt_type = 'analysis'
+  and wr.verdict in ('fail', 'refund')
+  and wr.idempotency_key like 'legacy:%';
+
+with legacy_receipts as (
+    select wr.*
+    from workflow_receipts wr
+    where wr.idempotency_key like 'legacy:%'
+      and not exists (
+          select 1
+          from workflow_receipts current_generation
+          where current_generation.run_id = wr.run_id
+            and current_generation.receipt_type = wr.receipt_type
+            and current_generation.idempotency_key not like 'legacy:%'
+      )
+), legacy_groups as (
+    select
+        lr.run_id,
+        lr.receipt_type,
+        (
+            lr.receipt_type = 'analysis'
+            and count(*) = 2
+            and count(*) filter (where lr.verdict in ('pass', 'partial')) = 1
+            and count(*) filter (where lr.verdict in ('fail', 'refund')) = 1
+            and max(lr.created_at) filter (where lr.verdict in ('pass', 'partial'))
+                < max(lr.created_at) filter (where lr.verdict in ('fail', 'refund'))
+            and (
+                count(*) filter (
+                    where lr.idempotency_key like 'legacy:decode-failure-duplicate:%'
+                ) = 1
+                or (
+                    r.credit_settlement = 'pending'
+                    and r.result_type = 'technical_failure'
+                )
+                or (
+                    r.credit_settlement = 'pending'
+                    and r.result_type in ('review_candidate', 'source_only_clue')
+                    and count(*) filter (
+                        where lr.id = r.receipt_id
+                          and lr.verdict in ('pass', 'partial')
+                    ) = 1
+                )
+            )
+        ) as decode_failure_pair
+    from legacy_receipts lr
+    join workflow_runs r on r.id = lr.run_id
+    group by lr.run_id, lr.receipt_type, r.result_type, r.credit_settlement, r.receipt_id
+), legacy_ranked_receipts as (
+    select
+        lr.id,
+        row_number() over (
+            partition by lr.run_id, lr.receipt_type
+            order by
+                case
+                    when lg.decode_failure_pair and lr.verdict in ('pass', 'partial') then 0
+                    when lg.decode_failure_pair then 1
+                    else 0
+                end,
+                lr.created_at desc,
+                lr.id desc
+        ) as receipt_rank
+    from legacy_receipts lr
+    join legacy_groups lg on lg.run_id = lr.run_id and lg.receipt_type = lr.receipt_type
+)
+update workflow_receipts wr
+set is_current = legacy_ranked_receipts.receipt_rank = 1
+from legacy_ranked_receipts
+where wr.id = legacy_ranked_receipts.id;
+
+with repaired_analysis as (
+    select wr.run_id, wr.id, wr.evidence_refs, wr.candidate_refs
+    from workflow_receipts wr
+    join workflow_runs r on r.id = wr.run_id
+    where wr.receipt_type = 'analysis'
+      and wr.is_current = true
+      and wr.idempotency_key like 'legacy:%'
+      and wr.verdict in ('pass', 'partial')
+      and r.result_type = 'technical_failure'
+      and r.credit_settlement = 'pending'
+      and (
+          select count(*)
+          from workflow_receipts pair
+          where pair.run_id = wr.run_id
+            and pair.receipt_type = 'analysis'
+            and pair.idempotency_key like 'legacy:%'
+      ) = 2
+      and not exists (
+          select 1
+          from workflow_receipts current_generation
+          where current_generation.run_id = wr.run_id
+            and current_generation.receipt_type = 'analysis'
+            and current_generation.idempotency_key not like 'legacy:%'
+      )
+      and exists (
+          select 1
+          from workflow_receipts failed
+          where failed.run_id = wr.run_id
+            and failed.receipt_type = 'analysis'
+            and failed.id <> wr.id
+            and failed.idempotency_key like 'legacy:%'
+            and failed.verdict in ('fail', 'refund')
+            and failed.created_at > wr.created_at
+      )
+), repaired_runs as (
+    update workflow_runs r
+    set status = 'needs_review',
+        result_type = case
+            when cardinality(repaired_analysis.candidate_refs) > 0 then 'review_candidate'
+            else 'source_only_clue'
+        end,
+        evidence_tier = case when r.evidence_tier = 'none' then 'weak' else r.evidence_tier end,
+        result_evidence_refs = repaired_analysis.evidence_refs,
+        result_candidate_refs = repaired_analysis.candidate_refs,
+        receipt_id = repaired_analysis.id,
+        completed_at = null
+    from repaired_analysis
+    where r.id = repaired_analysis.run_id
+    returning r.work_order_id, r.user_id
+)
+update work_orders wo
+set status = 'needs_review'
+from repaired_runs
+where wo.id = repaired_runs.work_order_id and wo.user_id = repaired_runs.user_id;
 
 create unique index if not exists idx_workflow_receipts_hash on workflow_receipts(receipt_hash);
 create index if not exists idx_workflow_receipts_run_id on workflow_receipts(run_id, created_at desc);
+create unique index if not exists idx_workflow_receipts_idempotency on workflow_receipts(run_id, receipt_type, idempotency_key);
+create unique index if not exists idx_workflow_receipts_current_analysis on workflow_receipts(run_id, attempt_no)
+where receipt_type = 'analysis' and is_current;
+create unique index if not exists idx_workflow_receipts_decision_id on workflow_receipts(decision_id)
+where decision_id is not null;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'workflow_receipts_attempt_check'
+          and conrelid = 'workflow_receipts'::regclass
+    ) then
+        alter table workflow_receipts add constraint workflow_receipts_attempt_check check (
+            attempt_no > 0 and result_revision > 0
+        );
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'workflow_receipts_failure_code_check') then
+        alter table workflow_receipts add constraint workflow_receipts_failure_code_check check (
+            failure_code is null or failure_code in (
+                'invalid_source', 'unsupported_source', 'source_fetch_failed', 'source_auth_blocked',
+                'source_rate_limited', 'source_content_unavailable', 'extractor_failed',
+                'model_provider_failed', 'model_timeout', 'model_invalid_output', 'map_lookup_failed',
+                'candidate_persistence_failed', 'receipt_persistence_failed', 'configuration_missing',
+                'internal_error'
+            )
+        );
+    end if;
+    if not exists (select 1 from pg_constraint where conname = 'workflow_receipts_failed_step_check') then
+        alter table workflow_receipts add constraint workflow_receipts_failed_step_check check (
+            failed_step is null or failed_step in (
+                'validate_input', 'fetch_source', 'extract_source', 'classify_source',
+                'recover_candidate', 'resolve_map_identity', 'persist_candidate',
+                'write_receipt', 'settle_credit'
+            )
+        );
+    end if;
+end $$;
 
 create table if not exists clearing_blocks (
     id uuid primary key default gen_random_uuid(),
@@ -610,7 +880,10 @@ create table if not exists credit_ledger (
     id uuid primary key default gen_random_uuid(),
     run_id uuid references workflow_runs(id) on delete set null,
     user_id text references profiles(id) on delete cascade not null,
-    delta integer not null,
+    attempt_no integer not null default 1,
+    decision_id uuid references user_decisions(id) on delete set null,
+    settlement_key text not null,
+    delta numeric(12, 4) not null,
     reason text not null,
     settlement text not null default 'pending',
     created_at timestamptz not null default now(),
@@ -619,12 +892,84 @@ create table if not exists credit_ledger (
 
 create index if not exists idx_credit_ledger_user_id on credit_ledger(user_id, created_at desc);
 create index if not exists idx_credit_ledger_run_id on credit_ledger(run_id);
+alter table credit_ledger alter column delta type numeric(12, 4) using delta::numeric;
+alter table credit_ledger add column if not exists attempt_no integer not null default 1;
+alter table credit_ledger add column if not exists decision_id uuid references user_decisions(id) on delete set null;
+alter table credit_ledger add column if not exists settlement_key text;
+update credit_ledger set settlement_key = 'legacy:' || id::text where settlement_key is null;
+alter table credit_ledger alter column settlement_key set not null;
+create unique index if not exists idx_credit_ledger_settlement_key on credit_ledger(run_id, settlement_key)
+where run_id is not null;
+
+insert into credit_ledger (
+    run_id, user_id, attempt_no, settlement_key, delta, reason, settlement
+)
+select
+    r.id,
+    r.user_id,
+    r.current_attempt_no,
+    'legacy_technical_failure:' || r.current_attempt_no::text,
+    r.credit_reserved,
+    'legacy_technical_failure',
+    'refunded'
+from workflow_runs r
+join workflow_receipts wr on wr.run_id = r.id
+where r.result_type = 'technical_failure'
+  and r.credit_settlement = 'pending'
+  and wr.receipt_type = 'analysis'
+  and wr.is_current = true
+  and wr.idempotency_key like 'legacy:%'
+  and wr.verdict in ('fail', 'refund')
+on conflict (run_id, settlement_key) where run_id is not null do nothing;
+
+with refunded_runs as (
+    update workflow_runs r
+    set status = 'failed',
+        credit_settlement = 'refunded',
+        completed_at = coalesce(r.completed_at, now())
+    where r.result_type = 'technical_failure'
+      and r.credit_settlement = 'pending'
+      and exists (
+          select 1
+          from workflow_receipts wr
+          where wr.run_id = r.id
+            and wr.receipt_type = 'analysis'
+            and wr.is_current = true
+            and wr.idempotency_key like 'legacy:%'
+            and wr.verdict in ('fail', 'refund')
+      )
+    returning r.work_order_id, r.user_id
+)
+update work_orders wo
+set status = 'failed'
+from refunded_runs
+where wo.id = refunded_runs.work_order_id and wo.user_id = refunded_runs.user_id;
 
 create table if not exists workflow_reputation_snapshots (
     id uuid primary key default gen_random_uuid(),
+    requester_id text references profiles(id) on delete cascade,
     listing_id text not null,
     workflow_id text not null,
+    workflow_version text not null default 'v0',
+    source_type text not null default 'unknown',
+    operator_id text not null default 'unknown',
+    model_provenance_bucket text not null default 'unknown',
+    policy_version text not null default 'v0',
+    is_current boolean not null default true,
     run_count integer not null default 0,
+    operational_success_count integer not null default 0,
+    technical_failure_count integer not null default 0,
+    confirmed_count integer not null default 0,
+    edited_count integer not null default 0,
+    rejected_count integer not null default 0,
+    source_only_count integer not null default 0,
+    median_latency_ms double precision,
+    user_decision_coverage double precision not null default 0,
+    operational_success_rate double precision not null default 0,
+    confirmation_rate double precision not null default 0,
+    edit_rate double precision not null default 0,
+    rejection_rate double precision not null default 0,
+    technical_failure_rate double precision not null default 0,
     pass_count integer not null default 0,
     partial_count integer not null default 0,
     fail_count integer not null default 0,
@@ -636,6 +981,32 @@ create table if not exists workflow_reputation_snapshots (
 );
 
 create index if not exists idx_workflow_reputation_listing on workflow_reputation_snapshots(listing_id, created_at desc);
+alter table workflow_reputation_snapshots add column if not exists requester_id text references profiles(id) on delete cascade;
+alter table workflow_reputation_snapshots add column if not exists workflow_version text not null default 'v0';
+alter table workflow_reputation_snapshots add column if not exists source_type text not null default 'unknown';
+alter table workflow_reputation_snapshots add column if not exists operator_id text not null default 'unknown';
+alter table workflow_reputation_snapshots add column if not exists model_provenance_bucket text not null default 'unknown';
+alter table workflow_reputation_snapshots add column if not exists policy_version text not null default 'v0';
+alter table workflow_reputation_snapshots add column if not exists is_current boolean not null default true;
+alter table workflow_reputation_snapshots add column if not exists operational_success_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists technical_failure_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists confirmed_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists edited_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists rejected_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists source_only_count integer not null default 0;
+alter table workflow_reputation_snapshots add column if not exists median_latency_ms double precision;
+alter table workflow_reputation_snapshots add column if not exists user_decision_coverage double precision not null default 0;
+alter table workflow_reputation_snapshots add column if not exists operational_success_rate double precision not null default 0;
+alter table workflow_reputation_snapshots add column if not exists confirmation_rate double precision not null default 0;
+alter table workflow_reputation_snapshots add column if not exists edit_rate double precision not null default 0;
+alter table workflow_reputation_snapshots add column if not exists rejection_rate double precision not null default 0;
+alter table workflow_reputation_snapshots add column if not exists technical_failure_rate double precision not null default 0;
+create unique index if not exists idx_workflow_reputation_current_subject
+on workflow_reputation_snapshots (
+    requester_id, workflow_id, workflow_version, source_type,
+    operator_id, model_provenance_bucket, policy_version
+)
+where is_current and requester_id is not null;
 
 insert into agent_capabilities (id, agent_family, vertical, action, description, risk_level, input_schema, output_schema)
 values

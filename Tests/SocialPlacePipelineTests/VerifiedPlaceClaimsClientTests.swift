@@ -351,7 +351,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
             "result_type": "review_candidate",
             "confidence": 0.82,
             "evidence_tier": "likely",
-            "result_evidence_refs": ["source_url:https://example.com/source"],
+            "result_evidence_refs": ["opaque:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
             "result_candidate_refs": ["\(candidateId.uuidString)"],
             "credit_reserved": 1,
             "credit_settlement": "pending",
@@ -366,7 +366,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
             "verdict": "pass",
             "settlement": "manual_review",
             "evaluator_summary": "Analysis produced a review candidate.",
-            "evidence_refs": ["source_url:https://example.com/source"],
+            "evidence_refs": ["opaque:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
             "candidate_refs": ["\(candidateId.uuidString)"],
             "receipt_hash": "hash_123",
             "anchor_status": "offchain",
@@ -426,6 +426,8 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         let runId = UUID()
         let receiptId = UUID()
         let candidateId = UUID()
+        let finalPlace = Place.mock
+        let finalPlaceId = finalPlace.id
         let result = PlaceRecoveryResultDraft(
             resultType: "review_candidate",
             evidenceTier: "likely",
@@ -436,7 +438,11 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         )
         let decision = PlaceRecoveryDecisionDraft(
             action: "confirm",
-            editedPayload: ["place_id": "place_123"],
+            candidateId: candidateId,
+            finalPlaceId: finalPlaceId,
+            finalPlace: finalPlace,
+            reasonCode: "confirm_candidate",
+            editedPayload: ["place_id": finalPlaceId.uuidString],
             reason: "User saved review candidate as confirmed Map Stamp."
         )
 
@@ -444,6 +450,11 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(result.body["evidence_tier"] as? String, "likely")
         XCTAssertEqual(result.body["candidate_refs"] as? [String], [candidateId.uuidString])
         XCTAssertEqual(decision.body["action"] as? String, "confirm")
+        XCTAssertEqual(decision.body["candidate_id"] as? String, candidateId.uuidString)
+        XCTAssertEqual(decision.body["final_place_id"] as? String, finalPlaceId.uuidString)
+        XCTAssertEqual(decision.body["reason_code"] as? String, "confirm_candidate")
+        XCTAssertEqual((decision.body["final_place"] as? [String: Any])?["id"] as? String, finalPlaceId.uuidString)
+        XCTAssertEqual((decision.body["final_place"] as? [String: Any])?["name"] as? String, finalPlace.name)
         XCTAssertEqual(decision.body["reason"] as? String, "User saved review candidate as confirmed Map Stamp.")
 
         let json = """
@@ -491,5 +502,24 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(response.receipt.id, receiptId)
         XCTAssertEqual(response.receipt.verdict, "pass")
         XCTAssertEqual(response.receipt.candidateRefs, [candidateId.uuidString])
+    }
+
+    func testTechnicalFailureDraftCarriesStructuredStageWithoutRawErrorText() {
+        let result = PlaceRecoveryResultDraft(
+            resultType: "technical_failure",
+            evidenceTier: "none",
+            confidence: 0,
+            evidenceRefs: ["artifact:opaque_1"],
+            candidateRefs: [],
+            technicalFailure: true,
+            failureCode: "candidate_persistence_failed",
+            failedStep: "persist_candidate",
+            retryable: true
+        )
+
+        XCTAssertEqual(result.body["failure_code"] as? String, "candidate_persistence_failed")
+        XCTAssertEqual(result.body["failed_step"] as? String, "persist_candidate")
+        XCTAssertEqual(result.body["retryable"] as? Bool, true)
+        XCTAssertFalse((result.body["evidence_refs"] as? [String] ?? []).contains { $0.contains("error:") })
     }
 }

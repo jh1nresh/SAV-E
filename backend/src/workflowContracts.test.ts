@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  WorkflowContractError,
+  failedSteps,
+  failureCodes,
   normalizePlaceRecoveryWorkOrderCreate,
   normalizePlaceRecoveryRunCreate,
   normalizePlaceRecoveryWorkerResult,
   normalizeUserDecision,
-  isFinalUserDecision,
   receiptForResult,
   analysisReceiptForResult,
+  userDecisionActions,
 } from "./workflowContracts.js";
 
 test("place recovery work order create canonicalizes agent clearing fields", () => {
@@ -40,6 +43,12 @@ test("place recovery run create canonicalizes supported source URL and reserves 
   assert.equal(run.creditReserved, 1);
 });
 
+test("place recovery run bounds explicit source types to a safe reputation dimension", () => {
+  const run = normalizePlaceRecoveryRunCreate({ source_type: "  Instagram Reels / Private  " });
+
+  assert.equal(run.sourceType, "other");
+});
+
 test("weak confirmed map stamp is downgraded to review candidate", () => {
   const result = normalizePlaceRecoveryWorkerResult({
     result_type: "confirmed_map_stamp",
@@ -64,7 +73,7 @@ test("weak confirmed map stamp is downgraded to review candidate", () => {
   });
 });
 
-test("worker result preserves job id, agent id, and model provenance", () => {
+test("worker result keeps bounded metadata but treats identity and provenance as self-claimed", () => {
   const result = normalizePlaceRecoveryWorkerResult({
     result_type: "review_candidate",
     evidence_tier: "likely",
@@ -93,21 +102,21 @@ test("worker result preserves job id, agent id, and model provenance", () => {
 
   assert.equal(result.jobId, "job_123");
   assert.equal(result.agentId, "SAV-E");
-  assert.equal(result.operatorId, "save-worker");
-  assert.equal(result.requesterId, "00000000-0000-0000-0000-000000000001");
-  assert.equal(result.inputHash, "input_hash_123");
-  assert.equal(result.outputHash, "output_hash_123");
-  assert.deepEqual(result.permissionSnapshot, { scopes: ["source_url.read", "place_candidate.write"] });
+  assert.equal(result.operatorId, "save-client");
+  assert.equal("requesterId" in result, false);
+  assert.equal("inputHash" in result, false);
+  assert.equal("outputHash" in result, false);
+  assert.deepEqual(result.permissionSnapshot, { scopes: ["place_recovery.result.submit"] });
   assert.deepEqual(result.toolTraceRefs, ["tool:source-search"]);
   assert.equal(result.latencyMs, 1234);
   assert.deepEqual(result.costEstimate, { usd: 0.002 });
-  assert.equal(result.failureReason, "missing_coordinates");
+  assert.equal(result.failureReason, undefined);
   assert.deepEqual(result.modelProvenance, {
     claimedProvider: "google",
     claimedModel: "gemini-3.5-flash",
     observedProvider: null,
-    observedModel: "gemini-3.5-flash",
-    attestationLevel: "provider_metadata",
+    observedModel: null,
+    attestationLevel: "self_claim",
     fallbackUsed: false,
     usage: { inputTokens: 100, outputTokens: 20 },
     evidenceRefs: ["provider_response:abc"],
@@ -163,12 +172,128 @@ test("technical failure refunds reserved credit", () => {
     result_type: "technical_failure",
     evidence_tier: "none",
     confidence: 0,
+    failure_code: "model_timeout",
+    failed_step: "recover_candidate",
+    retryable: true,
   });
+  const analysisReceipt = analysisReceiptForResult(result);
   const receipt = receiptForResult(result);
 
+  assert.equal(analysisReceipt.verdict, "fail");
+  assert.equal(analysisReceipt.settlement, "credit_refunded");
+  assert.equal(analysisReceipt.creditSettlement, "refunded");
   assert.equal(receipt.verdict, "refund");
   assert.equal(receipt.settlement, "credit_refunded");
   assert.equal(receipt.creditSettlement, "refunded");
+});
+
+test("technical failures require a structured code, failed step, and retryability", () => {
+  assert.throws(() => normalizePlaceRecoveryWorkerResult({
+    result_type: "technical_failure",
+  }), WorkflowContractError);
+
+  for (const failureCode of failureCodes) {
+    const result = normalizePlaceRecoveryWorkerResult({
+      result_type: "technical_failure",
+      failure_code: failureCode,
+      failed_step: "recover_candidate",
+      retryable: false,
+    });
+    assert.equal(result.failureCode, failureCode);
+  }
+
+  for (const failedStep of failedSteps) {
+    const result = normalizePlaceRecoveryWorkerResult({
+      result_type: "technical_failure",
+      failure_code: "internal_error",
+      failed_step: failedStep,
+      retryable: true,
+    });
+    assert.equal(result.failedStep, failedStep);
+  }
+
+  assert.throws(() => normalizePlaceRecoveryWorkerResult({
+    result_type: "technical_failure",
+    failure_code: "made_up_failure",
+    failed_step: "recover_candidate",
+    retryable: true,
+  }), WorkflowContractError);
+});
+
+test("worker result normalizes attempt identity without trusting requester or supplied hashes", () => {
+  const result = normalizePlaceRecoveryWorkerResult({
+    result_type: "review_candidate",
+    attempt_no: 2,
+    result_revision: 1,
+    idempotency_key: "result:attempt-2",
+    retry: true,
+    requester_id: "attacker",
+    input_hash: "client-input-hash",
+    output_hash: "client-output-hash",
+  });
+
+  assert.equal(result.attemptNo, 2);
+  assert.equal(result.resultRevision, 1);
+  assert.equal(result.idempotencyKey, "result:attempt-2");
+  assert.equal(result.explicitRetry, true);
+  assert.equal("requesterId" in result, false);
+  assert.equal("inputHash" in result, false);
+  assert.equal("outputHash" in result, false);
+  assert.throws(() => normalizePlaceRecoveryWorkerResult({
+    result_type: "source_only_clue",
+    idempotency_key: "legacy:caller-controlled",
+  }), WorkflowContractError);
+});
+
+test("full Inbox decision taxonomy is strict and client deltas are ignored", () => {
+  const expectedDeltas = {
+    confirm: [1, 1],
+    edit: [0.5, 0.25],
+    reject: [-1, -1],
+    source_only: [0.25, 0.1],
+    wrong_place: [0.5, 0.25],
+    wrong_city: [0.5, 0.25],
+    wrong_branch: [0.5, 0.25],
+    merge_existing: [1, 0.75],
+    needs_more_evidence: [0, 0],
+    investigate_more: [0, 0],
+  } as const;
+  for (const action of userDecisionActions) {
+    const decision = normalizeUserDecision({
+      action,
+      idempotency_key: `decision:${action}`,
+      quality_delta: action === "reject" ? 0.9 : -0.9,
+      reputation_delta: action === "reject" ? 0.9 : -0.9,
+    }, "run_123");
+    assert.equal(decision.action, action);
+    assert.equal(decision.idempotencyKey, `decision:${action}`);
+    assert.equal(decision.qualityDelta, expectedDeltas[action][0]);
+    assert.equal(decision.reputationDelta, expectedDeltas[action][1]);
+  }
+
+  assert.throws(() => normalizeUserDecision({ action: "charge_anyway" }, "run_123"), WorkflowContractError);
+});
+
+test("decision normalization keeps a bounded final place draft for atomic save", () => {
+  const finalPlaceId = "cb6a7108-a247-4d7d-94da-312c9e98ce34";
+  const decision = normalizeUserDecision({
+    action: "confirm",
+    final_place_id: finalPlaceId,
+    final_place: {
+      id: finalPlaceId,
+      name: "Atomic Cafe",
+      address: "1 Receipt Way",
+      latitude: 33.7,
+      longitude: -117.8,
+    },
+  }, "run_123");
+
+  assert.equal(decision.finalPlaceId, finalPlaceId);
+  assert.equal(decision.finalPlace?.name, "Atomic Cafe");
+  assert.throws(() => normalizeUserDecision({
+    action: "confirm",
+    final_place: { id: finalPlaceId, api_key: "must-not-pass" },
+  }, "run_123"), WorkflowContractError);
 });
 
 test("source-only clue settles as partial without pretending to be a failed place", () => {
@@ -197,7 +322,6 @@ test("requesting more evidence keeps credit pending", () => {
   assert.equal(receipt.verdict, "partial");
   assert.equal(receipt.settlement, "manual_review");
   assert.equal(receipt.creditSettlement, "pending");
-  assert.equal(isFinalUserDecision(decision.action), false);
 });
 
 test("saving source only creates a final partial settlement", () => {
@@ -206,14 +330,13 @@ test("saving source only creates a final partial settlement", () => {
     evidence_tier: "weak",
     confidence: 0.42,
   });
-  const decision = normalizeUserDecision({ action: "save_source_only" }, "run_123");
+  const decision = normalizeUserDecision({ action: "source_only" }, "run_123");
   const receipt = receiptForResult(result, decision);
 
   assert.equal(receipt.verdict, "partial");
   assert.equal(receipt.settlement, "partial");
   assert.equal(receipt.creditSettlement, "partial");
-  assert.equal(receipt.userFeedbackAction, "save_source_only");
-  assert.equal(isFinalUserDecision(decision.action), true);
+  assert.equal(receipt.userFeedbackAction, "source_only");
 });
 
 test("rejecting a review candidate refunds reserved credit", () => {

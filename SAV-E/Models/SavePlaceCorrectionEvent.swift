@@ -16,16 +16,18 @@ enum SavePlaceCorrectionEventType: String, Codable {
 
     var workflowAction: String {
         switch self {
-        case .confirmCandidate, .mergeExisting:
+        case .confirmCandidate:
             return "confirm"
+        case .mergeExisting:
+            return "merge_existing"
         case .wrongPlace, .rejectCandidate:
             return "reject"
         case .investigateMore:
-            return "needs_more_evidence"
+            return "investigate_more"
         case .wrongCity, .wrongBranch:
             return "needs_more_evidence"
         case .saveSourceOnly:
-            return "save_source_only"
+            return "source_only"
         case .editPlaceIdentity, .editAddress, .addReason, .changeCollection:
             return "edit"
         }
