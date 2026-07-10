@@ -318,7 +318,11 @@ final class SupabaseService: SupabaseServiceProtocol {
 
         let body = try Self.jsonBody(result.body)
         let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/result", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(PlaceRecoveryWorkflowRun.self, from: data)
+        return try Self.decodePlaceRecoveryResultResponse(data)
+    }
+
+    static func decodePlaceRecoveryResultResponse(_ data: Data) throws -> PlaceRecoveryWorkflowRun {
+        try JSONDecoder.supabase.decode(PlaceRecoveryResultResponse.self, from: data).run
     }
 
     func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
@@ -1045,6 +1049,11 @@ struct PlaceRecoveryDecisionDraft: Equatable {
 }
 
 struct PlaceRecoveryDecisionReceiptResponse: Codable, Equatable {
+    let run: PlaceRecoveryWorkflowRun
+    let receipt: WorkflowReceipt
+}
+
+struct PlaceRecoveryResultResponse: Codable, Equatable {
     let run: PlaceRecoveryWorkflowRun
     let receipt: WorkflowReceipt
 }

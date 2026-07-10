@@ -999,7 +999,7 @@ final class MapViewModel: ObservableObject {
         candidate: PendingReviewCandidate,
         error: Error
     ) async {
-        guard let run else { return }
+        guard let run, Self.shouldRecordPlaceRecoveryTechnicalFailure(for: error) else { return }
         do {
             _ = try await supabaseService.recordPlaceRecoveryResult(
                 PlaceRecoveryResultDraft(
@@ -1015,6 +1015,10 @@ final class MapViewModel: ObservableObject {
         } catch {
             print("MapViewModel: failed to record place recovery technical failure for \(candidate.candidateName): \(error)")
         }
+    }
+
+    nonisolated static func shouldRecordPlaceRecoveryTechnicalFailure(for error: Error) -> Bool {
+        !(error is DecodingError)
     }
 
     private func mirrorToLocalVault(_ candidate: PendingReviewCandidate) {

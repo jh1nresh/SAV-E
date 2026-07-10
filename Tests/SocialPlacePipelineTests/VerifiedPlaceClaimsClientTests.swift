@@ -334,6 +334,67 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
     }
 
+    func testPlaceRecoveryResultEnvelopeReturnsRun() throws {
+        let runId = UUID()
+        let receiptId = UUID()
+        let candidateId = UUID()
+        let json = """
+        {
+          "run": {
+            "id": "\(runId.uuidString)",
+            "work_order_id": null,
+            "workflow_id": "save_place_recovery_v0",
+            "listing_id": "save-place-recovery-agent",
+            "source_url": "https://example.com/source",
+            "source_type": "url",
+            "status": "needs_review",
+            "result_type": "review_candidate",
+            "confidence": 0.82,
+            "evidence_tier": "likely",
+            "result_evidence_refs": ["source_url:https://example.com/source"],
+            "result_candidate_refs": ["\(candidateId.uuidString)"],
+            "credit_reserved": 1,
+            "credit_settlement": "pending",
+            "receipt_id": "\(receiptId.uuidString)",
+            "created_at": "2026-07-10T05:11:25Z",
+            "completed_at": null
+          },
+          "receipt": {
+            "id": "\(receiptId.uuidString)",
+            "run_id": "\(runId.uuidString)",
+            "workflow_id": "save_place_recovery_v0",
+            "verdict": "pass",
+            "settlement": "manual_review",
+            "evaluator_summary": "Analysis produced a review candidate.",
+            "evidence_refs": ["source_url:https://example.com/source"],
+            "candidate_refs": ["\(candidateId.uuidString)"],
+            "receipt_hash": "hash_123",
+            "anchor_status": "offchain",
+            "private_url": null,
+            "created_at": "2026-07-10T05:11:26Z"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let run = try SupabaseService.decodePlaceRecoveryResultResponse(json)
+
+        XCTAssertEqual(run.id, runId)
+        XCTAssertEqual(run.status, "needs_review")
+        XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
+    }
+
+    func testPlaceRecoveryResponseDecodingErrorDoesNotBecomeTechnicalFailure() {
+        let malformedEnvelope = "{}".data(using: .utf8)!
+
+        XCTAssertThrowsError(try SupabaseService.decodePlaceRecoveryResultResponse(malformedEnvelope)) { error in
+            XCTAssertTrue(error is DecodingError)
+            XCTAssertFalse(MapViewModel.shouldRecordPlaceRecoveryTechnicalFailure(for: error))
+        }
+        XCTAssertTrue(MapViewModel.shouldRecordPlaceRecoveryTechnicalFailure(
+            for: SupabaseError.apiError(500, "server error")
+        ))
+    }
+
     func testPlaceRecoveryWorkOrderDecodesAgentClearingFields() throws {
         let workOrderId = UUID()
         let json = """
