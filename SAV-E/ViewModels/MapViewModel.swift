@@ -1093,6 +1093,7 @@ final class MapViewModel: ObservableObject {
             userFinalPlaceId: userFinalPlaceId,
             userReasonText: reason
         )
+        try correctionEventStore.append(event)
         if let runId = candidate.workflowRunId {
             _ = try await supabaseService.recordPlaceRecoveryDecision(
                 PlaceRecoveryDecisionDraft(
@@ -1112,11 +1113,6 @@ final class MapViewModel: ObservableObject {
                 status: Self.legacyCandidateStatus(for: eventType, finalPlaceId: userFinalPlaceId),
                 placeId: userFinalPlaceId
             )
-        }
-        do {
-            try correctionEventStore.append(event)
-        } catch {
-            print("MapViewModel: failed to persist local correction event for \(candidate.name): \(error)")
         }
     }
 
