@@ -271,6 +271,7 @@ enum SaveCollaborativeListNotification {
     static let didJoin = Notification.Name("SaveCollaborativeListDidJoin")
 }
 
+@MainActor
 final class SaveCollaborativeListStore {
     static let shared = SaveCollaborativeListStore()
 

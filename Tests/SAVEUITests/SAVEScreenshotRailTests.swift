@@ -22,6 +22,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func testCaptureAppStoreScreens() throws {
         let app = XCUIApplication()
         app.launchArguments += ["--uitest-complete-onboarding", "--skip-map-tour"]
@@ -106,6 +107,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     /// Types the App Review demo email + code (native SwiftUI fields — the
     /// demo pair never hits Privy or the network, see ReviewDemoService).
+    @MainActor
     private func signInViaReviewDemo(app: XCUIApplication) throws {
         let emailField = app.textFields["signin.emailField"]
         // The opening animation holds the screen for ~2s before SignInView.
@@ -146,6 +148,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     /// Taps the keyboard-toolbar Done button (signin.keyboardDone) so the
     /// buttons hidden underneath the keyboard become hittable again. No-op if
     /// the software keyboard isn't showing (e.g. hardware keyboard connected).
+    @MainActor
     private func dismissKeyboard(app: XCUIApplication) {
         let done = app.buttons["signin.keyboardDone"]
         if done.waitForExistence(timeout: 3), done.isHittable {
@@ -157,6 +160,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     /// Dismisses the system location permission alert if it is on screen.
     /// Queried on SpringBoard because system alerts live outside the app.
+    @MainActor
     private func dismissLocationAlertIfPresent() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow While Using App", "Allow Once", "Don't Allow"] {
@@ -170,6 +174,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     /// Drags the collapsed drawer sheet up towards a tall detent so the
     /// Stamps/Review tab bar and saved-place rows become visible.
+    @MainActor
     private func expandDrawer(app: XCUIApplication) {
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.30))
@@ -180,6 +185,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     /// Taps a seeded saved-place row (any of the ReviewDemoSeed names) to open
     /// its map-detail drawer card, scrolling the drawer when the rows sit
     /// below the fold.
+    @MainActor
     private func openSeededPlaceDetail(app: XCUIApplication) -> Bool {
         let seededNames = [
             "Ichiran Shibuya",
@@ -206,6 +212,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         return false
     }
 
+    @MainActor
     private func attach(_ app: XCUIApplication, name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

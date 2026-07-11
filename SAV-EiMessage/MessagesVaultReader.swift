@@ -8,7 +8,7 @@ import Foundation
 /// share-payload sanitizers, Privy, etc.) that is wasteful inside a memory-tight
 /// Messages extension. Instead we decode the same on-disk JSON with a minimal
 /// struct that matches the persisted `SaveMemoryRecord` coding keys.
-struct MessagesPlace: Identifiable, Hashable {
+nonisolated struct MessagesPlace: Identifiable, Hashable, Sendable {
     let id: UUID
     let name: String
     let address: String
@@ -21,7 +21,7 @@ struct MessagesPlace: Identifiable, Hashable {
 }
 
 /// Reads confirmed places directly from the App Group JSON the main app writes.
-enum MessagesVaultReader {
+nonisolated enum MessagesVaultReader {
     static let appGroupSuiteName = "group.com.wanderly.app"
     static let fileName = "save-memory-records.json"
 

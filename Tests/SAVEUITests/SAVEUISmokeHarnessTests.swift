@@ -1,6 +1,7 @@
 import XCTest
 
 final class SAVEUISmokeHarnessTests: XCTestCase {
+    @MainActor
     func testFivePathSmokeHarnessPasses() {
         let app = XCUIApplication()
         app.launchArguments.append("-SAVEUISmokeHarness")
@@ -14,6 +15,7 @@ final class SAVEUISmokeHarnessTests: XCTestCase {
         assertSmokePass("review", in: app)
     }
 
+    @MainActor
     private func assertSmokePass(
         _ id: String,
         in app: XCUIApplication,

@@ -2,9 +2,9 @@ import AppIntents
 import Foundation
 
 struct SavePlaceFromURLIntent: AppIntent {
-    static var title: LocalizedStringResource = "Save URL to SAV-E"
-    static var description = IntentDescription("Save a place, event, or social URL into SAV-E local memory for later review.")
-    static var openAppWhenRun = false
+    static let title: LocalizedStringResource = "Save URL to SAV-E"
+    static let description = IntentDescription("Save a place, event, or social URL into SAV-E local memory for later review.")
+    static let openAppWhenRun = false
 
     @Parameter(title: "URL")
     var url: URL
@@ -12,6 +12,7 @@ struct SavePlaceFromURLIntent: AppIntent {
     @Parameter(title: "Note", default: "")
     var note: String
 
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let candidates: [PendingReviewCandidate]
         do {

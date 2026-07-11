@@ -1,6 +1,6 @@
 import Foundation
 
-enum SavePlaceCorrectionEventType: String, Codable {
+nonisolated enum SavePlaceCorrectionEventType: String, Codable, Sendable {
     case confirmCandidate = "confirm_candidate"
     case editPlaceIdentity = "edit_place_identity"
     case editAddress = "edit_address"
@@ -34,7 +34,7 @@ enum SavePlaceCorrectionEventType: String, Codable {
     }
 }
 
-struct SavePlaceCorrectionSnapshot: Codable, Equatable {
+nonisolated struct SavePlaceCorrectionSnapshot: Codable, Equatable, Sendable {
     var name: String
     var address: String
     var city: String?
@@ -42,6 +42,7 @@ struct SavePlaceCorrectionSnapshot: Codable, Equatable {
     var latitude: Double?
     var longitude: Double?
 
+    @MainActor
     init(candidate: PlaceReviewCandidate) {
         name = candidate.name
         address = candidate.address
@@ -64,7 +65,7 @@ struct SavePlaceCorrectionSnapshot: Codable, Equatable {
     }
 }
 
-struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable {
+nonisolated struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable, Sendable {
     var id: UUID
     var userId: String?
     var captureId: UUID?
@@ -80,6 +81,7 @@ struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable {
     var userReasonText: String?
     var createdAt: Date
 
+    @MainActor
     init(
         id: UUID = UUID(),
         userId: String?,
@@ -125,16 +127,14 @@ struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable {
     }
 }
 
-final class SavePlaceCorrectionEventStore {
+nonisolated final class SavePlaceCorrectionEventStore: Sendable {
     static let shared = SavePlaceCorrectionEventStore()
 
-    private let fileManager: FileManager
     private let overrideURL: URL?
     private let fileName = "save-place-correction-events.json"
     private let queue = DispatchQueue(label: "com.save.place-correction-event-store")
 
-    init(fileManager: FileManager = .default, overrideURL: URL? = nil) {
-        self.fileManager = fileManager
+    init(overrideURL: URL? = nil) {
         self.overrideURL = overrideURL
     }
 
@@ -143,7 +143,7 @@ final class SavePlaceCorrectionEventStore {
             var events = try recentEventsUnlocked(limit: 999)
             events.insert(event, at: 0)
             guard let url = storageURL else { throw SaveLocalVaultError.storageUnavailable }
-            try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -159,7 +159,7 @@ final class SavePlaceCorrectionEventStore {
 
     private func recentEventsUnlocked(limit: Int) throws -> [SavePlaceCorrectionEvent] {
         guard let url = storageURL else { throw SaveLocalVaultError.storageUnavailable }
-        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return Array(try decoder.decode([SavePlaceCorrectionEvent].self, from: Data(contentsOf: url)).prefix(limit))
@@ -167,10 +167,10 @@ final class SavePlaceCorrectionEventStore {
 
     private var storageURL: URL? {
         if let overrideURL { return overrideURL }
-        if let appGroupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) {
+        if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) {
             return appGroupURL.appendingPathComponent(fileName)
         }
-        return fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent(fileName)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent(fileName)
     }
 }
 

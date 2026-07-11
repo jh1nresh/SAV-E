@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class SavePlanAroundControllerTests: XCTestCase {
+    @MainActor
     func testPlanAroundSavedAnchorIncludesNearbySavedAndMapSuggestion() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -40,6 +41,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(draft.explanation.contains("Map Stamp"))
     }
 
+    @MainActor
     func testAnchorWithoutCoordinatesBlocksPlan() throws {
         let planController = SavePlanAroundController()
         let anchor = SaveSearchResult(
@@ -81,6 +83,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(state.missingInfo.contains("coordinates"))
     }
 
+    @MainActor
     func testSourceOnlyClueBlocksPlan() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -112,6 +115,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(state.allowedActions.contains(.runRecovery))
     }
 
+    @MainActor
     func testFoodHeavyClusterAddsAttractionAsBalancedGapFiller() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -144,6 +148,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(draft.newSuggestions.first?.reason.contains("Public filler") == true)
     }
 
+    @MainActor
     func testBalancedPlanReservesPublicActivityWhenSavedPlacesAreAllFood() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -184,6 +189,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
     }
 
 
+    @MainActor
     func testPlanAroundKeepsSavedFirstAndUnsavedSuggestionsSeparate() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -218,6 +224,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.newSuggestions.first?.source, .unsavedMapCandidate)
     }
 
+    @MainActor
     func testPlanAroundRejectsWrongCityPublicFillers() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -255,6 +262,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(draft.retrievalReceipt.skippedReasons.contains { $0.contains("outside requested city") })
     }
 
+    @MainActor
     func testPlanAroundBlocksWhenOnlyAnchorAndNoFillers() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -277,6 +285,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(state.allowedActions.contains(.showNearby))
     }
 
+    @MainActor
     func testPlanAroundKeepsSavedOnlyDraftWhenPublicFetchFails() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -301,6 +310,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(draft.retrievalReceipt.skippedReasons.contains { $0.contains("No public recommendation candidates") })
     }
 
+    @MainActor
     func testPlanAroundAllowsOnlyHighConfidenceReviewCandidateWithLabel() throws {
         let searchController = SaveSearchController()
         let planController = SavePlanAroundController()
@@ -348,6 +358,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertTrue(draft.nearbySaved.first?.evidence.contains("Coordinates and category corroborated") == true)
     }
 
+    @MainActor
     private func place(
         name: String,
         address: String,

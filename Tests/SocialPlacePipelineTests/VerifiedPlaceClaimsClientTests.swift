@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class VerifiedPlaceClaimsClientTests: XCTestCase {
+    @MainActor
     func testVerifiedPlaceClaimDecodesSnakeCaseResponse() throws {
         let claimId = UUID()
         let placeId = UUID()
@@ -37,6 +38,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(claim.evidenceRefs, ["save://memory/1"])
     }
 
+    @MainActor
     func testVerifiedPlaceClaimDraftBuildsBackendBody() throws {
         let draft = VerifiedPlaceClaimDraft(
             claimType: "menu_item",
@@ -60,6 +62,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(draft.body["confidence"] as? Double, 0.74)
     }
 
+    @MainActor
     func testClaimRecommendationResponseDecodesRetrievalReceipt() throws {
         let placeId = UUID()
         let claimId = UUID()
@@ -94,6 +97,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertNil(response.agentShackReceiptEnvelope)
     }
 
+    @MainActor
     func testClaimRecommendationResponseDecodesAgentShackEnvelope() throws {
         let placeId = UUID()
         let claimId = UUID()
@@ -156,6 +160,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(envelope.settlementState, "not_settled")
     }
 
+    @MainActor
     func testRecommendationAnalysisInternalReceiptKeepsAgentShackProjectionSafe() throws {
         let receiptId = UUID()
         let envelope = AgentShackReceiptEnvelope(
@@ -198,6 +203,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertFalse(projectionJSON.contains("birthday plan"))
     }
 
+    @MainActor
     func testPublicPlaceCardDecodesPublicProjection() throws {
         let placeId = UUID()
         let claimId = UUID()
@@ -262,6 +268,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(card.agentActions, ["cite_card", "save_to_vault"])
     }
 
+    @MainActor
     func testClaimUsageReceiptDraftBuildsBodyAndDecodesResponse() throws {
         let claimId = UUID()
         let placeId = UUID()
@@ -299,6 +306,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(receipt.consumerAgentId, "save-ios")
     }
 
+    @MainActor
     func testPlaceRecoveryWorkflowRunDecodesResultState() throws {
         let workOrderId = UUID()
         let runId = UUID()
@@ -334,6 +342,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
     }
 
+    @MainActor
     func testPlaceRecoveryResultEnvelopeReturnsRun() throws {
         let runId = UUID()
         let receiptId = UUID()
@@ -383,6 +392,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(run.resultCandidateRefs, [candidateId.uuidString])
     }
 
+    @MainActor
     func testPlaceRecoveryResponseDecodingErrorDoesNotBecomeTechnicalFailure() {
         let malformedEnvelope = "{}".data(using: .utf8)!
 
@@ -395,6 +405,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testPlaceRecoveryWorkOrderDecodesAgentClearingFields() throws {
         let workOrderId = UUID()
         let json = """
@@ -421,6 +432,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(workOrder.settlementMode, "credit_after_decision")
     }
 
+    @MainActor
     func testPlaceRecoveryDraftsBuildBackendBodiesAndDecodeReceipt() throws {
         let workOrderId = UUID()
         let runId = UUID()
@@ -504,6 +516,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
         XCTAssertEqual(response.receipt.candidateRefs, [candidateId.uuidString])
     }
 
+    @MainActor
     func testTechnicalFailureDraftCarriesStructuredStageWithoutRawErrorText() {
         let result = PlaceRecoveryResultDraft(
             resultType: "technical_failure",

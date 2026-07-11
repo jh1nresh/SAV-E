@@ -19,6 +19,7 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
         XCTAssertEqual(MapViewModel.legacyCandidateStatus(for: .confirmCandidate, finalPlaceId: UUID()), "saved")
     }
 
+    @MainActor
     func testCorrectionPayloadKeepsBeforeAfterAndLearningLabels() throws {
         let candidate = makeCandidate(status: "review")
         var corrected = candidate
@@ -41,6 +42,7 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
         XCTAssertEqual(payload["user_reason_text"] as? String, "Wrong branch")
     }
 
+    @MainActor
     func testCorrectionStorePersistsEventsNewestFirst() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -65,6 +67,7 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
         XCTAssertEqual(try store.recentEvents().map(\.eventType), [.saveSourceOnly, .investigateMore])
     }
 
+    @MainActor
     func testCorrectionStoreDoesNotLoseConcurrentAppends() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -102,6 +105,7 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
         XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
     }
 
+    @MainActor
     private func makeCandidate(status: String) -> PlaceReviewCandidate {
         PlaceReviewCandidate(
             id: UUID(),

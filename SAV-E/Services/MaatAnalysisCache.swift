@@ -6,13 +6,8 @@ import Foundation
 final class MaatAnalysisCache {
     static let shared = MaatAnalysisCache()
 
-    private let fileManager: FileManager
     private let directoryName = "maat-analysis-cache"
     private let queue = DispatchQueue(label: "com.save.maat-analysis-cache", attributes: .concurrent)
-
-    init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-    }
 
     func analysis(for placeId: UUID) -> MaatPlaceAnalysisResponse? {
         queue.sync {
@@ -25,19 +20,19 @@ final class MaatAnalysisCache {
     }
 
     func store(_ analysis: MaatPlaceAnalysisResponse, for placeId: UUID) {
-        queue.async(flags: .barrier) { [weak self] in
-            guard let self,
-                  let directory = self.directoryURL(),
-                  let url = self.fileURL(for: placeId)
-            else { return }
-            try? self.fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            guard let data = try? JSONEncoder().encode(analysis) else { return }
+        guard let directory = directoryURL(),
+              let url = fileURL(for: placeId),
+              let data = try? JSONEncoder().encode(analysis)
+        else { return }
+
+        queue.async(flags: .barrier) {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             try? data.write(to: url, options: [.atomic])
         }
     }
 
     private func directoryURL() -> URL? {
-        fileManager
+        FileManager.default
             .urls(for: .cachesDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent(directoryName, isDirectory: true)

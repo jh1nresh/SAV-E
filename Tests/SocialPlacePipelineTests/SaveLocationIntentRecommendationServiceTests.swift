@@ -3,6 +3,7 @@ import XCTest
 @testable import SAVE
 
 final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
+    @MainActor
     func testNearbyCafeExcludesWrongCategoryAndFarCafeFromPrimaryResults() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 34.0522, longitude: -118.2437)
@@ -48,6 +49,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(sectioned.newRecommendations.showsNearbySearchAction)
     }
 
+    @MainActor
     func testNoNearbyCafeDoesNotRecommendWrongCategory() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 34.0522, longitude: -118.2437)
@@ -87,6 +89,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(sectioned.newRecommendations.showsNearbySearchAction)
     }
 
+    @MainActor
     func testTraditionalChineseCafeRecommendationKeepsFallbackAnswerLocalized() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -122,6 +125,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testTraditionalChineseNearbyPublicLaneAppearsBeforeFarSavedContext() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -157,6 +161,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.assistantMessage?.contains("Saved Map Stamp") == true)
     }
 
+    @MainActor
     func testEnglishCafeRecommendationAnswerDoesNotMixChineseLead() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -180,6 +185,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(message.contains("你的 SAV-E"))
     }
 
+    @MainActor
     func testNearbyCafeWithoutCurrentLocationReturnsLocationNeededMessage() throws {
         let service = SaveLocationIntentRecommendationService()
 
@@ -194,6 +200,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.placeIds, [])
     }
 
+    @MainActor
     func testMilkTeaWithCurrentLocationRanksSpecificEvidenceBeforeGenericCafe() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 34.0522, longitude: -118.2437)
@@ -222,6 +229,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.placeIds.contains(dinner.id.uuidString))
     }
 
+    @MainActor
     func testNearbyHotPotRequiresSpecificEvidenceBeforeGenericFood() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -276,6 +284,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.resolvedAgentAnswer?.grounding.allowedResultIDs, ["place-\(hotPot.id.uuidString)"])
     }
 
+    @MainActor
     func testCoffeeCravingTodayRequiresCurrentLocation() throws {
         let service = SaveLocationIntentRecommendationService()
 
@@ -291,6 +300,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.newRecommendations.results.isEmpty)
     }
 
+    @MainActor
     func testCoffeeCravingTodayOffersExplicitUnsavedSearchWhenNoNearbySavedCafe() throws {
         let service = SaveLocationIntentRecommendationService()
 
@@ -307,6 +317,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.newRecommendations.results.isEmpty)
     }
 
+    @MainActor
     func testSavedNearbyRecommendationDoesNotIncludePublicScoutUntilCandidatesArePrepared() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -330,6 +341,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.groundedAnswerSections.map(\.id), ["from-your-save-nearby"])
     }
 
+    @MainActor
     func testCoffeeCravingTodayShowsSavedCafeFirstWhenNearby() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -355,6 +367,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.shouldAutoSearchNearbyUnsavedCandidates)
     }
 
+    @MainActor
     func testRecommendationAnalysisReceiptDraftUsesSafeEnvelopeSignalsAndPrivateSnapshots() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -392,6 +405,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(signals.contains { $0.contains("Bright Coffee Bar") })
     }
 
+    @MainActor
     func testRecommendationAnalysisReceiptTreatsReviewAndTripStopAsSavedMemorySignals() throws {
         let review = searchResult(id: "review-1", objectType: .review)
         let tripStop = searchResult(id: "trip-1", objectType: .tripStop)
@@ -414,6 +428,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(signals.contains("source:public_quality"))
     }
 
+    @MainActor
     func testRestaurantRecommendationUsesCurrentLocationAndIncludesReviewCandidates() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -470,6 +485,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.assistantMessage?.contains("unsaved nearby option") == true)
     }
 
+    @MainActor
     func testVisitedTasteSignalsCanBeatCloserGenericSavedRestaurant() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -512,6 +528,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results[1].evidence.contains("Taste match from places you visited"))
     }
 
+    @MainActor
     func testGenericNearbyRecommendationUsesFrequentlySavedCategory() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -551,6 +568,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results.first?.evidence.contains("Category matches places you often save") == true)
     }
 
+    @MainActor
     func testLowRatedVisitedPlaceDoesNotSeedVisitedTasteEvidence() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -595,6 +613,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(dislikedResult.evidence.contains("Visited place you rated well"))
     }
 
+    @MainActor
     func testHighRatingPriceAndTasteTagsRankAheadOfCloserGenericSavedPlace() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -646,6 +665,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(matchingResult.evidence.contains("Price matches places you liked ($$$)"))
     }
 
+    @MainActor
     func testTasteSignalsDoNotCrossCategoryOrLocationGates() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -691,11 +711,13 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.additionalSections.first { $0.id == "saved-but-not-nearby" }?.results.map(\.title), ["Far Loved Restaurant"])
     }
 
+    @MainActor
     func testSharedGeminiFallbacksPrimary35FlashWith25FlashFallback() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, SAVEProductionConfig.defaultGeminiModelFallbacks)
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
     }
 
+    @MainActor
     func testUnsupportedGymQueryDoesNotMapToFoodOrCafe() throws {
         let service = SaveLocationIntentRecommendationService()
 
@@ -714,6 +736,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.messageText?.contains("不會誤判成餐廳或咖啡廳") == true)
     }
 
+    @MainActor
     func testNearbyMilkTeaKeepsFarSavedPlacesOutOfPrimaryAnswer() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -778,6 +801,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertTrue(response.assistantMessage?.contains("Nearby Boba") == true)
     }
 
+    @MainActor
     func testNearbyMilkTeaKeepsFarReviewCandidatesOutOfNearbyContext() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -847,6 +871,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.assistantMessage?.contains("Taipei Review Boba") == true)
     }
 
+    @MainActor
     func testTraditionalChineseNearbyMilkTeaResponseIncludesFollowUpChoices() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -871,6 +896,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(response.followUpChoices.map(\.label).contains { $0.contains("Budget") })
     }
 
+    @MainActor
     func testFarSavedNearbyRecommendationStillIncludesFollowUpChoices() throws {
         let service = SaveLocationIntentRecommendationService()
         let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
@@ -896,6 +922,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(response.followUpChoices.count, 4)
     }
 
+    @MainActor
     func testDeterministicParserRecognizesNearbyCafeIntent() throws {
         let parser = SaveSearchIntentParser()
         let intent = try XCTUnwrap(parser.parse("附近咖啡廳"))
@@ -916,6 +943,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(restaurantRecommendation.locationMode, .currentLocation(radiusMeters: 2_000))
     }
 
+    @MainActor
     func testDeterministicParserHandlesMilkTeaWithoutLocationAndNamedArea() throws {
         let parser = SaveSearchIntentParser()
         let milkTea = try XCTUnwrap(parser.parse("我今天想喝奶茶"))
@@ -928,6 +956,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertEqual(laCoffee.locationMode, .namedArea("Los Angeles"))
     }
 
+    @MainActor
     func testIntentJSONValidatorRejectsUnsafeModelOutput() throws {
         let validator = SaveSearchIntentJSONValidator()
         let valid = """
@@ -962,6 +991,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertThrowsError(try validator.parseIntentJSON(invalidSourceScope, rawText: "附近咖啡廳"))
     }
 
+    @MainActor
     func testAskSaveRecommendationQualityRegressionFixtures() throws {
         struct Fixture {
             let name: String
@@ -1139,6 +1169,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func place(
         name: String,
         category: PlaceCategory,
@@ -1175,6 +1206,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func reviewCandidate(name: String, categoryEvidence: String) -> PlaceReviewCandidate {
         PlaceReviewCandidate(
             id: UUID(),
@@ -1192,6 +1224,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func mapCandidate(name: String, category: PlaceCategory) -> SaveMapCandidate {
         SaveMapCandidate(
             title: name,
@@ -1206,6 +1239,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func searchResult(id: String, objectType: SaveSearchObjectType) -> SaveSearchResult {
         SaveSearchResult(
             id: id,

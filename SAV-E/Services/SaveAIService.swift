@@ -6,6 +6,7 @@ struct ConversationTurn: Equatable {
     let assistantResponse: String
 }
 
+@MainActor
 final class SaveAIService {
     static let shared = SaveAIService()
 

@@ -90,7 +90,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.businessPhotoUrls = businessPhotoUrls
     }
 
-    var displayTitle: String {
+    nonisolated var displayTitle: String {
         if let placeName, !placeName.isEmpty { return placeName }
         if !title.isEmpty { return title }
         return sourceURL ?? "Untitled source"

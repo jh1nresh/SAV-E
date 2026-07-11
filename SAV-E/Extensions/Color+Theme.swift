@@ -160,15 +160,20 @@ extension Color {
     }
 
     init(light lightHex: String, dark darkHex: String) {
-        self.init(UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(hex: darkHex)
-                : UIColor(hex: lightHex)
-        })
+        self.init(UIColor.adaptive(lightHex: lightHex, darkHex: darkHex))
     }
 }
 
 private extension UIColor {
+    nonisolated static func adaptive(lightHex: String, darkHex: String) -> UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(hex: darkHex)
+                : UIColor(hex: lightHex)
+        }
+    }
+
+    nonisolated
     convenience init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0

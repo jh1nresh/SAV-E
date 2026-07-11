@@ -1,6 +1,7 @@
 import XCTest
 
 final class SAVEOnboardingCarouselTests: XCTestCase {
+    @MainActor
     func testProofFirstFlowReachesOpenAppCTA() {
         let app = launchOnboardingApp()
         let primary = app.buttons["onboarding.primary"]
@@ -30,6 +31,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         waitForDisappearance(of: primary)
     }
 
+    @MainActor
     func testNonLanguageStepsSkipOneAtATime() {
         let app = launchOnboardingApp()
         let primary = app.buttons["onboarding.primary"]
@@ -53,6 +55,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         waitForDisappearance(of: primary)
     }
 
+    @MainActor
     private func launchOnboardingApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -63,6 +66,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         return app
     }
 
+    @MainActor
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 6) {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
         wait(for: [gone], timeout: timeout)

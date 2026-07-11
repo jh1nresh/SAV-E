@@ -18,6 +18,7 @@ final class SaveSearchIntentEvalTests: XCTestCase {
         let expected: Expected
     }
 
+    @MainActor
     func testDeterministicParserPassesCoreIntentFixtures() throws {
         let parser = SaveSearchIntentParser()
 
@@ -50,6 +51,7 @@ final class SaveSearchIntentEvalTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testGeminiModelOrderPrimary35FlashWith25FlashFallback() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, SAVEProductionConfig.defaultGeminiModelFallbacks)
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
@@ -65,6 +67,7 @@ final class SaveSearchIntentEvalTests: XCTestCase {
         return try JSONDecoder().decode([Fixture].self, from: data)
     }
 
+    @MainActor
     private func locationModeLabel(_ mode: SaveSearchIntent.LocationMode) -> String {
         switch mode {
         case .currentLocation:

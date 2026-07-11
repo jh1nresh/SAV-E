@@ -1569,7 +1569,7 @@ final class SocialLinkReviewCandidateService {
         }
     }
 
-    private func isSafePublicHTTPURL(_ url: URL) -> Bool {
+    private nonisolated func isSafePublicHTTPURL(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
             return false
         }
@@ -1588,7 +1588,9 @@ final class SocialLinkReviewCandidateService {
         }
     }
 
-    private final class SafeThumbnailDataFetcher: NSObject, URLSessionDataDelegate {
+    // SAFETY: every mutable delegate field is accessed while holding `lock`;
+    // `session` is initialized before its task starts and URLSession is thread-safe.
+    private final class SafeThumbnailDataFetcher: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         private enum FetchError: Error {
             case invalidResponse
             case unsafeRedirect
@@ -1596,7 +1598,7 @@ final class SocialLinkReviewCandidateService {
         }
 
         private let maxBytes: Int
-        private let isSafeURL: (URL) -> Bool
+        private let isSafeURL: @Sendable (URL) -> Bool
         private let lock = NSLock()
         private var data = Data()
         private var response: HTTPURLResponse?
@@ -1604,7 +1606,7 @@ final class SocialLinkReviewCandidateService {
         private var didFinish = false
         private lazy var session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
 
-        init(maxBytes: Int, isSafeURL: @escaping (URL) -> Bool) {
+        init(maxBytes: Int, isSafeURL: @escaping @Sendable (URL) -> Bool) {
             self.maxBytes = maxBytes
             self.isSafeURL = isSafeURL
         }

@@ -24,11 +24,11 @@ final class MessagesViewController: MSMessagesAppViewController {
     private func presentPicker() {
         // Read/decode the vault off the main thread so a growing JSON file never
         // stalls the Messages extension UI; render back on main.
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let places = MessagesVaultReader.confirmedPlaces()
-            await MainActor.run {
-                self?.renderPicker(with: places)
-            }
+        Task { [weak self] in
+            let places = await Task.detached(priority: .userInitiated) {
+                MessagesVaultReader.confirmedPlaces()
+            }.value
+            self?.renderPicker(with: places)
         }
     }
 
@@ -72,17 +72,17 @@ final class MessagesViewController: MSMessagesAppViewController {
         layout.subcaption = subcaption(for: place)
 
         let message = MSMessage()
-        message.layout = layout
         message.url = deepLinkURL(for: place)
 
-        // Render a MapKit snapshot for the card image, then insert. Falls back to
-        // a branded placeholder if the snapshot fails.
-        renderSnapshot(for: place) { [weak self] image in
-            layout.image = image
-            conversation.insert(message) { error in
-                if let error {
-                    NSLog("[SAVEiMessage] insert failed: \(error.localizedDescription)")
-                }
+        // Render a MapKit snapshot off the main actor, then insert the card.
+        Task { [weak self] in
+            let imageData = await Self.snapshotImageData(for: place)
+            layout.image = imageData.flatMap(UIImage.init(data:)) ?? Self.placeholderImage(for: place)
+            message.layout = layout
+            do {
+                try await conversation.insert(message)
+            } catch {
+                NSLog("[SAVEiMessage] insert failed: \(error.localizedDescription)")
             }
             self?.requestPresentationStyle(.compact)
         }
@@ -114,7 +114,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         return components.url
     }
 
-    private func renderSnapshot(for place: MessagesPlace, completion: @escaping (UIImage?) -> Void) {
+    private nonisolated static func snapshotImageData(for place: MessagesPlace) async -> Data? {
         let options = MKMapSnapshotter.Options()
         options.region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude),
@@ -123,29 +123,32 @@ final class MessagesViewController: MSMessagesAppViewController {
         )
         options.size = CGSize(width: 600, height: 360)
         options.showsBuildings = true
+        let snapshotSize = options.size
 
         let snapshotter = MKMapSnapshotter(options: options)
-        snapshotter.start(with: .main) { snapshot, _ in
-            guard let snapshot else {
-                completion(Self.placeholderImage(for: place))
-                return
-            }
+        return await withCheckedContinuation { continuation in
+            snapshotter.start(with: .global(qos: .userInitiated)) { snapshot, _ in
+                guard let snapshot else {
+                    continuation.resume(returning: nil)
+                    return
+                }
 
-            let renderer = UIGraphicsImageRenderer(size: options.size)
-            let image = renderer.image { _ in
-                snapshot.image.draw(at: .zero)
+                let renderer = UIGraphicsImageRenderer(size: snapshotSize)
+                let image = renderer.image { _ in
+                    snapshot.image.draw(at: .zero)
 
-                // Draw a pin at the place coordinate.
-                let pin = "📍" as NSString
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: UIFont.systemFont(ofSize: 36)
-                ]
-                let point = snapshot.point(for: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude))
-                let textSize = pin.size(withAttributes: attributes)
-                pin.draw(at: CGPoint(x: point.x - textSize.width / 2, y: point.y - textSize.height),
-                         withAttributes: attributes)
+                    // Draw a pin at the place coordinate.
+                    let pin = "📍" as NSString
+                    let attributes: [NSAttributedString.Key: Any] = [
+                        .font: UIFont.systemFont(ofSize: 36)
+                    ]
+                    let point = snapshot.point(for: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude))
+                    let textSize = pin.size(withAttributes: attributes)
+                    pin.draw(at: CGPoint(x: point.x - textSize.width / 2, y: point.y - textSize.height),
+                             withAttributes: attributes)
+                }
+                continuation.resume(returning: image.jpegData(compressionQuality: 0.9))
             }
-            completion(image)
         }
     }
 

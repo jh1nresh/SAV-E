@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class SaveLocalVaultServiceTests: XCTestCase {
+    @MainActor
     func testConfirmedPlaceSaveUpsertsMatchingVenueInsteadOfAppendingDuplicate() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -29,6 +30,18 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(places.first?.address, resaved.address)
     }
 
+    @MainActor
+    func testMissingVaultReadsAsEmpty() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("save-memory-records.json")
+        )
+
+        XCTAssertTrue(try service.recentRecords().isEmpty)
+    }
+
+    @MainActor
     private func makePlace(
         id: UUID,
         name: String,

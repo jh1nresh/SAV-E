@@ -3,7 +3,7 @@ import Foundation
 enum SAVEProductionConfig {
     // Existing App Store identifiers stay on com.wanderly until a separate app migration is planned.
     static let legacyProductionBundleID = "com.wanderly.app"
-    static let appGroupSuiteName = "group.com.wanderly.app"
+    nonisolated static let appGroupSuiteName = "group.com.wanderly.app"
     static let pendingPlacesFileName = "pending-places.json"
     static let pendingReviewCandidatesFileName = "pending-review-candidates.json"
 

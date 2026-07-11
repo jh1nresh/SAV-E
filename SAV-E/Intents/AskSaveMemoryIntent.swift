@@ -2,13 +2,14 @@ import AppIntents
 import Foundation
 
 struct AskSaveMemoryIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask SAV-E Memory"
-    static var description = IntentDescription("Ask SAV-E for a short summary of recent Map Stamps and source clues.")
-    static var openAppWhenRun = false
+    static let title: LocalizedStringResource = "Ask SAV-E Memory"
+    static let description = IntentDescription("Ask SAV-E for a short summary of recent Map Stamps and source clues.")
+    static let openAppWhenRun = false
 
     @Parameter(title: "Question", default: "What did I save recently?")
     var question: String
 
+    @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let records = try SaveLocalVaultService.shared.recentRecords(limit: 5)
         guard !records.isEmpty else {

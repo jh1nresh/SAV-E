@@ -3,6 +3,7 @@ import XCTest
 @testable import SAVE
 
 final class AppLanguageSettingsTests: XCTestCase {
+    @MainActor
     func testTraditionalChineseSharedLabelsDoNotFallBackToEnglish() {
         XCTAssertEqual(PlaceCategory.cafe.displayName(language: .traditionalChinese), "咖啡")
         XCTAssertEqual(PlaceStatus.wantToGo.memoryCardLabel(language: .traditionalChinese), "地圖章")
@@ -13,6 +14,7 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertTrue(AppLanguage.traditionalChinese.serviceOutputInstruction.contains("Map Stamp into natural Traditional Chinese"))
     }
 
+    @MainActor
     func testEnglishSharedLabelsStayStable() {
         XCTAssertEqual(PlaceCategory.cafe.displayName(language: .english), "Cafe")
         XCTAssertEqual(PlaceStatus.wantToGo.memoryCardLabel(language: .english), "Map Stamp")
@@ -22,6 +24,7 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertEqual(SaveSearchUserState.sourceOnly.displayName(language: .english), "Needs one more clue")
     }
 
+    @MainActor
     func testMVPDrawerEntryCopyDoesNotPromoteTripPlanning() {
         XCTAssertEqual(
             SaveText.text(.askPlaceholder, language: .english),
@@ -61,6 +64,7 @@ final class AppLanguageSettingsTests: XCTestCase {
         XCTAssertTrue(SaveMVPDrawerEntryCopy.focusNote(language: .traditionalChinese).contains("地點記憶流程"))
     }
 
+    @MainActor
     func testLanguageSettingsTracksObservationForEnvironmentConsumers() {
         let suiteName = "AppLanguageSettingsTests.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: suiteName)!

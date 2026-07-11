@@ -13,6 +13,7 @@ final class PlaceDeduplicationTests: XCTestCase {
 
     // Same venue: saved once from Instagram (sourceUrl, no place id), then found
     // again via Google map search (place id, no sourceUrl). Must be one place.
+    @MainActor
     func testSamePlaceFromDifferentSourcesIsDeduplicated() {
         let fromMapSearch = makePlace(
             name: "Hidden Moon Cafe",
@@ -37,6 +38,7 @@ final class PlaceDeduplicationTests: XCTestCase {
 
     // No place id on either side, but the same name at the same coordinate.
     // Address strings differ slightly (abbreviations) — must still dedupe.
+    @MainActor
     func testSameNameAndCoordinateIsDeduplicatedDespiteAddressDrift() {
         let saved = makePlace(
             name: "Onibus Coffee",
@@ -60,6 +62,7 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     // Normalised source URL: a tracking query / trailing slash must not defeat dedup.
+    @MainActor
     func testSameSourceURLWithTrackingParamsIsDeduplicated() {
         let saved = makePlace(
             name: "Blue Bottle",
@@ -79,6 +82,7 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     // Guard against over-matching: genuinely different places stay distinct.
+    @MainActor
     func testDistinctPlacesDoNotMatch() {
         let a = makePlace(
             name: "Hidden Moon Cafe",
@@ -103,6 +107,7 @@ final class PlaceDeduplicationTests: XCTestCase {
 
     // MARK: - Helper
 
+    @MainActor
     private func makePlace(
         name: String,
         address: String,

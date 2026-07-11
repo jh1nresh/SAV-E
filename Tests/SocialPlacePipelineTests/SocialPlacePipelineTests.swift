@@ -249,6 +249,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         var expected: Expected
     }
 
+    @MainActor
     func testGoogleMapsSavedListExtractsEmbeddedPlaceLinks() {
         let html = """
         <a href=\"https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z\">Quarter Sheets Pizza Club</a>
@@ -277,6 +278,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testGoogleMapsSavedListExtractsEscapedQueryPlaceLinks() {
         let html = #"""
         <a aria-label="Gem Dining" href="https:\/\/www.google.com\/maps?cid=123456789\u0026query_place_id=ChIJ123">Open</a>
@@ -295,6 +297,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.name), ["Gem Dining", "Stereoscope Coffee"])
     }
 
+    @MainActor
     func testGoogleMapsSavedListPrivateShellHasNoInventedCandidates() {
         let html = """
         <title>Private list - Google Maps</title>
@@ -318,6 +321,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         ).isEmpty)
     }
 
+    @MainActor
     func testInstagramTaiwanCaptionUsesAngleBracketVenueBeforeHoursLine() {
         let metadata = """
         煦那皮、台北美食、台中美食、國外旅遊 on Instagram: "<Standard Bread>  #新開幕
@@ -351,6 +355,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(analysis.placesFound.first?.locationClues.first, "臺北市信義區松壽路11號B2F")
     }
 
+    @MainActor
     func testInstagramTaiwanCaptionExtractsChineseAngleBracketVenueAndAddress() {
         let metadata = """
         <阿夢> 📍中正紀念堂
@@ -397,6 +402,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidate?.sourceHandle, "among_nimbo")
     }
 
+    @MainActor
     func testGoogleTakeoutImportParsesBulkFileFormatsSeparatelyFromSavedListLinks() async throws {
         let json = """
         [
@@ -459,6 +465,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         ))
     }
 
+    @MainActor
     private func parseTakeoutFixture(_ contents: String, fileExtension: String) async throws -> GoogleTakeoutImportResult {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -469,6 +476,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         return try await GoogleTakeoutImportService().parse(fileAt: url)
     }
 
+    @MainActor
     private func parseTakeoutZipFixture(entryName: String, contents: String) async throws -> GoogleTakeoutImportResult {
         let data = try XCTUnwrap(contents.data(using: .utf8))
         let url = FileManager.default.temporaryDirectory
@@ -488,6 +496,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         return try await GoogleTakeoutImportService().parse(fileAt: url)
     }
 
+    @MainActor
     private func loadTikTokSourceFixture(_ name: String) throws -> TikTokSourceFixture {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -515,6 +524,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         """
     }
 
+    @MainActor
     func testPlaceBearingSourceRunsPublicSearchAndPlacesMatchWithEvidenceReceipt() async throws {
         let places = StubGooglePlacesService()
         let search = StubPublicSourceSearchService()
@@ -545,6 +555,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains { $0.contains("Recovered venue candidate: Quarter Sheets Pizza Club") } == true)
     }
 
+    @MainActor
     func testSocialPlaceEvidenceResolverReturnsMapStampReadyEvidenceBackedCandidate() async throws {
         let places = StubGooglePlacesService()
         let search = StubPublicSourceSearchService()
@@ -579,6 +590,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result.evidence.contains { $0.contains("Confidence reason: Places resolver verified") })
     }
 
+    @MainActor
     func testSocialPlaceEvidenceResolverKeepsHandleOnlyInstagramAsReviewCandidateWithoutCoordinates() async throws {
         let places = EmptyGooglePlacesService()
         let service = SocialLinkReviewCandidateService(
@@ -606,6 +618,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result.confidenceReason.contains("Review Candidate"))
     }
 
+    @MainActor
     func testSocialPlaceEvidenceResolverKeepsBareInstagramURLSourceOnlyWithoutHallucinatingPlace() async throws {
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: EmptyGooglePlacesService(),
@@ -627,6 +640,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result.confidenceReason.contains("no verified place identity"))
     }
 
+    @MainActor
     func testInstagramReelThumbnailOCRFeedsPublicRecoveryAndPlacesResolver() async throws {
         let places = StubGooglePlacesService()
         let search = StubPublicSourceSearchService()
@@ -660,6 +674,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result.candidate.evidenceDiagnostic?.attempts.contains { $0.contains("public metadata/caption/OCR") } == true)
     }
 
+    @MainActor
     func testInstagramShilinSukiyakiCaptionStaysRecoveryScopedInsteadOfCreatorOnly() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -685,6 +700,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(analysis.resolverDecision.kind, .pendingCandidate)
     }
 
+    @MainActor
     func testInstagramShilinSukiyakiCaptionRunsPublicRecoveryAndPlacesMatch() async throws {
         let places = StubGooglePlacesService()
         let search = StubPublicSourceSearchService()
@@ -713,6 +729,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains { $0.contains("Recovered venue candidate: 牛喜壽喜燒") } == true)
     }
 
+    @MainActor
     func testInstagramCityNameHandleCaptionRecoversOfficialAddressAsReviewCandidate() async throws {
         let search = StubPublicSourceSearchService()
         let service = SocialLinkReviewCandidateService(
@@ -750,6 +767,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.missingFields.contains("Verified coordinates") == true)
     }
 
+    @MainActor
     func testInstagramCityGenericPhraseCreatorHandleWithoutSearchConfirmationStaysSourceOnly() async throws {
         let search = StubPublicSourceSearchService()
         let service = SocialLinkReviewCandidateService(
@@ -789,6 +807,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         var publicSearchResults: [Result]
     }
 
+    @MainActor
     private func loadLSHotelFixture() throws -> LSHotelFixture {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -831,6 +850,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// off the shortcode + creator handle and recover the venue as a Review
     /// Candidate — never an auto Map Stamp (no provider place id / coordinate
     /// provenance yet).
+    @MainActor
     func testAgeRestrictedInstagramReelRecoversHotelAsReviewCandidateFromShortcodeAndHandle() async throws {
         let fixture = try loadLSHotelFixture()
         let search = LSHotelSearchFake(
@@ -905,6 +925,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         var publicSearchResults: [Result]
     }
 
+    @MainActor
     private func loadUlamanFixture() throws -> UlamanFixture {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -949,6 +970,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// generic labels (Bali / Avatar / Pandora / beautiful destinations), and
     /// (3) produce a Review Candidate — never an auto Map Stamp (no provider place
     /// id / coordinate provenance yet).
+    @MainActor
     func testInstagramUlamanBaliReelRecoversResortAsReviewCandidateRankedOverGenericLabels() async throws {
         let fixture = try loadUlamanFixture()
         let search = UlamanSearchFake(
@@ -1014,6 +1036,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// fabricate a resort. The 📍 marker keeps it place-bearing (so recovery runs),
     /// but with no usable search hit the candidate must NOT invent coordinates and
     /// must NOT promote a generic hashtag (avatar/pandora/bali) into a venue name.
+    @MainActor
     func testInstagramUlamanBaliReelWithoutSearchConfirmationDoesNotFabricateResort() async throws {
         let fixture = try loadUlamanFixture()
         let emptySearch = StubPublicSourceSearchService() // returns [] for Ulaman queries
@@ -1040,6 +1063,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testAmapRefinementPromotesChinaRestaurantCandidateToMapReady() async {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
@@ -1073,6 +1097,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(refined.evidenceDiagnostic?.nextBestClue, "Confirm this Amap match before saving it as a Map Stamp.")
     }
 
+    @MainActor
     func testBaiduMapDeepLinkPreservesBD09CoordinateProvenance() throws {
         let match = try XCTUnwrap(ChinaMapDeepLinkParser.match(
             from: "https://api.map.baidu.com/marker?location=31.2391,121.4964&title=%E8%9F%B9%E5%B0%8A%E8%8B%91&content=%E4%B8%8A%E6%B5%B7%E5%B8%82%E9%BB%84%E6%B5%A6%E5%8C%BA%E5%B9%BF%E4%B8%9C%E8%B7%AF59%E5%8F%B7&output=html"
@@ -1087,6 +1112,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(match.coordinateEvidenceLabel, "Baidu Maps coordinates (BD-09)")
     }
 
+    @MainActor
     func testAmapMapDeepLinkBecomesMapReadyReviewCandidate() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -1103,6 +1129,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidate.evidenceDiagnostic?.nextBestClue, "Confirm this Amap deep-link match before saving it as a Map Stamp.")
     }
 
+    @MainActor
     func testChinaResolverKeepsBaiduFallbackAfterAmapAndProxyMiss() async throws {
         final class EmptyBackend: BackendPlaceResolverServiceProtocol {
             func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] { [] }
@@ -1147,6 +1174,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(matches.first?.coordinateEvidenceLabel, "Baidu Maps coordinates (BD-09)")
     }
 
+    @MainActor
     func testXiaohongshuAndDouyinLinksPreparePlatformSpecificRecoveryQueries() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1165,6 +1193,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(douyin?.evidenceDiagnostic?.suggestedSearchQueries?.contains("douyin buUywZoMiLw place") == true)
     }
 
+    @MainActor
     func testXiaohongshuURLOnlyUsesHermesStyleBlockedLinkAnalysis() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1189,6 +1218,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"https://www.xiaohongshu.com/explore/65abc123\"") == true)
     }
 
+    @MainActor
     func testXiaohongshuShortLinkDoesNotPretendSlugIsNoteID() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1210,6 +1240,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"http://xhslink.com/o/3zvbJIowbqS\"") == true)
     }
 
+    @MainActor
     func testXiaohongshuBlocked404OriginalURLRecoversCanonicalNoteID() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1228,6 +1259,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"http://www.xiaohongshu.com/discovery/item/69c3ed88000000001d01c4c3\"") == true)
     }
 
+    @MainActor
     func testXiaohongshuCaptionMetadataCanBecomeReviewCandidate() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1248,6 +1280,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.missingInfo.contains("Confirm coordinates"))
     }
 
+    @MainActor
     func testDianpingKeywordsCreateReviewCandidateWithoutFakeCoordinates() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
 
@@ -1272,6 +1305,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.attempts.contains("Preferred Dianping keywords/business field over generic feed title"))
     }
 
+    @MainActor
     func testDianpingKeywordOutranksGenericTitleAndRefinementKeepsAmapProvenance() async throws {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
@@ -1300,6 +1334,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Dianping feed id: 466776750") == true)
     }
 
+    @MainActor
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1315,6 +1350,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.first?.missingInfo.contains("Instagram metadata title; verify exact venue and address") == true)
     }
 
+    @MainActor
     func testInstagramRestaurantCaptionUsesNamedVenueBeforeAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1333,6 +1369,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "台中·餐廳" })
     }
 
+    @MainActor
     func testInstagramTraditionalChineseBookTitleVenueBeforePinAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1355,6 +1392,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("SaSa") })
     }
 
+    @MainActor
     func testInstagramFoodEmojiVenueMarkerBeforePinAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1378,6 +1416,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北最強的便當店") })
     }
 
+    @MainActor
     func testInstagramGenericEmojiVenueMarkerBeforePinAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1397,6 +1436,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("台北新店分享") })
     }
 
+    @MainActor
     func testInstagramGenericEmojiMarkerRejectsMarketingHeadlineBeforeAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1417,6 +1457,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("滷肉飯免費吃到飽") })
     }
 
+    @MainActor
     func testInstagramStandaloneChineseVenueLineBeforePinAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -1450,6 +1491,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: falls back to source-only when readable metadata is missing/blocked, only a creator handle exists, only OCR/headline text exists, only menu/items exist, multiple list places need selection, or no address/map-provider match is available"))
     }
 
+    @MainActor
     func testInstagramStandaloneLowercaseLatinVenueLineBeforePinAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -1467,6 +1509,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.first?.isSourceOnly == true)
     }
 
+    @MainActor
     func testInstagramTraditionalChineseBookTitleDiagnosticExplainsAnalysisMethod() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
@@ -1492,6 +1535,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records unresolved details internally so SAV-E can keep trying instead of guessing"))
     }
 
+    @MainActor
     func testInstagramPinVenueLineUsesNextLineHighwayAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1512,6 +1556,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "OC Insider" })
     }
 
+    @MainActor
     func testInstagramPinnedVenueLineWithZipAddressBeatsOCRText() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1534,6 +1579,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "MEDITERRANEAN" })
     }
 
+    @MainActor
     func testInstagramMenuItemPinLineDoesNotOutrankVenueNamedBeforeAddress() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -1563,6 +1609,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "炙烤牛舌｜甜玉米" })
     }
 
+    @MainActor
     func testInstagramLocatedHandleBeatsGenericOCRTitle() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -1589,6 +1636,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.placesFound.first?.evidenceChips.contains { $0.contains("@https://") } == true)
     }
 
+    @MainActor
     func testInstagramWildWondersVenueHandleBeatsGenericOCRHeading() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -1614,6 +1662,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName.localizedCaseInsensitiveContains("Things to know") })
     }
 
+    @MainActor
     func testAddressOnlyHighConfidencePlacesMatchOverridesGenericOCRHeading() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = try await service.recoverReviewCandidates(
@@ -1635,6 +1684,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidence.contains("Google Places refined match: Wild Wonders"))
     }
 
+    @MainActor
     func testTransitExitClueDoesNotBecomeAddressOnlyPlaceCandidate() {
         let evidence = """
         蘆洲美食 on Instagram: "下班後想吃點甜的
@@ -1664,6 +1714,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.address.contains("捷運蘆洲站") })
     }
 
+    @MainActor
     func testAgentParserMergesNumberedPlaceEvidence() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -1696,6 +1747,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName.contains("@") })
     }
 
+    @MainActor
     func testAgentParserRejectsCreatorHandleForJWMarriottStay() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -1722,6 +1774,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.placesFound.first?.missingInfo.contains("Confirm coordinates") == true)
     }
 
+    @MainActor
     func testCreatorOnlySocialLinkDoesNotBecomePlace() {
         let candidates = SocialPlaceParser().parse(
             evidence: SocialPlaceSourceEvidence(
@@ -1741,6 +1794,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty)
     }
 
+    @MainActor
     func testInstagramReelCaptionVenueMarkerBeatsSourceAccountProfile() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -1766,6 +1820,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.evidence.joined(separator: " ").contains("Venue handle: @citiesmemory") })
     }
 
+    @MainActor
     func testInstagramReelCaptionWithKoreanAddressCreatesReviewCandidate() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -1799,6 +1854,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// inline 👉🏻/📍 markers were not split into lines and the Thai-script
     /// address was not recognized. Stored as a fixture so the exact bytes are
     /// inspectable. See fixtures/social-osint/DZXG6QJTifN_citiesmemory_bangkok.txt
+    @MainActor
     private func loadOSINTCaptionFixture(_ name: String) throws -> String {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1811,6 +1867,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    @MainActor
     func testInstagramReelThaiVenueCaptionExtractsVenueNotSourceOnly() throws {
         let caption = try loadOSINTCaptionFixture("DZXG6QJTifN_citiesmemory_bangkok.txt")
         let service = SocialLinkReviewCandidateService()
@@ -1833,6 +1890,7 @@ final class SocialPlacePipelineTests: XCTestCase {
                        "Address must not keep the trailing caption separator artifact, got: \(candidate.address)")
     }
 
+    @MainActor
     func testVenueMarkerStripsStoreNamePrefixBeforeScoring() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -1847,6 +1905,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.first?.candidateName.contains("店名") == true)
     }
 
+    @MainActor
     func testSourceAccountCandidateRejectsInstagramSuffixLookalikeHost() {
         let candidates = SocialPlaceParser().parse(
             evidence: SocialPlaceSourceEvidence(
@@ -1867,6 +1926,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty)
     }
 
+    @MainActor
     func testProfileResolverUsesMetadataDisplayNameBeforeRawHandle() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -1882,6 +1942,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.first?.evidence.joined(separator: " ").contains("Resolved public profile metadata") == true)
     }
 
+    @MainActor
     func testHandleOnlySocialCandidateStaysReviewOnlyWithoutFakeCoordinates() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidates(
@@ -1901,6 +1962,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate?.evidence.joined(separator: " ").contains("Evidence tier: weakCandidate") == true)
     }
 
+    @MainActor
     func testInstagramCoffeeShopListTreatsHandlesAsPlaceCluesNotCaptionLabels() {
         let service = SocialLinkReviewCandidateService()
         let evidenceText = """
@@ -1944,6 +2006,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.first { $0.candidateName == "Fasttimescoffee" }?.evidence.joined(separator: " ").contains("Venue handle: @fasttimescoffee") == true)
     }
 
+    @MainActor
     func testInstagramCoffeeShopListProducesSourceLevelUnderstanding() {
         let evidenceText = """
         Teresa | LA & OC Lifestyle • Travel Creator on Instagram: "The coffee shops in Los Angeles County I always end up returning to ☕️
@@ -2002,6 +2065,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.nextBestAction.contains("enrich selected venue clues"))
     }
 
+    @MainActor
     func testTikTokSourceAdapterTreatsListOcrAsBoundedRecoveryContract() throws {
         let fixture = try loadTikTokSourceFixture("tiktok-tainan-ice-list.json")
         let result = TikTokSourceAdapter().analyze(fixture.input)
@@ -2017,6 +2081,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
+    @MainActor
     func testDouyinFoodListProducesMultiPlaceSourceUnderstanding() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2046,6 +2111,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.regionClues.contains { $0.localizedCaseInsensitiveContains("Thai Town") })
     }
 
+    @MainActor
     func testDouyinFoodListCreatesReviewCandidatesWithoutFakeCoordinates() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -2071,6 +2137,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(names.contains("已经开到上海咯"))
     }
 
+    @MainActor
     func testDouyinNoisyAggregateShareStaysMultiPlaceSourceOnly() {
         let noisyShareText = """
         9.41 复制打开抖音，看看【金贵七七（环游中国版）的作品】五一大家不要放过武汉！三刷武汉后从20+家美食里筛...
@@ -2098,6 +2165,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.regionClues.contains("武汉") || analysis.regionClues.contains("武漢"))
     }
 
+    @MainActor
     func testDouyinNoisyAggregateShareDoesNotInventRestaurantCoordinates() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -2121,6 +2189,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.recoveryPlan?.requiredEvidence.contains("Map/place match") == true)
     }
 
+    @MainActor
     func testInstagramCarouselWithPMarkersDoesNotTriggerDouyinListParser() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2146,6 +2215,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(names.contains("MY FAVORITE LA food carousel"))
     }
 
+    @MainActor
     func testDouyinCuisinePrefixKeepsFollowingVenueName() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2169,6 +2239,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(names.contains("可颂很好吃"))
     }
 
+    @MainActor
     func testRestaurantRecommendationWithoutVenueBecomesPlaceBearingIntent() {
         let evidenceText = """
         Talia on Instagram: "This is one of my absolutely favorite restaurants in LA.
@@ -2203,6 +2274,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.nextBestAction.contains("source recovery search"))
     }
 
+    @MainActor
     func testMultiHandleListUnderstandingUsesListModeAndHandleResolver() {
         let evidenceText = """
         @theboyandthebearco @stereoscopecoffee @musocoffeela
@@ -2235,6 +2307,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.placesFound.contains { $0.displayName == "unique coffee experiences" })
     }
 
+    @MainActor
     func testVagueLifestyleCaptionAsksForEvidenceAndSourceReceipt() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2256,6 +2329,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.placesFound.isEmpty)
     }
 
+    @MainActor
     func testMapShareUnderstandingRoutesToMapResolution() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2277,6 +2351,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
+    @MainActor
     func testBookingLinkUnderstandingRoutesToBookingResolution() {
         let analysis = SocialPlaceParser().analyze(
             evidence: SocialPlaceSourceEvidence(
@@ -2297,6 +2372,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.recoveryStrategies.contains(.publicSearchRecovery))
     }
 
+    @MainActor
     func testCreatorOnlyHandleDoesNotBecomePlaceBearingSource() {
         let evidenceText = "Please follow @travelcreator for daily hidden gems."
 
@@ -2322,6 +2398,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(analysis.placesFound.isEmpty)
     }
 
+    @MainActor
     func testOCRRejectsGenericCoffeeListLabelsAndFavoriteHeader() {
         let candidates = SocialPlaceParser().parse(
             evidence: SocialPlaceSourceEvidence(
@@ -2338,6 +2415,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.isEmpty)
     }
 
+    @MainActor
     func testInstagramActivityVenueMarkerWithNextLineAddressCreatesReviewCandidate() {
         let service = SocialLinkReviewCandidateService()
         let candidates = service.reviewCandidatesOrSourceOnly(
@@ -2361,6 +2439,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "Bitter Root Pottery" })
     }
 
+    @MainActor
     func testInstagramShopAndLocationMarkersCreateReviewCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYMZ575zYYQ/"
@@ -2387,6 +2466,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertNil(candidate.longitude)
     }
 
+    @MainActor
     func testURLOnlyInstagramReelProducesSourceOnlyEvidenceDebugCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYsourceOnly/"
@@ -2416,6 +2496,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.rejectedEvidence?.contains { $0.reason.contains("not promoted to venue") } == true)
     }
 
+    @MainActor
     func testPlausiblePlaceNameInSearchQueryBecomesUnresolvedCandidate() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DYtokyoPasta/"
@@ -2440,6 +2521,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidate.evidenceDiagnostic?.statusLabel, "Review candidate")
     }
 
+    @MainActor
     func testPlaceBearingInstagramMetadataCreatesWeakReviewCandidateInsteadOfSourceOnly() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DW2ZpyADbZ6/?igsh=tracking"
@@ -2478,6 +2560,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidenceDiagnostic?.rejectedEvidence?.contains { $0.value.contains("tracking") } == true)
     }
 
+    @MainActor
     func testURLOnlyInstagramReelSearchPlanRemovesTrackingQuery() {
         let service = SocialLinkReviewCandidateService()
         let sourceURL = "https://www.instagram.com/reel/DWmzyodgbuv/?igsh=tracking"
@@ -2491,6 +2574,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testURLOnlyInstagramPostRunsPublicRecoveryLikeShareExtension() async throws {
         let search = StubPublicSourceSearchService()
         let service = SocialLinkReviewCandidateService(
@@ -2517,6 +2601,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.missingInfo.contains("Verified coordinates"))
     }
 
+    @MainActor
     func testCaptionVenueWithoutVerifiedAddressStaysReviewCandidateWithoutCoordinates() {
         let service = SocialLinkReviewCandidateService()
 
@@ -2540,6 +2625,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate?.evidenceDiagnostic?.missingFields.contains("Verified address") == true)
     }
 
+    @MainActor
     func testSaveMemoryRecordPreservesEvidenceDiagnosticForSourceOnlyClues() throws {
         let diagnostic = SocialPlaceEvidenceDiagnostic(
             found: ["Source URL: https://www.instagram.com/reel/DYsourceOnly/"],
@@ -2564,6 +2650,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(decoded.evidenceDiagnostic?.nextBestClue, diagnostic.nextBestClue)
     }
 
+    @MainActor
     func testSaveCardPlaceDecodesOldRecordsWithoutStructuredHighlights() throws {
         let json = """
         {
@@ -2587,6 +2674,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertNil(place.sourceHandle)
     }
 
+    @MainActor
     func testEvidenceDiagnosticDecodesOldRecordsWithoutSearchQueries() throws {
         let json = """
         {
@@ -2605,6 +2693,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(diagnostic.found.first, "Source URL: https://www.instagram.com/reel/old/")
     }
 
+    @MainActor
     func testSaveSourceOnlyCreatesEvidenceDiagnosticInsteadOfBareBookmark() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -2631,6 +2720,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(record.evidenceDiagnostic?.rejectedEvidence?.contains { $0.value == "source-only link" } == true)
     }
 
+    @MainActor
     func testSaveLocalVaultRestoresConfirmedPlaceWithMapMetadata() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -2670,6 +2760,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(restored.first?.rating, 4.7)
     }
 
+    @MainActor
     func testSaveLocalVaultIgnoresLegacyConfirmedRecordsWithoutCoordinates() throws {
         let vaultDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
@@ -2696,6 +2787,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(try service.confirmedPlaces(), [])
     }
 
+    @MainActor
     func testEvidenceDiagnosticPromotesToMapMatchReadyAfterRefinement() async {
         let google = StubGooglePlacesService()
         let service = SocialLinkReviewCandidateService(googlePlacesService: google)
@@ -2724,6 +2816,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(refined.evidenceDiagnostic?.canSaveAsMapStamp, true)
     }
 
+    @MainActor
     func testPlacesRefineRanksAcceptableMatchInsteadOfFirstResult() async {
         let google = StubGooglePlacesService()
         let service = SocialLinkReviewCandidateService(googlePlacesService: google)
@@ -2759,6 +2852,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(refined.evidenceDiagnostic?.nextBestClue, "Confirm this Google Places match before saving it as a Map Stamp.")
     }
 
+    @MainActor
     func testPlacesRefinementQueriesSkipCreatorHandles() async {
         let google = StubGooglePlacesService()
         let service = SocialLinkReviewCandidateService(googlePlacesService: google)
@@ -2787,6 +2881,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(google.queries.contains { $0.localizedCaseInsensitiveContains("JW Marriott Desert Springs") })
     }
 
+    @MainActor
     func testExactMapCandidateSearchUsesRecoveredPlaceNameAndAddress() async {
         let google = StubGooglePlacesService()
         let service = MapCandidateSearchService(googlePlacesService: google)
@@ -2808,6 +2903,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result?.evidence.contains("Google Places result") == true)
     }
 
+    @MainActor
     func testOCRFramePairsBrandWithNearbyDescriptor() {
         let result = SocialOCRCandidateHeuristics.candidate(from: [
             "台南爆漿巴斯克",
@@ -2821,6 +2917,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(result?.supportingLines.contains("Tula Basque") == true)
     }
 
+    @MainActor
     func testOCRFrameFindsCJKHotelVenueFromThumbnailText() {
         let fixtures = [
             (
@@ -2862,6 +2959,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testSocialPipelineRegressionCasesStayStable() {
         let service = SocialLinkReviewCandidateService()
 
@@ -2925,6 +3023,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testPhoneContactLinesAreNeverPlaceNames() {
         XCTAssertFalse(SocialPlaceEvidenceScorer.isUsableCandidateName("電話：02-2321-2111"))
         XCTAssertFalse(SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName("電話：02-2321-2111"))
@@ -2937,6 +3036,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertNil(ocrResult)
     }
 
+    @MainActor
     func testInstagramReelCaptionKeepsVenueMarkerBeforeAddress() {
         let caption = """
         真蓁 挖寶美食💅 on Instagram: "這是我此生吃過最扯的吃到飽…….
@@ -2964,6 +3064,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(candidates.contains { $0.candidateName == "Address-only place clue" })
     }
 
+    @MainActor
     func testSavedPlaceMemorySummaryFiltersMapDistanceDebugLines() {
         let place = Place(
             id: UUID(),
@@ -2986,6 +3087,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
     }
 
+    @MainActor
     func testOnboardingFirstClueQueuesReviewCandidateWithoutSyntheticSourceURL() throws {
         let candidates = PendingPlaceImportService.onboardingFirstClueCandidates(
             from: "Hidden Moon Cafe near the station, tiny patio, tagged @hidden.moon.cafe"
@@ -3014,6 +3116,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         var expected: Expected
     }
 
+    @MainActor
     private func loadShareTextFixture(_ name: String) throws -> ShareTextFixture {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -3026,6 +3129,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         return try JSONDecoder().decode(ShareTextFixture.self, from: data)
     }
 
+    @MainActor
     private func assertShareTextFixtureNormalizes(_ name: String) throws {
         let fixture = try loadShareTextFixture(name)
         let bundle = SocialShareTextNormalizer.normalize(fixture.rawShareText)
@@ -3042,14 +3146,17 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testDouyinNoisyShareTextNormalizesToSourceBundle() throws {
         try assertShareTextFixtureNormalizes("douyin-noisy-share-wuhan.json")
     }
 
+    @MainActor
     func testXiaohongshuShareBoilerplateNormalizesToSourceBundle() throws {
         try assertShareTextFixtureNormalizes("xhs-share-boilerplate.json")
     }
 
+    @MainActor
     func testShareTextNormalizerPrefersStructuredMapLinkAcrossMultipleURLs() {
         let bundle = SocialShareTextNormalizer.normalize(
             """
@@ -3064,6 +3171,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(bundle.captionEvidence.contains("看看這個"))
     }
 
+    @MainActor
     func testShareTextNormalizerKeepsBareShortLinkAndURLLessPastes() {
         let bare = SocialShareTextNormalizer.normalize("http://xhslink.com/o/7FgwQfDuTc4")
         XCTAssertEqual(bare.primaryURLString, "http://xhslink.com/o/7FgwQfDuTc4")
@@ -3076,6 +3184,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(urlless.captionEvidence, "今天天氣很好，沒有連結")
     }
 
+    @MainActor
     func testCreatorWorkBracketTitleNeverBecomesVenueCandidate() {
         XCTAssertTrue(SocialPlaceEvidenceScorer.isRejectedTitle("金贵七七（环游中国版）的作品"))
         XCTAssertTrue(SocialPlaceEvidenceScorer.looksLikeShareBoilerplateText("9.41 复制打开抖音，看看"))
@@ -3099,6 +3208,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(analysis.resolverDecision.allowsDirectSave)
     }
 
+    @MainActor
     func testSharedTextEntryWithoutURLNeverHardFails() async throws {
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: EmptyGooglePlacesService(),
@@ -3124,6 +3234,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(vague.evidenceDiagnostic?.nextBestClue.isEmpty ?? true)
     }
 
+    @MainActor
     func testGoogleMapsPlaceLinkBecomesMapMatchReadyCandidateWithURLCoordinates() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
 
@@ -3148,6 +3259,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(apple.first?.reviewState, "map_match_ready")
     }
 
+    @MainActor
     func testGoogleMapsQueryLinkBecomesReviewCandidateWithDecodedNameAndAddress() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
 
@@ -3163,6 +3275,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(shared.first?.missingInfo.contains("Verified coordinates") == true)
     }
 
+    @MainActor
     func testWesternMapLinkRejectsInvalidCoordinatesAndLookalikeHosts() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
 
@@ -3194,6 +3307,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertNil(lookalikeHost.first?.latitude)
     }
 
+    @MainActor
     func testTikTokAndInstagramPostVariantsKeepDescriptorBackedSourceReceipts() {
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService())
 
@@ -3220,6 +3334,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(instagramPost.first?.evidenceDiagnostic?.suggestedSearchQueries?.contains { $0.contains("DW2ZpyADbZ6") } == true)
     }
 
+    @MainActor
     func testGeminiTransportRetriesTransientUpstreamErrorBeforeFailingLinkParse() async throws {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubGeminiURLProtocol.self]
@@ -3244,6 +3359,7 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     // MARK: - LLM caption -> venue extraction fallback (prose-only long tail)
 
+    @MainActor
     func testSharedCaptionVenueExtractionPolicyMatchesSendblueContract() throws {
         let caption = """
         1000CC • 台北探店 on Instagram: "台北中正區最近很紅的希臘左巴-古亭店，記得先訂位。#台北美食"
@@ -3273,6 +3389,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         var expectedConfidence: Double
     }
 
+    @MainActor
     private func loadCaptionVenueFixture(_ fileName: String) throws -> CaptionVenueFixture {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -3308,6 +3425,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// marker. The deterministic marker parser rejects prose, so without the LLM
     /// fallback this stays source-only. With the fake extractor it must produce a
     /// Review Candidate (NOT source-only, NO coordinates, NOT a Map Stamp).
+    @MainActor
     func testLLMCaptionFallbackRecoversAquarelaCoffeeAsReviewCandidate() async throws {
         let fixture = try loadCaptionVenueFixture("DXzN9wsBFRw_aquarela_coffee_la.json")
         let extractor = FakeCaptionVenueExtractor(
@@ -3354,6 +3472,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// FIXTURE 2: Spanish prose caption naming "Tec de Monterrey" (a mirador).
     /// Proves the multilingual path — the deterministic parser finds no marker,
     /// the (fake) LLM reads the Spanish prose natively and returns the venue.
+    @MainActor
     func testLLMCaptionFallbackRecoversSpanishTecMonterreyAsReviewCandidate() async throws {
         let fixture = try loadCaptionVenueFixture("DYaCPkAxxip_tec_monterrey.json")
         let extractor = FakeCaptionVenueExtractor(
@@ -3393,6 +3512,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// HALLUCINATION GUARD: the fake extractor returns a name that is NOT present
     /// in the caption. The anti-hallucination guardrail must discard it and the
     /// pipeline must stay source-only — no fabricated candidate.
+    @MainActor
     func testLLMCaptionFallbackDiscardsHallucinatedNameNotInCaption() async throws {
         // Generic prose with no marker/structured venue the deterministic parser
         // can latch onto. The (fake) LLM "hallucinates" a specific venue name that
@@ -3424,6 +3544,7 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     /// NO-VENUE GUARD: a caption with only generic vibes/hashtags and a fake
     /// extractor that returns nil (the LLM named no venue) must stay source-only.
+    @MainActor
     func testLLMCaptionFallbackStaysSourceOnlyWhenNoVenueNamed() async throws {
         let caption = "Living my best life this weekend ✨ such good vibes #weekendmood #blessed #views"
         let extractor = FakeCaptionVenueExtractor(trigger: "Aquarela", venue: nil) // never triggers -> nil
@@ -3448,6 +3569,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// DETERMINISTIC-FIRST GUARD: when the deterministic parser already extracts a
     /// venue (marker-driven), the LLM extractor must NOT be consulted — no cost on
     /// the easy/structured cases and no regression to the existing IG recovery.
+    @MainActor
     func testLLMCaptionFallbackNotCalledWhenDeterministicParserFindsVenue() async throws {
         let extractor = FakeCaptionVenueExtractor(
             trigger: "anything",
@@ -3478,16 +3600,49 @@ final class SocialPlacePipelineTests: XCTestCase {
 }
 
 private final class StubGeminiURLProtocol: URLProtocol {
-    static var responses: [(statusCode: Int, body: String)] = []
-    static var requestCount = 0
+    private final class State: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedResponses: [(statusCode: Int, body: String)] = []
+        private var storedRequestCount = 0
+
+        var responses: [(statusCode: Int, body: String)] {
+            get { lock.withLock { storedResponses } }
+            set { lock.withLock { storedResponses = newValue } }
+        }
+
+        var requestCount: Int {
+            get { lock.withLock { storedRequestCount } }
+            set { lock.withLock { storedRequestCount = newValue } }
+        }
+
+        func nextResponse() -> (statusCode: Int, body: String) {
+            lock.withLock {
+                let index = min(storedRequestCount, max(storedResponses.count - 1, 0))
+                storedRequestCount += 1
+                return storedResponses.indices.contains(index)
+                    ? storedResponses[index]
+                    : (statusCode: 500, body: "{}")
+            }
+        }
+    }
+
+    private static let state = State()
+
+    static var responses: [(statusCode: Int, body: String)] {
+        get { state.responses }
+        set { state.responses = newValue }
+    }
+
+    static var requestCount: Int {
+        get { state.requestCount }
+        set { state.requestCount = newValue }
+    }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
-        let index = min(Self.requestCount, max(Self.responses.count - 1, 0))
-        Self.requestCount += 1
-        let stub = Self.responses.indices.contains(index) ? Self.responses[index] : (statusCode: 500, body: "{}")
+        let stub = Self.state.nextResponse()
         let url = request.url ?? URL(string: "https://generativelanguage.googleapis.com")!
         guard let response = HTTPURLResponse(url: url, statusCode: stub.statusCode, httpVersion: nil, headerFields: nil) else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))

@@ -185,7 +185,13 @@ private struct EditProfileSheet: View {
     @State private var photoError: String?
 
     var body: some View {
-        NavigationStack {
+        let uploadPhotoTitle = languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片")
+        let inkColor = Color.saveInk
+        let horizontalPadding = SaveTheme.Spacing.md
+        let honeyColor = Color.saveHoney
+        let notebookLineColor = Color.saveNotebookLine
+
+        return NavigationStack {
             VStack(spacing: SaveTheme.Spacing.lg) {
                 HStack(spacing: SaveTheme.Spacing.md) {
                     Button(action: {
@@ -245,15 +251,15 @@ private struct EditProfileSheet: View {
                     )
 
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label(languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片"), systemImage: "camera.fill")
+                        Label(uploadPhotoTitle, systemImage: "camera.fill")
                             .font(.caption.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .padding(.horizontal, SaveTheme.Spacing.md)
+                            .foregroundColor(inkColor)
+                            .padding(.horizontal, horizontalPadding)
                             .frame(height: 36)
-                            .background(Color.saveHoney.opacity(0.42))
+                            .background(honeyColor.opacity(0.42))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                    .stroke(notebookLineColor, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }

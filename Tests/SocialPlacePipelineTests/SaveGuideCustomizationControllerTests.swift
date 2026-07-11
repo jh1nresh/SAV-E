@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class SaveGuideCustomizationControllerTests: XCTestCase {
+    @MainActor
     func testGuideDraftKeepsStopsAndSuggestsSavedSwaps() {
         let controller = SaveGuideCustomizationController()
         let guide = SaveGuide(
@@ -31,6 +32,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertTrue(draft.explanation.contains("saved SAV-E"))
     }
 
+    @MainActor
     func testUncertainGuideStopNeedsRecovery() {
         let controller = SaveGuideCustomizationController()
         let guide = SaveGuide(
@@ -47,6 +49,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertTrue(draft.explanation.contains("1 stops needing recovery"))
     }
 
+    @MainActor
     func testAlreadySavedClassificationPreservesGuideAttribution() {
         let controller = SaveGuideCustomizationController()
         let guide = SaveGuide(
@@ -77,6 +80,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertEqual(draft.originalGuide.sourceURL, "https://example.com/la-food")
     }
 
+    @MainActor
     func testCopyGuideToTripCreatesTripStopsNotSavedMemories() {
         let controller = SaveGuideCustomizationController()
         let guide = SaveGuide(
@@ -101,6 +105,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertTrue(trip.places.last?.note?.contains("State: Needs recovery") == true)
     }
 
+    @MainActor
     func testNearbyMapCandidatesStayUnsavedSuggestions() {
         let controller = SaveGuideCustomizationController()
         let guide = SaveGuide(
@@ -133,6 +138,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertEqual(draft.addNearbySuggestions.first?.sourcePlatform, .googleMaps)
     }
 
+    @MainActor
     private func guideStop(
         title: String,
         address: String?,
@@ -153,6 +159,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func place(
         name: String,
         address: String,

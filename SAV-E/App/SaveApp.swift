@@ -12,6 +12,7 @@ struct SaveApp: App {
     @State private var minimumOpeningAnimationCompleted = false
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
+    @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -105,10 +106,13 @@ struct SaveApp: App {
 
     @ViewBuilder
     private var standardRootContent: some View {
-        if !hasCompletedOnboarding {
+        if shouldShowOnboarding {
             OnboardingView { firstClue in
                 captureOnboardingFirstClue(firstClue)
                 hasCompletedOnboarding = true
+#if DEBUG
+                forceOnboardingForUITests = false
+#endif
                 minimumOpeningAnimationCompleted = false
             }
         } else if shouldShowOpeningAnimation {
@@ -128,6 +132,14 @@ struct SaveApp: App {
                     .environmentObject(authService)
             }
         }
+    }
+
+    private var shouldShowOnboarding: Bool {
+#if DEBUG
+        !hasCompletedOnboarding || forceOnboardingForUITests
+#else
+        !hasCompletedOnboarding
+#endif
     }
 
     private var shouldShowOpeningAnimation: Bool {

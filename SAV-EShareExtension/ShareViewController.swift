@@ -344,8 +344,14 @@ private struct ShareMetadata {
 }
 
 private let shareMetadataHTMLByteLimit = 2_000_000
-private let sharedImageByteLimit = 12_000_000
 private let sharedImageOCRLineLimit = 80
+
+private nonisolated func boundedSharedImageData(_ data: Data) -> Data? {
+    guard !data.isEmpty, data.count <= 12_000_000 else {
+        return nil
+    }
+    return data
+}
 
 private struct SocialPlaceEvidenceDiagnostic: Codable {
     var found: [String]
@@ -1406,13 +1412,6 @@ struct ShareExtensionView: View {
                 continuation.resume(returning: data.flatMap(boundedSharedImageData))
             }
         }
-    }
-
-    private func boundedSharedImageData(_ data: Data) -> Data? {
-        guard !data.isEmpty, data.count <= sharedImageByteLimit else {
-            return nil
-        }
-        return data
     }
 
     private func metadataValue(in html: String, keys: [String]) -> String? {
@@ -3405,7 +3404,6 @@ struct ShareExtensionView: View {
         }
 
         let fileURL = containerURL.appendingPathComponent("save-memory-records.json")
-        var records = loadMemoryRecords(from: fileURL)
         let searchQueries = sourceRecoverySearchQueries(sourceURLString: source, evidenceText: sharedText)
         let diagnostic = SocialPlaceEvidenceDiagnostic(
             found: ["Source URL: \(source)"],
@@ -3426,10 +3424,12 @@ struct ShareExtensionView: View {
             evidenceDiagnostic: diagnostic,
             createdAt: Date()
         )
-        records.insert(record, at: 0)
-
-        guard let data = try? JSONEncoder.shareMemory.encode(records) else { return }
-        _ = write(data, to: fileURL)
+        _ = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in
+            var records = loadMemoryRecords(from: coordinatedURL)
+            records.insert(record, at: 0)
+            guard let data = try? JSONEncoder.shareMemory.encode(records) else { return }
+            _ = write(data, to: coordinatedURL)
+        }
     }
 
     private func loadMemoryRecords(from fileURL: URL) -> [ShareMemoryRecord] {
@@ -3447,11 +3447,11 @@ struct ShareExtensionView: View {
         guard !items.isEmpty else { return true }
 
         var success = false
-        let coordinated = coordinate(fileURL, purpose: "append pending queue") {
+        let coordinated = coordinate(fileURL, purpose: "append pending queue") { coordinatedURL in
             do {
-                let existing = try loadArray([Element].self, from: fileURL)
+                let existing = try loadArray([Element].self, from: coordinatedURL)
                 let data = try JSONEncoder().encode(existing + items)
-                success = write(data, to: fileURL)
+                success = write(data, to: coordinatedURL)
             } catch {
                 parseError = "Couldn't read shared app storage"
                 success = false
@@ -3466,11 +3466,17 @@ struct ShareExtensionView: View {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    private func coordinate(_ fileURL: URL, purpose: String, _ work: () -> Void) -> Bool {
+    private func coordinate(_ fileURL: URL, purpose: String, _ work: (URL) -> Void) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        } catch {
+            parseError = "Couldn't prepare shared app storage"
+            return false
+        }
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
-        coordinator.coordinate(writingItemAt: fileURL, options: [], error: &coordinationError) { _ in
-            work()
+        coordinator.coordinate(writingItemAt: fileURL, options: [], error: &coordinationError) { coordinatedURL in
+            work(coordinatedURL)
         }
         if coordinationError != nil {
             parseError = "Couldn't coordinate shared app storage"

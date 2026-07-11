@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class ShareRouteCodecTests: XCTestCase {
+    @MainActor
     func testSharedPlaceShortCodeKeepsPRouteWithoutDecodingAsPayload() throws {
         let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
 
@@ -9,6 +10,7 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(SharedPlaceData.from(url: url))
     }
 
+    @MainActor
     func testEmbeddedSharedPlacePayloadStillRoundTrips() throws {
         let payload = SharedPlaceData(
             id: "place_1",
@@ -35,6 +37,7 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(decoded.address, "777 S Alameda St, Los Angeles, CA")
     }
 
+    @MainActor
     func testShareContentMessageUsesResolvedShortURL() throws {
         let fallbackURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/embeddedPayload"))
         let shortURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))

@@ -11,34 +11,45 @@ enum SaveLocalVaultError: LocalizedError {
     }
 }
 
-final class SaveLocalVaultService {
+final class SaveLocalVaultService: Sendable {
     static let shared = SaveLocalVaultService()
 
-    private let fileManager: FileManager
     private let fileName = "save-memory-records.json"
     private let overrideVaultURL: URL?
+    private let lock = NSLock()
 
-    init(fileManager: FileManager = .default, overrideVaultURL: URL? = nil) {
-        self.fileManager = fileManager
+    init(overrideVaultURL: URL? = nil) {
         self.overrideVaultURL = overrideVaultURL
     }
 
     func append(_ record: SaveMemoryRecord) throws {
-        var records = try loadRecords()
-        records.insert(record, at: 0)
-        try save(records)
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.insert(record, at: 0)
+                try save(records, to: url)
+            }
+        }
     }
 
     func recentRecords(limit: Int = 25) throws -> [SaveMemoryRecord] {
-        Array(try loadRecords().prefix(limit))
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Array(try loadRecords(from: url).prefix(limit))
+            }
+        }
     }
 
     func confirmedPlaces(limit: Int = 250) throws -> [Place] {
-        Array(
-            try loadRecords()
-                .compactMap(\.confirmedPlace)
-                .prefix(limit)
-        )
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Array(
+                    try loadRecords(from: url)
+                        .compactMap(\.confirmedPlace)
+                        .prefix(limit)
+                )
+            }
+        }
     }
 
     func saveSourceOnly(url: URL, note: String? = nil) throws -> SaveMemoryRecord {
@@ -118,17 +129,27 @@ final class SaveLocalVaultService {
             sourceImageUrl: place.sourceImageUrl,
             businessPhotoUrls: place.businessPhotoUrls
         )
-        var records = try loadRecords()
-        records.removeAll { existingRecord in
-            guard existingRecord.state == .confirmedPlace,
-                  let existingPlace = existingRecord.confirmedPlace else {
-                return false
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll { existingRecord in
+                    guard existingRecord.state == .confirmedPlace,
+                          let existingPlace = existingRecord.confirmedPlace else {
+                        return false
+                    }
+                    return existingPlace.id == place.id || existingPlace.matches(place)
+                }
+                records.insert(record, at: 0)
+                try save(records, to: url)
             }
-            return existingPlace.id == place.id || existingPlace.matches(place)
         }
-        records.insert(record, at: 0)
-        try save(records)
         return record
+    }
+
+    private func withLock<T>(_ operation: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try operation()
     }
 
     private func confirmedPlaceEvidence(_ place: Place) -> [String] {
@@ -150,26 +171,59 @@ final class SaveLocalVaultService {
         return evidence.filter { seen.insert($0).inserted }
     }
 
-    private func loadRecords() throws -> [SaveMemoryRecord] {
-        guard let url = vaultURL() else { throw SaveLocalVaultError.storageUnavailable }
-        guard fileManager.fileExists(atPath: url.path) else { return [] }
+    private func loadRecords(from url: URL) throws -> [SaveMemoryRecord] {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         let data = try Data(contentsOf: url)
         return try JSONDecoder.saveVault.decode([SaveMemoryRecord].self, from: data)
     }
 
-    private func save(_ records: [SaveMemoryRecord]) throws {
-        guard let url = vaultURL() else { throw SaveLocalVaultError.storageUnavailable }
-        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    private func save(_ records: [SaveMemoryRecord], to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder.saveVault.encode(records)
         try data.write(to: url, options: [.atomic])
     }
 
+    private func withCoordinatedVaultRead<T>(_ operation: (URL) throws -> T) throws -> T {
+        guard let url = vaultURL() else { throw SaveLocalVaultError.storageUnavailable }
+        return try coordinate(url: url, writing: false, operation)
+    }
+
+    private func withCoordinatedVaultWrite<T>(_ operation: (URL) throws -> T) throws -> T {
+        guard let url = vaultURL() else { throw SaveLocalVaultError.storageUnavailable }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        return try coordinate(url: url, writing: true, operation)
+    }
+
+    private func coordinate<T>(
+        url: URL,
+        writing: Bool,
+        _ operation: (URL) throws -> T
+    ) throws -> T {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var result: Result<T, Error>?
+
+        if writing {
+            coordinator.coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                result = Result { try operation(coordinatedURL) }
+            }
+        } else {
+            coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                result = Result { try operation(coordinatedURL) }
+            }
+        }
+
+        if let coordinationError { throw coordinationError }
+        guard let result else { throw SaveLocalVaultError.storageUnavailable }
+        return try result.get()
+    }
+
     private func vaultURL() -> URL? {
         if let overrideVaultURL { return overrideVaultURL }
-        if let appGroupURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) {
+        if let appGroupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) {
             return appGroupURL.appendingPathComponent(fileName)
         }
-        return fileManager.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent(fileName)
+        return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent(fileName)
     }
 
     private func sourceOnlyDisplayName(for url: URL) -> String {

@@ -4,6 +4,7 @@ import CoreLocation
 @testable import SAVE
 
 final class SaveSearchControllerTests: XCTestCase {
+    @MainActor
     func testPlaceActionResolutionIsStateSafe() {
         let weakCandidate = PlaceReviewCandidate(
             id: UUID(),
@@ -83,6 +84,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(savedAction.kind, .recommendOrder)
     }
 
+    @MainActor
     func testSavePlaceDrawerPresentationMapsCoreStates() {
         let savedPlace = place(
             name: "Bright Coffee Bar",
@@ -148,6 +150,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(orderDraftPresentation.primaryActionTitle, "Draft order idea")
     }
 
+    @MainActor
     func testSavePlaceDrawerPresentationLabelsUnsavedMapCandidatesSeparately() {
         let candidate = SaveMapCandidate(
             title: "Costco Wholesale",
@@ -169,6 +172,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(presentation.trustLine.contains("Map Stamp"))
     }
 
+    @MainActor
     func testSavedPlaceMatchesUnderlyingMapPOI() {
         let savedPlace = place(
             name: "Bright Coffee Bar",
@@ -188,6 +192,7 @@ final class SaveSearchControllerTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testMapCandidateKeepsMultipleBusinessPhotosForPreview() {
         let candidate = SaveMapCandidate(
             title: "Bright Coffee Bar",
@@ -209,6 +214,7 @@ final class SaveSearchControllerTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testCategoryInferenceUsesPOIAndAvoidsSubstringFalsePositives() {
         XCTAssertEqual(PlaceCategory.inferred(from: "Heritage Barbecue Chicken"), .food)
         XCTAssertEqual(PlaceCategory.inferred(from: "Bright Barber Shop"), .shopping)
@@ -233,6 +239,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testChineseMilkTeaQueryUnderstandsCafeDrinkIntent() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -254,6 +261,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.count, 0)
     }
 
+    @MainActor
     func testMilkTeaQueryMatchesSavedBobaEvidenceBeforeGenericCafe() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -274,6 +282,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.fromYourSave.results.first?.evidence.contains { $0.contains("milk tea") } == true)
     }
 
+    @MainActor
     func testHotPotQueryRequiresSpecificHotPotEvidence() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -326,6 +335,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(controller.specialtyMapCandidateQuery(for: "推薦我附近火鍋"), "hot pot")
     }
 
+    @MainActor
     func testNewRecommendationQueryShowsUnsavedShellWhenNoSavedMatch() throws {
         let controller = SaveSearchController()
         let response = controller.search(query: "推薦新的奶茶店", places: [], localRecords: [])
@@ -339,6 +349,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shell.evidence.contains { $0.contains("no map pin or saved memory") })
     }
 
+    @MainActor
     func testCoffeeCravingQueryReturnsNearbyUnsavedCafeCandidate() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -381,6 +392,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.first?.reviewCount, 1200)
     }
 
+    @MainActor
     func testMapCandidatePreparationRecognizesPlaceSearchIntent() {
         let controller = SaveSearchController()
 
@@ -404,6 +416,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(controller.mapCandidateCategories(for: "search nearby unsaved candidates for 我今天想喝咖啡推薦一家"), [.cafe])
     }
 
+    @MainActor
     func testNearbyCafeRecommendationIsSavedFirstBeforeUnsavedSearch() {
         let controller = SaveSearchController()
 
@@ -423,6 +436,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(drawer.shouldSearchNearbyUnsavedCandidates(for: "推薦我咖啡廳"))
     }
 
+    @MainActor
     func testPlainCafeSearchReturnsSavedAndUnsavedCandidatesWhenPrepared() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -564,6 +578,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Omomo Tea Shoppe", "Tea Maru - Housemade Boba"])
     }
 
+    @MainActor
     func testPublicDiscoveryRankingPrefersQualityBeforeRawDistance() {
         let service = SaveLocationIntentRecommendationService()
         let response = service.recommendationSearchResponse(
@@ -906,6 +921,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(client.requests.first?.allowedPlaceIds, ["place-\(savedPlace.id.uuidString)"])
     }
 
+    @MainActor
     func testSaveAIServiceNoPlacesMessageUsesSelectedOutputLanguage() async throws {
         let service = SaveAIService(apiKey: "")
         let response = try await service.query(
@@ -917,6 +933,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.messageText, "目前還沒有載入地圖章。先保存或匯入地點，再請我幫你規劃。")
     }
 
+    @MainActor
     func testAgentPromptPolicyCarriesSaveSoulAndBoundaries() {
         let policy = SaveAgentPromptPolicy()
         let result = SaveSearchResult(
@@ -992,6 +1009,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Search: hot pot"))
     }
 
+    @MainActor
     func testGeminiGroundedAnswerDetectsIncompleteDrafts() {
         XCTAssertTrue(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("公開搜尋到的附近選項（"))
         XCTAssertTrue(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("我會先看 Tea Maru，"))
@@ -999,6 +1017,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(GeminiSaveLLMClient.looksIncompleteGroundedAnswer("我會先看 Tea Maru，因為最近且評分高。想喝奶茶還是水果茶？"))
     }
 
+    @MainActor
     func testDrawerContextBuilderKeepsCommaLessStreetAddressesOffDigest() {
         let cjkStreetAddress = place(
             name: "巷弄甜點店",
@@ -1021,6 +1040,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testDrawerContextBuilderSelectsRelevantBoundedPlacesWithoutNotes() {
         var boba = place(
             name: "Omomo Tea Shoppe",
@@ -1065,6 +1085,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testLLMRouterTrustsConfidentDeterministicIntentAndDetectsNaturalLanguage() {
         let parser = SaveSearchIntentParser()
         XCTAssertTrue(SaveSearchLLMRouter.shouldTrustDeterministicIntent(parser.parse("coffee nearby")))
@@ -1138,6 +1159,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.groundedAnswerGrounding.allowedResultIDs.contains { $0.hasPrefix("place-") })
     }
 
+    @MainActor
     func testGroundedAnswerValidatorRejectsDigestOnlyPlaceMention() throws {
         let placeID = "place-saved-coffee"
         let result = SaveSearchResult(
@@ -1179,6 +1201,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(answer.citedResultIds, [placeID])
     }
 
+    @MainActor
     func testNearbySearchDisplaysPublicDiscoveryBeforeFarSavedWhenNoNearbyMemory() {
         let farSavedResult = SaveSearchResult(
             id: "place-far",
@@ -1260,6 +1283,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.groundedAnswerSections.map { $0.id }, ["nearby-unsaved-candidates"])
     }
 
+    @MainActor
     func testJapaneseRestaurantSearchRequiresJapaneseEvidenceForSavedPlaces() {
         let controller = SaveSearchController()
         let ramen = place(
@@ -1290,6 +1314,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(response.fromYourSave.results.map(\.title).contains("onns shisha bar"))
     }
 
+    @MainActor
     func testJapaneseRestaurantSearchRequiresJapaneseEvidenceForPublicCandidates() {
         let controller = SaveSearchController()
         let sushi = SaveMapCandidate(
@@ -1326,6 +1351,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(response.newRecommendations.results.map(\.title).contains("Fonda Moderna"))
     }
 
+    @MainActor
     func testSpecialtyQueryEvalFixturesRejectGenericCategoryMatches() {
         struct Fixture {
             let query: String
@@ -1408,6 +1434,7 @@ final class SaveSearchControllerTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testAgentPromptPolicyHandlesNoAllowedResultsAsBoundedFollowUp() {
         let policy = SaveAgentPromptPolicy()
         let request = GroundedAnswerRequest(
@@ -1860,6 +1887,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(map.mapCandidates.isEmpty)
     }
 
+    @MainActor
     func testUnsavedMapCandidatesSortByDistanceWhenScoresTie() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -1891,6 +1919,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.map(\.title), ["Near Coffee", "Far Coffee"])
     }
 
+    @MainActor
     func testRestaurantSearchReturnsSavedAndUnsavedCandidatesWhenPrepared() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -1937,6 +1966,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.first?.userState, .unsaved)
     }
 
+    @MainActor
     func testRecommendationSearchIncludesReviewCandidatesAndAssistantMessage() throws {
         let controller = SaveSearchController()
         let reviewRestaurant = PlaceReviewCandidate(
@@ -1968,6 +1998,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.assistantMessage?.contains("Review") == true)
     }
 
+    @MainActor
     func testReviewCandidateMilkTeaMatchStaysReviewScoped() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -1991,6 +2022,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.primaryAction, .runRecovery)
     }
 
+    @MainActor
     func testSourceOnlyMilkTeaClueRequiresRecovery() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2037,6 +2069,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(result.evidence.contains("Rejected evidence: creator handle — not venue proof"))
     }
 
+    @MainActor
     func testSearchPrioritizesSavedPlacesBeforeRecommendationShell() {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2051,6 +2084,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.newRecommendations.results.count, 0)
     }
 
+    @MainActor
     func testVisitedPlaceBecomesTriedMemorySearchResult() {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2068,6 +2102,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(response.fromYourSave.results.first?.userState, .visited)
     }
 
+    @MainActor
     func testUnsavedMapCandidatesStayCollectibleButNotSaved() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2101,6 +2136,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(result.evidence.contains("Visible on map"))
     }
 
+    @MainActor
     func testUnsavedMapCandidateMakesSaveDraftWithMapEvidence() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2138,6 +2174,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(draft.evidence.contains("Visible on map"))
     }
 
+    @MainActor
     func testSourceOnlyClueCannotMakeSaveDraft() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2157,6 +2194,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertNil(controller.makeSaveDraft(from: result))
     }
 
+    @MainActor
     func testSaveDraftBecomesPlaceWithoutPrivateRating() async throws {
         let controller = SaveSearchController()
         let draft = SavePlaceDraft(
@@ -2185,6 +2223,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(place.note?.contains("External reviews: 4100") == true)
     }
 
+    @MainActor
     func testSavedMapCandidateSearchesFromYourSaveAfterSave() async throws {
         let controller = SaveSearchController()
         let draft = SavePlaceDraft(
@@ -2213,6 +2252,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.rating, 4.6)
     }
 
+    @MainActor
     func testSourceOnlyAndReviewRecordsStayReviewScoped() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2253,6 +2293,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(result.isRecommendationShell)
     }
 
+    @MainActor
     func testReviewDraftDefaultsToPrivateAndReceiptReadyWithoutChainWrite() {
         let draft = SavePrivateReviewDraft(
             placeId: UUID(),
@@ -2274,6 +2315,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(draft.proofRefs.first?.commitmentHash, "sha256-placeholder")
     }
 
+    @MainActor
     func testAgentActionDrawerAdaptsToPlaceMemoryState() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2393,6 +2435,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(unsavedMapPlace.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
     }
 
+    @MainActor
     func testSourceOnlyEvidenceDrawerIncludesMissingFieldsAndRecoveryQuery() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2429,6 +2472,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value.contains("best pasta in LA") })
     }
 
+    @MainActor
     func testXiaohongshuSourceOnlySearchAddsRecoveryChoiceChips() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2476,6 +2520,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.followUpChoices.map(\.prompt).contains { $0.contains("地圖連結") })
     }
 
+    @MainActor
     func testNonXiaohongshuSourceOnlyDoesNotShowXHSRecoveryChoiceChips() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2502,6 +2547,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(response.followUpChoices.isEmpty)
     }
 
+    @MainActor
     func testSourceOnlyEvidenceDrawerIgnoresMidLineConfidenceReasonToken() throws {
         let controller = SaveSearchController()
         let midLineEvidence = "Caption says pasta in LA. Confidence reason: this is user caption text, not resolver metadata."
@@ -2536,6 +2582,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value == midLineEvidence })
     }
 
+    @MainActor
     func testUnsavedMapCandidateEvidenceDrawerShowsMapEvidenceWithoutMemoryClaim() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2570,6 +2617,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(drawer.candidateExplanation, "This is an unsaved candidate, not a Map Stamp yet.")
     }
 
+    @MainActor
     func testSavedPlaceEvidenceDrawerIncludesSourcePlatformAndAddress() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2595,6 +2643,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .receipt && $0.value == "Saved Map Stamp" })
     }
 
+    @MainActor
     func testEvidenceDrawerDoesNotTrustLookalikeSourceHost() throws {
         let controller = SaveSearchController()
         let response = controller.search(
@@ -2622,6 +2671,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(result.evidenceDrawer.evidenceAtoms.contains { $0.label == "Platform" && $0.value == "Instagram" })
     }
 
+    @MainActor
     func testSavedPlaceShareTextIncludesPlaceBasicsAndLinks() throws {
         let savedPlace = place(
             name: "Kato",
@@ -2643,6 +2693,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(savedPlace.saveShareURL?.path.hasPrefix("/p/") == true)
     }
 
+    @MainActor
     func testSavedPlaceShareLinkOmitsInternalDiagnostics() throws {
         let savedPlace = place(
             name: "FUGU Japanese Gastropub",
@@ -2675,6 +2726,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertLessThan(shareURL.absoluteString.count, 700)
     }
 
+    @MainActor
     func testUnsavedMapCandidateShareTextIncludesRatingReviewsAndMapLink() throws {
         let candidate = SaveMapCandidate(
             title: "Bright Coffee Bar",
@@ -2702,6 +2754,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(candidate.saveShareURL?.path.hasPrefix("/p/") == true)
     }
 
+    @MainActor
     func testPOICategoryWinsOverTextFallback() {
         XCTAssertEqual(
             PlaceCategory.poiFirst(
@@ -2721,6 +2774,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(PlaceCategory.from(googleTypes: ["school", "point_of_interest"]), .attraction)
     }
 
+    @MainActor
     func testGooglePlaceTypesDriveSavedReviewCandidateCategory() {
         let candidate = PlaceReviewCandidate(
             id: UUID(),
@@ -2752,6 +2806,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.category, .cafe)
     }
 
+    @MainActor
     func testReviewCandidateNameOverrideWinsOverRefinedGoogleMatch() {
         let candidate = PlaceReviewCandidate(
             id: UUID(),
@@ -2785,6 +2840,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.address, "123 Main St")
     }
 
+    @MainActor
     func testBlankReviewCandidateNameOverrideFallsBackToRefinedGoogleMatch() {
         let candidate = PlaceReviewCandidate(
             id: UUID(),
@@ -2816,6 +2872,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.name, "Google Places Business Name")
     }
 
+    @MainActor
     func testPassportStatsDeriveFromSavedPlaces() {
         let profile = UserProfile.empty
         let places = [
@@ -2834,6 +2891,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(stats.usesSavedPlaces)
     }
 
+    @MainActor
     func testPassportStatsCollapseTaiwanAddressesToCityStamp() {
         let profile = UserProfile.empty
         let places = [
@@ -2860,6 +2918,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(Set(map.filteredPlaces.map(\.id)), Set([focusedPlace.id, otherSavedPlace.id]))
     }
 
+    @MainActor
     private func place(
         name: String,
         address: String,
@@ -2895,6 +2954,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testGroundedAnswerValidatorRejectsUnknownCitationAndMarkdownJSON() throws {
         let placeID = "place-\(UUID().uuidString)"
         let result = SaveSearchResult(
@@ -2933,6 +2993,7 @@ final class SaveSearchControllerTests: XCTestCase {
         ))
     }
 
+    @MainActor
     func testGroundedAnswerValidatorRequiresPublicDiscoveryLabel() throws {
         let id = "map-candidate-public"
         let result = SaveSearchResult(
@@ -2972,6 +3033,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(answer.citedResultIds, [id])
     }
 
+    @MainActor
     func testPlaceFromReviewCandidatePreservesFoodIntelligenceOnConfirmation() throws {
         let candidate = PlaceReviewCandidate(
             id: UUID(),
@@ -3007,6 +3069,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.visibility, .privateMemory)
     }
 
+    @MainActor
     func testFoodPlaceInsightServiceUsesSavedPrivateStructuredMemoryAndIgnoresPublicShell() {
         let saved = place(
             name: "Known Noodle",
@@ -3073,6 +3136,7 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
 
+    @MainActor
     func testPublicDiscoveryRequiresExplicitUnsavedOrNewLanguage() {
         let controller = SaveSearchController()
 
@@ -3083,6 +3147,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(controller.shouldSearchNearbyUnsavedCandidatesImmediately(for: "找附近新的咖啡廳"))
     }
 
+    @MainActor
     func testFoodPlaceAnalysisServiceRecommendsOnlySavedRecommendedItems() {
         var saved = place(
             name: "Known Noodle",
@@ -3108,6 +3173,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(message.lowercased().contains("dumpling"))
     }
 
+    @MainActor
     func testFoodPlaceAnalysisServiceRefusesToInventDishWhenNoSavedItemExists() {
         var saved = place(
             name: "Broth Bar",
@@ -3153,6 +3219,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(response.aiMessage?.contains("invented lobster") == true)
     }
 
+    @MainActor
     private func groundedRequest(
         result: SaveSearchResult,
         allowedIDs: [String],

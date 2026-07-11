@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class DeterministicTripPlannerTests: XCTestCase {
+    @MainActor
     func testSpecificAnchorPlanningStillPullsNearbySavedMapStamps() throws {
         let anchor = makePlace(
             "一號地鍋雞",
@@ -38,6 +39,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.placeIds.count, 2, "Should only include anchor and nearby dessert")
     }
 
+    @MainActor
     func testPlannerGroupsRequestedDaysAndOrdersStopsByDistance() throws {
         let places = [
             makePlace("Santa Monica Pier", address: "Santa Monica, Los Angeles, CA", latitude: 34.0100, longitude: -118.4960, category: .attraction),
@@ -56,6 +58,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.itineraryDays.first?.stops.dropFirst().first?.placeName, "Venice Dinner")
     }
 
+    @MainActor
     func testPlannerFiltersDestinationWithoutDefaultCity() throws {
         let places = [
             makePlace("Disneyland Park", address: "Anaheim, CA", latitude: 33.8121, longitude: -117.9190, category: .attraction),
@@ -71,6 +74,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(plannedNames.contains("San Francisco Cafe"))
     }
 
+    @MainActor
     func testPlannerAssignsMealAndEveningSlots() throws {
         let places = [
             makePlace("Morning Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
@@ -86,6 +90,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(stops.first(where: { $0.placeName == "Night Bar" })?.time, "8:30 PM")
     }
 
+    @MainActor
     func testPlannerUnderstandsChineseTwoDayLAPrompt() throws {
         let places = [
             makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
@@ -102,6 +107,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(plannedNames.contains("Irvine Dinner"))
     }
 
+    @MainActor
     func testPlannerUsesSelectedLanguageForChineseTripFallback() throws {
         let places = [
             makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
@@ -122,6 +128,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(notes.contains { $0.contains("Meal slot") || $0.contains("Good morning") })
     }
 
+    @MainActor
     func testPlannerDoesNotUseWrongCityWhenDestinationHasNoSavedMatches() {
         let places = [
             makePlace("Irvine Dinner", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .food),
@@ -133,6 +140,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    @MainActor
     func testPlannerAsksForDaysOrStyleWhenTripRequestIsUnderspecified() throws {
         let places = [
             makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
@@ -155,6 +163,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(response.mapAction)
     }
 
+    @MainActor
     func testPlannerSkipsNonItineraryQueries() {
         let response = DeterministicTripPlanner().plan(
             for: "Show my food spots on the map",
@@ -164,6 +173,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    @MainActor
     func testPlannerDoesNotTreatTodayRecommendationAsTripPlanning() {
         let response = DeterministicTripPlanner().plan(
             for: "推薦我今天附近餐廳",
@@ -173,6 +183,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(response)
     }
 
+    @MainActor
     func testAIServiceFallsBackToDeterministicPlanWhenGeminiIsMissing() async throws {
         let places = [
             makePlace("Disneyland Park", address: "Anaheim, CA", latitude: 33.8121, longitude: -117.9190, category: .attraction),
@@ -186,6 +197,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.itineraryDays.first?.stops.map(\.placeName), ["Disneyland Park", "Anaheim Dinner"])
     }
 
+    @MainActor
     func testAIServiceTripFallbackUsesSelectedOutputLanguageWhenGeminiIsMissing() async throws {
         let places = [
             makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
@@ -206,6 +218,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
 
+    @MainActor
     func testPlannerHonorsExplicitTransitConstraintWithoutChangingSavedStops() throws {
         let places = [
             makePlace("Tokyo Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
@@ -220,6 +233,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(response.itineraryDays.flatMap(\.stops).contains { $0.note?.contains("public transit") == true })
     }
 
+    @MainActor
     func testPlannerRelaxedPaceCapsStopsPerDayButUsesOnlySavedPlaces() throws {
         let places = [
             makePlace("A Coffee", address: "Los Angeles, CA", latitude: 34.0000, longitude: -118.0000, category: .cafe),
@@ -236,6 +250,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(plannedStops.allSatisfy { stop in places.contains { $0.name == stop.placeName } })
     }
 
+    @MainActor
     func testPlannerAppliesRequestedStartTimeOnlyWhenExplicit() throws {
         let places = [
             makePlace("Morning Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
@@ -249,6 +264,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(stops.first(where: { $0.placeName == "Lunch Ramen" })?.time, "12:30 PM")
     }
 
+    @MainActor
     func testPlannerAddsTripHealthAndFoodOnlyActivityGap() throws {
         let places = [
             makePlace("Tokyo Coffee", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .cafe),
@@ -267,6 +283,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(health.warnings.contains { $0.type == .hoursUnknown })
     }
 
+    @MainActor
     func testPlannerPrioritizesReasonableActivitySlotOverMoreFoodStops() throws {
         let now = Date()
         let places = [
@@ -295,6 +312,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertLessThan(foodDrinkCount, stops.count)
     }
 
+    @MainActor
     func testPlannerLabelsDeterministicStopsAsConfirmedMapStampsWithUnknownRisks() throws {
         let places = [
             makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .attraction),
@@ -313,6 +331,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(stops.allSatisfy { $0.risks.contains(.bookingUnknown) })
     }
 
+    @MainActor
     func testItineraryPlanValidatorAllowsReorderDayGroupingAndPublicCandidatesOnlyFromRetrievalSet() throws {
         let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
         let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
@@ -357,6 +376,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(validated.mapAction?.placeIds, validated.placeIds)
     }
 
+    @MainActor
     func testItineraryPlanValidatorRejectsHallucinatedPublicStop() {
         let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
         let fallback = itineraryResponse(days: [
@@ -379,6 +399,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(validated)
     }
 
+    @MainActor
     func testItineraryPlanValidatorRejectsRepeatedSavedStop() {
         let dinner = makePlace("Sake House Malibu", address: "Malibu, Los Angeles, CA", latitude: 34.0360, longitude: -118.6860, category: .food)
         let fallback = itineraryResponse(days: [
@@ -401,6 +422,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertNil(validated)
     }
 
+    @MainActor
     func testAllFoodSavedTripPreparesPublicActivityCandidatesAndPromptPolicy() {
         let places = [
             makePlace("永樂牛肉湯", address: "台北市大同區", latitude: 25.0520, longitude: 121.5100, category: .food),
@@ -422,6 +444,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(policy.contains("不可直接輸出全餐廳行程"))
     }
 
+    @MainActor
     func testTripCanvasApprovesSkipsAndInsertsExternalSuggestionWithoutSavingIt() throws {
         let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
         var canvas = TripCanvasDraft(days: [
@@ -450,6 +473,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(canvas.visibleDays.first?.stops.contains(where: { $0.id == inserted.id }) == true)
     }
 
+    @MainActor
     func testTripCanvasReordersStopsWithoutChangingPlaceIDs() throws {
         let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
         let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
@@ -470,6 +494,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(canvas.visibleDays.flatMap(\.stops).compactMap(\.placeId).sorted(), originalIDs)
     }
 
+    @MainActor
     func testGapSuggestionEngineRanksSavedActivityBeforeExternalCandidate() throws {
         let savedMuseum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
         let externalPark = SaveMapCandidate(
@@ -497,6 +522,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(suggestion.requiresUserApproval)
     }
 
+    @MainActor
     func testGapSuggestionEngineScopesOptionsToPlannedDestination() throws {
         let laDinner = makePlace("Los Angeles Dinner", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food)
         let laMuseum = makePlace("The Broad", address: "Los Angeles, CA", latitude: 34.0544, longitude: -118.2500, category: .attraction)
@@ -532,6 +558,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(suggestion.options.map(\.title).contains("Orange County Museum"))
     }
 
+    @MainActor
     func testGapSuggestionEngineLabelsReviewCandidateAndSourceOnlySeparately() throws {
         let mapReadyReview = reviewCandidate(
             name: "Review Gallery",
@@ -563,6 +590,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(suggestion.options.first?.reviewCandidateId, mapReadyReview.id.uuidString)
     }
 
+    @MainActor
     func testGapSuggestionEngineExternalSuggestionRequiresApprovalAndDoesNotSaveMemory() throws {
         let external = SaveMapCandidate(
             id: "public-activity",
@@ -597,6 +625,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertTrue(inserted.risks.contains(.externalSuggestion))
     }
 
+    @MainActor
     private func makePlace(
         _ name: String,
         address: String,
@@ -630,6 +659,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func itineraryResponse(days: [ItineraryDay]) -> SaveAIResponse {
         let placeIDs = days.flatMap(\.stops).compactMap(\.placeId)
         return SaveAIResponse(
@@ -645,6 +675,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func stop(place: Place, time: String) -> ItineraryStop {
         ItineraryStop(
             id: UUID(),
@@ -656,6 +687,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func publicStop(_ name: String, time: String) -> ItineraryStop {
         ItineraryStop(
             id: UUID(),
@@ -667,6 +699,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func tripGap(_ type: TripGap.GapType) -> TripGap {
         TripGap(
             id: "gap-\(type.rawValue)",
@@ -677,6 +710,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func reviewCandidate(
         name: String,
         address: String,

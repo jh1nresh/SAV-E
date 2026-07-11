@@ -3,6 +3,7 @@ import XCTest
 @testable import SAVE
 
 final class SaveCollaborativeListTests: XCTestCase {
+    @MainActor
     func testSharedListLinkRoundTripsViewerRole() throws {
         var list = SaveCollaborativeList(title: "Tokyo cafes", note: "For Saturday")
         list.add(.from(place: place(name: "Onibus Coffee", category: .cafe)))
@@ -16,6 +17,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(payload.list.items.first?.title, "Onibus Coffee")
     }
 
+    @MainActor
     func testListAcceptsSavedPlaceAndUnsavedMapCandidateSnapshots() {
         var list = SaveCollaborativeList(title: "OC weekend")
         let saved = place(name: "Maru Coffee", category: .cafe)
@@ -41,6 +43,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(list.items.last?.photoURLs, ["https://example.com/bright.jpg", "https://example.com/bright-2.jpg"])
     }
 
+    @MainActor
     func testViewerJoinedListCannotAddItems() {
         var list = SaveCollaborativeList(title: "Viewer list", viewerRole: .viewer)
         list.add(.from(place: place(name: "Viewer Coffee", category: .cafe)))
@@ -49,6 +52,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(list.canEdit)
     }
 
+    @MainActor
     func testEditorJoinedListCanAddItems() {
         var list = SaveCollaborativeList(title: "Editor list", viewerRole: .editor)
         list.add(.from(place: place(name: "Editor Coffee", category: .cafe)))
@@ -57,6 +61,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(list.canEdit)
     }
 
+    @MainActor
     func testFriendCanSaveListItemIntoOwnSave() {
         let candidate = SaveMapCandidate(
             title: "List Ramen",
@@ -78,6 +83,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(saved.sourceUrl, "https://maps.apple.com/?q=List%20Ramen")
     }
 
+    @MainActor
     func testListItineraryKeepsUnsavedItemsSeparateFromPlaceIds() {
         var list = SaveCollaborativeList(title: "Mixed plan")
         let saved = place(name: "Saved Cafe", category: .cafe)
@@ -99,6 +105,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(response.itineraryDays.first?.stops.last?.note?.contains("Map result") == true)
     }
 
+    @MainActor
     private func place(name: String, category: PlaceCategory) -> Place {
         Place(
             id: UUID(),

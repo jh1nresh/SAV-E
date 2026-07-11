@@ -2,6 +2,7 @@ import XCTest
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
+    @MainActor
     func testTemplatesUseSaveKeysForProductionConfig() throws {
         let mainTemplate = try plistTemplate(at: "SAV-E/Resources/Secrets.plist.template")
         let shareTemplate = try plistTemplate(at: "SAV-EShareExtension/Secrets.plist.template")
@@ -21,6 +22,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertNil(shareTemplate["GEMINI_API_KEY"])
     }
 
+    @MainActor
     func testConfigNormalizationRejectsPlaceholders() {
         XCTAssertNil(SAVEProductionConfig.normalizedConfigValue("YOUR_KEY_HERE"))
         XCTAssertNil(SAVEProductionConfig.normalizedConfigValue("REPLACE_ME"))
@@ -28,11 +30,13 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProductionConfig.normalizedConfigValue(" https://sav-e-app.vercel.app/p "), "https://sav-e-app.vercel.app/p")
     }
 
+    @MainActor
     func testClientGeminiFallbackIsOffByDefault() {
         XCTAssertFalse(SAVEProductionConfig.allowsClientGeminiFallback())
         XCTAssertNil(SAVEProductionConfig.clientGeminiAPIKeyIfAllowed())
     }
 
+    @MainActor
     func testSharedProductionConstantsMatchExistingAppleIdentifiers() {
         XCTAssertEqual(SAVEProductionConfig.legacyProductionBundleID, "com.wanderly.app")
         XCTAssertEqual(SAVEProductionConfig.appGroupSuiteName, "group.com.wanderly.app")
@@ -40,6 +44,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProductionConfig.pendingReviewCandidatesFileName, "pending-review-candidates.json")
     }
 
+    @MainActor
     func testSharedGeminiModelFallbacksPreferStrongFlashWithStableFallback() {
         XCTAssertEqual(SAVEProductionConfig.defaultGeminiModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
 
@@ -50,6 +55,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testChinaProviderConfigurationRejectsPlaceholderKeys() {
         let status = ChinaPlaceResolverConfiguration.status(
             backendAPIBaseURL: nil,
@@ -67,6 +73,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testChinaProviderConfigurationReportsConfiguredProvidersWithoutLeakingKeys() {
         let status = ChinaPlaceResolverConfiguration.status(
             backendAPIBaseURL: "https://wanderly-api-production.up.railway.app",
