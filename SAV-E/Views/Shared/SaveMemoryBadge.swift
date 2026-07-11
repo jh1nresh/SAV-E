@@ -135,19 +135,33 @@ struct SaveStampMoment: Identifiable, Equatable {
     }
 }
 
-/// Rubber-stamp celebration card shown over the map right after a save.
-/// Plays the success haptic and slams the stamp in with a spring.
+/// Rubber-stamp celebration card shown over the map right after a save —
+/// the signature brand moment. Slam, ink ripple, settle, then the words.
 struct SaveStampMomentView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let moment: SaveStampMoment
     @State private var stamped = false
+    @State private var settled = false
+    @State private var textRevealed = false
+    @State private var inkRipple = false
 
     var body: some View {
         VStack(spacing: SaveTheme.Spacing.sm + 2) {
-            SaveMemoryBadge(state: .saved(moment.category), size: 62)
-                .scaleEffect(stamped ? 1 : 1.85)
-                .rotationEffect(.degrees(stamped ? -4 : -16))
-                .opacity(stamped ? 1 : 0)
+            ZStack {
+                // Ink ripple: a ring that blooms outward on impact, like ink
+                // pressed into paper. Purely decorative — hidden from a11y.
+                Circle()
+                    .stroke(Color.saveHoney.opacity(inkRipple ? 0 : 0.55), lineWidth: inkRipple ? 1 : 8)
+                    .frame(width: 62, height: 62)
+                    .scaleEffect(inkRipple ? 2.1 : 0.9)
+                    .accessibilityHidden(true)
+
+                SaveMemoryBadge(state: .saved(moment.category), size: 62)
+                    .scaleEffect(stamped ? 1 : 1.85)
+                    .rotationEffect(.degrees(stampRotation))
+                    .opacity(stamped ? 1 : 0)
+            }
 
             VStack(spacing: 2) {
                 Text(languageSettings.localized(english: "STAMPED TO YOUR MAP", traditionalChinese: "已蓋上地圖章"))
@@ -160,23 +174,50 @@ struct SaveStampMomentView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
+            .opacity(textRevealed ? 1 : 0)
+            .offset(y: textRevealed ? 0 : 6)
         }
         .padding(.horizontal, SaveTheme.Spacing.xl)
         .padding(.vertical, SaveTheme.Spacing.lg)
         .frame(maxWidth: 320)
         .saveNotebookPage(cornerRadius: 20)
-        .shadow(color: Color.saveCocoa.opacity(0.18), radius: 14, x: 0, y: 6)
-        .onAppear {
-            SaveHaptics.stamp()
-            withAnimation(SaveTheme.Motion.stampSpring) {
-                stamped = true
-            }
-        }
+        .shadow(color: Color.saveCocoa.opacity(0.15), radius: 12, x: 0, y: 6)
+        .onAppear(perform: playStampSequence)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(languageSettings.localized(
             english: "\(headline) saved as a Map Stamp",
             traditionalChinese: "\(headline) 已存成地圖章"
         ))
+    }
+
+    /// Slam in hard, ripple the ink, settle upright a touch, then the words.
+    private func playStampSequence() {
+        SaveHaptics.stamp()
+        guard !reduceMotion else {
+            stamped = true
+            settled = true
+            textRevealed = true
+            inkRipple = true
+            return
+        }
+
+        withAnimation(SaveTheme.Motion.stampSpring) {
+            stamped = true
+        }
+        withAnimation(.easeOut(duration: 0.5).delay(0.08)) {
+            inkRipple = true
+        }
+        withAnimation(SaveTheme.Motion.standardSpring.delay(0.30)) {
+            settled = true
+        }
+        withAnimation(SaveTheme.Motion.standardSpring.delay(0.16)) {
+            textRevealed = true
+        }
+    }
+
+    private var stampRotation: Double {
+        if settled { return -2 }
+        return stamped ? -5 : -16
     }
 
     private var headline: String {
