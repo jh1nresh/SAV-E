@@ -20,11 +20,11 @@ const contactOnly = process.argv.includes("--contact-only");
 
 // v3 — UI-fidelity pass: warm App Store frame with faithful in-phone SAV-E states.
 const shots = [
-  ["shot-01-hook", "01-stop-losing-friend-places.png"],
-  ["shot-02-paste-link", "02-paste-link-save-place.png"],
-  ["shot-03-confirm", "03-confirm-before-counts.png"],
-  ["shot-04-ask-your-map", "04-ask-your-private-map.png"],
-  ["shot-05-passport", "05-private-place-passport.png"],
+  ["shot-01-hook", "01-stop-losing-restaurants.png"],
+  ["shot-02-paste-link", "02-review-before-map-stamp.png"],
+  ["shot-03-confirm", "03-private-food-travel-map.png"],
+  ["shot-04-ask-your-map", "04-ask-saved-places-first.png"],
+  ["shot-05-passport", "05-share-place-card.png"],
 ];
 
 function run(command, args) {
