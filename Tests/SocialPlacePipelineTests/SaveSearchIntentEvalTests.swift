@@ -57,6 +57,48 @@ final class SaveSearchIntentEvalTests: XCTestCase {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
     }
 
+    func testMemoryOutcomeFailureFixturesCoverRequiredScrubbedGroups() throws {
+        struct MemoryFixture: Decodable {
+            let id: String
+            let failureGroup: String
+            let baselinePass: Bool
+            let postChangePass: Bool
+            let expected: String
+
+            enum CodingKeys: String, CodingKey {
+                case id, expected
+                case failureGroup = "failure_group"
+                case baselinePass = "baseline_pass"
+                case postChangePass = "post_change_pass"
+            }
+        }
+        let testFile = URL(fileURLWithPath: #filePath)
+        let url = testFile.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/SaveMemoryOutcomeEvalFixtures.json")
+        let data = try Data(contentsOf: url)
+        let fixtures = try JSONDecoder().decode([MemoryFixture].self, from: data)
+        let requiredGroups = Set([
+            "wrong_place_entity_resolution",
+            "saved_place_missing_after_import_sync",
+            "relevant_saved_place_not_retrieved",
+            "unrelated_memory_pollution",
+            "stale_place_or_menu_fact",
+            "preference_mismatch",
+            "hallucinated_evidence_or_action_overclaim",
+            "correction_removal_not_reflected"
+        ])
+
+        XCTAssertEqual(fixtures.count, 8)
+        XCTAssertEqual(Set(fixtures.map(\.failureGroup)), requiredGroups)
+        XCTAssertEqual(fixtures.filter(\.baselinePass).count, 5)
+        XCTAssertTrue(fixtures.allSatisfy(\.postChangePass))
+        XCTAssertTrue(fixtures.allSatisfy { !$0.id.isEmpty && !$0.expected.isEmpty })
+        let raw = String(decoding: data, as: UTF8.self)
+        XCTAssertFalse(raw.contains("http://"))
+        XCTAssertFalse(raw.contains("https://"))
+        XCTAssertNil(raw.range(of: #"\+?\d[\d\s().-]{7,}"#, options: .regularExpression))
+    }
+
     private func loadFixtures() throws -> [Fixture] {
         let testFile = URL(fileURLWithPath: #filePath)
         let fixtureURL = testFile

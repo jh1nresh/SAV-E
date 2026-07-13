@@ -1,0 +1,58 @@
+[
+  {
+    "id": "entity-branch-01",
+    "failure_group": "wrong_place_entity_resolution",
+    "baseline_pass": true,
+    "post_change_pass": true,
+    "expected": "category and evidence gates keep the wrong venue branch out"
+  },
+  {
+    "id": "sync-projection-01",
+    "failure_group": "saved_place_missing_after_import_sync",
+    "baseline_pass": false,
+    "post_change_pass": true,
+    "expected": "local mirror keeps the canonical place identity and delete clears it"
+  },
+  {
+    "id": "lexical-recall-01",
+    "failure_group": "relevant_saved_place_not_retrieved",
+    "baseline_pass": true,
+    "post_change_pass": true,
+    "expected": "structured dish evidence retrieves the matching saved place"
+  },
+  {
+    "id": "private-pollution-01",
+    "failure_group": "unrelated_memory_pollution",
+    "baseline_pass": true,
+    "post_change_pass": true,
+    "expected": "category and location gates exclude unrelated private memory"
+  },
+  {
+    "id": "stale-fact-01",
+    "failure_group": "stale_place_or_menu_fact",
+    "baseline_pass": true,
+    "post_change_pass": true,
+    "expected": "outcome taxonomy records stale evidence without rewriting preference state"
+  },
+  {
+    "id": "preference-vibe-01",
+    "failure_group": "preference_mismatch",
+    "baseline_pass": false,
+    "post_change_pass": true,
+    "expected": "active explicit like or dislike changes ranking"
+  },
+  {
+    "id": "grounding-claim-01",
+    "failure_group": "hallucinated_evidence_or_action_overclaim",
+    "baseline_pass": true,
+    "post_change_pass": true,
+    "expected": "existing evidence and action gates remain enforced and outcome labels stay separate"
+  },
+  {
+    "id": "removed-preference-01",
+    "failure_group": "correction_removal_not_reflected",
+    "baseline_pass": false,
+    "post_change_pass": true,
+    "expected": "proposed corrected and removed preferences have zero ranking influence"
+  }
+]

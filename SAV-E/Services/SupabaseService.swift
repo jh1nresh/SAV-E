@@ -34,6 +34,10 @@ protocol SupabaseServiceProtocol {
     func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool, includePublicWeb: Bool) async throws -> MaatPlaceAnalysisResponse
     func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse
     func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference]
+    func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference
+    func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference
+    func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference
     func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard
     func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt
 }
@@ -194,6 +198,44 @@ final class SupabaseService: SupabaseServiceProtocol {
         let body = try Self.jsonBody(receipt.body)
         let data = try await request(path: "/v0/recommendation-analysis-receipts", method: "POST", body: body)
         return try JSONDecoder.supabase.decode(SaveRecommendationAnalysisReceipt.self, from: data)
+    }
+
+    // MARK: - Explicit Memory
+
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] {
+        guard isConfigured else { return [] }
+        let data = try await request(path: "/v0/memory-preferences")
+        return try JSONDecoder.supabase.decode([SaveMemoryPreference].self, from: data)
+    }
+
+    func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(
+            path: "/v0/memory-preferences",
+            method: "POST",
+            body: try JSONEncoder.supabase.encode(draft)
+        )
+        return try JSONDecoder.supabase.decode(SaveMemoryPreference.self, from: data)
+    }
+
+    func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(
+            path: "/v0/memory-preferences/\(preferenceId.uuidString)",
+            method: "PATCH",
+            body: try Self.jsonBody(["status": status.rawValue])
+        )
+        return try JSONDecoder.supabase.decode(SaveMemoryPreference.self, from: data)
+    }
+
+    func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(
+            path: "/v0/memory-preferences/\(preferenceId.uuidString)/corrections",
+            method: "POST",
+            body: try JSONEncoder.supabase.encode(draft)
+        )
+        return try JSONDecoder.supabase.decode(SaveMemoryPreference.self, from: data)
     }
 
     func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard {
@@ -858,6 +900,66 @@ struct RecommendationAnalysisPublicSummary: Codable, Equatable {
         case proofLevelMin = "proof_level_min"
         case publicWebUsed = "public_web_used"
     }
+}
+
+struct SaveMemoryPreference: Codable, Identifiable, Equatable, Sendable {
+    enum Polarity: String, Codable, CaseIterable, Sendable { case like, dislike, constraint }
+    enum Source: String, Codable, Sendable { case explicit, inferred }
+    enum Status: String, Codable, Sendable { case proposed, active, corrected, removed }
+
+    let id: UUID
+    let preferenceType: String
+    let normalizedValue: String
+    let context: String
+    let polarity: Polarity
+    let source: Source
+    let evidenceRefs: [String]
+    let evidenceCount: Int
+    let confidence: Double
+    let status: Status
+    let correctedFromId: UUID?
+    let createdAt: Date
+    let updatedAt: Date
+
+    var isActiveForRanking: Bool { status == .active }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case preferenceType = "preference_type"
+        case normalizedValue = "normalized_value"
+        case context, polarity, source
+        case evidenceRefs = "evidence_refs"
+        case evidenceCount = "evidence_count"
+        case confidence, status
+        case correctedFromId = "corrected_from_id"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct SaveMemoryPreferenceDraft: Codable, Equatable, Sendable {
+    var preferenceType: String
+    var normalizedValue: String
+    var context: String = "general"
+    var polarity: SaveMemoryPreference.Polarity
+    var source: SaveMemoryPreference.Source = .explicit
+    var evidenceRefs: [String] = []
+    var evidenceCount: Int = 0
+    var confidence: Double = 1
+    var status: SaveMemoryPreference.Status = .active
+
+    enum CodingKeys: String, CodingKey {
+        case preferenceType = "preference_type"
+        case normalizedValue = "normalized_value"
+        case context, polarity, source
+        case evidenceRefs = "evidence_refs"
+        case evidenceCount = "evidence_count"
+        case confidence, status
+    }
+}
+
+extension Notification.Name {
+    static let saveMemoryPreferencesDidChange = Notification.Name("saveMemoryPreferencesDidChange")
 }
 
 struct SaveRecommendationAnalysisReceipt: Codable, Identifiable, Equatable {

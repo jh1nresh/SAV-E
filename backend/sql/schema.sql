@@ -297,6 +297,57 @@ create index if not exists idx_recommendation_analysis_receipts_user
 create index if not exists idx_recommendation_analysis_receipts_hashes
     on recommendation_analysis_receipts(input_hash, output_hash);
 
+-- Explicit preference memory is separate from saved places and request-local
+-- taste signals. Removed/corrected rows remain tombstones for sync/audit.
+create table if not exists memory_preferences (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    preference_type text not null,
+    normalized_value text not null,
+    context text not null default 'general',
+    polarity text not null,
+    source text not null,
+    evidence_refs text[] not null default '{}',
+    evidence_count integer not null default 0,
+    confidence double precision not null default 1,
+    status text not null,
+    corrected_from_id uuid references memory_preferences(id) on delete set null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint memory_preferences_polarity_check check (polarity in ('like', 'dislike', 'constraint')),
+    constraint memory_preferences_source_check check (source in ('explicit', 'inferred')),
+    constraint memory_preferences_status_check check (status in ('proposed', 'active', 'corrected', 'removed')),
+    constraint memory_preferences_confidence_check check (confidence >= 0 and confidence <= 1),
+    constraint memory_preferences_evidence_count_check check (evidence_count >= 0)
+);
+create index if not exists idx_memory_preferences_user_status
+    on memory_preferences(user_id, status, updated_at desc);
+
+-- Outcomes reference opaque records and versions; private queries/notes/source
+-- payloads are deliberately excluded and no preference mutation is triggered.
+create table if not exists recommendation_outcomes (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    recommendation_id text not null,
+    labels text[] not null,
+    label_source text not null,
+    candidate_ids uuid[] not null default '{}',
+    place_ids uuid[] not null default '{}',
+    memory_refs text[] not null default '{}',
+    evidence_refs text[] not null default '{}',
+    correction_class text,
+    receipt_ref text,
+    model_version text,
+    retrieval_version text,
+    created_at timestamptz not null default now(),
+    constraint recommendation_outcomes_label_source_check check (
+        label_source in ('explicit_user', 'evaluator', 'deterministic_outcome')
+    ),
+    constraint recommendation_outcomes_labels_check check (cardinality(labels) > 0)
+);
+create index if not exists idx_recommendation_outcomes_user_created
+    on recommendation_outcomes(user_id, created_at desc);
+
 create table if not exists agent_decisions (
     id uuid primary key default gen_random_uuid(),
     candidate_id uuid references place_candidates(id) on delete cascade not null,

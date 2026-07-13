@@ -160,6 +160,9 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: SaveCollaborativeListNotification.didJoin)) { _ in
                 mapVM.reloadCollaborativeLists()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .saveMemoryPreferencesDidChange)) { _ in
+                Task { await drawerVM.loadMemoryPreferences() }
+            }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 Task { await mapVM.handleSceneDidBecomeActive() }
@@ -167,6 +170,7 @@ struct ContentView: View {
             .task {
                 drawerVM.places = mapVM.places
                 drawerVM.mapCandidates = mapVM.mapCandidates
+                await drawerVM.loadMemoryPreferences()
                 await mapVM.loadPlaces()
             }
             .fullScreenCover(isPresented: shouldShowMapTour) {

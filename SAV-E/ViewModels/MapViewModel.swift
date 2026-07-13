@@ -1626,8 +1626,10 @@ final class MapViewModel: ObservableObject {
         clearRoute()
 
         do {
+            try saveLocalVaultService.removeConfirmedPlace(place)
             try await supabaseService.deletePlace(place.id)
         } catch {
+            _ = try? saveLocalVaultService.saveConfirmedPlace(place)
             places = previousPlaces
             selectedPlace = place
             throw error

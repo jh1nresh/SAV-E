@@ -38,6 +38,7 @@ final class AIDrawerViewModel: ObservableObject {
 
     @Published var places: [Place] = []
     @Published var mapCandidates: [SaveMapCandidate] = []
+    @Published private(set) var memoryPreferences: [SaveMemoryPreference] = []
 
     private let aiService: SaveAIService
     private let saveSearchController: SaveSearchController
@@ -108,6 +109,7 @@ final class AIDrawerViewModel: ObservableObject {
                 places: places,
                 reviewCandidates: reviewCandidates,
                 mapCandidates: mapCandidates,
+                preferences: memoryPreferences,
                 currentLocation: currentLocation,
                 outputLanguage: outputLanguage
             )
@@ -116,6 +118,7 @@ final class AIDrawerViewModel: ObservableObject {
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
+            preferences: memoryPreferences,
             currentLocation: currentLocation,
             outputLanguage: outputLanguage
         )
@@ -181,6 +184,16 @@ final class AIDrawerViewModel: ObservableObject {
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
             drawerState = .error(error.localizedDescription)
+        }
+    }
+
+    /// Preference memory is an explicit, owner-scoped durable input. Request
+    /// context and implicit place-derived taste never promote into this list.
+    func loadMemoryPreferences() async {
+        do {
+            memoryPreferences = try await persistenceService.fetchMemoryPreferences()
+        } catch {
+            logger.error("Preference refresh failed")
         }
     }
 

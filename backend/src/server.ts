@@ -82,6 +82,12 @@ import {
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
 import { createPrivyUserProvisioner } from "./privyUsers.js";
+import {
+  MemoryContractError,
+  normalizePreferenceCreate,
+  normalizePreferencePatch,
+  normalizeRecommendationOutcome,
+} from "./memoryContracts.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -186,7 +192,7 @@ async function placeSllrOrder(query: string, fromNumber: string, location?: Stor
       const near = await nearby(location.lat, location.lng, { limit: 1 });
       if (near[0]) merchantId = near[0].id;
     } catch (error) {
-      console.error("[sendblue] nearby lookup failed, using default merchant", error);
+      console.error(`[sendblue] nearby lookup failed, using default merchant kind=${safeErrorKind(error)}`);
     }
   }
   try {
@@ -203,7 +209,7 @@ async function placeSllrOrder(query: string, fromNumber: string, location?: Stor
     }
     return reply;
   } catch (error) {
-    console.error("[sendblue] SLL-R order failed", error);
+    console.error(`[sendblue] SLL-R order failed kind=${safeErrorKind(error)}`);
     return "Sorry — I couldn't place that order right now. Try again in a moment.";
   }
 }
@@ -220,7 +226,7 @@ async function setSllrRecurring(text: string, fromNumber: string, location?: Sto
       const near = await nearby(location.lat, location.lng, { limit: 1 });
       if (near[0]) merchantId = near[0].id;
     } catch (error) {
-      console.error("[sendblue] nearby lookup failed for recurring, using default", error);
+      console.error(`[sendblue] nearby lookup failed for recurring, using default kind=${safeErrorKind(error)}`);
     }
   }
   const schedule = parseRecurringSchedule(text, SLLR_TZ);
@@ -234,7 +240,7 @@ async function setSllrRecurring(text: string, fromNumber: string, location?: Sto
     if (!cardOnFile) reply += `\n\n💳 Heads up: no saved card yet — pay your next order with the Stripe link once and it'll be remembered for recurring.`;
     return reply;
   } catch (error) {
-    console.error("[sendblue] SLL-R recurring setup failed", error);
+    console.error(`[sendblue] SLL-R recurring setup failed kind=${safeErrorKind(error)}`);
     return "Sorry — I couldn't set that up right now. Try again in a moment.";
   }
 }
@@ -260,7 +266,7 @@ async function confirmSllrRecurring(fromNumber: string): Promise<string> {
     if (result.status === "requires_action") return "Your bank needs an extra confirmation — I'll send a payment link instead.";
     return `Couldn't complete that (${result.status}).`;
   } catch (error) {
-    console.error("[sendblue] SLL-R recurring confirm failed", error);
+    console.error(`[sendblue] SLL-R recurring confirm failed kind=${safeErrorKind(error)}`);
     return "Sorry — I couldn't confirm that right now. Try again in a moment.";
   }
 }
@@ -276,7 +282,7 @@ async function sllrNotifySweep(): Promise<number> {
   try {
     buyers = await sllrBuyers.all();
   } catch (error) {
-    console.error("[sendblue] sllr notify: list buyers failed", error);
+    console.error(`[sendblue] sllr notify: list buyers failed kind=${safeErrorKind(error)}`);
     return 0;
   }
   if (!buyers.length) return 0;
@@ -287,21 +293,21 @@ async function sllrNotifySweep(): Promise<number> {
     try {
       runs = await pendingRuns(buyer);
     } catch (error) {
-      console.error("[sendblue] sllr notify: pendingRuns failed", number, error);
+      console.error(`[sendblue] sllr notify: pendingRuns failed kind=${safeErrorKind(error)}`);
       continue;
     }
     for (const run of runs) {
       try {
         await client.sendMessage(number, `🔁 ${run.summary} — order now? Reply "confirm my usual".`);
       } catch (error) {
-        console.error("[sendblue] sllr notify: send failed", number, error);
+        console.error(`[sendblue] sllr notify: send failed kind=${safeErrorKind(error)}`);
         continue; // don't mark notified — let the next sweep retry
       }
       try {
         const fresh = await sllrBuyers.markNotified(run.id);
         if (fresh) sent++; // freshly prompted this run
       } catch (error) {
-        console.error("[sendblue] sllr notify: markNotified failed", error);
+        console.error(`[sendblue] sllr notify: markNotified failed kind=${safeErrorKind(error)}`);
       }
     }
   }
@@ -322,7 +328,7 @@ async function ensureSendblueTable(): Promise<void> {
     // Hydrate durable conversation memory into the in-memory layer.
     await sendblueConversationStore.hydrate();
   } catch (error) {
-    console.error("[sendblue] ensureSendblueTable failed", error);
+    console.error(`[sendblue] ensureSendblueTable failed kind=${safeErrorKind(error)}`);
   }
 }
 
@@ -447,6 +453,35 @@ const recommendationAnalysisReceiptFields = [
   "evaluator_verdict",
   "settlement_state",
   "created_at",
+] as const;
+
+const memoryPreferenceFields = [
+  "user_id",
+  "preference_type",
+  "normalized_value",
+  "context",
+  "polarity",
+  "source",
+  "evidence_refs",
+  "evidence_count",
+  "confidence",
+  "status",
+  "corrected_from_id",
+] as const;
+
+const recommendationOutcomeFields = [
+  "user_id",
+  "recommendation_id",
+  "labels",
+  "label_source",
+  "candidate_ids",
+  "place_ids",
+  "memory_refs",
+  "evidence_refs",
+  "correction_class",
+  "receipt_ref",
+  "model_version",
+  "retrieval_version",
 ] as const;
 
 const agentDecisionFields = [
@@ -754,6 +789,12 @@ createServer(async (request, response) => {
     if (isV0 && resource === "recommendation-analysis-receipts") {
       return await handleRecommendationAnalysisReceipts(request, response, userId);
     }
+    if (isV0 && resource === "memory-preferences") {
+      return await handleMemoryPreferences(request, response, id, segments[2], userId);
+    }
+    if (isV0 && resource === "recommendation-outcomes") {
+      return await handleRecommendationOutcomes(request, response, userId);
+    }
     if (isV0 && resource === "claims" && id === "usage-receipts") {
       return await handleAuthenticatedClaimUsageReceipts(request, response, userId);
     }
@@ -861,7 +902,7 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
     await ensurePrivyPhoneProfile(normalized, normalized, null);
     console.log(`[sendblue] auto-created SAV-E account for inbound number`);
   } catch (error) {
-    console.error("[sendblue] auto-create account failed", error);
+    console.error(`[sendblue] auto-create account failed kind=${safeErrorKind(error)}`);
   }
   // Memory key is the phone either way (profile id == phone), so existing memory
   // is preserved even if the insert above raced or failed.
@@ -1002,14 +1043,13 @@ async function handleSendblueWebhook(
   try {
     body = await readJson(request);
   } catch (error) {
-    console.error("[sendblue] readJson failed", error);
+    console.error(`[sendblue] readJson failed kind=${safeErrorKind(error)}`);
     return sendJson(response, { ok: true }, 200);
   }
 
-  // Diagnostic: log the FULL raw inbound payload so we can verify empirically
-  // whether Sendblue forwards a shared location / map pin (coordinates, a
-  // location message_type, or a media_url) — the docs list no location field.
-  console.log(`[sendblue] RAW ${JSON.stringify(body)}`);
+  // Keep operational diagnostics metadata-only. Inbound bodies can contain
+  // phone numbers, private messages, media URLs, and location payloads.
+  console.log(`[sendblue] inbound keys=${Object.keys(body).sort().join(",")} message_type=${stringValue(body.message_type) ?? "unknown"}`);
 
   // Respond 200 IMMEDIATELY so Sendblue's webhook never times out on a slow
   // link fetch / Gemini call; process + reply in the background (fire-and-forget).
@@ -1036,12 +1076,9 @@ async function handleSendblueWebhook(
         resolveMemoryKey: resolveSendblueMemoryKey,
         mySavesUrl: mySavesLink,
       });
-      console.log(
-        `[sendblue] done replied=${result.replied}` +
-          (result.reply ? ` reply=${JSON.stringify(result.reply)}` : ""),
-      );
+      console.log(`[sendblue] done replied=${result.replied}`);
     } catch (error) {
-      console.error("[sendblue] background processing error", error);
+      console.error(`[sendblue] background processing error kind=${safeErrorKind(error)}`);
     }
   })();
 }
@@ -1408,6 +1445,114 @@ async function handleRecommendationAnalysisReceipts(
     envelope: envelopeForRecommendationAnalysisReceipt(row),
     full_payload_json: JSON.stringify(row.private_payload),
   }, 201);
+}
+
+async function handleMemoryPreferences(
+  request: IncomingMessage,
+  response: ServerResponse,
+  preferenceId: string | undefined,
+  action: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET" && !preferenceId) {
+    const { rows } = await pool.query(
+      "select * from memory_preferences where user_id = $1 order by updated_at desc",
+      [userId],
+    );
+    return sendJson(response, rows.map((row) => formatDates(asObject(row))));
+  }
+
+  try {
+    if (request.method === "POST" && !preferenceId) {
+      const normalized = normalizePreferenceCreate(await readJson(request));
+      const insert = buildInsert(
+        "memory_preferences",
+        { ...normalized, user_id: userId },
+        memoryPreferenceFields,
+      );
+      const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+      return sendJson(response, formatDates(asObject(rows[0])), 201);
+    }
+
+    if (request.method === "PATCH" && preferenceId && !action) {
+      const patch = normalizePreferencePatch(await readJson(request));
+      const update = buildUpdate("memory_preferences", patch, memoryPreferenceFields);
+      if (!update) return sendJson(response, { error: "No writable fields" }, 400);
+      const { rows } = await pool.query(
+        `${update.sql}, updated_at = now() where id = $${update.values.length + 1} and user_id = $${update.values.length + 2} returning *`,
+        [...update.values, preferenceId, userId],
+      );
+      if (!rows[0]) return sendJson(response, { error: "Preference not found" }, 404);
+      return sendJson(response, formatDates(asObject(rows[0])));
+    }
+
+    if (request.method === "POST" && preferenceId && action === "corrections") {
+      const normalized = normalizePreferenceCreate({ ...await readJson(request), source: "explicit", status: "active" });
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const { rows: previousRows } = await client.query(
+          "update memory_preferences set status = 'corrected', updated_at = now() where id = $1 and user_id = $2 and status <> 'removed' returning id",
+          [preferenceId, userId],
+        );
+        if (!previousRows[0]) {
+          await client.query("rollback");
+          return sendJson(response, { error: "Preference not found" }, 404);
+        }
+        const insert = buildInsert(
+          "memory_preferences",
+          { ...normalized, user_id: userId, corrected_from_id: preferenceId },
+          memoryPreferenceFields,
+        );
+        const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+        await client.query("commit");
+        return sendJson(response, formatDates(asObject(rows[0])), 201);
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+  } catch (error) {
+    if (error instanceof MemoryContractError) return sendJson(response, { error: error.message }, 400);
+    throw error;
+  }
+
+  return sendJson(response, { error: "Unsupported memory preference route" }, 405);
+}
+
+async function handleRecommendationOutcomes(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET") {
+    const { rows } = await pool.query(
+      "select * from recommendation_outcomes where user_id = $1 order by created_at desc limit 200",
+      [userId],
+    );
+    return sendJson(response, rows.map((row) => formatDates(asObject(row))));
+  }
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported recommendation outcome route" }, 405);
+  }
+
+  try {
+    const normalized = normalizeRecommendationOutcome(await readJson(request));
+    for (const placeId of normalized.place_ids as string[]) await ensureOwnedPlaceReference(placeId, userId);
+    for (const candidateId of normalized.candidate_ids as string[]) await ensureOwnedCandidateReference(candidateId, userId);
+    const insert = buildInsert(
+      "recommendation_outcomes",
+      { ...normalized, user_id: userId },
+      recommendationOutcomeFields,
+    );
+    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+    return sendJson(response, formatDates(asObject(rows[0])), 201);
+  } catch (error) {
+    if (error instanceof MemoryContractError) return sendJson(response, { error: error.message }, 400);
+    throw error;
+  }
 }
 
 async function handleLLMProxy(
@@ -2778,6 +2923,10 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function safeErrorKind(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
 async function ensureCaptureOwner(captureId: string, userId: string): Promise<void> {
   const { rows } = await pool.query("select id from captures where id = $1 and user_id = $2", [captureId, userId]);
   if (!rows[0]) throw new ApiError(404, "Capture not found");
@@ -3996,7 +4145,7 @@ async function ensurePrivyPhoneProfile(
       await linkPrivyUserToProfile(profileId, privyUser.id);
     }
   } catch (error) {
-    console.error("[sendblue] privy phone provisioning failed", error);
+    console.error(`[sendblue] privy phone provisioning failed kind=${safeErrorKind(error)}`);
   }
 }
 

@@ -18,6 +18,7 @@ struct SaveLocationIntentRecommendationService {
         places: [Place],
         reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = [],
+        preferences: [SaveMemoryPreference] = [],
         currentLocation: CLLocation?,
         outputLanguage: AppLanguage = .english
     ) -> SaveSearchResponse? {
@@ -30,6 +31,7 @@ struct SaveLocationIntentRecommendationService {
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
+            preferences: preferences,
             currentLocation: currentLocation,
             outputLanguage: outputLanguage
         )
@@ -41,6 +43,7 @@ struct SaveLocationIntentRecommendationService {
         places: [Place],
         reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = [],
+        preferences: [SaveMemoryPreference] = [],
         currentLocation: CLLocation?,
         outputLanguage: AppLanguage = .english
     ) -> SaveSearchResponse? {
@@ -49,7 +52,7 @@ struct SaveLocationIntentRecommendationService {
         }
         var intent = initialIntent
         guard intent.sourceScope != .publicOnly else { return nil }
-        let tasteProfile = SaveTasteProfile(places: places)
+        let tasteProfile = SaveTasteProfile(places: places, preferences: preferences, query: query)
         if intent.requiredCategories.isEmpty, let frequentCategory = tasteProfile.mostSavedCategory {
             intent = intent.withRequiredCategory(frequentCategory)
         }
@@ -216,6 +219,7 @@ struct SaveLocationIntentRecommendationService {
         places: [Place],
         reviewCandidates: [PlaceReviewCandidate] = [],
         mapCandidates: [SaveMapCandidate] = [],
+        preferences: [SaveMemoryPreference] = [],
         currentLocation: CLLocation?
     ) -> SaveAIResponse? {
         let outputLanguage = inferredOutputLanguage(for: query)
@@ -224,6 +228,7 @@ struct SaveLocationIntentRecommendationService {
             places: places,
             reviewCandidates: reviewCandidates,
             mapCandidates: mapCandidates,
+            preferences: preferences,
             currentLocation: currentLocation,
             outputLanguage: outputLanguage
         ) else {
@@ -936,13 +941,20 @@ private struct SaveTasteProfile {
     private let preferredTerms: Set<String>
     private let preferredPriceRanges: Set<String>
     private let savedCategoryCounts: [PlaceCategory: Int]
+    private let activePreferences: [SaveMemoryPreference]
 
-    init(places: [Place]) {
+    init(places: [Place], preferences: [SaveMemoryPreference], query: String) {
         let positiveVisited = places.filter(Self.isPositiveVisitedPlace)
         preferredTerms = Set(positiveVisited.flatMap(Self.tagLikeTasteTerms))
         preferredPriceRanges = Set(positiveVisited.compactMap { Self.clean($0.priceRange) })
         savedCategoryCounts = Dictionary(grouping: places, by: \.category)
             .mapValues { $0.count }
+        let normalizedQuery = SaveSearchIntentParser.normalize(query)
+        activePreferences = preferences.filter { preference in
+            guard preference.isActiveForRanking else { return false }
+            let context = SaveSearchIntentParser.normalize(preference.context)
+            return context == "general" || normalizedQuery.contains(context)
+        }
     }
 
     func rankingSignals(for place: Place) -> SaveTasteRankingSignals {
@@ -952,7 +964,8 @@ private struct SaveTasteProfile {
             highRating: Self.highRating(for: place),
             matchingPreferredTerms: matchingPreferredTerms(for: place).sorted(),
             preferredPriceRange: priceRange.flatMap { preferredPriceRanges.contains($0) ? $0 : nil },
-            frequentCategoryCount: savedCategoryCounts[place.category] ?? 0
+            frequentCategoryCount: savedCategoryCounts[place.category] ?? 0,
+            explicitPreferenceScore: explicitPreferenceScore(for: place)
         )
     }
 
@@ -969,6 +982,27 @@ private struct SaveTasteProfile {
 
     private func matchingPreferredTerms(for place: Place) -> Set<String> {
         Set(Self.tagLikeTasteTerms(for: place)).intersection(preferredTerms)
+    }
+
+    private func explicitPreferenceScore(for place: Place) -> Int {
+        let searchable = SaveSearchIntentParser.normalize([
+            place.name,
+            place.category.rawValue,
+            place.note ?? "",
+            place.extractedDishes?.joined(separator: " ") ?? "",
+            place.priceRange ?? "",
+            place.recommender ?? ""
+        ].joined(separator: " "))
+
+        return activePreferences.reduce(into: 0) { score, preference in
+            let value = SaveSearchIntentParser.normalize(preference.normalizedValue)
+            guard !value.isEmpty, searchable.contains(value) else { return }
+            switch preference.polarity {
+            case .like: score += 6
+            case .dislike: score -= 8
+            case .constraint: score += 4
+            }
+        }
     }
 
     private static func isPositiveVisitedPlace(_ place: Place) -> Bool {
@@ -1018,6 +1052,7 @@ private struct SaveTasteRankingSignals {
     let matchingPreferredTerms: [String]
     let preferredPriceRange: String?
     let frequentCategoryCount: Int
+    let explicitPreferenceScore: Int
 
     var hasVisitedTasteMatch: Bool {
         isPositiveVisited || !matchingPreferredTerms.isEmpty || preferredPriceRange != nil
@@ -1038,6 +1073,7 @@ private struct SaveTasteRankingSignals {
         if frequentCategoryCount >= SaveTasteProfile.frequentCategoryThreshold {
             value += min(frequentCategoryCount, 3)
         }
+        value += explicitPreferenceScore
         return value
     }
 

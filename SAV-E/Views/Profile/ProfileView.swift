@@ -87,21 +87,19 @@ struct ProfileView: View {
                         }
                         .accessibilityIdentifier("profile.language")
 
-                        #if DEBUG
                         NavigationLink {
                             SaveMemoryDebugView()
                         } label: {
                             SettingsRow(
-                                icon: "tray",
-                                title: localMemoryTitle,
-                                detail: localMemoryDetail,
+                                icon: "brain.head.profile",
+                                title: languageSettings.localized(english: "Memory & Preferences", traditionalChinese: "記憶與偏好"),
+                                detail: languageSettings.localized(english: "Inspect and control what SAV-E remembers", traditionalChinese: "查看並控制 SAV-E 記住的內容"),
                                 color: .saveCocoa
                             )
                         }
                         .buttonStyle(.plain)
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
-                        .accessibilityIdentifier("profile.debugMemory")
-                        #endif
+                        .accessibilityIdentifier("profile.memoryPreferences")
 
                         SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .saveError) {
                             SaveHaptics.tap()

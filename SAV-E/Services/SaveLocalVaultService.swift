@@ -107,6 +107,7 @@ final class SaveLocalVaultService: Sendable {
 
     func saveConfirmedPlace(_ place: Place) throws -> SaveMemoryRecord {
         let record = SaveMemoryRecord(
+            id: place.id,
             state: .confirmedPlace,
             sourceURL: place.sourceUrl,
             sourceText: place.note,
@@ -144,6 +145,19 @@ final class SaveLocalVaultService: Sendable {
             }
         }
         return record
+    }
+
+    func removeConfirmedPlace(_ place: Place) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll { record in
+                    guard let confirmed = record.confirmedPlace else { return false }
+                    return confirmed.id == place.id || confirmed.matches(place)
+                }
+                try save(records, to: url)
+            }
+        }
     }
 
     private func withLock<T>(_ operation: () throws -> T) rethrows -> T {

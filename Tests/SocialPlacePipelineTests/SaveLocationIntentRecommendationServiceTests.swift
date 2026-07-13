@@ -712,6 +712,47 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testOnlyActiveExplicitPreferencesInfluenceRanking() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let generic = place(name: "Closer Cafe", category: .cafe, latitude: 33.6847, longitude: -117.8265)
+        let quiet = place(name: "Quiet Reading Cafe", category: .cafe, latitude: 33.6852, longitude: -117.8265, note: "quiet reading tables")
+        let currentLocation = CLLocation(latitude: 33.6846, longitude: -117.8265)
+
+        let active = preference(value: "quiet", status: .active)
+        let activeResponse = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "recommend nearby coffee",
+            places: [generic, quiet],
+            preferences: [active],
+            currentLocation: currentLocation
+        ))
+        XCTAssertEqual(activeResponse.fromYourSave.results.first?.title, "Quiet Reading Cafe")
+
+        for status in [SaveMemoryPreference.Status.proposed, .corrected, .removed] {
+            let response = try XCTUnwrap(service.recommendationSearchResponse(
+                for: "recommend nearby coffee",
+                places: [generic, quiet],
+                preferences: [preference(value: "quiet", status: status)],
+                currentLocation: currentLocation
+            ))
+            XCTAssertEqual(response.fromYourSave.results.first?.title, "Closer Cafe", "\(status) must not rank")
+        }
+    }
+
+    @MainActor
+    func testActiveDislikeDemotesMatchingPlace() throws {
+        let service = SaveLocationIntentRecommendationService()
+        let loud = place(name: "Loud Cafe", category: .cafe, note: "loud music")
+        let calm = place(name: "Calm Cafe", category: .cafe, note: "calm tables")
+        let response = try XCTUnwrap(service.recommendationSearchResponse(
+            for: "recommend coffee in LA",
+            places: [loud, calm],
+            preferences: [preference(value: "loud", polarity: .dislike, status: .active)],
+            currentLocation: nil
+        ))
+        XCTAssertEqual(response.fromYourSave.results.first?.title, "Calm Cafe")
+    }
+
+    @MainActor
     func testSharedGeminiFallbacksPrimary35FlashWith25FlashFallback() {
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, SAVEProductionConfig.defaultGeminiModelFallbacks)
         XCTAssertEqual(SaveAIService.defaultModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
@@ -1203,6 +1244,28 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: Date()
+        )
+    }
+
+    private func preference(
+        value: String,
+        polarity: SaveMemoryPreference.Polarity = .like,
+        status: SaveMemoryPreference.Status
+    ) -> SaveMemoryPreference {
+        SaveMemoryPreference(
+            id: UUID(),
+            preferenceType: "vibe",
+            normalizedValue: value,
+            context: "general",
+            polarity: polarity,
+            source: .explicit,
+            evidenceRefs: [],
+            evidenceCount: 0,
+            confidence: 1,
+            status: status,
+            correctedFromId: nil,
+            createdAt: Date(),
+            updatedAt: Date()
         )
     }
 

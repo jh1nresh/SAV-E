@@ -33,6 +33,10 @@ const defaultGeminiModel = "gemini-2.5-flash";
 const maxCaptionChars = 4_000;
 const maxVenuesPerCaption = 10;
 
+function safeErrorKind(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
 export type FetchText = (url: string) => Promise<string>;
 
 export type LinkCaption = {
@@ -331,7 +335,7 @@ ${text}`;
   try {
     raw = await gemini(prompt);
   } catch (error) {
-    console.error("[sendblue] extractReceipt gemini error", error);
+    console.error(`[sendblue] extractReceipt gemini error kind=${safeErrorKind(error)}`);
     return null;
   }
   const parsed = parseReplyJson(raw) as {
@@ -387,7 +391,7 @@ ${text}`;
   try {
     raw = await gemini(prompt);
   } catch (error) {
-    console.error("[sendblue] extractReview gemini error", error);
+    console.error(`[sendblue] extractReview gemini error kind=${safeErrorKind(error)}`);
     return null;
   }
   const parsed = parseReplyJson(raw) as {
@@ -1219,7 +1223,7 @@ export class PgBackedConversationStore implements ConversationStore {
       }
       console.log(`[sendblue] hydrated ${rows.length} conversation states`);
     } catch (error) {
-      console.error("[sendblue] conversation hydrate failed", error);
+      console.error(`[sendblue] conversation hydrate failed kind=${safeErrorKind(error)}`);
     }
   }
 
@@ -1229,7 +1233,7 @@ export class PgBackedConversationStore implements ConversationStore {
       // Cleared/expired → drop the durable row too (best-effort).
       void this.db
         .query(`delete from sendblue_conversation_state where memory_key = $1`, [phone])
-        .catch((error) => console.error("[sendblue] conversation delete failed", error));
+        .catch((error) => console.error(`[sendblue] conversation delete failed kind=${safeErrorKind(error)}`));
       return;
     }
     const { at: _at, ...rest } = state;
@@ -1240,7 +1244,7 @@ export class PgBackedConversationStore implements ConversationStore {
          on conflict (memory_key) do update set state = excluded.state, updated_at = now()`,
         [phone, JSON.stringify(rest)],
       )
-      .catch((error) => console.error("[sendblue] conversation persist failed", error));
+      .catch((error) => console.error(`[sendblue] conversation persist failed kind=${safeErrorKind(error)}`));
   }
 
   get(phone: string): ConversationState | undefined {
@@ -1385,7 +1389,7 @@ Return STRICT JSON only, no markdown.`;
   try {
     raw = await gemini(prompt);
   } catch (error) {
-    console.error("[sendblue] decideRecall gemini error", error);
+    console.error(`[sendblue] decideRecall gemini error kind=${safeErrorKind(error)}`);
     return null;
   }
   const parsed = parseRecallJson(raw);
@@ -1554,7 +1558,7 @@ Return STRICT JSON only: {"reply": string}`;
     const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     return reply.length > 0 ? reply : template();
   } catch (error) {
-    console.error("[sendblue] phraseRecommendations gemini error", error);
+    console.error(`[sendblue] phraseRecommendations gemini error kind=${safeErrorKind(error)}`);
     return template();
   }
 }
@@ -1743,7 +1747,7 @@ Return STRICT JSON only: {"reply": string|null}`;
   try {
     raw = await gemini(prompt);
   } catch (error) {
-    console.error("[sendblue] suggestOrderFromCaption gemini error", error);
+    console.error(`[sendblue] suggestOrderFromCaption gemini error kind=${safeErrorKind(error)}`);
     return null;
   }
   const parsed = parseReplyJson(raw);
@@ -1778,7 +1782,7 @@ Return STRICT JSON only: {"reply": string|null}`;
     if (reply && isImplausibleOrderAdvice(placeName, corpus, reply)) return null;
     return reply.length > 0 ? reply : null;
   } catch (error) {
-    console.error("[sendblue] suggestOrderFromReviews gemini error", error);
+    console.error(`[sendblue] suggestOrderFromReviews gemini error kind=${safeErrorKind(error)}`);
     return null;
   }
 }
@@ -1818,7 +1822,7 @@ Return STRICT JSON only: {"reply": string}`;
     const reply = parsed && typeof parsed.reply === "string" ? parsed.reply.trim() : "";
     return reply.length > 0 ? reply : template();
   } catch (error) {
-    console.error("[sendblue] phrasePlaceRec gemini error", error);
+    console.error(`[sendblue] phrasePlaceRec gemini error kind=${safeErrorKind(error)}`);
     return template();
   }
 }
@@ -1909,7 +1913,7 @@ async function keywordRecallReply(
   try {
     savedAreas = await store.distinctAreas(from);
   } catch (storeError) {
-    console.error("[sendblue] store.distinctAreas error", storeError);
+    console.error(`[sendblue] store.distinctAreas error kind=${safeErrorKind(storeError)}`);
   }
   const area = detectArea(text, savedAreas);
 
@@ -1918,11 +1922,11 @@ async function keywordRecallReply(
     try {
       places = await store.list(from, area ? { area } : undefined);
     } catch (storeError) {
-      console.error("[sendblue] store.list error", storeError);
+      console.error(`[sendblue] store.list error kind=${safeErrorKind(storeError)}`);
       places = [];
     }
     const picked = pickRecommendation(places);
-    console.log(`[sendblue] recommend intent area=${area ?? "(any)"} picked=${picked?.name ?? "(none)"}`);
+    console.log(`[sendblue] recommend intent area_set=${Boolean(area)} picked=${Boolean(picked)}`);
     if (picked) return formatRecommendReply(picked, chinese);
     if (area) return formatNoAreaMatch(area, chinese);
     return emptyListReply;
@@ -1933,10 +1937,10 @@ async function keywordRecallReply(
     try {
       places = await store.list(from, area ? { area } : undefined);
     } catch (storeError) {
-      console.error("[sendblue] store.list error", storeError);
+      console.error(`[sendblue] store.list error kind=${safeErrorKind(storeError)}`);
       places = [];
     }
-    console.log(`[sendblue] list intent for ${from} area=${area ?? "(any)"} count=${places.length}`);
+    console.log(`[sendblue] list intent area_set=${Boolean(area)} count=${places.length}`);
     const url = mySavesUrl?.(from);
     if (url) return formatMySavesLinkHandoff(places, area, url, chinese);
     return area ? formatAreaList(places, area, chinese) : formatPlaceList(places, chinese);
@@ -1956,23 +1960,23 @@ export async function processSendblueInbound(
   deps: ProcessDeps,
 ): Promise<ProcessResult> {
   if (!isInboundMessage(body)) {
-    console.log("[sendblue] ignored non-inbound event", JSON.stringify(body).slice(0, 160));
+    console.log(`[sendblue] ignored non-inbound event keys=${Object.keys(body).sort().join(",")}`);
     return { replied: false };
   }
 
   const from = inboundFrom(body);
   const text = inboundText(body);
   if (!from || !text) {
-    console.log(`[sendblue] inbound missing from/text from=${from ?? "?"} text=${(text ?? "").slice(0, 60)}`);
+    console.log(`[sendblue] inbound missing fields has_from=${Boolean(from)} text_length=${text?.length ?? 0}`);
     return { replied: false };
   }
-  console.log(`[sendblue] inbound from=${from} text=${text.slice(0, 120)}`);
+  console.log(`[sendblue] inbound text_length=${text.length}`);
   let memoryKey = from;
   if (deps.resolveMemoryKey) {
     try {
       memoryKey = await deps.resolveMemoryKey(from);
     } catch (error) {
-      console.error("[sendblue] resolveMemoryKey error", error);
+      console.error(`[sendblue] resolveMemoryKey error kind=${safeErrorKind(error)}`);
     }
   }
   if (memoryKey !== from) console.log("[sendblue] resolved inbound channel to SAV-E profile");
@@ -2006,9 +2010,9 @@ export async function processSendblueInbound(
         try {
           const { caption } = await fetchLinkCaption(url, deps.fetchText);
           receiptText = `${text}\n${caption}`.trim();
-          console.log(`[sendblue] receipt link ${url} captionLen=${caption.length}`);
+          console.log(`[sendblue] receipt link caption_length=${caption.length}`);
         } catch (fetchErr) {
-          console.error("[sendblue] receipt link fetch error", fetchErr);
+          console.error(`[sendblue] receipt link fetch error kind=${safeErrorKind(fetchErr)}`);
         }
       }
       const receipt = await extractReceipt(receiptText, deps.gemini);
@@ -2034,11 +2038,9 @@ export async function processSendblueInbound(
             });
           }
         } catch (storeError) {
-          console.error("[sendblue] receipt save error", storeError);
+          console.error(`[sendblue] receipt save error kind=${safeErrorKind(storeError)}`);
         }
-        console.log(
-          `[sendblue] receipt merchant="${receipt.merchant}" total="${receipt.total ?? ""}" count=${count} dup=${dup} link=${receiptLink}`,
-        );
+        console.log(`[sendblue] receipt count=${count} duplicate=${dup} link=${receiptLink}`);
         // Arm a receipt-gated review: the next message is read as a review of
         // this exact (verified) merchant.
         if (deps.reviewStore) convoStore.setReview(memoryKey, receipt.merchant);
@@ -2061,7 +2063,7 @@ export async function processSendblueInbound(
         const freshMs = last?.createdAt ? Date.now() - last.createdAt.getTime() : Infinity;
         if (last && freshMs < 30 * 60 * 1000) reviewMerchant = last.merchant;
       } catch (storeError) {
-        console.error("[sendblue] recent visit lookup error", storeError);
+        console.error(`[sendblue] recent visit lookup error kind=${safeErrorKind(storeError)}`);
       }
     }
     if (deps.reviewStore && deps.gemini && reviewMerchant && !url) {
@@ -2077,23 +2079,21 @@ export async function processSendblueInbound(
             text: review.text,
           });
         } catch (storeError) {
-          console.error("[sendblue] review save error", storeError);
+          console.error(`[sendblue] review save error kind=${safeErrorKind(storeError)}`);
         }
-        console.log(
-          `[sendblue] review merchant="${merchant}" rating=${review.rating ?? ""} count=${count}`,
-        );
+        console.log(`[sendblue] review has_rating=${review.rating !== undefined} count=${count}`);
         reply = formatReviewReply(merchant, review, count, chinese);
         await deps.client.sendMessage(from, reply);
         return { replied: true, reply };
       }
-      console.log(`[sendblue] pending review for "${merchant}" not a review → falling through`);
+      console.log("[sendblue] pending review was not a review → falling through");
     }
     // Receipt-ish text we could NOT parse as a receipt (e.g. an order header like
     // "Review Order #214 at X" that precedes the receipt link). Don't let it fall
     // through to the place-recall path and answer "I don't have a place called X"
     // — ack softly and ask for the receipt instead.
     if (!url && looksLikeReceipt(text)) {
-      console.log(`[sendblue] receipt-ish unparsed → soft ack for ${from}`);
+      console.log("[sendblue] receipt-ish unparsed → soft ack");
       reply = chinese
         ? "📩 看起來像收據 — 把收據連結或完整內容傳給我,我就幫你記成驗證訪問。"
         : "📩 Looks like a receipt — forward the receipt link or full text and I'll log it as a verified visit.";
@@ -2104,7 +2104,7 @@ export async function processSendblueInbound(
       const recent = uniqueRecentPlaces(convo);
       if (recent.length >= 2) {
         reply = formatCompareReply(recent, chinese);
-        console.log(`[sendblue] compare intent for ${from} places=${recent.map((place) => place.name).join("|")}`);
+        console.log(`[sendblue] compare intent place_count=${recent.length}`);
         await deps.client.sendMessage(from, reply);
         return { replied: true, reply };
       }
@@ -2112,7 +2112,7 @@ export async function processSendblueInbound(
     if (!url && isBookingIntent(text)) {
       const recent = uniqueRecentPlaces(convo);
       reply = formatBookingReply(recent[0], chinese);
-      console.log(`[sendblue] booking intent for ${from} target="${recent[0]?.name ?? "(none)"}"`);
+      console.log(`[sendblue] booking intent has_target=${Boolean(recent[0])}`);
       await deps.client.sendMessage(from, reply);
       return { replied: true, reply };
     }
@@ -2170,7 +2170,7 @@ export async function processSendblueInbound(
       const orderReply = await deps.order(orderQuery(text), from, loc);
       if (orderReply) {
         await deps.client.sendMessage(from, orderReply);
-        console.log(`[sendblue] order reply for ${from} near ${loc.label}`);
+        console.log("[sendblue] order reply with saved location");
         return { replied: true, reply: orderReply };
       }
     }
@@ -2179,9 +2179,9 @@ export async function processSendblueInbound(
     } else if (url) {
       // Save flow: link → caption → venue(s) → remember them for this number.
       const { caption } = await fetchLinkCaption(url, deps.fetchText);
-      console.log(`[sendblue] url=${url} captionLen=${caption.length}`);
+      console.log(`[sendblue] source link caption_length=${caption.length}`);
       const venues = caption ? await extractVenuesFromCaption(caption, deps.gemini) : [];
-      console.log(`[sendblue] venues=${venues.length > 0 ? JSON.stringify(venues) : "(none)"}`);
+      console.log(`[sendblue] extracted venue_count=${venues.length}`);
       if (venues.length > 0) {
         let count = 0;
         try {
@@ -2190,13 +2190,13 @@ export async function processSendblueInbound(
           }
         } catch (storeError) {
           // Degrade gracefully: still confirm the find even if persistence fails.
-          console.error("[sendblue] store.save error", storeError);
+          console.error(`[sendblue] store.save error kind=${safeErrorKind(storeError)}`);
           reply = formatVenueReply(venues[0]);
           await deps.client.sendMessage(from, reply);
-          console.log(`[sendblue] sent to ${from} (save failed, no count)`);
+          console.log("[sendblue] sent reply after save failure");
           return { replied: true, reply };
         }
-        console.log(`[sendblue] saved place for ${from} count=${count}`);
+        console.log(`[sendblue] saved place count=${count}`);
         reply = formatMultiSaveReply(venues, count, chinese);
         // Make the first just-saved place the conversation's focus so a follow-up
         // ("where is it?", "京都哪裡?") resolves to THIS place instead of
@@ -2219,10 +2219,10 @@ export async function processSendblueInbound(
                 priceRange: hit.priceRange,
                 category: primaryVenue.category ?? hit.category,
               };
-              console.log(`[sendblue] save enrich → "${hit.name}" ${hit.address ?? "(no addr)"}`);
+              console.log(`[sendblue] save enrichment found=${Boolean(hit.address)}`);
             }
           } catch (enrichError) {
-            console.error("[sendblue] save enrich error", enrichError);
+            console.error(`[sendblue] save enrich error kind=${safeErrorKind(enrichError)}`);
           }
         }
         convoStore.setRecommended(memoryKey, focus);
@@ -2238,7 +2238,7 @@ export async function processSendblueInbound(
       try {
         places = await deps.store.list(memoryKey, { limit: 50 });
       } catch (storeError) {
-        console.error("[sendblue] store.list error", storeError);
+        console.error(`[sendblue] store.list error kind=${safeErrorKind(storeError)}`);
       }
       // Personalization: build a taste profile from saved places + visited
       // merchants (receipts), to skip places they already know and nudge ranking.
@@ -2247,7 +2247,7 @@ export async function processSendblueInbound(
         try {
           visitedMerchants = (await deps.receiptStore.list(memoryKey, 50)).map((v) => v.merchant);
         } catch (storeError) {
-          console.error("[sendblue] receiptStore.list error", storeError);
+          console.error(`[sendblue] receiptStore.list error kind=${safeErrorKind(storeError)}`);
         }
       }
       const taste = buildTasteProfile(places, visitedMerchants);
@@ -2260,7 +2260,7 @@ export async function processSendblueInbound(
       });
       if (!decision) {
         convoStore.clearPending(memoryKey);
-        console.log(`[sendblue] agentic empty → keyword fallback for ${from}`);
+        console.log("[sendblue] agentic empty → keyword fallback");
         reply = await keywordRecallReply(text, memoryKey, chinese, deps.store, deps.mySavesUrl);
       } else if (decision.kind === "details") {
         // The user wants a specific place's address / map / "card" → look it up
@@ -2272,10 +2272,10 @@ export async function processSendblueInbound(
         try {
           found = await search(lookupQuery);
         } catch (searchError) {
-          console.error("[sendblue] details lookup error", searchError);
+          console.error(`[sendblue] details lookup error kind=${safeErrorKind(searchError)}`);
         }
         const place = found[0];
-        console.log(`[sendblue] details "${lookupQuery}" → ${place?.name ?? "(none)"}`);
+        console.log(`[sendblue] details lookup found=${Boolean(place)}`);
         const replyChinese =
           chinese ||
           contextLooksChinese(decision.placeName) ||
@@ -2313,7 +2313,7 @@ export async function processSendblueInbound(
             }
             if (advice) source = "saved-post";
           } catch (fetchErr) {
-            console.error("[sendblue] order_advice caption fetch error", fetchErr);
+            console.error(`[sendblue] order_advice caption fetch error kind=${safeErrorKind(fetchErr)}`);
           }
         }
         // 2. Otherwise (e.g. a place the bot just RECOMMENDED, not saved) ground it
@@ -2330,10 +2330,10 @@ export async function processSendblueInbound(
             }
             if (advice) source = "reviews";
           } catch (reviewsErr) {
-            console.error("[sendblue] order_advice reviews error", reviewsErr);
+            console.error(`[sendblue] order_advice reviews error kind=${safeErrorKind(reviewsErr)}`);
           }
         }
-        console.log(`[sendblue] order_advice "${decision.placeName}" source=${source} hasAdvice=${!!advice}`);
+        console.log(`[sendblue] order_advice source=${source} has_advice=${Boolean(advice)}`);
         if (advice) {
           reply = advice;
         } else {
@@ -2345,20 +2345,18 @@ export async function processSendblueInbound(
         // Pure location, nothing pending → store it and ask what they want,
         // instead of a hollow "I'll remember" that loses the area.
         convoStore.setArea(memoryKey, decision.area);
-        console.log(`[sendblue] location set for ${from} area="${decision.area}"`);
+        console.log("[sendblue] location set for conversation");
         reply = chinese
           ? `📍 收到,你在 ${decision.area} 附近 — 要找什麼?(咖啡、吃的、酒吧…)`
           : `📍 Got it, you're near ${decision.area} — what are you looking for? (coffee, food, a bar…)`;
       } else if (decision.kind === "reply") {
         convoStore.clearPending(memoryKey);
-        console.log(
-          `[sendblue] agentic reply for ${from} placeCount=${places.length} recentPlaces=${convo?.lastPlaces?.length ?? 0}`,
-        );
+        console.log(`[sendblue] agentic reply place_count=${places.length} recent_place_count=${convo?.lastPlaces?.length ?? 0}`);
         reply = decision.reply;
       } else if (!(decision.area ?? convo?.lastArea)) {
         // Wants nearby but we have NO location at all → remember query, ask where.
         convoStore.setPending(memoryKey, decision.query);
-        console.log(`[sendblue] discovery wants location from ${from} (pending="${decision.query}")`);
+        console.log("[sendblue] discovery needs location");
         reply = askLocationReply(chinese);
       } else {
         // Discovery: search near the given area, OR — deterministically — the
@@ -2370,7 +2368,7 @@ export async function processSendblueInbound(
         try {
           found = await search(`${decision.query} in ${area}`);
         } catch (searchError) {
-          console.error("[sendblue] places search error", searchError);
+          console.error(`[sendblue] places search error kind=${safeErrorKind(searchError)}`);
         }
         // A specific street address can make Google return the address ITSELF as
         // a "place" (a geocode/premise, no rating). Never recommend the user's own
@@ -2381,9 +2379,8 @@ export async function processSendblueInbound(
         const exclude = [...(convo?.shownNames ?? []), ...taste.knownNames];
         const picks = rankPlaces(businesses, exclude, taste.preferredCategories).slice(0, 3);
         console.log(
-          `[sendblue] discovery query="${decision.query}" area="${area}" results=${found.length} picks=[${picks.map((p) => p.name).join(" | ")}] known=${taste.knownNames.length} cats=[${taste.preferredCategories.join(",")}]` +
-            (convo?.pendingQuery ? " (resumed pending)" : "") +
-            (!decision.area && convo?.lastArea ? " (reused area)" : ""),
+          `[sendblue] discovery results=${found.length} pick_count=${picks.length} known_count=${taste.knownNames.length}` +
+            ` resumed=${Boolean(convo?.pendingQuery)} reused_area=${Boolean(!decision.area && convo?.lastArea)}`,
         );
         if (picks.length) {
           // Remember location + what we recommended for follow-ups / "something else".
@@ -2413,12 +2410,12 @@ export async function processSendblueInbound(
     }
   } catch (error) {
     // Spike: degrade gracefully, never bubble up to the webhook.
-    console.error("[sendblue] inbound processing error", error);
+    console.error(`[sendblue] inbound processing error kind=${safeErrorKind(error)}`);
     reply = noVenueReply;
   }
 
   await deps.client.sendMessage(from, reply);
-  console.log(`[sendblue] sent to ${from}`);
+  console.log("[sendblue] sent reply");
   return { replied: true, reply };
 }
 
