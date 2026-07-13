@@ -91,6 +91,15 @@ import {
   normalizePreferencePatch,
   normalizeRecommendationOutcome,
 } from "./memoryContracts.js";
+import {
+  R8AgentMetricsQueryError,
+  aggregateR8PilotMetrics,
+  authorizeR8AgentMetrics,
+  normalizeR8AgentMetricsQuery,
+  r8AgentMetricsFailureLabels,
+  r8AgentMetricsSql,
+  type R8AgentMetricsRow,
+} from "./r8AgentMetrics.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -753,6 +762,9 @@ createServer(async (request, response) => {
     }
 
     const rawSegments = url.pathname.split("/").filter(Boolean);
+    if (rawSegments.join("/") === "internal/r8/pilot-metrics") {
+      return await handleR8AgentPilotMetrics(request, response, url);
+    }
     const isPublicV0 = rawSegments[0] === "public" && rawSegments[1] === "v0";
     if (isPublicV0) {
       return await handlePublicV0(request, response, rawSegments.slice(2));
@@ -1516,6 +1528,55 @@ async function handleRecommendationAnalysisReceipts(
     envelope: envelopeForRecommendationAnalysisReceipt(row),
     full_payload_json: JSON.stringify(row.private_payload),
   }, 201);
+}
+
+async function handleR8AgentPilotMetrics(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  if (request.method !== "GET") {
+    return sendJson(response, { error: "Unsupported R8 pilot metrics route" }, 405);
+  }
+
+  const configuredToken = process.env.SAVE_INTERNAL_AGENT_TOKEN?.trim();
+  const authorization = authorizeR8AgentMetrics(configuredToken, request.headers.authorization);
+  if (authorization === "unavailable") {
+    return sendJson(response, { error: "Internal agent metrics are not configured" }, 503);
+  }
+  if (authorization === "unauthorized") {
+    return sendJson(response, { error: "Unauthorized" }, 401);
+  }
+
+  let query;
+  try {
+    query = normalizeR8AgentMetricsQuery(url.searchParams);
+  } catch (error) {
+    if (error instanceof R8AgentMetricsQueryError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    throw error;
+  }
+
+  const generatedAt = new Date();
+  const since = new Date(generatedAt.getTime() - query.days * 24 * 60 * 60 * 1000);
+  const { rows } = await pool.query<R8AgentMetricsRow>(r8AgentMetricsSql, [
+    since,
+    generatedAt,
+    r8AgentMetricsFailureLabels,
+  ]);
+  const metrics = aggregateR8PilotMetrics({
+    rows,
+    token: configuredToken as string,
+    days: query.days,
+    limit: query.limit,
+    generatedAt: generatedAt.toISOString(),
+  });
+  console.info(
+    `[r8-pilot-metrics] access days=${query.days} limit=${query.limit} cohort_users=${metrics.cohort.users_total} returned_users=${metrics.cohort.users_returned} starts_at=${metrics.window.starts_at} generated_at=${metrics.window.generated_at}`,
+  );
+  return sendJson(response, metrics);
 }
 
 async function handleMemoryPreferences(

@@ -12,6 +12,7 @@ PRIVY_APP_ID=...
 PRIVY_APP_SECRET=...
 PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
 SAVE_GUEST_SESSION_SECRET=...
+SAVE_INTERNAL_AGENT_TOKEN=... # 32+ character server-to-server bearer token for private R8 pilot metrics
 PORT=3000
 GOOGLE_PLACES_API_KEY=...
 SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=false
@@ -30,6 +31,8 @@ YELP_API_KEY=
 ```
 
 Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get SAV-E backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
+
+`SAVE_INTERNAL_AGENT_TOKEN` gates `GET /internal/r8/pilot-metrics?days=30&limit=100`. Generate at least 32 random bytes with an OS cryptographic random generator, store the value only in Railway's secret manager and approved server-side agent runtime, and never ship it to the app or browser. The endpoint is read-only and returns cohort totals plus HMAC-pseudonymous per-user analysis and outcome counts; it never returns raw user IDs or recommendation payloads. If the token is missing or too short, the route fails closed with `503`; invalid bearer credentials return `401`. Successful reads emit a metadata-only audit log with the window, requested limit, and aggregate user counts. Rotating the token also rotates the v0 pseudonymous user references.
 
 Source recovery can run with metadata and public search only. Set `GOOGLE_PLACES_API_KEY` to let the worker corroborate Review Candidates with Places address/coordinates. Set `SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=true` to allow bounded public video fetch plus one keyframe sample, and set `SAVE_ENABLE_SERVER_OCR=true` only on workers that have `tesseract` installed. Set `SAVE_ENABLE_SERVER_ASR=true` only on workers that have a local Whisper-compatible CLI available through `SAVE_SERVER_ASR_COMMAND`; transcripts are attached as cited evidence and never used to invent address/coordinates. Set `SAVE_EVIDENCE_RUBRIC_URL` to an HTTPS public rubric service endpoint when you want an external LLM rubric; the worker sends a bounded projection of metadata/candidate/search/media text, validates the response schema, blocks redirects/private hosts, and falls back to the deterministic rubric when unavailable. If these toggles are off or unavailable, recovery keeps the source as a cited clue instead of inventing place details.
 
@@ -134,6 +137,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
     }
   }
   ```
+- `GET /internal/r8/pilot-metrics?days=30&limit=100` — internal bearer-authenticated, agent-callable R8 pilot metrics. Technical evaluator verdicts and latest linked `explicit_user` outcome counts are reported separately; evaluator/deterministic outcomes cannot become user success, user identity is an HMAC pseudonym, and private payload fields are excluded.
 - `GET /public/v0/cards/:id` — returns a public projection for a public-link/public-guide place with public/link-shared claims only.
 - `POST /public/v0/claim-usage-receipts` — records bounded public usage receipts for public/link-shared claims.
 - `POST /v0/claims/usage-receipts` — records authenticated owner-scoped usage receipts.
