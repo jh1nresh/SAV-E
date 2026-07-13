@@ -7,7 +7,10 @@ import {
   buildMaatPlaceAnalysis,
   buildPublicPlaceCard,
   buildTrustSummary,
+  experienceReviewClaimType,
+  experienceReviewMutationScope,
   formatPlaceClaim,
+  normalizeExperienceReviewPatch,
   normalizePlaceClaimCreate,
   normalizeRecommendationRequest,
   normalizeUsageReceiptCreate,
@@ -411,6 +414,7 @@ const placeClaimFields = [
   "place_id",
   "claim_type",
   "claim",
+  "idempotency_key",
   "agent_usable_summary",
   "author_type",
   "author_public_handle",
@@ -424,6 +428,15 @@ const placeClaimFields = [
   "observed_at",
   "expires_or_stale_after",
   "created_at",
+] as const;
+
+const experienceReviewPatchFields = [
+  "claim",
+  "agent_usable_summary",
+  "context",
+  "ratings",
+  "observed_at",
+  "expires_or_stale_after",
 ] as const;
 
 const claimUsageReceiptFields = [
@@ -802,7 +815,7 @@ createServer(async (request, response) => {
       return await handleLLMProxy(request, response, segments.slice(1));
     }
     if (isV0 && resource === "places" && id && segments[2] === "verified-claims") {
-      return await handlePlaceVerifiedClaims(request, response, id, url, userId);
+      return await handlePlaceVerifiedClaims(request, response, id, segments[3], url, userId);
     }
     if (isV0 && resource === "places" && id && segments[2] === "maat-analysis") {
       return await handlePlaceMaatAnalysis(request, response, id, url, userId);
@@ -1264,12 +1277,13 @@ async function handlePlaceVerifiedClaims(
   request: IncomingMessage,
   response: ServerResponse,
   placeId: string,
+  claimId: string | undefined,
   url: URL,
   userId: string,
 ): Promise<void> {
   await ensureOwnedPlaceReference(placeId, userId);
 
-  if (request.method === "GET") {
+  if (request.method === "GET" && !claimId) {
     const includePrivateEvidence = url.searchParams.get("includePrivateEvidence") === "true" ||
       url.searchParams.get("include_private_evidence") === "true";
     const claims = await placeClaimsForPlace(placeId, userId, {
@@ -1286,7 +1300,7 @@ async function handlePlaceVerifiedClaims(
     });
   }
 
-  if (request.method === "POST") {
+  if (request.method === "POST" && !claimId) {
     let body: JsonBody;
     try {
       body = normalizePlaceClaimCreate(await readJson(request), placeId, userId);
@@ -1296,8 +1310,65 @@ async function handlePlaceVerifiedClaims(
     }
 
     const insert = buildInsert("place_claims", body, [...placeClaimFields, "user_id"]);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatPlaceClaim(formatDates(rows[0]), true), 201);
+    if (body.claim_type !== experienceReviewClaimType) {
+      const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+      return sendJson(response, formatPlaceClaim(formatDates(rows[0]), true), 201);
+    }
+
+    const { rows } = await pool.query(
+      `${insert.sql}
+       on conflict (user_id, place_id, idempotency_key)
+       where claim_type = 'experience_review' and idempotency_key is not null
+       do nothing
+       returning *`,
+      insert.values,
+    );
+    if (rows[0]) return sendJson(response, formatPlaceClaim(formatDates(rows[0]), true), 201);
+
+    const { rows: replayRows } = await pool.query(
+      `select * from place_claims
+       where user_id = $1 and place_id = $2 and claim_type = 'experience_review' and idempotency_key = $3
+       limit 1`,
+      [userId, placeId, String(body.idempotency_key)],
+    );
+    if (!replayRows[0]) throw new Error("Experience review idempotency replay was not found");
+    return sendJson(response, formatPlaceClaim(formatDates(replayRows[0]), true), 200);
+  }
+
+  if (request.method === "PATCH" && claimId) {
+    const scope = experienceReviewMutationScope(placeId, claimId, userId);
+    const { rows: existingRows } = await pool.query(
+      `select * from place_claims where ${scope.clause} limit 1`,
+      scope.values,
+    );
+    if (!existingRows[0]) return sendJson(response, { error: "Experience review not found" }, 404);
+
+    let patch: JsonBody;
+    try {
+      patch = normalizeExperienceReviewPatch(await readJson(request), asObject(existingRows[0]));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid experience review";
+      return sendJson(response, { error: message }, 400);
+    }
+    const update = buildUpdate("place_claims", patch, experienceReviewPatchFields);
+    if (!update) return sendJson(response, { error: "No writable experience fields" }, 400);
+    const updateScope = experienceReviewMutationScope(placeId, claimId, userId, update.values.length);
+    const { rows } = await pool.query(
+      `${update.sql}, updated_at = now() where ${updateScope.clause} returning *`,
+      [...update.values, ...updateScope.values],
+    );
+    if (!rows[0]) return sendJson(response, { error: "Experience review not found" }, 404);
+    return sendJson(response, formatPlaceClaim(formatDates(rows[0]), true));
+  }
+
+  if (request.method === "DELETE" && claimId) {
+    const scope = experienceReviewMutationScope(placeId, claimId, userId);
+    const { rows } = await pool.query(
+      `delete from place_claims where ${scope.clause} returning id`,
+      scope.values,
+    );
+    if (!rows[0]) return sendJson(response, { error: "Experience review not found" }, 404);
+    return sendJson(response, null, 204);
   }
 
   return sendJson(response, { error: "Unsupported verified claims route" }, 405);

@@ -4,7 +4,9 @@ import {
   buildMaatPlaceAnalysis,
   buildPublicPlaceCard,
   buildTrustSummary,
+  experienceReviewMutationScope,
   formatPlaceClaim,
+  normalizeExperienceReviewPatch,
   normalizePlaceClaimCreate,
   normalizeRecommendationRequest,
   normalizeUsageReceiptCreate,
@@ -51,6 +53,231 @@ test("normalizePlaceClaimCreate keeps raw evidence refs private by default", () 
     ...claim,
   }, true);
   assert.deepEqual(privateShape.evidence_refs, ["source_123", "photo_456"]);
+});
+
+test("experience reviews are private structured self reports with note-free summaries", () => {
+  const claim = normalizePlaceClaimCreate({
+    claimType: "experience_review",
+    note: "Private companion detail that must not reach ranking copy.",
+    proofLevel: "visited_self_reported",
+    visibility: "private",
+    observedAt: "2026-07-13T12:00:00Z",
+    context: {
+      occasion: "date",
+      time_of_day: "evening",
+      price_band: "$$",
+    },
+    ratings: {
+      would_return: "yes",
+      strengths: ["vibe", "taste", "taste"],
+      misses: ["wait"],
+    },
+    agentUsableSummary: "Client text must be ignored.",
+  }, "place_1", "user_1");
+
+  assert.deepEqual(claim, {
+    user_id: "user_1",
+    place_id: "place_1",
+    claim_type: "experience_review",
+    claim: "Private companion detail that must not reach ranking copy.",
+    agent_usable_summary: "Would return: yes; occasion: date; time: evening; price: $$; strengths: taste, vibe; misses: wait",
+    author_type: "self",
+    author_public_handle: undefined,
+    author_relationship: "self",
+    proof_level: "visited_self_reported",
+    evidence_refs: [],
+    visibility: "private",
+    confidence: 1,
+    context: { occasion: "date", time_of_day: "evening", price_band: "$$" },
+    ratings: { would_return: "yes", strengths: ["taste", "vibe"], misses: ["wait"] },
+    observed_at: "2026-07-13T12:00:00Z",
+    expires_or_stale_after: undefined,
+    idempotency_key: claim.idempotency_key,
+  });
+  assert.match(String(claim.idempotency_key), /^experience:[a-f0-9]{64}$/);
+  assert.doesNotMatch(String(claim.agent_usable_summary), /companion|Client text/);
+
+  const analysis = buildMaatPlaceAnalysis(
+    { id: "place_1", name: "Private Date Place" },
+    [{ id: "claim_1", ...claim }],
+    { includePrivateEvidence: true },
+  );
+  assert.doesNotMatch(JSON.stringify(analysis), /Private companion detail/);
+});
+
+test("experience reviews reject incomplete, public, and out-of-vocabulary input", () => {
+  const valid = {
+    claim_type: "experience_review",
+    observed_at: "2026-07-13T12:00:00Z",
+    context: { occasion: "general" },
+    ratings: { would_return: "unsure" },
+  };
+
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, observed_at: undefined }, "place_1", "user_1"),
+    /observed_at is required/,
+  );
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, visibility: "public" }, "place_1", "user_1"),
+    /visibility must be private/,
+  );
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, proof_level: "receipt_backed" }, "place_1", "user_1"),
+    /proof_level must be visited_self_reported/,
+  );
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, context: { occasion: "business" } }, "place_1", "user_1"),
+    /context.occasion/,
+  );
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, ratings: { would_return: "maybe" } }, "place_1", "user_1"),
+    /ratings.would_return/,
+  );
+  assert.throws(
+    () => normalizePlaceClaimCreate({ ...valid, ratings: { would_return: "yes", strengths: ["parking"] } }, "place_1", "user_1"),
+    /ratings.strengths/,
+  );
+});
+
+test("experience create dedupes retries but preserves separate observed visits", () => {
+  const first = normalizePlaceClaimCreate({
+    claim_type: "experience_review",
+    observed_at: "2026-07-13T12:00:00Z",
+    context: { occasion: "date" },
+    ratings: { would_return: "yes", strengths: ["vibe", "taste"] },
+  }, "place_1", "user_1");
+  const retry = normalizePlaceClaimCreate({
+    claim_type: "experience_review",
+    observed_at: "2026-07-13T12:00:00Z",
+    context: { occasion: "date" },
+    ratings: { would_return: "yes", strengths: ["taste", "vibe"] },
+  }, "place_1", "user_1");
+  const laterVisit = normalizePlaceClaimCreate({
+    claim_type: "experience_review",
+    observed_at: "2026-07-14T12:00:00Z",
+    context: { occasion: "date" },
+    ratings: { would_return: "yes", strengths: ["taste", "vibe"] },
+  }, "place_1", "user_1");
+
+  assert.equal(first.idempotency_key, retry.idempotency_key);
+  assert.notEqual(first.idempotency_key, laterVisit.idempotency_key);
+});
+
+test("experience patches preserve ownership invariants and can clear a private note", () => {
+  const existing = normalizePlaceClaimCreate({
+    claim_type: "experience_review",
+    note: "Original private note",
+    observed_at: "2026-07-13T12:00:00Z",
+    context: { occasion: "date" },
+    ratings: { would_return: "yes", strengths: ["vibe"] },
+  }, "place_1", "user_1");
+
+  const patch = normalizeExperienceReviewPatch({
+    note: "",
+    ratings: { would_return: "no", misses: ["wait", "service"] },
+    expires_or_stale_after: null,
+  }, existing);
+
+  assert.deepEqual(patch, {
+    claim: "",
+    agent_usable_summary: "Would return: no; occasion: date; misses: service, wait",
+    context: { occasion: "date" },
+    ratings: { would_return: "no", strengths: [], misses: ["service", "wait"] },
+    observed_at: "2026-07-13T12:00:00Z",
+    expires_or_stale_after: null,
+  });
+  assert.throws(
+    () => normalizeExperienceReviewPatch({ visibility: "public" }, existing),
+    /visibility must be private/,
+  );
+  assert.throws(
+    () => normalizeExperienceReviewPatch({ visibility: "private" }, existing),
+    /No writable experience fields/,
+  );
+});
+
+test("experience mutation scope fails closed on place, claim, owner, type, and visibility", () => {
+  assert.deepEqual(experienceReviewMutationScope("place_1", "claim_1", "user_1"), {
+    clause: "id = $1 and place_id = $2 and user_id = $3 and claim_type = 'experience_review' and author_type = 'self' and author_relationship = 'self' and visibility = 'private'",
+    values: ["claim_1", "place_1", "user_1"],
+  });
+  assert.equal(
+    experienceReviewMutationScope("place_1", "claim_1", "user_1", 6).clause,
+    "id = $7 and place_id = $8 and user_id = $9 and claim_type = 'experience_review' and author_type = 'self' and author_relationship = 'self' and visibility = 'private'",
+  );
+});
+
+test("deleting an experience removes its next-request ranking influence", () => {
+  const request = normalizeRecommendationRequest({ intent: "date", limit: 3 });
+  const experience = {
+    id: "claim_1",
+    place_id: "place_1",
+    place_name: "Date Place",
+    claim_type: "experience_review",
+    claim: "",
+    agent_usable_summary: "Would return: yes; occasion: date",
+    proof_level: "visited_self_reported",
+    confidence: 1,
+    context: { occasion: "date" },
+    ratings: { would_return: "yes" },
+  };
+
+  assert.equal((recommendPlacesByClaims([experience], request).results as unknown[]).length, 1);
+  assert.deepEqual(recommendPlacesByClaims([], request).results, []);
+});
+
+test("experience reviews without positive return evidence are not ranked as likes", () => {
+  const request = normalizeRecommendationRequest({ intent: "date", limit: 3 });
+  const rows = ["no", "unsure"].map((wouldReturn, index) => ({
+    id: `claim_${index}`,
+    place_id: `place_${index}`,
+    place_name: `Place ${index}`,
+    claim_type: "experience_review",
+    claim: "",
+    agent_usable_summary: `Would return: ${wouldReturn}; occasion: date`,
+    proof_level: "visited_self_reported",
+    confidence: 1,
+    context: { occasion: "date" },
+    ratings: { would_return: wouldReturn },
+  }));
+
+  const output = recommendPlacesByClaims(rows, request);
+  assert.deepEqual(output.results, []);
+  assert.deepEqual((output.retrieval_receipt as Record<string, unknown>).skipped, [
+    "2 experiences without positive return evidence",
+  ]);
+});
+
+test("private experience notes do not influence recommendation ranking or warnings", () => {
+  const request = normalizeRecommendationRequest({ intent: "secret spicy", limit: 2 });
+  const output = recommendPlacesByClaims([
+    {
+      id: "claim_neutral",
+      place_id: "place_neutral",
+      place_name: "Neutral Place",
+      claim_type: "saved_place",
+      claim: "Saved place",
+      agent_usable_summary: "Saved place",
+      proof_level: "visited_self_reported",
+      confidence: 1,
+    },
+    {
+      id: "claim_private",
+      place_id: "place_private",
+      place_name: "Private Note Place",
+      claim_type: "experience_review",
+      claim: "secret spicy long wait",
+      agent_usable_summary: "Would return: yes; occasion: general",
+      proof_level: "visited_self_reported",
+      confidence: 1,
+      context: { occasion: "general" },
+      ratings: { would_return: "yes" },
+    },
+  ], request);
+
+  const results = output.results as Array<Record<string, unknown>>;
+  assert.equal(results[0].place_id, "place_neutral");
+  assert.deepEqual(results[1].warnings, []);
 });
 
 test("buildTrustSummary weights proof level and exposes warnings without raw evidence", () => {

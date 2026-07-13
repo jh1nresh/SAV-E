@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type JsonObject = Record<string, unknown>;
 
 export const proofLevels = [
@@ -14,6 +16,16 @@ export const claimVisibilities = ["private", "link_shared", "public", "permissio
 
 export type ClaimProofLevel = typeof proofLevels[number];
 export type ClaimVisibility = typeof claimVisibilities[number];
+
+export const experienceReviewClaimType = "experience_review";
+export const experienceReviewOccasions = ["general", "solo", "date", "friends", "work", "travel"] as const;
+export const experienceReviewTimeOfDay = ["morning", "afternoon", "evening", "late_night"] as const;
+export const experienceReviewPriceBands = ["$", "$$", "$$$", "$$$$"] as const;
+export const experienceReviewWouldReturn = ["yes", "no", "unsure"] as const;
+export const experienceReviewStrengths = ["taste", "value", "vibe", "service"] as const;
+export const experienceReviewMisses = ["taste", "value", "vibe", "service", "wait"] as const;
+
+const experienceReviewNoteMaxLength = 500;
 
 export interface ClaimRecommendationRequest {
   intent?: string;
@@ -45,8 +57,12 @@ export function normalizePlaceClaimCreate(
   userId: string,
 ): JsonObject {
   const claimType = trimmedString(body.claim_type ?? body.claimType);
-  const claim = trimmedString(body.claim);
   if (!claimType) throw new Error("claim_type is required");
+  if (claimType === experienceReviewClaimType) {
+    return normalizeExperienceReviewCreate(body, placeId, userId);
+  }
+
+  const claim = trimmedString(body.claim);
   if (!claim) throw new Error("claim is required");
 
   return {
@@ -66,6 +82,173 @@ export function normalizePlaceClaimCreate(
     ratings: objectValue(body.ratings) ?? {},
     observed_at: dateString(body.observed_at ?? body.observedAt),
     expires_or_stale_after: dateString(body.expires_or_stale_after ?? body.expiresOrStaleAfter),
+  };
+}
+
+export function normalizeExperienceReviewCreate(
+  body: JsonObject,
+  placeId: string,
+  userId: string,
+): JsonObject {
+  requireFixedExperienceValue(body, ["claim_type", "claimType"], experienceReviewClaimType, "claim_type");
+  requireFixedExperienceValue(body, ["proof_level", "proofLevel"], "visited_self_reported", "proof_level");
+  requireFixedExperienceValue(body, ["visibility"], "private", "visibility");
+  requireFixedExperienceValue(body, ["author_type", "authorType"], "self", "author_type");
+  requireFixedExperienceValue(body, ["author_relationship", "relationship"], "self", "author_relationship");
+  if (trimmedString(body.author_public_handle ?? body.publicHandle)) {
+    throw new Error("author_public_handle is not allowed for experience_review");
+  }
+
+  const observedAt = dateString(body.observed_at ?? body.observedAt);
+  if (!observedAt) throw new Error("observed_at is required and must be a valid date");
+
+  const contextInput = objectValue(body.context);
+  if (!contextInput) throw new Error("context is required");
+  const occasion = strictEnum(contextInput.occasion, experienceReviewOccasions, "context.occasion");
+  const timeOfDay = optionalStrictEnum(
+    contextInput.time_of_day ?? contextInput.timeOfDay,
+    experienceReviewTimeOfDay,
+    "context.time_of_day",
+  );
+  const priceBand = optionalStrictEnum(
+    contextInput.price_band ?? contextInput.priceBand,
+    experienceReviewPriceBands,
+    "context.price_band",
+  );
+  const context: JsonObject = {
+    occasion,
+    ...(timeOfDay ? { time_of_day: timeOfDay } : {}),
+    ...(priceBand ? { price_band: priceBand } : {}),
+  };
+
+  const ratingsInput = objectValue(body.ratings);
+  if (!ratingsInput) throw new Error("ratings is required");
+  const wouldReturn = strictEnum(
+    ratingsInput.would_return ?? ratingsInput.wouldReturn,
+    experienceReviewWouldReturn,
+    "ratings.would_return",
+  );
+  const strengths = strictEnumArray(ratingsInput.strengths, experienceReviewStrengths, "ratings.strengths");
+  const misses = strictEnumArray(ratingsInput.misses, experienceReviewMisses, "ratings.misses");
+  const ratings: JsonObject = { would_return: wouldReturn, strengths, misses };
+  const claim = privateExperienceNote(body.note ?? body.claim);
+  const evidenceRefs = [...new Set(stringArray(body.evidence_refs ?? body.evidenceRefs) ?? [])].sort();
+  const expiresOrStaleAfter = optionalStrictDate(
+    body.expires_or_stale_after ?? body.expiresOrStaleAfter,
+    "expires_or_stale_after",
+  );
+  const agentUsableSummary = experienceReviewSummary({
+    occasion,
+    time_of_day: timeOfDay,
+    price_band: priceBand,
+  }, { would_return: wouldReturn, strengths, misses });
+  const fingerprintPayload = {
+    user_id: userId,
+    place_id: placeId,
+    claim,
+    context,
+    ratings,
+    evidence_refs: evidenceRefs,
+    observed_at: observedAt,
+    expires_or_stale_after: expiresOrStaleAfter ?? null,
+  };
+
+  return {
+    user_id: userId,
+    place_id: placeId,
+    claim_type: experienceReviewClaimType,
+    claim,
+    agent_usable_summary: agentUsableSummary,
+    author_type: "self",
+    author_public_handle: undefined,
+    author_relationship: "self",
+    proof_level: "visited_self_reported",
+    evidence_refs: evidenceRefs,
+    visibility: "private",
+    confidence: 1,
+    context,
+    ratings,
+    observed_at: observedAt,
+    expires_or_stale_after: expiresOrStaleAfter,
+    idempotency_key: `experience:${createHash("sha256").update(JSON.stringify(fingerprintPayload)).digest("hex")}`,
+  };
+}
+
+export function normalizeExperienceReviewPatch(body: JsonObject, existing: JsonObject): JsonObject {
+  const mutableKeys = [
+    "claim",
+    "note",
+    "context",
+    "ratings",
+    "observed_at",
+    "observedAt",
+    "expires_or_stale_after",
+    "expiresOrStaleAfter",
+  ];
+  const invariantKeys = [
+    "claim_type",
+    "claimType",
+    "proof_level",
+    "proofLevel",
+    "visibility",
+    "author_type",
+    "authorType",
+    "author_relationship",
+    "relationship",
+    "author_public_handle",
+    "publicHandle",
+  ];
+  const hasMutableField = mutableKeys.some((key) => Object.hasOwn(body, key));
+  if (![...mutableKeys, ...invariantKeys].some((key) => Object.hasOwn(body, key))) {
+    throw new Error("No writable experience fields");
+  }
+
+  const merged: JsonObject = {
+    claim_type: body.claim_type ?? body.claimType ?? existing.claim_type,
+    proof_level: body.proof_level ?? body.proofLevel ?? existing.proof_level,
+    visibility: body.visibility ?? existing.visibility,
+    author_type: body.author_type ?? body.authorType ?? existing.author_type,
+    author_relationship: body.author_relationship ?? body.relationship ?? existing.author_relationship,
+    author_public_handle: body.author_public_handle ?? body.publicHandle ?? existing.author_public_handle,
+    note: firstOwnedValue(body, ["note", "claim"], existing.claim),
+    context: firstOwnedValue(body, ["context"], existing.context),
+    ratings: firstOwnedValue(body, ["ratings"], existing.ratings),
+    observed_at: firstOwnedValue(body, ["observed_at", "observedAt"], existing.observed_at),
+    expires_or_stale_after: firstOwnedValue(
+      body,
+      ["expires_or_stale_after", "expiresOrStaleAfter"],
+      existing.expires_or_stale_after,
+    ),
+  };
+  const normalized = normalizeExperienceReviewCreate(
+    merged,
+    String(existing.place_id),
+    String(existing.user_id),
+  );
+  if (!hasMutableField) throw new Error("No writable experience fields");
+  const expiryWasCleared = ["expires_or_stale_after", "expiresOrStaleAfter"]
+    .some((key) => Object.hasOwn(body, key) && (body[key] === null || body[key] === ""));
+
+  return {
+    claim: normalized.claim,
+    agent_usable_summary: normalized.agent_usable_summary,
+    context: normalized.context,
+    ratings: normalized.ratings,
+    observed_at: normalized.observed_at,
+    expires_or_stale_after: expiryWasCleared ? null : normalized.expires_or_stale_after,
+  };
+}
+
+export function experienceReviewMutationScope(
+  placeId: string,
+  claimId: string,
+  userId: string,
+  parameterOffset = 0,
+): { clause: string; values: string[] } {
+  const parameter = (index: number) => `$${index + parameterOffset}`;
+  return {
+    clause: `id = ${parameter(1)} and place_id = ${parameter(2)} and user_id = ${parameter(3)} and claim_type = 'experience_review' and author_type = 'self' and author_relationship = 'self' and visibility = 'private'`,
+    values: [claimId, placeId, userId],
   };
 }
 
@@ -238,6 +421,7 @@ export function recommendPlacesByClaims(
   const grouped = new Map<string, JsonObject[]>();
   let skippedLowProof = 0;
   let skippedStale = 0;
+  let skippedWithoutPositiveExperience = 0;
 
   for (const row of rows) {
     if (proofRank(row.proof_level) < proofRank(minProof)) {
@@ -246,6 +430,10 @@ export function recommendPlacesByClaims(
     }
     if (isStale(row)) {
       skippedStale += 1;
+      continue;
+    }
+    if (row.claim_type === experienceReviewClaimType && objectValue(row.ratings)?.would_return !== "yes") {
+      skippedWithoutPositiveExperience += 1;
       continue;
     }
     const placeId = String(row.place_id);
@@ -263,10 +451,16 @@ export function recommendPlacesByClaims(
   return {
     results,
     retrieval_receipt: {
-      used: [`${grouped.size} owner-scoped places`, `${rows.length - skippedLowProof - skippedStale} verified claims`],
+      used: [
+        `${grouped.size} owner-scoped places`,
+        `${rows.length - skippedLowProof - skippedStale - skippedWithoutPositiveExperience} verified claims`,
+      ],
       skipped: [
         skippedLowProof ? `${skippedLowProof} claims below proof threshold` : null,
         skippedStale ? `${skippedStale} stale claims` : null,
+        skippedWithoutPositiveExperience
+          ? `${skippedWithoutPositiveExperience} experiences without positive return evidence`
+          : null,
       ].filter(Boolean),
       public_web_used: false,
     },
@@ -321,7 +515,7 @@ function claimScore(claim: JsonObject, request: ClaimRecommendationRequest): num
   ].map((token) => token.toLowerCase()).filter(Boolean);
   const haystack = [
     claim.claim_type,
-    claim.claim,
+    agentVisibleClaimText(claim),
     claim.agent_usable_summary,
     JSON.stringify(claim.context ?? {}),
     JSON.stringify(claim.ratings ?? {}),
@@ -380,7 +574,7 @@ function trustWarnings(claims: JsonObject[]): string[] {
   for (const claim of claims) {
     const text = [
       claim.claim_type,
-      claim.claim,
+      agentVisibleClaimText(claim),
       claim.agent_usable_summary,
       JSON.stringify(claim.context ?? {}),
     ].join(" ").toLowerCase();
@@ -541,7 +735,7 @@ function detailEvidenceTexts(place: JsonObject, claims: JsonObject[]): string[] 
     ...(stringArray(place.extracted_dishes) ?? []),
     ...claims.flatMap((claim) => [
       trimmedString(claim.claim_type),
-      trimmedString(claim.claim),
+      trimmedString(agentVisibleClaimText(claim)),
       trimmedString(claim.agent_usable_summary),
       JSON.stringify(claim.context ?? {}),
       JSON.stringify(claim.ratings ?? {}),
@@ -762,6 +956,79 @@ function parseVisibility(value: unknown, fallback: ClaimVisibility): ClaimVisibi
   return typeof value === "string" && claimVisibilities.includes(value as ClaimVisibility)
     ? value as ClaimVisibility
     : fallback;
+}
+
+function requireFixedExperienceValue(
+  body: JsonObject,
+  keys: string[],
+  expected: string,
+  field: string,
+): void {
+  const supplied = keys.find((key) => Object.hasOwn(body, key));
+  if (supplied && body[supplied] !== expected) {
+    throw new Error(`${field} must be ${expected} for experience_review`);
+  }
+}
+
+function strictEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
+  if (typeof value !== "string" || !allowed.includes(value as T)) {
+    throw new Error(`${field} must be one of: ${allowed.join(", ")}`);
+  }
+  return value as T;
+}
+
+function optionalStrictEnum<T extends string>(value: unknown, allowed: readonly T[], field: string): T | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return strictEnum(value, allowed, field);
+}
+
+function strictEnumArray<T extends string>(value: unknown, allowed: readonly T[], field: string): T[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !allowed.includes(item as T))) {
+    throw new Error(`${field} must contain only: ${allowed.join(", ")}`);
+  }
+  const supplied = new Set(value as T[]);
+  return allowed.filter((item) => supplied.has(item));
+}
+
+function privateExperienceNote(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") throw new Error("note must be a string");
+  const note = value.trim();
+  if (note.length > experienceReviewNoteMaxLength) {
+    throw new Error(`note must be ${experienceReviewNoteMaxLength} characters or fewer`);
+  }
+  return note;
+}
+
+function optionalStrictDate(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = dateString(value);
+  if (!parsed) throw new Error(`${field} must be a valid date`);
+  return parsed;
+}
+
+function experienceReviewSummary(
+  context: { occasion: string; time_of_day?: string; price_band?: string },
+  ratings: { would_return: string; strengths: string[]; misses: string[] },
+): string {
+  return [
+    `Would return: ${ratings.would_return}`,
+    `occasion: ${context.occasion}`,
+    context.time_of_day ? `time: ${context.time_of_day}` : undefined,
+    context.price_band ? `price: ${context.price_band}` : undefined,
+    ratings.strengths.length ? `strengths: ${ratings.strengths.join(", ")}` : undefined,
+    ratings.misses.length ? `misses: ${ratings.misses.join(", ")}` : undefined,
+  ].filter(Boolean).join("; ");
+}
+
+function firstOwnedValue(body: JsonObject, keys: string[], fallback: unknown): unknown {
+  const key = keys.find((candidate) => Object.hasOwn(body, candidate));
+  return key ? body[key] : fallback;
+}
+
+function agentVisibleClaimText(claim: JsonObject): unknown {
+  return claim.claim_type === experienceReviewClaimType ? undefined : claim.claim;
 }
 
 function parseUsageAction(value: unknown): UsageReceiptAction {

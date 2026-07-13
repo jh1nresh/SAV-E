@@ -209,6 +209,7 @@ create table if not exists place_claims (
     place_id uuid references places(id) on delete cascade not null,
     claim_type text not null,
     claim text not null,
+    idempotency_key text,
     agent_usable_summary text not null default '',
     author_type text not null default 'self',
     author_public_handle text,
@@ -240,10 +241,29 @@ create table if not exists place_claims (
     constraint place_claims_confidence_check check (confidence >= 0 and confidence <= 1)
 );
 
+alter table place_claims add column if not exists idempotency_key text;
+alter table place_claims drop constraint if exists place_claims_experience_review_check;
+alter table place_claims add constraint place_claims_experience_review_check check (
+    claim_type <> 'experience_review' or (
+        proof_level = 'visited_self_reported'
+        and visibility = 'private'
+        and author_type = 'self'
+        and author_relationship = 'self'
+        and author_public_handle is null
+        and observed_at is not null
+        and idempotency_key is not null
+        and coalesce(context->>'occasion', '') in ('general', 'solo', 'date', 'friends', 'work', 'travel')
+        and coalesce(ratings->>'would_return', '') in ('yes', 'no', 'unsure')
+    )
+);
+
 create index if not exists idx_place_claims_user_place on place_claims(user_id, place_id, created_at desc);
 create index if not exists idx_place_claims_proof on place_claims(user_id, proof_level);
 create index if not exists idx_place_claims_type on place_claims(user_id, claim_type);
 create index if not exists idx_place_claims_visibility on place_claims(user_id, visibility);
+create unique index if not exists idx_place_claims_experience_idempotency
+    on place_claims(user_id, place_id, idempotency_key)
+    where claim_type = 'experience_review' and idempotency_key is not null;
 
 create table if not exists claim_usage_receipts (
     id uuid primary key default gen_random_uuid(),
