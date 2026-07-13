@@ -23,7 +23,7 @@ enum MapDetailDrawerItem: Identifiable {
     }
 }
 
-private enum CommandDrawerTab: String, CaseIterable, Hashable {
+enum CommandDrawerTab: String, CaseIterable, Hashable {
     case saved
     case review
     case lists
@@ -103,6 +103,7 @@ struct AIDrawerView: View {
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
+    var onOpenInbox: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
@@ -119,8 +120,6 @@ struct AIDrawerView: View {
     @State private var showsSlowLoadingHint = false
     @State private var showProfile = false
     @State private var showLists = false
-    @State private var activeCommandTab: CommandDrawerTab = .review
-    @State private var didAutoPresentPendingInbox = false
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
     @State private var newListNote = ""
@@ -201,9 +200,11 @@ struct AIDrawerView: View {
             }
         }
         .onChange(of: needsReviewCandidates.count, initial: true) { _, count in
-            guard count > 0, !didAutoPresentPendingInbox else { return }
-            didAutoPresentPendingInbox = true
-            activeCommandTab = .review
+            guard count > 0,
+                  mapDetailDrawerItem == nil,
+                  !viewModel.didAutoPresentPendingInbox else { return }
+            viewModel.didAutoPresentPendingInbox = true
+            viewModel.activeCommandTab = .review
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .large
             }
@@ -218,6 +219,7 @@ struct AIDrawerView: View {
             isWorkingReviewCandidateID: candidateActionInFlight,
             isWorkingMapCandidateID: mapCandidateActionInFlight,
             onClose: closeMapDetail,
+            onOpenInbox: onOpenInbox,
             onDeletePlace: { place in
                 try await onDeletePlace(place)
                 viewModel.removePlace(place)
@@ -401,6 +403,20 @@ struct AIDrawerView: View {
 
     @ViewBuilder
     private var commandBarTrailingActions: some View {
+        Button(action: onOpenInbox) {
+            Image(systemName: "tray.full.fill")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(commandBarTextColor)
+                .frame(width: 30, height: 30)
+                .background(commandIconFill)
+                .overlay(Circle().stroke(commandBarStroke, lineWidth: 1))
+                .clipShape(Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
+        .accessibilityIdentifier("map.returnToInbox")
+
         if hasActiveDrawerContent {
             Button(action: closeDrawerContent) {
                 Image(systemName: "xmark.circle.fill")
@@ -988,7 +1004,7 @@ struct AIDrawerView: View {
                 .padding(.top, SaveTheme.Spacing.sm)
                 .padding(.bottom, SaveTheme.Spacing.sm)
 
-            switch activeCommandTab {
+            switch viewModel.activeCommandTab {
             case .saved:
                 savedPlacesView
             case .review:
@@ -1005,9 +1021,9 @@ struct AIDrawerView: View {
         HStack(spacing: SaveTheme.Spacing.sm) {
             ForEach(CommandDrawerTab.publicTestCases, id: \.self) { tab in
                 Button {
-                    guard activeCommandTab != tab else { return }
+                    guard viewModel.activeCommandTab != tab else { return }
                     SaveHaptics.select()
-                    activeCommandTab = tab
+                    viewModel.activeCommandTab = tab
                     showSavedCategories = false
                     showReviewInbox = false
                     showLists = false
@@ -1021,15 +1037,15 @@ struct AIDrawerView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.76)
                     }
-                    .foregroundColor(activeCommandTab == tab ? .saveInk : .saveCocoa.opacity(0.76))
+                    .foregroundColor(viewModel.activeCommandTab == tab ? .saveInk : .saveCocoa.opacity(0.76))
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 38)
                     .padding(.vertical, 2)
-                    .background(activeCommandTab == tab ? Color.saveHoney.opacity(0.62) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
+                    .background(viewModel.activeCommandTab == tab ? Color.saveHoney.opacity(0.62) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(activeCommandTab == tab ? 0.56 : 0.22), lineWidth: 1)
+                            .stroke(Color.saveNotebookLine.opacity(viewModel.activeCommandTab == tab ? 0.56 : 0.22), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -1581,7 +1597,7 @@ struct AIDrawerView: View {
 
     private func openReviewInbox() {
         viewModel.returnToCommands()
-        activeCommandTab = .review
+        viewModel.activeCommandTab = .review
         searchFocused = false
         withAnimation { drawerDetent = .large }
     }
@@ -1873,7 +1889,7 @@ struct AIDrawerView: View {
     private func addMoreClue(for candidate: PlaceReviewCandidate) {
         mapDetailDrawerItem = nil
         viewModel.returnToCommands()
-        activeCommandTab = .review
+        viewModel.activeCommandTab = .review
         showSavedCategories = false
         showReviewInbox = true
         showLists = false
@@ -1923,7 +1939,7 @@ struct AIDrawerView: View {
         Task {
             await onPlanList(list)
             viewModel.showCollaborativeListPlan(list)
-            activeCommandTab = .lists
+            viewModel.activeCommandTab = .lists
             withAnimation { drawerDetent = .large }
         }
     }
@@ -1987,6 +2003,7 @@ private struct MapDetailDrawerView: View {
     let isWorkingReviewCandidateID: UUID?
     let isWorkingMapCandidateID: String?
     let onClose: () -> Void
+    let onOpenInbox: () -> Void
     let onDeletePlace: (Place) async throws -> Void
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
@@ -2010,6 +2027,7 @@ private struct MapDetailDrawerView: View {
                 SelectedPlaceCapsule(
                     item: item,
                     onExpand: expandDetail,
+                    onOpenInbox: onOpenInbox,
                     onClose: onClose
                 )
                 .padding(.horizontal, 18)
@@ -2053,6 +2071,14 @@ private struct MapDetailDrawerView: View {
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+
+            Button(action: onOpenInbox) {
+                SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
+            .accessibilityIdentifier("map.returnToInbox")
+            .frame(width: 44, height: 44)
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
@@ -2164,6 +2190,7 @@ private struct SelectedPlaceCapsule: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     let onExpand: () -> Void
+    let onOpenInbox: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -2200,6 +2227,14 @@ private struct SelectedPlaceCapsule: View {
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Open \(item.presentation.title) details", traditionalChinese: "打開 \(item.presentation.title) 詳情"))
             .accessibilityHint(languageSettings.localized(english: "Expands the selected place drawer", traditionalChinese: "展開選取的地點抽屜"))
+
+            Button(action: onOpenInbox) {
+                SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
+            .accessibilityIdentifier("map.returnToInbox")
+            .frame(width: 44, height: 44)
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
