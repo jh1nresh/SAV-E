@@ -147,6 +147,47 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(inboxRoot.waitForExistence(timeout: stepTimeout))
     }
 
+    @MainActor
+    func testTripKmlExportMenuSmoke() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--uitest-complete-onboarding", "--skip-map-tour"]
+        app.launchArguments += ["-save.appLanguage", "en"]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["memory-inbox-root"].waitForExistence(timeout: 45))
+
+        let askButton = app.buttons["memory-inbox-ask"]
+        XCTAssertTrue(askButton.waitForExistence(timeout: stepTimeout))
+        askButton.tap()
+        dismissLocationAlertIfPresent()
+
+        let namedField = app.textFields["Ask saved places or paste a spot..."]
+        let queryField = namedField.waitForExistence(timeout: stepTimeout) ? namedField : app.textFields.firstMatch
+        XCTAssertTrue(queryField.waitForExistence(timeout: stepTimeout))
+        queryField.tap()
+        queryField.typeText("Plan a one day Taipei trip")
+        let searchKey = app.keyboards.buttons["Search"]
+        if searchKey.waitForExistence(timeout: 3) {
+            searchKey.tap()
+        } else {
+            queryField.typeText("\n")
+        }
+
+        let shareMenu = app.buttons["Share or export trip"]
+        XCTAssertTrue(shareMenu.waitForExistence(timeout: 45))
+        shareMenu.tap()
+
+        XCTAssertTrue(app.buttons["Share SAV-E Link"].waitForExistence(timeout: stepTimeout))
+        let exportKml = app.buttons["Export KML"]
+        XCTAssertTrue(exportKml.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(exportKml.isEnabled)
+        exportKml.tap()
+
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Sign in to export your confirmed Map Stamps."].exists)
+    }
+
     // MARK: - Demo sign-in
 
     /// Types the App Review demo email + code (native SwiftUI fields — the

@@ -495,6 +495,103 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testTripCanvasKmlExportUsesOnlyVisibleConfirmedKnownPlacesInOrder() throws {
+        let museum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
+        let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
+        let cafe = makePlace("Taipei Cafe", address: "台北市信義區", latitude: 25.0330, longitude: 121.5650, category: .cafe)
+        let unknownID = UUID()
+        let museumStop = itineraryStop(placeId: museum.id.uuidString, state: .confirmedMapStamp, name: museum.name)
+        let lunchStop = itineraryStop(placeId: lunch.id.uuidString, state: .confirmedMapStamp, name: lunch.name)
+        let duplicateLunchStop = itineraryStop(placeId: lunch.id.uuidString, state: .confirmedMapStamp, name: lunch.name)
+        let reviewStop = itineraryStop(placeId: cafe.id.uuidString, state: .reviewCandidate, name: cafe.name)
+        let externalStop = itineraryStop(placeId: cafe.id.uuidString, state: .externalSuggestion, name: cafe.name)
+        let unknownStop = itineraryStop(placeId: unknownID.uuidString, state: .confirmedMapStamp, name: "Unknown")
+        let malformedStop = itineraryStop(placeId: "not-a-uuid", state: .confirmedMapStamp, name: "Malformed")
+        let cafeStop = itineraryStop(placeId: cafe.id.uuidString, state: .confirmedMapStamp, name: cafe.name)
+        var canvas = TripCanvasDraft(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
+                museumStop,
+                lunchStop,
+                duplicateLunchStop,
+                reviewStop,
+                externalStop,
+                unknownStop,
+                malformedStop,
+                cafeStop,
+            ])
+        ])
+
+        canvas.moveStopEarlier(lunchStop.id)
+        canvas.skipStop(museumStop.id)
+
+        XCTAssertEqual(
+            try canvas.kmlExportPlaceIDs(availablePlaces: [museum, lunch, cafe]),
+            [lunch.id, cafe.id]
+        )
+    }
+
+    @MainActor
+    func testTripCanvasKmlExportRejectsEmptyAndOverLimitSelections() throws {
+        let reviewPlace = makePlace("Needs Review", address: "Taipei", latitude: 25.04, longitude: 121.52, category: .attraction)
+        let reviewOnly = TripCanvasDraft(days: [
+            ItineraryDay(dayNumber: 1, label: nil, stops: [
+                itineraryStop(placeId: reviewPlace.id.uuidString, state: .reviewCandidate, name: reviewPlace.name)
+            ])
+        ])
+
+        XCTAssertThrowsError(try reviewOnly.kmlExportPlaceIDs(availablePlaces: [reviewPlace])) { error in
+            XCTAssertEqual(error as? TripKmlExportSelectionError, .noConfirmedMapStamps)
+        }
+
+        let places = (0..<101).map { index in
+            makePlace(
+                "Place \(index)",
+                address: "Taipei",
+                latitude: 25.04 + Double(index) / 10_000,
+                longitude: 121.52,
+                category: .attraction
+            )
+        }
+        let overLimit = TripCanvasDraft(days: [
+            ItineraryDay(
+                dayNumber: 1,
+                label: nil,
+                stops: places.map {
+                    itineraryStop(placeId: $0.id.uuidString, state: .confirmedMapStamp, name: $0.name)
+                }
+            )
+        ])
+
+        XCTAssertThrowsError(try overLimit.kmlExportPlaceIDs(availablePlaces: places)) { error in
+            XCTAssertEqual(error as? TripKmlExportSelectionError, .tooManyConfirmedMapStamps(101))
+        }
+    }
+
+    @MainActor
+    func testTrekKmlResponseValidationRequiresKmlMimeTypeAndDocument() {
+        let valid = Data("<?xml version=\"1.0\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\"></kml>".utf8)
+        let oversized = Data(("<kml>" + String(repeating: " ", count: 2_097_152) + "</kml>").utf8)
+
+        XCTAssertTrue(SupabaseService.isValidTrekKmlResponse(valid, mimeType: "application/vnd.google-earth.kml+xml"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(valid, mimeType: "application/json"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(Data("<html></html>".utf8), mimeType: "application/vnd.google-earth.kml+xml"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(Data("<kmlnotreally></kml>".utf8), mimeType: "application/vnd.google-earth.kml+xml"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(Data("<kml><Document></kml>".utf8), mimeType: "application/vnd.google-earth.kml+xml"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(oversized, mimeType: "application/vnd.google-earth.kml+xml"))
+        XCTAssertFalse(SupabaseService.isValidTrekKmlResponse(Data(), mimeType: "application/vnd.google-earth.kml+xml"))
+    }
+
+    @MainActor
+    func testTrekKmlExportRequestContainsOnlyPlaceIDs() throws {
+        let placeID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+        let data = try SupabaseService.trekKmlExportRequestBody(placeIds: [placeID])
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(Set(object.keys), ["place_ids"])
+        XCTAssertEqual(object["place_ids"] as? [String], [placeID.uuidString.lowercased()])
+    }
+
+    @MainActor
     func testGapSuggestionEngineRanksSavedActivityBeforeExternalCandidate() throws {
         let savedMuseum = makePlace("Taipei Museum", address: "台北市中正區", latitude: 25.0400, longitude: 121.5200, category: .attraction)
         let externalPark = SaveMapCandidate(
@@ -683,6 +780,23 @@ final class DeterministicTripPlannerTests: XCTestCase {
             placeName: place.name,
             time: time,
             duration: 90,
+            note: nil
+        )
+    }
+
+    @MainActor
+    private func itineraryStop(
+        placeId: String?,
+        state: ItineraryPlaceState,
+        name: String
+    ) -> ItineraryStop {
+        ItineraryStop(
+            id: UUID(),
+            placeId: placeId,
+            placeState: state,
+            placeName: name,
+            time: nil,
+            duration: 60,
             note: nil
         )
     }

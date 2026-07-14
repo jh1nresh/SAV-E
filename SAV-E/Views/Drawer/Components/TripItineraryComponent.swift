@@ -7,7 +7,9 @@ struct TripItineraryComponent: View {
     let aiMessage: String?
     var places: [Place] = []
     @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var showShareSheet = false
+    @State private var shareItem: TripItineraryShareItem?
+    @State private var exportAlert: TripItineraryExportAlert?
+    @State private var exportTask: Task<Void, Never>?
     @State private var canvas: TripCanvasDraft
 
     init(
@@ -57,24 +59,65 @@ struct TripItineraryComponent: View {
                 }
                 Spacer()
 
-                Button(action: { showShareSheet = true }) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveInk)
-                        .frame(width: 34, height: 34)
-                        .background(Color.saveNotebookPage.opacity(0.74))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                Menu {
+                    Button(action: shareSaveLink) {
+                        Label(
+                            languageSettings.localized(
+                                english: "Share SAV-E Link",
+                                traditionalChinese: "分享 SAV-E 連結"
+                            ),
+                            systemImage: "link"
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .disabled(buildShareURL() == nil)
+
+                    Divider()
+
+                    Button {
+                        guard exportTask == nil else { return }
+                        exportTask = Task { await exportKml() }
+                    } label: {
+                        Label(
+                            languageSettings.localized(
+                                english: isExportingKml ? "Preparing KML…" : "Export KML",
+                                traditionalChinese: isExportingKml ? "正在準備 KML…" : "匯出 KML"
+                            ),
+                            systemImage: "doc.badge.arrow.up"
+                        )
+                    }
+                    .disabled(isExportingKml || kmlExportDisabledReason != nil)
+
+                    if let kmlExportDisabledReason {
+                        Button(action: {}) {
+                            Label(kmlExportDisabledReason, systemImage: "info.circle")
+                        }
+                        .disabled(true)
+                    }
+                } label: {
+                    Group {
+                        if isExportingKml {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.saveInk)
+                        } else {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.saveInk)
+                        }
+                    }
+                    .frame(width: 34, height: 34)
+                    .background(Color.saveNotebookPage.opacity(0.74))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .sheet(isPresented: $showShareSheet) {
-                    if let url = buildShareURL() {
-                        ShareSheet(items: [url])
-                    }
-                }
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Share or export trip",
+                    traditionalChinese: "分享或匯出行程"
+                ))
 
                 Label(dayCountText, systemImage: "calendar")
                     .font(.caption.weight(.bold))
@@ -122,11 +165,163 @@ struct TripItineraryComponent: View {
         .onChange(of: canvasInputID) { _, _ in
             canvas = TripCanvasDraft(days: sourceDays)
         }
+        .onAppear(perform: cleanupTemporaryExport)
+        .sheet(item: $shareItem, onDismiss: cleanupTemporaryExport) { item in
+            ShareSheet(items: [item.url])
+        }
+        .alert(item: $exportAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text(languageSettings.localized(english: "OK", traditionalChinese: "好")))
+            )
+        }
+        .onDisappear(perform: handleDisappear)
     }
 
     private func buildShareURL() -> URL? {
         let tripData = SharedTripData.from(title: title, city: "", days: canvas.visibleDays, places: places)
         return tripData.toURL()
+    }
+
+    private func shareSaveLink() {
+        guard let url = buildShareURL() else { return }
+        do {
+            try removeTemporaryExportIfPresent()
+        } catch {
+            exportAlert = exportAlert(for: error)
+            return
+        }
+        shareItem = TripItineraryShareItem(url: url)
+    }
+
+    private func exportKml() async {
+        defer { exportTask = nil }
+
+        do {
+            try removeTemporaryExportIfPresent()
+            let placeIDs = try canvas.kmlExportPlaceIDs(availablePlaces: places)
+            let data = try await SupabaseService.shared.exportTrekKml(placeIds: placeIDs)
+            try Task.checkCancellation()
+
+            try data.write(to: kmlExportFileURL, options: [.atomic, .completeFileProtection])
+            shareItem = TripItineraryShareItem(url: kmlExportFileURL)
+        } catch is CancellationError {
+            return
+        } catch {
+            cleanupTemporaryExport()
+            exportAlert = exportAlert(for: error)
+        }
+    }
+
+    private func handleDisappear() {
+        exportTask?.cancel()
+        exportTask = nil
+        if shareItem == nil {
+            cleanupTemporaryExport()
+        }
+    }
+
+    private func cleanupTemporaryExport() {
+        do {
+            try removeTemporaryExportIfPresent()
+        } catch {
+            exportAlert = exportAlert(for: error)
+        }
+    }
+
+    private var isExportingKml: Bool {
+        exportTask != nil
+    }
+
+    private var kmlExportFileURL: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("save-trip-pack.kml", isDirectory: false)
+    }
+
+    private func removeTemporaryExportIfPresent() throws {
+        guard FileManager.default.fileExists(atPath: kmlExportFileURL.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: kmlExportFileURL)
+        } catch {
+            throw TripItineraryExportError.temporaryFileCleanupFailed
+        }
+    }
+
+    private var kmlExportDisabledReason: String? {
+        do {
+            _ = try canvas.kmlExportPlaceIDs(availablePlaces: places)
+            return nil
+        } catch let error as TripKmlExportSelectionError {
+            return selectionMessage(for: error)
+        } catch {
+            return languageSettings.localized(
+                english: "This trip cannot be exported yet.",
+                traditionalChinese: "這份行程目前還不能匯出。"
+            )
+        }
+    }
+
+    private func exportAlert(for error: Error) -> TripItineraryExportAlert {
+        let message: String
+        if case TripItineraryExportError.temporaryFileCleanupFailed = error {
+            message = languageSettings.localized(
+                english: "SAV-E could not remove its temporary KML file. Close the share sheet and try again.",
+                traditionalChinese: "SAV-E 無法移除暫存 KML 檔案。請關閉分享畫面後再試一次。"
+            )
+        } else if let selectionError = error as? TripKmlExportSelectionError {
+            message = selectionMessage(for: selectionError)
+        } else if let serviceError = error as? SupabaseError {
+            switch serviceError {
+            case .notConfigured:
+                message = languageSettings.localized(
+                    english: "Connect SAV-E to its backend before exporting KML.",
+                    traditionalChinese: "請先連接 SAV-E 後端，再匯出 KML。"
+                )
+            case .notAuthenticated:
+                message = languageSettings.localized(
+                    english: "Sign in to export your confirmed Map Stamps.",
+                    traditionalChinese: "請先登入，再匯出已確認的地圖章。"
+                )
+            case .networkError:
+                message = languageSettings.localized(
+                    english: "Check your connection and try exporting again.",
+                    traditionalChinese: "請確認網路連線後再試一次。"
+                )
+            case .recordNotFound, .apiError, .invalidResponse:
+                message = languageSettings.localized(
+                    english: "SAV-E could not prepare a valid KML file. Try again later.",
+                    traditionalChinese: "SAV-E 無法準備有效的 KML 檔案，請稍後再試。"
+                )
+            }
+        } else {
+            message = languageSettings.localized(
+                english: "SAV-E could not create the KML file. Try again.",
+                traditionalChinese: "SAV-E 無法建立 KML 檔案，請再試一次。"
+            )
+        }
+        return TripItineraryExportAlert(
+            title: languageSettings.localized(
+                english: "Couldn’t Export KML",
+                traditionalChinese: "無法匯出 KML"
+            ),
+            message: message
+        )
+    }
+
+    private func selectionMessage(for error: TripKmlExportSelectionError) -> String {
+        switch error {
+        case .noConfirmedMapStamps:
+            return languageSettings.localized(
+                english: "No confirmed Map Stamps are visible in this plan.",
+                traditionalChinese: "這份行程目前沒有可見的已確認地圖章。"
+            )
+        case .tooManyConfirmedMapStamps(let count):
+            return languageSettings.localized(
+                english: "KML export supports up to 100 Map Stamps; this plan has \(count).",
+                traditionalChinese: "KML 最多可匯出 100 個地圖章；這份行程有 \(count) 個。"
+            )
+        }
     }
 
     private var canvasInputID: String {
@@ -166,6 +361,21 @@ struct TripItineraryComponent: View {
         return canvas.visibleDays.first?.dayNumber ?? 1
     }
 
+}
+
+private struct TripItineraryShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct TripItineraryExportAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
+
+private enum TripItineraryExportError: Error {
+    case temporaryFileCleanupFailed
 }
 
 // MARK: - Trip Health
