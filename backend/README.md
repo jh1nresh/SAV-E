@@ -82,6 +82,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `POST /trips`
 - `PATCH /trips/:id`
 - `DELETE /trips/:id`
+- `POST /v0/exports/trek-kml` — exports 1–100 explicitly selected, owner-scoped Map Stamps as a private/no-store KML attachment compatible with [TREK](https://github.com/mauriceboe/TREK). The request body is `{ "place_ids": ["<uuid>"] }`; the export includes only place ID, name, address, category, status, and coordinates, and excludes notes, source URLs, photos, and evidence.
 - `GET /profile`
 - `PATCH /profile`
 - `POST /memory/captures/:id/search-recovery` — runs public search recovery for source-only captures and writes search-derived results back as review-only place candidates.
@@ -148,5 +149,17 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `POST /v0/workflows/place-recovery/runs` — authenticated workflow run creation with internal credit reservation.
 - `POST /v0/workflows/place-recovery/runs/:id/result` — records bounded worker/classifier result type and evidence tier, creates an off-chain **analysis** workflow receipt (`receipt_type=analysis`) with `workflow_version`, `operator_id`, `requester_id`, `agent_id`, optional `job_id`, `model_provenance`, input/output hashes, permission snapshot, tool trace refs, latency/cost/failure fields, then points `workflow_runs.receipt_id` at that receipt.
 - `POST /v0/workflows/place-recovery/runs/:id/decision` — records user confirm/edit/reject and creates an off-chain **decision** workflow receipt with credit settlement plus `user_feedback_action`, `quality_delta`, and `reputation_delta`.
+
+To move selected SAV-E Map Stamps into TREK without copying either product's private data model, request the export with the same Privy or guest authorization used by other persistence routes:
+
+```bash
+curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
+  -H "Authorization: Bearer $SAVE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  --data '{"place_ids":["11111111-1111-4111-8111-111111111111"]}' \
+  --output save-map-stamps.kml
+```
+
+Import `save-map-stamps.kml` from TREK's planner file-import surface. SAV-E remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.

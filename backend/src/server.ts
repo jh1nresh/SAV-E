@@ -100,6 +100,14 @@ import {
   r8AgentMetricsSql,
   type R8AgentMetricsRow,
 } from "./r8AgentMetrics.js";
+import {
+  TrekKmlExportError,
+  buildTrekKml,
+  normalizeTrekKmlExportRequest,
+  trekKmlPlacesSql,
+  trekKmlResponseHeaders,
+  type TrekKmlPlaceRow,
+} from "./trekKmlExport.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -822,6 +830,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "claims" && id === "usage-receipts") {
       return await handleAuthenticatedClaimUsageReceipts(request, response, userId);
+    }
+    if (isV0 && resource === "exports" && id === "trek-kml") {
+      return await handleTrekKmlExport(request, response, userId);
     }
     if (isV0 && resource === "llm") {
       return await handleLLMProxy(request, response, segments.slice(1));
@@ -1901,6 +1912,44 @@ async function handleTrips(
   }
 
   return sendJson(response, { error: "Unsupported trips route" }, 405);
+}
+
+async function handleTrekKmlExport(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported TREK KML export route" }, 405);
+  }
+
+  let placeIds: string[];
+  try {
+    placeIds = normalizeTrekKmlExportRequest(await readJson(request));
+  } catch (error) {
+    if (error instanceof TrekKmlExportError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    throw error;
+  }
+
+  const { rows } = await pool.query<TrekKmlPlaceRow>(trekKmlPlacesSql, [userId, placeIds]);
+  if (rows.length !== placeIds.length) {
+    return sendJson(response, { error: "One or more places were not found" }, 404);
+  }
+
+  let kml: string;
+  try {
+    kml = buildTrekKml(rows);
+  } catch (error) {
+    if (error instanceof TrekKmlExportError) {
+      return sendJson(response, { error: error.message }, 422);
+    }
+    throw error;
+  }
+
+  response.writeHead(200, trekKmlResponseHeaders());
+  response.end(kml);
 }
 
 async function handleProfile(
