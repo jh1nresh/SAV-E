@@ -3597,49 +3597,6 @@ final class SocialPlacePipelineTests: XCTestCase {
                       "Deterministic recovery succeeded; the LLM caption extractor must not be called")
     }
 
-    @MainActor
-    func testInboxSnapshotSeparatesReviewSourceOnlyAndRecentMapStamps() {
-        let now = Date(timeIntervalSince1970: 2_000_000)
-        let review = PlaceReviewCandidate(
-            id: UUID(),
-            captureId: nil,
-            name: "Openaire",
-            address: "3515 Wilshire Blvd, Los Angeles",
-            city: "Los Angeles",
-            latitude: nil,
-            longitude: nil,
-            evidence: ["Source URL: https://www.instagram.com/reel/example/"],
-            confidence: 0.68,
-            missingInfo: ["Confirm coordinates"],
-            status: "review",
-            createdAt: now
-        )
-        let sourceOnly = PlaceReviewCandidate(
-            id: UUID(),
-            captureId: nil,
-            name: "Xiaohongshu link",
-            address: "",
-            city: nil,
-            latitude: nil,
-            longitude: nil,
-            evidence: ["Source URL: http://xhslink.com/o/example"],
-            confidence: 0.2,
-            missingInfo: ["Readable caption or screenshot OCR"],
-            status: "source_only",
-            createdAt: now.addingTimeInterval(-10)
-        )
-
-        let snapshot = SaveInboxSnapshot(
-            reviewCandidates: [sourceOnly, review],
-            places: ReviewDemoSeed.places(now: now),
-            recentPlaceLimit: 2
-        )
-
-        XCTAssertEqual(snapshot.needsReview.map(\.id), [review.id])
-        XCTAssertEqual(snapshot.sourceOnly.map(\.id), [sourceOnly.id])
-        XCTAssertEqual(snapshot.recentPlaces.map(\.name), ["Daan Forest Park", "Bar Benfiddich"])
-    }
-
 }
 
 private final class StubGeminiURLProtocol: URLProtocol {

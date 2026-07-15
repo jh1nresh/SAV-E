@@ -1,10 +1,5 @@
 import SwiftUI
 
-private enum SaveRootSurface {
-    case inbox
-    case map
-}
-
 struct ContentView: View {
     @StateObject private var mapVM = MapViewModel()
     @StateObject private var drawerVM = AIDrawerViewModel()
@@ -12,24 +7,20 @@ struct ContentView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenMapTour") private var hasSeenMapTour = false
-    @State private var rootSurface: SaveRootSurface
-    @State private var drawerDetent: PresentationDetent = .height(88)
+    @State private var isRootSheetPresented = true
+    @State private var drawerDetent: PresentationDetent
+    @State private var shouldAutoFocusUserLocationOnLaunch: Bool
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
+    @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
 
     init(incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil)) {
         _incomingPlaceReceipt = incomingPlaceReceipt
-        _rootSurface = State(initialValue: incomingPlaceReceipt.wrappedValue == nil ? .map : .inbox)
+        _drawerDetent = State(initialValue: incomingPlaceReceipt.wrappedValue == nil ? .height(88) : .large)
+        _shouldAutoFocusUserLocationOnLaunch = State(initialValue: incomingPlaceReceipt.wrappedValue == nil)
     }
 
     var body: some View {
-        Group {
-            switch rootSurface {
-            case .inbox:
-                inboxSurface
-            case .map:
-                mapSurface
-            }
-        }
+        mapSurface
         .environment(\.appLanguageSettings, languageSettings)
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
@@ -45,30 +36,31 @@ struct ContentView: View {
                 traditionalChinese: "「\(mapVM.syncFailedPlaceName ?? "")」沒能同步到你的帳號——請檢查網路。它仍保存在本機。"
             ))
         }
-        .sheet(item: $incomingPlaceReceipt) { destination in
-            FriendShareReceiptView(destination: destination) { receipt in
-                try await mapVM.saveSharedPlaceReceipt(receipt)
-            }
-            .environment(\.appLanguageSettings, languageSettings)
+        .sheet(isPresented: $isRootSheetPresented, onDismiss: restorePermanentDrawer) {
+            rootSheetContent
         }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
+            guard receiptID != nil else { return }
+            pendingReceiptMapDetail = nil
             mapDetailDrawerItem = nil
+            mapVM.clearSelectedMapObject()
             drawerVM.returnToCommands()
+            shouldAutoFocusUserLocationOnLaunch = false
             withAnimation(SaveTheme.Motion.standardSpring) {
-                rootSurface = receiptID == nil ? .map : .inbox
-                drawerDetent = .height(88)
+                drawerDetent = .large
             }
+            isRootSheetPresented = true
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }
-            openPlaceFromInbox(place)
+            openMapDetail(.savedPlace(place))
         }
         .onChange(of: mapVM.selectedReviewCandidate) { _, candidate in
             guard let candidate else { return }
-            openCandidateFromInbox(candidate)
+            openMapDetail(.reviewCandidate(candidate))
         }
         .onChange(of: mapVM.selectedMapCandidate) { _, candidate in
             guard let candidate else { return }
@@ -110,25 +102,29 @@ struct ContentView: View {
         }
     }
 
-    private var inboxSurface: some View {
-        MemoryInboxView(
-            places: mapVM.places,
-            reviewCandidates: mapVM.reviewCandidates,
-            isLoading: mapVM.isLoading,
-            onOpenCandidate: openCandidateFromInbox,
-            onOpenPlace: openPlaceFromInbox,
-            onOpenMap: openMap,
-            onAsk: openAsk,
-            onCapture: openAsk
+    private var mapSurface: some View {
+        MapView(
+            viewModel: mapVM,
+            shouldFocusOnUserLocationOnLaunch: shouldAutoFocusUserLocationOnLaunch
         )
+            .environment(\.appLanguageSettings, languageSettings)
     }
 
-    private var mapSurface: some View {
-        MapView(viewModel: mapVM)
-            .environment(\.appLanguageSettings, languageSettings)
-            .sheet(isPresented: .constant(true)) {
-                drawerView
+    @ViewBuilder
+    private var rootSheetContent: some View {
+        if let destination = incomingPlaceReceipt {
+            FriendShareReceiptView(destination: destination) { receipt in
+                let outcome = try await mapVM.saveSharedPlaceReceipt(receipt)
+                pendingReceiptMapDetail = .savedPlace(outcome.place)
+                return outcome
             }
+            .id(destination.id)
+            .environment(\.appLanguageSettings, languageSettings)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        } else {
+            drawerView
+        }
     }
 
     private var drawerView: some View {
@@ -208,7 +204,6 @@ struct ContentView: View {
             onToggleCategory: { category in
                 mapVM.toggleCategory(category)
             },
-            onOpenInbox: returnToInbox,
             onDismissMapDetail: {
                 mapVM.clearSelectedMapObject()
             }
@@ -227,53 +222,35 @@ struct ContentView: View {
     /// `hasSeenMapTour` true on dismissal keeps it from ever showing again.
     private var shouldShowMapTour: Binding<Bool> {
         Binding(
-            get: { rootSurface == .map && !hasSeenMapTour },
+            get: { incomingPlaceReceipt == nil && !hasSeenMapTour },
             set: { if !$0 { hasSeenMapTour = true } }
         )
     }
 
-    private func openMap() {
-        mapDetailDrawerItem = nil
-        drawerVM.returnToCommands()
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            rootSurface = .map
-            drawerDetent = .height(88)
-        }
-    }
-
-    private func openAsk() {
-        mapDetailDrawerItem = nil
-        drawerVM.returnToCommands()
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            rootSurface = .map
-            drawerDetent = .medium
-        }
-    }
-
-    private func openCandidateFromInbox(_ candidate: PlaceReviewCandidate) {
-        openMapDetail(.reviewCandidate(candidate))
-    }
-
-    private func openPlaceFromInbox(_ place: Place) {
-        openMapDetail(.savedPlace(place))
-    }
-
     private func openMapDetail(_ item: MapDetailDrawerItem) {
+        guard incomingPlaceReceipt == nil else { return }
         drawerVM.returnToCommands()
         mapDetailDrawerItem = item
         withAnimation(SaveTheme.Motion.standardSpring) {
-            rootSurface = .map
             drawerDetent = .fraction(0.38)
         }
     }
 
-    private func returnToInbox() {
-        mapVM.clearSelectedMapObject()
-        mapDetailDrawerItem = nil
+    private func restorePermanentDrawer() {
+        let pendingDetail = pendingReceiptMapDetail
+        pendingReceiptMapDetail = nil
+        shouldAutoFocusUserLocationOnLaunch = pendingDetail == nil
+        incomingPlaceReceipt = nil
         drawerVM.returnToCommands()
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            rootSurface = .inbox
-            drawerDetent = .height(88)
+        mapDetailDrawerItem = pendingDetail
+        drawerDetent = pendingDetail == nil ? .height(88) : .fraction(0.38)
+        if pendingDetail == nil {
+            mapVM.clearSelectedMapObject()
+        }
+
+        Task { @MainActor in
+            await Task.yield()
+            isRootSheetPresented = true
         }
     }
 
@@ -330,6 +307,7 @@ private struct FriendShareReceiptView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(localized("Done", "完成")) { dismiss() }
+                        .disabled(saveState == .saving)
                 }
             }
         }
@@ -340,6 +318,7 @@ private struct FriendShareReceiptView: View {
             activeLoadID = nil
             activeSaveID = nil
         }
+        .interactiveDismissDisabled(saveState == .saving)
     }
 
     private var loadingView: some View {
