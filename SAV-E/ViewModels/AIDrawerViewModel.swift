@@ -30,7 +30,6 @@ final class AIDrawerViewModel: ObservableObject {
     @Published var mapAction: MapActionData?
     @Published var chatHistory: [ChatEntry] = []
     @Published var activeCommandTab: CommandDrawerTab = .review
-    var didAutoPresentPendingInbox = false
 
     struct ChatEntry: Identifiable, Equatable {
         let id = UUID()
