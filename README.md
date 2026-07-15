@@ -16,7 +16,7 @@ The core judgment is conservative: SAV-E should not pretend a clue is a real pla
 
 ## What ships in the iOS app
 
-- **Inbox-first home** — unresolved links and place clues land in Memory Inbox; MapKit remains the secondary surface for confirmed Map Stamps.
+- **Map-first home** — the app opens on confirmed Map Stamps with current-location controls; unresolved links and place clues remain available in Memory Inbox as a secondary review surface.
 - **AI command drawer** — persistent bottom drawer for search, “plan around this”, order/recommendation analysis, URL import, voice input, and place actions.
 - **Review inbox** — imported social/web clues become review candidates with evidence, rejected evidence, confidence, and source-recovery receipts before saving.
 - **Map Stamps** — confirmed places support categories, visibility, detail cards, source links, notes, navigation, deletion, and list membership.

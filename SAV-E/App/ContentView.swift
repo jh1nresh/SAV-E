@@ -12,12 +12,13 @@ struct ContentView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasSeenMapTour") private var hasSeenMapTour = false
-    @State private var rootSurface: SaveRootSurface = .inbox
+    @State private var rootSurface: SaveRootSurface
     @State private var drawerDetent: PresentationDetent = .height(88)
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
 
     init(incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil)) {
         _incomingPlaceReceipt = incomingPlaceReceipt
+        _rootSurface = State(initialValue: incomingPlaceReceipt.wrappedValue == nil ? .map : .inbox)
     }
 
     var body: some View {
@@ -54,9 +55,12 @@ struct ContentView: View {
             if let action { mapVM.apply(action) }
         }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
-            guard receiptID != nil else { return }
             mapDetailDrawerItem = nil
-            rootSurface = .inbox
+            drawerVM.returnToCommands()
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                rootSurface = receiptID == nil ? .map : .inbox
+                drawerDetent = .height(88)
+            }
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }

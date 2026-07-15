@@ -199,16 +199,6 @@ struct AIDrawerView: View {
                 break
             }
         }
-        .onChange(of: needsReviewCandidates.count, initial: true) { _, count in
-            guard count > 0,
-                  mapDetailDrawerItem == nil,
-                  !viewModel.didAutoPresentPendingInbox else { return }
-            viewModel.didAutoPresentPendingInbox = true
-            viewModel.activeCommandTab = .review
-            withAnimation(SaveTheme.Motion.standardSpring) {
-                drawerDetent = .large
-            }
-        }
     }
 
     private func mapDetailDrawer(for item: MapDetailDrawerItem) -> some View {

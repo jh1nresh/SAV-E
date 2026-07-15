@@ -6,8 +6,8 @@ import XCTest
 /// bypass, seeded local places, no real network required) and captures the
 /// core screens as `.keepAlways` attachments:
 ///
-///   1. screenshot-01-memory-inbox           — inbox-first home with recent stamps
-///   2. screenshot-02-map-collapsed-drawer   — map with seeded pins, drawer collapsed
+///   1. screenshot-01-memory-inbox           — secondary review surface with recent stamps
+///   2. screenshot-02-map-collapsed-drawer   — map-first home with seeded pins
 ///   3. screenshot-03-drawer-stamps-tab      — drawer expanded on the Stamps tab
 ///   4. screenshot-04-place-detail           — a seeded place's detail card
 ///   5. screenshot-05-passport-profile       — the SAV-E Passport / profile sheet
@@ -53,32 +53,43 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        // --- (a) Inbox-first home -------------------------------------------
-        let inboxRoot = app.descendants(matching: .any)["memory-inbox-root"]
-        guard inboxRoot.waitForExistence(timeout: 45) else {
+        // --- (a) Map-first home ---------------------------------------------
+        dismissLocationAlertIfPresent()
+        let passportButton = app.buttons["Open SAV-E Passport"]
+        guard passportButton.waitForExistence(timeout: 45) else {
             attach(app, name: "debug-after-signin")
-            throw XCTSkip("Memory Inbox never appeared after demo sign-in — no screenshots captured.")
+            throw XCTSkip("Map/drawer never appeared after demo sign-in — no screenshots captured.")
+        }
+        dismissLocationAlertIfPresent()
+        sleep(4) // let map tiles + seeded pins finish rendering
+        attach(app, name: "screenshot-02-map-collapsed-drawer")
+
+        // --- (b) Secondary Memory Inbox ------------------------------------
+        let inboxButton = app.buttons["map.returnToInbox"]
+        guard inboxButton.waitForExistence(timeout: stepTimeout), inboxButton.isHittable else {
+            throw XCTSkip("Memory Inbox entry was not reachable from the map.")
+        }
+        inboxButton.tap()
+
+        let inboxRoot = app.descendants(matching: .any)["memory-inbox-root"]
+        guard inboxRoot.waitForExistence(timeout: stepTimeout) else {
+            attach(app, name: "debug-after-opening-inbox")
+            throw XCTSkip("Memory Inbox never appeared from the map.")
         }
         sleep(2)
         attach(app, name: "screenshot-01-memory-inbox")
 
-        // --- (b) Map with seeded pins + collapsed drawer -------------------
+        // Return to the map before continuing the drawer/detail rail.
         let mapButton = app.buttons["memory-inbox-map"]
         guard mapButton.waitForExistence(timeout: stepTimeout), mapButton.isHittable else {
             throw XCTSkip("Map entry was not reachable from Memory Inbox.")
         }
         mapButton.tap()
-
-        // Fresh installs show the location permission alert when Map first opens.
         dismissLocationAlertIfPresent()
-        let passportButton = app.buttons["Open SAV-E Passport"]
         guard passportButton.waitForExistence(timeout: 45) else {
             attach(app, name: "debug-after-opening-map")
             throw XCTSkip("Map/drawer never appeared after tapping Map.")
         }
-        dismissLocationAlertIfPresent()
-        sleep(4) // let map tiles + seeded pins finish rendering
-        attach(app, name: "screenshot-02-map-collapsed-drawer")
 
         // --- (c) Drawer expanded on the Stamps tab --------------------------
         expandDrawer(app: app)
@@ -119,7 +130,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testInboxFirstShellOpensMapAndReturns() throws {
+    func testMapFirstShellOpensInboxAndReturns() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -130,9 +141,17 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
+        dismissLocationAlertIfPresent()
+
+        let locationButton = app.buttons["Center map on current location"]
+        XCTAssertTrue(locationButton.waitForExistence(timeout: 45))
+
+        let returnButton = app.buttons["map.returnToInbox"]
+        XCTAssertTrue(returnButton.waitForExistence(timeout: stepTimeout))
+        returnButton.tap()
 
         let inboxRoot = app.descendants(matching: .any)["memory-inbox-root"]
-        XCTAssertTrue(inboxRoot.waitForExistence(timeout: 45))
+        XCTAssertTrue(inboxRoot.waitForExistence(timeout: stepTimeout))
 
         let recentPlace = app.staticTexts["Daan Forest Park"]
         XCTAssertTrue(recentPlace.waitForExistence(timeout: stepTimeout))
@@ -147,12 +166,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(mapButton.waitForExistence(timeout: stepTimeout))
         mapButton.tap()
         dismissLocationAlertIfPresent()
-
-        let returnButton = app.buttons["map.returnToInbox"]
-        XCTAssertTrue(returnButton.waitForExistence(timeout: 45))
-        returnButton.tap()
-
-        XCTAssertTrue(inboxRoot.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(locationButton.waitForExistence(timeout: 45))
     }
 
     @MainActor
@@ -167,11 +181,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["memory-inbox-root"].waitForExistence(timeout: 45))
-
-        let askButton = app.buttons["memory-inbox-ask"]
-        XCTAssertTrue(askButton.waitForExistence(timeout: stepTimeout))
-        askButton.tap()
         dismissLocationAlertIfPresent()
 
         let namedField = app.textFields["Ask saved places or paste a spot..."]
@@ -212,8 +221,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         // The opening animation holds the screen for ~2s before SignInView.
         guard emailField.waitForExistence(timeout: 20) else {
             // A previous demo session may already be signed in (vault + seed
-            // flag persist); if the Inbox is up, proceed without signing in.
-            if app.descendants(matching: .any)["memory-inbox-root"].waitForExistence(timeout: stepTimeout) {
+            // flag persist); proceed if either root surface is already up.
+            if app.buttons["Open SAV-E Passport"].waitForExistence(timeout: stepTimeout) ||
+                app.descendants(matching: .any)["memory-inbox-root"].exists {
                 return
             }
             throw XCTSkip("Email sign-in field never appeared — cannot reach the demo session.")
