@@ -335,6 +335,22 @@ private extension String {
     }
 }
 
+enum SharedPlaceSaveOutcome {
+    case saved(Place)
+    case alreadySaved(Place)
+
+    var place: Place {
+        switch self {
+        case .saved(let place), .alreadySaved(let place): return place
+        }
+    }
+
+    var isDuplicate: Bool {
+        if case .alreadySaved = self { return true }
+        return false
+    }
+}
+
 @MainActor
 final class MapViewModel: ObservableObject {
     private static let pendingReviewImportBatchLimit = 4
@@ -876,6 +892,67 @@ final class MapViewModel: ObservableObject {
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
         revealImportedPlaces([place])
+    }
+
+    @discardableResult
+    func saveSharedPlaceReceipt(_ receipt: SharedPlaceReceipt) async throws -> SharedPlaceSaveOutcome {
+        if let code = receipt.code {
+            Task {
+                try? await supabaseService.recordFriendShareEvent(
+                    code: code,
+                    event: .saveTapped,
+                    failureReason: nil
+                )
+            }
+        }
+
+        if !hasLoadedPlaces {
+            await loadPlaces()
+        }
+
+        let place = receipt.privatePlace()
+
+        // A verified short-code receipt is server-owned. The server must accept
+        // the save before we mirror it locally, otherwise an expired, forged,
+        // or self-authored receipt could bypass validation on this device.
+        if let code = receipt.code {
+            guard let userId = authService.currentUserId else {
+                throw SupabaseError.notAuthenticated
+            }
+            let result = try await supabaseService.saveFriendSharedPlace(
+                place,
+                code: code,
+                userId: userId
+            )
+            let savedPlace = result.place
+            mirrorToLocalVault(savedPlace)
+            places.removeAll { $0.matches(savedPlace) }
+            places = [savedPlace] + places
+            revealImportedPlaces([savedPlace])
+
+            return result.isDuplicate ? .alreadySaved(savedPlace) : .saved(savedPlace)
+        }
+
+        if let existing = existingSavedPlace(matching: place) {
+            focusSavedPlace(existing, showStampMoment: false)
+            return .alreadySaved(existing)
+        }
+
+        let savedPlace = place
+        if let userId = authService.currentUserId {
+            do {
+                try await supabaseService.savePlace(place, userId: userId)
+            } catch {
+                print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
+                syncFailedPlaceName = place.name
+            }
+        }
+
+        mirrorToLocalVault(savedPlace)
+        places.removeAll { $0.matches(savedPlace) }
+        places = [savedPlace] + places
+        revealImportedPlaces([savedPlace])
+        return .saved(savedPlace)
     }
 
     @discardableResult

@@ -1,4 +1,5 @@
-import { MySavesPayload, Place, SharedPlaceData, TripRecord } from "./models";
+import { MySavesPayload, Place, SharedPlaceData, SharedPlaceReceipt, TripRecord } from "./models";
+import { sanitizeSharedPlaceData } from "./sharedTrip";
 
 const apiBaseUrl =
   normalizedEnvValue(process.env.EXPO_PUBLIC_SAVE_API_URL) ??
@@ -38,6 +39,7 @@ type BackendPlace = {
   source_platform: Place["sourcePlatform"];
   note?: string | null;
   price_range?: string | null;
+  recommender?: string | null;
 };
 
 type BackendTrip = {
@@ -50,13 +52,48 @@ type BackendTrip = {
 };
 
 type SharedPlaceLink = {
-  code: string;
-  url: string;
-  payload: SharedPlaceData;
-  source_place_id?: string | null;
-  expires_at?: string | null;
-  created_at?: string;
+  code?: unknown;
+  url?: unknown;
+  payload?: unknown;
+  sender?: unknown;
+  expires_at?: unknown;
+  created_at?: unknown;
 };
+
+export type FriendShareEventType =
+  | "friend_share_receipt_opened"
+  | "friend_share_save_tapped"
+  | "friend_share_open_failed";
+
+export type FriendShareOpenFailureReason =
+  | "expired"
+  | "malformed_payload"
+  | "network_error"
+  | "server_error"
+  | "unsupported_route"
+  | "unknown";
+
+export type FriendShareEventOptions = {
+  reasonCode?: FriendShareOpenFailureReason;
+  recipientPlaceId?: string;
+};
+
+export type FriendSharePlaceSaveOutcome = "saved" | "already_saved";
+
+export type FriendSharePlaceSaveResult = {
+  place: Place;
+  outcome: FriendSharePlaceSaveOutcome;
+};
+
+export class SharedPlaceLinkError extends Error {
+  constructor(
+    message: string,
+    readonly reasonCode: FriendShareOpenFailureReason,
+  ) {
+    super(message);
+    this.name = "SharedPlaceLinkError";
+  }
+}
 
 function requireApiBaseUrl(): string {
   if (!apiBaseUrl) {
@@ -147,13 +184,27 @@ export async function createGuestSession(): Promise<GuestSession> {
   };
 }
 
+export async function runSingleFlight<T>(
+  ref: { current: Promise<T> | null },
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (ref.current) return ref.current;
+  const pending = operation();
+  ref.current = pending;
+  try {
+    return await pending;
+  } finally {
+    if (ref.current === pending) ref.current = null;
+  }
+}
+
 export async function fetchPlaces(auth: SaveAuth): Promise<Place[]> {
   const places = await apiRequest<BackendPlace[]>("/places", { method: "GET" }, auth);
   return places.map(mapPlace);
 }
 
-export async function createPlace(auth: SaveAuth, place: Place): Promise<Place> {
-  const body = {
+export function placeCreateBody(place: Place, friendShareCode?: string): Record<string, unknown> {
+  const body: Record<string, unknown> = {
     name: place.name,
     address: place.address,
     latitude: place.latitude,
@@ -164,9 +215,30 @@ export async function createPlace(auth: SaveAuth, place: Place): Promise<Place> 
     source_url: place.sourceUrl ?? null,
     source_platform: place.sourcePlatform,
     price_range: place.priceRange ?? null,
+    recommender: place.recommender ?? null,
   };
+  const code = normalizedString(friendShareCode);
+  if (friendShareCode !== undefined && !code) {
+    throw new Error("friendShareCode must not be empty");
+  }
+  if (code) body.friend_share_code = code;
+  return body;
+}
 
-  const created = await apiRequest<BackendPlace>(
+export async function createPlace(auth: SaveAuth, place: Place): Promise<Place>;
+export async function createPlace(
+  auth: SaveAuth,
+  place: Place,
+  friendShareCode: string,
+): Promise<FriendSharePlaceSaveResult>;
+export async function createPlace(
+  auth: SaveAuth,
+  place: Place,
+  friendShareCode?: string,
+): Promise<Place | FriendSharePlaceSaveResult> {
+  const body = placeCreateBody(place, friendShareCode);
+
+  const created = await apiRequest<BackendPlace | { place?: unknown; outcome?: unknown }>(
     "/places",
     {
       method: "POST",
@@ -174,7 +246,18 @@ export async function createPlace(auth: SaveAuth, place: Place): Promise<Place> 
     },
     auth
   );
-  return mapPlace(created);
+  if (!friendShareCode) return mapPlace(created as BackendPlace);
+
+  const receipt = objectValue(created);
+  const canonicalPlace = objectValue(receipt?.place) as BackendPlace | undefined;
+  const outcome = receipt?.outcome;
+  if (!canonicalPlace || (outcome !== "saved" && outcome !== "already_saved")) {
+    throw new Error("Friend share save response is malformed");
+  }
+  return {
+    place: mapPlace(canonicalPlace),
+    outcome,
+  };
 }
 
 export async function fetchTrips(auth: SaveAuth): Promise<TripRecord[]> {
@@ -230,14 +313,126 @@ export async function createSharedPlaceLink(
   );
 }
 
-export async function resolveSharedPlaceLink(code: string): Promise<SharedPlaceData> {
-  const response = await fetch(`${requireApiBaseUrl()}/v0/shared-place-links/${encodeURIComponent(code)}`);
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Shared place link failed: ${response.status}`);
+export async function resolveSharedPlaceLink(code: string): Promise<SharedPlaceReceipt> {
+  let response: Response;
+  try {
+    response = await fetch(`${requireApiBaseUrl()}/v0/shared-place-links/${encodeURIComponent(code)}`);
+  } catch (error) {
+    throw new SharedPlaceLinkError(
+      error instanceof Error ? error.message : "Could not reach the shared place service.",
+      "network_error",
+    );
   }
-  const link = (await response.json()) as SharedPlaceLink;
-  return link.payload;
+  if (!response.ok) {
+    const message = await responseErrorMessage(response, `Shared place link failed: ${response.status}`);
+    const reasonCode: FriendShareOpenFailureReason = response.status === 410
+      ? "expired"
+      : response.status >= 500
+        ? "server_error"
+        : response.status === 404
+          ? "unknown"
+          : "unsupported_route";
+    throw new SharedPlaceLinkError(message, reasonCode);
+  }
+
+  try {
+    return sharedPlaceReceiptFromResponse(await response.json());
+  } catch (error) {
+    if (error instanceof SharedPlaceLinkError) throw error;
+    throw new SharedPlaceLinkError("Shared place response is malformed.", "malformed_payload");
+  }
+}
+
+export async function recordPublicFriendShareEvent(
+  code: string,
+  eventType: "friend_share_receipt_opened" | "friend_share_open_failed",
+  reasonCode?: FriendShareOpenFailureReason,
+): Promise<void> {
+  const response = await fetch(
+    `${requireApiBaseUrl()}/v0/shared-place-links/${encodeURIComponent(code)}/events`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(friendShareEventBody(eventType, { reasonCode })),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await responseErrorMessage(response, `Friend share event failed: ${response.status}`));
+  }
+}
+
+export async function recordAuthenticatedFriendShareEvent(
+  auth: SaveAuth,
+  code: string,
+  eventType: FriendShareEventType,
+  options: FriendShareEventOptions = {},
+): Promise<void> {
+  await apiRequest(
+    "/v0/friend-share-events",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        ...friendShareEventBody(eventType, options),
+      }),
+    },
+    auth,
+  );
+}
+
+export function friendShareEventBody(
+  eventType: FriendShareEventType,
+  options: FriendShareEventOptions = {},
+): Record<string, string> {
+  if (![
+    "friend_share_receipt_opened",
+    "friend_share_save_tapped",
+    "friend_share_open_failed",
+  ].includes(eventType)) {
+    throw new Error("eventType is not allowed for client-authored events");
+  }
+  const body: Record<string, string> = {
+    event_type: eventType,
+    surface: "web",
+  };
+  if (eventType === "friend_share_open_failed") {
+    body.reason_code = options.reasonCode ?? "unknown";
+  } else if (options.reasonCode) {
+    throw new Error("reasonCode is only allowed for friend_share_open_failed");
+  }
+
+  if (options.recipientPlaceId !== undefined) {
+    throw new Error("recipientPlaceId is not allowed for client-authored events");
+  }
+  return body;
+}
+
+export function sharedPlaceReceiptFromResponse(value: unknown): SharedPlaceReceipt {
+  const link = objectValue(value) as SharedPlaceLink | undefined;
+  const payload = sanitizeSharedPlaceData(link?.payload) ?? undefined;
+  if (
+    !link
+    || typeof link.code !== "string"
+    || typeof link.url !== "string"
+    || !payload
+  ) {
+    throw new SharedPlaceLinkError("Shared place response is malformed.", "malformed_payload");
+  }
+
+  const rawSender = objectValue(link.sender);
+  const displayName = rawSender ? normalizedString(rawSender.display_name) : undefined;
+  const handle = rawSender ? normalizedString(rawSender.handle) : undefined;
+
+  return {
+    code: link.code,
+    url: link.url,
+    payload,
+    sender: displayName
+      ? { displayName, handle }
+      : undefined,
+    expiresAt: normalizedString(link.expires_at),
+    createdAt: normalizedString(link.created_at),
+  };
 }
 
 export async function resolveMySaves(token: string): Promise<MySavesPayload> {
@@ -284,5 +479,29 @@ function mapPlace(place: BackendPlace): Place {
     sourceUrl: place.source_url ?? undefined,
     note: place.note ?? undefined,
     priceRange: place.price_range ?? undefined,
+    recommender: place.recommender ?? undefined,
   };
+}
+
+async function responseErrorMessage(response: Response, fallback: string): Promise<string> {
+  const text = await response.text();
+  if (!text) return fallback;
+  try {
+    const value = JSON.parse(text) as { error?: unknown };
+    return typeof value.error === "string" && value.error.trim() ? value.error : fallback;
+  } catch {
+    return text;
+  }
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function normalizedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
 }

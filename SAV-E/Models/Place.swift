@@ -75,6 +75,10 @@ struct Place: Identifiable, Codable, Hashable {
             .first
     }
 
+    var publicShareSourceURL: URL? {
+        ShareRoutePayloadSanitizer.publicURL(from: primarySourceURL?.absoluteString)
+    }
+
     var shareSubject: String {
         "SAV-E Map Stamp: \(name)"
     }
@@ -101,10 +105,7 @@ struct Place: Identifiable, Codable, Hashable {
         if let recommender, !recommender.isEmpty {
             lines.append("Recommended by: \(recommender)")
         }
-        if let note = ShareRoutePayloadSanitizer.publicNote(note) {
-            lines.append("Note: \(note)")
-        }
-        if let sourceURL = primarySourceURL {
+        if let sourceURL = publicShareSourceURL {
             lines.append("Source: \(sourceURL.absoluteString)")
         }
         if let saveShareURL {

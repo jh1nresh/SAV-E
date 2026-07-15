@@ -800,8 +800,8 @@ extension SaveMapCandidate {
         if let distanceLabel {
             lines.append("Distance: \(distanceLabel)")
         }
-        if let sourceURL, !sourceURL.isEmpty {
-            lines.append("Source: \(sourceURL)")
+        if let safeSourceURL = ShareRoutePayloadSanitizer.publicURL(from: sourceURL) {
+            lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
             lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
@@ -1233,8 +1233,8 @@ extension SaveSearchResult {
         if let reviewCount {
             lines.append("Reviews: \(reviewCount)")
         }
-        if let sourceURL, !sourceURL.isEmpty {
-            lines.append("Source: \(sourceURL)")
+        if let safeSourceURL = ShareRoutePayloadSanitizer.publicURL(from: sourceURL) {
+            lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
             lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")

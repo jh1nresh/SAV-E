@@ -46,9 +46,29 @@ import { PgReviewStore, reviewsTableSql } from "./sendblueReviewStore.js";
 import { renderMySavesPage, type MySavesPayload } from "./mySavesPage.js";
 import { buildClearingBlockDraft } from "./clearingBlocks.js";
 import {
+  formatPublicSharedPlaceLink,
   formatSharedPlaceLink,
   normalizeSharedPlaceLinkCreate,
+  normalizeSharedSenderSnapshot,
+  isSharedPlaceLinkExpired,
+  publicSharedPlaceLinkSelectSQL,
+  sharedPlaceLinkBodyMaxBytes,
 } from "./shareLinks.js";
+import {
+  friendShareEventExpiryDisposition,
+  friendShareCodeFromPlaceCreate,
+  friendShareExclusiveOpenFailurePredicate,
+  friendSharePlaceOriginConflictClause,
+  friendShareRecipientMetrics,
+  friendShareShareMetrics,
+  friendShareVerifiedCohortPredicate,
+  isSelfFriendShareRecipient,
+  normalizeFriendShareClientEvent,
+  recipientPlaceMatchesSharedPayload,
+  type FriendShareClientEvent,
+  type FriendShareRecipientMetricsRow,
+  type FriendShareShareMetricsRow,
+} from "./friendShareEvents.js";
 import {
   normalizeFollowRequest,
   normalizeVisibilityRequest,
@@ -575,6 +595,10 @@ const sharedPlaceLinkFields = [
   "code",
   "user_id",
   "source_place_id",
+  "sender_display_name",
+  "sender_handle",
+  "source_verified_at",
+  "note_consent_version",
   "payload",
   "expires_at",
 ] as const;
@@ -773,6 +797,9 @@ createServer(async (request, response) => {
     if (rawSegments.join("/") === "internal/r8/pilot-metrics") {
       return await handleR8AgentPilotMetrics(request, response, url);
     }
+    if (rawSegments.join("/") === "internal/friend-share/events") {
+      return await handleInternalFriendShareEvents(request, response, url);
+    }
     const isPublicV0 = rawSegments[0] === "public" && rawSegments[1] === "v0";
     if (isPublicV0) {
       return await handlePublicV0(request, response, rawSegments.slice(2));
@@ -789,7 +816,16 @@ createServer(async (request, response) => {
     if (request.method === "GET" && resource === "referrals") {
       return await handleReferrals(request, response, id, url);
     }
-    if (isV0 && request.method === "GET" && resource === "shared-place-links" && id) {
+    if (
+      isV0
+      && request.method === "POST"
+      && resource === "shared-place-links"
+      && id
+      && segments[2] === "events"
+    ) {
+      return await handlePublicFriendShareEvent(request, response, id);
+    }
+    if (isV0 && request.method === "GET" && resource === "shared-place-links" && id && segments.length === 2) {
       return await handleSharedPlaceLinkPublic(response, id);
     }
     if (isV0 && request.method === "POST" && resource === "guest-sessions" && !id) {
@@ -827,6 +863,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "recommendation-outcomes") {
       return await handleRecommendationOutcomes(request, response, userId);
+    }
+    if (isV0 && resource === "friend-share-events") {
+      return await handleFriendShareEvents(request, response, url, userId);
     }
     if (isV0 && resource === "claims" && id === "usage-receipts") {
       return await handleAuthenticatedClaimUsageReceipts(request, response, userId);
@@ -1131,7 +1170,77 @@ async function handlePlaces(
   }
 
   if (request.method === "POST" && !placeId) {
-    const body = withOwner(await readJson(request), userId);
+    const rawBody = await readJson(request);
+    let friendShareCode: string | undefined;
+    try {
+      friendShareCode = friendShareCodeFromPlaceCreate(rawBody);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid friend share code";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const body = withOwner(rawBody, userId);
+    if (friendShareCode) {
+      const link = await friendShareLinkForEvent(friendShareCode);
+      if (friendShareLinkIsExpired(link)) {
+        return sendJson(response, { error: "Shared place link expired" }, 410);
+      }
+      if (isSelfFriendShareRecipient(link.user_id, userId)) {
+        return sendJson(response, { error: "Sender cannot save their own friend share receipt" }, 409);
+      }
+      if (!recipientPlaceMatchesSharedPayload(body, link.payload)) {
+        return sendJson(response, { error: "Place does not match the shared place" }, 409);
+      }
+
+      const receiptBody: JsonBody = {
+        ...body,
+        origin_shared_place_link_id: link.id,
+      };
+      const insert = buildInsert(
+        "places",
+        receiptBody,
+        [...placeFields, "user_id", "origin_shared_place_link_id"],
+      );
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const { rows } = await client.query(
+          `${insert.sql}
+           ${friendSharePlaceOriginConflictClause}
+           returning *, (xmax = 0) as friend_share_receipt_created`,
+          insert.values,
+        );
+        const result = asObject(rows[0]);
+        const { friend_share_receipt_created: created, ...canonicalPlace } = result;
+        const terminalEvent = created === true
+          ? "friend_share_saved"
+          : "friend_share_duplicate_blocked";
+        await client.query(
+          `insert into friend_share_events (
+             shared_place_link_id,
+             sender_user_id,
+             recipient_user_id,
+             recipient_place_id,
+             event_type,
+             surface
+           )
+           values ($1, $2, $3, $4, $5, 'server')
+           on conflict do nothing`,
+          [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
+        );
+        await client.query("commit");
+        return sendJson(response, {
+          place: formatPlace(canonicalPlace),
+          outcome: created === true ? "saved" : "already_saved",
+        }, 201);
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
     const insert = buildInsert("places", body, [...placeFields, "user_id"]);
     const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
     return sendJson(response, formatPlace(rows[0]), 201);
@@ -1588,6 +1697,145 @@ async function handleR8AgentPilotMetrics(
     `[r8-pilot-metrics] access days=${query.days} limit=${query.limit} cohort_users=${metrics.cohort.users_total} returned_users=${metrics.cohort.users_returned} starts_at=${metrics.window.starts_at} generated_at=${metrics.window.generated_at}`,
   );
   return sendJson(response, metrics);
+}
+
+async function handleInternalFriendShareEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  if (request.method !== "GET") {
+    return sendJson(response, { error: "Unsupported friend share event metrics route" }, 405);
+  }
+
+  const configuredToken = process.env.SAVE_INTERNAL_AGENT_TOKEN?.trim();
+  const authorization = authorizeR8AgentMetrics(configuredToken, request.headers.authorization);
+  if (authorization === "unavailable") {
+    return sendJson(response, { error: "Internal agent metrics are not configured" }, 503);
+  }
+  if (authorization === "unauthorized") {
+    return sendJson(response, { error: "Unauthorized" }, 401);
+  }
+
+  let query;
+  try {
+    query = normalizeR8AgentMetricsQuery(url.searchParams);
+  } catch (error) {
+    if (error instanceof R8AgentMetricsQueryError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    throw error;
+  }
+
+  const code = url.searchParams.get("code")?.trim();
+  if (code && !/^[A-Za-z0-9_-]{6,32}$/.test(code)) {
+    return sendJson(response, { error: "code is invalid" }, 400);
+  }
+
+  const generatedAt = new Date();
+  const since = new Date(generatedAt.getTime() - query.days * 24 * 60 * 60 * 1000);
+  const filters = [
+    "event.created_at >= $1",
+    "event.created_at <= $2",
+    friendShareVerifiedCohortPredicate,
+  ];
+  const values: QueryValue[] = [since, generatedAt];
+  if (code) {
+    values.push(code);
+    filters.push(`link.code = $${values.length}`);
+  }
+  values.push(query.limit);
+  const limitPlaceholder = `$${values.length}`;
+  const exclusiveOpenFailure = friendShareExclusiveOpenFailurePredicate(
+    "event",
+    "terminal_event",
+    { startsAt: "$1", endsAt: "$2" },
+  );
+
+  const { rows: shareRows } = await pool.query<FriendShareShareMetricsRow>(
+    `select
+       link.id as link_id,
+       event.sender_user_id,
+       count(*)::int as events_total,
+       (count(*) filter (where event.event_type = 'friend_share_receipt_opened'))::int as receipt_opened,
+       (count(*) filter (where event.event_type = 'friend_share_save_tapped'))::int as save_tapped,
+       (count(*) filter (where event.event_type = 'friend_share_saved'))::int as saved,
+       (count(*) filter (where event.event_type = 'friend_share_duplicate_blocked'))::int as duplicate_blocked,
+       (count(*) filter (where ${exclusiveOpenFailure}))::int as open_failed,
+       (count(distinct event.recipient_user_id))::int as identified_recipient_sessions,
+       (count(distinct event.recipient_user_id) filter (
+         where left(event.recipient_user_id, 6) <> 'guest_'
+       ))::int as account_recipient_users,
+       (count(distinct event.recipient_user_id) filter (
+         where left(event.recipient_user_id, 6) = 'guest_'
+       ))::int as guest_recipient_sessions,
+       (count(distinct event.recipient_user_id) filter (
+         where event.event_type in ('friend_share_saved', 'friend_share_duplicate_blocked')
+           and left(event.recipient_user_id, 6) <> 'guest_'
+       ))::int as account_recipient_users_succeeded,
+       (count(distinct event.recipient_user_id) filter (
+         where event.event_type in ('friend_share_saved', 'friend_share_duplicate_blocked')
+           and left(event.recipient_user_id, 6) = 'guest_'
+       ))::int as guest_recipient_sessions_succeeded,
+       (count(distinct event.recipient_user_id) filter (
+         where ${exclusiveOpenFailure}
+           and left(event.recipient_user_id, 6) <> 'guest_'
+       ))::int as account_recipient_users_open_failed,
+       (count(distinct event.recipient_user_id) filter (
+         where ${exclusiveOpenFailure}
+           and left(event.recipient_user_id, 6) = 'guest_'
+       ))::int as guest_recipient_sessions_open_failed,
+       (count(*) filter (where event.recipient_user_id is null))::int as anonymous_events,
+       max(event.created_at) as last_activity_at
+     from friend_share_events event
+     join shared_place_links link on link.id = event.shared_place_link_id
+     where ${filters.join(" and ")}
+     group by link.id, event.sender_user_id
+     order by last_activity_at desc, link.id
+     limit ${limitPlaceholder}`,
+    values,
+  );
+
+  const recipientValues = values.slice(0, -1);
+  recipientValues.push(query.limit);
+  const recipientLimitPlaceholder = `$${recipientValues.length}`;
+  const { rows: recipientRows } = await pool.query<FriendShareRecipientMetricsRow>(
+    `select
+       link.id as link_id,
+       event.recipient_user_id,
+       (count(*) filter (where event.event_type = 'friend_share_receipt_opened'))::int as receipt_opened,
+       (count(*) filter (where event.event_type = 'friend_share_save_tapped'))::int as save_tapped,
+       (count(*) filter (where event.event_type = 'friend_share_saved'))::int as saved,
+       (count(*) filter (where event.event_type = 'friend_share_duplicate_blocked'))::int as duplicate_blocked,
+       (count(*) filter (where ${exclusiveOpenFailure}))::int as open_failed,
+       max(event.created_at) as last_activity_at
+     from friend_share_events event
+     join shared_place_links link on link.id = event.shared_place_link_id
+     where ${filters.join(" and ")}
+       and event.recipient_user_id is not null
+     group by link.id, event.recipient_user_id
+     order by last_activity_at desc, link.id, event.recipient_user_id
+     limit ${recipientLimitPlaceholder}`,
+    recipientValues,
+  );
+
+  return sendJson(response, {
+    window: {
+      days: query.days,
+      starts_at: since.toISOString(),
+      generated_at: generatedAt.toISOString(),
+    },
+    shares: friendShareShareMetrics(shareRows, configuredToken as string),
+    recipients: friendShareRecipientMetrics(recipientRows, configuredToken as string),
+    definitions: {
+      success: "An identified account or guest session saved the place or confirmed it was already saved.",
+      failure: "An identified account or guest session recorded an open failure and no save or duplicate receipt in this window.",
+      unresolved: "The recipient opened or tapped save without a saved, duplicate, or failure receipt in this window.",
+      demand_proof: "Use account_recipient_users and account_recipient_users_succeeded for the account-user conversion threshold; guest sessions are reported separately.",
+      privacy: "Share and user references are token-scoped pseudonyms; raw link codes, display names, note text, and precise coordinates are not returned.",
+    },
+  });
 }
 
 async function handleMemoryPreferences(
@@ -2060,16 +2308,217 @@ async function handleSharedPlaceLinkPublic(
   response: ServerResponse,
   code: string,
 ): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  const { rows } = await pool.query(publicSharedPlaceLinkSelectSQL, [code]);
+  if (!rows[0]) return sendJson(response, { error: "Shared place link not found" }, 404);
+  if (isSharedPlaceLinkExpired(rows[0].expires_at)) {
+    return sendJson(response, { error: "Shared place link expired" }, 410);
+  }
+  return sendJson(response, formatPublicSharedPlaceLink(formatDates(rows[0])));
+}
+
+async function handlePublicFriendShareEvent(
+  request: IncomingMessage,
+  response: ServerResponse,
+  code: string,
+): Promise<void> {
+  let event: FriendShareClientEvent;
+  try {
+    event = normalizeFriendShareClientEvent(await readJson(request), "public");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid friend share event";
+    return sendJson(response, { error: message }, 400);
+  }
+
+  const link = await friendShareLinkForEvent(code);
+  const expiryDisposition = friendShareEventExpiryDisposition(event, friendShareLinkIsExpired(link));
+  if (expiryDisposition === "link_expired") {
+    return sendJson(response, { error: "Shared place link expired" }, 410);
+  }
+  if (expiryDisposition === "reason_mismatch") {
+    return sendJson(response, { error: "Shared place link is not expired" }, 400);
+  }
+
+  const created = await insertFriendShareEvent(link, event, null);
+  return sendJson(response, created, 201);
+}
+
+async function handleFriendShareEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  url: URL,
+  userId: string,
+): Promise<void> {
+  if (request.method === "POST") {
+    const body = await readJson(request);
+    const code = stringValue(body.code);
+    if (!code) return sendJson(response, { error: "code is required" }, 400);
+
+    let event: FriendShareClientEvent;
+    try {
+      event = normalizeFriendShareClientEvent(body, "authenticated");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid friend share event";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const link = await friendShareLinkForEvent(code);
+    if (isSelfFriendShareRecipient(link.user_id, userId)) {
+      return sendJson(response, { error: "Share owners cannot record recipient events on their own links" }, 409);
+    }
+    const expiryDisposition = friendShareEventExpiryDisposition(event, friendShareLinkIsExpired(link));
+    if (expiryDisposition === "link_expired") {
+      return sendJson(response, { error: "Shared place link expired" }, 410);
+    }
+    if (expiryDisposition === "reason_mismatch") {
+      return sendJson(response, { error: "Shared place link is not expired" }, 400);
+    }
+    const created = await insertFriendShareEvent(link, event, userId);
+    return sendJson(response, created, 201);
+  }
+
+  if (request.method === "GET") {
+    const code = url.searchParams.get("code")?.trim();
+    if (!code) return sendJson(response, { error: "code is required" }, 400);
+    const { rows: links } = await pool.query(
+      "select id from shared_place_links where code = $1 and user_id = $2 limit 1",
+      [code, userId],
+    );
+    if (!links[0]) return sendJson(response, { error: "Shared place link not found" }, 404);
+
+    const exclusiveOpenFailure = friendShareExclusiveOpenFailurePredicate(
+      "event",
+      "terminal_event",
+    );
+    const { rows: summaryRows } = await pool.query(
+      `select
+         count(*)::int as events_total,
+         (count(*) filter (where event_type = 'friend_share_link_created'))::int as link_created,
+         (count(*) filter (where event_type = 'friend_share_receipt_opened'))::int as receipt_opened,
+         (count(*) filter (where event_type = 'friend_share_save_tapped'))::int as save_tapped,
+         (count(*) filter (where event_type = 'friend_share_saved'))::int as saved,
+         (count(*) filter (where event_type = 'friend_share_duplicate_blocked'))::int as duplicate_blocked,
+         (count(*) filter (where ${exclusiveOpenFailure}))::int as open_failed,
+         (count(distinct recipient_user_id))::int as identified_recipient_sessions,
+         (count(distinct recipient_user_id) filter (
+           where left(recipient_user_id, 6) <> 'guest_'
+         ))::int as account_recipient_users,
+         (count(distinct recipient_user_id) filter (
+           where left(recipient_user_id, 6) = 'guest_'
+         ))::int as guest_recipient_sessions,
+         (count(distinct recipient_user_id) filter (
+           where event_type in ('friend_share_saved', 'friend_share_duplicate_blocked')
+             and left(recipient_user_id, 6) <> 'guest_'
+         ))::int as account_recipient_users_succeeded,
+         (count(distinct recipient_user_id) filter (
+           where event_type in ('friend_share_saved', 'friend_share_duplicate_blocked')
+             and left(recipient_user_id, 6) = 'guest_'
+         ))::int as guest_recipient_sessions_succeeded,
+         (count(distinct recipient_user_id) filter (
+           where ${exclusiveOpenFailure}
+             and left(recipient_user_id, 6) <> 'guest_'
+         ))::int as account_recipient_users_open_failed,
+         (count(distinct recipient_user_id) filter (
+           where ${exclusiveOpenFailure}
+             and left(recipient_user_id, 6) = 'guest_'
+         ))::int as guest_recipient_sessions_open_failed,
+         (count(*) filter (where recipient_user_id is null))::int as anonymous_events
+       from friend_share_events event
+       where event.shared_place_link_id = $1`,
+      [links[0].id],
+    );
+    const { rows } = await pool.query(
+      `select event_type, surface, reason_code, created_at
+       from friend_share_events
+       where shared_place_link_id = $1
+       order by created_at desc
+       limit 100`,
+      [links[0].id],
+    );
+    return sendJson(response, {
+      code,
+      summary: asObject(summaryRows[0]),
+      events: rows.map((row) => {
+        const event = asObject(row);
+        return formatDates({
+          event_type: event.event_type,
+          surface: event.surface,
+          reason_code: event.reason_code ?? null,
+          created_at: event.created_at,
+        });
+      }),
+    });
+  }
+
+  return sendJson(response, { error: "Unsupported friend share events route" }, 405);
+}
+
+async function friendShareLinkForEvent(code: string): Promise<JsonBody> {
+  if (!/^[A-Za-z0-9_-]{6,32}$/.test(code)) throw new ApiError(404, "Shared place link not found");
   const { rows } = await pool.query(
-    `select *
+    `select id, user_id, payload, expires_at
      from shared_place_links
      where code = $1
-       and (expires_at is null or expires_at > now())
      limit 1`,
     [code],
   );
-  if (!rows[0]) return sendJson(response, { error: "Shared place link not found" }, 404);
-  return sendJson(response, formatSharedPlaceLink(formatDates(rows[0])));
+  if (!rows[0]) throw new ApiError(404, "Shared place link not found");
+  return asObject(rows[0]);
+}
+
+function friendShareLinkIsExpired(link: JsonBody): boolean {
+  if (!link.expires_at) return false;
+  const expiresAt = link.expires_at instanceof Date
+    ? link.expires_at.getTime()
+    : Date.parse(String(link.expires_at));
+  return !Number.isFinite(expiresAt) || expiresAt <= Date.now();
+}
+
+async function insertFriendShareEvent(
+  link: JsonBody,
+  event: FriendShareClientEvent,
+  recipientUserId: string | null,
+): Promise<JsonBody> {
+  const { rows } = await pool.query(
+    `insert into friend_share_events (
+       shared_place_link_id,
+       sender_user_id,
+       recipient_user_id,
+       recipient_place_id,
+       event_type,
+       surface,
+       reason_code
+     )
+     values ($1, $2, $3, $4, $5, $6, $7)
+     on conflict do nothing
+     returning event_type, surface, reason_code, created_at`,
+    [
+      link.id,
+      link.user_id,
+      recipientUserId,
+      event.recipientPlaceId,
+      event.eventType,
+      event.surface,
+      event.reasonCode,
+    ],
+  );
+  if (rows[0]) return formatDates(asObject(rows[0]));
+
+  const { rows: existingRows } = await pool.query(
+    `select event_type, surface, reason_code, created_at
+     from friend_share_events
+     where shared_place_link_id = $1
+       and recipient_user_id is not distinct from $2
+       and event_type = $3
+       and surface = $4
+       and reason_code is not distinct from $5
+     limit 1`,
+    [link.id, recipientUserId, event.eventType, event.surface, event.reasonCode],
+  );
+  if (existingRows[0]) return formatDates(asObject(existingRows[0]));
+
+  throw new Error("Friend share event receipt could not be persisted");
 }
 
 async function handleSharedPlaceLinks(
@@ -2093,23 +2542,79 @@ async function handleSharedPlaceLinks(
   if (request.method === "POST" && !code) {
     let create;
     try {
-      create = normalizeSharedPlaceLinkCreate(await readJson(request));
+      create = normalizeSharedPlaceLinkCreate(await readJson(request, sharedPlaceLinkBodyMaxBytes));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid shared place payload";
       return sendJson(response, { error: message }, 400);
     }
 
-    await ensureOwnedPlaceReference(create.sourcePlaceId, userId);
-    const body: JsonBody = {
-      code: await uniqueShareCode(),
-      user_id: userId,
-      source_place_id: create.sourcePlaceId ?? null,
-      payload: create.payload,
-      expires_at: create.expiresAt ?? null,
-    };
-    const insert = buildInsert("shared_place_links", body, sharedPlaceLinkFields);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatSharedPlaceLink(formatDates(rows[0])), 201);
+    const code = await uniqueShareCode();
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      let senderDisplayName: string | null = null;
+      let senderHandle: string | null = null;
+      let sourceVerifiedAt: Date | null = null;
+      if (create.sourcePlaceId) {
+        const { rows: senderRows } = await client.query(
+          `select
+             place.name,
+             place.address,
+             place.latitude,
+             place.longitude,
+             place.source_url,
+             profile.display_name,
+             profile.handle,
+             now() as source_verified_at
+           from places place
+           join profiles profile on profile.id = place.user_id
+           where place.id = $1 and place.user_id = $2
+           limit 1`,
+          [create.sourcePlaceId, userId],
+        );
+        if (!senderRows[0]) throw new ApiError(404, "Place not found");
+        if (!recipientPlaceMatchesSharedPayload(asObject(senderRows[0]), create.payload)) {
+          throw new ApiError(409, "Shared payload does not match the verified source place");
+        }
+        const senderSnapshot = normalizeSharedSenderSnapshot(
+          senderRows[0].display_name,
+          senderRows[0].handle,
+        );
+        senderDisplayName = senderSnapshot.displayName;
+        senderHandle = senderSnapshot.handle;
+        sourceVerifiedAt = senderRows[0].source_verified_at as Date;
+      }
+      const body: JsonBody = {
+        code,
+        user_id: userId,
+        source_place_id: create.sourcePlaceId ?? null,
+        sender_display_name: senderDisplayName,
+        sender_handle: senderHandle,
+        source_verified_at: sourceVerifiedAt,
+        note_consent_version: create.noteConsentVersion,
+        payload: create.payload,
+        expires_at: create.expiresAt,
+      };
+      const insert = buildInsert("shared_place_links", body, sharedPlaceLinkFields);
+      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      await client.query(
+        `insert into friend_share_events (
+           shared_place_link_id,
+           sender_user_id,
+           event_type,
+           surface
+         )
+         values ($1, $2, 'friend_share_link_created', 'server')`,
+        [rows[0].id, userId],
+      );
+      await client.query("commit");
+      return sendJson(response, formatSharedPlaceLink(formatDates(rows[0])), 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   return sendJson(response, { error: "Unsupported shared place links route" }, 405);
@@ -4561,7 +5066,8 @@ function sendHtml(response: ServerResponse, body: string, status = 200): void {
 }
 
 function formatPlace(row: JsonBody): JsonBody {
-  return formatDates(row);
+  const { origin_shared_place_link_id: _originSharedPlaceLinkId, ...publicPlace } = row;
+  return formatDates(publicPlace);
 }
 
 function formatTrip(row: JsonBody): JsonBody {

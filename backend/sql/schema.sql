@@ -61,6 +61,7 @@ create table if not exists places (
     google_rating double precision,
     google_price_level integer,
     opening_hours text,
+    origin_shared_place_link_id uuid,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -73,6 +74,7 @@ create index if not exists idx_places_fts on places
     using gin(to_tsvector('english', coalesce(name, '') || ' ' || coalesce(address, '')));
 
 alter table places add column if not exists business_photo_urls text[] default '{}';
+alter table places add column if not exists origin_shared_place_link_id uuid;
 
 create table if not exists follows (
     id uuid primary key default gen_random_uuid(),
@@ -458,14 +460,185 @@ create table if not exists shared_place_links (
     code text not null unique,
     user_id text references profiles(id) on delete cascade not null,
     source_place_id uuid references places(id) on delete set null,
+    sender_display_name text,
+    sender_handle text,
+    source_verified_at timestamptz,
+    note_consent_version integer,
     payload jsonb not null,
-    expires_at timestamptz,
+    expires_at timestamptz default (now() + interval '30 days'),
     created_at timestamptz not null default now(),
     constraint shared_place_links_code_check check (code ~ '^[A-Za-z0-9_-]{6,32}$')
 );
 
+alter table shared_place_links
+    alter column expires_at set default (now() + interval '30 days');
+
+alter table shared_place_links
+    add column if not exists sender_display_name text;
+alter table shared_place_links
+    add column if not exists sender_handle text;
+alter table shared_place_links
+    add column if not exists source_verified_at timestamptz;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = current_schema()
+          and table_name = 'shared_place_links'
+          and column_name = 'note_consent_version'
+    ) then
+        alter table shared_place_links add column note_consent_version integer;
+        update shared_place_links set payload = payload - 'note';
+    end if;
+end
+$$;
+
+update shared_place_links
+set payload = payload - 'note'
+where note_consent_version is null
+  and payload ? 'note';
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'shared_place_links_note_consent_check'
+          and conrelid = 'shared_place_links'::regclass
+    ) then
+        alter table shared_place_links
+            add constraint shared_place_links_note_consent_check check (
+                note_consent_version is null or note_consent_version = 1
+            );
+    end if;
+end
+$$;
+
+update shared_place_links
+set expires_at = created_at + interval '30 days'
+where expires_at is null
+   or expires_at <= created_at
+   or expires_at > created_at + interval '30 days';
+
+alter table shared_place_links
+    alter column expires_at set not null;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'shared_place_links_expiry_check'
+          and conrelid = 'shared_place_links'::regclass
+    ) then
+        alter table shared_place_links
+            add constraint shared_place_links_expiry_check check (
+                expires_at > created_at
+                and expires_at <= created_at + interval '30 days'
+            );
+    end if;
+end
+$$;
+
 create index if not exists idx_shared_place_links_user_id on shared_place_links(user_id, created_at desc);
 create index if not exists idx_shared_place_links_source_place_id on shared_place_links(source_place_id);
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'places_origin_shared_place_link_id_fkey'
+          and conrelid = 'places'::regclass
+    ) then
+        alter table places
+            add constraint places_origin_shared_place_link_id_fkey
+            foreign key (origin_shared_place_link_id)
+            references shared_place_links(id)
+            on delete set null;
+    end if;
+end
+$$;
+
+create unique index if not exists idx_places_user_origin_shared_place_link_unique
+    on places(user_id, origin_shared_place_link_id)
+    where origin_shared_place_link_id is not null;
+
+create table if not exists friend_share_events (
+    id uuid primary key default gen_random_uuid(),
+    shared_place_link_id uuid references shared_place_links(id) on delete cascade not null,
+    sender_user_id text references profiles(id) on delete cascade not null,
+    recipient_user_id text references profiles(id) on delete set null,
+    recipient_place_id uuid references places(id) on delete set null,
+    event_type text not null,
+    surface text not null,
+    reason_code text,
+    created_at timestamptz not null default now(),
+    constraint friend_share_events_type_check check (event_type in (
+        'friend_share_link_created',
+        'friend_share_receipt_opened',
+        'friend_share_save_tapped',
+        'friend_share_saved',
+        'friend_share_duplicate_blocked',
+        'friend_share_open_failed'
+    )),
+    constraint friend_share_events_surface_check check (surface in ('server', 'web', 'ios', 'app_clip')),
+    constraint friend_share_events_terminal_surface_check check (
+        event_type not in ('friend_share_saved', 'friend_share_duplicate_blocked')
+        or surface = 'server'
+    ),
+    constraint friend_share_events_reason_check check (
+        (event_type = 'friend_share_open_failed' and reason_code in (
+            'expired',
+            'malformed_payload',
+            'network_error',
+            'server_error',
+            'unsupported_route',
+            'unknown'
+        ))
+        or (event_type <> 'friend_share_open_failed' and reason_code is null)
+    )
+);
+
+alter table friend_share_events
+    add column if not exists recipient_place_id uuid references places(id) on delete set null;
+
+create index if not exists idx_friend_share_events_link on friend_share_events(shared_place_link_id, created_at desc);
+create index if not exists idx_friend_share_events_sender on friend_share_events(sender_user_id, created_at desc);
+create index if not exists idx_friend_share_events_recipient on friend_share_events(recipient_user_id, created_at desc)
+    where recipient_user_id is not null;
+create unique index if not exists idx_friend_share_events_terminal_receipt_unique
+    on friend_share_events(shared_place_link_id, recipient_user_id, recipient_place_id)
+    where recipient_user_id is not null
+      and recipient_place_id is not null
+      and event_type in ('friend_share_saved', 'friend_share_duplicate_blocked');
+
+create unique index if not exists idx_friend_share_events_recipient_client_unique
+    on friend_share_events(
+        shared_place_link_id,
+        recipient_user_id,
+        event_type,
+        surface,
+        coalesce(reason_code, '')
+    )
+    where recipient_user_id is not null
+      and event_type in (
+          'friend_share_receipt_opened',
+          'friend_share_save_tapped',
+          'friend_share_open_failed'
+      );
+
+create unique index if not exists idx_friend_share_events_public_open_unique
+    on friend_share_events(shared_place_link_id, surface)
+    where recipient_user_id is null
+      and event_type = 'friend_share_receipt_opened';
+
+create unique index if not exists idx_friend_share_events_public_failure_unique
+    on friend_share_events(shared_place_link_id, surface, reason_code)
+    where recipient_user_id is null
+      and event_type = 'friend_share_open_failed';
 
 create table if not exists work_orders (
     id uuid primary key default gen_random_uuid(),

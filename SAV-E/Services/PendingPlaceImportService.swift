@@ -524,17 +524,15 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         if let city, !city.isEmpty {
             lines.append("City: \(city)")
         }
-        if let confidence {
-            lines.append("Confidence: \(Int(confidence * 100))%")
-        }
         if !missingInfo.isEmpty {
             lines.append("Needs: \(missingInfo.joined(separator: ", "))")
+        }
+        if let safeSourceURL = SharedPlaceData.from(candidate: self)?.safeSourceURL {
+            lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
             lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
         }
-        let sourceLines = evidence.filter { $0.localizedCaseInsensitiveContains("source") }.prefix(2)
-        lines.append(contentsOf: sourceLines)
 
         return lines.joined(separator: "\n")
     }

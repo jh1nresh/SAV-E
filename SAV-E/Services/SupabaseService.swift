@@ -5,6 +5,7 @@ import Foundation
 protocol SupabaseServiceProtocol {
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
+    func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
     func updatePlace(_ place: Place) async throws
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
@@ -27,7 +28,16 @@ protocol SupabaseServiceProtocol {
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place]
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws
-    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?) async throws -> URL
+    func createSharedPlaceLink(
+        payload: SharedPlaceData,
+        sourcePlaceId: UUID?,
+        noteConsentVersion: Int?
+    ) async throws -> URL
+    func recordFriendShareEvent(
+        code: String,
+        event: FriendShareReceiptEvent,
+        failureReason: FriendShareOpenFailureReason?
+    ) async throws
     func fetchVerifiedPlaceClaims(for placeId: UUID, includePrivateEvidence: Bool) async throws -> [VerifiedPlaceClaim]
     func createVerifiedPlaceClaim(_ draft: VerifiedPlaceClaimDraft, for placeId: UUID) async throws -> VerifiedPlaceClaim
     func fetchPlaceTrustSummary(for placeId: UUID) async throws -> PlaceTrustSummaryResponse
@@ -103,6 +113,23 @@ final class SupabaseService: SupabaseServiceProtocol {
         try await request(path: "/places", method: "POST", body: body)
     }
 
+    func saveFriendSharedPlace(
+        _ place: Place,
+        code: String,
+        userId: String
+    ) async throws -> FriendSharedPlaceSaveResult {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
+        let body = try JSONEncoder.supabase.encode(row)
+        let data = try await request(path: "/places", method: "POST", body: body)
+        let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
+        guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid friend share save outcome")
+        }
+        return FriendSharedPlaceSaveResult(place: response.place.toPlace(), outcome: outcome)
+    }
+
     func updatePlace(_ place: Place) async throws {
         guard isConfigured else { return }
 
@@ -135,17 +162,41 @@ final class SupabaseService: SupabaseServiceProtocol {
         try await request(path: "/places/\(placeId)/visibility", method: "PATCH", body: body)
     }
 
-    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?) async throws -> URL {
+    func createSharedPlaceLink(
+        payload: SharedPlaceData,
+        sourcePlaceId: UUID?,
+        noteConsentVersion: Int? = nil
+    ) async throws -> URL {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try JSONEncoder.supabase.encode(SharedPlaceLinkCreateBody(
             payload: payload,
-            source_place_id: sourcePlaceId?.uuidString
+            source_place_id: sourcePlaceId?.uuidString,
+            note_consent_version: noteConsentVersion
         ))
         let data = try await request(path: "/v0/shared-place-links", method: "POST", body: body)
         let row = try JSONDecoder.supabase.decode(SharedPlaceLinkRow.self, from: data)
         guard let url = URL(string: row.url) else { throw SupabaseError.recordNotFound }
         return url
+    }
+
+    func recordFriendShareEvent(
+        code: String,
+        event: FriendShareReceiptEvent,
+        failureReason: FriendShareOpenFailureReason? = nil
+    ) async throws {
+        guard isConfigured else { return }
+
+        var payload: [String: Any] = [
+            "code": code,
+            "event_type": event.rawValue,
+            "surface": FriendShareReceiptSurface.ios.rawValue,
+        ]
+        if let failureReason {
+            payload["reason_code"] = failureReason.rawValue
+        }
+        let body = try Self.jsonBody(payload)
+        try await request(path: "/v0/friend-share-events", method: "POST", body: body)
     }
 
     // MARK: - KML Export
@@ -1317,6 +1368,23 @@ struct WorkflowReceipt: Codable, Identifiable, Equatable {
     }
 }
 
+struct FriendSharedPlaceSaveResult {
+    enum Outcome: String {
+        case saved
+        case alreadySaved = "already_saved"
+    }
+
+    let place: Place
+    let outcome: Outcome
+
+    var isDuplicate: Bool { outcome == .alreadySaved }
+}
+
+private struct FriendSharedPlaceSaveResponse: Decodable {
+    let place: PlaceRow
+    let outcome: String
+}
+
 private struct PlaceRow: Codable {
     let id: UUID
     let user_id: String
@@ -1342,6 +1410,7 @@ private struct PlaceRow: Codable {
     let created_at: String
     let visibility: String?
     let social_signal: PlaceSocialSignalRow?
+    let friend_share_code: String?
 
     func toPlace() -> Place {
         Place(
@@ -1371,7 +1440,7 @@ private struct PlaceRow: Codable {
         )
     }
 
-    static func from(place: Place, userId: String) -> PlaceRow {
+    static func from(place: Place, userId: String, friendShareCode: String? = nil) -> PlaceRow {
         PlaceRow(
             id: place.id,
             user_id: userId,
@@ -1396,7 +1465,8 @@ private struct PlaceRow: Codable {
             opening_hours: place.openingHours,
             created_at: ISO8601DateFormatter().string(from: place.createdAt),
             visibility: place.visibility?.rawValue,
-            social_signal: nil
+            social_signal: nil,
+            friend_share_code: friendShareCode
         )
     }
 }
@@ -1609,6 +1679,7 @@ private struct ProfileRow: Codable {
 private struct SharedPlaceLinkCreateBody: Encodable {
     let payload: SharedPlaceData
     let source_place_id: String?
+    let note_consent_version: Int?
 }
 
 private final class KmlRootElementParserDelegate: NSObject, XMLParserDelegate {
