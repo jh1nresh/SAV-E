@@ -69,6 +69,11 @@ struct ItineraryStop: Identifiable, Equatable {
     var risks: [TripRisk] = []
 }
 
+enum TripKmlExportSelectionError: Error, Equatable {
+    case noConfirmedMapStamps
+    case tooManyConfirmedMapStamps(Int)
+}
+
 struct TripCanvasDraft: Equatable {
     private(set) var days: [ItineraryDay]
     private(set) var approvedExternalStopIDs: Set<UUID>
@@ -88,6 +93,31 @@ struct TripCanvasDraft: Equatable {
         days.map { day in
             day.replacingStops(day.stops.filter { !skippedStopIDs.contains($0.id) })
         }
+    }
+
+    func kmlExportPlaceIDs(availablePlaces: [Place]) throws -> [UUID] {
+        let availablePlaceIDs = Set(availablePlaces.map(\.id))
+        var seenPlaceIDs = Set<UUID>()
+        let placeIDs = visibleDays
+            .flatMap(\.stops)
+            .compactMap { stop -> UUID? in
+                guard stop.placeState == .confirmedMapStamp,
+                      let rawPlaceID = stop.placeId,
+                      let placeID = UUID(uuidString: rawPlaceID),
+                      availablePlaceIDs.contains(placeID),
+                      seenPlaceIDs.insert(placeID).inserted else {
+                    return nil
+                }
+                return placeID
+            }
+
+        guard !placeIDs.isEmpty else {
+            throw TripKmlExportSelectionError.noConfirmedMapStamps
+        }
+        guard placeIDs.count <= 100 else {
+            throw TripKmlExportSelectionError.tooManyConfirmedMapStamps(placeIDs.count)
+        }
+        return placeIDs
     }
 
     mutating func approveExternalStop(_ stopID: UUID) {
