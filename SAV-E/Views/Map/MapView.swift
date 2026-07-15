@@ -3,6 +3,7 @@ import MapKit
 
 struct MapView: View {
     @ObservedObject var viewModel: MapViewModel
+    let shouldFocusOnUserLocationOnLaunch: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -117,7 +118,8 @@ struct MapView: View {
             .animation(SaveTheme.Motion.standardSpring, value: viewModel.stampMoment)
             .ignoresSafeArea()
         }
-        .task {
+        .task(id: shouldFocusOnUserLocationOnLaunch) {
+            guard shouldFocusOnUserLocationOnLaunch else { return }
             await viewModel.focusOnUserLocationOnLaunch()
         }
     }

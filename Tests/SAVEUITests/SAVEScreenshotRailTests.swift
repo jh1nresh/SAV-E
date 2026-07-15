@@ -6,7 +6,7 @@ import XCTest
 /// bypass, seeded local places, no real network required) and captures the
 /// core screens as `.keepAlways` attachments:
 ///
-///   1. screenshot-01-memory-inbox           — secondary review surface with recent stamps
+///   1. screenshot-01-drawer-review          — Review stays inside the map drawer
 ///   2. screenshot-02-map-collapsed-drawer   — map-first home with seeded pins
 ///   3. screenshot-03-drawer-stamps-tab      — drawer expanded on the Stamps tab
 ///   4. screenshot-04-place-detail           — a seeded place's detail card
@@ -64,36 +64,25 @@ final class SAVEScreenshotRailTests: XCTestCase {
         sleep(4) // let map tiles + seeded pins finish rendering
         attach(app, name: "screenshot-02-map-collapsed-drawer")
 
-        // --- (b) Secondary Memory Inbox ------------------------------------
-        let inboxButton = app.buttons["map.returnToInbox"]
-        guard inboxButton.waitForExistence(timeout: stepTimeout), inboxButton.isHittable else {
-            throw XCTSkip("Memory Inbox entry was not reachable from the map.")
+        // --- (b) Review inside the map drawer -------------------------------
+        let reviewShortcut = app.buttons["drawer.openReview"]
+        guard reviewShortcut.waitForExistence(timeout: stepTimeout), reviewShortcut.isHittable else {
+            throw XCTSkip("Review shortcut was not reachable from the map drawer.")
         }
-        inboxButton.tap()
+        reviewShortcut.tap()
 
-        let inboxRoot = app.descendants(matching: .any)["memory-inbox-root"]
-        guard inboxRoot.waitForExistence(timeout: stepTimeout) else {
-            attach(app, name: "debug-after-opening-inbox")
-            throw XCTSkip("Memory Inbox never appeared from the map.")
+        let reviewTab = app.buttons["drawer.tab.review"]
+        let reviewRoot = app.descendants(matching: .any)["drawer.review.root"]
+        guard reviewTab.waitForExistence(timeout: stepTimeout),
+              reviewRoot.waitForExistence(timeout: stepTimeout) else {
+            attach(app, name: "debug-after-opening-review")
+            throw XCTSkip("Drawer Review never appeared above the map.")
         }
         sleep(2)
-        attach(app, name: "screenshot-01-memory-inbox")
-
-        // Return to the map before continuing the drawer/detail rail.
-        let mapButton = app.buttons["memory-inbox-map"]
-        guard mapButton.waitForExistence(timeout: stepTimeout), mapButton.isHittable else {
-            throw XCTSkip("Map entry was not reachable from Memory Inbox.")
-        }
-        mapButton.tap()
-        dismissLocationAlertIfPresent()
-        guard passportButton.waitForExistence(timeout: 45) else {
-            attach(app, name: "debug-after-opening-map")
-            throw XCTSkip("Map/drawer never appeared after tapping Map.")
-        }
+        attach(app, name: "screenshot-01-drawer-review")
 
         // --- (c) Drawer expanded on the Stamps tab --------------------------
-        expandDrawer(app: app)
-        let stampsTab = app.buttons["Stamps"]
+        let stampsTab = app.buttons["drawer.tab.saved"]
         let seededRow = app.staticTexts["Ichiran Shibuya"]
         guard stampsTab.waitForExistence(timeout: stepTimeout) || seededRow.waitForExistence(timeout: stepTimeout) else {
             attach(app, name: "debug-after-expand")
@@ -109,7 +98,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         // --- (d) Place detail for a seeded place ----------------------------
         guard openSeededPlaceDetail(app: app) else {
             attach(app, name: "debug-stamps-rows")
-            throw XCTSkip("Could not open a seeded place detail — captured Inbox, map, and Stamps tab only.")
+            throw XCTSkip("Could not open a seeded place detail — captured map, Review, and Stamps only.")
         }
         sleep(5) // give the business-photo carousel a moment to load
         attach(app, name: "screenshot-04-place-detail")
@@ -120,7 +109,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
             closeDetail.tap()
         }
         guard passportButton.waitForExistence(timeout: stepTimeout) else {
-            throw XCTSkip("Passport button not reachable after closing place detail — captured 3 of 4 screens.")
+            throw XCTSkip("Passport button not reachable after closing place detail — captured the first 4 screens.")
         }
         passportButton.tap()
         let profileMarker = app.buttons["profile.edit"]
@@ -130,7 +119,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testMapFirstShellOpensInboxAndReturns() throws {
+    func testMapOnlyShellKeepsReviewInDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -146,27 +135,30 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let locationButton = app.buttons["Center map on current location"]
         XCTAssertTrue(locationButton.waitForExistence(timeout: 45))
 
-        let returnButton = app.buttons["map.returnToInbox"]
-        XCTAssertTrue(returnButton.waitForExistence(timeout: stepTimeout))
-        returnButton.tap()
+        let reviewShortcut = app.buttons["drawer.openReview"]
+        XCTAssertTrue(reviewShortcut.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(reviewShortcut.isHittable)
+        reviewShortcut.tap()
 
-        let inboxRoot = app.descendants(matching: .any)["memory-inbox-root"]
-        XCTAssertTrue(inboxRoot.waitForExistence(timeout: stepTimeout))
+        let reviewTab = app.buttons["drawer.tab.review"]
+        let reviewRoot = app.descendants(matching: .any)["drawer.review.root"]
+        XCTAssertTrue(reviewTab.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(reviewRoot.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(locationButton.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["memory-inbox-root"].exists)
 
+        let stampsTab = app.buttons["drawer.tab.saved"]
+        XCTAssertTrue(stampsTab.waitForExistence(timeout: stepTimeout))
+        stampsTab.tap()
         let recentPlace = app.staticTexts["Daan Forest Park"]
         XCTAssertTrue(recentPlace.waitForExistence(timeout: stepTimeout))
         recentPlace.tap()
 
-        let detailReturnButton = app.buttons["map.returnToInbox"]
-        XCTAssertTrue(detailReturnButton.waitForExistence(timeout: 45))
-        detailReturnButton.tap()
-        XCTAssertTrue(inboxRoot.waitForExistence(timeout: stepTimeout))
-
-        let mapButton = app.buttons["memory-inbox-map"]
-        XCTAssertTrue(mapButton.waitForExistence(timeout: stepTimeout))
-        mapButton.tap()
-        dismissLocationAlertIfPresent()
-        XCTAssertTrue(locationButton.waitForExistence(timeout: 45))
+        let detailReviewShortcut = app.buttons["drawer.openReview"]
+        XCTAssertTrue(detailReviewShortcut.waitForExistence(timeout: stepTimeout))
+        detailReviewShortcut.tap()
+        XCTAssertTrue(reviewRoot.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(locationButton.exists)
     }
 
     @MainActor
@@ -183,8 +175,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         try signInViaReviewDemo(app: app)
         dismissLocationAlertIfPresent()
 
-        let namedField = app.textFields["Ask saved places or paste a spot..."]
-        let queryField = namedField.waitForExistence(timeout: stepTimeout) ? namedField : app.textFields.firstMatch
+        let queryField = app.textFields["Ask saved places or paste a spot..."]
         XCTAssertTrue(queryField.waitForExistence(timeout: stepTimeout))
         queryField.tap()
         queryField.typeText("Plan a one day Taipei trip")
@@ -221,9 +212,8 @@ final class SAVEScreenshotRailTests: XCTestCase {
         // The opening animation holds the screen for ~2s before SignInView.
         guard emailField.waitForExistence(timeout: 20) else {
             // A previous demo session may already be signed in (vault + seed
-            // flag persist); proceed if either root surface is already up.
-            if app.buttons["Open SAV-E Passport"].waitForExistence(timeout: stepTimeout) ||
-                app.descendants(matching: .any)["memory-inbox-root"].exists {
+            // flag persist); proceed if the map root is already up.
+            if app.buttons["Open SAV-E Passport"].waitForExistence(timeout: stepTimeout) {
                 return
             }
             throw XCTSkip("Email sign-in field never appeared — cannot reach the demo session.")
@@ -279,16 +269,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
                 return
             }
         }
-    }
-
-    /// Drags the collapsed drawer sheet up towards a tall detent so the
-    /// Stamps/Review tab bar and saved-place rows become visible.
-    @MainActor
-    private func expandDrawer(app: XCUIApplication) {
-        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.94))
-        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.30))
-        start.press(forDuration: 0.15, thenDragTo: end)
-        sleep(1)
     }
 
     /// Taps a seeded saved-place row (any of the ReviewDemoSeed names) to open

@@ -450,7 +450,7 @@ final class MapViewModel: ObservableObject {
     }
 
     var reviewCandidatesOnMap: [PlaceReviewCandidate] {
-        // Inbox-first invariant: unresolved candidates never appear as default map pins.
+        // Review invariant: unresolved candidates never appear as default map pins.
         []
     }
 

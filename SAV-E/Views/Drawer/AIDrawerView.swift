@@ -45,7 +45,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
         case .saved:
             return language.localized(english: "Stamps", traditionalChinese: "地圖章")
         case .review:
-            return language.localized(english: "Inbox", traditionalChinese: "收件匣")
+            return language.localized(english: "Review", traditionalChinese: "待確認")
         case .lists:
             return language.localized(english: "Lists", traditionalChinese: "清單")
         case .friends:
@@ -103,7 +103,6 @@ struct AIDrawerView: View {
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
-    var onOpenInbox: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
@@ -209,7 +208,7 @@ struct AIDrawerView: View {
             isWorkingReviewCandidateID: candidateActionInFlight,
             isWorkingMapCandidateID: mapCandidateActionInFlight,
             onClose: closeMapDetail,
-            onOpenInbox: onOpenInbox,
+            onOpenInbox: openReviewInbox,
             onDeletePlace: { place in
                 try await onDeletePlace(place)
                 viewModel.removePlace(place)
@@ -246,7 +245,7 @@ struct AIDrawerView: View {
             onRejectCandidate: { candidate in
                 performCandidateAction(
                     candidate,
-                    successMessage: languageSettings.localized(english: "Removed from Inbox.", traditionalChinese: "已從收件匣移除。")
+                    successMessage: languageSettings.localized(english: "Removed from Review.", traditionalChinese: "已從待確認移除。")
                 ) {
                     try await onRejectCandidate(candidate)
                     closeMapDetail()
@@ -274,7 +273,7 @@ struct AIDrawerView: View {
             onInvestigateCandidateMore: { candidate in
                 performCandidateAction(
                     candidate,
-                    successMessage: languageSettings.localized(english: "Kept in Inbox for more investigation.", traditionalChinese: "已留在收件匣，等待進一步調查。")
+                    successMessage: languageSettings.localized(english: "Kept in Review for more investigation.", traditionalChinese: "已留在待確認，等待進一步調查。")
                 ) {
                     try await onInvestigateCandidateMore(candidate)
                     addMoreClue(for: candidate)
@@ -393,7 +392,7 @@ struct AIDrawerView: View {
 
     @ViewBuilder
     private var commandBarTrailingActions: some View {
-        Button(action: onOpenInbox) {
+        Button(action: openReviewInbox) {
             Image(systemName: "tray.full.fill")
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(commandBarTextColor)
@@ -404,8 +403,8 @@ struct AIDrawerView: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
-        .accessibilityIdentifier("map.returnToInbox")
+        .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+        .accessibilityIdentifier("drawer.openReview")
 
         if hasActiveDrawerContent {
             Button(action: closeDrawerContent) {
@@ -646,7 +645,7 @@ struct AIDrawerView: View {
                         }
                     },
                     onReject: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Removed from Inbox.", traditionalChinese: "已從收件匣移除。")) {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Removed from Review.", traditionalChinese: "已從待確認移除。")) {
                             try await onRejectCandidate(candidate)
                             viewModel.returnToCommands()
                         }
@@ -664,7 +663,7 @@ struct AIDrawerView: View {
                         }
                     },
                     onInvestigateMore: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Kept in Inbox for more investigation.", traditionalChinese: "已留在收件匣，等待進一步調查。")) {
+                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Kept in Review for more investigation.", traditionalChinese: "已留在待確認，等待進一步調查。")) {
                             try await onInvestigateCandidateMore(candidate)
                             addMoreClue(for: candidate)
                         }
@@ -1039,6 +1038,7 @@ struct AIDrawerView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.tab.\(tab.rawValue)")
             }
         }
     }
@@ -1405,6 +1405,7 @@ struct AIDrawerView: View {
             .padding(.top, SaveTheme.Spacing.lg)
             .padding(.bottom, 24)
         }
+        .accessibilityIdentifier("drawer.review.root")
     }
 
     private var needsReviewCandidates: [PlaceReviewCandidate] {
@@ -1586,6 +1587,8 @@ struct AIDrawerView: View {
     }
 
     private func openReviewInbox() {
+        mapDetailDrawerItem = nil
+        onDismissMapDetail()
         viewModel.returnToCommands()
         viewModel.activeCommandTab = .review
         searchFocused = false
@@ -2066,8 +2069,8 @@ private struct MapDetailDrawerView: View {
                 SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
-            .accessibilityIdentifier("map.returnToInbox")
+            .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+            .accessibilityIdentifier("drawer.openReview")
             .frame(width: 44, height: 44)
 
             Button(action: onClose) {
@@ -2222,8 +2225,8 @@ private struct SelectedPlaceCapsule: View {
                 SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Open Memory Inbox", traditionalChinese: "打開記憶收件匣"))
-            .accessibilityIdentifier("map.returnToInbox")
+            .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+            .accessibilityIdentifier("drawer.openReview")
             .frame(width: 44, height: 44)
 
             Button(action: onClose) {
