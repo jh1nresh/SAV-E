@@ -44,6 +44,57 @@ final class ReviewDemoTests: XCTestCase {
     }
 
     @MainActor
+    func testMissingSeedPlacesRepairsPartialVaultWithoutDuplicatingExistingSeeds() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let seeds = ReviewDemoSeed.places(now: now)
+        let existingSeed = seeds[1]
+
+        let missing = ReviewDemoSeed.missingPlaces(from: [existingSeed], now: now)
+
+        XCTAssertEqual(missing.count, seeds.count - 1)
+        XCTAssertFalse(missing.contains { $0.matches(existingSeed) })
+        XCTAssertTrue(ReviewDemoSeed.missingPlaces(from: seeds, now: now).isEmpty)
+    }
+
+    @MainActor
+    func testProductionSeedPolicyDoesNotWriteIntoAnExistingPersonalVault() {
+        let personalPlace = Place(
+            id: UUID(),
+            name: "Personal Cafe",
+            address: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            googlePlaceId: nil,
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            businessPhotoUrls: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+
+        XCTAssertFalse(ReviewDemoSeed.shouldSeedVault(
+            existingPlaces: [personalPlace],
+            wasSeeded: false,
+            repairForUITests: false
+        ))
+        XCTAssertTrue(ReviewDemoSeed.shouldSeedVault(
+            existingPlaces: [personalPlace],
+            wasSeeded: true,
+            repairForUITests: true
+        ))
+    }
+
+    @MainActor
     func testGuestTokenHolderRoundTrips() {
         let holder = ReviewDemoGuestTokenHolder()
         XCTAssertNil(holder.current)

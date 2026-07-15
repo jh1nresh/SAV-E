@@ -50,6 +50,7 @@ enum SupabaseError: LocalizedError {
     case recordNotFound
     case networkError(Error)
     case apiError(Int, String)
+    case invalidResponse(String)
 
     var errorDescription: String? {
         switch self {
@@ -58,6 +59,7 @@ enum SupabaseError: LocalizedError {
         case .recordNotFound: return "Record not found"
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
         case .apiError(let code, let msg): return "SAV-E API error \(code): \(msg)"
+        case .invalidResponse(let message): return message
         }
     }
 }
@@ -144,6 +146,49 @@ final class SupabaseService: SupabaseServiceProtocol {
         let row = try JSONDecoder.supabase.decode(SharedPlaceLinkRow.self, from: data)
         guard let url = URL(string: row.url) else { throw SupabaseError.recordNotFound }
         return url
+    }
+
+    // MARK: - KML Export
+
+    func exportTrekKml(placeIds: [UUID]) async throws -> Data {
+        let body = try Self.trekKmlExportRequestBody(placeIds: placeIds)
+        let (data, response) = try await requestWithResponse(
+            path: "/v0/exports/trek-kml",
+            method: "POST",
+            body: body
+        )
+        guard Self.isValidTrekKmlResponse(data, mimeType: response.mimeType) else {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid KML file")
+        }
+        return data
+    }
+
+    static func trekKmlExportRequestBody(placeIds: [UUID]) throws -> Data {
+        guard (1...100).contains(placeIds.count), Set(placeIds).count == placeIds.count else {
+            throw SupabaseError.apiError(422, "KML export requires 1 to 100 unique place IDs")
+        }
+        return try jsonBody([
+            "place_ids": placeIds.map { $0.uuidString.lowercased() }
+        ])
+    }
+
+    static func isValidTrekKmlResponse(_ data: Data, mimeType: String?) -> Bool {
+        guard data.count <= 2_097_152,
+              mimeType?.lowercased() == "application/vnd.google-earth.kml+xml" else {
+            return false
+        }
+        let delegate = KmlRootElementParserDelegate()
+        let parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false
+        parser.delegate = delegate
+        return parser.parse() && delegate.rootElementName == "kml"
+    }
+
+    static func httpError(statusCode: Int, body: String) -> SupabaseError {
+        if statusCode == 401 || statusCode == 403 {
+            return .notAuthenticated
+        }
+        return .apiError(statusCode, body)
     }
 
     // MARK: - Verified Place Claims
@@ -490,6 +535,21 @@ final class SupabaseService: SupabaseServiceProtocol {
         body: Data? = nil,
         requiresAuth: Bool = true
     ) async throws -> Data {
+        let (data, _) = try await requestWithResponse(
+            path: path,
+            method: method,
+            body: body,
+            requiresAuth: requiresAuth
+        )
+        return data
+    }
+
+    private func requestWithResponse(
+        path: String,
+        method: String = "GET",
+        body: Data? = nil,
+        requiresAuth: Bool = true
+    ) async throws -> (Data, HTTPURLResponse) {
         guard let apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(apiBaseURL)\(path)") else {
@@ -500,19 +560,39 @@ final class SupabaseService: SupabaseServiceProtocol {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if requiresAuth {
-            request.setValue("Bearer \(try await privyAccessToken())", forHTTPHeaderField: "Authorization")
+            do {
+                request.setValue("Bearer \(try await privyAccessToken())", forHTTPHeaderField: "Authorization")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw SupabaseError.notAuthenticated
+            }
         }
 
         if let body { request.httpBody = body }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw SupabaseError.apiError(http.statusCode, body)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError {
+            if error.code == .cancelled {
+                throw CancellationError()
+            }
+            throw SupabaseError.networkError(error)
         }
 
-        return data
+        guard let http = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse("SAV-E returned a non-HTTP response")
+        }
+        if !(200..<300).contains(http.statusCode) {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw Self.httpError(statusCode: http.statusCode, body: body)
+        }
+
+        return (data, http)
     }
 
     @MainActor
@@ -1529,6 +1609,22 @@ private struct ProfileRow: Codable {
 private struct SharedPlaceLinkCreateBody: Encodable {
     let payload: SharedPlaceData
     let source_place_id: String?
+}
+
+private final class KmlRootElementParserDelegate: NSObject, XMLParserDelegate {
+    private(set) var rootElementName: String?
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
+        if rootElementName == nil {
+            rootElementName = elementName.lowercased()
+        }
+    }
 }
 
 private struct SharedPlaceLinkRow: Codable {

@@ -193,19 +193,28 @@ final class PrivyAuthService: ObservableObject {
         }
     }
 
-    /// Seeds the local vault with demo places once. Idempotent via a UserDefaults
-    /// flag so re-entering demo mode doesn't duplicate places. Best-effort: a
-    /// seed failure must not block demo entry.
+    /// Seeds an empty production demo vault once. A DEBUG-only UI-test flag may
+    /// repair missing simulator seeds without changing or clearing existing data.
+    /// Best-effort: a seed failure must not block demo entry.
     private func seedReviewerDemoVaultIfNeeded() {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: ReviewDemo.seededDefaultsKey) else { return }
+#if DEBUG
+        let shouldRepairForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-repair-review-demo-seed")
+#else
+        let shouldRepairForUITests = false
+#endif
         let vault = SaveLocalVaultService()
-        let alreadyHasPlaces = (try? vault.confirmedPlaces(limit: 1).isEmpty == false) ?? false
-        guard !alreadyHasPlaces else {
+        let existingPlaces = (try? vault.confirmedPlaces(limit: 500)) ?? []
+        let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
+        guard ReviewDemoSeed.shouldSeedVault(
+            existingPlaces: existingPlaces,
+            wasSeeded: wasSeeded,
+            repairForUITests: shouldRepairForUITests
+        ) else {
             defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
             return
         }
-        for place in ReviewDemoSeed.places() {
+        for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
             _ = try? vault.saveConfirmedPlace(place)
         }
         defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)

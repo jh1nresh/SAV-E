@@ -26,7 +26,7 @@ enum ReviewDemo {
     /// Stable user id used for the demo `authState`. Not a real Privy id.
     static let userId = "review-demo"
 
-    /// UserDefaults flag so the local vault is only seeded once (idempotent).
+    /// UserDefaults flag so a production demo vault is seeded only once.
     static let seededDefaultsKey = "reviewDemoSeeded"
 
     /// Case-insensitive, whitespace-trimmed match on the email so the reviewer
@@ -180,5 +180,22 @@ enum ReviewDemoSeed {
                 sourceHandle: "taipei.outdoors"
             ),
         ]
+    }
+
+    /// Repairs partial or stale demo vaults without duplicating existing seeds.
+    static func missingPlaces(from existingPlaces: [Place], now: Date = Date()) -> [Place] {
+        places(now: now).filter { seed in
+            !existingPlaces.contains { existing in
+                existing.id == seed.id || existing.matches(seed)
+            }
+        }
+    }
+
+    static func shouldSeedVault(
+        existingPlaces: [Place],
+        wasSeeded: Bool,
+        repairForUITests: Bool
+    ) -> Bool {
+        repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
     }
 }
