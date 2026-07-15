@@ -207,7 +207,7 @@ private struct PlaceDetailGlassBackground: View {
             .fill(colorScheme == .dark ? Color.saveNotebookPage.opacity(0.88) : Color.saveNotebookPage.opacity(0.82))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(colorScheme == .dark ? 0.42 : 0.52), lineWidth: 1.2)
+                    .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
             )
     }
 }
@@ -580,7 +580,7 @@ struct PlaceInsightSummaryPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1.2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
     }
 
@@ -786,7 +786,7 @@ struct PlaceBusinessPhotoCarousel: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
     }
 

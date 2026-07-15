@@ -177,7 +177,7 @@ struct PlaceDetailView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.88), lineWidth: 1.2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .padding(.horizontal)
     }

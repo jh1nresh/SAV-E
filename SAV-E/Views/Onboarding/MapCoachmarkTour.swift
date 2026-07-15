@@ -199,10 +199,10 @@ struct MapCoachmarkTour: View {
         .background(Color.saveNotebookPage)
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
+                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: Color.saveInk.opacity(0.18), radius: 18, x: 0, y: 10)
+        .shadow(color: Color.saveInk.opacity(0.15), radius: 12, x: 0, y: 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(step.title). \(step.body)")
     }
@@ -259,9 +259,9 @@ private struct CoachmarkArrow: View {
             .background(
                 Circle()
                     .fill(Color.saveNotebookPage)
-                    .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.6))
+                    .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
             )
-            .shadow(color: Color.saveInk.opacity(0.16), radius: 6, x: 0, y: 3)
+            .shadow(color: Color.saveInk.opacity(0.15), radius: 6, x: 0, y: 3)
             .offset(y: bob ? bobOffset : 0)
             .onAppear {
                 guard !reduceMotion else { return }
