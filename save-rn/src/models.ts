@@ -31,6 +31,7 @@ export type Place = {
   note?: string;
   time?: string;
   sourceUrl?: string;
+  recommender?: string;
   importKind?: ImportKind;
   eventLabel?: string;
 };
@@ -66,6 +67,20 @@ export type SharedPlaceData = {
   sourceURL?: string | null;
   photoURLs: string[];
   note?: string | null;
+};
+
+export type SharedPlaceSender = {
+  displayName: string;
+  handle?: string;
+};
+
+export type SharedPlaceReceipt = {
+  code: string;
+  url: string;
+  payload: SharedPlaceData;
+  sender?: SharedPlaceSender;
+  expiresAt?: string;
+  createdAt?: string;
 };
 
 export type MySavesPayload = {

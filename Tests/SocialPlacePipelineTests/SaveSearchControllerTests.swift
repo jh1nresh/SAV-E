@@ -2694,7 +2694,7 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testSavedPlaceShareLinkOmitsInternalDiagnostics() throws {
+    func testSavedPlaceShareLinkOmitsInternalDiagnosticsAndPrivateNoteByDefault() throws {
         let savedPlace = place(
             name: "FUGU Japanese Gastropub",
             address: "110台灣臺北市信義區中興里嘉興街30號",
@@ -2718,10 +2718,10 @@ final class SaveSearchControllerTests: XCTestCase {
         let shareURL = try XCTUnwrap(savedPlace.saveShareURL)
         let payload = try XCTUnwrap(SharedPlaceData.from(url: shareURL))
 
-        XCTAssertTrue(shareText.contains("Note: Bring friends here for izakaya night"))
+        XCTAssertFalse(shareText.contains("Bring friends here for izakaya night"))
         XCTAssertFalse(shareText.contains("Analysis pipeline:"))
         XCTAssertFalse(shareText.contains("Google Places coordinates:"))
-        XCTAssertEqual(payload.note, "Bring friends here for izakaya night")
+        XCTAssertNil(payload.note)
         XCTAssertFalse(shareURL.absoluteString.contains("QW5hbHlzaXM"))
         XCTAssertLessThan(shareURL.absoluteString.count, 700)
     }
@@ -2736,7 +2736,7 @@ final class SaveSearchControllerTests: XCTestCase {
             category: .cafe,
             rating: 4.8,
             reviewCount: 1200,
-            sourceURL: "https://maps.google.com/?q=Bright+Coffee+Bar",
+            sourceURL: "https://maps.google.com/?q=Bright+Coffee+Bar&token=private",
             sourcePlatform: .googleMaps,
             evidence: ["Visible on map"]
         )
@@ -2747,7 +2747,9 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Bright Coffee Bar"))
         XCTAssertTrue(shareText.contains("Rating: 4.8"))
         XCTAssertTrue(shareText.contains("Reviews: 1200"))
-        XCTAssertTrue(shareText.contains("Source: https://maps.google.com/?q=Bright+Coffee+Bar"))
+        XCTAssertTrue(shareText.contains("Source: https://maps.google.com/"))
+        XCTAssertFalse(shareText.contains("token=private"))
+        XCTAssertFalse(candidate.saveShareURL?.absoluteString.contains("token=private") == true)
         XCTAssertTrue(shareText.contains("Open in SAV-E: https://sav-e-app.vercel.app/p/"))
         XCTAssertFalse(shareText.contains("Map fallback: https://maps.apple.com"))
         XCTAssertEqual(candidate.saveShareURL?.host, "sav-e-app.vercel.app")

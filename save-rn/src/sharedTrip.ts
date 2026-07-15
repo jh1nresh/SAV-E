@@ -13,6 +13,9 @@ const tripBaseUrl =
 const acceptedShareHosts = new Set([
   "sav-e-app.vercel.app",
 ]);
+const sharedPlacePayloadMaxBytes = 12 * 1024;
+const sharedPlaceEmbeddedTokenMaxCharacters = 16 * 1024;
+const sharedPlacePublicURLMaxCharacters = 2 * 1024;
 
 export function buildSharedTripData(
   name: string,
@@ -101,12 +104,47 @@ export function decodePlaceLink(link: string): SharedPlaceData | null {
     const url = new URL(link);
     if (!isSavePlaceLink(link)) return null;
     const payload = routeToken(url, "p");
-    if (!payload || !isEmbeddedPlacePayloadToken(payload)) return null;
+    if (
+      !payload
+      || payload.length > sharedPlaceEmbeddedTokenMaxCharacters
+      || !isEmbeddedPlacePayloadToken(payload)
+    ) return null;
     const json = Buffer.from(decodePayload(payload), "base64").toString("utf8");
-    return JSON.parse(json) as SharedPlaceData;
+    const parsed = JSON.parse(json) as unknown;
+    return sanitizeSharedPlaceData(parsed);
   } catch {
     return null;
   }
+}
+
+export function sanitizeSharedPlaceData(value: unknown): SharedPlaceData | null {
+  const payload = objectValue(value);
+  if (!payload || jsonByteLength(payload) > sharedPlacePayloadMaxBytes) return null;
+  const name = normalizedTextValue(payload?.name);
+  const lat = finiteNumber(payload?.lat);
+  const lng = finiteNumber(payload?.lng);
+  if (!payload || !name || lat === undefined || lng === undefined || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return null;
+  }
+
+  return {
+    id: normalizedTextValue(payload.id) ?? "",
+    name,
+    address: normalizedTextValue(payload.address) ?? "",
+    lat,
+    lng,
+    category: normalizedTextValue(payload.category) ?? "Place",
+    rating: nullableFiniteNumber(payload.rating),
+    reviewCount: nullableNonnegativeInteger(payload.reviewCount),
+    priceRange: nullableText(payload.priceRange),
+    hours: nullableText(payload.hours),
+    sourceLabel: normalizedTextValue(payload.sourceLabel) ?? "SAV-E",
+    sourceURL: safeHTTPURL(payload.sourceURL),
+    photoURLs: Array.isArray(payload.photoURLs)
+      ? payload.photoURLs.map(safeHTTPURL).filter(isString).slice(0, 1)
+      : [],
+    note: safeSharedPlaceNote(payload.note),
+  };
 }
 
 export function sharedPlaceShortCode(link: string): string | null {
@@ -114,7 +152,11 @@ export function sharedPlaceShortCode(link: string): string | null {
     const url = new URL(link);
     if (!isSavePlaceLink(link)) return null;
     const token = routeToken(url, "p");
-    if (!token || isEmbeddedPlacePayloadToken(token)) return null;
+    if (
+      !token
+      || !/^[A-Za-z0-9_-]{6,32}$/.test(token)
+      || isEmbeddedPlacePayloadToken(token)
+    ) return null;
     return token;
   } catch {
     return null;
@@ -134,7 +176,7 @@ export function decodeTripLink(link: string): SharedTripData | null {
   }
 }
 
-export function sharedPlaceToBookmark(shared: SharedPlaceData): Place {
+export function sharedPlaceToBookmark(shared: SharedPlaceData, recommender?: string): Place {
   return {
     id: shared.id || `shared_${Date.now()}`,
     name: shared.name || "Shared SAV-E place",
@@ -147,8 +189,18 @@ export function sharedPlaceToBookmark(shared: SharedPlaceData): Place {
     priceRange: shared.priceRange ?? undefined,
     note: shared.note ?? undefined,
     sourceUrl: shared.sourceURL ?? undefined,
+    recommender: normalizedText(recommender),
     importKind: "place",
   };
+}
+
+export function findMatchingBookmark(bookmarks: Place[], candidate: Place): Place | undefined {
+  return bookmarks.find(
+    (place) =>
+      (candidate.sourceUrl && place.sourceUrl === candidate.sourceUrl) ||
+      (place.name.toLowerCase() === candidate.name.toLowerCase() &&
+        place.address.toLowerCase() === candidate.address.toLowerCase()),
+  );
 }
 
 export function buildAppleMapsUrl(place: Place): string {
@@ -161,6 +213,11 @@ function normalizedEnvValue(value?: string): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed || trimmed.startsWith("__")) return undefined;
   return trimmed.replace(/\/+$/, "");
+}
+
+function normalizedText(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
 }
 
 function encodePayload(value: unknown): string {
@@ -179,7 +236,11 @@ function decodePayload(value: string): string {
 }
 
 function isEmbeddedPlacePayloadToken(value: string): boolean {
-  if (value.length < 80 || !/^[A-Za-z0-9_-]+$/.test(value)) return false;
+  if (
+    value.length < 80
+    || value.length > sharedPlaceEmbeddedTokenMaxCharacters
+    || !/^[A-Za-z0-9_-]+$/.test(value)
+  ) return false;
   try {
     const json = Buffer.from(decodePayload(value), "base64").toString("utf8");
     const parsed = JSON.parse(json) as Partial<SharedPlaceData>;
@@ -195,6 +256,96 @@ function routeToken(url: URL, route: string): string | null {
   if (routeIndex < 0 || routeIndex + 1 >= parts.length) return null;
   return parts[routeIndex + 1];
 }
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function normalizedTextValue(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function nullableText(value: unknown): string | null {
+  return normalizedTextValue(value) ?? null;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function nullableFiniteNumber(value: unknown): number | null {
+  return finiteNumber(value) ?? null;
+}
+
+function nullableNonnegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function safeHTTPURL(value: unknown): string | null {
+  const text = normalizedTextValue(value);
+  if (!text || text.length > sharedPlacePublicURLMaxCharacters) return null;
+  try {
+    const url = new URL(text);
+    const safeProtocol = url.protocol === "http:" || url.protocol === "https:";
+    if (!safeProtocol || !url.hostname || url.username || url.password) return null;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function jsonByteLength(value: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(value), "utf8");
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+function safeSharedPlaceNote(value: unknown): string | null {
+  const rawNote = normalizedTextValue(value);
+  const note = rawNote?.replace(/\r\n?/g, "\n");
+  if (!note || note.length > 180) return null;
+  const lines = note.split("\n");
+  if (lines.length > 2) return null;
+  if (lines.some((line) => {
+    const normalized = line.trim().toLocaleLowerCase("en-US");
+    return diagnosticNotePrefixes.some((prefix) => normalized.startsWith(prefix));
+  })) {
+    return null;
+  }
+  return note;
+}
+
+function isString(value: string | null): value is string {
+  return typeof value === "string";
+}
+
+const diagnosticNotePrefixes = [
+  "address clue:",
+  "analysis failed:",
+  "analysis pipeline:",
+  "category clue:",
+  "confidence:",
+  "debug:",
+  "diagnostic:",
+  "error:",
+  "evidence tier:",
+  "google places address:",
+  "google places coordinates:",
+  "google places refined match:",
+  "location clue:",
+  "source recovery failed:",
+  "source url:",
+  "stack trace:",
+  "venue name:",
+] as const;
 
 function categoryFromLabel(value?: string | null): PlaceCategory {
   const normalized = value?.toLowerCase() ?? "";

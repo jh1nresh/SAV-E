@@ -5,7 +5,11 @@ struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var openedPlace: SharedPlaceData?
+    @AppStorage(
+        "pendingFriendShareURL",
+        store: UserDefaults(suiteName: "group.com.wanderly.app")
+    ) private var pendingFriendShareURL = ""
+    @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -51,16 +55,21 @@ struct SaveApp: App {
                 rootContent
             }
             .environment(\.appLanguageSettings, languageSettings)
+            .onAppear(perform: restorePendingFriendShare)
+            .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
+                if receiptID == nil {
+                    pendingFriendShareURL = ""
+                }
+            }
             .onOpenURL(perform: handleIncomingURL)
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 guard let url = activity.webpageURL else { return }
                 handleIncomingURL(url)
             }
             .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedPlace != nil || openedTrip != nil || openedList != nil || openedReferral != nil },
+                get: { openedTrip != nil || openedList != nil || openedReferral != nil },
                 set: {
                     if !$0 {
-                        openedPlace = nil
                         openedTrip = nil
                         openedList = nil
                         openedReferral = nil
@@ -68,7 +77,6 @@ struct SaveApp: App {
                 }
             )) {
                 Button(languageSettings.text(.ok)) {
-                    openedPlace = nil
                     openedTrip = nil
                     openedList = nil
                     openedReferral = nil
@@ -76,8 +84,6 @@ struct SaveApp: App {
             } message: {
                 if let openedReferral {
                     Text(referralReadyMessage(openedReferral))
-                } else if let openedPlace {
-                    Text(placeReadyMessage(openedPlace))
                 } else if let openedList {
                     Text(listReadyMessage(openedList))
                 } else if let openedTrip {
@@ -128,7 +134,7 @@ struct SaveApp: App {
                 SignInView(onFirstClueCaptured: captureOnboardingFirstClue)
                     .environmentObject(authService)
             case .authenticated:
-                ContentView()
+                ContentView(incomingPlaceReceipt: $incomingPlaceReceipt)
                     .environmentObject(authService)
             }
         }
@@ -170,17 +176,19 @@ struct SaveApp: App {
             return
         }
 
-        if isPlaceLink(url), let place = SharedPlaceData.from(url: url) {
-            openedPlace = place
-            return
-        }
-
-        if isPlaceLink(url), SharedPlaceData.shortCode(from: url) != nil {
-            Task {
-                guard let place = await SharedPlaceData.resolveShortCode(from: url) else { return }
-                await MainActor.run {
-                    openedPlace = place
-                }
+        if isPlaceLink(url) {
+            guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
+                pendingFriendShareURL = ""
+                incomingPlaceReceipt = .malformed(url)
+                return
+            }
+            pendingFriendShareURL = url.absoluteString
+            if let place = SharedPlaceData.from(url: url) {
+                incomingPlaceReceipt = .embedded(place)
+            } else if SharedPlaceData.shortCode(from: url) != nil {
+                incomingPlaceReceipt = .shortLink(url)
+            } else {
+                incomingPlaceReceipt = .malformed(url)
             }
             return
         }
@@ -205,6 +213,15 @@ struct SaveApp: App {
         }
     }
 
+    private func restorePendingFriendShare() {
+        guard incomingPlaceReceipt == nil,
+              !pendingFriendShareURL.isEmpty,
+              let url = URL(string: pendingFriendShareURL),
+              isPlaceLink(url)
+        else { return }
+        handleIncomingURL(url)
+    }
+
     @MainActor
     private func handleReferralTarget(_ target: SaveReferralTarget) async {
         let profile: SaveReferralProfile
@@ -224,12 +241,6 @@ struct SaveApp: App {
             case .traditionalChinese: return "推薦連結準備好了"
             }
         }
-        if openedPlace != nil {
-            switch languageSettings.language {
-            case .english: return "SAV-E place ready"
-            case .traditionalChinese: return "SAV-E 地點準備好了"
-            }
-        }
         if openedList != nil {
             switch languageSettings.language {
             case .english: return "SAV-E list ready"
@@ -245,15 +256,6 @@ struct SaveApp: App {
             return "\(profile.displayName)'s starter map pack is ready. SAV-E will finish the follow after install/open and unlock your first AI itinerary from their places."
         case .traditionalChinese:
             return "\(profile.displayName) 的入門地圖包準備好了。安裝或打開後，SAV-E 會完成追蹤，並用這些地點解鎖你的第一份 AI 行程。"
-        }
-    }
-
-    private func placeReadyMessage(_ place: SharedPlaceData) -> String {
-        switch languageSettings.language {
-        case .english:
-            return "\(place.name) is ready. Save it to your SAV-E or open Maps from the place card."
-        case .traditionalChinese:
-            return "\(place.name) 已準備好。你可以存進 SAV-E，或從地點卡打開地圖。"
         }
     }
 

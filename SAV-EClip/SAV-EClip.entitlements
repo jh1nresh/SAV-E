@@ -8,6 +8,10 @@
 	<array>
 		<string>$(AppIdentifierPrefix)com.wanderly.app</string>
 	</array>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.wanderly.app</string>
+	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>appclips:sav-e-app.vercel.app</string>

@@ -23,8 +23,33 @@ struct SharedPlaceData: Codable {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
     }
 
+    var hasValidCoordinate: Bool {
+        lat.isFinite && lng.isFinite && (-90...90).contains(lat) && (-180...180).contains(lng)
+    }
+
+    var safeSourceURL: URL? {
+        guard let sourceURL else { return nil }
+        return Self.sanitizedPublicHTTPURL(sourceURL)
+    }
+
+    var appleMapsURL: URL? {
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: name),
+            URLQueryItem(name: "ll", value: "\(lat),\(lng)")
+        ]
+        return components?.url
+    }
+
     static func from(url: URL) -> SharedPlaceData? {
-        ShareRouteCodec.decode(SharedPlaceData.self, from: url, route: "p")
+        guard let payload = ShareRouteCodec.decode(
+            SharedPlaceData.self,
+            from: url,
+            route: "p",
+            maxTokenCharacters: ShareRoutePayloadLimits.embeddedTokenMaxCharacters
+        ),
+              payload.hasValidCoordinate else { return nil }
+        return payload.sanitizedForReceipt()
     }
 
     static func shortCode(from url: URL) -> String? {
@@ -32,23 +57,225 @@ struct SharedPlaceData: Codable {
     }
 
     static func resolveShortCode(from url: URL, apiBaseURL: String? = nil) async -> SharedPlaceData? {
-        guard let code = shortCode(from: url),
-              let baseURL = apiBaseURL
-                ?? SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
-              let requestURL = URL(string: "\(baseURL)/v0/shared-place-links/\(code)")
-        else { return nil }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(from: requestURL)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-            return try JSONDecoder().decode(SharedPlaceLinkResponse.self, from: data).payload
-        } catch {
-            return nil
-        }
+        try? await SharedPlaceReceipt.resolve(from: url, apiBaseURL: apiBaseURL).payload
     }
 
     func toURL(baseURL: String = "https://sav-e-app.vercel.app/p") -> URL? {
-        ShareRouteCodec.url(for: self, baseURL: baseURL)
+        let sanitized = sanitizedForReceipt()
+        guard ShareRoutePayloadLimits.allowsPlacePayload(sanitized) else { return nil }
+        return ShareRouteCodec.url(for: sanitized, baseURL: baseURL)
+    }
+
+    func sanitizedForReceipt() -> SharedPlaceData {
+        SharedPlaceData(
+            id: id,
+            name: name,
+            address: address,
+            lat: lat,
+            lng: lng,
+            category: category,
+            rating: rating,
+            reviewCount: reviewCount,
+            priceRange: priceRange,
+            hours: hours,
+            sourceLabel: sourceLabel,
+            sourceURL: safeSourceURL?.absoluteString,
+            photoURLs: Array(photoURLs.compactMap(Self.sanitizedPublicHTTPURL).map(\.absoluteString).prefix(1)),
+            note: Self.publicNote(note)
+        )
+    }
+
+    private static func sanitizedPublicHTTPURL(_ value: String) -> URL? {
+        guard value.count <= ShareRoutePayloadLimits.publicURLMaxCharacters,
+              var components = URLComponents(string: value),
+              ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil
+        else { return nil }
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    private static func publicNote(_ value: String?) -> String? {
+        let diagnosticPrefixes = [
+            "Source URL:",
+            "Venue name:",
+            "Address clue:",
+            "Category clue:",
+            "Location clue:",
+            "Analysis pipeline:",
+            "Evidence tier:",
+            "Google Places refined match:",
+            "Google Places address:",
+            "Google Places coordinates:",
+            "Confidence:",
+            "Analysis failed:",
+            "Debug:",
+            "Diagnostic:",
+            "Error:",
+            "Source recovery failed:",
+            "Stack trace:",
+        ]
+        let text = value?
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { line in
+                guard !line.isEmpty else { return false }
+                return !diagnosticPrefixes.contains {
+                    line.range(of: $0, options: [.caseInsensitive, .anchored]) != nil
+                }
+            }
+            .prefix(2)
+            .joined(separator: " · ") ?? ""
+        guard !text.isEmpty else { return nil }
+        if text.utf16.count <= 180 { return text }
+
+        var truncated = ""
+        var usedUTF16Units = 0
+        for character in text {
+            let characterUnits = String(character).utf16.count
+            guard usedUTF16Units + characterUnits <= 179 else { break }
+            truncated.append(character)
+            usedUTF16Units += characterUnits
+        }
+        return truncated.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+}
+
+struct SharedPlaceSender: Codable {
+    let displayName: String?
+    let handle: String?
+
+    var publicLabel: String? {
+        if let displayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !displayName.isEmpty {
+            return displayName
+        }
+        guard let handle = handle?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !handle.isEmpty else { return nil }
+        return handle.hasPrefix("@") ? handle : "@\(handle)"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+        case handle
+    }
+}
+
+struct SharedPlaceReceipt {
+    let code: String?
+    let payload: SharedPlaceData
+    let sourcePlaceID: String?
+    let expiresAt: String?
+    let sender: SharedPlaceSender?
+
+    var verifiedSenderLabel: String? { sender?.publicLabel }
+
+    static func embedded(_ payload: SharedPlaceData) -> SharedPlaceReceipt {
+        SharedPlaceReceipt(code: nil, payload: payload, sourcePlaceID: nil, expiresAt: nil, sender: nil)
+    }
+
+    static func resolve(from url: URL, apiBaseURL: String? = nil) async throws -> SharedPlaceReceipt {
+        guard let code = SharedPlaceData.shortCode(from: url),
+              let baseURL = apiBaseURL
+                ?? SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+              let requestURL = URL(string: "\(baseURL)/v0/shared-place-links/\(code)")
+        else { throw SharedPlaceReceiptError.malformedOrUnconfigured }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(from: requestURL)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch {
+            throw SharedPlaceReceiptError.networkUnavailable
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SharedPlaceReceiptError.invalidResponse
+        }
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 404 || httpResponse.statusCode == 410 {
+                throw SharedPlaceReceiptError.missingOrExpired
+            }
+            throw SharedPlaceReceiptError.serverUnavailable
+        }
+
+        do {
+            guard data.count <= ShareRoutePayloadLimits.receiptResponseMaxBytes else {
+                throw SharedPlaceReceiptError.invalidResponse
+            }
+            let response = try JSONDecoder().decode(SharedPlaceLinkResponse.self, from: data)
+            guard response.payload.hasValidCoordinate else {
+                throw SharedPlaceReceiptError.invalidResponse
+            }
+            return SharedPlaceReceipt(
+                code: code,
+                payload: response.payload.sanitizedForReceipt(),
+                sourcePlaceID: response.sourcePlaceID,
+                expiresAt: response.expiresAt,
+                sender: response.sender
+            )
+        } catch {
+            throw SharedPlaceReceiptError.invalidResponse
+        }
+    }
+
+    var fullAppURL: URL? {
+        if let code {
+            return URL(string: "wanderly://p/\(code)")
+        }
+        return payload.toURL(baseURL: "wanderly://p")
+    }
+}
+
+enum SharedPlaceReceiptError: Error {
+    case malformedOrUnconfigured
+    case networkUnavailable
+    case missingOrExpired
+    case serverUnavailable
+    case invalidResponse
+
+    var eventFailureReason: String {
+        switch self {
+        case .malformedOrUnconfigured: return "unsupported_route"
+        case .networkUnavailable: return "network_error"
+        case .missingOrExpired: return "expired"
+        case .serverUnavailable: return "server_error"
+        case .invalidResponse: return "malformed_payload"
+        }
+    }
+}
+
+extension SharedPlaceReceipt {
+    static func recordPublicEvent(
+        code: String,
+        eventType: String,
+        reasonCode: String? = nil,
+        apiBaseURL: String? = nil
+    ) async {
+        guard ["friend_share_receipt_opened", "friend_share_open_failed"].contains(eventType),
+              let baseURL = apiBaseURL
+                ?? SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+              let url = URL(string: "\(baseURL)/v0/shared-place-links/\(code)/events")
+        else { return }
+
+        var body = [
+            "event_type": eventType,
+            "surface": "app_clip",
+        ]
+        if let reasonCode { body["reason_code"] = reasonCode }
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        _ = try? await URLSession.shared.data(for: request)
     }
 }
 
@@ -92,14 +319,33 @@ struct SharedTripData: Codable {
     }
 }
 
+enum ShareRoutePayloadLimits {
+    static let placePayloadMaxBytes = 12 * 1024
+    static let embeddedTokenMaxCharacters = 16 * 1024
+    static let pendingPlaceURLMaxBytes = 20 * 1024
+    static let receiptResponseMaxBytes = 32 * 1024
+    static let publicURLMaxCharacters = 2 * 1024
+
+    static func allowsPlacePayload<T: Encodable>(_ payload: T) -> Bool {
+        guard let data = try? JSONEncoder().encode(payload) else { return false }
+        return data.count <= placePayloadMaxBytes
+    }
+}
+
 enum ShareRouteCodec {
     static func url<T: Encodable>(for payload: T, baseURL: String) -> URL? {
         guard let token = token(for: payload) else { return nil }
         return URL(string: "\(baseURL)/\(token)")
     }
 
-    static func decode<T: Decodable>(_ type: T.Type, from url: URL, route: String) -> T? {
+    static func decode<T: Decodable>(
+        _ type: T.Type,
+        from url: URL,
+        route: String,
+        maxTokenCharacters: Int? = nil
+    ) -> T? {
         guard let token = token(from: url, route: route),
+              maxTokenCharacters.map({ token.count <= $0 }) ?? true,
               let data = data(from: token) else { return nil }
         return try? JSONDecoder().decode(type, from: data)
     }
@@ -152,6 +398,16 @@ enum ShareRouteCodec {
 
 private struct SharedPlaceLinkResponse: Codable {
     let payload: SharedPlaceData
+    let sourcePlaceID: String?
+    let expiresAt: String?
+    let sender: SharedPlaceSender?
+
+    private enum CodingKeys: String, CodingKey {
+        case payload
+        case sourcePlaceID = "source_place_id"
+        case expiresAt = "expires_at"
+        case sender
+    }
 }
 
 struct SharedMySavesData: Codable {

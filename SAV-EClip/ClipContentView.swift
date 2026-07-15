@@ -3,13 +3,15 @@ import MapKit
 import UIKit
 
 struct ClipContentView: View {
-    @State private var placeData: SharedPlaceData?
+    @State private var placeReceipt: SharedPlaceReceipt?
     @State private var tripData: SharedTripData?
     @State private var listData: SharedListData?
     @State private var referralData: SharedReferralProfile?
     @State private var mySavesData: SharedMySavesData?
     @State private var mySavesSourceURL: URL?
     @State private var isLoading = true
+    @State private var incomingURLTask: Task<Void, Never>?
+    @State private var activeIncomingURLRequestID: UUID?
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -26,8 +28,8 @@ struct ClipContentView: View {
                     referralContentView(referral)
                 } else if let list = listData {
                     listContentView(list)
-                } else if let place = placeData {
-                    placeContentView(place)
+                } else if let receipt = placeReceipt {
+                    placeContentView(receipt)
                 } else if let trip = tripData {
                     tripContentView(trip)
                 } else {
@@ -46,9 +48,15 @@ struct ClipContentView: View {
         }
         .task {
             try? await Task.sleep(for: .seconds(1))
-            if placeData == nil && tripData == nil && listData == nil && referralData == nil && mySavesData == nil {
+            if activeIncomingURLRequestID == nil,
+               placeReceipt == nil && tripData == nil && listData == nil && referralData == nil && mySavesData == nil {
                 isLoading = false
             }
+        }
+        .onDisappear {
+            incomingURLTask?.cancel()
+            incomingURLTask = nil
+            activeIncomingURLRequestID = nil
         }
     }
 
@@ -300,8 +308,9 @@ struct ClipContentView: View {
 
     // MARK: - Place Content
 
-    private func placeContentView(_ place: SharedPlaceData) -> some View {
-        ScrollView {
+    private func placeContentView(_ receipt: SharedPlaceReceipt) -> some View {
+        let place = receipt.payload
+        return ScrollView {
             VStack(spacing: 18) {
                 Map(position: $cameraPosition) {
                     Marker(place.name, coordinate: place.coordinate)
@@ -312,20 +321,17 @@ struct ClipContentView: View {
                 .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 14) {
-                    AsyncImage(url: place.photoURLs.first.flatMap(URL.init(string:))) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        ZStack {
-                            Color.savePaper
-                            Image(systemName: "photo")
-                                .font(.title2)
-                                .foregroundColor(Color.saveCoral)
-                        }
-                    }
-                    .frame(height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
                     VStack(alignment: .leading, spacing: 5) {
+                        if let sender = receipt.verifiedSenderLabel {
+                            Label("Shared by \(sender)", systemImage: "person.crop.circle")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(Color.saveCoral)
+                        } else {
+                            Label("Shared place", systemImage: "square.and.arrow.down")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.secondary)
+                        }
+
                         Text(place.name)
                             .font(.title2)
                             .fontWeight(.bold)
@@ -366,19 +372,37 @@ struct ClipContentView: View {
                 .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
                 .padding(.horizontal)
 
-                Button(action: openInFullApp) {
-                    Text("Save / Open in SAV-E")
-                        .font(.headline)
-                        .foregroundColor(Color.saveInk)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.saveHoney)
-                        .cornerRadius(16)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 2)
-                        )
-                        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                VStack(spacing: 12) {
+                    Button(action: openInFullApp) {
+                        Text("Save to my SAV-E")
+                            .font(.headline)
+                            .foregroundColor(Color.saveInk)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.saveHoney)
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
+                            )
+                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                    }
+
+                    if let mapsURL = place.appleMapsURL {
+                        Link(destination: mapsURL) {
+                            Label("Open in Maps", systemImage: "map")
+                                .font(.headline)
+                                .foregroundColor(Color.saveInk)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.savePaper)
+                                .cornerRadius(16)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                                )
+                        }
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 32)
@@ -730,13 +754,16 @@ struct ClipContentView: View {
 
     private func handleIncomingURL(_ url: URL?) {
         guard let url else { return }
-        print("App Clip opened with URL: \(url)")
+        incomingURLTask?.cancel()
+        incomingURLTask = nil
+        let requestID = UUID()
+        activeIncomingURLRequestID = requestID
 
         if let referral = SharedReferralProfile.from(url: url) {
             referralData = referral
             mySavesData = nil
             mySavesSourceURL = nil
-            placeData = nil
+            placeReceipt = nil
             tripData = nil
             listData = nil
             updateCamera(for: referral.featuredPlaces.map {
@@ -751,7 +778,7 @@ struct ClipContentView: View {
                 listData = payload.list
                 mySavesData = nil
                 mySavesSourceURL = nil
-                placeData = nil
+                placeReceipt = nil
                 tripData = nil
                 referralData = nil
                 updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note) })
@@ -762,47 +789,88 @@ struct ClipContentView: View {
 
         if SharedMySavesData.isMySavesLink(url) {
             isLoading = true
-            Task {
+            incomingURLTask = Task { @MainActor in
                 let resolved = await SharedMySavesData.resolve(from: url)
-                await MainActor.run {
-                    mySavesData = resolved
-                    mySavesSourceURL = url
-                    placeData = nil
-                    tripData = nil
-                    listData = nil
-                    referralData = nil
-                    isLoading = false
-                }
+                guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                mySavesData = resolved
+                mySavesSourceURL = url
+                placeReceipt = nil
+                tripData = nil
+                listData = nil
+                referralData = nil
+                isLoading = false
+                incomingURLTask = nil
             }
             return
         }
 
         if isPlaceLink(url) {
+            guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
+                isLoading = false
+                return
+            }
+            persistPendingFriendShare(url)
+            placeReceipt = nil
+            mySavesData = nil
+            mySavesSourceURL = nil
+            tripData = nil
+            listData = nil
+            referralData = nil
             if let data = SharedPlaceData.from(url: url) {
-                placeData = data
-                mySavesData = nil
-                mySavesSourceURL = nil
-                tripData = nil
-                listData = nil
-                referralData = nil
+                placeReceipt = .embedded(data)
                 updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
                 isLoading = false
                 return
             } else if SharedPlaceData.shortCode(from: url) != nil {
                 isLoading = true
-                Task {
-                    let resolved = await SharedPlaceData.resolveShortCode(from: url)
-                    await MainActor.run {
-                        if let data = resolved {
-                            placeData = data
-                            mySavesData = nil
-                            mySavesSourceURL = nil
-                            tripData = nil
-                            listData = nil
-                            referralData = nil
-                            updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
-                        }
+                incomingURLTask = Task { @MainActor in
+                    do {
+                        let receipt = try await SharedPlaceReceipt.resolve(from: url)
+                        guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        let data = receipt.payload
+                        placeReceipt = receipt
+                        mySavesData = nil
+                        mySavesSourceURL = nil
+                        tripData = nil
+                        listData = nil
+                        referralData = nil
+                        updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
                         isLoading = false
+                        if let code = receipt.code {
+                            guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                            await SharedPlaceReceipt.recordPublicEvent(
+                                code: code,
+                                eventType: "friend_share_receipt_opened"
+                            )
+                        }
+                        guard activeIncomingURLRequestID == requestID else { return }
+                        incomingURLTask = nil
+                    } catch is CancellationError {
+                        return
+                    } catch let error as SharedPlaceReceiptError {
+                        guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        if let code = SharedPlaceData.shortCode(from: url) {
+                            await SharedPlaceReceipt.recordPublicEvent(
+                                code: code,
+                                eventType: "friend_share_open_failed",
+                                reasonCode: error.eventFailureReason
+                            )
+                        }
+                        guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        isLoading = false
+                        incomingURLTask = nil
+                    } catch {
+                        guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        if let code = SharedPlaceData.shortCode(from: url) {
+                            await SharedPlaceReceipt.recordPublicEvent(
+                                code: code,
+                                eventType: "friend_share_open_failed",
+                                reasonCode: "unknown"
+                            )
+                        }
+                        guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        isLoading = false
+                        incomingURLTask = nil
                     }
                 }
                 return
@@ -812,7 +880,7 @@ struct ClipContentView: View {
         }
 
         guard isTripLink(url) else {
-            placeData = nil
+            placeReceipt = nil
             tripData = nil
             listData = nil
             referralData = nil
@@ -824,7 +892,7 @@ struct ClipContentView: View {
 
         if let data = SharedTripData.from(url: url) {
             tripData = data
-            placeData = nil
+            placeReceipt = nil
             listData = nil
             referralData = nil
             mySavesData = nil
@@ -839,7 +907,7 @@ struct ClipContentView: View {
         if mySavesData != nil { return "My SAV-E" }
         if referralData != nil { return "Referral Preview" }
         if listData != nil { return "List Preview" }
-        if placeData != nil { return "Place Preview" }
+        if placeReceipt != nil { return "Place Preview" }
         return "Trip Preview"
     }
 
@@ -945,13 +1013,27 @@ struct ClipContentView: View {
             url = currentListAppURL()
         } else if let referralData {
             url = referralData.fullAppURL()
-        } else if let placeData {
-            url = placeData.toURL(baseURL: "wanderly://p") ?? URL(string: "wanderly://p")
+        } else if let placeReceipt {
+            url = placeReceipt.fullAppURL ?? URL(string: "wanderly://p")
         } else {
             url = tripData?.toURL(baseURL: "wanderly://trip") ?? URL(string: "wanderly://trip")
         }
         guard let url else { return }
-        UIApplication.shared.open(url)
+        if placeReceipt != nil {
+            persistPendingFriendShare(url)
+        }
+        UIApplication.shared.open(url) { opened in
+            guard !opened,
+                  let appStoreURL = URL(string: "https://apps.apple.com/app/id6769216556")
+            else { return }
+            UIApplication.shared.open(appStoreURL)
+        }
+    }
+
+    private func persistPendingFriendShare(_ url: URL) {
+        guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else { return }
+        UserDefaults(suiteName: "group.com.wanderly.app")?
+            .set(url.absoluteString, forKey: "pendingFriendShareURL")
     }
 
     private func currentListAppURL() -> URL? {

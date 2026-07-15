@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,24 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { createGuestSession, createPlace, createTrip, fetchPlaces, fetchTrips, GuestSession, hasApiConfig, resolveMySaves, SaveAuth } from "./src/api";
+import {
+  createGuestSession,
+  createPlace,
+  createTrip,
+  fetchPlaces,
+  fetchTrips,
+  FriendShareEventOptions,
+  FriendShareEventType,
+  FriendSharePlaceSaveOutcome,
+  GuestSession,
+  hasApiConfig,
+  recordAuthenticatedFriendShareEvent,
+  resolveMySaves,
+  resolveSharedPlaceLink,
+  runSingleFlight,
+  SaveAuth,
+  SharedPlaceLinkError,
+} from "./src/api";
 import { parseSharedLink } from "./src/importLink";
 import {
   categoryLabel,
@@ -23,6 +40,7 @@ import {
   PlaceCategory,
   MySavesPayload,
   SharedPlaceData,
+  SharedPlaceReceipt,
   SharedTripData,
   TripRecord,
   statusLabel,
@@ -34,14 +52,19 @@ import {
   decodePlaceLink,
   buildTripLink,
   decodeTripLink,
+  findMatchingBookmark,
   isSavePlaceLink,
   isSaveMySavesLink,
   isSaveTripLink,
   mySavesToken,
+  sharedPlaceShortCode,
   sharedPlaceToBookmark,
 } from "./src/sharedTrip";
 
 type TabKey = "places" | "trip" | "share";
+type SharedPlaceLoadState = "idle" | "loading" | "ready" | "error";
+type IncomingPlaceSaveState = "idle" | "saving" | "saved" | "already_saved";
+type SaveBookmarkResult = { place: Place; outcome: FriendSharePlaceSaveOutcome };
 
 const allCategories: Array<PlaceCategory | "all"> = [
   "all",
@@ -84,11 +107,20 @@ function SaveApp() {
   const [importMessage, setImportMessage] = useState("");
   const [pendingImport, setPendingImport] = useState<Place | null>(null);
   const [incomingPlace, setIncomingPlace] = useState<SharedPlaceData | null>(null);
+  const [incomingPlaceReceipt, setIncomingPlaceReceipt] = useState<SharedPlaceReceipt | null>(null);
+  const [incomingPlaceCode, setIncomingPlaceCode] = useState<string | null>(null);
+  const [incomingPlaceState, setIncomingPlaceState] = useState<SharedPlaceLoadState>("idle");
+  const [incomingPlaceSaveState, setIncomingPlaceSaveState] = useState<IncomingPlaceSaveState>("idle");
+  const [incomingPlaceError, setIncomingPlaceError] = useState("");
   const [incomingTrip, setIncomingTrip] = useState<SharedTripData | null>(null);
   const [incomingMySaves, setIncomingMySaves] = useState<MySavesPayload | null>(null);
   const [guestSession, setGuestSession] = useState<GuestSession | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const sharedPlaceRequestId = useRef(0);
+  const incomingPlaceSaveStateRef = useRef<IncomingPlaceSaveState>("idle");
+  const guestSessionRef = useRef<GuestSession | null>(null);
+  const guestSessionRequestRef = useRef<Promise<GuestSession> | null>(null);
 
   useEffect(() => {
     void hydrateInitialTripLink();
@@ -122,7 +154,18 @@ function SaveApp() {
   const previewTrip = incomingTrip ?? decodedTrip;
   const nextStop = selectedPlaces[0];
   const importedCount = bookmarks.filter((place) => Boolean(place.sourceUrl)).length;
-  const showingIncomingShare = Boolean(incomingMySaves || incomingPlace || incomingTrip);
+  const incomingSenderName = incomingPlaceReceipt?.sender?.displayName;
+  const incomingSaveButtonLabel = incomingPlaceSaveState === "saving"
+    ? "Saving..."
+    : incomingPlaceSaveState === "saved"
+      ? "Saved to my SAV-E"
+      : incomingPlaceSaveState === "already_saved"
+        ? "Already saved"
+        : "Save to my SAV-E";
+  const incomingSourceURL = safeHTTPURL(incomingPlace?.sourceURL);
+  const showingIncomingShare = Boolean(
+    incomingMySaves || incomingTrip || incomingPlaceState !== "idle",
+  );
 
   async function hydrateInitialTripLink() {
     const initialUrl = await Linking.getInitialURL();
@@ -136,8 +179,72 @@ function SaveApp() {
     }
   }
 
+  function clearIncomingPlace() {
+    sharedPlaceRequestId.current += 1;
+    setIncomingPlace(null);
+    setIncomingPlaceReceipt(null);
+    setIncomingPlaceCode(null);
+    setIncomingPlaceState("idle");
+    updateIncomingPlaceSaveState("idle");
+    setIncomingPlaceError("");
+  }
+
+  function updateIncomingPlaceSaveState(state: IncomingPlaceSaveState) {
+    incomingPlaceSaveStateRef.current = state;
+    setIncomingPlaceSaveState(state);
+  }
+
+  function openEmbeddedSharedPlace(place: SharedPlaceData) {
+    sharedPlaceRequestId.current += 1;
+    setIncomingMySaves(null);
+    setIncomingTrip(null);
+    setIncomingPlace(place);
+    setIncomingPlaceReceipt(null);
+    setIncomingPlaceCode(null);
+    setIncomingPlaceState("ready");
+    updateIncomingPlaceSaveState("idle");
+    setIncomingPlaceError("");
+    setActiveTab("share");
+    setImportMessage(`Opened shared place: ${place.name}`);
+  }
+
+  async function openSharedPlaceCode(code: string) {
+    const requestId = sharedPlaceRequestId.current + 1;
+    sharedPlaceRequestId.current = requestId;
+    setIncomingMySaves(null);
+    setIncomingTrip(null);
+    setIncomingPlace(null);
+    setIncomingPlaceReceipt(null);
+    setIncomingPlaceCode(code);
+    setIncomingPlaceState("loading");
+    updateIncomingPlaceSaveState("idle");
+    setIncomingPlaceError("");
+    setActiveTab("share");
+    setImportMessage("Opening shared place...");
+
+    try {
+      const receipt = await resolveSharedPlaceLink(code);
+      if (sharedPlaceRequestId.current !== requestId) return;
+      setIncomingPlace(receipt.payload);
+      setIncomingPlaceReceipt(receipt);
+      setIncomingPlaceState("ready");
+      setImportMessage(`Opened shared place: ${receipt.payload.name}`);
+      void recordIncomingFriendShareEvent(code, "friend_share_receipt_opened");
+    } catch (error) {
+      if (sharedPlaceRequestId.current !== requestId) return;
+      const reasonCode = error instanceof SharedPlaceLinkError ? error.reasonCode : "unknown";
+      const message = error instanceof Error ? error.message : "This shared place could not be opened.";
+      setIncomingPlaceState("error");
+      setIncomingPlaceError(message);
+      setImportMessage(`Shared place link failed: ${message}`);
+      void recordIncomingFriendShareEvent(code, "friend_share_open_failed", { reasonCode });
+    }
+  }
+
   function applyIncomingShareLink(url: string) {
     if (isSaveMySavesLink(url)) {
+      clearIncomingPlace();
+      setIncomingTrip(null);
       const token = mySavesToken(url);
       if (!token) return;
       setIncomingMySaves(null);
@@ -156,19 +263,30 @@ function SaveApp() {
 
     if (isSavePlaceLink(url)) {
       const place = decodePlaceLink(url);
-      if (!place) {
-        setActiveTab("share");
-        setImportMessage("This SAV-E place link is invalid or incomplete.");
+      if (place) {
+        openEmbeddedSharedPlace(place);
         return;
       }
 
-      setIncomingPlace(place);
+      const code = sharedPlaceShortCode(url);
+      if (code) {
+        void openSharedPlaceCode(code);
+        return;
+      }
+
+      clearIncomingPlace();
+      setIncomingMySaves(null);
+      setIncomingTrip(null);
       setActiveTab("share");
-      setImportMessage(`Opened shared place: ${place.name}`);
+      setIncomingPlaceState("error");
+      setIncomingPlaceError("This SAV-E place link is invalid or incomplete.");
+      setImportMessage("This SAV-E place link is invalid or incomplete.");
       return;
     }
 
     if (isSaveTripLink(url)) {
+      clearIncomingPlace();
+      setIncomingMySaves(null);
       const trip = decodeTripLink(url);
       if (!trip) {
         setActiveTab("share");
@@ -262,19 +380,28 @@ function SaveApp() {
   }
 
   async function ensureGuestSession(): Promise<GuestSession> {
-    if (guestSession) return guestSession;
-
-    const stored = await AsyncStorage.getItem(guestSessionStorageKey);
-    const parsed = stored ? parseGuestSession(stored) : null;
-    if (parsed) {
-      setGuestSession(parsed);
-      return parsed;
+    const cached = guestSessionRef.current ?? guestSession;
+    if (cached && Date.parse(cached.expiresAt) > Date.now()) {
+      guestSessionRef.current = cached;
+      return cached;
     }
+    guestSessionRef.current = null;
 
-    const nextGuestSession = await createGuestSession();
-    await AsyncStorage.setItem(guestSessionStorageKey, JSON.stringify(nextGuestSession));
-    setGuestSession(nextGuestSession);
-    return nextGuestSession;
+    return runSingleFlight(guestSessionRequestRef, async () => {
+      const stored = await AsyncStorage.getItem(guestSessionStorageKey);
+      const parsed = stored ? parseGuestSession(stored) : null;
+      if (parsed) {
+        guestSessionRef.current = parsed;
+        setGuestSession(parsed);
+        return parsed;
+      }
+
+      const nextGuestSession = await createGuestSession();
+      await AsyncStorage.setItem(guestSessionStorageKey, JSON.stringify(nextGuestSession));
+      guestSessionRef.current = nextGuestSession;
+      setGuestSession(nextGuestSession);
+      return nextGuestSession;
+    });
   }
 
   function togglePlace(placeId: string) {
@@ -300,7 +427,19 @@ function SaveApp() {
   async function handleImportedLink(rawLink: string) {
     const sharedPlace = decodePlaceLink(rawLink);
     if (sharedPlace) {
-      await saveBookmark(sharedPlaceToBookmark(sharedPlace), `Saved shared place: ${sharedPlace.name}`);
+      const bookmark = sharedPlaceToBookmark(sharedPlace);
+      const duplicate = findMatchingBookmark(bookmarks, bookmark);
+      if (duplicate) {
+        showDuplicateBookmark(duplicate);
+        return;
+      }
+      await saveBookmark(bookmark, `Saved shared place: ${sharedPlace.name}`);
+      return;
+    }
+
+    const sharedCode = sharedPlaceShortCode(rawLink);
+    if (sharedCode) {
+      await openSharedPlaceCode(sharedCode);
       return;
     }
 
@@ -313,18 +452,10 @@ function SaveApp() {
       return;
     }
 
-    const duplicate = bookmarks.find(
-      (place) =>
-        (parsed.sourceUrl && place.sourceUrl === parsed.sourceUrl) ||
-        (place.name.toLowerCase() === parsed.name.toLowerCase() &&
-          place.address.toLowerCase() === parsed.address.toLowerCase())
-    );
+    const duplicate = findMatchingBookmark(bookmarks, parsed);
 
     if (duplicate) {
-      setImportMessage(`Already saved: ${duplicate.name}`);
-      setPendingImport(null);
-      setSelectedIds((current) => (current.includes(duplicate.id) ? current : [duplicate.id, ...current]));
-      setImportLink("");
+      showDuplicateBookmark(duplicate);
       return;
     }
 
@@ -337,26 +468,48 @@ function SaveApp() {
     await saveBookmark(parsed, `Saved to bookmarks: ${parsed.name}`);
   }
 
-  async function saveBookmark(place: Place, message?: string) {
+  function showDuplicateBookmark(duplicate: Place) {
+    setImportMessage(`Already saved: ${duplicate.name}`);
+    setPendingImport(null);
+    setSelectedIds((current) => (current.includes(duplicate.id) ? current : [duplicate.id, ...current]));
+    setImportLink("");
+  }
+
+  async function saveBookmark(
+    place: Place,
+    message?: string,
+    friendShareCode?: string,
+  ): Promise<SaveBookmarkResult | null> {
     let savedPlace = place;
+    let outcome: FriendSharePlaceSaveOutcome = "saved";
 
     if (!apiEnabled) {
       const next = [place, ...bookmarks];
       await persistLocalBookmarks(next);
     } else {
       try {
-        savedPlace = await createPlace(await resolveAuthContext(), place);
-        setBookmarks((current) => [savedPlace, ...current]);
+        const auth = await resolveAuthContext();
+        if (friendShareCode) {
+          const result = await createPlace(auth, place, friendShareCode);
+          savedPlace = result.place;
+          outcome = result.outcome;
+        } else {
+          savedPlace = await createPlace(auth, place);
+        }
+        setBookmarks((current) => [savedPlace, ...current.filter((item) => item.id !== savedPlace.id)]);
       } catch (error) {
         Alert.alert("Save failed", error instanceof Error ? error.message : "Could not save bookmark.");
-        return;
+        return null;
       }
     }
 
     setPendingImport(null);
     setSelectedIds((current) => [savedPlace.id, ...current.filter((id) => id !== savedPlace.id)]);
-    setImportMessage(message ?? `Saved to bookmarks: ${savedPlace.name}`);
+    setImportMessage(outcome === "already_saved"
+      ? `Already saved: ${savedPlace.name}`
+      : message ?? `Saved to bookmarks: ${savedPlace.name}`);
     setImportLink("");
+    return { place: savedPlace, outcome };
   }
 
   async function saveRefinedImport() {
@@ -435,8 +588,70 @@ function SaveApp() {
   }
 
   async function saveIncomingPlace() {
+    if (!incomingPlace || incomingPlaceSaveStateRef.current !== "idle") return;
+    updateIncomingPlaceSaveState("saving");
+    const bookmark = sharedPlaceToBookmark(incomingPlace, incomingSenderName);
+    void recordIncomingFriendShareEvent(incomingPlaceCode, "friend_share_save_tapped");
+
+    const duplicate = findMatchingBookmark(bookmarks, bookmark);
+    if (duplicate && (!incomingPlaceCode || !apiEnabled)) {
+      showDuplicateBookmark(duplicate);
+      updateIncomingPlaceSaveState("already_saved");
+      return;
+    }
+
+    try {
+      const result = await saveBookmark(
+        bookmark,
+        `Saved shared place: ${incomingPlace.name}`,
+        incomingPlaceCode ?? undefined,
+      );
+      if (!result) {
+        updateIncomingPlaceSaveState("idle");
+        return;
+      }
+      updateIncomingPlaceSaveState(result.outcome);
+    } catch (error) {
+      updateIncomingPlaceSaveState("idle");
+      Alert.alert("Save failed", error instanceof Error ? error.message : "Could not save bookmark.");
+    }
+  }
+
+  async function openIncomingPlaceInMaps() {
     if (!incomingPlace) return;
-    await saveBookmark(sharedPlaceToBookmark(incomingPlace), `Saved shared place: ${incomingPlace.name}`);
+    const bookmark = sharedPlaceToBookmark(incomingPlace, incomingSenderName);
+    try {
+      await Linking.openURL(buildAppleMapsUrl(bookmark));
+    } catch (error) {
+      Alert.alert("Maps unavailable", error instanceof Error ? error.message : "Could not open this place in Maps.");
+    }
+  }
+
+  async function openIncomingPlaceSource() {
+    if (!incomingSourceURL) return;
+    try {
+      await Linking.openURL(incomingSourceURL);
+    } catch (error) {
+      Alert.alert("Source unavailable", error instanceof Error ? error.message : "Could not open the original source.");
+    }
+  }
+
+  async function recordIncomingFriendShareEvent(
+    code: string | null,
+    eventType: FriendShareEventType,
+    options: FriendShareEventOptions = {},
+  ) {
+    if (!apiEnabled || !code) return;
+    try {
+      await recordAuthenticatedFriendShareEvent(
+        await resolveAuthContext(),
+        code,
+        eventType,
+        options,
+      );
+    } catch {
+      // Event receipts are best-effort and never block the explicit save action.
+    }
   }
 
   async function handleAuthAction() {
@@ -675,7 +890,7 @@ function SaveApp() {
               <Text style={styles.sectionTitle}>
                 {incomingMySaves
                   ? "My SAV-E"
-                  : incomingPlace
+                  : incomingPlaceState !== "idle"
                     ? "Shared place"
                     : incomingTrip
                       ? "Shared trip"
@@ -689,11 +904,54 @@ function SaveApp() {
                 </View>
               ) : null}
 
-              {incomingPlace ? (
+              {incomingPlaceState === "loading" ? (
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Opened place link</Text>
-                  <DecodedPlace place={incomingPlace} />
-                  <ActionButton label="Save Shared Place" onPress={saveIncomingPlace} />
+                  <Text style={styles.cardTitle}>Opening place link</Text>
+                  <ActivityIndicator size="small" color={palette.ink} />
+                  <Text style={styles.helperText}>Loading the place and verified sender receipt...</Text>
+                </View>
+              ) : null}
+
+              {incomingPlaceState === "error" ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>Place link unavailable</Text>
+                  <Text style={styles.helperText}>{incomingPlaceError}</Text>
+                  {incomingPlaceCode ? (
+                    <ActionButton
+                      label="Try Again"
+                      onPress={() => void openSharedPlaceCode(incomingPlaceCode)}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+
+              {incomingPlaceState === "ready" && incomingPlace ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>
+                    {incomingSenderName ? "Friend share receipt" : "Shared place receipt"}
+                  </Text>
+                  <DecodedPlace place={incomingPlace} receipt={incomingPlaceReceipt} />
+                  <View style={styles.inlineActionRow}>
+                    <ActionButton
+                      label={incomingSaveButtonLabel}
+                      onPress={saveIncomingPlace}
+                      disabled={incomingPlaceSaveState !== "idle"}
+                      compact
+                    />
+                    <ActionButton
+                      label="Open in Maps"
+                      onPress={openIncomingPlaceInMaps}
+                      tone="secondary"
+                      compact
+                    />
+                  </View>
+                  {incomingSourceURL ? (
+                    <ActionButton
+                      label="Open Original Source"
+                      onPress={openIncomingPlaceSource}
+                      tone="secondary"
+                    />
+                  ) : null}
                 </View>
               ) : null}
 
@@ -785,6 +1043,18 @@ function parseGuestSession(raw: string): GuestSession | null {
   return null;
 }
 
+function safeHTTPURL(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    const safeProtocol = url.protocol === "https:" || url.protocol === "http:";
+    return safeProtocol && !url.username && !url.password ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function TabButton({
   label,
   active,
@@ -850,29 +1120,43 @@ function PlaceCard({
       <Text style={styles.placeMeta}>
         {categoryLabel[place.category]} · {statusLabel[place.status]} · {place.sourcePlatform}
       </Text>
+      {place.recommender ? <Text style={styles.successText}>Shared by {place.recommender}</Text> : null}
       {place.note ? <Text style={styles.placeNote}>{place.note}</Text> : null}
     </View>
   );
 }
 
-function DecodedPlace({ place }: { place: SharedPlaceData }) {
+function DecodedPlace({
+  place,
+  receipt,
+}: {
+  place: SharedPlaceData;
+  receipt?: SharedPlaceReceipt | null;
+}) {
   const meta = [
     place.category,
     place.rating ? `${place.rating.toFixed(1)} stars` : null,
     place.reviewCount ? `${place.reviewCount} reviews` : null,
     place.priceRange,
   ].filter(Boolean);
+  const verifiedSender = receipt?.sender;
 
   return (
     <View style={styles.sharedPlaceCard}>
       {place.photoURLs?.[0] ? (
         <Text style={styles.helperText}>Photo available from shared payload</Text>
       ) : null}
+      {verifiedSender ? (
+        <Text style={styles.successText}>Shared by {verifiedSender.displayName}</Text>
+      ) : (
+        <Text style={styles.helperText}>Shared place</Text>
+      )}
       <Text style={styles.previewHeadline}>{place.name}</Text>
       <Text style={styles.previewSubhead}>{place.address || "No address attached"}</Text>
       {meta.length > 0 ? <Text style={styles.stopMeta}>{meta.join(" · ")}</Text> : null}
       {place.hours ? <Text style={styles.stopMeta}>Hours: {place.hours}</Text> : null}
-      {place.sourceURL ? <Text style={styles.stopMeta}>Source: {place.sourceURL}</Text> : null}
+      <Text style={styles.stopMeta}>Original source: {place.sourceLabel || "SAV-E"}</Text>
+      {place.sourceURL ? <Text style={styles.stopMeta}>{place.sourceURL}</Text> : null}
       {place.note ? <Text style={styles.placeNote}>{place.note}</Text> : null}
     </View>
   );
@@ -949,19 +1233,23 @@ function ActionButton({
   onPress,
   tone = "primary",
   compact = false,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   tone?: "primary" | "secondary";
   compact?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={[
         styles.actionButton,
         tone === "secondary" && styles.actionButtonSecondary,
         compact && styles.actionButtonCompact,
+        disabled && styles.actionButtonDisabled,
       ]}
     >
       <Text style={[styles.actionButtonText, tone === "secondary" && styles.actionButtonTextSecondary]}>
@@ -1149,6 +1437,7 @@ const styles = StyleSheet.create({
   },
   actionButtonSecondary: { backgroundColor: palette.sky },
   actionButtonCompact: { minHeight: 48, justifyContent: "center" },
+  actionButtonDisabled: { opacity: 0.55 },
   actionButtonText: { color: palette.ink, fontWeight: "900", fontSize: 15 },
   actionButtonTextSecondary: { color: palette.ink },
   codeBlock: { fontSize: 12, lineHeight: 18, color: palette.ink },
