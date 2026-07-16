@@ -5,6 +5,7 @@ import {
   candidatesFromSearchResults,
   defaultFetchMetadataHTML,
   parseDuckDuckGoResults,
+  parsePersistedSourceResolution,
   resolveSourceDocument,
   runSourceSearchRecovery,
   sourceResolutionResponseBody,
@@ -233,6 +234,54 @@ test("source resolution ignores a malformed canonical URL", async () => {
   assert.equal(document.resolution.status, "resolved");
   assert.equal(document.resolution.resolvedURL, sourceURL);
   assert.equal(document.resolution.title, "Readable Source Cafe");
+});
+
+test("source recovery reuses a persisted resolution after the short link expires", async () => {
+  const originalURL = "https://xhslink.com/m/persisted88";
+  const persisted = parsePersistedSourceResolution({
+    original_url: originalURL,
+    resolved_url: "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
+    redirect_chain: [
+      originalURL,
+      "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
+    ],
+    canonical_content_id: "6a20eacb000000000f03ac00",
+    status: "resolved",
+    title: "Kiraku Kyoto",
+    caption: "2415 Park Ave, Tustin, CA 92782",
+  }, originalURL);
+  let fetchCount = 0;
+
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: originalURL, maxQueries: 0 },
+    async () => {
+      fetchCount += 1;
+      throw new Error("expired short link");
+    },
+    async () => [],
+    { persistedSourceResolution: persisted },
+  );
+
+  assert.equal(fetchCount, 0);
+  assert.equal(output.sourceResolution?.canonicalContentID, "6a20eacb000000000f03ac00");
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0]?.name, "Kiraku Kyoto");
+  assert.match(output.candidates[0]?.address ?? "", /2415 Park Ave, Tustin/);
+});
+
+test("persisted source resolution rejects mismatched or unsafe URLs", () => {
+  const originalURL = "https://xhslink.com/m/persisted99";
+  const base = {
+    original_url: originalURL,
+    resolved_url: "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
+    redirect_chain: [originalURL],
+    status: "resolved",
+  };
+
+  assert.equal(parsePersistedSourceResolution(base, "https://xhslink.com/m/different"), undefined);
+  assert.equal(parsePersistedSourceResolution({ ...base, resolved_url: "http://127.0.0.1/private" }, originalURL), undefined);
+  assert.equal(parsePersistedSourceResolution({ ...base, resolved_url: "https://user:secret@example.com/place" }, originalURL), undefined);
+  assert.equal(parsePersistedSourceResolution({ ...base, status: "invented" }, originalURL), undefined);
 });
 
 test("parseDuckDuckGoResults extracts titles snippets and canonical target URLs", () => {
