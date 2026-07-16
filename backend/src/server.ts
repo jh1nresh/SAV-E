@@ -19,7 +19,11 @@ import {
   recommendPlacesByClaims,
 } from "./placeClaims.js";
 import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
-import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
+import {
+  runSourceSearchRecovery,
+  sourceResolutionResponseBody,
+  type SourceSearchCandidate,
+} from "./sourceSearchWorker.js";
 import {
   defaultGeminiText,
   defaultPlacesSearch,
@@ -3059,6 +3063,9 @@ async function handleCaptureSearchRecovery(
     search_results: recovery.searchResults,
     created_candidates: createdCandidates,
     media_evidence: recovery.mediaEvidence,
+    source_resolution: recovery.sourceResolution
+      ? sourceResolutionResponseBody(recovery.sourceResolution)
+      : null,
     errors: recovery.errors,
     receipt: recovery.receipt,
   });

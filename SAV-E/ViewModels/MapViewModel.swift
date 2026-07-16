@@ -718,7 +718,7 @@ final class MapViewModel: ObservableObject {
                 )
                 if candidate.isSourceOnly {
                     let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
-                    importedCount += recovered?.count ?? 0
+                    importedCount += recovered?.createdCandidates.count ?? 0
                 }
             } catch {
                 if failedStep != "write_receipt" {
