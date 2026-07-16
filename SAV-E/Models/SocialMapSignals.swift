@@ -79,6 +79,18 @@ enum SaveFollowSource: String, Codable, Hashable {
     case appClipHandoff = "app_clip_handoff"
 }
 
+struct SaveFollowedFriend: Codable, Identifiable, Hashable {
+    let id: String
+    let displayName: String
+    let handle: String?
+    let avatarUrl: String?
+
+    var handleLabel: String? {
+        guard let handle, !handle.isEmpty else { return nil }
+        return handle.hasPrefix("@") ? handle : "@\(handle)"
+    }
+}
+
 enum SaveSocialLens: String, Codable, CaseIterable, Hashable {
     case forYou
     case friends

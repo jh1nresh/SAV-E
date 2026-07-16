@@ -379,6 +379,9 @@ final class MapViewModel: ObservableObject {
     @Published var collaborativeLists: [SaveCollaborativeList] = []
     @Published var socialLens: SaveSocialLens = .forYou
     @Published var socialPlaces: [Place] = []
+    @Published private(set) var followedFriends: [SaveFollowedFriend] = []
+    @Published private(set) var isLoadingFollowedFriends = false
+    @Published private(set) var followedFriendsLoadFailed = false
     @Published var selectedSocialPlace: Place?
     @Published private(set) var showsSocialMapLayer = false
     /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
@@ -401,6 +404,8 @@ final class MapViewModel: ObservableObject {
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
+    private var hasLoadedFollowedFriends = false
+    private var shouldRefreshFollowedFriendsAfterLoad = false
     private var routeCalculationID = UUID()
 
     init(
@@ -1347,7 +1352,58 @@ final class MapViewModel: ObservableObject {
 
         try await supabaseService.followProfile(target: target, source: .manual)
         socialLens = target.lens
+        await refreshFollowedFriends(force: true)
         await refreshSocialSignals()
+    }
+
+    func refreshFollowedFriends(force: Bool = false) async {
+        guard !isLoadingFollowedFriends else {
+            if force {
+                shouldRefreshFollowedFriendsAfterLoad = true
+            }
+            return
+        }
+        guard force || !hasLoadedFollowedFriends else { return }
+        guard let requestedUserId = authService.currentUserId else {
+            followedFriends = []
+            followedFriendsLoadFailed = false
+            hasLoadedFollowedFriends = false
+            shouldRefreshFollowedFriendsAfterLoad = false
+            return
+        }
+
+        isLoadingFollowedFriends = true
+        followedFriendsLoadFailed = false
+
+        let loadResult: Result<[SaveFollowedFriend], Error>
+        do {
+            loadResult = .success(try await supabaseService.fetchFollowedFriends())
+        } catch {
+            loadResult = .failure(error)
+        }
+
+        let isSameAccount = authService.currentUserId == requestedUserId
+        if isSameAccount {
+            switch loadResult {
+            case .success(let friends):
+                followedFriends = friends
+            case .failure(let error):
+                followedFriendsLoadFailed = true
+                print("MapViewModel: failed to refresh followed friends: \(error)")
+            }
+            hasLoadedFollowedFriends = true
+        } else {
+            followedFriends = []
+            followedFriendsLoadFailed = false
+            hasLoadedFollowedFriends = false
+        }
+        isLoadingFollowedFriends = false
+
+        let shouldRefreshAgain = shouldRefreshFollowedFriendsAfterLoad || !isSameAccount
+        shouldRefreshFollowedFriendsAfterLoad = false
+        if shouldRefreshAgain {
+            await refreshFollowedFriends(force: true)
+        }
     }
 
     private func refreshSocialSignals() async {

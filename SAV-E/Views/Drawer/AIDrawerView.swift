@@ -29,7 +29,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
     case lists
     case friends
 
-    static let publicTestCases: [CommandDrawerTab] = [.saved, .review]
+    static let publicTestCases: [CommandDrawerTab] = [.saved, .review, .friends]
 
     var title: String {
         switch self {
@@ -95,11 +95,14 @@ struct AIDrawerView: View {
     var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
     var onSaveListItem: (SaveListItem) async throws -> Void = { _ in }
     var onPlanList: (SaveCollaborativeList) async -> Void = { _ in }
-    var socialLens: SaveSocialLens = .forYou
     var socialPlaces: [Place] = []
+    var followedFriends: [SaveFollowedFriend] = []
+    var isLoadingFollowedFriends = false
+    var followedFriendsLoadFailed = false
     var onSelectSocialLens: (SaveSocialLens) -> Void = { _ in }
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
     var onFollowReferral: (String) async throws -> Void = { _ in }
+    var onRefreshFollowedFriends: () async -> Void = {}
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
@@ -1001,7 +1004,7 @@ struct AIDrawerView: View {
             case .lists:
                 collaborativeListsView
             case .friends:
-                socialMapTabView
+                friendsTabView
             }
         }
     }
@@ -1043,10 +1046,21 @@ struct AIDrawerView: View {
         }
     }
 
-    private var socialMapTabView: some View {
+    private var friendsTabView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                socialSignalSection
+                Text(languageSettings.localized(
+                    english: "Follow people you trust, then save only the places they choose to share.",
+                    traditionalChinese: "追蹤你信任的人，只保存他們主動選擇分享的地點。"
+                ))
+                .font(.subheadline)
+                .foregroundColor(.saveCocoa.opacity(0.76))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+
+                followingFriendsSection
+                followFriendForm
+                friendSharedPlacesSection
                 if let addSpotStatus {
                     Text(addSpotStatus)
                         .font(.caption)
@@ -1058,6 +1072,15 @@ struct AIDrawerView: View {
             .padding(.top, SaveTheme.Spacing.lg)
             .padding(.bottom, 24)
         }
+        .refreshable {
+            await onRefreshFollowedFriends()
+            onSelectSocialLens(.friends)
+        }
+        .task {
+            onSelectSocialLens(.friends)
+            await onRefreshFollowedFriends()
+        }
+        .accessibilityIdentifier("drawer.friends.root")
     }
 
     private var suggestionsView: some View {
@@ -1141,51 +1164,71 @@ struct AIDrawerView: View {
         }
     }
 
-    private var socialSignalSection: some View {
+    private var followingFriendsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            NotebookBandLabel(languageSettings.localized(english: "Friend signal", traditionalChinese: "朋友訊號"))
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            HStack(spacing: 7) {
-                ForEach(SaveSocialLens.allCases, id: \.self) { lens in
-                    Button {
-                        onSelectSocialLens(lens)
-                        withAnimation { drawerDetent = .medium }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: lens.systemImage)
-                                .font(.caption2.weight(.bold))
-                            Text(lens.title(language: languageSettings.language))
-                                .font(.caption.weight(.bold))
-                        }
-                        .foregroundColor(socialLens == lens ? .saveInk : .saveCocoa.opacity(0.78))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(socialLens == lens ? Color.saveHoney.opacity(0.50) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
+            HStack {
+                NotebookBandLabel(languageSettings.localized(english: "Following", traditionalChinese: "追蹤中"))
+                Spacer(minLength: 8)
+                Text("\(followedFriends.count)")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.saveCocoa)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Color.saveHoney.opacity(0.48), in: Capsule())
             }
             .padding(.horizontal, SaveTheme.Spacing.lg)
 
-            if socialPlaces.isEmpty {
-                followFriendEmptyState
+            if isLoadingFollowedFriends && followedFriends.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(languageSettings.localized(english: "Loading people you follow…", traditionalChinese: "正在載入追蹤中的朋友…"))
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.72))
+                }
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else if followedFriends.isEmpty {
+                Text(languageSettings.localized(
+                    english: "You are not following anyone yet. Add a referral code or SAV-E profile link below.",
+                    traditionalChinese: "你還沒有追蹤任何人。可在下方貼上推薦碼或 SAV-E 個人連結。"
+                ))
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.72))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
             } else {
-                ForEach(socialPlaces.prefix(3)) { place in
-                    SocialPlaceRow(place: place) {
-                        Task { await saveSocialPlace(place) }
-                    }
+                ForEach(followedFriends) { friend in
+                    FollowedFriendRow(friend: friend)
                     .padding(.horizontal, SaveTheme.Spacing.lg)
                 }
             }
+
+            if followedFriendsLoadFailed {
+                HStack(spacing: 8) {
+                    Text(languageSettings.localized(english: "Could not refresh this list.", traditionalChinese: "無法更新追蹤名單。"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.saveCocoa.opacity(0.78))
+                    Button(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次")) {
+                        Task { await onRefreshFollowedFriends() }
+                    }
+                    .font(.caption2.weight(.bold))
+                    .buttonStyle(.plain)
+                    .foregroundColor(.saveCoral)
+                }
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            }
         }
+        .accessibilityIdentifier("drawer.friends.following")
     }
 
-    private var followFriendEmptyState: some View {
+    private var followFriendForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(socialSignalEmptyMessage)
+            NotebookBandLabel(languageSettings.localized(english: "Add a friend", traditionalChinese: "新增朋友"))
+
+            Text(languageSettings.localized(
+                english: "Paste their referral code or SAV-E profile link. Following is one-way and does not expose either private map.",
+                traditionalChinese: "貼上對方的推薦碼或 SAV-E 個人連結。追蹤是單向的，不會公開任何一方的私人地圖。"
+            ))
                 .font(.caption)
                 .foregroundColor(.saveCocoa.opacity(0.72))
                 .fixedSize(horizontal: false, vertical: true)
@@ -1203,6 +1246,7 @@ struct AIDrawerView: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
                     )
+                    .accessibilityIdentifier("drawer.friends.referral")
 
                 Button {
                     Task { await followFriend() }
@@ -1226,6 +1270,7 @@ struct AIDrawerView: View {
                 )
                 .disabled(!canFollowReferral || isFollowingReferral)
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.friends.follow")
             }
 
             if let followReferralMessage {
@@ -1236,6 +1281,40 @@ struct AIDrawerView: View {
             }
         }
         .padding(.horizontal, SaveTheme.Spacing.lg)
+    }
+
+    private var friendSharedPlacesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            NotebookBandLabel(languageSettings.localized(english: "Friend-shared places", traditionalChinese: "朋友分享的地點"))
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+
+            Text(languageSettings.localized(
+                english: "Only opted-in friend places appear here. Saving creates your own private Map Stamp.",
+                traditionalChinese: "這裡只顯示朋友主動開放的地點；保存後會成為你自己的私人地圖章。"
+            ))
+            .font(.caption)
+            .foregroundColor(.saveCocoa.opacity(0.72))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SaveTheme.Spacing.lg)
+
+            if socialPlaces.isEmpty {
+                Text(languageSettings.localized(
+                    english: "No shared friend places yet.",
+                    traditionalChinese: "目前還沒有朋友分享的地點。"
+                ))
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.72))
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else {
+                ForEach(socialPlaces.prefix(6)) { place in
+                    SocialPlaceRow(place: place) {
+                        Task { await saveSocialPlace(place) }
+                    }
+                    .padding(.horizontal, SaveTheme.Spacing.lg)
+                }
+            }
+        }
+        .accessibilityIdentifier("drawer.friends.sharedPlaces")
     }
 
     private var canFollowReferral: Bool {
@@ -1263,26 +1342,6 @@ struct AIDrawerView: View {
             withAnimation { drawerDetent = .medium }
         } catch {
             followReferralMessage = languageSettings.localized(english: "Could not follow that code or link.", traditionalChinese: "無法追蹤這個推薦碼或連結。")
-        }
-    }
-
-    private var socialSignalEmptyMessage: String {
-        switch socialLens {
-        case .forYou:
-            return languageSettings.localized(
-                english: "Friend-shared places will appear here when someone shares real saved spots with you.",
-                traditionalChinese: "當朋友分享真實保存的地點給你時，會出現在這裡。"
-            )
-        case .friends:
-            return languageSettings.localized(
-                english: "No shared friend places yet. SAV-E only shows places friends chose to share.",
-                traditionalChinese: "還沒有朋友分享的地點。SAV-E 只會顯示朋友選擇分享的地點。"
-            )
-        case .trending:
-            return languageSettings.localized(
-                english: "Trending stays empty until there is enough real shared place signal for this area and category.",
-                traditionalChinese: "這個區域與分類累積足夠真實分享訊號後，熱門地點才會出現。"
-            )
         }
     }
 
@@ -2402,6 +2461,72 @@ private extension MapDetailDrawerItem {
         case .unsavedCandidate(let candidate):
             return .mapCandidate(candidate)
         }
+    }
+}
+
+private struct FollowedFriendRow: View {
+    let friend: SaveFollowedFriend
+
+    var body: some View {
+        HStack(spacing: 11) {
+            Group {
+                if let avatarURL {
+                    CachedAsyncImage(url: avatarURL) { phase in
+                        if case .success(let image) = phase {
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            avatarFallback
+                        }
+                    }
+                } else {
+                    avatarFallback
+                }
+            }
+            .frame(width: 42, height: 42)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(friend.displayName)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(1)
+
+                if let handleLabel = friend.handleLabel {
+                    Text(handleLabel)
+                        .font(.caption)
+                        .foregroundColor(.saveCocoa.opacity(0.72))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.saveMint)
+                .accessibilityHidden(true)
+        }
+        .padding(11)
+        .saveNotebookSurface(cornerRadius: 14, fill: .saveNotebookPage, opacity: 0.62, strokeOpacity: 0.34, lineWidth: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drawer.friends.following.\(friend.id)")
+    }
+
+    private var avatarURL: URL? {
+        guard let avatarUrl = friend.avatarUrl,
+              let url = URL(string: avatarUrl),
+              !url.isFileURL else { return nil }
+        return url
+    }
+
+    private var avatarFallback: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundColor(.saveCocoa.opacity(0.68))
+            .padding(5)
     }
 }
 

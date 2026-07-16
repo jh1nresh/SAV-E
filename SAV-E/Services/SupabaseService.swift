@@ -23,6 +23,7 @@ protocol SupabaseServiceProtocol {
     func deleteTrip(_ tripId: UUID) async throws
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
+    func fetchFollowedFriends() async throws -> [SaveFollowedFriend]
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
     func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile
@@ -547,6 +548,13 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
     }
 
     // MARK: - Social Graph
+
+    func fetchFollowedFriends() async throws -> [SaveFollowedFriend] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/follows")
+        return try JSONDecoder.supabase.decode([SaveFollowedFriend].self, from: data)
+    }
 
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {
         try await followProfile(

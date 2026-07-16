@@ -80,6 +80,7 @@ import {
   normalizeVisibilityRequest,
   parseLens,
 } from "./socialContracts.js";
+import { listFollowedFriends } from "./followList.js";
 import {
   WorkflowContractError,
   normalizePlaceRecoveryWorkOrderCreate,
@@ -2295,6 +2296,16 @@ async function handleFollows(
   response: ServerResponse,
   userId: string,
 ): Promise<void> {
+  if (request.method === "GET") {
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("Vary", "Authorization");
+    const friends = await listFollowedFriends(
+      userId,
+      (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+    );
+    return sendJson(response, friends);
+  }
+
   if (request.method !== "POST") return sendJson(response, { error: "Unsupported follows route" }, 405);
 
   const followRequest = normalizeFollowRequest(await readJson(request));

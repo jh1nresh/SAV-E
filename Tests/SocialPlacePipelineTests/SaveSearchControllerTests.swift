@@ -5,6 +5,16 @@ import CoreLocation
 
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
+    func testFollowedFriendDecodesPublicProfileProjection() throws {
+        let data = Data(#"{"id":"follow-1","displayName":"Memo Friend","handle":"memo-friend","avatarUrl":null}"#.utf8)
+        let friend = try JSONDecoder().decode(SaveFollowedFriend.self, from: data)
+
+        XCTAssertEqual(friend.id, "follow-1")
+        XCTAssertEqual(friend.displayName, "Memo Friend")
+        XCTAssertEqual(friend.handleLabel, "@memo-friend")
+    }
+
+    @MainActor
     func testPlaceActionResolutionIsStateSafe() {
         let weakCandidate = PlaceReviewCandidate(
             id: UUID(),

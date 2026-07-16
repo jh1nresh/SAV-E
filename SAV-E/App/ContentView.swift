@@ -208,8 +208,10 @@ struct ContentView: View {
             onPlanList: { list in
                 await mapVM.planCollaborativeList(list)
             },
-            socialLens: mapVM.socialLens,
             socialPlaces: mapVM.visibleSocialPlaces,
+            followedFriends: mapVM.followedFriends,
+            isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
+            followedFriendsLoadFailed: mapVM.followedFriendsLoadFailed,
             onSelectSocialLens: { lens in
                 mapVM.selectSocialLens(lens)
             },
@@ -218,6 +220,9 @@ struct ContentView: View {
             },
             onFollowReferral: { value in
                 try await mapVM.followReferral(value)
+            },
+            onRefreshFollowedFriends: {
+                await mapVM.refreshFollowedFriends(force: true)
             },
             selectedCategories: mapVM.selectedCategories,
             onToggleCategory: { category in
