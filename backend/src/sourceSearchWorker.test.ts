@@ -5,7 +5,9 @@ import {
   candidatesFromSearchResults,
   defaultFetchMetadataHTML,
   parseDuckDuckGoResults,
+  resolveSourceDocument,
   runSourceSearchRecovery,
+  sourceResolutionResponseBody,
 } from "./sourceSearchWorker.js";
 
 test("buildSourceRecoveryQueries strips Instagram tracking query", () => {
@@ -100,6 +102,137 @@ test("defaultFetchMetadataHTML blocks redirects to private hosts", async () => {
     defaultFetchMetadataHTML("https://example.com/short", 512_000, fetcher),
     /Blocked non-public URL/,
   );
+});
+
+test("source resolution contract preserves redirect chain and canonical content id", async () => {
+  const originalURL = "http://xhslink.com/m/sourceContract88";
+  const resolvedURL = "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00";
+  const html = `<!doctype html><html><head>
+    <meta property="og:title" content="先斗町しゃぶしゃぶすき焼き きらく" />
+    <meta property="og:description" content="京都府京都市中京区先斗町通四条上る柏屋町169-2" />
+    <meta property="og:image" content="https://example.com/kiraku.jpg" />
+  </head></html>`;
+  const fetcher = async (url: string | URL | Request) => {
+    if (url.toString() === originalURL) {
+      return new Response(null, { status: 302, headers: { location: resolvedURL } });
+    }
+    return new Response(html, { status: 200 });
+  };
+
+  const document = await resolveSourceDocument(originalURL, 512_000, fetcher);
+
+  assert.equal(document.resolution.status, "resolved");
+  assert.equal(document.resolution.originalURL, originalURL);
+  assert.equal(document.resolution.resolvedURL, resolvedURL);
+  assert.deepEqual(document.resolution.redirectChain, [originalURL, resolvedURL]);
+  assert.equal(document.resolution.canonicalContentID, "6a20eacb000000000f03ac00");
+  assert.equal(document.resolution.title, "先斗町しゃぶしゃぶすき焼き きらく");
+  assert.equal(document.resolution.caption, "京都府京都市中京区先斗町通四条上る柏屋町169-2");
+  assert.equal(document.resolution.thumbnailURL, "https://example.com/kiraku.jpg");
+  assert.deepEqual(sourceResolutionResponseBody(document.resolution), {
+    original_url: originalURL,
+    resolved_url: resolvedURL,
+    redirect_chain: [originalURL, resolvedURL],
+    canonical_content_id: "6a20eacb000000000f03ac00",
+    status: "resolved",
+    title: "先斗町しゃぶしゃぶすき焼き きらく",
+    caption: "京都府京都市中京区先斗町通四条上る柏屋町169-2",
+    thumbnail_url: "https://example.com/kiraku.jpg",
+  });
+});
+
+test("source resolution caches successful short-link documents", async () => {
+  const sourceURL = "https://93.184.216.34/cache-source-contract";
+  let fetchCount = 0;
+  const fetcher = async () => {
+    fetchCount += 1;
+    return new Response(`
+      <html><head><meta property="og:title" content="Cache Source Cafe" /></head></html>
+    `, { status: 200 });
+  };
+
+  const first = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+  const second = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+
+  assert.equal(first.resolution.status, "resolved");
+  assert.deepEqual(second, first);
+  assert.equal(fetchCount, 1);
+});
+
+test("source resolution cache keeps fragment merchant ids isolated", async () => {
+  let fetchCount = 0;
+  const fetcher = async (url: string | URL | Request) => {
+    fetchCount += 1;
+    const merchantID = new URL(url.toString()).hash.slice("#id=".length);
+    return new Response(`
+      <html><head><meta property="og:title" content="Merchant ${merchantID}" /></head></html>
+    `, { status: 200 });
+  };
+
+  const first = await resolveSourceDocument("https://h5.ele.me/shop/#id=merchant111", 512_000, fetcher);
+  const second = await resolveSourceDocument("https://h5.ele.me/shop/#id=merchant222", 512_000, fetcher);
+
+  assert.equal(first.resolution.canonicalContentID, "merchant111");
+  assert.equal(second.resolution.canonicalContentID, "merchant222");
+  assert.equal(fetchCount, 2);
+});
+
+test("source recovery reports login wall without creating a review candidate", async () => {
+  const sourceURL = "https://93.184.216.34/login-required";
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: sourceURL, maxQueries: 0 },
+    async () => "",
+    async () => [],
+    {
+      sourceDocumentResolver: async () => resolveSourceDocument(
+        sourceURL,
+        512_000,
+        async () => new Response(`
+          <html><head></head>
+          <body>请先登录后在美团 App 中查看</body></html>
+        `, { status: 200 }),
+      ),
+    },
+  );
+
+  assert.equal(output.sourceResolution?.status, "blocked_login");
+  assert.equal(output.candidates.length, 0);
+  assert.equal(output.receipt.output, "source_only_clue");
+});
+
+test("source resolution distinguishes expired and opaque unresolved pages", async () => {
+  const expired = await resolveSourceDocument(
+    "https://93.184.216.34/expired",
+    512_000,
+    async () => new Response("链接已失效", { status: 410 }),
+  );
+  const opaque = await resolveSourceDocument(
+    "https://93.184.216.34/opaque-code?id=not-a-platform-id",
+    512_000,
+    async () => new Response("<html><body></body></html>", { status: 200 }),
+  );
+
+  assert.equal(expired.resolution.status, "expired");
+  assert.equal(opaque.resolution.status, "opaque_unresolved");
+  assert.equal(opaque.resolution.canonicalContentID, undefined);
+});
+
+test("source resolution ignores a malformed canonical URL", async () => {
+  const sourceURL = "https://93.184.216.34/malformed-canonical";
+  const document = await resolveSourceDocument(
+    sourceURL,
+    512_000,
+    async () => new Response(`
+      <html><head>
+        <link rel="canonical" href="http://[invalid" />
+        <meta property="og:title" content="Readable Source Cafe" />
+      </head></html>
+    `, { status: 200 }),
+  );
+
+  assert.equal(document.resolution.status, "resolved");
+  assert.equal(document.resolution.resolvedURL, sourceURL);
+  assert.equal(document.resolution.title, "Readable Source Cafe");
 });
 
 test("parseDuckDuckGoResults extracts titles snippets and canonical target URLs", () => {
