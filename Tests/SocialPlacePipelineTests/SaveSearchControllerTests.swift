@@ -6,12 +6,30 @@ import CoreLocation
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
     func testFollowedFriendDecodesPublicProfileProjection() throws {
-        let data = Data(#"{"id":"follow-1","displayName":"Memo Friend","handle":"memo-friend","avatarUrl":null}"#.utf8)
-        let friend = try JSONDecoder().decode(SaveFollowedFriend.self, from: data)
+        let data = Data(#"{"items":[{"id":"follow-1","displayName":"Memo Friend","handle":"memo-friend","avatarUrl":null}],"nextCursor":"cursor-2"}"#.utf8)
+        let page = try JSONDecoder().decode(SaveFollowedFriendsPage.self, from: data)
+        let friend = try XCTUnwrap(page.items.first)
 
         XCTAssertEqual(friend.id, "follow-1")
         XCTAssertEqual(friend.displayName, "Memo Friend")
         XCTAssertEqual(friend.handleLabel, "@memo-friend")
+        XCTAssertEqual(page.nextCursor, "cursor-2")
+    }
+
+    @MainActor
+    func testFollowedFriendsPathSafelyEncodesSearchAndCursor() throws {
+        let path = SupabaseService.followedFriendsPath(
+            query: "Amy & 李",
+            cursor: "cursor+/=value",
+            limit: 80
+        )
+        let components = try XCTUnwrap(URLComponents(string: path))
+        let values = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+
+        XCTAssertEqual(components.path, "/v0/follows")
+        XCTAssertEqual(values["q"], "Amy & 李")
+        XCTAssertEqual(values["cursor"], "cursor+/=value")
+        XCTAssertEqual(values["limit"], "50")
     }
 
     @MainActor

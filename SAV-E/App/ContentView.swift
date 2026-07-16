@@ -212,6 +212,9 @@ struct ContentView: View {
             followedFriends: mapVM.followedFriends,
             isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
             followedFriendsLoadFailed: mapVM.followedFriendsLoadFailed,
+            hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
+            isLoadingMoreFollowedFriends: mapVM.isLoadingMoreFollowedFriends,
+            followedFriendsLoadMoreFailed: mapVM.followedFriendsLoadMoreFailed,
             onSelectSocialLens: { lens in
                 mapVM.selectSocialLens(lens)
             },
@@ -223,6 +226,15 @@ struct ContentView: View {
             },
             onRefreshFollowedFriends: {
                 await mapVM.refreshFollowedFriends(force: true)
+            },
+            onSearchFollowedFriends: { query in
+                await mapVM.refreshFollowedFriends(query: query, force: true)
+            },
+            onLoadMoreFollowedFriends: {
+                await mapVM.loadMoreFollowedFriends()
+            },
+            onUnfollowFriend: { friend in
+                try await mapVM.unfollowFriend(friend)
             },
             selectedCategories: mapVM.selectedCategories,
             onToggleCategory: { category in

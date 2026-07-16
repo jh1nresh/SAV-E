@@ -382,6 +382,9 @@ final class MapViewModel: ObservableObject {
     @Published private(set) var followedFriends: [SaveFollowedFriend] = []
     @Published private(set) var isLoadingFollowedFriends = false
     @Published private(set) var followedFriendsLoadFailed = false
+    @Published private(set) var hasMoreFollowedFriends = false
+    @Published private(set) var isLoadingMoreFollowedFriends = false
+    @Published private(set) var followedFriendsLoadMoreFailed = false
     @Published var selectedSocialPlace: Place?
     @Published private(set) var showsSocialMapLayer = false
     /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
@@ -405,7 +408,10 @@ final class MapViewModel: ObservableObject {
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
     private var hasLoadedFollowedFriends = false
-    private var shouldRefreshFollowedFriendsAfterLoad = false
+    private var followedFriendsCursor: String?
+    private var followedFriendsQuery = ""
+    private var followedFriendsRequestGeneration = UUID()
+    private let followedFriendsPageSize = 20
     private var routeCalculationID = UUID()
 
     init(
@@ -1352,58 +1358,146 @@ final class MapViewModel: ObservableObject {
 
         try await supabaseService.followProfile(target: target, source: .manual)
         socialLens = target.lens
-        await refreshFollowedFriends(force: true)
+        await refreshFollowedFriends(query: followedFriendsQuery, force: true)
         await refreshSocialSignals()
     }
 
-    func refreshFollowedFriends(force: Bool = false) async {
-        guard !isLoadingFollowedFriends else {
-            if force {
-                shouldRefreshFollowedFriendsAfterLoad = true
-            }
-            return
-        }
-        guard force || !hasLoadedFollowedFriends else { return }
+    func refreshFollowedFriends(query: String? = nil, force: Bool = false) async {
+        let normalizedQuery = Self.normalizedFollowedFriendsQuery(query ?? followedFriendsQuery)
+        guard force || !hasLoadedFollowedFriends || normalizedQuery != followedFriendsQuery else { return }
         guard let requestedUserId = authService.currentUserId else {
-            followedFriends = []
-            followedFriendsLoadFailed = false
-            hasLoadedFollowedFriends = false
-            shouldRefreshFollowedFriendsAfterLoad = false
+            resetFollowedFriendsState(query: normalizedQuery)
             return
         }
 
-        isLoadingFollowedFriends = true
-        followedFriendsLoadFailed = false
-
-        let loadResult: Result<[SaveFollowedFriend], Error>
-        do {
-            loadResult = .success(try await supabaseService.fetchFollowedFriends())
-        } catch {
-            loadResult = .failure(error)
-        }
-
-        let isSameAccount = authService.currentUserId == requestedUserId
-        if isSameAccount {
-            switch loadResult {
-            case .success(let friends):
-                followedFriends = friends
-            case .failure(let error):
-                followedFriendsLoadFailed = true
-                print("MapViewModel: failed to refresh followed friends: \(error)")
-            }
-            hasLoadedFollowedFriends = true
-        } else {
+        let requestGeneration = UUID()
+        followedFriendsRequestGeneration = requestGeneration
+        if normalizedQuery != followedFriendsQuery {
             followedFriends = []
-            followedFriendsLoadFailed = false
-            hasLoadedFollowedFriends = false
+            followedFriendsCursor = nil
+            hasMoreFollowedFriends = false
         }
-        isLoadingFollowedFriends = false
+        followedFriendsQuery = normalizedQuery
+        isLoadingFollowedFriends = true
+        isLoadingMoreFollowedFriends = false
+        followedFriendsLoadFailed = false
+        followedFriendsLoadMoreFailed = false
 
-        let shouldRefreshAgain = shouldRefreshFollowedFriendsAfterLoad || !isSameAccount
-        shouldRefreshFollowedFriendsAfterLoad = false
-        if shouldRefreshAgain {
-            await refreshFollowedFriends(force: true)
+        do {
+            let page = try await supabaseService.fetchFollowedFriends(
+                query: normalizedQuery,
+                cursor: nil,
+                limit: followedFriendsPageSize
+            )
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            guard authService.currentUserId == requestedUserId else {
+                resetFollowedFriendsState(query: normalizedQuery)
+                await refreshFollowedFriends(query: normalizedQuery, force: true)
+                return
+            }
+            followedFriends = Self.uniqueFollowedFriends(page.items)
+            followedFriendsCursor = page.nextCursor
+            hasMoreFollowedFriends = page.nextCursor != nil
+            hasLoadedFollowedFriends = true
+            isLoadingFollowedFriends = false
+        } catch is CancellationError {
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            isLoadingFollowedFriends = false
+        } catch {
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            guard authService.currentUserId == requestedUserId else {
+                resetFollowedFriendsState(query: normalizedQuery)
+                await refreshFollowedFriends(query: normalizedQuery, force: true)
+                return
+            }
+            followedFriendsLoadFailed = true
+            hasLoadedFollowedFriends = true
+            isLoadingFollowedFriends = false
+            print("MapViewModel: failed to refresh followed friends: \(error)")
         }
+    }
+
+    func loadMoreFollowedFriends() async {
+        guard hasMoreFollowedFriends,
+              let cursor = followedFriendsCursor,
+              !isLoadingFollowedFriends,
+              !isLoadingMoreFollowedFriends,
+              let requestedUserId = authService.currentUserId else { return }
+
+        let requestGeneration = followedFriendsRequestGeneration
+        let requestedQuery = followedFriendsQuery
+        isLoadingMoreFollowedFriends = true
+        followedFriendsLoadMoreFailed = false
+
+        do {
+            let page = try await supabaseService.fetchFollowedFriends(
+                query: requestedQuery,
+                cursor: cursor,
+                limit: followedFriendsPageSize
+            )
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            guard authService.currentUserId == requestedUserId,
+                  followedFriendsQuery == requestedQuery else {
+                resetFollowedFriendsState(query: requestedQuery)
+                await refreshFollowedFriends(query: requestedQuery, force: true)
+                return
+            }
+            followedFriends = Self.uniqueFollowedFriends(followedFriends + page.items)
+            followedFriendsCursor = page.nextCursor
+            hasMoreFollowedFriends = page.nextCursor != nil
+            isLoadingMoreFollowedFriends = false
+        } catch is CancellationError {
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            isLoadingMoreFollowedFriends = false
+        } catch {
+            guard followedFriendsRequestGeneration == requestGeneration else { return }
+            guard authService.currentUserId == requestedUserId else {
+                resetFollowedFriendsState(query: requestedQuery)
+                await refreshFollowedFriends(query: requestedQuery, force: true)
+                return
+            }
+            followedFriendsLoadMoreFailed = true
+            isLoadingMoreFollowedFriends = false
+            print("MapViewModel: failed to load more followed friends: \(error)")
+        }
+    }
+
+    func unfollowFriend(_ friend: SaveFollowedFriend) async throws {
+        guard let requestedUserId = authService.currentUserId else {
+            throw SupabaseError.notAuthenticated
+        }
+        try await supabaseService.unfollowProfile(followId: friend.id)
+        guard authService.currentUserId == requestedUserId else {
+            resetFollowedFriendsState(query: followedFriendsQuery)
+            throw SupabaseError.notAuthenticated
+        }
+
+        followedFriends.removeAll { $0.id == friend.id }
+        socialPlaces = []
+        await refreshFollowedFriends(query: followedFriendsQuery, force: true)
+        await refreshSocialSignals()
+    }
+
+    private func resetFollowedFriendsState(query: String) {
+        followedFriendsRequestGeneration = UUID()
+        followedFriendsQuery = query
+        followedFriends = []
+        followedFriendsCursor = nil
+        hasMoreFollowedFriends = false
+        isLoadingFollowedFriends = false
+        isLoadingMoreFollowedFriends = false
+        followedFriendsLoadFailed = false
+        followedFriendsLoadMoreFailed = false
+        hasLoadedFollowedFriends = false
+    }
+
+    private static func normalizedFollowedFriendsQuery(_ query: String) -> String {
+        query.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func uniqueFollowedFriends(_ friends: [SaveFollowedFriend]) -> [SaveFollowedFriend] {
+        var seen = Set<String>()
+        return friends.filter { seen.insert($0.id).inserted }
     }
 
     private func refreshSocialSignals() async {

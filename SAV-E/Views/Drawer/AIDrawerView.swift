@@ -99,10 +99,16 @@ struct AIDrawerView: View {
     var followedFriends: [SaveFollowedFriend] = []
     var isLoadingFollowedFriends = false
     var followedFriendsLoadFailed = false
+    var hasMoreFollowedFriends = false
+    var isLoadingMoreFollowedFriends = false
+    var followedFriendsLoadMoreFailed = false
     var onSelectSocialLens: (SaveSocialLens) -> Void = { _ in }
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
     var onFollowReferral: (String) async throws -> Void = { _ in }
     var onRefreshFollowedFriends: () async -> Void = {}
+    var onSearchFollowedFriends: (String) async -> Void = { _ in }
+    var onLoadMoreFollowedFriends: () async -> Void = {}
+    var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
@@ -128,6 +134,10 @@ struct AIDrawerView: View {
     @State private var followReferralInput = ""
     @State private var isFollowingReferral = false
     @State private var followReferralMessage: String?
+    @State private var followedFriendsSearchQuery = ""
+    @State private var pendingUnfollowFriend: SaveFollowedFriend?
+    @State private var unfollowingFriendID: String?
+    @State private var unfollowFriendMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -1078,7 +1088,42 @@ struct AIDrawerView: View {
         }
         .task {
             onSelectSocialLens(.friends)
-            await onRefreshFollowedFriends()
+        }
+        .task(id: followedFriendsSearchQuery) {
+            if !followedFriendsSearchQuery.isEmpty {
+                do {
+                    try await Task.sleep(nanoseconds: 250_000_000)
+                } catch {
+                    return
+                }
+            }
+            guard !Task.isCancelled else { return }
+            await onSearchFollowedFriends(followedFriendsSearchQuery)
+        }
+        .confirmationDialog(
+            languageSettings.localized(english: "Stop following?", traditionalChinese: "停止追蹤？"),
+            isPresented: Binding(
+                get: { pendingUnfollowFriend != nil },
+                set: { if !$0 { pendingUnfollowFriend = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingUnfollowFriend
+        ) { friend in
+            Button(
+                languageSettings.localized(
+                    english: "Unfollow \(friend.displayName)",
+                    traditionalChinese: "取消追蹤 \(friend.displayName)"
+                ),
+                role: .destructive
+            ) {
+                Task { await unfollow(friend) }
+            }
+            Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
+        } message: { _ in
+            Text(languageSettings.localized(
+                english: "Their shared places will stop appearing in your Friends view. Your private Map Stamps stay unchanged.",
+                traditionalChinese: "對方分享的地點將不再顯示於朋友頁面；你的私人地圖章不會受到影響。"
+            ))
         }
         .accessibilityIdentifier("drawer.friends.root")
     }
@@ -1169,13 +1214,52 @@ struct AIDrawerView: View {
             HStack {
                 NotebookBandLabel(languageSettings.localized(english: "Following", traditionalChinese: "追蹤中"))
                 Spacer(minLength: 8)
-                Text("\(followedFriends.count)")
+                Text("\(followedFriends.count)\(hasMoreFollowedFriends ? "+" : "")")
                     .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
                     .background(Color.saveHoney.opacity(0.48), in: Capsule())
             }
+            .padding(.horizontal, SaveTheme.Spacing.lg)
+
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveCocoa.opacity(0.62))
+                TextField(
+                    languageSettings.localized(english: "Search people you follow", traditionalChinese: "搜尋追蹤中的人"),
+                    text: $followedFriendsSearchQuery
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .font(.caption.weight(.semibold))
+                .accessibilityIdentifier("drawer.friends.search")
+                .onChange(of: followedFriendsSearchQuery) { _, value in
+                    if value.count > 64 {
+                        followedFriendsSearchQuery = String(value.prefix(64))
+                    }
+                }
+                if !followedFriendsSearchQuery.isEmpty {
+                    Button {
+                        followedFriendsSearchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.saveCocoa.opacity(0.58))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(languageSettings.localized(english: "Clear Following search", traditionalChinese: "清除追蹤搜尋"))
+                }
+            }
+            .padding(.horizontal, 11)
+            .frame(minHeight: 40)
+            .background(Color.saveNotebookPage.opacity(0.58))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+            )
             .padding(.horizontal, SaveTheme.Spacing.lg)
 
             if isLoadingFollowedFriends && followedFriends.isEmpty {
@@ -1189,8 +1273,12 @@ struct AIDrawerView: View {
                 .padding(.horizontal, SaveTheme.Spacing.lg)
             } else if followedFriends.isEmpty {
                 Text(languageSettings.localized(
-                    english: "You are not following anyone yet. Add a referral code or SAV-E profile link below.",
-                    traditionalChinese: "你還沒有追蹤任何人。可在下方貼上推薦碼或 SAV-E 個人連結。"
+                    english: followedFriendsSearchQuery.isEmpty
+                        ? "You are not following anyone yet. Add a referral code or SAV-E profile link below."
+                        : "No one you follow matches this search.",
+                    traditionalChinese: followedFriendsSearchQuery.isEmpty
+                        ? "你還沒有追蹤任何人。可在下方貼上推薦碼或 SAV-E 個人連結。"
+                        : "追蹤名單中沒有符合搜尋的人。"
                 ))
                 .font(.caption)
                 .foregroundColor(.saveCocoa.opacity(0.72))
@@ -1198,9 +1286,38 @@ struct AIDrawerView: View {
                 .padding(.horizontal, SaveTheme.Spacing.lg)
             } else {
                 ForEach(followedFriends) { friend in
-                    FollowedFriendRow(friend: friend)
+                    FollowedFriendRow(
+                        friend: friend,
+                        isUnfollowing: unfollowingFriendID == friend.id,
+                        onUnfollow: { pendingUnfollowFriend = friend }
+                    )
                     .padding(.horizontal, SaveTheme.Spacing.lg)
                 }
+            }
+
+            if hasMoreFollowedFriends || isLoadingMoreFollowedFriends || followedFriendsLoadMoreFailed {
+                Button {
+                    Task { await onLoadMoreFollowedFriends() }
+                } label: {
+                    HStack(spacing: 7) {
+                        if isLoadingMoreFollowedFriends {
+                            ProgressView().controlSize(.mini)
+                        }
+                        Text(languageSettings.localized(
+                            english: followedFriendsLoadMoreFailed ? "Try loading more again" : "Load more",
+                            traditionalChinese: followedFriendsLoadMoreFailed ? "再次載入更多" : "載入更多"
+                        ))
+                            .font(.caption.weight(.bold))
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 38)
+                }
+                .foregroundColor(.saveInk)
+                .background(Color.saveHoney.opacity(0.58))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .buttonStyle(.plain)
+                .disabled(isLoadingMoreFollowedFriends)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+                .accessibilityIdentifier("drawer.friends.loadMore")
             }
 
             if followedFriendsLoadFailed {
@@ -1217,8 +1334,37 @@ struct AIDrawerView: View {
                 }
                 .padding(.horizontal, SaveTheme.Spacing.lg)
             }
+
+            if let unfollowFriendMessage {
+                Text(unfollowFriendMessage)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.saveCocoa.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, SaveTheme.Spacing.lg)
+            }
         }
         .accessibilityIdentifier("drawer.friends.following")
+    }
+
+    private func unfollow(_ friend: SaveFollowedFriend) async {
+        guard unfollowingFriendID == nil else { return }
+        pendingUnfollowFriend = nil
+        unfollowingFriendID = friend.id
+        unfollowFriendMessage = nil
+        defer { unfollowingFriendID = nil }
+
+        do {
+            try await onUnfollowFriend(friend)
+            unfollowFriendMessage = languageSettings.localized(
+                english: "Unfollowed \(friend.displayName).",
+                traditionalChinese: "已取消追蹤 \(friend.displayName)。"
+            )
+        } catch {
+            unfollowFriendMessage = languageSettings.localized(
+                english: "Could not unfollow \(friend.displayName). Try again.",
+                traditionalChinese: "無法取消追蹤 \(friend.displayName)，請再試一次。"
+            )
+        }
     }
 
     private var followFriendForm: some View {
@@ -2465,7 +2611,10 @@ private extension MapDetailDrawerItem {
 }
 
 private struct FollowedFriendRow: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     let friend: SaveFollowedFriend
+    let isUnfollowing: Bool
+    let onUnfollow: () -> Void
 
     var body: some View {
         HStack(spacing: 11) {
@@ -2504,13 +2653,29 @@ private struct FollowedFriendRow: View {
 
             Spacer(minLength: 8)
 
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.saveMint)
-                .accessibilityHidden(true)
+            Button(role: .destructive, action: onUnfollow) {
+                Group {
+                    if isUnfollowing {
+                        ProgressView()
+                            .controlSize(.mini)
+                    } else {
+                        Image(systemName: "person.badge.minus")
+                    }
+                }
+                .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.saveCoral)
+            .disabled(isUnfollowing)
+            .accessibilityLabel(languageSettings.localized(
+                english: "Unfollow \(friend.displayName)",
+                traditionalChinese: "取消追蹤 \(friend.displayName)"
+            ))
+            .accessibilityIdentifier("drawer.friends.unfollow.\(friend.id)")
         }
         .padding(11)
         .saveNotebookSurface(cornerRadius: 14, fill: .saveNotebookPage, opacity: 0.62, strokeOpacity: 0.34, lineWidth: 1)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.friends.following.\(friend.id)")
     }
 
