@@ -33,22 +33,13 @@ targets:
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
       - path: SAV-EShared
-      - path: SAV-E/Resources/Secrets.plist
-        optional: true
-        buildPhase: resources
-    preBuildScripts:
-      - name: Create Local Secrets.plist
-        script: |
-          set -euo pipefail
-          secrets="${SRCROOT}/SAV-E/Resources/Secrets.plist"
-          template="${SRCROOT}/SAV-E/Resources/Secrets.plist.template"
-          if [ ! -f "$secrets" ]; then
-            cp "$template" "$secrets"
-          fi
-        inputFiles:
-          - $(SRCROOT)/SAV-E/Resources/Secrets.plist.template
+    postBuildScripts:
+      - name: Package App Secrets.plist
+        script: '"${SRCROOT}/scripts/package-google-places-secrets.sh"'
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
         outputFiles:
-          - $(SRCROOT)/SAV-E/Resources/Secrets.plist
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Secrets.plist
     dependencies:
       - package: Privy
         product: Privy
@@ -203,6 +194,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.tests
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleDisplayName: SAVETests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SAVE.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SAVE"
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated

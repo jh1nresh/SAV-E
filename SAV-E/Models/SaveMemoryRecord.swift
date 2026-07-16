@@ -86,8 +86,8 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.rating = rating
         self.createdAt = createdAt
         self.googlePlaceId = googlePlaceId
-        self.sourceImageUrl = sourceImageUrl
-        self.businessPhotoUrls = businessPhotoUrls
+        self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
+        self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
     }
 
     nonisolated var displayTitle: String {
@@ -146,7 +146,11 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
-        sourceImageUrl = try container.decodeIfPresent(String.self, forKey: .sourceImageUrl)
-        businessPhotoUrls = try container.decodeIfPresent([String].self, forKey: .businessPhotoUrls)
+        sourceImageUrl = GooglePlacesPhotoURL.persistableString(
+            try container.decodeIfPresent(String.self, forKey: .sourceImageUrl)
+        )
+        businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(
+            try container.decodeIfPresent([String].self, forKey: .businessPhotoUrls)
+        )
     }
 }

@@ -59,28 +59,43 @@ final class CachedImageStore {
 
     private let memoryCache = NSCache<NSURL, UIImage>()
     private let session: URLSession
+    private let sensitiveSession: URLSession
 
     private init() {
         memoryCache.countLimit = 200
         // `URLCache.shared` is configured at app launch and handles the disk tier.
         session = URLSession(configuration: .default)
+        let sensitiveConfiguration = URLSessionConfiguration.ephemeral
+        sensitiveConfiguration.urlCache = nil
+        sensitiveConfiguration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        sensitiveSession = URLSession(configuration: sensitiveConfiguration)
     }
 
     func image(for url: URL) -> UIImage? {
-        memoryCache.object(forKey: url as NSURL)
+        let cacheURL = GooglePlacesPhotoURL.persistableURL(url)
+        return memoryCache.object(forKey: cacheURL as NSURL)
     }
 
     func loadImage(for url: URL) async throws -> UIImage {
-        if let cached = memoryCache.object(forKey: url as NSURL) {
+        let cacheURL = GooglePlacesPhotoURL.persistableURL(url)
+        if let cached = memoryCache.object(forKey: cacheURL as NSURL) {
             return cached
         }
 
-        let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)
-        let (data, _) = try await session.data(for: request)
+        let isGooglePlacesPhoto = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL)
+        guard let requestURL = GooglePlacesService.shared.authorizedPhotoURL(for: cacheURL) else {
+            throw URLError(.userAuthenticationRequired)
+        }
+        let request = URLRequest(
+            url: requestURL,
+            cachePolicy: isGooglePlacesPhoto ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
+        )
+        let requestSession = isGooglePlacesPhoto ? sensitiveSession : session
+        let (data, _) = try await requestSession.data(for: request)
         guard let image = UIImage(data: data) else {
             throw URLError(.cannotDecodeContentData)
         }
-        memoryCache.setObject(image, forKey: url as NSURL)
+        memoryCache.setObject(image, forKey: cacheURL as NSURL)
         return image
     }
 }

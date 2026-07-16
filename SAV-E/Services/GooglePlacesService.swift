@@ -317,13 +317,22 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     static let shared = GooglePlacesService()
 
     private let apiKey: String?
+    private let session: URLSession
 
-    init(apiKey: String? = nil) {
+    init(apiKey: String? = nil, session: URLSession? = nil) {
         self.apiKey = Self.normalizedAPIKey(
             apiKey
                 ?? ProcessInfo.processInfo.environment["GOOGLE_PLACES_API_KEY"]
                 ?? SAVEProductionConfig.keyFromPlist("GOOGLE_PLACES_API_KEY")
         )
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.urlCache = nil
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            self.session = URLSession(configuration: configuration)
+        }
     }
 
     private static func normalizedAPIKey(_ value: String?) -> String? {
@@ -357,7 +366,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.noResults
         }
 
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(from: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let results = json?["results"] as? [[String: Any]], !results.isEmpty else {
@@ -404,7 +413,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.noResults
         }
 
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, _) = try await session.data(from: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let result = json?["result"] as? [String: Any] else {
@@ -438,8 +447,80 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     // MARK: - Photo URL
 
     func photoURL(reference: String, maxWidth: Int = 400) -> URL? {
+        guard apiKey != nil else { return nil }
+        return GooglePlacesPhotoURL.persistableURL(reference: reference, maxWidth: maxWidth)
+    }
+
+    func authorizedPhotoURL(for persistedURL: URL) -> URL? {
+        guard GooglePlacesPhotoURL.isGooglePlacesPhotoURL(persistedURL) else { return persistedURL }
         guard let apiKey else { return nil }
-        return URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=\(maxWidth)&photo_reference=\(reference)&key=\(apiKey)")
+        return GooglePlacesPhotoURL.authorizedURL(persistedURL, apiKey: apiKey)
+    }
+}
+
+enum GooglePlacesPhotoURL {
+    nonisolated private static let host = "maps.googleapis.com"
+    nonisolated private static let path = "/maps/api/place/photo"
+
+    nonisolated static func persistableURL(reference: String, maxWidth: Int) -> URL? {
+        let normalizedReference = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedReference.isEmpty else { return nil }
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = path
+        components.queryItems = [
+            URLQueryItem(name: "maxwidth", value: String(max(1, maxWidth))),
+            URLQueryItem(name: "photo_reference", value: normalizedReference),
+        ]
+        return urlWithLiteralPlusesEncoded(from: components)
+    }
+
+    nonisolated static func persistableURL(_ url: URL) -> URL {
+        guard isGooglePlacesPhotoURL(url), var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        components.queryItems = components.queryItems?.filter { $0.name.lowercased() != "key" }
+        return urlWithLiteralPlusesEncoded(from: components) ?? url
+    }
+
+    nonisolated static func persistableString(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        guard let url = URL(string: normalized) else { return normalized }
+        return persistableURL(url).absoluteString
+    }
+
+    nonisolated static func persistableStrings(_ values: [String]?) -> [String]? {
+        guard let values else { return nil }
+        let sanitized = values.compactMap(persistableString)
+        return sanitized.isEmpty ? nil : sanitized
+    }
+
+    nonisolated static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https" &&
+            url.host?.lowercased() == host &&
+            url.path == path
+    }
+
+    nonisolated static func authorizedURL(_ persistedURL: URL, apiKey: String) -> URL? {
+        guard isGooglePlacesPhotoURL(persistedURL),
+              var components = URLComponents(url: persistableURL(persistedURL), resolvingAgainstBaseURL: false)
+        else { return persistedURL }
+
+        var queryItems = components.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "key", value: apiKey))
+        components.queryItems = queryItems
+        return urlWithLiteralPlusesEncoded(from: components)
+    }
+
+    nonisolated private static func urlWithLiteralPlusesEncoded(from components: URLComponents) -> URL? {
+        var encodedComponents = components
+        encodedComponents.percentEncodedQuery = encodedComponents.percentEncodedQuery?
+            .replacingOccurrences(of: "+", with: "%2B")
+        return encodedComponents.url
     }
 }
 

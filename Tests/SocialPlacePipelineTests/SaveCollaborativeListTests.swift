@@ -106,6 +106,46 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testGooglePhotoKeyIsAddedOnlyForTheTransientRequest() throws {
+        let service = GooglePlacesService(apiKey: "TEST_ONLY_NON_SECRET_VALUE")
+        let persistedURL = try XCTUnwrap(service.photoURL(reference: "photo/reference+value", maxWidth: 900))
+        let persistedItems = try XCTUnwrap(URLComponents(url: persistedURL, resolvingAgainstBaseURL: false)?.queryItems)
+
+        XCTAssertNil(persistedItems.first(where: { $0.name == "key" }))
+        XCTAssertEqual(persistedItems.first(where: { $0.name == "photo_reference" })?.value, "photo/reference+value")
+        XCTAssertTrue(persistedURL.absoluteString.contains("%2B"))
+        XCTAssertFalse(persistedURL.absoluteString.contains("photo_reference=photo/reference+value"))
+
+        let requestURL = try XCTUnwrap(service.authorizedPhotoURL(for: persistedURL))
+        let requestItems = try XCTUnwrap(URLComponents(url: requestURL, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(requestItems.first(where: { $0.name == "key" })?.value, "TEST_ONLY_NON_SECRET_VALUE")
+        XCTAssertEqual(GooglePlacesPhotoURL.persistableURL(requestURL), persistedURL)
+    }
+
+    @MainActor
+    func testPersistedMemoryAndSharedListsStripLegacyGooglePhotoKeys() throws {
+        let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
+        let record = SaveMemoryRecord(
+            state: .confirmedPlace,
+            title: "Legacy Cafe",
+            sourceImageUrl: legacyURL,
+            businessPhotoUrls: [legacyURL]
+        )
+        XCTAssertFalse(try XCTUnwrap(record.sourceImageUrl).contains("key="))
+        XCTAssertFalse(try XCTUnwrap(record.businessPhotoUrls?.first).contains("key="))
+
+        var legacyPlace = place(name: "Legacy Cafe", category: .cafe)
+        legacyPlace.sourceImageUrl = legacyURL
+        legacyPlace.businessPhotoUrls = [legacyURL]
+        var list = SaveCollaborativeList(title: "Safe list")
+        list.add(.from(place: legacyPlace))
+
+        let shareURL = try XCTUnwrap(list.shareURL())
+        let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
+        XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
+    }
+
+    @MainActor
     private func place(name: String, category: PlaceCategory) -> Place {
         Place(
             id: UUID(),

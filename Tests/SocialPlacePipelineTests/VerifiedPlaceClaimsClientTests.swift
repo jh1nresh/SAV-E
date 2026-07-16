@@ -517,6 +517,24 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaceRecoveryDecisionStripsGooglePhotoKeysFromFinalPlacePayload() throws {
+        let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
+        var finalPlace = Place.mock
+        finalPlace.sourceImageUrl = legacyURL
+        finalPlace.businessPhotoUrls = [legacyURL]
+        let decision = PlaceRecoveryDecisionDraft(
+            action: "confirm",
+            finalPlaceId: finalPlace.id,
+            finalPlace: finalPlace,
+            editedPayload: [:]
+        )
+
+        let payload = try XCTUnwrap(decision.body["final_place"] as? [String: Any])
+        XCTAssertFalse(try XCTUnwrap(payload["source_image_url"] as? String).contains("key="))
+        XCTAssertFalse(try XCTUnwrap((payload["business_photo_urls"] as? [String])?.first).contains("key="))
+    }
+
+    @MainActor
     func testTechnicalFailureDraftCarriesStructuredStageWithoutRawErrorText() {
         let result = PlaceRecoveryResultDraft(
             resultType: "technical_failure",
