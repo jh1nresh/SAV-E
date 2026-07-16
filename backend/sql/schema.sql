@@ -17,6 +17,17 @@ alter table profiles add column if not exists trusted_guide_count integer not nu
 alter table profiles add column if not exists ai_planning_credits integer not null default 0;
 alter table profiles add column if not exists profile_stamp_unlocked_at timestamptz;
 alter table profiles add column if not exists privy_user_id text;
+alter table profiles add column if not exists pet_preset text;
+alter table profiles add column if not exists pet_name text;
+alter table profiles add column if not exists pet_selected_at timestamptz;
+
+do $$
+begin
+    if not exists (select 1 from pg_constraint where conname = 'profiles_pet_preset_check') then
+        alter table profiles add constraint profiles_pet_preset_check
+            check (pet_preset is null or pet_preset in ('sprout', 'spark', 'cloud'));
+    end if;
+end $$;
 
 create unique index if not exists idx_profiles_handle on profiles(lower(handle)) where handle is not null;
 create unique index if not exists idx_profiles_referral_code on profiles(referral_code) where referral_code is not null;

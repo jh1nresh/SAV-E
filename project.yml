@@ -8,7 +8,9 @@ options:
 
 settings:
   base:
-    SWIFT_VERSION: "5.9"
+    SWIFT_VERSION: "6.0"
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
     TARGETED_DEVICE_FAMILY: "1,2"
     DEVELOPMENT_TEAM: JC6858UYM9
     CODE_SIGN_STYLE: Automatic
@@ -203,6 +205,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: SAVETests
         BUNDLE_LOADER: "$(TEST_HOST)"
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/SAVE.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SAVE"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 
   SAVEUITests:
     type: bundle.ui-testing
@@ -218,6 +221,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.uitests
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleDisplayName: SAVEUITests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
 schemes:
   SAV-E:
     build:
