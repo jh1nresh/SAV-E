@@ -91,6 +91,11 @@ struct SaveFollowedFriend: Codable, Identifiable, Hashable {
     }
 }
 
+struct SaveFollowedFriendsPage: Codable, Hashable {
+    let items: [SaveFollowedFriend]
+    let nextCursor: String?
+}
+
 enum SaveSocialLens: String, Codable, CaseIterable, Hashable {
     case forYou
     case friends

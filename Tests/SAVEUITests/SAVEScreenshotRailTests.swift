@@ -186,6 +186,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.following"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.sharedPlaces"].exists)
+        XCTAssertTrue(app.textFields["drawer.friends.search"].exists)
         XCTAssertTrue(app.textFields["drawer.friends.referral"].exists)
         XCTAssertTrue(app.buttons["drawer.friends.follow"].exists)
     }

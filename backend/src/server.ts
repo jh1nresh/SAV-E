@@ -80,7 +80,13 @@ import {
   normalizeVisibilityRequest,
   parseLens,
 } from "./socialContracts.js";
-import { listFollowedFriends } from "./followList.js";
+import {
+  FollowListInputError,
+  listFollowedFriends,
+  listFollowedFriendsPage,
+  normalizeFollowListOptions,
+  unfollowByRelationshipId,
+} from "./followList.js";
 import {
   WorkflowContractError,
   normalizePlaceRecoveryWorkOrderCreate,
@@ -950,7 +956,9 @@ createServer(async (request, response) => {
     if (resource === "places") return await handlePlaces(request, response, id, userId);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
-    if (resource === "follows") return await handleFollows(request, response, userId);
+    if (resource === "follows") {
+      return await handleFollows(request, response, id, url, userId, isV0);
+    }
     if (isV0 && resource === "shared-place-links") return await handleSharedPlaceLinks(request, response, id, userId);
     if (isV0 && resource === "workflows") return await handleWorkflows(request, response, segments.slice(1), userId);
     if (resource === "social" && id === "signals") return await handleSocialSignals(request, response, url, userId);
@@ -2294,11 +2302,35 @@ async function handleProfile(
 async function handleFollows(
   request: IncomingMessage,
   response: ServerResponse,
+  followId: string | undefined,
+  url: URL,
   userId: string,
+  isVersioned: boolean,
 ): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Vary", "Authorization");
+
   if (request.method === "GET") {
-    response.setHeader("Cache-Control", "private, no-store");
-    response.setHeader("Vary", "Authorization");
+    if (followId) return sendJson(response, { error: "Not found" }, 404);
+    if (isVersioned) {
+      try {
+        const page = await listFollowedFriendsPage(
+          userId,
+          normalizeFollowListOptions({
+            search: url.searchParams.get("q"),
+            limit: url.searchParams.get("limit"),
+            cursor: url.searchParams.get("cursor"),
+          }),
+          (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+        );
+        return sendJson(response, page);
+      } catch (error) {
+        if (error instanceof FollowListInputError) {
+          return sendJson(response, { error: error.message }, 400);
+        }
+        throw error;
+      }
+    }
     const friends = await listFollowedFriends(
       userId,
       (sql, values) => pool.query(sql, [...values] as QueryValue[]),
@@ -2306,7 +2338,28 @@ async function handleFollows(
     return sendJson(response, friends);
   }
 
-  if (request.method !== "POST") return sendJson(response, { error: "Unsupported follows route" }, 405);
+  if (request.method === "DELETE") {
+    if (!isVersioned || !followId) {
+      return sendJson(response, { error: "Follow id is required" }, 400);
+    }
+    try {
+      await unfollowByRelationshipId(
+        userId,
+        followId,
+        (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+      );
+    } catch (error) {
+      if (error instanceof FollowListInputError) {
+        return sendJson(response, { error: error.message }, 400);
+      }
+      throw error;
+    }
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method !== "POST" || followId) {
+    return sendJson(response, { error: "Unsupported follows route" }, 405);
+  }
 
   const followRequest = normalizeFollowRequest(await readJson(request));
   const target = await resolveFollowTarget(followRequest);
