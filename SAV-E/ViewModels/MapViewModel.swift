@@ -396,6 +396,7 @@ final class MapViewModel: ObservableObject {
     private let saveSearchController: SaveSearchController
     private let saveSearchIntentParser: SaveSearchIntentParser
     private let collaborativeListStore: SaveCollaborativeListStore
+    private let referralHandoffStore: SaveReferralHandoffStore
     private var importedPendingKeys: Set<String> = []
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
@@ -413,7 +414,8 @@ final class MapViewModel: ObservableObject {
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         saveSearchController: SaveSearchController = SaveSearchController(),
         saveSearchIntentParser: SaveSearchIntentParser = SaveSearchIntentParser(),
-        collaborativeListStore: SaveCollaborativeListStore = .shared
+        collaborativeListStore: SaveCollaborativeListStore = .shared,
+        referralHandoffStore: SaveReferralHandoffStore = .shared
     ) {
         self.supabaseService = supabaseService
         self.authService = PrivyAuthService.shared
@@ -427,6 +429,7 @@ final class MapViewModel: ObservableObject {
         self.saveSearchController = saveSearchController
         self.saveSearchIntentParser = saveSearchIntentParser
         self.collaborativeListStore = collaborativeListStore
+        self.referralHandoffStore = referralHandoffStore
         self.collaborativeLists = collaborativeListStore.load()
     }
 
@@ -1317,7 +1320,7 @@ final class MapViewModel: ObservableObject {
     }
 
     private func completeReferralHandoffIfNeeded() async {
-        guard let handoff = SaveReferralHandoffStore.shared.load(),
+        guard let handoff = referralHandoffStore.load(),
               authService.currentUserId != nil
         else { return }
 
@@ -1327,7 +1330,7 @@ final class MapViewModel: ObservableObject {
                 lens: handoff.lens,
                 source: .appClipHandoff
             )
-            SaveReferralHandoffStore.shared.clear()
+            referralHandoffStore.clear()
             socialLens = handoff.lens
         } catch {
             print("MapViewModel: failed to complete referral follow: \(error)")

@@ -1,5 +1,11 @@
 import SwiftUI
 
+private struct DeferredAccountScopedLink: Equatable {
+    let id: UUID
+    let url: URL
+    var ownerGeneration: Int?
+}
+
 @main
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
@@ -13,6 +19,9 @@ struct SaveApp: App {
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
+    @State private var verifiedAccountGeneration: Int?
+    @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
+    @State private var accountScopedURLProcessingID: UUID?
     @State private var minimumOpeningAnimationCompleted = false
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
@@ -22,6 +31,7 @@ struct SaveApp: App {
     private let supabaseService = SupabaseService.shared
     private let pendingImportService = PendingPlaceImportService.shared
     private let minimumOpeningAnimationDuration: UInt64 = 1_800_000_000
+    private let accountScopedURLMaxBytes = 8 * 1024
 
     init() {
         // Generous shared image/network cache so place photos load once then
@@ -65,6 +75,9 @@ struct SaveApp: App {
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 guard let url = activity.webpageURL else { return }
                 handleIncomingURL(url)
+            }
+            .onChange(of: authService.sessionGeneration) { _, generation in
+                handleAccountGenerationChange(generation)
             }
             .alert(linkAlertTitle, isPresented: Binding(
                 get: { openedTrip != nil || openedList != nil || openedReferral != nil },
@@ -134,7 +147,12 @@ struct SaveApp: App {
                 SignInView(onFirstClueCaptured: captureOnboardingFirstClue)
                     .environmentObject(authService)
             case .authenticated:
-                ContentView(incomingPlaceReceipt: $incomingPlaceReceipt)
+                AuthenticatedRootView(
+                    sessionGeneration: authService.sessionGeneration,
+                    sessionOrigin: authService.sessionOrigin,
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    onVerificationChanged: updateVerifiedAccount
+                )
                     .environmentObject(authService)
             }
         }
@@ -171,8 +189,15 @@ struct SaveApp: App {
             return
         }
 #endif
-        if let target = SaveReferralLink.target(from: url) {
-            Task { await handleReferralTarget(target) }
+        if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
+            guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
+            deferredAccountScopedLink = DeferredAccountScopedLink(
+                id: UUID(),
+                url: url,
+                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+            )
+            accountScopedURLProcessingID = nil
+            processDeferredAccountURLIfVerified()
             return
         }
 
@@ -198,12 +223,71 @@ struct SaveApp: App {
             return
         }
 
-        guard SaveSharedListPayload.isListLink(url) else {
+    }
+
+    @MainActor
+    private func updateVerifiedAccount(sourceGeneration: Int, verifiedGeneration: Int?) {
+        guard sourceGeneration == authService.sessionGeneration else { return }
+        verifiedAccountGeneration = verifiedGeneration
+        if verifiedGeneration != nil {
+            processDeferredAccountURLIfVerified()
+        }
+    }
+
+    private var isCurrentAccountVerified: Bool {
+        guard case .authenticated = authService.authState else { return false }
+        return verifiedAccountGeneration == authService.sessionGeneration
+    }
+
+    @MainActor
+    private func handleAccountGenerationChange(_ generation: Int) {
+        verifiedAccountGeneration = nil
+        accountScopedURLProcessingID = nil
+        if let ownerGeneration = deferredAccountScopedLink?.ownerGeneration,
+           ownerGeneration != generation {
+            deferredAccountScopedLink = nil
+        }
+        openedList = nil
+        openedReferral = nil
+    }
+
+    @MainActor
+    private func processDeferredAccountURLIfVerified() {
+        guard isCurrentAccountVerified,
+              accountScopedURLProcessingID == nil,
+              var link = deferredAccountScopedLink else { return }
+
+        let generation = authService.sessionGeneration
+        guard link.ownerGeneration == nil || link.ownerGeneration == generation else {
+            deferredAccountScopedLink = nil
+            return
+        }
+        if link.ownerGeneration == nil {
+            link.ownerGeneration = generation
+            deferredAccountScopedLink = link
+        }
+
+        if let target = SaveReferralLink.target(from: link.url) {
+            let processingID = UUID()
+            let linkID = link.id
+            accountScopedURLProcessingID = processingID
+            Task {
+                await completeDeferredReferral(
+                    target,
+                    linkID: linkID,
+                    processingID: processingID,
+                    generation: generation
+                )
+            }
             return
         }
 
+        guard SaveSharedListPayload.isListLink(link.url) else {
+            deferredAccountScopedLink = nil
+            return
+        }
         do {
-            openedList = try SaveCollaborativeListStore.shared.join(from: url)
+            openedList = try activeCollaborativeListStore.join(from: link.url)
         } catch {
             openedList = SaveCollaborativeList(
                 title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
@@ -211,6 +295,49 @@ struct SaveApp: App {
                 viewerRole: .viewer
             )
         }
+        if deferredAccountScopedLink?.id == link.id {
+            deferredAccountScopedLink = nil
+        }
+    }
+
+    @MainActor
+    private func completeDeferredReferral(
+        _ target: SaveReferralTarget,
+        linkID: UUID,
+        processingID: UUID,
+        generation: Int
+    ) async {
+        let profile: SaveReferralProfile
+        do {
+            profile = try await supabaseService.fetchReferralProfile(target: target)
+        } catch {
+            profile = target.previewProfile
+        }
+
+        guard accountScopedURLProcessingID == processingID else { return }
+        accountScopedURLProcessingID = nil
+        guard let link = deferredAccountScopedLink,
+              link.id == linkID,
+              link.ownerGeneration == generation,
+              isCurrentAccountVerified,
+              authService.sessionGeneration == generation,
+              SaveReferralLink.target(from: link.url) != nil else {
+            if deferredAccountScopedLink?.id == linkID {
+                deferredAccountScopedLink = nil
+            }
+            return
+        }
+        activeReferralHandoffStore.save(profile)
+        openedReferral = profile
+        deferredAccountScopedLink = nil
+    }
+
+    private var activeCollaborativeListStore: SaveCollaborativeListStore {
+        authService.isReviewerDemo ? ReviewDemoStorage.collaborativeListStore : .shared
+    }
+
+    private var activeReferralHandoffStore: SaveReferralHandoffStore {
+        authService.isReviewerDemo ? ReviewDemoStorage.referralHandoffStore : .shared
     }
 
     private func restorePendingFriendShare() {
@@ -220,18 +347,6 @@ struct SaveApp: App {
               isPlaceLink(url)
         else { return }
         handleIncomingURL(url)
-    }
-
-    @MainActor
-    private func handleReferralTarget(_ target: SaveReferralTarget) async {
-        let profile: SaveReferralProfile
-        do {
-            profile = try await supabaseService.fetchReferralProfile(target: target)
-        } catch {
-            profile = target.previewProfile
-        }
-        SaveReferralHandoffStore.shared.save(profile)
-        openedReferral = profile
     }
 
     private var linkAlertTitle: String {
@@ -285,6 +400,350 @@ struct SaveApp: App {
               ["sav-e-app.vercel.app"].contains(url.host ?? "") else { return false }
         return url.path.hasPrefix("/trip/")
             || (url.path == "/trip" && URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "d" } == true)
+    }
+}
+
+// MARK: - Verified Account Root
+
+@MainActor
+private struct AuthenticatedRootView: View {
+    @EnvironmentObject private var authService: PrivyAuthService
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @StateObject private var accountGate = AccountSessionGate()
+
+    let sessionGeneration: Int
+    let sessionOrigin: AccountSessionOrigin
+    @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
+
+    private var taskID: AccountGateTaskID {
+        AccountGateTaskID(generation: sessionGeneration, origin: sessionOrigin)
+    }
+
+    var body: some View {
+        Group {
+            switch accountGate.state {
+            case .verified(let verifiedGeneration) where verifiedGeneration == sessionGeneration:
+                ContentView(
+                    incomingPlaceReceipt: $incomingPlaceReceipt,
+                    storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
+                )
+            case .idle, .verifying, .verified:
+                AuthLoadingView()
+            case .accountNeedsConfirmation(let kind):
+                accountConfirmationView(kind)
+            case .recoveryNeeded(let reason):
+                recoveryView(reason)
+            case .reauthenticationRequired:
+                reauthenticationView
+            case .unavailable:
+                unavailableView
+            }
+        }
+        .task(id: taskID) {
+            await verifyAccount()
+        }
+        .onChange(of: accountGate.state) { _, state in
+            if case .verified(let generation) = state, generation == sessionGeneration {
+                onVerificationChanged(sessionGeneration, generation)
+            } else {
+                onVerificationChanged(sessionGeneration, nil)
+            }
+        }
+        .onDisappear {
+            onVerificationChanged(sessionGeneration, nil)
+        }
+    }
+
+    private func accountConfirmationView(_ kind: AccountConfirmationKind) -> some View {
+        AccountAccessView(
+            icon: "person.crop.circle.badge.plus",
+            title: confirmationTitle(kind),
+            message: confirmationMessage(kind),
+            primaryTitle: confirmationPrimaryTitle(kind),
+            primaryAccessibilityID: "accountGate.startNew",
+            primaryAction: {
+                await accountGate.confirmPendingAccount(sessionGeneration: sessionGeneration)
+            },
+            secondaryTitle: languageSettings.localized(
+                english: "Use a different sign-in",
+                traditionalChinese: "改用其他登入帳號"
+            ),
+            secondaryAccessibilityID: "accountGate.switchGoogle",
+            secondaryAction: signOutForGoogleChoice
+        )
+    }
+
+    private func recoveryView(_ reason: AccountRecoveryReason) -> some View {
+        AccountAccessView(
+            icon: "person.crop.circle.badge.exclamationmark",
+            title: recoveryTitle(reason),
+            message: recoveryMessage(reason),
+            primaryTitle: languageSettings.localized(
+                english: "Use a different sign-in",
+                traditionalChinese: "改用其他登入帳號"
+            ),
+            primaryAccessibilityID: "accountGate.switchGoogle",
+            primaryAction: signOutForGoogleChoice,
+            secondaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
+            secondaryAccessibilityID: "accountGate.retry",
+            secondaryAction: verifyAccount
+        )
+    }
+
+    private var reauthenticationView: some View {
+        AccountAccessView(
+            icon: "key.horizontal.fill",
+            title: languageSettings.localized(
+                english: "Verify your SAV-E account",
+                traditionalChinese: "重新驗證 SAV-E 帳號"
+            ),
+            message: languageSettings.localized(
+                english: "Your saved data is unchanged. Sign in again with the exact method and account you used for SAV-E.",
+                traditionalChinese: "你的已存資料沒有被刪除。請用原本的登入方式與同一個帳號重新登入 SAV-E。"
+            ),
+            primaryTitle: languageSettings.localized(
+                english: "Continue to sign-in",
+                traditionalChinese: "前往重新登入"
+            ),
+            primaryAccessibilityID: "accountGate.reauthenticate",
+            primaryAction: signOutForGoogleChoice,
+            secondaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
+            secondaryAccessibilityID: "accountGate.retry",
+            secondaryAction: verifyAccount
+        )
+    }
+
+    private var unavailableView: some View {
+        AccountAccessView(
+            icon: "wifi.exclamationmark",
+            title: languageSettings.localized(
+                english: "Couldn’t verify your account",
+                traditionalChinese: "目前無法確認你的帳號"
+            ),
+            message: languageSettings.localized(
+                english: "SAV-E kept the map locked so data from two accounts cannot mix. Check your connection and try again.",
+                traditionalChinese: "SAV-E 已先鎖住地圖，避免兩個帳號的資料混在一起。請檢查網路後再試一次。"
+            ),
+            primaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
+            primaryAccessibilityID: "accountGate.retry",
+            primaryAction: verifyAccount,
+            secondaryTitle: languageSettings.localized(
+                english: "Use a different sign-in",
+                traditionalChinese: "改用其他登入帳號"
+            ),
+            secondaryAccessibilityID: "accountGate.switchGoogle",
+            secondaryAction: signOutForGoogleChoice
+        )
+    }
+
+    private func verifyAccount() async {
+        await accountGate.verify(
+            sessionGeneration: sessionGeneration,
+            sessionOrigin: sessionOrigin,
+            reviewerDemo: authService.isReviewerDemo
+        )
+    }
+
+    private func signOutForGoogleChoice() async {
+        accountGate.invalidate()
+        await authService.signOut()
+    }
+
+    private func recoveryTitle(_ reason: AccountRecoveryReason) -> String {
+        switch reason {
+        case .emptyRestoredAccount, .differentAccount:
+            return languageSettings.localized(
+                english: "This isn’t your saved SAV-E account",
+                traditionalChinese: "這不是你原本有資料的 SAV-E 帳號"
+            )
+        case .unconfirmedRestoredAccount:
+            return languageSettings.localized(
+                english: "Confirm your original account",
+                traditionalChinese: "確認你的原本帳號"
+            )
+        case .splitProfileBinding, .conflictingProfileBinding, .missingConfirmedProfile:
+            return languageSettings.localized(
+                english: "Your account needs recovery",
+                traditionalChinese: "你的帳號需要恢復確認"
+            )
+        }
+    }
+
+    private func recoveryMessage(_ reason: AccountRecoveryReason) -> String {
+        switch reason {
+        case .emptyRestoredAccount:
+            return languageSettings.localized(
+                english: "This login has no Map Stamps or Review items. Your original data has not been deleted. Sign out and use the exact method and account you used before.",
+                traditionalChinese: "這個登入沒有地圖章或 Review 紀錄。你的原始資料沒有被刪除；請登出並用之前的登入方式與同一個帳號重新登入。"
+            )
+        case .differentAccount:
+            return languageSettings.localized(
+                english: "SAV-E stopped before opening a different account, so saved and local data cannot mix. Use your original sign-in and account.",
+                traditionalChinese: "SAV-E 已在打開不同帳號前停止，避免已存與本機資料混在一起。請使用原本的登入方式與帳號。"
+            )
+        case .unconfirmedRestoredAccount:
+            return languageSettings.localized(
+                english: "Before this update can attach the map stored on this phone, sign out and use the exact method and account you used before. You’ll confirm it once after sign-in.",
+                traditionalChinese: "這次更新在連結手機上的舊地圖前，會先請你登出並用之前的登入方式與同一個帳號重新登入；登入後只需確認一次。"
+            )
+        case .splitProfileBinding, .conflictingProfileBinding:
+            return languageSettings.localized(
+                english: "SAV-E found conflicting account records and did not choose one. Your data is unchanged; verify the original sign-in and account before continuing.",
+                traditionalChinese: "SAV-E 發現互相衝突的帳號紀錄，因此沒有擅自選擇。你的資料未被更動；請先驗證原本的登入方式與帳號。"
+            )
+        case .missingConfirmedProfile:
+            return languageSettings.localized(
+                english: "The previously confirmed account record is unavailable. SAV-E stopped before loading or syncing any data.",
+                traditionalChinese: "先前已確認的帳號紀錄目前不存在。SAV-E 已在載入或同步任何資料前停止。"
+            )
+        }
+    }
+
+    private func confirmationTitle(_ kind: AccountConfirmationKind) -> String {
+        switch kind {
+        case .newAccount:
+            return languageSettings.localized(
+                english: "Start a new SAV-E account?",
+                traditionalChinese: "要建立新的 SAV-E 帳號嗎？"
+            )
+        case .existingAccount:
+            return languageSettings.localized(
+                english: "Is this your original SAV-E account?",
+                traditionalChinese: "這是你原本的 SAV-E 帳號嗎？"
+            )
+        case .emptyAccount:
+            return languageSettings.localized(
+                english: "Use this empty SAV-E account?",
+                traditionalChinese: "要使用這個空白 SAV-E 帳號嗎？"
+            )
+        }
+    }
+
+    private func confirmationMessage(_ kind: AccountConfirmationKind) -> String {
+        switch kind {
+        case .newAccount:
+            return languageSettings.localized(
+                english: "This sign-in has no SAV-E profile yet. Continue only if this is the account you want to bind to this phone’s map.",
+                traditionalChinese: "這個登入帳號尚未有 SAV-E 資料。只有在你確定要把這支手機的地圖連結到此帳號時才繼續。"
+            )
+        case .existingAccount(let stamps, let reviewItems):
+            return languageSettings.localized(
+                english: "SAV-E found \(stamps) Map Stamps and \(reviewItems) Review items. Confirm once before this phone’s local map is attached.",
+                traditionalChinese: "SAV-E 找到 \(stamps) 個地圖章與 \(reviewItems) 筆 Review。請先確認一次，才會連結這支手機上的本機地圖。"
+            )
+        case .emptyAccount:
+            return languageSettings.localized(
+                english: "This existing profile has 0 Map Stamps and 0 Review items. Continue only if you intentionally want this account on this phone.",
+                traditionalChinese: "這個既有帳號目前有 0 個地圖章與 0 筆 Review。只有在你確定要在這支手機使用此帳號時才繼續。"
+            )
+        }
+    }
+
+    private func confirmationPrimaryTitle(_ kind: AccountConfirmationKind) -> String {
+        switch kind {
+        case .newAccount:
+            return languageSettings.localized(english: "Start with this account", traditionalChinese: "用這個帳號開始")
+        case .existingAccount:
+            return languageSettings.localized(english: "Confirm original account", traditionalChinese: "確認原本帳號")
+        case .emptyAccount:
+            return languageSettings.localized(english: "Use this empty account", traditionalChinese: "使用這個空白帳號")
+        }
+    }
+}
+
+private struct AccountGateTaskID: Hashable {
+    let generation: Int
+    let origin: AccountSessionOrigin
+}
+
+private struct AccountAccessView: View {
+    let icon: String
+    let title: String
+    let message: String
+    let primaryTitle: String
+    let primaryAccessibilityID: String
+    let primaryAction: () async -> Void
+    let secondaryTitle: String?
+    let secondaryAccessibilityID: String?
+    let secondaryAction: (() async -> Void)?
+
+    @State private var isWorking = false
+
+    var body: some View {
+        ZStack {
+            SaveDottedBackground()
+                .ignoresSafeArea()
+
+            VStack(spacing: 22) {
+                Image(systemName: icon)
+                    .font(.system(size: 42, weight: .bold))
+                    .foregroundColor(.saveInk)
+                    .frame(width: 82, height: 82)
+                    .background(Color.saveHoney.opacity(0.58))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.4))
+
+                VStack(spacing: 10) {
+                    Text(title)
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.saveInk)
+                        .multilineTextAlignment(.center)
+                    Text(message)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.saveMutedText)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                }
+
+                VStack(spacing: 12) {
+                    Button(primaryTitle) {
+                        run(primaryAction)
+                    }
+                    .font(.headline)
+                    .foregroundColor(.saveNotebookPage)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Color.saveInk)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .accessibilityIdentifier(primaryAccessibilityID)
+
+                    if let secondaryTitle, let secondaryAction {
+                        Button(secondaryTitle) {
+                            run(secondaryAction)
+                        }
+                        .font(.headline)
+                        .foregroundColor(.saveInk)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color.saveNotebookPage)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityIdentifier(secondaryAccessibilityID ?? "")
+                    }
+                }
+                .disabled(isWorking)
+
+                if isWorking {
+                    ProgressView()
+                        .tint(.saveInk)
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 430)
+        }
+    }
+
+    private func run(_ action: @escaping () async -> Void) {
+        guard !isWorking else { return }
+        isWorking = true
+        Task {
+            await action()
+            isWorking = false
+        }
     }
 }
 
@@ -543,6 +1002,7 @@ struct SignInView: View {
                         googleSignInButton
                         emailSignInSection
                     }
+                    .disabled(isLoading)
                     .padding(.horizontal, 22)
                     .padding(.bottom, isCompactHeight ? 16 : 28)
                 }
@@ -598,8 +1058,9 @@ struct SignInView: View {
 
     private var appleSignInButton: some View {
         SignInWithAppleButton {
+            guard !isLoading else { return }
+            isLoading = true
             Task {
-                isLoading = true
                 defer { isLoading = false }
                 do { try await authService.signInWithApple() }
                 catch { presentAuthError(error) }
@@ -612,8 +1073,9 @@ struct SignInView: View {
 
     private var googleSignInButton: some View {
         Button(action: {
+            guard !isLoading else { return }
+            isLoading = true
             Task {
-                isLoading = true
                 defer { isLoading = false }
                 do { try await authService.signInWithGoogle() }
                 catch { presentAuthError(error) }
@@ -698,8 +1160,9 @@ struct SignInView: View {
                     fieldAccessibilityID: "signin.emailField",
                     buttonAccessibilityID: "signin.sendCode"
                 ) {
+                    guard !isLoading else { return }
+                    isLoading = true
                     Task {
-                        isLoading = true
                         defer { isLoading = false }
                         do {
                             email = trimmedEmail
@@ -720,8 +1183,9 @@ struct SignInView: View {
                     fieldAccessibilityID: "signin.codeField",
                     buttonAccessibilityID: "signin.verify"
                 ) {
+                    guard !isLoading else { return }
+                    isLoading = true
                     Task {
-                        isLoading = true
                         defer { isLoading = false }
                         do { try await authService.verifyEmailCode(verificationCode) }
                         catch { presentAuthError(error) }

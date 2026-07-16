@@ -6,9 +6,14 @@ struct SaveMemoryDebugView: View {
     @State private var errorMessage: String?
     @State private var editor: PreferenceEditorTarget?
     private let service: SupabaseServiceProtocol
+    private let localVaultService: SaveLocalVaultService
 
-    init(service: SupabaseServiceProtocol = SupabaseService.shared) {
+    init(
+        service: SupabaseServiceProtocol = SupabaseService.shared,
+        localVaultService: SaveLocalVaultService = .shared
+    ) {
         self.service = service
+        self.localVaultService = localVaultService
     }
 
     var body: some View {
@@ -136,7 +141,7 @@ struct SaveMemoryDebugView: View {
     @MainActor
     private func loadMemory() async {
         do {
-            records = try SaveLocalVaultService.shared.recentRecords(limit: 50)
+            records = try localVaultService.recentRecords(limit: 50)
             preferences = try await service.fetchMemoryPreferences()
             errorMessage = nil
         } catch {

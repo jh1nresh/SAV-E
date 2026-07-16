@@ -562,9 +562,11 @@ final class PendingPlaceImportService {
     private static let onboardingFirstClueSourceURL = "save://onboarding/first-clue"
 
     private let fileManager: FileManager
+    private let overrideContainerURL: URL?
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, overrideContainerURL: URL? = nil) {
         self.fileManager = fileManager
+        self.overrideContainerURL = overrideContainerURL
     }
 
     func consumePendingPlaces() -> [PendingSharedPlace] {
@@ -691,6 +693,9 @@ final class PendingPlaceImportService {
     }
 
     private func pendingFileURL(named fileName: String) -> URL? {
+        if let overrideContainerURL {
+            return overrideContainerURL.appendingPathComponent(fileName)
+        }
         guard let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) else {
             return nil
         }

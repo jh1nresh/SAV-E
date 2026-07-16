@@ -29,6 +29,7 @@ struct ProfileView: View {
                 VStack(spacing: SaveTheme.Spacing.lg) {
                     PassportTopBar(
                         waitingClues: waitingClues,
+                        allowsEditing: !PrivyAuthService.shared.isReviewerDemo,
                         onClose: { dismiss() },
                         onEdit: {
                             SaveHaptics.tap()
@@ -87,7 +88,11 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.language")
 
                         NavigationLink {
-                            SaveMemoryDebugView()
+                            SaveMemoryDebugView(
+                                localVaultService: PrivyAuthService.shared.isReviewerDemo
+                                    ? ReviewDemoStorage.localVaultService
+                                    : .shared
+                            )
                         } label: {
                             SettingsRow(
                                 icon: "brain.head.profile",
@@ -331,6 +336,7 @@ private struct EditProfileSheet: View {
 private struct PassportTopBar: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let waitingClues: Int
+    let allowsEditing: Bool
     let onClose: () -> Void
     let onEdit: () -> Void
 
@@ -349,20 +355,22 @@ private struct PassportTopBar: View {
 
             Spacer()
 
-            Button(action: onEdit) {
-                HStack(spacing: SaveTheme.Spacing.xs) {
-                    Image(systemName: "pencil")
-                        .font(.caption.weight(.bold))
-                    Text(languageSettings.text(.edit))
-                        .font(.caption.weight(.bold))
+            if allowsEditing {
+                Button(action: onEdit) {
+                    HStack(spacing: SaveTheme.Spacing.xs) {
+                        Image(systemName: "pencil")
+                            .font(.caption.weight(.bold))
+                        Text(languageSettings.text(.edit))
+                            .font(.caption.weight(.bold))
+                    }
+                        .foregroundColor(.saveInk)
+                        .padding(.horizontal, SaveTheme.Spacing.md)
+                        .frame(height: 38)
+                        .saveNotebookSurface(cornerRadius: 14, fill: .saveHoney, opacity: 0.42, lineWidth: 1.4)
                 }
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, SaveTheme.Spacing.md)
-                    .frame(height: 38)
-                    .saveNotebookSurface(cornerRadius: 14, fill: .saveHoney, opacity: 0.42, lineWidth: 1.4)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.edit")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("profile.edit")
         }
         .padding(SaveTheme.Spacing.sm)
         .saveNotebookSurface(cornerRadius: 22)

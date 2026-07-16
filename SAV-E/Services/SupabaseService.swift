@@ -76,7 +76,7 @@ enum SupabaseError: LocalizedError {
 
 // MARK: - Implementation
 
-final class SupabaseService: SupabaseServiceProtocol {
+final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
     static let shared = SupabaseService()
 
     private let apiBaseURL: String?
@@ -508,6 +508,23 @@ final class SupabaseService: SupabaseServiceProtocol {
     }
 
     // MARK: - Profile
+
+    func fetchAccountStatus() async throws -> AccountStatusResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(path: "/v0/account-status")
+        return try JSONDecoder.supabase.decode(AccountStatusResponse.self, from: data)
+    }
+
+    func confirmAccount(expectedAccountRef: String) async throws -> AccountStatusResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["account_ref": expectedAccountRef])
+        let data = try await request(
+            path: "/v0/account-status/confirm",
+            method: "POST",
+            body: body
+        )
+        return try JSONDecoder.supabase.decode(AccountStatusResponse.self, from: data)
+    }
 
     func fetchProfile(for userId: String) async throws -> UserProfile? {
         guard isConfigured else { return .mock }

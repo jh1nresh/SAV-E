@@ -1,7 +1,22 @@
 import SwiftUI
 
+enum ContentStorageScope {
+    case production
+    case reviewerDemo
+
+    @MainActor
+    func makeMapViewModel() -> MapViewModel {
+        switch self {
+        case .production:
+            return MapViewModel()
+        case .reviewerDemo:
+            return ReviewDemoStorage.makeMapViewModel()
+        }
+    }
+}
+
 struct ContentView: View {
-    @StateObject private var mapVM = MapViewModel()
+    @StateObject private var mapVM: MapViewModel
     @StateObject private var drawerVM = AIDrawerViewModel()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -13,7 +28,11 @@ struct ContentView: View {
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
 
-    init(incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil)) {
+    init(
+        incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        storageScope: ContentStorageScope = .production
+    ) {
+        _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _incomingPlaceReceipt = incomingPlaceReceipt
         _drawerDetent = State(initialValue: incomingPlaceReceipt.wrappedValue == nil ? .height(88) : .large)
         _shouldAutoFocusUserLocationOnLaunch = State(initialValue: incomingPlaceReceipt.wrappedValue == nil)
