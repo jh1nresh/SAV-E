@@ -1334,8 +1334,12 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.rating { payload["rating"] = value }
         if let value = finalPlace.note { payload["note"] = value }
         if let value = finalPlace.sourceUrl { payload["source_url"] = value }
-        if let value = finalPlace.sourceImageUrl { payload["source_image_url"] = value }
-        if let value = finalPlace.businessPhotoUrls { payload["business_photo_urls"] = value }
+        if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
+            payload["source_image_url"] = value
+        }
+        if let value = GooglePlacesPhotoURL.persistableStrings(finalPlace.businessPhotoUrls) {
+            payload["business_photo_urls"] = value
+        }
         if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
         if let value = finalPlace.priceRange { payload["price_range"] = value }
         if let value = finalPlace.recommender { payload["recommender"] = value }
@@ -1444,8 +1448,8 @@ private struct PlaceRow: Codable {
             note: note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
-            sourceImageUrl: source_image_url,
-            businessPhotoUrls: business_photo_urls,
+            sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
+            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
             extractedDishes: extracted_dishes,
             priceRange: price_range,
             recommender: recommender,
@@ -1473,8 +1477,8 @@ private struct PlaceRow: Codable {
             note: place.note,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
-            source_image_url: place.sourceImageUrl,
-            business_photo_urls: place.businessPhotoUrls,
+            source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
             price_range: place.priceRange,
             recommender: place.recommender,

@@ -127,8 +127,8 @@ final class SaveLocalVaultService: Sendable {
             rating: place.rating ?? place.googleRating,
             createdAt: place.createdAt,
             googlePlaceId: place.googlePlaceId,
-            sourceImageUrl: place.sourceImageUrl,
-            businessPhotoUrls: place.businessPhotoUrls
+            sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls)
         )
         try withLock {
             try withCoordinatedVaultWrite { url in
@@ -385,8 +385,8 @@ private extension SaveMemoryRecord {
             note: sourceText,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
-            sourceImageUrl: sourceImageUrl,
-            businessPhotoUrls: businessPhotoUrls,
+            sourceImageUrl: GooglePlacesPhotoURL.persistableString(sourceImageUrl),
+            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls),
             extractedDishes: recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
             recommender: sourceHandle,

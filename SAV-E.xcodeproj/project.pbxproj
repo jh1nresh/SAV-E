@@ -106,7 +106,6 @@
 		CAC07FED23417B9E3A51D005 /* SaveLocationIntentRecommendationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D404A68838FF556ADEBC2D7 /* SaveLocationIntentRecommendationServiceTests.swift */; };
 		CBA17520CBB278E88B318ED7 /* Trip.swift in Sources */ = {isa = PBXBuildFile; fileRef = F50ABA09CC51700F3AB8F9A9 /* Trip.swift */; };
 		CCA908BE75D42562E30A5CE9 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */; };
-		CCB166D7D20D87D5509F8FC4 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = 242AE991A2AD504072657488 /* Secrets.plist */; };
 		CDC6527B4176C047D3886751 /* ClipContentPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4B4B95EA0D05BDD2E6D294 /* ClipContentPreview.swift */; };
 		D6A7E1A1FA84E376E5DED98D /* SaveGuideCustomizationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83B1A866047516CB0F0279B4 /* SaveGuideCustomizationController.swift */; };
 		D9B91E68C4E171646EF1DCD7 /* Privy in Frameworks */ = {isa = PBXBuildFile; productRef = 4C303CB6E0BFF6EF181C1848 /* Privy */; };
@@ -203,7 +202,6 @@
 		20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		20C3E36D76FC12C5F397674A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaatAnalysisCache.swift; sourceTree = "<group>"; };
-		242AE991A2AD504072657488 /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRouteCodecTests.swift; sourceTree = "<group>"; };
 		2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEScreenshotRailTests.swift; sourceTree = "<group>"; };
 		2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchIntentEvalTests.swift; sourceTree = "<group>"; };
@@ -363,7 +361,6 @@
 			children = (
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
-				242AE991A2AD504072657488 /* Secrets.plist */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -753,12 +750,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 70CA07F0843BD50BE64AFAFE /* Build configuration list for PBXNativeTarget "SAVE" */;
 			buildPhases = (
-				E111CB68DA23BD58839901EB /* Create Local Secrets.plist */,
 				F8008762F67CEBD35CE262B8 /* Sources */,
 				6DD38CF456169763BD57F8B1 /* Resources */,
 				6DFB59A5DACC6C13A2CE7794 /* Frameworks */,
 				38E3923233750DB0215AE4B2 /* Embed Foundation Extensions */,
 				3D8AE07A69D4E51CB90C125D /* Embed App Clips */,
+				1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */,
 			);
 			buildRules = (
 			);
@@ -900,32 +897,32 @@
 			files = (
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
-				CCB166D7D20D87D5509F8FC4 /* Secrets.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		E111CB68DA23BD58839901EB /* Create Local Secrets.plist */ = {
+		1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/SAV-E/Resources/Secrets.plist.template",
 			);
-			name = "Create Local Secrets.plist";
+			name = "Package App Secrets.plist";
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(SRCROOT)/SAV-E/Resources/Secrets.plist",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Secrets.plist",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nsecrets=\"${SRCROOT}/SAV-E/Resources/Secrets.plist\"\ntemplate=\"${SRCROOT}/SAV-E/Resources/Secrets.plist.template\"\nif [ ! -f \"$secrets\" ]; then\n  cp \"$template\" \"$secrets\"\nfi\n";
+			shellScript = "\"${SRCROOT}/scripts/package-google-places-secrets.sh\"";
+			showEnvVarsInLog = 0;
 		};
 		E39A5DBBB7CA3D59DD3A6759 /* Create Local Secrets.plist */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1522,8 +1519,8 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
