@@ -10,7 +10,12 @@ struct SavePetSelectionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.xl) {
                 VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                    MemoMascotMark(size: 86)
+                    SavePetAvatar(
+                        preset: selectedPreset,
+                        stage: .hatchling,
+                        size: 96
+                    )
+                    .animation(SaveTheme.Motion.standardSpring, value: selectedPreset)
                     Text(languageSettings.localized(
                         english: "Choose your SAV-E companion",
                         traditionalChinese: "選一隻 SAV-E 夥伴"
@@ -130,16 +135,12 @@ private struct SavePetPresetRow: View {
 
     var body: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            ZStack(alignment: .bottomTrailing) {
-                MemoMascotMark(size: 58)
-                Image(systemName: preset.systemImage)
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 26, height: 26)
-                    .background(accentColor)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
-            }
+            SavePetAvatar(
+                preset: preset,
+                stage: .hatchling,
+                size: 64,
+                animates: isSelected
+            )
 
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                 Text(title)

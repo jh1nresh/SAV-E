@@ -13,16 +13,11 @@ struct SavePetCompanionCard: View {
 
                 VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
                     HStack(spacing: SaveTheme.Spacing.md) {
-                        ZStack(alignment: .bottomTrailing) {
-                            MemoMascotMark(size: 66)
-                            Image(systemName: preset.systemImage)
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(.saveInk)
-                                .frame(width: 26, height: 26)
-                                .background(accentColor(for: preset))
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
-                        }
+                        SavePetAvatar(
+                            preset: preset,
+                            stage: profile.petStage,
+                            size: 82
+                        )
 
                         VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                             Text(languageSettings.localized(
@@ -35,21 +30,24 @@ struct SavePetCompanionCard: View {
                             Text(profile.petName ?? presetTitle(preset))
                                 .font(.title3.weight(.bold))
                                 .foregroundColor(.saveInk)
+                                .lineLimit(1)
 
-                            Label(stageTitle(profile.petStage), systemImage: "arrow.up.right.circle.fill")
-                                .font(SaveTheme.Typography.supporting)
-                                .foregroundColor(.saveMutedText)
+                            HStack(spacing: SaveTheme.Spacing.sm) {
+                                Label(stageTitle(profile.petStage), systemImage: "arrow.up.right.circle.fill")
+                                    .font(SaveTheme.Typography.supporting)
+                                    .foregroundColor(.saveMutedText)
+                                    .lineLimit(1)
+
+                                Text("\(profile.petXP) XP")
+                                    .font(SaveTheme.Typography.stamp)
+                                    .foregroundColor(.saveInk)
+                                    .padding(.horizontal, SaveTheme.Spacing.sm)
+                                    .frame(height: 28)
+                                    .background(Color.saveHoney.opacity(0.58))
+                                    .clipShape(Capsule())
+                            }
                         }
-
-                        Spacer(minLength: 0)
-
-                        Text("\(profile.petXP) XP")
-                            .font(SaveTheme.Typography.stamp)
-                            .foregroundColor(.saveInk)
-                            .padding(.horizontal, SaveTheme.Spacing.sm)
-                            .frame(height: 28)
-                            .background(Color.saveHoney.opacity(0.58))
-                            .clipShape(Capsule())
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     ProgressView(value: profile.petStage.progress(xp: profile.petXP))

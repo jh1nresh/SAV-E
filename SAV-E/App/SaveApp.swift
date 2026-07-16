@@ -18,6 +18,7 @@ struct SaveApp: App {
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
+    private let petStageGalleryActive = ProcessInfo.processInfo.arguments.contains("--uitest-pet-stage-gallery")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -101,7 +102,9 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if smokeHarnessActive {
+        if petStageGalleryActive {
+            SavePetStageGalleryView()
+        } else if smokeHarnessActive {
             SaveSmokeHarnessView()
         } else {
             standardRootContent
