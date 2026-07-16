@@ -4,6 +4,7 @@ import SwiftUI
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()
+    @StateObject private var petCompanionStore = SavePetCompanionStore()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
@@ -134,9 +135,30 @@ struct SaveApp: App {
                 SignInView(onFirstClueCaptured: captureOnboardingFirstClue)
                     .environmentObject(authService)
             case .authenticated:
-                ContentView(incomingPlaceReceipt: $incomingPlaceReceipt)
-                    .environmentObject(authService)
+                authenticatedRootContent
             }
+        }
+    }
+
+    @ViewBuilder
+    private var authenticatedRootContent: some View {
+        if let userID = authService.currentUserId {
+            Group {
+                switch petCompanionStore.phase(for: userID) {
+                case .idle, .loading:
+                    AuthLoadingView()
+                case .needsSelection:
+                    SavePetSelectionView(store: petCompanionStore)
+                case .ready, .unavailable:
+                    ContentView(incomingPlaceReceipt: $incomingPlaceReceipt)
+                        .environmentObject(authService)
+                }
+            }
+            .task(id: userID) {
+                await petCompanionStore.load(userID: userID)
+            }
+        } else {
+            AuthLoadingView()
         }
     }
 

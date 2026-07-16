@@ -95,6 +95,11 @@ import {
   safeOpaqueRefs,
 } from "./workflowLifecycle.js";
 import {
+  PetCompanionValidationError,
+  normalizePetSelectionPatch,
+  petXPForVerifiedReceipts,
+} from "./petCompanion.js";
+import {
   buildRecommendationAnalysisReceiptDraft,
   envelopeForRecommendationAnalysisReceipt,
   normalizeRecommendationAnalysisReceiptPayload,
@@ -417,7 +422,15 @@ const tripStopFields = [
   "note",
 ] as const;
 
-const profileFields = ["display_name", "avatar_url", "handle", "referral_code"] as const;
+const profileFields = [
+  "display_name",
+  "avatar_url",
+  "handle",
+  "referral_code",
+  "pet_preset",
+  "pet_name",
+  "pet_selected_at",
+] as const;
 
 const captureFields = [
   "id",
@@ -2211,16 +2224,36 @@ async function handleProfile(
         p.*,
         (select count(*)::int from places where user_id = p.id) as saved_count,
         (select count(*)::int from places where user_id = p.id and status = 'visited') as visited_count,
-        (select count(distinct city)::int from trips where user_id = p.id and city <> '') as cities_count
+        (select count(distinct city)::int from trips where user_id = p.id and city <> '') as cities_count,
+        (select count(*)::int
+           from workflow_receipts wr
+           join workflow_runs r on r.id = wr.run_id
+          where r.user_id = p.id
+            and r.workflow_id = $2
+            and wr.receipt_type = 'analysis'
+            and wr.is_current = true
+            and wr.verdict = 'pass'
+            and p.pet_selected_at is not null
+            and wr.created_at >= p.pet_selected_at) as verified_pet_receipt_count
       from profiles p
       where p.id = $1`,
-      [userId],
+      [userId, placeRecoveryWorkflowId],
     );
     return sendJson(response, formatProfile(rows[0]));
   }
 
   if (request.method === "PATCH") {
-    const body = pickFields(await readJson(request), profileFields);
+    const rawBody = await readJson(request);
+    const body = pickFields(rawBody, ["display_name", "avatar_url", "handle", "referral_code"] as const);
+    try {
+      const petSelection = normalizePetSelectionPatch(rawBody);
+      if (petSelection) Object.assign(body, petSelection);
+    } catch (error) {
+      if (error instanceof PetCompanionValidationError) {
+        return sendJson(response, { error: error.message }, 400);
+      }
+      throw error;
+    }
     const update = buildUpdate("profiles", body, profileFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
@@ -5080,7 +5113,11 @@ function formatTrip(row: JsonBody): JsonBody {
 }
 
 function formatProfile(row: JsonBody): JsonBody {
-  return formatDates(row);
+  const { verified_pet_receipt_count: verifiedReceiptCount, ...profile } = row;
+  return formatDates({
+    ...profile,
+    pet_xp: petXPForVerifiedReceipts(verifiedReceiptCount),
+  });
 }
 
 function formatCapture(row: JsonBody): JsonBody {
