@@ -145,6 +145,26 @@ test("fetchLinkCaption parses XHS metadata description and image", async () => {
   assert.equal(result.imageURL, "https://example.com/xhs.jpg");
 });
 
+test("fetchLinkCaption keeps mainland merchant title when description is a generic app shell", async () => {
+  const meituan = await fetchLinkCaption(
+    "https://i.waimai.meituan.com/restaurant/123456789",
+    async () => `
+      <meta property="og:title" content="喜茶（国贸商城店）- 美团外卖" />
+      <meta property="og:description" content="美团外卖，送啥都快" />
+    `,
+  );
+  const taobaoInstantCommerce = await fetchLinkCaption(
+    "https://h5.ele.me/shop/#id=987654321",
+    async () => `
+      <meta property="og:title" content="奈雪的茶（上海静安嘉里中心店）- 淘宝闪购" />
+      <meta property="og:description" content="淘宝闪购，即时配送到家" />
+    `,
+  );
+
+  assert.match(meituan.caption, /喜茶（国贸商城店）/);
+  assert.match(taobaoInstantCommerce.caption, /奈雪的茶（上海静安嘉里中心店）/);
+});
+
 test("extractVenueFromCaption returns venue for an English Aquarela caption", async () => {
   const caption = "Best sunset dinner in Cabo — go to Aquarela in San Jose del Cabo.";
   const gemini = fakeGemini({

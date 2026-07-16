@@ -246,6 +246,10 @@ final class SaveLocalVaultService: Sendable {
         if url.host()?.lowercased().contains("instagram") == true { return "Instagram link" }
         if url.host()?.lowercased().matchesDomain("xiaohongshu.com") == true || url.host()?.lowercased().matchesDomain("xhslink.com") == true { return "Xiaohongshu link" }
         if url.host()?.lowercased().matchesDomain("douyin.com") == true || url.host()?.lowercased().matchesDomain("iesdouyin.com") == true { return "Douyin link" }
+        if url.host()?.lowercased().matchesDomain("dianping.com") == true || url.host()?.lowercased().matchesDomain("dpurl.cn") == true { return "Dianping link" }
+        if url.host()?.lowercased().matchesDomain("meituan.com") == true { return "Meituan link" }
+        if url.host()?.lowercased().matchesDomain("ele.me") == true { return "Taobao Instant Commerce link" }
+        if SocialShareTextNormalizer.isGenericTaobaoProductURL(url.absoluteString) { return "Taobao product link" }
         return url.host() ?? url.absoluteString
     }
 

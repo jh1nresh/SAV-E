@@ -220,6 +220,42 @@ test("runSourceSearchRecovery uses injected fetcher and returns candidates", asy
   assert.ok(output.receipt.missing.includes("Verified coordinates"));
 });
 
+test("source recovery classifies mainland place platforms without treating Taobao products as place links", async () => {
+  const emptyFetcher = async () => "";
+  const noMedia = async () => [];
+  const meituan = await runSourceSearchRecovery(
+    { sourceUrl: "https://i.waimai.meituan.com/restaurant/123456789", maxQueries: 0 },
+    emptyFetcher,
+    noMedia,
+  );
+  const taobaoInstantCommerce = await runSourceSearchRecovery(
+    { sourceUrl: "https://h5.ele.me/shop/#id=987654321", maxQueries: 0 },
+    emptyFetcher,
+    noMedia,
+  );
+  const taobaoProduct = await runSourceSearchRecovery(
+    { sourceUrl: "https://m.tb.cn/h.exampleProduct", maxQueries: 0 },
+    emptyFetcher,
+    noMedia,
+  );
+  const meituanLookalike = await runSourceSearchRecovery(
+    { sourceUrl: "https://meituan.com.evil.example/restaurant/123456789", maxQueries: 0 },
+    emptyFetcher,
+    noMedia,
+  );
+  const elemeLookalike = await runSourceSearchRecovery(
+    { sourceUrl: "https://ele.me.evil.example/shop/#id=987654321", maxQueries: 0 },
+    emptyFetcher,
+    noMedia,
+  );
+
+  assert.equal(meituan.receipt.input, "social_url");
+  assert.equal(taobaoInstantCommerce.receipt.input, "social_url");
+  assert.equal(taobaoProduct.receipt.input, "web_url");
+  assert.equal(meituanLookalike.receipt.input, "web_url");
+  assert.equal(elemeLookalike.receipt.input, "web_url");
+});
+
 test("runSourceSearchRecovery creates review candidate from explicit source metadata address", async () => {
   const output = await runSourceSearchRecovery(
     {

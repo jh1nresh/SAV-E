@@ -308,7 +308,7 @@ function buildSourceRecoveryReceipt(
 
   const sourceURL = input.sourceUrl?.trim();
   const parsedURL = sourceURL ? safeURL(sourceURL) : undefined;
-  const inputKind = parsedURL?.host.match(/\b(instagram|tiktok|xiaohongshu|xhslink)\b/i)
+  const inputKind = parsedURL && isPlacePlatformURL(parsedURL)
     ? "social_url"
     : parsedURL
       ? "web_url"
@@ -364,6 +364,22 @@ function buildSourceRecoveryReceipt(
         : "diagnostic_only",
     nextBestClue: nextBestClue(candidates),
   };
+}
+
+function isPlacePlatformURL(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return [
+    "instagram.com",
+    "tiktok.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "douyin.com",
+    "iesdouyin.com",
+    "dianping.com",
+    "dpurl.cn",
+    "meituan.com",
+    "ele.me",
+  ].some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
 function nextBestClue(candidates: SourceSearchCandidate[]): string {
