@@ -1,0 +1,10 @@
+{
+  "rawShareText": "便携咖啡杯（商品，不是门店） https://m.tb.cn/h.exampleProduct 复制这段内容，打开淘宝App查看",
+  "expected": {
+    "primaryURLString": "https://m.tb.cn/h.exampleProduct",
+    "platform": "generic",
+    "creatorName": null,
+    "captionContains": ["便携咖啡杯", "不是门店"],
+    "captionExcludes": ["复制这段内容", "打开淘宝App"]
+  }
+}

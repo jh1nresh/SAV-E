@@ -489,7 +489,10 @@ struct SaveSearchController {
         if host.matchesDomain("xiaohongshu.com") || host.matchesDomain("xhslink.com") { return .xiaohongshu }
         if host.matchesDomain("douyin.com") || host.matchesDomain("iesdouyin.com") { return .douyin }
         if host.matchesDomain("dianping.com") || host.matchesDomain("dpurl.cn") { return .dianping }
+        if host.matchesDomain("meituan.com") { return .meituan }
+        if host.matchesDomain("ele.me") { return .taobaoInstantCommerce }
         if host.matchesDomain("amap.com") { return .amap }
+        if host.matchesDomain("map.baidu.com") { return .baidu }
         if host.matchesDomain("maps.apple.com") { return .appleMaps }
         if host.matchesDomain("google.com") || host.matchesDomain("goo.gl") || host.matchesDomain("maps.app.goo.gl") {
             return .googleMaps
@@ -750,6 +753,10 @@ private struct SaveSearchQuery {
         if containsAny(value, keywords: ["xiaohongshu", "xhs", "小紅書", "小红书"]) { result.insert(.xiaohongshu) }
         if containsAny(value, keywords: ["douyin", "抖音"]) { result.insert(.douyin) }
         if containsAny(value, keywords: ["dianping", "大众点评", "大眾點評", "点评", "點評"]) { result.insert(.dianping) }
+        if containsAny(value, keywords: ["meituan", "美团", "美團", "美团外卖", "美團外賣"]) { result.insert(.meituan) }
+        if containsAny(value, keywords: ["taobao instant commerce", "淘宝闪购", "淘寶閃購", "饿了么", "餓了麼", "ele.me", "eleme"]) {
+            result.insert(.taobaoInstantCommerce)
+        }
         if containsAny(value, keywords: ["google maps", "googlemaps", "maps", "地圖", "地图"]) { result.insert(.googleMaps) }
         if containsAny(value, keywords: ["amap", "gaode", "高德", "高德地圖", "高德地图"]) { result.insert(.amap) }
         return result

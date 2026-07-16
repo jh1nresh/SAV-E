@@ -57,7 +57,7 @@ export async function fetchLinkCaption(
 ): Promise<LinkCaption> {
   const html = await fetchText(url);
   const metadata = sourceMetadataFromHTML(html, url);
-  const rawCaption = captionTextFromMetadata(metadata.description, metadata.title);
+  const rawCaption = captionTextFromMetadata(metadata.description, metadata.title, url);
   const caption = decodeHTML(rawCaption).replace(/\s+/g, " ").trim().slice(0, maxCaptionChars);
   return {
     caption,
@@ -66,9 +66,28 @@ export async function fetchLinkCaption(
   };
 }
 
-function captionTextFromMetadata(description?: string, title?: string): string {
+function captionTextFromMetadata(description?: string, title?: string, sourceURL?: string): string {
+  if (title && isMainlandMerchantURL(sourceURL)) {
+    return [title, description]
+      .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index)
+      .join("\n");
+  }
   if (description && !isGenericSocialDescription(description)) return description;
   return title ?? description ?? "";
+}
+
+function isMainlandMerchantURL(value?: string): boolean {
+  if (!value) return false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return hostMatchesDomain(host, "meituan.com") || hostMatchesDomain(host, "ele.me");
+  } catch {
+    return false;
+  }
+}
+
+function hostMatchesDomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
 }
 
 function isGenericSocialDescription(value: string): boolean {

@@ -117,6 +117,8 @@ enum SocialSharePlatform: String, Codable {
     case douyin
     case xiaohongshu
     case dianping
+    case meituan
+    case taobaoInstantCommerce = "taobao_instant_commerce"
     case tiktok
     case instagram
     case googleMaps
@@ -194,6 +196,8 @@ enum SocialShareTextNormalizer {
         if isHost(host, domain: "douyin.com") || isHost(host, domain: "iesdouyin.com") { return .douyin }
         if isHost(host, domain: "xiaohongshu.com") || isHost(host, domain: "xhslink.com") { return .xiaohongshu }
         if isHost(host, domain: "dianping.com") || isHost(host, domain: "dpurl.cn") { return .dianping }
+        if isHost(host, domain: "meituan.com") { return .meituan }
+        if isHost(host, domain: "ele.me") { return .taobaoInstantCommerce }
         if isHost(host, domain: "tiktok.com") { return .tiktok }
         if isHost(host, domain: "instagram.com") { return .instagram }
         if isHost(host, domain: "amap.com") || isHost(host, domain: "map.baidu.com") { return .chinaMaps }
@@ -201,6 +205,13 @@ enum SocialShareTextNormalizer {
         if isHost(host, domain: "google.com") && path.contains("/maps") { return .googleMaps }
         if isHost(host, domain: "maps.apple.com") { return .appleMaps }
         return .generic
+    }
+
+    static func isGenericTaobaoProductURL(_ urlString: String) -> Bool {
+        guard let url = URL(string: urlString), let host = url.host?.lowercased() else { return false }
+        return isHost(host, domain: "tb.cn") ||
+            isHost(host, domain: "taobao.com") ||
+            isHost(host, domain: "tmall.com")
     }
 
     // MARK: - Private
@@ -228,6 +239,12 @@ enum SocialShareTextNormalizer {
         #"打开【?小红书】?\s*App查看精彩内容[！!]?"#,
         #"打開【?小紅書】?\s*App查看精彩內容[！!]?"#,
         #"(?:\d+\s+)?发现了?一篇[^\n]{0,20}笔记[^\n]{0,20}(?:快来看吧)?[！!]?"#,
+        #"复制(?:这|此)(?:条|條)信息[^\n]*"#,
+        #"複製(?:這|此)(?:條|条)訊息[^\n]*"#,
+        #"打开(?:美团|美團)(?:外卖|外賣)?\s*App[^\n]*"#,
+        #"打開(?:美团|美團)(?:外卖|外賣)?\s*App[^\n]*"#,
+        #"打开(?:淘宝闪购|淘寶閃購|饿了么|餓了麼)\s*App[^\n]*"#,
+        #"打開(?:淘宝闪购|淘寶閃購|饿了么|餓了麼)\s*App[^\n]*"#,
         #"复制这段内容[^\n]*"#,
         // English app share boilerplate.
         #"(?i)check out [^\n]{0,60}(?:'s)? (?:video|post) on tiktok[.!]?"#
@@ -246,7 +263,7 @@ enum SocialShareTextNormalizer {
         switch platform {
         case .chinaMaps, .googleMaps, .appleMaps:
             return 0
-        case .dianping:
+        case .dianping, .meituan, .taobaoInstantCommerce:
             return 1
         case .douyin:
             return 2
@@ -933,6 +950,7 @@ struct SocialPlaceParser {
 
         let isDouyinAggregateList = looksLikeDouyinAggregateFoodList(text: text, sourceURL: evidence.sourceURL)
         var candidates: [SocialPlaceCandidateDraft] = []
+        candidates.append(contentsOf: mainlandMerchantCandidates(from: evidence, fullText: text))
         candidates.append(contentsOf: douyinFoodListCandidates(from: text, sourceURL: evidence.sourceURL))
         if !isDouyinAggregateList || !candidates.isEmpty {
             candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
@@ -1032,6 +1050,115 @@ struct SocialPlaceParser {
     }
 
     // MARK: - Candidate builders
+
+    private func mainlandMerchantCandidates(
+        from evidence: SocialPlaceSourceEvidence,
+        fullText: String
+    ) -> [SocialPlaceCandidateDraft] {
+        let sourceURL = evidence.resolvedURL ?? evidence.sourceURL
+        let platform = SocialShareTextNormalizer.platform(forURLString: sourceURL)
+        guard platform == .meituan || platform == .taobaoInstantCommerce else { return [] }
+
+        let structuredTitles = [evidence.metadataTitle, evidence.sharedTitle].compactMap { $0 }
+        let labeledTitles = fullText
+            .components(separatedBy: .newlines)
+            .map(SocialPlaceEvidenceScorer.cleanText)
+            .filter { mainlandMerchantTitleLine($0, platform: platform) }
+        let titleCandidates = uniqueStrings(structuredTitles + labeledTitles)
+
+        guard let title = titleCandidates.first(where: { rawTitle in
+            let name = cleanMainlandMerchantName(rawTitle, platform: platform)
+            return isLikelyMainlandMerchantName(name)
+        }) else { return [] }
+
+        let name = cleanMainlandMerchantName(title, platform: platform)
+        let location = firstLocationClue(in: fullText)
+        let platformLabel = platform == .meituan ? "Meituan" : "Taobao Instant Commerce"
+        let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+
+        return [draft(
+            name: name,
+            category: category(from: "\(name)\n\(fullText)"),
+            sourceURL: sourceURL,
+            fullText: fullText,
+            locationClues: location.map { [$0] } ?? [],
+            atoms: [
+                SocialEvidenceAtom(
+                    source: .metadataTitle,
+                    role: .venueName,
+                    value: name,
+                    line: "\(platformLabel) merchant title: \(title)",
+                    confidence: 0.72
+                )
+            ],
+            confidence: location == nil ? 0.56 : 0.66,
+            tier: tier,
+            extraMissingInfo: ["\(platformLabel) merchant metadata; confirm the exact map listing"]
+        )]
+    }
+
+    private func mainlandMerchantTitleLine(_ line: String, platform: SocialSharePlatform) -> Bool {
+        guard !line.isEmpty else { return false }
+        if line.range(
+            of: #"(?i)^\s*(?:Title|og:title|Merchant|Business|店名|店铺|店鋪|商家)\s*[:：]"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        switch platform {
+        case .meituan:
+            return line.range(of: #"(?:美团|美團)(?:外卖|外賣|闪购|閃購)?\s*$"#, options: .regularExpression) != nil
+        case .taobaoInstantCommerce:
+            return line.range(
+                of: #"(?:淘宝闪购|淘寶閃購|饿了么|餓了麼|Taobao Instant Commerce|Ele\.me)\s*$"#,
+                options: [.regularExpression, .caseInsensitive]
+            ) != nil
+        default:
+            return false
+        }
+    }
+
+    private func cleanMainlandMerchantName(_ value: String, platform: SocialSharePlatform) -> String {
+        var cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(value)
+            .replacingOccurrences(
+                of: #"(?i)^\s*(?:Title|og:title|Merchant|Business|店名|店铺|店鋪|商家)\s*[:：]\s*"#,
+                with: "",
+                options: .regularExpression
+            )
+
+        let suffixPattern: String
+        switch platform {
+        case .meituan:
+            suffixPattern = #"\s*[-–—_|｜·]\s*(?:美团|美團)(?:外卖|外賣|闪购|閃購)?.*$"#
+        case .taobaoInstantCommerce:
+            suffixPattern = #"(?i)\s*[-–—_|｜·]\s*(?:淘宝闪购|淘寶閃購|饿了么|餓了麼|Taobao Instant Commerce|Ele\.me).*$"#
+        default:
+            return ""
+        }
+
+        cleaned = cleaned
+            .replacingOccurrences(of: suffixPattern, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r,，.。:：;；|｜-–—_"))
+        return cleaned
+    }
+
+    private func isLikelyMainlandMerchantName(_ value: String) -> Bool {
+        guard SocialPlaceEvidenceScorer.isUsableCandidateName(value),
+              !SocialPlaceEvidenceScorer.isRejectedTitle(value),
+              !SocialPlaceEvidenceScorer.looksLikeMarketingLine(value),
+              !SocialPlaceEvidenceScorer.looksLikeAddressLine(value),
+              !SocialPlaceEvidenceScorer.looksLikeMenuOrPriceLine(value),
+              !SocialPlaceEvidenceScorer.looksLikeOperatingHoursLine(value) else {
+            return false
+        }
+        let genericNames: Set<String> = [
+            "美团", "美團", "美团外卖", "美團外賣", "美团闪购", "美團閃購", "外卖", "外賣",
+            "淘宝闪购", "淘寶閃購", "饿了么", "餓了麼", "Taobao Instant Commerce", "Ele.me",
+            "首页", "首頁", "附近商家", "美食", "立即下单", "立即下單"
+        ]
+        return !genericNames.contains(value)
+    }
 
     private func douyinFoodListCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
         let segments = douyinListSegments(from: text, sourceURL: sourceURL)

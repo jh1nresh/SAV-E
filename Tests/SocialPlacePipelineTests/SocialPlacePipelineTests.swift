@@ -1335,6 +1335,95 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testMeituanMerchantMetadataCreatesReviewCandidateWithoutFakeCoordinates() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            Title: 喜茶（国贸商城店）- 美团外卖
+            Description: 人气饮品门店
+            📍北京市朝阳区建国门外大街1号国贸商城B1层
+            """,
+            sourceURL: "https://i.waimai.meituan.com/restaurant/123456789"
+        ).first)
+
+        XCTAssertEqual(candidate.candidateName, "喜茶（国贸商城店）")
+        XCTAssertEqual(candidate.address, "北京市朝阳区建国门外大街1号国贸商城B1层")
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertNil(candidate.latitude)
+        XCTAssertNil(candidate.longitude)
+        XCTAssertTrue(candidate.missingInfo.contains("Confirm coordinates"))
+    }
+
+    @MainActor
+    func testTaobaoInstantCommerceMetadataCreatesReviewCandidateWithoutFakeCoordinates() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            Title: 奈雪的茶（上海静安嘉里中心店）- 淘宝闪购
+            Description: 门店配送页面
+            📍上海市静安区南京西路1515号静安嘉里中心B1层
+            """,
+            sourceURL: "https://h5.ele.me/shop/#id=987654321"
+        ).first)
+
+        XCTAssertEqual(candidate.candidateName, "奈雪的茶（上海静安嘉里中心店）")
+        XCTAssertEqual(candidate.address, "上海市静安区南京西路1515号静安嘉里中心B1层")
+        XCTAssertFalse(candidate.isSourceOnly)
+        XCTAssertNil(candidate.latitude)
+        XCTAssertNil(candidate.longitude)
+        XCTAssertTrue(candidate.missingInfo.contains("Confirm coordinates"))
+    }
+
+    @MainActor
+    func testMainlandMerchantURLWithoutMerchantEvidenceStaysSourceOnly() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+
+        let meituan = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "",
+            sourceURL: "https://i.waimai.meituan.com/restaurant/opaque-id"
+        ).first)
+        let taobaoInstantCommerce = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "淘宝闪购",
+            sourceURL: "https://h5.ele.me/shop/#id=opaque-id"
+        ).first)
+
+        XCTAssertEqual(meituan.candidateName, "Meituan link")
+        XCTAssertTrue(meituan.isSourceOnly)
+        XCTAssertEqual(taobaoInstantCommerce.candidateName, "Taobao Instant Commerce link")
+        XCTAssertTrue(taobaoInstantCommerce.isSourceOnly)
+    }
+
+    @MainActor
+    func testMainlandMerchantSourcePlatformsDoNotMisclassifyGenericTaobaoProductLinks() {
+        XCTAssertEqual(
+            SourcePlatform.from(urlString: "https://i.waimai.meituan.com/restaurant/123456789"),
+            .meituan
+        )
+        XCTAssertEqual(
+            SourcePlatform.from(urlString: "https://h5.ele.me/shop/#id=987654321"),
+            .taobaoInstantCommerce
+        )
+        XCTAssertEqual(
+            SourcePlatform.from(urlString: "https://m.tb.cn/h.exampleProduct"),
+            .other
+        )
+        XCTAssertEqual(
+            SourcePlatform.from(urlString: "https://map.baidu.com/poi/example"),
+            .baidu
+        )
+        XCTAssertEqual(
+            SourcePlatform.from(urlString: "https://meituan.com.evil.example/restaurant/123456789"),
+            .other
+        )
+        XCTAssertEqual(
+            SocialShareTextNormalizer.platform(forURLString: "https://ele.me.evil.example/shop/#id=987654321"),
+            .generic
+        )
+    }
+
+    @MainActor
     func testInstagramReelPublicMetadataExtractsVenueInsteadOfSourceOnly() async throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidates(
@@ -3154,6 +3243,31 @@ final class SocialPlacePipelineTests: XCTestCase {
     @MainActor
     func testXiaohongshuShareBoilerplateNormalizesToSourceBundle() throws {
         try assertShareTextFixtureNormalizes("xhs-share-boilerplate.json")
+    }
+
+    @MainActor
+    func testMeituanMerchantShareTextNormalizesToSourceBundle() throws {
+        try assertShareTextFixtureNormalizes("meituan-merchant-share.json")
+    }
+
+    @MainActor
+    func testTaobaoInstantCommerceShareTextNormalizesToSourceBundle() throws {
+        try assertShareTextFixtureNormalizes("taobao-instant-commerce-share.json")
+    }
+
+    @MainActor
+    func testGenericTaobaoProductShareDoesNotBecomeMainlandMerchantSource() throws {
+        try assertShareTextFixtureNormalizes("taobao-product-not-place.json")
+
+        let fixture = try loadShareTextFixture("taobao-product-not-place.json")
+        let bundle = SocialShareTextNormalizer.normalize(fixture.rawShareText)
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let candidate = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: bundle.captionEvidence,
+            sourceURL: try XCTUnwrap(bundle.primaryURLString)
+        ).first)
+
+        XCTAssertTrue(candidate.isSourceOnly)
     }
 
     @MainActor

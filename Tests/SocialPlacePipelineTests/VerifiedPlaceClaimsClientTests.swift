@@ -406,6 +406,41 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
     }
 
     @MainActor
+    func testSourceSearchRecoveryDecodesSourceResolutionContract() throws {
+        let json = """
+        {
+          "created_candidates": [],
+          "source_resolution": {
+            "original_url": "http://xhslink.com/m/66nsbd6V2We",
+            "resolved_url": "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
+            "redirect_chain": [
+              "http://xhslink.com/m/66nsbd6V2We",
+              "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00"
+            ],
+            "canonical_content_id": "6a20eacb000000000f03ac00",
+            "status": "resolved",
+            "title": "先斗町しゃぶしゃぶすき焼き きらく",
+            "caption": "京都府京都市中京区先斗町通四条上る柏屋町169-2",
+            "thumbnail_url": "https://example.com/kiraku.jpg"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let result = try SupabaseService.decodeSourceSearchRecoveryResponse(json)
+
+        XCTAssertTrue(result.createdCandidates.isEmpty)
+        XCTAssertEqual(result.sourceResolution?.status, .resolved)
+        XCTAssertEqual(result.sourceResolution?.originalURL, "http://xhslink.com/m/66nsbd6V2We")
+        XCTAssertEqual(
+            result.sourceResolution?.resolvedURL,
+            "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00"
+        )
+        XCTAssertEqual(result.sourceResolution?.canonicalContentID, "6a20eacb000000000f03ac00")
+        XCTAssertEqual(result.sourceResolution?.redirectChain.count, 2)
+        XCTAssertEqual(result.sourceResolution?.thumbnailURL, "https://example.com/kiraku.jpg")
+    }
+
+    @MainActor
     func testPlaceRecoveryWorkOrderDecodesAgentClearingFields() throws {
         let workOrderId = UUID()
         let json = """

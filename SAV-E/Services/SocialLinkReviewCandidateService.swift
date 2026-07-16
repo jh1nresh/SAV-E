@@ -2171,7 +2171,11 @@ final class SocialLinkReviewCandidateService {
 
     private func sourceOnlyCandidate(evidenceText: String, sourceURL: String) -> PendingReviewCandidate {
         let diagnostic = sourceOnlyDiagnostic(evidenceText: evidenceText, sourceURL: sourceURL)
-        if xiaohongshuLinkContext(sourceURL: sourceURL)?.isShortLink != true,
+        let sourcePlatform = SocialShareTextNormalizer.platform(forURLString: sourceURL)
+        if sourcePlatform != .meituan,
+           sourcePlatform != .taobaoInstantCommerce,
+           !SocialShareTextNormalizer.isGenericTaobaoProductURL(sourceURL),
+           xiaohongshuLinkContext(sourceURL: sourceURL)?.isShortLink != true,
            let candidateName = unresolvedPlaceCandidateName(from: diagnostic.suggestedSearchQueries ?? []),
            candidateName != socialPostDescriptor(in: URL(string: sourceURL))?.id {
             let upgradedDiagnostic = unresolvedPlaceDiagnostic(from: diagnostic, candidateName: candidateName)
@@ -3073,6 +3077,9 @@ final class SocialLinkReviewCandidateService {
         if host.matchesSocialDomain("xiaohongshu.com") || host.matchesSocialDomain("xhslink.com") { return "Xiaohongshu link" }
         if host.matchesSocialDomain("douyin.com") || host.matchesSocialDomain("iesdouyin.com") { return "Douyin link" }
         if host.matchesSocialDomain("dianping.com") || host.matchesSocialDomain("dpurl.cn") { return "Dianping link" }
+        if host.matchesSocialDomain("meituan.com") { return "Meituan link" }
+        if host.matchesSocialDomain("ele.me") { return "Taobao Instant Commerce link" }
+        if SocialShareTextNormalizer.isGenericTaobaoProductURL(sourceURL) { return "Taobao product link" }
         if host.matchesSocialDomain("tiktok.com") { return "TikTok link" }
         if host == "maps.app.goo.gl" || (host.contains("google") && path.contains("/maps")) { return "Google Maps link" }
         if host.matchesSocialDomain("maps.apple.com") { return "Apple Maps link" }

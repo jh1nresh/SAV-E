@@ -10,7 +10,7 @@ protocol SupabaseServiceProtocol {
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> [PlaceReviewCandidate]
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder
@@ -390,8 +390,8 @@ final class SupabaseService: SupabaseServiceProtocol {
         return row.id
     }
 
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> [PlaceReviewCandidate] {
-        guard isConfigured else { return [] }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> SourceSearchRecoveryResult {
+        guard isConfigured else { return SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil) }
 
         let body = try Self.jsonBody([
             "workflow_run_id": workflowRunId?.uuidString,
@@ -402,8 +402,15 @@ final class SupabaseService: SupabaseServiceProtocol {
             method: "POST",
             body: body
         )
+        return try Self.decodeSourceSearchRecoveryResponse(data)
+    }
+
+    static func decodeSourceSearchRecoveryResponse(_ data: Data) throws -> SourceSearchRecoveryResult {
         let row = try JSONDecoder.supabase.decode(SourceSearchRecoveryRow.self, from: data)
-        return row.created_candidates.map { $0.toCandidate() }
+        return SourceSearchRecoveryResult(
+            createdCandidates: row.createdCandidates.map { $0.toCandidate() },
+            sourceResolution: row.sourceResolution
+        )
     }
 
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] {
@@ -1545,8 +1552,46 @@ private struct MemoryCaptureRow: Codable {
     let id: UUID
 }
 
+struct SourceSearchRecoveryResult {
+    let createdCandidates: [PlaceReviewCandidate]
+    let sourceResolution: SourceResolution?
+}
+
+struct SourceResolution: Codable, Equatable {
+    enum Status: String, Codable {
+        case resolved
+        case blockedLogin = "blocked_login"
+        case expired
+        case opaqueUnresolved = "opaque_unresolved"
+    }
+
+    let originalURL: String
+    let resolvedURL: String
+    let redirectChain: [String]
+    let canonicalContentID: String?
+    let status: Status
+    let title: String?
+    let caption: String?
+    let thumbnailURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case originalURL = "original_url"
+        case resolvedURL = "resolved_url"
+        case redirectChain = "redirect_chain"
+        case canonicalContentID = "canonical_content_id"
+        case status, title, caption
+        case thumbnailURL = "thumbnail_url"
+    }
+}
+
 private struct SourceSearchRecoveryRow: Codable {
-    let created_candidates: [PlaceCandidateRow]
+    let createdCandidates: [PlaceCandidateRow]
+    let sourceResolution: SourceResolution?
+
+    enum CodingKeys: String, CodingKey {
+        case createdCandidates = "created_candidates"
+        case sourceResolution = "source_resolution"
+    }
 }
 
 private struct PlaceCandidateRow: Codable {
