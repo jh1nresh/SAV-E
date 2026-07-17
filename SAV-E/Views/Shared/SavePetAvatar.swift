@@ -14,7 +14,10 @@ struct SavePetAvatar: View {
         ZStack {
             stageBackdrop
 
-            MemoMascotMark(size: mascotSize, framed: false)
+            Image(preset.assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: mascotSize, height: mascotSize)
                 .scaleEffect(isAnimating ? animatedScale : 1)
                 .rotationEffect(.degrees(isAnimating ? animatedRotation : 0))
                 .offset(y: mascotOffset + (isAnimating ? animatedOffset : 0))
