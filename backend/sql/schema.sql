@@ -179,15 +179,47 @@ create table if not exists captures (
     source_url text,
     raw_text text,
     title text,
+    source_resolution jsonb,
     status text not null default 'review',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     constraint captures_source_type_check check (source_type in ('url', 'note', 'screenshot', 'video', 'file', 'manual')),
-    constraint captures_status_check check (status in ('review', 'investigating', 'resolved', 'archived'))
+    constraint captures_status_check check (status in ('review', 'investigating', 'resolved', 'archived')),
+    constraint captures_source_resolution_check check (
+        source_resolution is null or (
+            jsonb_typeof(source_resolution) = 'object'
+            and source_resolution ?& array['original_url', 'resolved_url', 'redirect_chain', 'status']
+            and jsonb_typeof(source_resolution -> 'original_url') = 'string'
+            and jsonb_typeof(source_resolution -> 'resolved_url') = 'string'
+            and jsonb_typeof(source_resolution -> 'redirect_chain') = 'array'
+            and source_resolution ->> 'status' in ('resolved', 'blocked_login', 'expired', 'opaque_unresolved')
+        )
+    )
 );
 
 create index if not exists idx_captures_user_id on captures(user_id, created_at desc);
 create index if not exists idx_captures_status on captures(user_id, status);
+alter table captures add column if not exists source_resolution jsonb;
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'captures_source_resolution_check'
+          and conrelid = 'captures'::regclass
+    ) then
+        alter table captures add constraint captures_source_resolution_check check (
+            source_resolution is null or (
+                jsonb_typeof(source_resolution) = 'object'
+                and source_resolution ?& array['original_url', 'resolved_url', 'redirect_chain', 'status']
+                and jsonb_typeof(source_resolution -> 'original_url') = 'string'
+                and jsonb_typeof(source_resolution -> 'resolved_url') = 'string'
+                and jsonb_typeof(source_resolution -> 'redirect_chain') = 'array'
+                and source_resolution ->> 'status' in ('resolved', 'blocked_login', 'expired', 'opaque_unresolved')
+            )
+        );
+    end if;
+end $$;
 
 create table if not exists place_candidates (
     id uuid primary key default gen_random_uuid(),

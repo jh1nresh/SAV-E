@@ -106,6 +106,7 @@ export type SourceSearchWorkerOptions = {
   placesCorroborator?: PlacesCorroborator;
   rubricEvaluator?: EvidenceRubricEvaluator;
   sourceDocumentResolver?: SourceDocumentResolver;
+  persistedSourceResolution?: unknown;
 };
 
 type PlacesCorroboration = {
@@ -151,6 +152,7 @@ export async function runSourceSearchRecovery(
     fetchText,
     errors,
     options.sourceDocumentResolver,
+    options.persistedSourceResolution,
   );
   const sourceMetadata = sourceDocument?.metadata;
   const sourceResolution = sourceDocument?.resolution;
@@ -1133,15 +1135,80 @@ export function sourceResolutionResponseBody(resolution: SourceResolution): Reco
   };
 }
 
+export function parsePersistedSourceResolution(
+  value: unknown,
+  expectedOriginalURL?: string,
+): SourceResolution | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  const originalURL = persistedPublicURL(row.original_url ?? row.originalURL);
+  const resolvedURL = persistedPublicURL(row.resolved_url ?? row.resolvedURL);
+  if (!originalURL || !resolvedURL) return undefined;
+
+  if (expectedOriginalURL) {
+    const expected = persistedPublicURL(expectedOriginalURL);
+    if (!expected || expected !== originalURL) return undefined;
+  }
+
+  const rawStatus = row.status;
+  if (
+    rawStatus !== "resolved" &&
+    rawStatus !== "blocked_login" &&
+    rawStatus !== "expired" &&
+    rawStatus !== "opaque_unresolved"
+  ) return undefined;
+
+  const rawChain = row.redirect_chain ?? row.redirectChain;
+  if (!Array.isArray(rawChain) || rawChain.length < 1 || rawChain.length > maxMetadataRedirects + 1) {
+    return undefined;
+  }
+  const redirectChain = rawChain.map(persistedPublicURL);
+  if (redirectChain.some((item) => !item) || redirectChain[0] !== originalURL) return undefined;
+
+  const rawCanonicalContentID = row.canonical_content_id ?? row.canonicalContentID;
+  const canonicalContentID = typeof rawCanonicalContentID === "string" && isCanonicalContentToken(rawCanonicalContentID)
+    ? rawCanonicalContentID
+    : undefined;
+  if (rawCanonicalContentID !== undefined && !canonicalContentID) return undefined;
+
+  const title = persistedText(row.title, 300);
+  const caption = persistedText(row.caption, 2_000);
+  if ((row.title !== undefined && !title) || (row.caption !== undefined && !caption)) return undefined;
+
+  const rawThumbnailURL = row.thumbnail_url ?? row.thumbnailURL;
+  const thumbnailURL = rawThumbnailURL === undefined ? undefined : persistedPublicURL(rawThumbnailURL);
+  if (rawThumbnailURL !== undefined && !thumbnailURL) return undefined;
+
+  return {
+    originalURL,
+    resolvedURL,
+    redirectChain: redirectChain as string[],
+    canonicalContentID,
+    status: rawStatus,
+    title,
+    caption,
+    thumbnailURL,
+  };
+}
+
 async function fetchSourceDocument(
   sourceUrl: string | null | undefined,
   fetchText: FetchText,
   errors: string[],
   resolver?: SourceDocumentResolver,
+  persistedValue?: unknown,
 ): Promise<SourceDocumentFetchResult | undefined> {
   const source = sourceUrl?.trim();
   const url = source ? safeURL(source) : undefined;
   if (!url || !isSafePublicHTTPURLByHostname(url)) return undefined;
+
+  const persisted = parsePersistedSourceResolution(persistedValue, url.toString());
+  if (persisted?.status === "resolved") {
+    return {
+      metadata: sourceMetadataFromResolution(persisted),
+      resolution: persisted,
+    };
+  }
 
   try {
     let document: ResolvedSourceDocument;
@@ -1177,6 +1244,15 @@ async function fetchSourceDocument(
   }
 }
 
+function sourceMetadataFromResolution(resolution: SourceResolution): SourceMetadata {
+  return {
+    resolvedURL: resolution.resolvedURL,
+    title: resolution.title,
+    description: resolution.caption,
+    imageURL: resolution.thumbnailURL,
+  };
+}
+
 function cacheResolvedSourceDocument(cacheKey: string, document: ResolvedSourceDocument): void {
   if (sourceResolutionCache.size >= sourceResolutionCacheLimit) {
     const oldestKey = sourceResolutionCache.keys().next().value;
@@ -1208,9 +1284,9 @@ function buildSourceResolution(input: {
   metadata: SourceMetadata;
   networkURL: string;
 }): SourceResolution {
-  const title = cleanOptionalText(input.metadata.title);
-  const caption = cleanOptionalText(input.metadata.description);
-  const thumbnailURL = input.metadata.imageURL;
+  const title = cleanOptionalText(input.metadata.title, 300);
+  const caption = cleanOptionalText(input.metadata.description, 2_000);
+  const thumbnailURL = persistedPublicURL(input.metadata.imageURL);
   const resolved = safeURL(input.resolvedURL);
   const canonicalContentID = canonicalContentIDFromURL(resolved);
   const diagnosticText = cleanText([title, caption, stripTags(input.html.slice(0, 4_000))].filter(Boolean).join(" "));
@@ -1324,9 +1400,21 @@ function hostMatchesDomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
-function cleanOptionalText(value: string | undefined): string | undefined {
+function cleanOptionalText(value: string | undefined, maxLength: number): string | undefined {
   const cleaned = value ? cleanText(value) : "";
-  return cleaned || undefined;
+  return cleaned ? cleaned.slice(0, maxLength) : undefined;
+}
+
+function persistedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const cleaned = cleanText(value);
+  return cleaned && cleaned.length <= maxLength ? cleaned : undefined;
+}
+
+function persistedPublicURL(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 2_048) return undefined;
+  const parsed = safeURL(value);
+  return parsed && isSafePublicHTTPURLByHostname(parsed) ? parsed.toString() : undefined;
 }
 
 function isExpiredSource(status: number, text: string): boolean {
@@ -1565,6 +1653,7 @@ async function isSafePublicHTTPURL(url: URL): Promise<boolean> {
 
 function isSafePublicHTTPURLByHostname(url: URL): boolean {
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  if (url.username || url.password) return false;
   const host = normalizedHostname(url);
   if (!host || host === "localhost" || host.endsWith(".localhost")) return false;
   if (isIP(host)) return !isPrivateIPAddress(host);

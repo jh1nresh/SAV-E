@@ -3066,13 +3066,18 @@ async function handleCaptureSearchRecovery(
 
   await pool.query("update captures set status = 'investigating' where id = $1 and user_id = $2", [captureId, userId]);
 
-  const recovery = await runSourceSearchRecovery({
-    sourceUrl: stringValue(capture.source_url),
-    rawText: stringValue(capture.raw_text),
-    title: stringValue(capture.title),
-    suggestedSearchQueries: requestedQueries,
-    maxQueries,
-  });
+  const recovery = await runSourceSearchRecovery(
+    {
+      sourceUrl: stringValue(capture.source_url),
+      rawText: stringValue(capture.raw_text),
+      title: stringValue(capture.title),
+      suggestedSearchQueries: requestedQueries,
+      maxQueries,
+    },
+    undefined,
+    undefined,
+    { persistedSourceResolution: capture.source_resolution },
+  );
 
   const existingKeys = await existingCandidateKeys(captureId);
   const createdCandidates: JsonBody[] = [];
@@ -3088,7 +3093,17 @@ async function handleCaptureSearchRecovery(
     createdCandidates.push(formatPlaceCandidate(insertedRows[0]));
   }
 
-  await pool.query("update captures set status = 'review' where id = $1 and user_id = $2", [captureId, userId]);
+  const sourceResolution = recovery.sourceResolution
+    ? sourceResolutionResponseBody(recovery.sourceResolution)
+    : null;
+  await pool.query(
+    `update captures
+     set status = 'review',
+         source_resolution = coalesce($3::jsonb, source_resolution),
+         updated_at = now()
+     where id = $1 and user_id = $2`,
+    [captureId, userId, sourceResolution ? JSON.stringify(sourceResolution) : null],
+  );
 
   return sendJson(response, {
     capture_id: captureId,
@@ -3096,9 +3111,7 @@ async function handleCaptureSearchRecovery(
     search_results: recovery.searchResults,
     created_candidates: createdCandidates,
     media_evidence: recovery.mediaEvidence,
-    source_resolution: recovery.sourceResolution
-      ? sourceResolutionResponseBody(recovery.sourceResolution)
-      : null,
+    source_resolution: sourceResolution,
     errors: recovery.errors,
     receipt: recovery.receipt,
   });
