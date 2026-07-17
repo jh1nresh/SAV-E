@@ -2,6 +2,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
 import pg, { type PoolClient } from "pg";
+import {
+  evaluateAccountConfirmationRequest,
+  evaluateAccountStatusRequest,
+  resolveProfileSubject,
+  stableAccountRefSecret,
+} from "./accountStatus.js";
 import { createGuestSession, userIdFromGuestSessionToken } from "./guestSessions.js";
 import {
   buildMaatPlaceAnalysis,
@@ -78,6 +84,13 @@ import {
   normalizeVisibilityRequest,
   parseLens,
 } from "./socialContracts.js";
+import {
+  FollowListInputError,
+  listFollowedFriends,
+  listFollowedFriendsPage,
+  normalizeFollowListOptions,
+  unfollowByRelationshipId,
+} from "./followList.js";
 import {
   WorkflowContractError,
   normalizePlaceRecoveryWorkOrderCreate,
@@ -862,6 +875,58 @@ createServer(async (request, response) => {
       return await handleMySaves(response, id);
     }
 
+    if (isV0 && resource === "account-status") {
+      if (segments.length > 2 || (segments.length === 2 && segments[1] !== "confirm")) {
+        return sendJson(response, { error: "Not found" }, 404);
+      }
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+      response.setHeader("Referrer-Policy", "no-referrer");
+      if (segments[1] === "confirm") {
+        if (request.method !== "POST") {
+          return sendJson(response, { error: "Method not allowed" }, 405);
+        }
+        const body = await readJson(request, 2_048);
+        const client = await pool.connect();
+        try {
+          const result = await evaluateAccountConfirmationRequest({
+            method: request.method,
+            authorizationHeader: request.headers.authorization,
+            accountRefSecret: stableAccountRefSecret(process.env),
+            expectedAccountRef: body.account_ref,
+            verifySubject: verifiedPrivySubject,
+            beginTransaction: async () => { await client.query("begin"); },
+            lockSubject: (subject) => lockProfileSubject(client, subject),
+            query: (sql, values) => client.query(sql, [...values] as QueryValue[]),
+            createProfile: async (subject) => {
+              await client.query(
+                `insert into profiles (id, display_name)
+                 select $1, 'SAV-E User'
+                 where not exists (
+                   select 1 from profiles where privy_user_id = $1
+                 )
+                 on conflict (id) do nothing`,
+                [subject],
+              );
+            },
+            commitTransaction: async () => { await client.query("commit"); },
+            rollbackTransaction: async () => { await client.query("rollback"); },
+          });
+          return sendJson(response, result.body, result.statusCode);
+        } finally {
+          client.release();
+        }
+      }
+      const result = await evaluateAccountStatusRequest({
+        method: request.method,
+        authorizationHeader: request.headers.authorization,
+        accountRefSecret: stableAccountRefSecret(process.env),
+        verifySubject: verifiedPrivySubject,
+        query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+      });
+      return sendJson(response, result.body, result.statusCode);
+    }
+
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
@@ -908,7 +973,9 @@ createServer(async (request, response) => {
     if (resource === "places") return await handlePlaces(request, response, id, userId);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
-    if (resource === "follows") return await handleFollows(request, response, userId);
+    if (resource === "follows") {
+      return await handleFollows(request, response, id, url, userId, isV0);
+    }
     if (isV0 && resource === "shared-place-links") return await handleSharedPlaceLinks(request, response, id, userId);
     if (isV0 && resource === "workflows") return await handleWorkflows(request, response, segments.slice(1), userId);
     if (resource === "social" && id === "signals") return await handleSocialSignals(request, response, url, userId);
@@ -2272,9 +2339,64 @@ async function handleProfile(
 async function handleFollows(
   request: IncomingMessage,
   response: ServerResponse,
+  followId: string | undefined,
+  url: URL,
   userId: string,
+  isVersioned: boolean,
 ): Promise<void> {
-  if (request.method !== "POST") return sendJson(response, { error: "Unsupported follows route" }, 405);
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Vary", "Authorization");
+
+  if (request.method === "GET") {
+    if (followId) return sendJson(response, { error: "Not found" }, 404);
+    if (isVersioned) {
+      try {
+        const page = await listFollowedFriendsPage(
+          userId,
+          normalizeFollowListOptions({
+            search: url.searchParams.get("q"),
+            limit: url.searchParams.get("limit"),
+            cursor: url.searchParams.get("cursor"),
+          }),
+          (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+        );
+        return sendJson(response, page);
+      } catch (error) {
+        if (error instanceof FollowListInputError) {
+          return sendJson(response, { error: error.message }, 400);
+        }
+        throw error;
+      }
+    }
+    const friends = await listFollowedFriends(
+      userId,
+      (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+    );
+    return sendJson(response, friends);
+  }
+
+  if (request.method === "DELETE") {
+    if (!isVersioned || !followId) {
+      return sendJson(response, { error: "Follow id is required" }, 400);
+    }
+    try {
+      await unfollowByRelationshipId(
+        userId,
+        followId,
+        (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+      );
+    } catch (error) {
+      if (error instanceof FollowListInputError) {
+        return sendJson(response, { error: error.message }, 400);
+      }
+      throw error;
+    }
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method !== "POST" || followId) {
+    return sendJson(response, { error: "Unsupported follows route" }, 405);
+  }
 
   const followRequest = normalizeFollowRequest(await readJson(request));
   const target = await resolveFollowTarget(followRequest);
@@ -4862,13 +4984,48 @@ async function ensureProfile(userId: string): Promise<void> {
   );
 }
 
-async function linkPrivyUserToProfile(profileId: string, privyUserId: string): Promise<void> {
-  await pool.query(
-    `update profiles
-     set privy_user_id = $2, updated_at = now()
-     where id = $1 and (privy_user_id is null or privy_user_id = $2)`,
-    [profileId, privyUserId],
+async function lockProfileSubject(client: PoolClient, privySubject: string): Promise<void> {
+  await client.query(
+    "select pg_advisory_xact_lock(hashtext($1))",
+    [`save-profile-subject:v0:${privySubject}`],
   );
+}
+
+async function linkPrivyUserToProfile(profileId: string, privyUserId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await lockProfileSubject(client, privyUserId);
+    const { rows: existingRows } = await client.query(
+      `select id, privy_user_id
+       from profiles
+       where id = $1 or privy_user_id = $1
+       for update`,
+      [privyUserId],
+    );
+    const hasConflict = existingRows.some((row) => {
+      const existingId = typeof row.id === "string" ? row.id : "";
+      const existingBinding = typeof row.privy_user_id === "string" ? row.privy_user_id : "";
+      return existingId !== profileId
+        || (existingBinding.length > 0 && existingBinding !== privyUserId);
+    });
+    if (hasConflict) throw new Error("Privy profile link conflict");
+
+    const { rows } = await client.query(
+      `update profiles
+       set privy_user_id = $2, updated_at = now()
+       where id = $1 and (privy_user_id is null or privy_user_id = $2)
+       returning id`,
+      [profileId, privyUserId],
+    );
+    if (!rows[0]) throw new Error("Privy profile link target unavailable");
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function ensurePrivyPhoneProfile(
@@ -4907,8 +5064,43 @@ async function resolveUserId(request: IncomingMessage): Promise<string> {
 }
 
 async function profileIdForPrivySubject(privySubject: string): Promise<string> {
-  const { rows } = await pool.query("select id from profiles where privy_user_id = $1 limit 1", [privySubject]);
-  return typeof rows[0]?.id === "string" ? rows[0].id : privySubject;
+  const client = await pool.connect();
+  let transactionStarted = false;
+  let transactionFinished = false;
+  try {
+    await client.query("begin");
+    transactionStarted = true;
+    await lockProfileSubject(client, privySubject);
+
+    const resolution = await resolveProfileSubject(
+      privySubject,
+      (sql, values) => client.query(sql, [...values] as QueryValue[]),
+    );
+    if (resolution.conflictingRawBinding) {
+      throw new ApiError(409, "Account profile binding conflict");
+    }
+
+    await client.query(
+      `insert into profiles (id, display_name)
+       values ($1, 'SAV-E User')
+       on conflict (id) do nothing`,
+      [resolution.profileId],
+    );
+    await client.query("commit");
+    transactionFinished = true;
+    return resolution.profileId;
+  } catch (error) {
+    if (transactionStarted && !transactionFinished) {
+      try {
+        await client.query("rollback");
+      } catch {
+        // Preserve the original failure; this client is released below.
+      }
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function verifiedPrivySubject(token: string): Promise<string> {

@@ -39,10 +39,13 @@ final class PrivyAuthService: ObservableObject {
 
     private let privy: Privy?
     @Published var authState: AuthState = .unknown
+    @Published private(set) var sessionOrigin: AccountSessionOrigin = .restored
+    @Published private(set) var sessionGeneration = 0
     private var pendingEmail: String?
     private let appId: String
     private let clientId: String
     private var authStateTask: Task<Void, Never>?
+    private var interactiveAuthAttempts: Set<UUID> = []
 
     // MARK: App Review Demo
 
@@ -90,8 +93,9 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Session Restore
 
     func restoreSession() async {
+        sessionOrigin = .restored
         guard let privy else {
-            authState = .unauthenticated
+            transitionToUnauthenticated()
             return
         }
         let state = await privy.getAuthState()
@@ -112,16 +116,20 @@ final class PrivyAuthService: ObservableObject {
 
     func signInWithApple() async throws {
         let privy = try validatedPrivy()
+        let attemptID = beginInteractiveAuthentication()
+        defer { endInteractiveAuthentication(attemptID) }
         let user = try await privy.oAuth.login(with: .apple)
-        authState = .authenticated(userId: user.id)
+        transitionToAuthenticated(userId: user.id)
     }
 
     // MARK: - Google
 
     func signInWithGoogle() async throws {
         let privy = try validatedPrivy()
+        let attemptID = beginInteractiveAuthentication()
+        defer { endInteractiveAuthentication(attemptID) }
         let user = try await privy.oAuth.login(with: .google)
-        authState = .authenticated(userId: user.id)
+        transitionToAuthenticated(userId: user.id)
     }
 
     // MARK: - Email OTP
@@ -150,9 +158,11 @@ final class PrivyAuthService: ObservableObject {
         }
         let privy = try validatedPrivy()
         guard let email = pendingEmail else { throw AuthError.invalidCode }
+        let attemptID = beginInteractiveAuthentication()
+        defer { endInteractiveAuthentication(attemptID) }
         let user = try await privy.email.loginWithCode(code, sentTo: email)
         pendingEmail = nil
-        authState = .authenticated(userId: user.id)
+        transitionToAuthenticated(userId: user.id)
     }
 
     // MARK: - App Review Demo Session
@@ -162,11 +172,13 @@ final class PrivyAuthService: ObservableObject {
     /// Never throws — if the network call fails we still enter local-only demo so
     /// the reviewer is never blocked at the door.
     func enterReviewerDemo() async {
+        let guestToken = await fetchGuestToken()
         isReviewerDemo = true
-        demoGuestToken = await fetchGuestToken()
+        demoGuestToken = guestToken
         ReviewDemoGuestTokenHolder.shared.set(demoGuestToken)
         seedReviewerDemoVaultIfNeeded()
-        authState = .authenticated(userId: ReviewDemo.userId)
+        sessionOrigin = .interactive
+        transitionToAuthenticated(userId: ReviewDemo.userId)
     }
 
     /// POST {API}/v0/guest-sessions -> { guest_token }. Returns nil on any error.
@@ -193,17 +205,17 @@ final class PrivyAuthService: ObservableObject {
         }
     }
 
-    /// Seeds an empty production demo vault once. A DEBUG-only UI-test flag may
+    /// Seeds the isolated review-demo vault once. A DEBUG-only UI-test flag may
     /// repair missing simulator seeds without changing or clearing existing data.
     /// Best-effort: a seed failure must not block demo entry.
     private func seedReviewerDemoVaultIfNeeded() {
-        let defaults = UserDefaults.standard
+        let defaults = ReviewDemoStorage.defaults
 #if DEBUG
         let shouldRepairForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-repair-review-demo-seed")
 #else
         let shouldRepairForUITests = false
 #endif
-        let vault = SaveLocalVaultService()
+        let vault = ReviewDemoStorage.localVaultService
         let existingPlaces = (try? vault.confirmedPlaces(limit: 500)) ?? []
         let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
         guard ReviewDemoSeed.shouldSeedVault(
@@ -224,19 +236,20 @@ final class PrivyAuthService: ObservableObject {
 
     func signOut() async {
         if isReviewerDemo {
-            isReviewerDemo = false
-            demoGuestToken = nil
-            ReviewDemoGuestTokenHolder.shared.set(nil)
-            authState = .unauthenticated
+            clearReviewerDemoState()
+            sessionOrigin = .restored
+            transitionToUnauthenticated()
             return
         }
         guard let privy else {
-            authState = .unauthenticated
+            sessionOrigin = .restored
+            transitionToUnauthenticated()
             return
         }
         let user = await privy.getUser()
         await user?.logout()
-        authState = .unauthenticated
+        sessionOrigin = .restored
+        transitionToUnauthenticated()
     }
 
     func accessToken() async throws -> String {
@@ -252,16 +265,62 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Helpers
 
     private func applyPrivyState(_ state: PrivySDK.AuthState) {
+        // Every SDK stream event belongs to a real Privy session. Demo state is
+        // an app-local auth mode and must never survive into one of these states.
+        clearReviewerDemoState()
         switch state {
         case .authenticated(let user):
-            authState = .authenticated(userId: user.id)
+            if hasInteractiveAuthenticationInFlight {
+                sessionOrigin = .interactive
+            } else if currentUserId != user.id {
+                sessionOrigin = .restored
+            }
+            transitionToAuthenticated(userId: user.id)
         case .unauthenticated:
-            authState = .unauthenticated
+            if !hasInteractiveAuthenticationInFlight {
+                sessionOrigin = .restored
+            }
+            transitionToUnauthenticated()
         case .notReady, .authenticatedUnverified:
             authState = .unknown
         @unknown default:
             authState = .unknown
         }
+    }
+
+    private var hasInteractiveAuthenticationInFlight: Bool {
+        !interactiveAuthAttempts.isEmpty
+    }
+
+    private func beginInteractiveAuthentication() -> UUID {
+        let attemptID = UUID()
+        interactiveAuthAttempts.insert(attemptID)
+        sessionOrigin = .interactive
+        return attemptID
+    }
+
+    private func endInteractiveAuthentication(_ attemptID: UUID) {
+        interactiveAuthAttempts.remove(attemptID)
+    }
+
+    private func clearReviewerDemoState() {
+        isReviewerDemo = false
+        demoGuestToken = nil
+        ReviewDemoGuestTokenHolder.shared.set(nil)
+    }
+
+    private func transitionToAuthenticated(userId: String) {
+        if currentUserId != userId {
+            sessionGeneration &+= 1
+        }
+        authState = .authenticated(userId: userId)
+    }
+
+    private func transitionToUnauthenticated() {
+        if authState != .unauthenticated {
+            sessionGeneration &+= 1
+        }
+        authState = .unauthenticated
     }
 
     private func validateConfig() throws {
@@ -282,6 +341,7 @@ final class PrivyAuthService: ObservableObject {
 
 struct SignInWithAppleButton: UIViewRepresentable {
     typealias UIViewType = ASAuthorizationAppleIDButton
+    @Environment(\.isEnabled) private var isEnabled
     var action: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
@@ -289,10 +349,13 @@ struct SignInWithAppleButton: UIViewRepresentable {
     func makeUIView(context: Context) -> ASAuthorizationAppleIDButton {
         let button = ASAuthorizationAppleIDButton(type: .continue, style: .black)
         button.addTarget(context.coordinator, action: #selector(Coordinator.tapped), for: .touchUpInside)
+        button.isEnabled = isEnabled
         return button
     }
 
-    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {}
+    func updateUIView(_ uiView: ASAuthorizationAppleIDButton, context: Context) {
+        uiView.isEnabled = isEnabled
+    }
 
     final class Coordinator: NSObject {
         let action: () -> Void

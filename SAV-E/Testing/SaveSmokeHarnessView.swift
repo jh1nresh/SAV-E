@@ -112,8 +112,8 @@ private struct SaveSmokeHarnessRunner {
         }
         let stateDescription: String
         switch authService.authState {
-        case .authenticated(let userId):
-            stateDescription = "authenticated:\(userId)"
+        case .authenticated:
+            stateDescription = "authenticated route reachable"
         case .unauthenticated:
             stateDescription = "unauthenticated route reachable"
         case .unknown:

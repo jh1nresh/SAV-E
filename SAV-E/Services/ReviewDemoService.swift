@@ -26,7 +26,7 @@ enum ReviewDemo {
     /// Stable user id used for the demo `authState`. Not a real Privy id.
     static let userId = "review-demo"
 
-    /// UserDefaults flag so a production demo vault is seeded only once.
+    /// UserDefaults flag so the isolated demo vault is seeded only once.
     static let seededDefaultsKey = "reviewDemoSeeded"
 
     /// Case-insensitive, whitespace-trimmed match on the email so the reviewer
@@ -43,6 +43,43 @@ enum ReviewDemo {
 
     private static func normalized(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+// MARK: - Isolated Demo Storage
+
+@MainActor
+enum ReviewDemoStorage {
+    static let directoryURL: URL = {
+        let fileManager = FileManager.default
+        let baseURL = fileManager.containerURL(
+            forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName
+        ) ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        return baseURL.appendingPathComponent("review-demo-v1", isDirectory: true)
+    }()
+
+    static let defaults = UserDefaults(suiteName: "com.wanderly.app.review-demo")!
+    static let localVaultService = SaveLocalVaultService(
+        overrideVaultURL: directoryURL.appendingPathComponent("save-memory-records.json")
+    )
+    static let pendingImportService = PendingPlaceImportService(
+        overrideContainerURL: directoryURL
+    )
+    static let correctionEventStore = SavePlaceCorrectionEventStore(
+        overrideURL: directoryURL.appendingPathComponent("save-place-correction-events.json")
+    )
+    static let collaborativeListStore = SaveCollaborativeListStore(defaults: defaults)
+    static let referralHandoffStore = SaveReferralHandoffStore(defaults: defaults)
+
+    static func makeMapViewModel() -> MapViewModel {
+        MapViewModel(
+            pendingImportService: pendingImportService,
+            saveLocalVaultService: localVaultService,
+            correctionEventStore: correctionEventStore,
+            collaborativeListStore: collaborativeListStore,
+            referralHandoffStore: referralHandoffStore
+        )
     }
 }
 

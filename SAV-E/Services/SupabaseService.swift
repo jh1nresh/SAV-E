@@ -23,9 +23,11 @@ protocol SupabaseServiceProtocol {
     func deleteTrip(_ tripId: UUID) async throws
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
+    func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage
     func selectPet(preset: SavePetPreset, name: String) async throws -> UserProfile
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
     func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws
+    func unfollowProfile(followId: String) async throws
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place]
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws
@@ -77,7 +79,7 @@ enum SupabaseError: LocalizedError {
 
 // MARK: - Implementation
 
-final class SupabaseService: SupabaseServiceProtocol {
+final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
     static let shared = SupabaseService()
 
     private let apiBaseURL: String?
@@ -517,6 +519,23 @@ final class SupabaseService: SupabaseServiceProtocol {
 
     // MARK: - Profile
 
+    func fetchAccountStatus() async throws -> AccountStatusResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(path: "/v0/account-status")
+        return try JSONDecoder.supabase.decode(AccountStatusResponse.self, from: data)
+    }
+
+    func confirmAccount(expectedAccountRef: String) async throws -> AccountStatusResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["account_ref": expectedAccountRef])
+        let data = try await request(
+            path: "/v0/account-status/confirm",
+            method: "POST",
+            body: body
+        )
+        return try JSONDecoder.supabase.decode(AccountStatusResponse.self, from: data)
+    }
+
     func fetchProfile(for userId: String) async throws -> UserProfile? {
         guard isConfigured else { return .mock }
 
@@ -556,6 +575,14 @@ final class SupabaseService: SupabaseServiceProtocol {
 
     // MARK: - Social Graph
 
+    func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
+        guard isConfigured else { return SaveFollowedFriendsPage(items: [], nextCursor: nil) }
+
+        let path = Self.followedFriendsPath(query: query, cursor: cursor, limit: limit)
+        let data = try await request(path: path)
+        return try JSONDecoder.supabase.decode(SaveFollowedFriendsPage.self, from: data)
+    }
+
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {
         try await followProfile(
             target: SaveReferralTarget(referralCode: referralCode, handle: nil, lens: lens),
@@ -574,6 +601,27 @@ final class SupabaseService: SupabaseServiceProtocol {
             "source": source.rawValue,
         ])
         try await request(path: "/follows", method: "POST", body: body)
+    }
+
+    func unfollowProfile(followId: String) async throws {
+        guard isConfigured else { return }
+        guard let encodedId = followId.urlPathEncoded else { throw SupabaseError.recordNotFound }
+        try await request(path: "/v0/follows/\(encodedId)", method: "DELETE")
+    }
+
+    static func followedFriendsPath(query: String, cursor: String?, limit: Int) -> String {
+        var components = URLComponents()
+        components.path = "/v0/follows"
+        var queryItems = [URLQueryItem(name: "limit", value: String(max(1, min(50, limit))))]
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !normalizedQuery.isEmpty {
+            queryItems.append(URLQueryItem(name: "q", value: normalizedQuery))
+        }
+        if let cursor = cursor?.trimmingCharacters(in: .whitespacesAndNewlines), !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        components.queryItems = queryItems
+        return components.string ?? "/v0/follows?limit=\(max(1, min(50, limit)))"
     }
 
     func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
