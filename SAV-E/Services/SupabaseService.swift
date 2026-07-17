@@ -10,7 +10,7 @@ protocol SupabaseServiceProtocol {
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> [PlaceReviewCandidate]
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder
@@ -24,6 +24,7 @@ protocol SupabaseServiceProtocol {
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
     func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage
+    func selectPet(preset: SavePetPreset, name: String) async throws -> UserProfile
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
     func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws
     func unfollowProfile(followId: String) async throws
@@ -391,8 +392,8 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
         return row.id
     }
 
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> [PlaceReviewCandidate] {
-        guard isConfigured else { return [] }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> SourceSearchRecoveryResult {
+        guard isConfigured else { return SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil) }
 
         let body = try Self.jsonBody([
             "workflow_run_id": workflowRunId?.uuidString,
@@ -403,8 +404,15 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
             method: "POST",
             body: body
         )
+        return try Self.decodeSourceSearchRecoveryResponse(data)
+    }
+
+    static func decodeSourceSearchRecoveryResponse(_ data: Data) throws -> SourceSearchRecoveryResult {
         let row = try JSONDecoder.supabase.decode(SourceSearchRecoveryRow.self, from: data)
-        return row.created_candidates.map { $0.toCandidate() }
+        return SourceSearchRecoveryResult(
+            createdCandidates: row.createdCandidates.map { $0.toCandidate() },
+            sourceResolution: row.sourceResolution
+        )
     }
 
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] {
@@ -546,6 +554,23 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
         ]
         let body = try Self.jsonBody(updates)
         try await request(path: "/profile", method: "PATCH", body: body)
+    }
+
+    func selectPet(preset: SavePetPreset, name: String) async throws -> UserProfile {
+        guard isConfigured else {
+            var profile = UserProfile.mock
+            profile.petPreset = preset
+            profile.petName = name
+            profile.petXP = 0
+            return profile
+        }
+
+        let body = try Self.jsonBody([
+            "pet_preset": preset.rawValue,
+            "pet_name": name,
+        ])
+        let data = try await request(path: "/profile", method: "PATCH", body: body)
+        return try JSONDecoder.supabase.decode(ProfileRow.self, from: data).toProfile()
     }
 
     // MARK: - Social Graph
@@ -1364,8 +1389,12 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.rating { payload["rating"] = value }
         if let value = finalPlace.note { payload["note"] = value }
         if let value = finalPlace.sourceUrl { payload["source_url"] = value }
-        if let value = finalPlace.sourceImageUrl { payload["source_image_url"] = value }
-        if let value = finalPlace.businessPhotoUrls { payload["business_photo_urls"] = value }
+        if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
+            payload["source_image_url"] = value
+        }
+        if let value = GooglePlacesPhotoURL.persistableStrings(finalPlace.businessPhotoUrls) {
+            payload["business_photo_urls"] = value
+        }
         if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
         if let value = finalPlace.priceRange { payload["price_range"] = value }
         if let value = finalPlace.recommender { payload["recommender"] = value }
@@ -1474,8 +1503,8 @@ private struct PlaceRow: Codable {
             note: note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
-            sourceImageUrl: source_image_url,
-            businessPhotoUrls: business_photo_urls,
+            sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
+            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
             extractedDishes: extracted_dishes,
             priceRange: price_range,
             recommender: recommender,
@@ -1503,8 +1532,8 @@ private struct PlaceRow: Codable {
             note: place.note,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
-            source_image_url: place.sourceImageUrl,
-            business_photo_urls: place.businessPhotoUrls,
+            source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
             price_range: place.priceRange,
             recommender: place.recommender,
@@ -1571,8 +1600,46 @@ private struct MemoryCaptureRow: Codable {
     let id: UUID
 }
 
+struct SourceSearchRecoveryResult {
+    let createdCandidates: [PlaceReviewCandidate]
+    let sourceResolution: SourceResolution?
+}
+
+struct SourceResolution: Codable, Equatable {
+    enum Status: String, Codable {
+        case resolved
+        case blockedLogin = "blocked_login"
+        case expired
+        case opaqueUnresolved = "opaque_unresolved"
+    }
+
+    let originalURL: String
+    let resolvedURL: String
+    let redirectChain: [String]
+    let canonicalContentID: String?
+    let status: Status
+    let title: String?
+    let caption: String?
+    let thumbnailURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case originalURL = "original_url"
+        case resolvedURL = "resolved_url"
+        case redirectChain = "redirect_chain"
+        case canonicalContentID = "canonical_content_id"
+        case status, title, caption
+        case thumbnailURL = "thumbnail_url"
+    }
+}
+
 private struct SourceSearchRecoveryRow: Codable {
-    let created_candidates: [PlaceCandidateRow]
+    let createdCandidates: [PlaceCandidateRow]
+    let sourceResolution: SourceResolution?
+
+    enum CodingKeys: String, CodingKey {
+        case createdCandidates = "created_candidates"
+        case sourceResolution = "source_resolution"
+    }
 }
 
 private struct PlaceCandidateRow: Codable {
@@ -1707,6 +1774,9 @@ private struct ProfileRow: Codable {
     let saved_count: Int?
     let visited_count: Int?
     let cities_count: Int?
+    let pet_preset: SavePetPreset?
+    let pet_name: String?
+    let pet_xp: Int?
 
     func toProfile() -> UserProfile {
         UserProfile(
@@ -1719,7 +1789,10 @@ private struct ProfileRow: Codable {
             citiesCount: cities_count ?? 0,
             isPremium: is_premium,
             collections: [],
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            petPreset: pet_preset,
+            petName: pet_name,
+            petXP: pet_xp ?? 0
         )
     }
 }

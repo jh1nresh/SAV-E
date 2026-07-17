@@ -17,6 +17,17 @@ alter table profiles add column if not exists trusted_guide_count integer not nu
 alter table profiles add column if not exists ai_planning_credits integer not null default 0;
 alter table profiles add column if not exists profile_stamp_unlocked_at timestamptz;
 alter table profiles add column if not exists privy_user_id text;
+alter table profiles add column if not exists pet_preset text;
+alter table profiles add column if not exists pet_name text;
+alter table profiles add column if not exists pet_selected_at timestamptz;
+
+do $$
+begin
+    if not exists (select 1 from pg_constraint where conname = 'profiles_pet_preset_check') then
+        alter table profiles add constraint profiles_pet_preset_check
+            check (pet_preset is null or pet_preset in ('sprout', 'spark', 'cloud'));
+    end if;
+end $$;
 
 create unique index if not exists idx_profiles_handle on profiles(lower(handle)) where handle is not null;
 create unique index if not exists idx_profiles_referral_code on profiles(referral_code) where referral_code is not null;
@@ -168,15 +179,47 @@ create table if not exists captures (
     source_url text,
     raw_text text,
     title text,
+    source_resolution jsonb,
     status text not null default 'review',
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     constraint captures_source_type_check check (source_type in ('url', 'note', 'screenshot', 'video', 'file', 'manual')),
-    constraint captures_status_check check (status in ('review', 'investigating', 'resolved', 'archived'))
+    constraint captures_status_check check (status in ('review', 'investigating', 'resolved', 'archived')),
+    constraint captures_source_resolution_check check (
+        source_resolution is null or (
+            jsonb_typeof(source_resolution) = 'object'
+            and source_resolution ?& array['original_url', 'resolved_url', 'redirect_chain', 'status']
+            and jsonb_typeof(source_resolution -> 'original_url') = 'string'
+            and jsonb_typeof(source_resolution -> 'resolved_url') = 'string'
+            and jsonb_typeof(source_resolution -> 'redirect_chain') = 'array'
+            and source_resolution ->> 'status' in ('resolved', 'blocked_login', 'expired', 'opaque_unresolved')
+        )
+    )
 );
 
 create index if not exists idx_captures_user_id on captures(user_id, created_at desc);
 create index if not exists idx_captures_status on captures(user_id, status);
+alter table captures add column if not exists source_resolution jsonb;
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'captures_source_resolution_check'
+          and conrelid = 'captures'::regclass
+    ) then
+        alter table captures add constraint captures_source_resolution_check check (
+            source_resolution is null or (
+                jsonb_typeof(source_resolution) = 'object'
+                and source_resolution ?& array['original_url', 'resolved_url', 'redirect_chain', 'status']
+                and jsonb_typeof(source_resolution -> 'original_url') = 'string'
+                and jsonb_typeof(source_resolution -> 'resolved_url') = 'string'
+                and jsonb_typeof(source_resolution -> 'redirect_chain') = 'array'
+                and source_resolution ->> 'status' in ('resolved', 'blocked_login', 'expired', 'opaque_unresolved')
+            )
+        );
+    end if;
+end $$;
 
 create table if not exists place_candidates (
     id uuid primary key default gen_random_uuid(),

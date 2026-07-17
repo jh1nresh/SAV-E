@@ -25,7 +25,11 @@ import {
   recommendPlacesByClaims,
 } from "./placeClaims.js";
 import { enrichMaatPlaceAnalysisWithPublicWeb } from "./maatPublicWebAnalysis.js";
-import { runSourceSearchRecovery, type SourceSearchCandidate } from "./sourceSearchWorker.js";
+import {
+  runSourceSearchRecovery,
+  sourceResolutionResponseBody,
+  type SourceSearchCandidate,
+} from "./sourceSearchWorker.js";
 import {
   defaultGeminiText,
   defaultPlacesSearch,
@@ -107,6 +111,11 @@ import {
   reconcileReputation,
   safeOpaqueRefs,
 } from "./workflowLifecycle.js";
+import {
+  PetCompanionValidationError,
+  normalizePetSelectionPatch,
+  petXPForVerifiedReceipts,
+} from "./petCompanion.js";
 import {
   buildRecommendationAnalysisReceiptDraft,
   envelopeForRecommendationAnalysisReceipt,
@@ -430,7 +439,15 @@ const tripStopFields = [
   "note",
 ] as const;
 
-const profileFields = ["display_name", "avatar_url", "handle", "referral_code"] as const;
+const profileFields = [
+  "display_name",
+  "avatar_url",
+  "handle",
+  "referral_code",
+  "pet_preset",
+  "pet_name",
+  "pet_selected_at",
+] as const;
 
 const captureFields = [
   "id",
@@ -2278,16 +2295,36 @@ async function handleProfile(
         p.*,
         (select count(*)::int from places where user_id = p.id) as saved_count,
         (select count(*)::int from places where user_id = p.id and status = 'visited') as visited_count,
-        (select count(distinct city)::int from trips where user_id = p.id and city <> '') as cities_count
+        (select count(distinct city)::int from trips where user_id = p.id and city <> '') as cities_count,
+        (select count(*)::int
+           from workflow_receipts wr
+           join workflow_runs r on r.id = wr.run_id
+          where r.user_id = p.id
+            and r.workflow_id = $2
+            and wr.receipt_type = 'analysis'
+            and wr.is_current = true
+            and wr.verdict = 'pass'
+            and p.pet_selected_at is not null
+            and wr.created_at >= p.pet_selected_at) as verified_pet_receipt_count
       from profiles p
       where p.id = $1`,
-      [userId],
+      [userId, placeRecoveryWorkflowId],
     );
     return sendJson(response, formatProfile(rows[0]));
   }
 
   if (request.method === "PATCH") {
-    const body = pickFields(await readJson(request), profileFields);
+    const rawBody = await readJson(request);
+    const body = pickFields(rawBody, ["display_name", "avatar_url", "handle", "referral_code"] as const);
+    try {
+      const petSelection = normalizePetSelectionPatch(rawBody);
+      if (petSelection) Object.assign(body, petSelection);
+    } catch (error) {
+      if (error instanceof PetCompanionValidationError) {
+        return sendJson(response, { error: error.message }, 400);
+      }
+      throw error;
+    }
     const update = buildUpdate("profiles", body, profileFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
@@ -3151,13 +3188,18 @@ async function handleCaptureSearchRecovery(
 
   await pool.query("update captures set status = 'investigating' where id = $1 and user_id = $2", [captureId, userId]);
 
-  const recovery = await runSourceSearchRecovery({
-    sourceUrl: stringValue(capture.source_url),
-    rawText: stringValue(capture.raw_text),
-    title: stringValue(capture.title),
-    suggestedSearchQueries: requestedQueries,
-    maxQueries,
-  });
+  const recovery = await runSourceSearchRecovery(
+    {
+      sourceUrl: stringValue(capture.source_url),
+      rawText: stringValue(capture.raw_text),
+      title: stringValue(capture.title),
+      suggestedSearchQueries: requestedQueries,
+      maxQueries,
+    },
+    undefined,
+    undefined,
+    { persistedSourceResolution: capture.source_resolution },
+  );
 
   const existingKeys = await existingCandidateKeys(captureId);
   const createdCandidates: JsonBody[] = [];
@@ -3173,7 +3215,17 @@ async function handleCaptureSearchRecovery(
     createdCandidates.push(formatPlaceCandidate(insertedRows[0]));
   }
 
-  await pool.query("update captures set status = 'review' where id = $1 and user_id = $2", [captureId, userId]);
+  const sourceResolution = recovery.sourceResolution
+    ? sourceResolutionResponseBody(recovery.sourceResolution)
+    : null;
+  await pool.query(
+    `update captures
+     set status = 'review',
+         source_resolution = coalesce($3::jsonb, source_resolution),
+         updated_at = now()
+     where id = $1 and user_id = $2`,
+    [captureId, userId, sourceResolution ? JSON.stringify(sourceResolution) : null],
+  );
 
   return sendJson(response, {
     capture_id: captureId,
@@ -3181,6 +3233,7 @@ async function handleCaptureSearchRecovery(
     search_results: recovery.searchResults,
     created_candidates: createdCandidates,
     media_evidence: recovery.mediaEvidence,
+    source_resolution: sourceResolution,
     errors: recovery.errors,
     receipt: recovery.receipt,
   });
@@ -5272,7 +5325,11 @@ function formatTrip(row: JsonBody): JsonBody {
 }
 
 function formatProfile(row: JsonBody): JsonBody {
-  return formatDates(row);
+  const { verified_pet_receipt_count: verifiedReceiptCount, ...profile } = row;
+  return formatDates({
+    ...profile,
+    pet_xp: petXPForVerifiedReceipts(verifiedReceiptCount),
+  });
 }
 
 function formatCapture(row: JsonBody): JsonBody {

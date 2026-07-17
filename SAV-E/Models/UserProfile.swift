@@ -11,6 +11,13 @@ struct UserProfile: Identifiable, Codable {
     var isPremium: Bool
     var collections: [PlaceCollection]
     var createdAt: Date
+    var petPreset: SavePetPreset?
+    var petName: String?
+    var petXP: Int
+
+    var petStage: SavePetStage {
+        SavePetStage(xp: petXP)
+    }
 }
 
 struct PassportStats: Hashable {
@@ -92,7 +99,10 @@ extension UserProfile {
         citiesCount: 0,
         isPremium: false,
         collections: [],
-        createdAt: Date()
+        createdAt: Date(),
+        petPreset: nil,
+        petName: nil,
+        petXP: 0
     )
 
     static let mock = UserProfile(
@@ -105,7 +115,10 @@ extension UserProfile {
         citiesCount: 7,
         isPremium: false,
         collections: PlaceCollection.mockList,
-        createdAt: Date().addingTimeInterval(-86400 * 90)
+        createdAt: Date().addingTimeInterval(-86400 * 90),
+        petPreset: .sprout,
+        petName: "Memo",
+        petXP: 40
     )
 }
 

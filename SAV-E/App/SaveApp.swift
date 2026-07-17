@@ -10,6 +10,7 @@ private struct DeferredAccountScopedLink: Equatable {
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()
+    @StateObject private var petCompanionStore = SavePetCompanionStore()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
@@ -27,6 +28,7 @@ struct SaveApp: App {
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
+    private let petStageGalleryActive = ProcessInfo.processInfo.arguments.contains("--uitest-pet-stage-gallery")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -118,7 +120,9 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if smokeHarnessActive {
+        if petStageGalleryActive {
+            SavePetStageGalleryView()
+        } else if smokeHarnessActive {
             SaveSmokeHarnessView()
         } else {
             standardRootContent
@@ -156,7 +160,8 @@ struct SaveApp: App {
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
-                    onVerificationChanged: updateVerifiedAccount
+                    onVerificationChanged: updateVerifiedAccount,
+                    petCompanionStore: petCompanionStore
                 )
                     .environmentObject(authService)
             }
@@ -432,6 +437,7 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
+    @ObservedObject var petCompanionStore: SavePetCompanionStore
 
     private var taskID: AccountGateTaskID {
         AccountGateTaskID(generation: sessionGeneration, origin: sessionOrigin)
@@ -441,10 +447,7 @@ private struct AuthenticatedRootView: View {
         Group {
             switch accountGate.state {
             case .verified(let verifiedGeneration) where verifiedGeneration == sessionGeneration:
-                ContentView(
-                    incomingPlaceReceipt: $incomingPlaceReceipt,
-                    storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
-                )
+                verifiedAccountContent
             case .idle, .verifying, .verified:
                 AuthLoadingView()
             case .accountNeedsConfirmation(let kind):
@@ -469,6 +472,30 @@ private struct AuthenticatedRootView: View {
         }
         .onDisappear {
             onVerificationChanged(sessionGeneration, nil)
+        }
+    }
+
+    @ViewBuilder
+    private var verifiedAccountContent: some View {
+        if let userID = authService.currentUserId {
+            Group {
+                switch petCompanionStore.phase(for: userID) {
+                case .idle, .loading:
+                    AuthLoadingView()
+                case .needsSelection:
+                    SavePetSelectionView(store: petCompanionStore)
+                case .ready, .unavailable:
+                    ContentView(
+                        incomingPlaceReceipt: $incomingPlaceReceipt,
+                        storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
+                    )
+                }
+            }
+            .task(id: userID) {
+                await petCompanionStore.load(userID: userID)
+            }
+        } else {
+            AuthLoadingView()
         }
     }
 

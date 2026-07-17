@@ -46,6 +46,9 @@ struct ProfileView: View {
                     )
                     .padding(.horizontal)
 
+                    SavePetCompanionCard(profile: viewModel.profile)
+                        .padding(.horizontal)
+
                     StatsView(stats: passportStats)
 
                     if let errorMessage = viewModel.errorMessage {

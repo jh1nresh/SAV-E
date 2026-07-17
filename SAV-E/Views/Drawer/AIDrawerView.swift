@@ -3378,12 +3378,15 @@ private struct CollaborativeListCard: View {
             } else {
                 ForEach(list.items) { item in
                     HStack(alignment: .top, spacing: 10) {
-                        AsyncImage(url: item.photoURLs.first.flatMap(URL.init(string:))) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Image(systemName: item.source == .savedPlace ? "mappin.circle.fill" : "map")
-                                .font(.subheadline)
-                                .foregroundColor(.saveCocoa)
+                        CachedAsyncImage(url: item.photoURLs.first.flatMap(URL.init(string:))) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Image(systemName: item.source == .savedPlace ? "mappin.circle.fill" : "map")
+                                    .font(.subheadline)
+                                    .foregroundColor(.saveCocoa)
+                            }
                         }
                         .frame(width: 42, height: 42)
                         .background(Color.saveCream.opacity(0.8))

@@ -923,13 +923,19 @@ struct ShareExtensionView: View {
     }
 
     private func sourceLine(_ candidate: PendingReviewCandidate) -> String {
-        guard let sourceURL = candidate.sourceURL?.lowercased() else { return "Found from shared post" }
-        if sourceURL.contains("instagram.com") { return "Found from Instagram source" }
-        if sourceURL.contains("tiktok.com") { return "Found from TikTok" }
-        if sourceURL.contains("xiaohongshu.com") || sourceURL.contains("xhslink.com") { return "Found from Xiaohongshu" }
-        if sourceURL.contains("douyin.com") || sourceURL.contains("iesdouyin.com") { return "Found from Douyin" }
-        if sourceURL.contains("dianping.com") || sourceURL.contains("dpurl.cn") { return "Found from Dianping" }
-        if sourceURL.contains("pin.it") || sourceURL.contains("pinterest.") { return "Found from Pinterest" }
+        guard let sourceURL = candidate.sourceURL else { return "Found from shared post" }
+        switch SocialShareTextNormalizer.platform(forURLString: sourceURL) {
+        case .instagram: return "Found from Instagram source"
+        case .tiktok: return "Found from TikTok"
+        case .xiaohongshu: return "Found from Xiaohongshu"
+        case .douyin: return "Found from Douyin"
+        case .dianping: return "Found from Dianping"
+        case .meituan: return "Found from Meituan"
+        case .taobaoInstantCommerce: return "Found from Taobao Instant Commerce"
+        default: break
+        }
+        let host = URL(string: sourceURL)?.host?.lowercased() ?? ""
+        if host == "pin.it" || host.hasSuffix(".pinterest.com") || host == "pinterest.com" { return "Found from Pinterest" }
         return "Found from shared link"
     }
 
@@ -1195,6 +1201,17 @@ struct ShareExtensionView: View {
                 return
             }
             let sourceOnly = sourceOnlyReviewCandidate(sourceURLString: parseContent, evidenceText: publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText))
+            reviewCandidates = [sourceOnly]
+            selectedCategory = sourceOnly.category
+            isParsing = false
+            return
+        }
+
+        if SocialShareTextNormalizer.isGenericTaobaoProductURL(parseContent) {
+            let sourceOnly = sourceOnlyReviewCandidate(
+                sourceURLString: parseContent,
+                evidenceText: publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+            )
             reviewCandidates = [sourceOnly]
             selectedCategory = sourceOnly.category
             isParsing = false
@@ -2198,7 +2215,11 @@ struct ShareExtensionView: View {
             nextBestClue: "Run the suggested public searches, or share a caption, screenshot/OCR frame, map link, or visible venue handle.",
             suggestedSearchQueries: searchQueries.isEmpty ? nil : searchQueries
         )
-        if let candidateName = unresolvedPlaceCandidateName(from: searchQueries) {
+        let sourcePlatform = SocialShareTextNormalizer.platform(forURLString: sourceURLString)
+        if sourcePlatform != .meituan,
+           sourcePlatform != .taobaoInstantCommerce,
+           !SocialShareTextNormalizer.isGenericTaobaoProductURL(sourceURLString),
+           let candidateName = unresolvedPlaceCandidateName(from: searchQueries) {
             let upgradedDiagnostic = unresolvedPlaceDiagnostic(from: diagnostic, candidateName: candidateName)
             return PendingReviewCandidate(
                 candidateName: candidateName,
@@ -2236,8 +2257,15 @@ struct ShareExtensionView: View {
     private func sourceOnlyDisplayName(for sourceURLString: String) -> String {
         guard let url = URL(string: sourceURLString) else { return "Social link" }
         let path = url.path.lowercased()
+        let host = url.host?.lowercased() ?? ""
         if path.contains("/reel/") || path.contains("/reels/") { return "Instagram reel" }
-        if url.host?.lowercased().contains("instagram") == true { return "Instagram link" }
+        if host.contains("instagram") { return "Instagram link" }
+        if host == "xhslink.com" || host.hasSuffix(".xiaohongshu.com") || host == "xiaohongshu.com" { return "Xiaohongshu link" }
+        if host.hasSuffix(".douyin.com") || host == "douyin.com" || host.hasSuffix(".iesdouyin.com") || host == "iesdouyin.com" { return "Douyin link" }
+        if host == "dpurl.cn" || host.hasSuffix(".dianping.com") || host == "dianping.com" { return "Dianping link" }
+        if host.hasSuffix(".meituan.com") || host == "meituan.com" { return "Meituan link" }
+        if host.hasSuffix(".ele.me") || host == "ele.me" { return "Taobao Instant Commerce link" }
+        if SocialShareTextNormalizer.isGenericTaobaoProductURL(sourceURLString) { return "Taobao product link" }
         return "Social link"
     }
 
@@ -3076,16 +3104,14 @@ struct ShareExtensionView: View {
 
     private func isSocialURL(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
-        return host == "xhslink.com" ||
-            host.hasSuffix("xiaohongshu.com") ||
-            host.hasSuffix("instagram.com") ||
-            host.hasSuffix("threads.net") ||
-            host.hasSuffix("threads.com") ||
-            host.hasSuffix("tiktok.com") ||
-            host.hasSuffix("douyin.com") ||
-            host.hasSuffix("iesdouyin.com") ||
-            host == "dpurl.cn" ||
-            host.hasSuffix("dianping.com")
+        let domains = [
+            "xhslink.com", "xiaohongshu.com", "instagram.com", "threads.net", "threads.com",
+            "tiktok.com", "douyin.com", "iesdouyin.com", "dpurl.cn", "dianping.com",
+            "meituan.com", "ele.me"
+        ]
+        return domains.contains { domain in
+            host == domain || host.hasSuffix(".\(domain)")
+        }
     }
 
     private func deterministicMapPlace(from content: String, title: String, text: String) -> ParsedPlace? {

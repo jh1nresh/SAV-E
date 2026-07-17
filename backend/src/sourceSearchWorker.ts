@@ -56,11 +56,30 @@ export type SourceMediaEvidence = {
   textSource?: "ocr" | "asr";
 };
 
+export type SourceResolutionStatus = "resolved" | "blocked_login" | "expired" | "opaque_unresolved";
+
+export type SourceResolution = {
+  originalURL: string;
+  resolvedURL: string;
+  redirectChain: string[];
+  canonicalContentID?: string;
+  status: SourceResolutionStatus;
+  title?: string;
+  caption?: string;
+  thumbnailURL?: string;
+};
+
+export type ResolvedSourceDocument = {
+  html: string;
+  resolution: SourceResolution;
+};
+
 export type SourceSearchOutput = {
   queries: string[];
   searchResults: SourceSearchResult[];
   candidates: SourceSearchCandidate[];
   mediaEvidence: SourceMediaEvidence[];
+  sourceResolution?: SourceResolution;
   errors: string[];
   receipt: SourceRecoveryReceipt;
 };
@@ -75,12 +94,19 @@ export type SourceMetadata = {
 
 type FetchText = (url: string) => Promise<string>;
 type FetchMediaEvidence = (metadata: SourceMetadata) => Promise<SourceMediaEvidence[]>;
+type SourceDocumentResolver = (url: string) => Promise<ResolvedSourceDocument>;
+type SourceDocumentFetchResult = {
+  metadata?: SourceMetadata;
+  resolution: SourceResolution;
+};
 type PlacesCorroborator = (candidate: SourceSearchCandidate) => Promise<PlacesCorroboration | undefined>;
 type EvidenceRubricEvaluator = (input: EvidenceRubricInput) => EvidenceRubricVerdict | Promise<EvidenceRubricVerdict>;
 
 export type SourceSearchWorkerOptions = {
   placesCorroborator?: PlacesCorroborator;
   rubricEvaluator?: EvidenceRubricEvaluator;
+  sourceDocumentResolver?: SourceDocumentResolver;
+  persistedSourceResolution?: unknown;
 };
 
 type PlacesCorroboration = {
@@ -110,6 +136,9 @@ const defaultMaxQueries = 4;
 const maxResultsPerQuery = 5;
 const maxTextFetchBytes = 1_000_000;
 const maxMetadataRedirects = 3;
+const sourceResolutionCacheTTL = 24 * 60 * 60 * 1_000;
+const sourceResolutionCacheLimit = 100;
+const sourceResolutionCache = new Map<string, { expiresAt: number; document: ResolvedSourceDocument }>();
 
 export async function runSourceSearchRecovery(
   input: SourceSearchInput,
@@ -118,9 +147,17 @@ export async function runSourceSearchRecovery(
   options: SourceSearchWorkerOptions = {},
 ): Promise<SourceSearchOutput> {
   const errors: string[] = [];
-  const sourceMetadata = await fetchSourceMetadata(input.sourceUrl, fetchText, errors);
+  const sourceDocument = await fetchSourceDocument(
+    input.sourceUrl,
+    fetchText,
+    errors,
+    options.sourceDocumentResolver,
+    options.persistedSourceResolution,
+  );
+  const sourceMetadata = sourceDocument?.metadata;
+  const sourceResolution = sourceDocument?.resolution;
   const mediaEvidence = await recoverSourceMediaEvidence(sourceMetadata, fetchMediaEvidence, errors);
-  const enrichedInput = inputWithSourceMetadata(input, sourceMetadata);
+  const enrichedInput = inputWithSourceMetadata(input, sourceMetadata, sourceResolution);
   const queries = buildSourceRecoveryQueries(enrichedInput).slice(0, input.maxQueries ?? defaultMaxQueries);
   const searchResults: SourceSearchResult[] = [];
 
@@ -156,8 +193,18 @@ export async function runSourceSearchRecovery(
     searchResults,
     candidates,
     mediaEvidence,
+    sourceResolution,
     errors,
-    receipt: buildSourceRecoveryReceipt(input, sourceMetadata, queries, searchResults, candidates, mediaEvidence, errors),
+    receipt: buildSourceRecoveryReceipt(
+      input,
+      sourceMetadata,
+      sourceResolution,
+      queries,
+      searchResults,
+      candidates,
+      mediaEvidence,
+      errors,
+    ),
   };
 }
 
@@ -195,13 +242,17 @@ export function buildSourceRecoveryQueries(input: SourceSearchInput): string[] {
   return unique(queries).filter(Boolean).slice(0, defaultMaxQueries);
 }
 
-function inputWithSourceMetadata(input: SourceSearchInput, metadata: SourceMetadata | undefined): SourceSearchInput {
-  if (!metadata) return input;
-  const metadataText = [metadata.title, metadata.description].filter(Boolean).join("\n");
+function inputWithSourceMetadata(
+  input: SourceSearchInput,
+  metadata: SourceMetadata | undefined,
+  resolution: SourceResolution | undefined,
+): SourceSearchInput {
+  if (!metadata && !resolution) return input;
+  const metadataText = [metadata?.title, metadata?.description].filter(Boolean).join("\n");
   return {
     ...input,
-    sourceUrl: metadata.resolvedURL ?? input.sourceUrl,
-    title: [input.title, metadata.title].filter(Boolean).join(" "),
+    sourceUrl: resolution?.resolvedURL ?? metadata?.resolvedURL ?? input.sourceUrl,
+    title: [input.title, metadata?.title].filter(Boolean).join(" "),
     rawText: [input.rawText, metadataText].filter(Boolean).join("\n"),
   };
 }
@@ -296,6 +347,7 @@ function candidatesFromMediaEvidence(
 function buildSourceRecoveryReceipt(
   input: SourceSearchInput,
   metadata: SourceMetadata | undefined,
+  sourceResolution: SourceResolution | undefined,
   queries: string[],
   searchResults: SourceSearchResult[],
   candidates: SourceSearchCandidate[],
@@ -308,13 +360,14 @@ function buildSourceRecoveryReceipt(
 
   const sourceURL = input.sourceUrl?.trim();
   const parsedURL = sourceURL ? safeURL(sourceURL) : undefined;
-  const inputKind = parsedURL?.host.match(/\b(instagram|tiktok|xiaohongshu|xhslink)\b/i)
+  const inputKind = parsedURL && isPlacePlatformURL(parsedURL)
     ? "social_url"
     : parsedURL
       ? "web_url"
       : "text";
 
   if (sourceURL) found.push("source_url");
+  if (sourceResolution?.status === "resolved") found.push("source_resolution");
   if (input.rawText?.trim()) found.push("user_shared_text");
   if (metadata?.title || metadata?.description) found.push("public_metadata");
   if (metadata?.imageURL) found.push("public_thumbnail_url");
@@ -325,7 +378,10 @@ function buildSourceRecoveryReceipt(
   if (candidates.some((candidate) => candidate.address)) found.push("explicit_address");
   if (candidates.length > 0) found.push("review_candidate");
 
-  if (sourceURL) tried.push("public_source_metadata");
+  if (sourceURL) {
+    tried.push("source_resolution");
+    tried.push("public_source_metadata");
+  }
   if (metadata?.imageURL || metadata?.videoURL) tried.push("public_media_fetch");
   if (metadata?.videoURL) tried.push("server_keyframe_extraction");
   if (queries.length > 0) tried.push("public_search");
@@ -344,6 +400,10 @@ function buildSourceRecoveryReceipt(
     missing.add("Verified address");
     missing.add("Verified coordinates");
   }
+
+  if (sourceResolution?.status === "blocked_login") missing.add("Public page without a login wall");
+  if (sourceResolution?.status === "expired") missing.add("Unexpired source link");
+  if (sourceResolution?.status === "opaque_unresolved") missing.add("Canonical source URL or readable share evidence");
 
   return {
     input: inputKind,
@@ -364,6 +424,22 @@ function buildSourceRecoveryReceipt(
         : "diagnostic_only",
     nextBestClue: nextBestClue(candidates),
   };
+}
+
+function isPlacePlatformURL(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  return [
+    "instagram.com",
+    "tiktok.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "douyin.com",
+    "iesdouyin.com",
+    "dianping.com",
+    "dpurl.cn",
+    "meituan.com",
+    "ele.me",
+  ].some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
 function nextBestClue(candidates: SourceSearchCandidate[]): string {
@@ -974,13 +1050,29 @@ export async function defaultFetchMetadataHTML(
   maxBytes = 512_000,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
+  return (await resolveSourceDocument(url, maxBytes, fetchImpl)).html;
+}
+
+export async function resolveSourceDocument(
+  url: string,
+  maxBytes = 512_000,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ResolvedSourceDocument> {
   let parsed = safeURL(url);
   if (!parsed || !(await isSafePublicHTTPURL(parsed))) throw new Error("Blocked non-public URL");
+
+  const originalURL = parsed.toString();
+  // Query and fragment can carry the only merchant/content identifier.
+  const cacheKey = originalURL;
+  const cached = sourceResolutionCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.document;
+  if (cached) sourceResolutionCache.delete(cacheKey);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     let response: Response | undefined;
+    const redirectChain = [originalURL];
     for (let redirectCount = 0; redirectCount <= maxMetadataRedirects; redirectCount += 1) {
       response = await fetchImpl(parsed.toString(), {
         headers: {
@@ -996,35 +1088,180 @@ export async function defaultFetchMetadataHTML(
       if (!location || redirectCount === maxMetadataRedirects) throw new Error("Blocked redirect response");
       parsed = safeURL(new URL(location, parsed).toString());
       if (!parsed || !(await isSafePublicHTTPURL(parsed))) throw new Error("Blocked non-public URL");
+      redirectChain.push(parsed.toString());
     }
 
     if (!response) throw new Error("No response");
     if (isRedirectResponse(response)) throw new Error("Blocked redirect response");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await boundedHeadResponseText(response, maxBytes);
+    if (!response.ok && ![401, 403, 404, 410].includes(response.status)) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const html = await boundedHeadResponseText(response, maxBytes);
+    const networkURL = parsed.toString();
+    const canonicalURL = canonicalSourceURL(html, parsed) ?? recoveredOriginalURL(parsed) ?? parsed;
+    const resolvedURL = canonicalURL.toString();
+    const metadata = sourceMetadataFromHTML(html, resolvedURL);
+    const resolution = buildSourceResolution({
+      originalURL,
+      resolvedURL,
+      redirectChain,
+      responseStatus: response.status,
+      html,
+      metadata,
+      networkURL,
+    });
+    const document = { html, resolution };
+
+    if (resolution.status === "resolved") {
+      cacheResolvedSourceDocument(cacheKey, document);
+    }
+    return document;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function fetchSourceMetadata(
+export function sourceResolutionResponseBody(resolution: SourceResolution): Record<string, unknown> {
+  return {
+    original_url: resolution.originalURL,
+    resolved_url: resolution.resolvedURL,
+    redirect_chain: resolution.redirectChain,
+    ...(resolution.canonicalContentID ? { canonical_content_id: resolution.canonicalContentID } : {}),
+    status: resolution.status,
+    ...(resolution.title ? { title: resolution.title } : {}),
+    ...(resolution.caption ? { caption: resolution.caption } : {}),
+    ...(resolution.thumbnailURL ? { thumbnail_url: resolution.thumbnailURL } : {}),
+  };
+}
+
+export function parsePersistedSourceResolution(
+  value: unknown,
+  expectedOriginalURL?: string,
+): SourceResolution | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  const originalURL = persistedPublicURL(row.original_url ?? row.originalURL);
+  const resolvedURL = persistedPublicURL(row.resolved_url ?? row.resolvedURL);
+  if (!originalURL || !resolvedURL) return undefined;
+
+  if (expectedOriginalURL) {
+    const expected = persistedPublicURL(expectedOriginalURL);
+    if (!expected || expected !== originalURL) return undefined;
+  }
+
+  const rawStatus = row.status;
+  if (
+    rawStatus !== "resolved" &&
+    rawStatus !== "blocked_login" &&
+    rawStatus !== "expired" &&
+    rawStatus !== "opaque_unresolved"
+  ) return undefined;
+
+  const rawChain = row.redirect_chain ?? row.redirectChain;
+  if (!Array.isArray(rawChain) || rawChain.length < 1 || rawChain.length > maxMetadataRedirects + 1) {
+    return undefined;
+  }
+  const redirectChain = rawChain.map(persistedPublicURL);
+  if (redirectChain.some((item) => !item) || redirectChain[0] !== originalURL) return undefined;
+
+  const rawCanonicalContentID = row.canonical_content_id ?? row.canonicalContentID;
+  const canonicalContentID = typeof rawCanonicalContentID === "string" && isCanonicalContentToken(rawCanonicalContentID)
+    ? rawCanonicalContentID
+    : undefined;
+  if (rawCanonicalContentID !== undefined && !canonicalContentID) return undefined;
+
+  const title = persistedText(row.title, 300);
+  const caption = persistedText(row.caption, 2_000);
+  if ((row.title !== undefined && !title) || (row.caption !== undefined && !caption)) return undefined;
+
+  const rawThumbnailURL = row.thumbnail_url ?? row.thumbnailURL;
+  const thumbnailURL = rawThumbnailURL === undefined ? undefined : persistedPublicURL(rawThumbnailURL);
+  if (rawThumbnailURL !== undefined && !thumbnailURL) return undefined;
+
+  return {
+    originalURL,
+    resolvedURL,
+    redirectChain: redirectChain as string[],
+    canonicalContentID,
+    status: rawStatus,
+    title,
+    caption,
+    thumbnailURL,
+  };
+}
+
+async function fetchSourceDocument(
   sourceUrl: string | null | undefined,
   fetchText: FetchText,
   errors: string[],
-): Promise<SourceMetadata | undefined> {
+  resolver?: SourceDocumentResolver,
+  persistedValue?: unknown,
+): Promise<SourceDocumentFetchResult | undefined> {
   const source = sourceUrl?.trim();
   const url = source ? safeURL(source) : undefined;
   if (!url || !isSafePublicHTTPURLByHostname(url)) return undefined;
 
+  const persisted = parsePersistedSourceResolution(persistedValue, url.toString());
+  if (persisted?.status === "resolved") {
+    return {
+      metadata: sourceMetadataFromResolution(persisted),
+      resolution: persisted,
+    };
+  }
+
   try {
-    const html = await fetchText(url.toString());
-    const metadata = sourceMetadataFromHTML(html, url.toString());
-    return metadata.title || metadata.description || metadata.resolvedURL || metadata.imageURL || metadata.videoURL ? metadata : undefined;
+    let document: ResolvedSourceDocument;
+    if (resolver) {
+      document = await resolver(url.toString());
+    } else if (fetchText === defaultFetchText) {
+      document = await resolveSourceDocument(url.toString());
+    } else {
+      const html = await fetchText(url.toString());
+      const metadata = sourceMetadataFromHTML(html, url.toString());
+      document = {
+        html,
+        resolution: buildSourceResolution({
+          originalURL: url.toString(),
+          resolvedURL: url.toString(),
+          redirectChain: [url.toString()],
+          responseStatus: 200,
+          html,
+          metadata,
+          networkURL: url.toString(),
+        }),
+      };
+    }
+
+    const metadata = document.resolution.status === "resolved"
+      ? sourceMetadataFromHTML(document.html, document.resolution.resolvedURL)
+      : undefined;
+    return { metadata, resolution: document.resolution };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown source metadata error";
     errors.push(`source metadata ${url.toString()}: ${message}`);
     return undefined;
   }
+}
+
+function sourceMetadataFromResolution(resolution: SourceResolution): SourceMetadata {
+  return {
+    resolvedURL: resolution.resolvedURL,
+    title: resolution.title,
+    description: resolution.caption,
+    imageURL: resolution.thumbnailURL,
+  };
+}
+
+function cacheResolvedSourceDocument(cacheKey: string, document: ResolvedSourceDocument): void {
+  if (sourceResolutionCache.size >= sourceResolutionCacheLimit) {
+    const oldestKey = sourceResolutionCache.keys().next().value;
+    if (oldestKey) sourceResolutionCache.delete(oldestKey);
+  }
+  sourceResolutionCache.set(cacheKey, {
+    expiresAt: Date.now() + sourceResolutionCacheTTL,
+    document,
+  });
 }
 
 export function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
@@ -1036,6 +1273,173 @@ export function sourceMetadataFromHTML(html: string, resolvedURL?: string): Sour
     imageURL: safePublicMediaURL(metadataValue(html, ["og:image:secure_url", "og:image", "twitter:image"]), baseURL),
     videoURL: safePublicMediaURL(metadataValue(html, ["og:video:secure_url", "og:video", "og:video:url", "twitter:player:stream"]), baseURL),
   };
+}
+
+function buildSourceResolution(input: {
+  originalURL: string;
+  resolvedURL: string;
+  redirectChain: string[];
+  responseStatus: number;
+  html: string;
+  metadata: SourceMetadata;
+  networkURL: string;
+}): SourceResolution {
+  const title = cleanOptionalText(input.metadata.title, 300);
+  const caption = cleanOptionalText(input.metadata.description, 2_000);
+  const thumbnailURL = persistedPublicURL(input.metadata.imageURL);
+  const resolved = safeURL(input.resolvedURL);
+  const canonicalContentID = canonicalContentIDFromURL(resolved);
+  const diagnosticText = cleanText([title, caption, stripTags(input.html.slice(0, 4_000))].filter(Boolean).join(" "));
+
+  let status: SourceResolutionStatus;
+  if (isExpiredSource(input.responseStatus, diagnosticText)) {
+    status = "expired";
+  } else if (isBlockedLoginDocument(input.responseStatus, title, diagnosticText)) {
+    status = "blocked_login";
+  } else if (
+    canonicalContentID ||
+    hasUsableSourceTitle(title) ||
+    hasUsableSourceCaption(caption) ||
+    thumbnailURL ||
+    input.resolvedURL !== input.originalURL ||
+    input.networkURL !== input.originalURL
+  ) {
+    status = "resolved";
+  } else {
+    status = "opaque_unresolved";
+  }
+
+  return {
+    originalURL: input.originalURL,
+    resolvedURL: input.resolvedURL,
+    redirectChain: input.redirectChain,
+    canonicalContentID,
+    status,
+    title,
+    caption,
+    thumbnailURL,
+  };
+}
+
+function canonicalSourceURL(html: string, baseURL: URL): URL | undefined {
+  const tags = html.match(/<link\b[^>]*>/gi) ?? [];
+  for (const tag of tags) {
+    const rel = attrValue(tag, "rel")?.toLowerCase().split(/\s+/) ?? [];
+    if (!rel.includes("canonical")) continue;
+    const href = attrValue(tag, "href");
+    if (!href) continue;
+    let candidate: URL | undefined;
+    try {
+      candidate = safeURL(new URL(href, baseURL).toString());
+    } catch {
+      continue;
+    }
+    if (candidate && isSafePublicHTTPURLByHostname(candidate) && sameDomainFamily(candidate, baseURL)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function recoveredOriginalURL(url: URL): URL | undefined {
+  const value = url.searchParams.get("originalUrl") ?? url.searchParams.get("original_url");
+  if (!value) return undefined;
+  const candidate = safeURL(value);
+  if (!candidate || !isSafePublicHTTPURLByHostname(candidate) || !sameDomainFamily(candidate, url)) return undefined;
+  return candidate;
+}
+
+function sameDomainFamily(lhs: URL, rhs: URL): boolean {
+  const left = normalizedHostname(lhs).replace(/^www\./, "");
+  const right = normalizedHostname(rhs).replace(/^www\./, "");
+  return left === right || left.endsWith(`.${right}`) || right.endsWith(`.${left}`);
+}
+
+function canonicalContentIDFromURL(url: URL | undefined): string | undefined {
+  if (!url) return undefined;
+  const recovered = recoveredOriginalURL(url);
+  if (recovered && recovered.toString() !== url.toString()) return canonicalContentIDFromURL(recovered);
+
+  const parameterKeys = new Set([
+    "id", "noteid", "note_id", "videoid", "video_id", "feedid", "feed_id",
+    "shopid", "shop_id", "merchantid", "merchant_id", "poi_id", "poiid",
+  ]);
+  if (isPlacePlatformURL(url)) {
+    const queryItems = [...url.searchParams.entries()];
+    const fragmentItems = url.hash.startsWith("#")
+      ? [...new URLSearchParams(url.hash.slice(1)).entries()]
+      : [];
+    for (const [key, value] of [...queryItems, ...fragmentItems]) {
+      if (parameterKeys.has(key.toLowerCase()) && isCanonicalContentToken(value)) return value;
+    }
+  }
+
+  const host = normalizedHostname(url);
+  const parts = url.pathname.split("/").filter(Boolean);
+  const markers: string[] = [];
+  if (hostMatchesDomain(host, "xiaohongshu.com")) markers.push("item", "explore");
+  if (hostMatchesDomain(host, "douyin.com") || hostMatchesDomain(host, "iesdouyin.com")) markers.push("video", "note");
+  if (hostMatchesDomain(host, "dianping.com")) markers.push("shop", "feed", "review");
+  if (hostMatchesDomain(host, "meituan.com")) markers.push("restaurant", "shop", "poi");
+  if (hostMatchesDomain(host, "instagram.com")) markers.push("reel", "reels", "p", "tv");
+  if (hostMatchesDomain(host, "tiktok.com")) markers.push("video");
+
+  for (const marker of markers) {
+    const markerIndex = parts.findIndex((part) => part.toLowerCase() === marker);
+    const value = markerIndex >= 0 ? parts[markerIndex + 1] : undefined;
+    if (value && isCanonicalContentToken(value)) return value;
+  }
+  return undefined;
+}
+
+function isCanonicalContentToken(value: string): boolean {
+  return /^[A-Za-z0-9_-]{5,100}$/.test(value) && !/^(login|signin|share|detail|index|home)$/i.test(value);
+}
+
+function hostMatchesDomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function cleanOptionalText(value: string | undefined, maxLength: number): string | undefined {
+  const cleaned = value ? cleanText(value) : "";
+  return cleaned ? cleaned.slice(0, maxLength) : undefined;
+}
+
+function persistedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const cleaned = cleanText(value);
+  return cleaned && cleaned.length <= maxLength ? cleaned : undefined;
+}
+
+function persistedPublicURL(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length > 2_048) return undefined;
+  const parsed = safeURL(value);
+  return parsed && isSafePublicHTTPURLByHostname(parsed) ? parsed.toString() : undefined;
+}
+
+function isExpiredSource(status: number, text: string): boolean {
+  if (status === 404 || status === 410) return true;
+  return /(链接|連結|页面|頁面|内容|內容).{0,12}(失效|不存在|已删除|已刪除|过期|過期)|\b(page|content|link)\s+(?:was\s+)?(?:not found|expired|removed)\b/i.test(text);
+}
+
+function isBlockedLoginDocument(status: number, title: string | undefined, text: string): boolean {
+  if (status === 401 || status === 403) return true;
+  const loginSignal = /(请先|請先)?(?:登录|登入)|\b(?:log\s*in|sign\s*in|login required)\b|安全验(?:证|證)|安全驗證|访问受限|訪問受限/i;
+  const openAppSignal = /(?:打开|打開).{0,16}(?:App|应用|應用)|\bopen (?:this )?(?:in|with) (?:the )?app\b/i;
+  const genericTitle = /^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok)$/i;
+  return loginSignal.test(title ?? "") ||
+    (!hasUsableSourceTitle(title) && loginSignal.test(text)) ||
+    (genericTitle.test(title ?? "") && openAppSignal.test(text));
+}
+
+function hasUsableSourceTitle(value: string | undefined): boolean {
+  if (!value || value.length < 2) return false;
+  return !/^(?:登录|登入|log\s*in|sign\s*in|美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok)$/i.test(value);
+}
+
+function hasUsableSourceCaption(value: string | undefined): boolean {
+  if (!value || value.length < 4) return false;
+  return !/(请先|請先)?(?:登录|登入)|\b(?:log\s*in|sign\s*in|login required)\b/i.test(value);
 }
 
 function metadataValue(html: string, keys: string[]): string | undefined {
@@ -1249,6 +1653,7 @@ async function isSafePublicHTTPURL(url: URL): Promise<boolean> {
 
 function isSafePublicHTTPURLByHostname(url: URL): boolean {
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  if (url.username || url.password) return false;
   const host = normalizedHostname(url);
   if (!host || host === "localhost" || host.endsWith(".localhost")) return false;
   if (isIP(host)) return !isPrivateIPAddress(host);
@@ -1325,8 +1730,16 @@ async function boundedHeadResponseText(response: Response, maxBytes: number): Pr
 
     const headEnd = text.match(/<\/head\s*>/i);
     if (headEnd?.index !== undefined) {
-      await reader.cancel();
-      return text.slice(0, headEnd.index + headEnd[0].length);
+      const headLength = headEnd.index + headEnd[0].length;
+      const head = text.slice(0, headLength);
+      if (/<title\b|<meta\b[^>]*(?:description|og:|twitter:)/i.test(head)) {
+        await reader.cancel();
+        return head;
+      }
+      if (text.length >= headLength + 8_192) {
+        await reader.cancel();
+        return text.slice(0, headLength + 8_192);
+      }
     }
 
     if (byteLength >= maxBytes) {

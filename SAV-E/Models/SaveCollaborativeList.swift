@@ -69,7 +69,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             rating: place.googleRating ?? place.rating,
             reviewCount: nil,
             sourceURL: place.sourceUrl,
-            photoURLs: place.businessPhotoURLStrings,
+            photoURLs: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoURLStrings) ?? [],
             note: place.note,
             addedByDisplayName: addedByDisplayName,
             addedAt: addedAt
@@ -89,7 +89,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             rating: candidate.rating,
             reviewCount: candidate.reviewCount,
             sourceURL: candidate.sourceURL,
-            photoURLs: candidate.businessPhotoURLStrings,
+            photoURLs: GooglePlacesPhotoURL.persistableStrings(candidate.businessPhotoURLStrings) ?? [],
             note: candidate.shareNote,
             addedByDisplayName: addedByDisplayName,
             addedAt: addedAt
@@ -124,8 +124,8 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             note: note,
             sourceUrl: sourceURL,
             sourcePlatform: .other,
-            sourceImageUrl: photoURLs.first,
-            businessPhotoUrls: photoURLs,
+            sourceImageUrl: GooglePlacesPhotoURL.persistableString(photoURLs.first),
+            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(photoURLs),
             extractedDishes: nil,
             priceRange: nil,
             recommender: addedByDisplayName,
@@ -244,12 +244,15 @@ struct SaveSharedListPayload: Codable, Hashable {
            let role = SaveListRole(rawValue: roleValue) {
             payload.role = role
         }
+        payload.list = payload.list.sanitizingPhotoURLs()
         payload.list.viewerRole = payload.role
         return payload
     }
 
     func toURL(baseURL: String? = nil) -> URL? {
-        guard let jsonData = try? JSONEncoder().encode(self),
+        var safePayload = self
+        safePayload.list = list.sanitizingPhotoURLs()
+        guard let jsonData = try? JSONEncoder().encode(safePayload),
               let base64 = jsonData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
         }
@@ -287,11 +290,14 @@ final class SaveCollaborativeListStore {
               let lists = try? JSONDecoder().decode([SaveCollaborativeList].self, from: data) else {
             return []
         }
-        return lists.sorted { $0.updatedAt > $1.updatedAt }
+        return lists
+            .map { $0.sanitizingPhotoURLs() }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func save(_ lists: [SaveCollaborativeList]) {
-        guard let data = try? JSONEncoder().encode(lists) else { return }
+        let safeLists = lists.map { $0.sanitizingPhotoURLs() }
+        guard let data = try? JSONEncoder().encode(safeLists) else { return }
         defaults.set(data, forKey: storageKey)
     }
 
@@ -310,6 +316,18 @@ final class SaveCollaborativeListStore {
         save(lists)
         NotificationCenter.default.post(name: SaveCollaborativeListNotification.didJoin, object: joined)
         return joined
+    }
+}
+
+private extension SaveCollaborativeList {
+    func sanitizingPhotoURLs() -> SaveCollaborativeList {
+        var copy = self
+        copy.items = items.map { item in
+            var safeItem = item
+            safeItem.photoURLs = GooglePlacesPhotoURL.persistableStrings(item.photoURLs) ?? []
+            return safeItem
+        }
+        return copy
     }
 }
 
