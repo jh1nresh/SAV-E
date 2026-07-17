@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE79719B259620EE6212C7 /* Place.swift */; };
 		08517724B9C3842471E1208C /* DeterministicTripPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */; };
+		0DC49802ED00F7D312CC0073 /* SavePetStageVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BD1EB25DF15172B95286CE /* SavePetStageVisualTests.swift */; };
 		11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6C366D3712F5DE04F5EEC40 /* SavePlanAroundController.swift */; };
 		1A6CFA49853A5DA9FAAFDAE8 /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14C815DA9D24219C76EF772 /* PlaceDetailView.swift */; };
 		1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */; };
@@ -24,6 +25,7 @@
 		346469A0705DCADF67B899B0 /* PlacePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */; };
 		362D688B8CC9DEA7219CBC87 /* SaveSearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */; };
 		36589FF0D1AC553DE90E6457 /* ReviewDemoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81A98C2E4AE6FC2ADD4E59E2 /* ReviewDemoTests.swift */; };
+		386FF27FB91775B267C30CD6 /* SavePetAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 451867EDFD260856B3380670 /* SavePetAvatar.swift */; };
 		38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DF55BE93F14D29CE673F5D /* SaveAIService.swift */; };
 		39FF5DB199938DCC8C8CD544 /* PlatformIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E45623E52CFE065303EC21 /* PlatformIcon.swift */; };
 		3AE07A508B3AB47A5B8C4813 /* VerifiedPlaceClaimsClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */; };
@@ -216,6 +218,7 @@
 		425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocationIntentRecommendationService.swift; sourceTree = "<group>"; };
 		425DBDCA43C59790CEA7BB2F /* SAV-EShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SAV-EShareExtension.entitlements"; sourceTree = "<group>"; };
 		42EC012C324D256BB87EE382 /* NavigationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationService.swift; sourceTree = "<group>"; };
+		451867EDFD260856B3380670 /* SavePetAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePetAvatar.swift; sourceTree = "<group>"; };
 		468D23D10B68903C13C10154 /* SaveGuideModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveGuideModels.swift; sourceTree = "<group>"; };
 		482E0F42191576E75DFAA558 /* SAV-EClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SAV-EClip.entitlements"; sourceTree = "<group>"; };
 		48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifiedPlaceClaimsClientTests.swift; sourceTree = "<group>"; };
@@ -309,6 +312,7 @@
 		F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapCoachmarkTour.swift; sourceTree = "<group>"; };
 		F50ABA09CC51700F3AB8F9A9 /* Trip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trip.swift; sourceTree = "<group>"; };
 		F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettings.swift; sourceTree = "<group>"; };
+		F9BD1EB25DF15172B95286CE /* SavePetStageVisualTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePetStageVisualTests.swift; sourceTree = "<group>"; };
 		FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEiMessageExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -506,6 +510,7 @@
 				B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */,
 				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
 				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
+				451867EDFD260856B3380670 /* SavePetAvatar.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -585,6 +590,7 @@
 			isa = PBXGroup;
 			children = (
 				7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */,
+				F9BD1EB25DF15172B95286CE /* SavePetStageVisualTests.swift */,
 				2548E18AFB39B3FE8525FB38 /* SAVEScreenshotRailTests.swift */,
 				33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */,
 			);
@@ -1062,6 +1068,7 @@
 				6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */,
 				593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */,
 				3EA497DD9126B572939E0D11 /* SaveMemoryRecord.swift in Sources */,
+				386FF27FB91775B267C30CD6 /* SavePetAvatar.swift in Sources */,
 				2BAD202D520B9A9483BCCA48 /* SavePetCompanion.swift in Sources */,
 				E21A1B05B486BCD8E6ED441F /* SavePetCompanionCard.swift in Sources */,
 				5B630551792393A0E2F28C4E /* SavePetCompanionStore.swift in Sources */,
@@ -1099,6 +1106,7 @@
 				733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */,
 				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
 				B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */,
+				0DC49802ED00F7D312CC0073 /* SavePetStageVisualTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
