@@ -15,11 +15,17 @@ enum SavePetPreset: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var assetName: String {
-        switch self {
-        case .sprout: return "SavePetSprout"
-        case .spark: return "SavePetSpark"
-        case .cloud: return "SavePetCloud"
+    func assetName(for stage: SavePetStage) -> String {
+        switch (self, stage) {
+        case (.sprout, .hatchling): return "SavePetSprout"
+        case (.sprout, .companion): return "SavePetSproutCompanion"
+        case (.sprout, .guardian): return "SavePetSproutGuardian"
+        case (.spark, .hatchling): return "SavePetSpark"
+        case (.spark, .companion): return "SavePetSparkCompanion"
+        case (.spark, .guardian): return "SavePetSparkGuardian"
+        case (.cloud, .hatchling): return "SavePetCloud"
+        case (.cloud, .companion): return "SavePetCloudCompanion"
+        case (.cloud, .guardian): return "SavePetCloudGuardian"
         }
     }
 }

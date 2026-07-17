@@ -18,6 +18,16 @@ final class SavePetCompanionTests: XCTestCase {
         XCTAssertEqual(SavePetStage.guardian.progress(xp: 60), 1)
     }
 
+    func testEveryPresetStageUsesDistinctArtwork() {
+        let assetNames = SavePetPreset.allCases.flatMap { preset in
+            SavePetStage.allCases.map { stage in
+                preset.assetName(for: stage)
+            }
+        }
+
+        XCTAssertEqual(Set(assetNames).count, 9)
+    }
+
     func testProfileDerivesStageFromReceiptBackedXP() {
         var profile = UserProfile.mock
         profile.petXP = 60

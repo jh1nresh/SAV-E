@@ -14,7 +14,7 @@ struct SavePetAvatar: View {
         ZStack {
             stageBackdrop
 
-            Image(preset.assetName)
+            Image(preset.assetName(for: stage))
                 .resizable()
                 .scaledToFit()
                 .frame(width: mascotSize, height: mascotSize)
@@ -62,11 +62,9 @@ struct SavePetAvatar: View {
                 .stroke(accentColor.opacity(isAnimating ? 0.18 : 0.44), lineWidth: size * 0.08)
                 .frame(width: size * 0.92, height: size * 0.92)
                 .scaleEffect(isAnimating ? 1.08 : 0.94)
-            Image(systemName: "shield.fill")
-                .font(.system(size: size * 0.80, weight: .bold))
-                .foregroundStyle(accentColor.opacity(0.70))
-                .shadow(color: Color.saveNotebookLine.opacity(0.20), radius: 0, x: 0, y: 1)
-                .offset(y: size * 0.045)
+            Circle()
+                .fill(accentColor.opacity(0.28))
+                .frame(width: size * 0.76, height: size * 0.76)
         }
     }
 
@@ -79,25 +77,8 @@ struct SavePetAvatar: View {
                 .overlay(SavePetEggShell().stroke(Color.saveNotebookLine.opacity(0.58), lineWidth: 1.2))
                 .frame(width: size * 0.72, height: size * 0.34)
                 .offset(y: size * 0.30)
-        case .companion:
-            Image(systemName: "heart.fill")
-                .font(.system(size: size * 0.16, weight: .bold))
-                .foregroundStyle(accentColor)
-                .padding(size * 0.08)
-                .background(Color.saveCream.opacity(0.96), in: Circle())
-                .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
-                .offset(x: -size * 0.30, y: -size * 0.25)
-        case .guardian:
-            Image(systemName: "crown.fill")
-                .font(.system(size: size * 0.26, weight: .black))
-                .foregroundStyle(Color.saveHoney)
-                .rotationEffect(.degrees(-4))
-                .offset(y: -size * 0.39)
-
-            Image(systemName: "sparkles")
-                .font(.system(size: size * 0.18, weight: .bold))
-                .foregroundStyle(Color.saveHoney)
-                .offset(x: size * 0.34, y: -size * 0.18)
+        case .companion, .guardian:
+            EmptyView()
         }
     }
 
@@ -122,16 +103,16 @@ struct SavePetAvatar: View {
     private var mascotSize: CGFloat {
         switch stage {
         case .hatchling: size * 0.78
-        case .companion: size * 0.90
-        case .guardian: size * 0.88
+        case .companion: size * 0.94
+        case .guardian: size * 0.96
         }
     }
 
     private var mascotOffset: CGFloat {
         switch stage {
         case .hatchling: size * 0.03
-        case .companion: size * 0.02
-        case .guardian: size * 0.05
+        case .companion: size * 0.01
+        case .guardian: size * 0.02
         }
     }
 
