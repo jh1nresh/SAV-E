@@ -162,6 +162,36 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testFriendsSurfaceIsReachableAndKeepsFollowEntryVisible() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+        dismissLocationAlertIfPresent()
+
+        let reviewShortcut = app.buttons["drawer.openReview"]
+        XCTAssertTrue(reviewShortcut.waitForExistence(timeout: 45))
+        reviewShortcut.tap()
+
+        let friendsTab = app.buttons["drawer.tab.friends"]
+        XCTAssertTrue(friendsTab.waitForExistence(timeout: stepTimeout))
+        friendsTab.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.following"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.sharedPlaces"].exists)
+        XCTAssertTrue(app.textFields["drawer.friends.search"].exists)
+        XCTAssertTrue(app.textFields["drawer.friends.referral"].exists)
+        XCTAssertTrue(app.buttons["drawer.friends.follow"].exists)
+    }
+
+    @MainActor
     func testTripKmlExportMenuSmoke() throws {
         let app = XCUIApplication()
         app.launchArguments += [

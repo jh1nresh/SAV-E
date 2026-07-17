@@ -19,6 +19,7 @@ struct SaveApp: App {
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
+    @State private var linkErrorMessage: String?
     @State private var verifiedAccountGeneration: Int?
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
@@ -80,12 +81,13 @@ struct SaveApp: App {
                 handleAccountGenerationChange(generation)
             }
             .alert(linkAlertTitle, isPresented: Binding(
-                get: { openedTrip != nil || openedList != nil || openedReferral != nil },
+                get: { openedTrip != nil || openedList != nil || openedReferral != nil || linkErrorMessage != nil },
                 set: {
                     if !$0 {
                         openedTrip = nil
                         openedList = nil
                         openedReferral = nil
+                        linkErrorMessage = nil
                     }
                 }
             )) {
@@ -93,9 +95,12 @@ struct SaveApp: App {
                     openedTrip = nil
                     openedList = nil
                     openedReferral = nil
+                    linkErrorMessage = nil
                 }
             } message: {
-                if let openedReferral {
+                if let linkErrorMessage {
+                    Text(linkErrorMessage)
+                } else if let openedReferral {
                     Text(referralReadyMessage(openedReferral))
                 } else if let openedList {
                     Text(listReadyMessage(openedList))
@@ -249,6 +254,7 @@ struct SaveApp: App {
         }
         openedList = nil
         openedReferral = nil
+        linkErrorMessage = nil
     }
 
     @MainActor
@@ -307,11 +313,11 @@ struct SaveApp: App {
         processingID: UUID,
         generation: Int
     ) async {
-        let profile: SaveReferralProfile
+        let profile: SaveReferralProfile?
         do {
             profile = try await supabaseService.fetchReferralProfile(target: target)
         } catch {
-            profile = target.previewProfile
+            profile = nil
         }
 
         guard accountScopedURLProcessingID == processingID else { return }
@@ -325,6 +331,14 @@ struct SaveApp: App {
             if deferredAccountScopedLink?.id == linkID {
                 deferredAccountScopedLink = nil
             }
+            return
+        }
+        guard let profile else {
+            linkErrorMessage = languageSettings.localized(
+                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new SAV-E profile link.",
+                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 SAV-E 個人連結。"
+            )
+            deferredAccountScopedLink = nil
             return
         }
         activeReferralHandoffStore.save(profile)
@@ -350,6 +364,9 @@ struct SaveApp: App {
     }
 
     private var linkAlertTitle: String {
+        if linkErrorMessage != nil {
+            return languageSettings.localized(english: "Could not load friend profile", traditionalChinese: "無法載入朋友資料")
+        }
         if openedReferral != nil {
             switch languageSettings.language {
             case .english: return "Referral ready"
