@@ -118,11 +118,11 @@ struct SavePetSelectionView: View {
     private func detail(for preset: SavePetPreset) -> String {
         switch preset {
         case .sprout:
-            return languageSettings.localized(english: "Warm and curious", traditionalChinese: "溫暖又好奇")
+            return languageSettings.localized(english: "Leaf-eared and curious", traditionalChinese: "葉耳森林獸，好奇又溫暖")
         case .spark:
-            return languageSettings.localized(english: "Bold and energetic", traditionalChinese: "勇敢又有活力")
+            return languageSettings.localized(english: "A bold little fire fox", traditionalChinese: "火花尾小狐狸，勇敢有活力")
         case .cloud:
-            return languageSettings.localized(english: "Calm and thoughtful", traditionalChinese: "平靜又細心")
+            return languageSettings.localized(english: "A calm cloud bunny", traditionalChinese: "雲耳小兔，平靜又細心")
         }
     }
 }

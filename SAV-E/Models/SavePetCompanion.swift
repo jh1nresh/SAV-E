@@ -14,6 +14,14 @@ enum SavePetPreset: String, Codable, CaseIterable, Identifiable {
         case .cloud: return "cloud.fill"
         }
     }
+
+    var assetName: String {
+        switch self {
+        case .sprout: return "SavePetSprout"
+        case .spark: return "SavePetSpark"
+        case .cloud: return "SavePetCloud"
+        }
+    }
 }
 
 enum SavePetStage: String, Codable, CaseIterable {
