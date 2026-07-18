@@ -5,7 +5,7 @@ struct SavePetCompanionCard: View {
     let profile: UserProfile
 
     var body: some View {
-        if let preset = profile.petPreset {
+        if SaveCompanionAvailability.isEnabled, let preset = profile.petPreset {
             HStack(spacing: 0) {
                 Rectangle()
                     .fill(accentColor(for: preset))
