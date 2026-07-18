@@ -37,6 +37,7 @@
 		42BC5392454D192F9C084FE7 /* GoogleTakeoutImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC0381352FF23295F3BE120 /* GoogleTakeoutImportService.swift */; };
 		430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */; };
 		45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */; };
+		47019D109073AB4BB2707D28 /* SaveCompanionAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */; };
 		47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E674763445F956B8660707 /* Color+Theme.swift */; };
 		4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */; };
 		4CF65DAE4673D60F28E20D77 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */; };
@@ -84,6 +85,7 @@
 		9B89D237E9E3B0347D707D58 /* SavePlaceFromURLIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */; };
 		9BBD5A95B6C4D533DE2AA0A6 /* SocialPlaceEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */; };
 		9E128B182EBB30CE71CA03D8 /* PlaceDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BBD7E840405A678802BD835 /* PlaceDeduplicationTests.swift */; };
+		9E6A561FBE53395FB40FA84B /* CompanionAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D7A6509BF9A779BA3BD56C45 /* CompanionAssets.xcassets */; };
 		9F3813BB934F44CF302ACC48 /* SocialOCRCandidateHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */; };
 		9FB7081124C31C9CCA80433F /* EvidenceLinkList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */; };
 		A011580AC9A6F3C2A02FE472 /* SAVEClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = A8238D841A80D8B370120F95 /* SAVEClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -299,6 +301,8 @@
 		CF327EE5BF2F3299F2DAD7E1 /* PrivyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivyAuthService.swift; sourceTree = "<group>"; };
 		D22D539942802E3845E8D2CE /* Secrets.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Secrets.plist; sourceTree = "<group>"; };
 		D7341CE0888D59F87FF9795A /* SaveGuideCustomizationControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveGuideCustomizationControllerTests.swift; sourceTree = "<group>"; };
+		D7A6509BF9A779BA3BD56C45 /* CompanionAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = CompanionAssets.xcassets; sourceTree = "<group>"; };
+		D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCompanionAvailability.swift; sourceTree = "<group>"; };
 		D874F1D0FD76DECBCE8398FF /* SocialCaptionVenueExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialCaptionVenueExtractor.swift; sourceTree = "<group>"; };
 		DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchModels.swift; sourceTree = "<group>"; };
@@ -372,6 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
+				D7A6509BF9A779BA3BD56C45 /* CompanionAssets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
@@ -693,6 +698,7 @@
 				76EE79719B259620EE6212C7 /* Place.swift */,
 				146D4B13678DF31140133614 /* SaveCard.swift */,
 				9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */,
+				D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */,
 				468D23D10B68903C13C10154 /* SaveGuideModels.swift */,
 				2C0D3A7A18E473C94F819125 /* SaveMemoryRecord.swift */,
 				868FC322F65E61552DA6B234 /* SavePetCompanion.swift */,
@@ -914,6 +920,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
+				9E6A561FBE53395FB40FA84B /* CompanionAssets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1076,6 +1083,7 @@
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
 				8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */,
 				1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */,
+				47019D109073AB4BB2707D28 /* SaveCompanionAvailability.swift in Sources */,
 				D6A7E1A1FA84E376E5DED98D /* SaveGuideCustomizationController.swift in Sources */,
 				B76C75E6A77E56F866167BA1 /* SaveGuideModels.swift in Sources */,
 				8F19E2D31087563F35CA0A16 /* SaveLLMClient.swift in Sources */,
@@ -1331,6 +1339,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 81;
 				DEVELOPMENT_TEAM = JC6858UYM9;
+				EXCLUDED_SOURCE_FILE_NAMES = "$(inherited) CompanionAssets.xcassets";
 				INFOPLIST_FILE = "SAV-E/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1421,6 +1430,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app;
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SAVE_INTERNAL_COMPANIONS";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;

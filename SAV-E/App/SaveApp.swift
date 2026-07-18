@@ -477,6 +477,15 @@ private struct AuthenticatedRootView: View {
 
     @ViewBuilder
     private var verifiedAccountContent: some View {
+        if SaveCompanionAvailability.isEnabled {
+            companionAccountContent
+        } else {
+            mainAccountContent
+        }
+    }
+
+    @ViewBuilder
+    private var companionAccountContent: some View {
         if let userID = authService.currentUserId {
             Group {
                 switch petCompanionStore.phase(for: userID) {
@@ -485,10 +494,7 @@ private struct AuthenticatedRootView: View {
                 case .needsSelection:
                     SavePetSelectionView(store: petCompanionStore)
                 case .ready, .unavailable:
-                    ContentView(
-                        incomingPlaceReceipt: $incomingPlaceReceipt,
-                        storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
-                    )
+                    mainAccountContent
                 }
             }
             .task(id: userID) {
@@ -497,6 +503,13 @@ private struct AuthenticatedRootView: View {
         } else {
             AuthLoadingView()
         }
+    }
+
+    private var mainAccountContent: some View {
+        ContentView(
+            incomingPlaceReceipt: $incomingPlaceReceipt,
+            storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
+        )
     }
 
     private func accountConfirmationView(_ kind: AccountConfirmationKind) -> some View {

@@ -10,7 +10,14 @@ struct SavePetAvatar: View {
 
     @State private var isAnimating = false
 
+    @ViewBuilder
     var body: some View {
+        if SaveCompanionAvailability.isEnabled {
+            avatar
+        }
+    }
+
+    private var avatar: some View {
         ZStack {
             stageBackdrop
 
