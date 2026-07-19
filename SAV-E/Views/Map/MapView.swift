@@ -4,6 +4,20 @@ import MapKit
 struct MapView: View {
     @ObservedObject var viewModel: MapViewModel
     let shouldFocusOnUserLocationOnLaunch: Bool
+    let displayedPlaces: [Place]?
+    let showsAuxiliaryPins: Bool
+
+    init(
+        viewModel: MapViewModel,
+        shouldFocusOnUserLocationOnLaunch: Bool,
+        displayedPlaces: [Place]? = nil,
+        showsAuxiliaryPins: Bool = true
+    ) {
+        self.viewModel = viewModel
+        self.shouldFocusOnUserLocationOnLaunch = shouldFocusOnUserLocationOnLaunch
+        self.displayedPlaces = displayedPlaces
+        self.showsAuxiliaryPins = showsAuxiliaryPins
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -11,7 +25,7 @@ struct MapView: View {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
                     UserAnnotation()
 
-                    ForEach(viewModel.filteredPlaces) { place in
+                    ForEach(displayedPlaces ?? viewModel.filteredPlaces) { place in
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(
                                 place: place,
@@ -22,35 +36,37 @@ struct MapView: View {
                         }
                     }
 
-                    ForEach(viewModel.reviewCandidatesOnMap) { candidate in
-                        if let coordinate = candidate.coordinate {
-                            Annotation("", coordinate: coordinate) {
-                                ReviewCandidateMapPin(
-                                    candidate: candidate
-                                ) {
-                                    viewModel.selectReviewCandidate(candidate)
+                    if showsAuxiliaryPins {
+                        ForEach(viewModel.reviewCandidatesOnMap) { candidate in
+                            if let coordinate = candidate.coordinate {
+                                Annotation("", coordinate: coordinate) {
+                                    ReviewCandidateMapPin(
+                                        candidate: candidate
+                                    ) {
+                                        viewModel.selectReviewCandidate(candidate)
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    ForEach(viewModel.visibleMapCandidates) { candidate in
-                        Annotation("", coordinate: candidate.coordinate) {
-                            UnsavedMapCandidatePin(
-                                candidate: candidate,
-                                isSelected: viewModel.selectedMapCandidate?.id == candidate.id
-                            ) {
-                                viewModel.selectMapCandidate(candidate)
+                        ForEach(viewModel.visibleMapCandidates) { candidate in
+                            Annotation("", coordinate: candidate.coordinate) {
+                                UnsavedMapCandidatePin(
+                                    candidate: candidate,
+                                    isSelected: viewModel.selectedMapCandidate?.id == candidate.id
+                                ) {
+                                    viewModel.selectMapCandidate(candidate)
+                                }
                             }
                         }
-                    }
 
-                    ForEach(viewModel.visibleSocialPlaces) { place in
-                        Annotation("", coordinate: place.coordinate) {
-                            SocialPlaceMapPin(
-                                place: place
-                            ) {
-                                viewModel.selectSocialPlace(place)
+                        ForEach(viewModel.visibleSocialPlaces) { place in
+                            Annotation("", coordinate: place.coordinate) {
+                                SocialPlaceMapPin(
+                                    place: place
+                                ) {
+                                    viewModel.selectSocialPlace(place)
+                                }
                             }
                         }
                     }

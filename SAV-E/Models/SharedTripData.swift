@@ -454,6 +454,8 @@ struct SharedTripData: Codable {
         let lng: Double
         let time: String?
         let note: String?
+        let day: Int?
+        let order: Int?
 
         var coordinate: CLLocationCoordinate2D {
             CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -463,11 +465,23 @@ struct SharedTripData: Codable {
     // MARK: - URL Encoding
 
     static func from(url: URL) -> SharedTripData? {
-        ShareRouteCodec.decode(SharedTripData.self, from: url, route: "trip")
+        guard let payload = ShareRouteCodec.decode(
+            SharedTripData.self,
+            from: url,
+            route: "trip",
+            maxTokenCharacters: ShareRoutePayloadLimits.embeddedTokenMaxCharacters
+        ), payload.isShareable else { return nil }
+        return payload
     }
 
     func toURL(baseURL: String? = nil) -> URL? {
-        ShareRouteCodec.url(for: self, baseURL: baseURL ?? SaveShareLinkConfig.tripBaseURL)
+        guard isShareable, ShareRoutePayloadLimits.allowsTripPayload(self) else { return nil }
+        guard let url = ShareRouteCodec.url(
+            for: self,
+            baseURL: baseURL ?? SaveShareLinkConfig.tripBaseURL
+        ), url.lastPathComponent.count <= ShareRoutePayloadLimits.embeddedTokenMaxCharacters
+        else { return nil }
+        return url
     }
 
     // MARK: - Convenience Builders
@@ -485,11 +499,63 @@ struct SharedTripData: Codable {
                     lat: place?.latitude ?? 0,
                     lng: place?.longitude ?? 0,
                     time: stop.time,
-                    note: stop.note
+                    note: nil,
+                    day: day.dayNumber,
+                    order: day.stops.firstIndex(where: { $0.id == stop.id })
                 )
             }
         }
         return SharedTripData(name: title, city: city, stops: stops)
+    }
+
+    /// Builds a public Trip Pack link from confirmed Map Stamps only. Private
+    /// notes never leave the device through the route payload.
+    static func from(trip: Trip, places: [Place]) -> SharedTripData? {
+        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        var seen = Set<UUID>()
+        let stops = trip.places
+            .sorted { ($0.day, $0.orderIndex) < ($1.day, $1.orderIndex) }
+            .compactMap { stop -> SharedStop? in
+                guard seen.insert(stop.placeId).inserted,
+                      let place = placeByID[stop.placeId],
+                      place.latitude.isFinite,
+                      place.longitude.isFinite,
+                      (-90...90).contains(place.latitude),
+                      (-180...180).contains(place.longitude),
+                      place.latitude != 0 || place.longitude != 0
+                else { return nil }
+                return SharedStop(
+                    id: place.id.uuidString,
+                    name: place.name,
+                    address: place.address,
+                    lat: place.latitude,
+                    lng: place.longitude,
+                    time: stop.startTime,
+                    note: nil,
+                    day: stop.day,
+                    order: stop.orderIndex
+                )
+            }
+        guard !stops.isEmpty, stops.count <= 100 else { return nil }
+        return SharedTripData(name: trip.name, city: trip.city, stops: stops)
+    }
+
+    private var isShareable: Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.utf8.count <= 256,
+              city.utf8.count <= 256,
+              (1...100).contains(stops.count)
+        else { return false }
+        return stops.allSatisfy { stop in
+            !stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                stop.name.utf8.count <= 512 &&
+                stop.address.utf8.count <= 2_048 &&
+                stop.lat.isFinite && stop.lng.isFinite &&
+                (-90...90).contains(stop.lat) && (-180...180).contains(stop.lng) &&
+                (stop.lat != 0 || stop.lng != 0) &&
+                (stop.day.map { $0 >= 1 } ?? true) &&
+                (stop.order.map { $0 >= 0 } ?? true)
+        }
     }
 
     var routeSummary: String {
@@ -501,6 +567,9 @@ struct SharedTripData: Codable {
 
 enum ShareRoutePayloadLimits {
     static let placePayloadMaxBytes = 12 * 1024
+    // Base64 expands by roughly one third. Keep raw Trip JSON at or below
+    // 12 KiB and verify the final token so every generated link can reopen.
+    static let tripPayloadMaxBytes = 12 * 1024
     static let embeddedTokenMaxCharacters = 16 * 1024
     static let pendingPlaceURLMaxBytes = 20 * 1024
     static let receiptResponseMaxBytes = 32 * 1024
@@ -509,6 +578,11 @@ enum ShareRoutePayloadLimits {
     static func allowsPlacePayload<T: Encodable>(_ payload: T) -> Bool {
         guard let data = try? JSONEncoder().encode(payload) else { return false }
         return data.count <= placePayloadMaxBytes
+    }
+
+    static func allowsTripPayload<T: Encodable>(_ payload: T) -> Bool {
+        guard let data = try? JSONEncoder().encode(payload) else { return false }
+        return data.count <= tripPayloadMaxBytes
     }
 }
 

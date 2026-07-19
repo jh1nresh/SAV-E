@@ -1,16 +1,9 @@
 import XCTest
 
-/// App Store screenshot rail.
+/// App Store screenshot rail for the Trip Pack-first product shell.
 ///
-/// Drives the real app into the App Review demo session (native email + code
-/// bypass, seeded local places, no real network required) and captures the
-/// core screens as `.keepAlways` attachments:
-///
-///   1. screenshot-01-drawer-review          — Review stays inside the map drawer
-///   2. screenshot-02-map-collapsed-drawer   — map-first home with seeded pins
-///   3. screenshot-03-drawer-stamps-tab      — drawer expanded on the Stamps tab
-///   4. screenshot-04-place-detail           — a seeded place's detail card
-///   5. screenshot-05-passport-profile       — the SAV-E Passport / profile sheet
+/// The review-demo session is local and deterministic. The five screenshots
+/// cover Trips home plus the exact Plan / Map / Inbox / Share workspace.
 ///
 /// Extract the PNGs with `specs/capture-app-screenshots.sh`. The test skips
 /// (never hard-fails) when a step of the demo flow can't be reached, so a
@@ -53,73 +46,48 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        // --- (a) Map-first home ---------------------------------------------
-        dismissLocationAlertIfPresent()
-        let passportButton = app.buttons["Open SAV-E Passport"]
-        guard passportButton.waitForExistence(timeout: 45) else {
+        let tripsHome = app.descendants(matching: .any)["trips.home"]
+        guard tripsHome.waitForExistence(timeout: 45) else {
             attach(app, name: "debug-after-signin")
-            throw XCTSkip("Map/drawer never appeared after demo sign-in — no screenshots captured.")
+            throw XCTSkip("Trips home never appeared after demo sign-in.")
         }
+        XCTAssertTrue(app.buttons["trips.capture"].exists)
+        attach(app, name: "screenshot-01-trips-home")
+
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        guard firstTrip.waitForExistence(timeout: 20), firstTrip.isHittable else {
+            throw XCTSkip("Review-demo Trip Packs were not seeded.")
+        }
+        firstTrip.tap()
+
+        let tabBar = app.tabBars.firstMatch
+        guard tabBar.buttons["Plan"].waitForExistence(timeout: stepTimeout) else {
+            throw XCTSkip("Trip workspace did not open.")
+        }
+        attach(app, name: "screenshot-02-trip-plan")
+
+        tabBar.buttons["Map"].tap()
         dismissLocationAlertIfPresent()
-        sleep(4) // let map tiles + seeded pins finish rendering
-        attach(app, name: "screenshot-02-map-collapsed-drawer")
-
-        // --- (b) Review inside the map drawer -------------------------------
-        let reviewShortcut = app.buttons["drawer.openReview"]
-        guard reviewShortcut.waitForExistence(timeout: stepTimeout), reviewShortcut.isHittable else {
-            throw XCTSkip("Review shortcut was not reachable from the map drawer.")
-        }
-        reviewShortcut.tap()
-
-        let reviewTab = app.buttons["drawer.tab.review"]
-        let reviewRoot = app.descendants(matching: .any)["drawer.review.root"]
-        guard reviewTab.waitForExistence(timeout: stepTimeout),
-              reviewRoot.waitForExistence(timeout: stepTimeout) else {
-            attach(app, name: "debug-after-opening-review")
-            throw XCTSkip("Drawer Review never appeared above the map.")
-        }
+        XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
         sleep(2)
-        attach(app, name: "screenshot-01-drawer-review")
+        attach(app, name: "screenshot-03-trip-map")
 
-        // --- (c) Drawer expanded on the Stamps tab --------------------------
-        let stampsTab = app.buttons["drawer.tab.saved"]
-        let seededRow = app.staticTexts["Ichiran Shibuya"]
-        guard stampsTab.waitForExistence(timeout: stepTimeout) || seededRow.waitForExistence(timeout: stepTimeout) else {
-            attach(app, name: "debug-after-expand")
-            throw XCTSkip("Drawer did not expand to the Stamps tab — captured map only.")
-        }
-        if stampsTab.exists, stampsTab.isHittable {
-            stampsTab.tap()
-        }
-        _ = seededRow.waitForExistence(timeout: stepTimeout)
+        tabBar.buttons["Inbox"].tap()
+        XCTAssertTrue(app.buttons["Paste / Share Link"].waitForExistence(timeout: stepTimeout))
         sleep(1)
-        attach(app, name: "screenshot-03-drawer-stamps-tab")
+        attach(app, name: "screenshot-04-trip-inbox")
 
-        // --- (d) Place detail for a seeded place ----------------------------
-        guard openSeededPlaceDetail(app: app) else {
-            attach(app, name: "debug-stamps-rows")
-            throw XCTSkip("Could not open a seeded place detail — captured map, Review, and Stamps only.")
-        }
-        sleep(5) // give the business-photo carousel a moment to load
-        attach(app, name: "screenshot-04-place-detail")
-
-        // --- (e) Passport / profile -----------------------------------------
-        let closeDetail = app.buttons["Close place detail"]
-        if closeDetail.waitForExistence(timeout: stepTimeout) {
-            closeDetail.tap()
-        }
-        guard passportButton.waitForExistence(timeout: stepTimeout) else {
-            throw XCTSkip("Passport button not reachable after closing place detail — captured the first 4 screens.")
-        }
-        passportButton.tap()
-        let profileMarker = app.buttons["profile.edit"]
-        _ = profileMarker.waitForExistence(timeout: stepTimeout)
+        tabBar.buttons["Share"].tap()
+        XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["trip.share.kml"].exists)
         sleep(1)
-        attach(app, name: "screenshot-05-passport-profile")
+        attach(app, name: "screenshot-05-trip-share")
     }
 
     @MainActor
-    func testMapOnlyShellKeepsReviewInDrawer() throws {
+    func testTripPackFirstShellKeepsCaptureAndMapReachable() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -130,35 +98,28 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["trips.capture"].isHittable)
+
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
+        firstTrip.tap()
+
+        let tabBar = app.tabBars.firstMatch
+        for tab in ["Plan", "Map", "Inbox", "Share"] {
+            XCTAssertTrue(tabBar.buttons[tab].waitForExistence(timeout: stepTimeout), "Missing \(tab) tab")
+        }
+        XCTAssertEqual(tabBar.buttons.count, 4)
+
+        tabBar.buttons["Map"].tap()
         dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
-        let locationButton = app.buttons["Center map on current location"]
-        XCTAssertTrue(locationButton.waitForExistence(timeout: 45))
-
-        let reviewShortcut = app.buttons["drawer.openReview"]
-        XCTAssertTrue(reviewShortcut.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(reviewShortcut.isHittable)
-        reviewShortcut.tap()
-
-        let reviewTab = app.buttons["drawer.tab.review"]
-        let reviewRoot = app.descendants(matching: .any)["drawer.review.root"]
-        XCTAssertTrue(reviewTab.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(reviewRoot.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(locationButton.exists)
-        XCTAssertFalse(app.descendants(matching: .any)["memory-inbox-root"].exists)
-
-        let stampsTab = app.buttons["drawer.tab.saved"]
-        XCTAssertTrue(stampsTab.waitForExistence(timeout: stepTimeout))
-        stampsTab.tap()
-        let recentPlace = app.staticTexts["Daan Forest Park"]
-        XCTAssertTrue(recentPlace.waitForExistence(timeout: stepTimeout))
-        recentPlace.tap()
-
-        let detailReviewShortcut = app.buttons["drawer.openReview"]
-        XCTAssertTrue(detailReviewShortcut.waitForExistence(timeout: stepTimeout))
-        detailReviewShortcut.tap()
-        XCTAssertTrue(reviewRoot.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(locationButton.exists)
+        tabBar.buttons["Inbox"].tap()
+        XCTAssertTrue(app.buttons["Paste / Share Link"].waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
@@ -173,11 +134,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
-        dismissLocationAlertIfPresent()
 
-        let reviewShortcut = app.buttons["drawer.openReview"]
-        XCTAssertTrue(reviewShortcut.waitForExistence(timeout: 45))
-        reviewShortcut.tap()
+        let capture = app.buttons["trips.capture"]
+        XCTAssertTrue(capture.waitForExistence(timeout: 45))
+        capture.tap()
 
         let friendsTab = app.buttons["drawer.tab.friends"]
         XCTAssertTrue(friendsTab.waitForExistence(timeout: stepTimeout))
@@ -203,33 +163,29 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
-        dismissLocationAlertIfPresent()
 
-        let queryField = app.textFields["Ask saved places or paste a spot..."]
-        XCTAssertTrue(queryField.waitForExistence(timeout: stepTimeout))
-        queryField.tap()
-        queryField.typeText("Plan a one day Taipei trip")
-        let searchKey = app.keyboards.buttons["Search"]
-        if searchKey.waitForExistence(timeout: 3) {
-            searchKey.tap()
-        } else {
-            queryField.typeText("\n")
-        }
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
+        firstTrip.tap()
 
-        let shareMenu = app.buttons["Share or export trip"]
-        XCTAssertTrue(shareMenu.waitForExistence(timeout: 45))
-        shareMenu.tap()
+        let shareTab = app.tabBars.buttons["Share"]
+        XCTAssertTrue(shareTab.waitForExistence(timeout: stepTimeout))
+        shareTab.tap()
 
-        let shareSaveLink = app.buttons["Share SAV-E Link"]
+        let shareSaveLink = app.buttons["trip.share.link"]
         XCTAssertTrue(shareSaveLink.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(shareSaveLink.isEnabled)
-        let exportKml = app.buttons["Export KML"]
+        let exportKml = app.buttons["trip.share.kml"]
         XCTAssertTrue(exportKml.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(exportKml.isEnabled)
         exportKml.tap()
-
-        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["Sign in to export your confirmed Map Stamps."].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.share.kml.sheet"]
+                .waitForExistence(timeout: stepTimeout),
+            "Reviewer demo KML should create a file and open the share sheet."
+        )
     }
 
     // MARK: - Demo sign-in
@@ -241,9 +197,8 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let emailField = app.textFields["signin.emailField"]
         // The opening animation holds the screen for ~2s before SignInView.
         guard emailField.waitForExistence(timeout: 20) else {
-            // A previous demo session may already be signed in (vault + seed
-            // flag persist); proceed if the map root is already up.
-            if app.buttons["Open SAV-E Passport"].waitForExistence(timeout: stepTimeout) {
+            // A previous demo session may already be signed in.
+            if app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout) {
                 return
             }
             throw XCTSkip("Email sign-in field never appeared — cannot reach the demo session.")

@@ -150,6 +150,18 @@ import {
   trekKmlResponseHeaders,
   type TrekKmlPlaceRow,
 } from "./trekKmlExport.js";
+import {
+  TripSnapshotInputError,
+  canonicalizeOwnedTripStops,
+  deleteTripStopsSql,
+  normalizeTripStopSnapshot,
+  validateTripMetadataSnapshot,
+  ownedTripForUpdateSql,
+  ownedTripPlacesSql,
+  type CanonicalTripStopSnapshot,
+  type NormalizedTripStopSnapshot,
+  type OwnedTripPlaceRow,
+} from "./tripPersistence.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -2191,27 +2203,28 @@ async function handleTrips(
 
   if (request.method === "POST" && !tripId) {
     const body = await readJson(request);
-    const stops = Array.isArray(body.trip_stops) ? body.trip_stops.map(asObject) : [];
+    validateTripMetadataForApi(body, true);
+    const stops = normalizeTripStopsForApi(body);
     const tripBody = withOwner(writableFields(body, ["trip_stops"]), userId);
     const client = await pool.connect();
+    let transactionFinished = false;
 
     try {
       await client.query("begin");
+      const canonicalStops = await canonicalTripStopsForUser(client, userId, stops);
       const insert = buildInsert("trips", tripBody, [...tripFields, "user_id"]);
       const { rows: tripRows } = await client.query(`${insert.sql} returning *`, insert.values);
       const trip = tripRows[0] as { id: string };
 
-      for (const stop of stops) {
-        const stopBody = { ...writableFields(stop, ["trip_id", "created_at"]), trip_id: trip.id };
-        const stopInsert = buildInsert("trip_stops", stopBody, [...tripStopFields, "trip_id"]);
-        await client.query(stopInsert.sql, stopInsert.values);
-      }
+      await insertTripStops(client, trip.id, canonicalStops);
 
       const { rows } = await client.query(tripsSelect("where t.id = $1 and t.user_id = $2"), [trip.id, userId]);
+      const responseBody = formatTrip(rows[0]);
       await client.query("commit");
-      return sendJson(response, formatTrip(rows[0]), 201);
+      transactionFinished = true;
+      return sendJson(response, responseBody, 201);
     } catch (error) {
-      await client.query("rollback");
+      if (!transactionFinished) await rollbackQuietly(client);
       throw error;
     } finally {
       client.release();
@@ -2219,19 +2232,46 @@ async function handleTrips(
   }
 
   if (request.method === "PATCH" && tripId) {
-    const body = writableFields(await readJson(request), ["id", "user_id", "trip_stops", "created_at", "updated_at"]);
+    if (!isUuid(tripId)) return sendJson(response, { error: "Trip id must be a UUID" }, 400);
+
+    const requestBody = await readJson(request);
+    validateTripMetadataForApi(requestBody, false);
+    const stops = normalizeTripStopsForApi(requestBody);
+    const body = writableFields(requestBody, ["id", "user_id", "trip_stops", "created_at", "updated_at"]);
     const update = buildUpdate("trips", body, tripFields);
-    if (!update) return sendJson(response, { error: "No writable fields" }, 400);
+    const client = await pool.connect();
+    let transactionFinished = false;
 
-    const values = [...update.values, tripId, userId];
-    const { rows } = await pool.query(
-      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning id`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Trip not found" }, 404);
+    try {
+      await client.query("begin");
+      const { rows: tripRows } = await client.query(ownedTripForUpdateSql, [tripId, userId]);
+      if (!tripRows[0]) throw new ApiError(404, "Trip not found");
 
-    const { rows: trips } = await pool.query(tripsSelect("where t.id = $1 and t.user_id = $2"), [tripId, userId]);
-    return sendJson(response, formatTrip(trips[0]));
+      const canonicalStops = await canonicalTripStopsForUser(client, userId, stops);
+      if (update) {
+        const values = [...update.values, tripId, userId];
+        await client.query(
+          `${update.sql}, updated_at = now() where id = $${values.length - 1} and user_id = $${values.length}`,
+          values,
+        );
+      } else {
+        await client.query("update trips set updated_at = now() where id = $1 and user_id = $2", [tripId, userId]);
+      }
+
+      await client.query(deleteTripStopsSql, [tripId]);
+      await insertTripStops(client, tripId, canonicalStops);
+
+      const { rows: trips } = await client.query(tripsSelect("where t.id = $1 and t.user_id = $2"), [tripId, userId]);
+      const responseBody = formatTrip(trips[0]);
+      await client.query("commit");
+      transactionFinished = true;
+      return sendJson(response, responseBody);
+    } catch (error) {
+      if (!transactionFinished) await rollbackQuietly(client);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   if (request.method === "DELETE" && tripId) {
@@ -2244,6 +2284,60 @@ async function handleTrips(
   }
 
   return sendJson(response, { error: "Unsupported trips route" }, 405);
+}
+
+function normalizeTripStopsForApi(body: JsonBody): NormalizedTripStopSnapshot[] {
+  try {
+    return normalizeTripStopSnapshot(body);
+  } catch (error) {
+    if (error instanceof TripSnapshotInputError) throw new ApiError(400, error.message);
+    throw error;
+  }
+}
+
+function validateTripMetadataForApi(body: JsonBody, requireName: boolean): void {
+  try {
+    validateTripMetadataSnapshot(body, requireName);
+  } catch (error) {
+    if (error instanceof TripSnapshotInputError) throw new ApiError(400, error.message);
+    throw error;
+  }
+}
+
+async function canonicalTripStopsForUser(
+  client: PoolClient,
+  userId: string,
+  stops: NormalizedTripStopSnapshot[],
+): Promise<CanonicalTripStopSnapshot[]> {
+  if (stops.length === 0) return [];
+
+  const placeIds = [...new Set(stops.map((stop) => stop.place_id))];
+  const { rows } = await client.query(ownedTripPlacesSql, [userId, placeIds]);
+  try {
+    return canonicalizeOwnedTripStops(stops, rows as OwnedTripPlaceRow[]);
+  } catch (error) {
+    if (error instanceof TripSnapshotInputError) throw new ApiError(400, error.message);
+    throw error;
+  }
+}
+
+async function insertTripStops(
+  client: PoolClient,
+  tripId: string,
+  stops: CanonicalTripStopSnapshot[],
+): Promise<void> {
+  for (const stop of stops) {
+    const stopInsert = buildInsert("trip_stops", { ...stop, trip_id: tripId }, [...tripStopFields, "trip_id"]);
+    await client.query(stopInsert.sql, stopInsert.values);
+  }
+}
+
+async function rollbackQuietly(client: PoolClient): Promise<void> {
+  try {
+    await client.query("rollback");
+  } catch {
+    // Preserve the mutation error that caused the rollback.
+  }
 }
 
 async function handleTrekKmlExport(

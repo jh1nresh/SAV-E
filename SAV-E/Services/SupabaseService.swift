@@ -503,12 +503,10 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
     func updateTrip(_ trip: Trip) async throws {
         guard isConfigured else { return }
 
-        let updates: [String: Any?] = [
-            "name": trip.name,
-            "city": trip.city,
-            "is_optimized": trip.isOptimized,
-        ]
-        let body = try Self.jsonBody(updates)
+        // PATCH carries the complete ordered stop snapshot. The backend replaces
+        // stops transactionally after verifying every place belongs to this user.
+        let row = TripRow.from(trip: trip, userId: "", includeStops: true)
+        let body = try JSONEncoder.supabase.encode(row)
         try await request(path: "/trips/\(trip.id)", method: "PATCH", body: body)
     }
 
@@ -1701,7 +1699,9 @@ private struct TripRow: Codable {
             city: city,
             startDate: start_date.flatMap { df.date(from: $0) },
             endDate: end_date.flatMap { df.date(from: $0) },
-            places: (trip_stops ?? []).map { $0.toStop() },
+            // A deleted or legacy-null place is no longer a confirmed Map Stamp,
+            // so it must not be fabricated into the Trip Pack with a random ID.
+            places: (trip_stops ?? []).compactMap { $0.toStop() },
             isOptimized: is_optimized,
             createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
         )
@@ -1736,10 +1736,11 @@ private struct TripStopRow: Codable {
     let duration: Int?
     let note: String?
 
-    func toStop() -> TripStop {
-        TripStop(
+    func toStop() -> TripStop? {
+        guard let place_id else { return nil }
+        return TripStop(
             id: id,
-            placeId: place_id ?? UUID(),
+            placeId: place_id,
             placeName: place_name,
             day: day,
             orderIndex: order_index,

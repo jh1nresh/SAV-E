@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum ContentStorageScope {
+enum ContentStorageScope: Equatable {
     case production
     case reviewerDemo
 
@@ -13,33 +13,54 @@ enum ContentStorageScope {
             return ReviewDemoStorage.makeMapViewModel()
         }
     }
+
+    @MainActor
+    func makeTripPackStore() -> TripPackStore {
+        switch self {
+        case .production:
+            return TripPackStore(
+                userID: PrivyAuthService.shared.currentUserId ?? "unavailable",
+                persistence: SupabaseService.shared
+            )
+        case .reviewerDemo:
+            return .reviewerDemo()
+        }
+    }
 }
 
 struct ContentView: View {
     @StateObject private var mapVM: MapViewModel
+    @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("hasSeenMapTour") private var hasSeenMapTour = false
-    @State private var isRootSheetPresented = true
+    @State private var isRootSheetPresented: Bool
     @State private var drawerDetent: PresentationDetent
-    @State private var shouldAutoFocusUserLocationOnLaunch: Bool
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
+    @State private var pendingTripAssignmentPlace: Place?
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
         storageScope: ContentStorageScope = .production
     ) {
         _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
+        _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
-        _drawerDetent = State(initialValue: incomingPlaceReceipt.wrappedValue == nil ? .height(88) : .large)
-        _shouldAutoFocusUserLocationOnLaunch = State(initialValue: incomingPlaceReceipt.wrappedValue == nil)
+        self.storageScope = storageScope
+        _isRootSheetPresented = State(initialValue: incomingPlaceReceipt.wrappedValue != nil)
+        _drawerDetent = State(initialValue: .large)
     }
 
     var body: some View {
-        mapSurface
+        TripsHomeView(
+            store: tripStore,
+            mapViewModel: mapVM,
+            storageScope: storageScope,
+            onOpenCapture: openCapture
+        )
         .environment(\.appLanguageSettings, languageSettings)
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
@@ -55,8 +76,39 @@ struct ContentView: View {
                 traditionalChinese: "「\(mapVM.syncFailedPlaceName ?? "")」沒能同步到你的帳號——請檢查網路。它仍保存在本機。"
             ))
         }
-        .sheet(isPresented: $isRootSheetPresented, onDismiss: restorePermanentDrawer) {
+        .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
             rootSheetContent
+        }
+        .confirmationDialog(
+            languageSettings.localized(
+                english: "Add this place to a Trip Pack?",
+                traditionalChinese: "要把這個地點加入 Trip Pack 嗎？"
+            ),
+            isPresented: Binding(
+                get: { pendingTripAssignmentPlace != nil },
+                set: { if !$0 { pendingTripAssignmentPlace = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(addToTripButtonTitle) {
+                guard let place = pendingTripAssignmentPlace else { return }
+                pendingTripAssignmentPlace = nil
+                Task { await addConfirmedPlaceToTrip(place) }
+            }
+            Button(
+                languageSettings.localized(
+                    english: "Keep in SAV-E only",
+                    traditionalChinese: "只存到 SAV-E"
+                ),
+                role: .cancel
+            ) {
+                pendingTripAssignmentPlace = nil
+            }
+        } message: {
+            Text(languageSettings.localized(
+                english: "The Map Stamp is saved. A Trip Pack is always a separate, explicit choice.",
+                traditionalChinese: "地圖章已保存；是否加入 Trip Pack 仍由你另外確認。"
+            ))
         }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
@@ -67,7 +119,6 @@ struct ContentView: View {
             mapDetailDrawerItem = nil
             mapVM.clearSelectedMapObject()
             drawerVM.returnToCommands()
-            shouldAutoFocusUserLocationOnLaunch = false
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .large
             }
@@ -111,22 +162,11 @@ struct ContentView: View {
             drawerVM.mapCandidates = mapVM.mapCandidates
             await drawerVM.loadMemoryPreferences()
             await mapVM.loadPlaces()
-        }
-        .fullScreenCover(isPresented: shouldShowMapTour) {
-            MapCoachmarkTour {
-                hasSeenMapTour = true
+            await tripStore.load()
+            if storageScope == .reviewerDemo {
+                await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
             }
-            .environment(\.appLanguageSettings, languageSettings)
-            .presentationBackground(.clear)
         }
-    }
-
-    private var mapSurface: some View {
-        MapView(
-            viewModel: mapVM,
-            shouldFocusOnUserLocationOnLaunch: shouldAutoFocusUserLocationOnLaunch
-        )
-            .environment(\.appLanguageSettings, languageSettings)
     }
 
     @ViewBuilder
@@ -160,7 +200,9 @@ struct ContentView: View {
                 try await mapVM.deletePlace(place)
             },
             onSaveCandidate: { candidate, nameOverride in
-                try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                pendingTripAssignmentPlace = place
+                isRootSheetPresented = false
             },
             onRejectCandidate: { candidate in
                 try await mapVM.rejectReviewCandidate(candidate)
@@ -248,19 +290,8 @@ struct ContentView: View {
         .presentationDetents([.height(88), .height(104), .height(160), .fraction(0.34), .fraction(0.38), .medium, .large], selection: $drawerDetent)
         .presentationDragIndicator(.visible)
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        .interactiveDismissDisabled(true)
         .presentationBackground(.clear)
         .presentationCornerRadius(32)
-    }
-
-    /// First-run gate: the guided tour shows once, the first time the user is
-    /// actually on the map (this view only renders post-auth). Setting
-    /// `hasSeenMapTour` true on dismissal keeps it from ever showing again.
-    private var shouldShowMapTour: Binding<Bool> {
-        Binding(
-            get: { incomingPlaceReceipt == nil && !hasSeenMapTour },
-            set: { if !$0 { hasSeenMapTour = true } }
-        )
     }
 
     private func openMapDetail(_ item: MapDetailDrawerItem) {
@@ -270,24 +301,61 @@ struct ContentView: View {
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = .fraction(0.38)
         }
+        isRootSheetPresented = true
     }
 
-    private func restorePermanentDrawer() {
+    private func openCapture() {
+        guard incomingPlaceReceipt == nil else { return }
+        mapDetailDrawerItem = nil
+        mapVM.clearSelectedMapObject()
+        drawerVM.returnToCommands()
+        drawerDetent = .large
+        isRootSheetPresented = true
+    }
+
+    private func handleRootSheetDismiss() {
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
-        shouldAutoFocusUserLocationOnLaunch = pendingDetail == nil
         incomingPlaceReceipt = nil
         drawerVM.returnToCommands()
         mapDetailDrawerItem = pendingDetail
-        drawerDetent = pendingDetail == nil ? .height(88) : .fraction(0.38)
         if pendingDetail == nil {
             mapVM.clearSelectedMapObject()
+            return
         }
 
         Task { @MainActor in
             await Task.yield()
+            drawerDetent = .fraction(0.38)
             isRootSheetPresented = true
         }
+    }
+
+    private var addToTripButtonTitle: String {
+        if let trip = tripStore.selectedTrip ?? tripStore.suggestedTrip {
+            return languageSettings.localized(
+                english: "Add to \(trip.name)",
+                traditionalChinese: "加入「\(trip.name)」"
+            )
+        }
+        return languageSettings.localized(
+            english: "Add to a new Trip Pack",
+            traditionalChinese: "加入新的 Trip Pack"
+        )
+    }
+
+    private func addConfirmedPlaceToTrip(_ place: Place) async {
+        if let trip = tripStore.selectedTrip ?? tripStore.suggestedTrip {
+            _ = await tripStore.addConfirmedPlace(place, to: trip.id)
+            return
+        }
+
+        let defaultName = languageSettings.localized(
+            english: "My Trip",
+            traditionalChinese: "我的行程"
+        )
+        guard let trip = await tripStore.createTrip(name: defaultName) else { return }
+        _ = await tripStore.addConfirmedPlace(place, to: trip.id)
     }
 
     private func refreshSelectedMapDetailPlace(from places: [Place]) {
