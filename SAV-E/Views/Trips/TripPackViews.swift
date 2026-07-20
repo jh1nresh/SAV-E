@@ -5,9 +5,12 @@ struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
     let storageScope: ContentStorageScope
-    let onOpenCapture: () -> Void
+    let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
+    let onOpenReviewCandidate: (PlaceReviewCandidate, UUID?) -> Void
+    let onActiveTripChange: (UUID?) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsCreateTrip = false
+    @State private var drawerDragOffset: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -41,7 +44,7 @@ struct TripsHomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
-                .padding(.bottom, 108)
+                .padding(.bottom, 132)
             }
             .background(Color.saveCream.ignoresSafeArea())
             .navigationTitle(localized("Trips", "行程"))
@@ -56,7 +59,7 @@ struct TripsHomeView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                captureButton
+                drawerLauncher
             }
             .refreshable {
                 await store.load()
@@ -107,28 +110,127 @@ struct TripsHomeView: View {
             ))
             .font(.subheadline)
             .foregroundStyle(.secondary)
+
+            Text(localized(
+                "Analyze  →  Review  →  Save  →  Plan",
+                "分析  →  確認  →  收藏  →  規劃"
+            ))
+            .font(.caption.weight(.bold))
+            .foregroundStyle(Color.saveCoralInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.saveCoral.opacity(0.18), in: Capsule())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private var captureButton: some View {
-        Button {
-            onOpenCapture()
-        } label: {
-            Label(localized("Paste / Share Link", "貼上／分享連結"), systemImage: "link.badge.plus")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
+    private var drawerLauncher: some View {
+        VStack(spacing: 7) {
+            Capsule()
+                .fill(Color.saveCocoa.opacity(0.32))
+                .frame(width: 34, height: 4)
+
+            HStack(spacing: 8) {
+                Button {
+                    onOpenDrawer(.addLink, nil)
+                } label: {
+                    Label(localized("Add link", "加入連結"), systemImage: "link.badge.plus")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(Color.saveInk)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 48)
+                        .background(Color.saveCoral.opacity(0.78), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("trips.capture")
+
+                launcherButton(
+                    title: localized("Saved", "收藏"),
+                    systemImage: "bookmark.fill",
+                    identifier: "trips.saved"
+                ) {
+                    onOpenDrawer(.saved, nil)
+                }
+
+                launcherButton(
+                    title: localized("Review", "待確認"),
+                    systemImage: "checklist.unchecked",
+                    badge: TripWorkspaceBadge.label(for: mapViewModel.reviewCandidates.count),
+                    identifier: "trips.review"
+                ) {
+                    onOpenDrawer(.review, nil)
+                }
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Color.saveCoral)
-        .foregroundStyle(Color.saveInk)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.top, 7)
+        .padding(.bottom, 10)
         .background(.ultraThinMaterial)
-        .accessibilityIdentifier("trips.capture")
+        .background(Color.saveCream.opacity(0.45))
+        .contentShape(Rectangle())
+        .offset(y: drawerDragOffset)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10, coordinateSpace: .global)
+                .onChanged { value in
+                    guard value.translation.height < 0,
+                          abs(value.translation.height) > abs(value.translation.width)
+                    else {
+                        drawerDragOffset = 0
+                        return
+                    }
+                    drawerDragOffset = max(value.translation.height, -96)
+                }
+                .onEnded { value in
+                    let shouldOpen = value.translation.height < -52
+                        && abs(value.translation.height) > abs(value.translation.width)
+
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                        drawerDragOffset = 0
+                    }
+
+                    if shouldOpen {
+                        onOpenDrawer(.addLink, nil)
+                    }
+                }
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.launcher")
+    }
+
+    private func launcherButton(
+        title: String,
+        systemImage: String,
+        badge: String? = nil,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.bold))
+                Text(title)
+                    .font(.caption2.weight(.bold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.saveInk)
+            .frame(width: 62, height: 48)
+            .background(Color.savePaper.opacity(0.78), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                if let badge {
+                    Text(badge)
+                        .font(.caption2.weight(.black))
+                        .foregroundStyle(Color.saveInk)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 20, minHeight: 20)
+                        .background(Color.saveHoney, in: Capsule())
+                        .offset(x: 5, y: -5)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -152,7 +254,9 @@ struct TripsHomeView: View {
                             store: store,
                             mapViewModel: mapViewModel,
                             storageScope: storageScope,
-                            onOpenCapture: onOpenCapture
+                            onOpenDrawer: onOpenDrawer,
+                            onOpenReviewCandidate: onOpenReviewCandidate,
+                            onActiveTripChange: onActiveTripChange
                         )
                     } label: {
                         TripPackCard(trip: trip)
@@ -211,7 +315,7 @@ private struct TripPackCard: View {
     }
 }
 
-private struct NewTripPackView: View {
+struct NewTripPackView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
     let onCreate: (String, String, Date?, Date?) async -> Void
@@ -295,7 +399,9 @@ private struct TripWorkspaceView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
     let storageScope: ContentStorageScope
-    let onOpenCapture: () -> Void
+    let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
+    let onOpenReviewCandidate: (PlaceReviewCandidate, UUID?) -> Void
+    let onActiveTripChange: (UUID?) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var selectedTab: TripWorkspaceTab = .plan
 
@@ -314,9 +420,10 @@ private struct TripWorkspaceView: View {
                         .accessibilityIdentifier("trip.tab.map")
 
                     TripInboxView(
+                        tripName: trip.name,
                         candidates: mapViewModel.reviewCandidates,
-                        onSelect: mapViewModel.selectReviewCandidate,
-                        onOpenCapture: onOpenCapture
+                        onSelect: { onOpenReviewCandidate($0, trip.id) },
+                        onOpenCapture: { onOpenDrawer(.addLink, trip.id) }
                     )
                     .tabItem { Label(localized("Inbox", "收件匣"), systemImage: "tray") }
                     .badge(TripWorkspaceBadge.label(for: mapViewModel.reviewCandidates.count))
@@ -336,7 +443,9 @@ private struct TripWorkspaceView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: onOpenCapture) {
+                        Button {
+                            onOpenDrawer(.addLink, trip.id)
+                        } label: {
                             Image(systemName: "link.badge.plus")
                         }
                         .accessibilityLabel(localized("Paste or share link", "貼上或分享連結"))
@@ -353,7 +462,13 @@ private struct TripWorkspaceView: View {
             }
         }
         .tint(Color.saveCoralInk)
-        .onAppear { store.selectTrip(tripID) }
+        .onAppear {
+            store.selectTrip(tripID)
+            onActiveTripChange(tripID)
+        }
+        .onDisappear {
+            onActiveTripChange(nil)
+        }
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -376,11 +491,11 @@ private struct TripPlanView: View {
                     Label(localized("No stops yet", "還沒有行程地點"), systemImage: "mappin.and.ellipse")
                 } description: {
                     Text(localized(
-                        "Confirm a link in Inbox, or choose an existing Map Stamp.",
-                        "先在收件匣確認連結，或選擇既有地圖章。"
+                        "Confirm a link in Review, or choose an existing saved place.",
+                        "先在待確認中確認連結，或選擇既有收藏地點。"
                     ))
                 } actions: {
-                    Button(localized("Add from SAV-E", "從 SAV-E 加入")) { showsPlacePicker = true }
+                    Button(localized("Add saved place", "加入收藏地點")) { showsPlacePicker = true }
                 }
                 .saveNotebookListRow()
             } else {
@@ -411,7 +526,7 @@ private struct TripPlanView: View {
                 Button {
                     showsPlacePicker = true
                 } label: {
-                    Label(localized("Add confirmed Map Stamp", "加入已確認地圖章"), systemImage: "plus.circle")
+                    Label(localized("Add saved place", "加入收藏地點"), systemImage: "plus.circle")
                 }
                 .disabled(availablePlaces.isEmpty)
             }
@@ -726,7 +841,7 @@ private struct SavedPlacePicker: View {
                 }
                 .saveNotebookListRow()
 
-                Section(localized("Confirmed Map Stamps", "已確認地圖章")) {
+                Section(localized("Saved places", "收藏地點")) {
                     ForEach(filteredPlaces) { place in
                         Button {
                             onSelect(place, selectedDay)
@@ -745,7 +860,7 @@ private struct SavedPlacePicker: View {
             }
             .listStyle(.insetGrouped)
             .saveNotebookListCanvas()
-            .navigationTitle(localized("Add Map Stamp", "加入地圖章"))
+            .navigationTitle(localized("Add saved place", "加入收藏地點"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query)
             .toolbar {
@@ -804,6 +919,7 @@ private struct TripMapView: View {
 }
 
 private struct TripInboxView: View {
+    let tripName: String
     let candidates: [PlaceReviewCandidate]
     let onSelect: (PlaceReviewCandidate) -> Void
     let onOpenCapture: () -> Void
@@ -813,15 +929,15 @@ private struct TripInboxView: View {
         List {
             Section {
                 Text(localized(
-                    "Candidates stay outside the Trip Pack until you confirm the exact place.",
-                    "候選地點會留在 Trip Pack 外，直到你確認精確地點。"
+                    "This is your SAV-E-wide Review queue. Confirm an exact place, then choose whether to add it to \(tripName).",
+                    "這是 SAV-E 的全域待確認清單。確認精確地點後，再選擇是否加入「\(tripName)」。"
                 ))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
             .saveNotebookListRow()
 
-            Section(localized("Waiting for confirmation", "等待確認")) {
+            Section(localized("SAV-E Needs Review", "SAV-E 待確認")) {
                 if candidates.isEmpty {
                     ContentUnavailableView(
                         localized("Inbox is clear", "收件匣已清空"),
@@ -851,8 +967,9 @@ private struct TripInboxView: View {
 
             Section {
                 Button(action: onOpenCapture) {
-                    Label(localized("Paste / Share Link", "貼上／分享連結"), systemImage: "link.badge.plus")
+                    Label(localized("Add a link", "加入連結"), systemImage: "link.badge.plus")
                 }
+                .accessibilityIdentifier("trip.inbox.addLink")
             }
             .saveNotebookListRow()
         }

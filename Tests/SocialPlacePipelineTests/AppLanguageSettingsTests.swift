@@ -28,12 +28,17 @@ final class AppLanguageSettingsTests: XCTestCase {
     func testMVPDrawerEntryCopyDoesNotPromoteTripPlanning() {
         XCTAssertEqual(
             SaveText.text(.askPlaceholder, language: .english),
-            "Ask saved places or paste a spot..."
+            "Paste a link or ask about saved places..."
         )
         XCTAssertEqual(
             SaveText.text(.askPlaceholder, language: .traditionalChinese),
-            "問你存過的地點，或貼上一個新地點..."
+            "貼上連結，或問你收藏的地點..."
         )
+
+        XCTAssertEqual(CommandDrawerTab.saved.title(language: .english), "Saved")
+        XCTAssertEqual(CommandDrawerTab.saved.title(language: .traditionalChinese), "收藏")
+        XCTAssertEqual(CommandDrawerTab.review.title(language: .english), "Review")
+        XCTAssertEqual(CommandDrawerTab.review.title(language: .traditionalChinese), "待確認")
 
         let englishSuggestions = SaveMVPDrawerEntryCopy.suggestions(language: .english)
         XCTAssertEqual(englishSuggestions, [

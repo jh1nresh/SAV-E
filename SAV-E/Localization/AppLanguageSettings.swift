@@ -314,7 +314,7 @@ enum SaveText {
         case .signOut:
             return localized(english: "Sign Out", traditionalChinese: "登出", language: language)
         case .askPlaceholder:
-            return localized(english: "Ask saved places or paste a spot...", traditionalChinese: "問你存過的地點，或貼上一個新地點...", language: language)
+            return localized(english: "Paste a link or ask about saved places...", traditionalChinese: "貼上連結，或問你收藏的地點...", language: language)
         case .openReviewCandidates:
             return localized(english: "Open review candidates", traditionalChinese: "查看待確認地點", language: language)
         case .memoSorting:
