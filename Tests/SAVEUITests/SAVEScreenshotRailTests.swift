@@ -123,6 +123,62 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testTripStopEditorSurfaceIsReachable() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
+        firstTrip.tap()
+
+        let firstStopEditor = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trip.stop.' AND identifier ENDSWITH '.edit'")
+        ).firstMatch
+        XCTAssertTrue(firstStopEditor.waitForExistence(timeout: stepTimeout))
+        firstStopEditor.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["trip.stop.edit"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.steppers["trip.stop.edit.dayPicker"].exists)
+        XCTAssertTrue(app.textFields["trip.stop.edit.startTime"].exists)
+        XCTAssertTrue(app.textFields["trip.stop.edit.duration"].exists)
+        XCTAssertTrue(app.textFields["trip.stop.edit.note"].exists)
+        XCTAssertTrue(app.buttons["trip.stop.edit.save"].exists)
+        XCTAssertTrue(app.buttons["trip.stop.edit.remove"].exists)
+
+        replaceText(in: app.textFields["trip.stop.edit.startTime"], with: "09:30")
+        replaceText(in: app.textFields["trip.stop.edit.duration"], with: "45")
+        replaceText(in: app.textFields["trip.stop.edit.note"], with: "UI smoke")
+        app.buttons["trip.stop.edit.save"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["trip.stop.edit"].waitForExistence(timeout: 2))
+
+        XCTAssertTrue(firstStopEditor.waitForExistence(timeout: stepTimeout))
+        firstStopEditor.tap()
+        XCTAssertEqual(app.textFields["trip.stop.edit.startTime"].value as? String, "09:30")
+        XCTAssertEqual(app.textFields["trip.stop.edit.duration"].value as? String, "45")
+        XCTAssertEqual(app.textFields["trip.stop.edit.note"].value as? String, "UI smoke")
+
+        app.buttons["trip.stop.edit.remove"].tap()
+        XCTAssertTrue(app.buttons["trip.stop.edit.remove.confirm"].waitForExistence(timeout: stepTimeout))
+        app.alerts.buttons["Cancel"].tap()
+        app.navigationBars.buttons["Cancel"].tap()
+
+        let addMapStamp = app.buttons["Add confirmed Map Stamp"]
+        XCTAssertTrue(addMapStamp.waitForExistence(timeout: stepTimeout))
+        addMapStamp.tap()
+        XCTAssertTrue(app.steppers["trip.add.dayPicker"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
     func testFriendsSurfaceIsReachableAndKeepsFollowEntryVisible() throws {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -241,6 +297,17 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private func replaceText(in field: XCUIElement, with replacement: String) {
+        field.tap()
+        if let current = field.value as? String,
+           current != field.placeholderValue,
+           !current.isEmpty {
+            field.typeKey("a", modifierFlags: .command)
+        }
+        field.typeText(replacement)
+    }
 
     /// Dismisses the system location permission alert if it is on screen.
     /// Queried on SpringBoard because system alerts live outside the app.

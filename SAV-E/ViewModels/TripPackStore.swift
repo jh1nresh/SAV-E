@@ -18,15 +18,30 @@ enum TripPackStoreState: Equatable {
 
 enum TripPackStoreError: LocalizedError {
     case tripNotFound
+    case stopNotFound
     case invalidDateRange
+    case invalidDay
+    case invalidDuration
+    case startTimeTooLong
+    case noteTooLong
     case invalidMove
 
     var errorDescription: String? {
         switch self {
         case .tripNotFound:
             return "Choose or create a Trip Pack first."
+        case .stopNotFound:
+            return "That trip stop could not be found."
         case .invalidDateRange:
             return "The trip end date must be on or after its start date."
+        case .invalidDay:
+            return "Day must be between 1 and 365."
+        case .invalidDuration:
+            return "Duration must be between 1 and 1440 minutes."
+        case .startTimeTooLong:
+            return "Start time must be 64 bytes or fewer."
+        case .noteTooLong:
+            return "Note must be 4096 bytes or fewer."
         case .invalidMove:
             return "That stop cannot move any farther."
         }
@@ -44,8 +59,8 @@ final class TripPackStore: ObservableObject {
     private let calendar: Calendar
     private let nowProvider: () -> Date
     private var reviewerDemoSeedPlaces: [Place]
-    private var reorderTail: Task<Bool, Never>?
-    private var reorderGeneration = 0
+    private var mutationTail: Task<Bool, Never>?
+    private var mutationGeneration = 0
 
     init(
         userID: String,
@@ -205,7 +220,17 @@ final class TripPackStore: ObservableObject {
     }
 
     @discardableResult
-    func addConfirmedPlace(_ place: Place, to tripID: UUID? = nil) async -> Bool {
+    func addConfirmedPlace(_ place: Place, to tripID: UUID? = nil, day: Int = 1) async -> Bool {
+        guard (1...365).contains(day) else {
+            fail(TripPackStoreError.invalidDay)
+            return false
+        }
+        return await enqueueMutation { store in
+            await store.performAddConfirmedPlace(place, to: tripID, day: day)
+        }
+    }
+
+    private func performAddConfirmedPlace(_ place: Place, to tripID: UUID?, day: Int) async -> Bool {
         guard let targetID = tripID ?? selectedTripID ?? suggestedTrip?.id,
               var trip = trips.first(where: { $0.id == targetID })
         else {
@@ -218,7 +243,7 @@ final class TripPackStore: ObservableObject {
         }
 
         let nextOrder = trip.places
-            .filter { $0.day == 1 }
+            .filter { $0.day == day }
             .map(\.orderIndex)
             .max()
             .map { $0 + 1 } ?? 0
@@ -226,7 +251,7 @@ final class TripPackStore: ObservableObject {
             id: UUID(),
             placeId: place.id,
             placeName: place.name,
-            day: 1,
+            day: day,
             orderIndex: nextOrder,
             startTime: nil,
             duration: nil,
@@ -237,21 +262,107 @@ final class TripPackStore: ObservableObject {
     }
 
     @discardableResult
+    func updateStop(
+        _ stopID: UUID,
+        in tripID: UUID,
+        day: Int,
+        startTime: String?,
+        duration: Int?,
+        note: String?
+    ) async -> Bool {
+        guard (1...365).contains(day) else {
+            fail(TripPackStoreError.invalidDay)
+            return false
+        }
+        guard duration.map({ (1...1440).contains($0) }) ?? true else {
+            fail(TripPackStoreError.invalidDuration)
+            return false
+        }
+
+        let normalizedStartTime = Self.normalizedText(startTime)
+        guard normalizedStartTime.map({ $0.utf8.count <= 64 }) ?? true else {
+            fail(TripPackStoreError.startTimeTooLong)
+            return false
+        }
+        let normalizedNote = Self.normalizedText(note)
+        guard normalizedNote.map({ $0.utf8.count <= 4096 }) ?? true else {
+            fail(TripPackStoreError.noteTooLong)
+            return false
+        }
+
+        return await enqueueMutation { store in
+            await store.performUpdateStop(
+                stopID,
+                in: tripID,
+                day: day,
+                startTime: normalizedStartTime,
+                duration: duration,
+                note: normalizedNote
+            )
+        }
+    }
+
+    private func performUpdateStop(
+        _ stopID: UUID,
+        in tripID: UUID,
+        day: Int,
+        startTime: String?,
+        duration: Int?,
+        note: String?
+    ) async -> Bool {
+        guard var trip = trips.first(where: { $0.id == tripID }) else {
+            fail(TripPackStoreError.tripNotFound)
+            return false
+        }
+        trip = Self.normalized(trip)
+        guard let stopIndex = trip.places.firstIndex(where: { $0.id == stopID }) else {
+            fail(TripPackStoreError.stopNotFound)
+            return false
+        }
+
+        var stop = trip.places.remove(at: stopIndex)
+        let movedToAnotherDay = stop.day != day
+        stop.day = day
+        if movedToAnotherDay {
+            stop.orderIndex = trip.places.filter { $0.day == day }.count
+        }
+        stop.startTime = startTime
+        stop.duration = duration
+        stop.note = note
+        trip.places.append(stop)
+
+        selectedTripID = tripID
+        return await persistUpdate(Self.normalized(trip))
+    }
+
+    @discardableResult
+    func removeStop(_ stopID: UUID, from tripID: UUID) async -> Bool {
+        await enqueueMutation { store in
+            await store.performRemoveStop(stopID, from: tripID)
+        }
+    }
+
+    private func performRemoveStop(_ stopID: UUID, from tripID: UUID) async -> Bool {
+        guard var trip = trips.first(where: { $0.id == tripID }) else {
+            fail(TripPackStoreError.tripNotFound)
+            return false
+        }
+        trip = Self.normalized(trip)
+        guard let stopIndex = trip.places.firstIndex(where: { $0.id == stopID }) else {
+            fail(TripPackStoreError.stopNotFound)
+            return false
+        }
+
+        trip.places.remove(at: stopIndex)
+        selectedTripID = tripID
+        return await persistUpdate(Self.normalized(trip))
+    }
+
+    @discardableResult
     func moveStop(_ stopID: UUID, in tripID: UUID, by offset: Int) async -> Bool {
-        let previousReorder = reorderTail
-        reorderGeneration += 1
-        let generation = reorderGeneration
-        let reorder = Task { @MainActor [weak self] in
-            _ = await previousReorder?.value
-            guard let self else { return false }
-            return await self.performMoveStop(stopID, in: tripID, by: offset)
+        await enqueueMutation { store in
+            await store.performMoveStop(stopID, in: tripID, by: offset)
         }
-        reorderTail = reorder
-        let result = await reorder.value
-        if generation == reorderGeneration {
-            reorderTail = nil
-        }
-        return result
     }
 
     private func performMoveStop(_ stopID: UUID, in tripID: UUID, by offset: Int) async -> Bool {
@@ -317,6 +428,25 @@ final class TripPackStore: ObservableObject {
             state = .failed(error.localizedDescription)
             return false
         }
+    }
+
+    private func enqueueMutation(
+        _ operation: @escaping @MainActor (TripPackStore) async -> Bool
+    ) async -> Bool {
+        let previousMutation = mutationTail
+        mutationGeneration += 1
+        let generation = mutationGeneration
+        let mutation = Task { @MainActor [weak self] in
+            _ = await previousMutation?.value
+            guard let self else { return false }
+            return await operation(self)
+        }
+        mutationTail = mutation
+        let result = await mutation.value
+        if generation == mutationGeneration {
+            mutationTail = nil
+        }
+        return result
     }
 
     private func seedReviewerDemoTrips(from places: [Place]) async throws {
@@ -392,6 +522,12 @@ final class TripPackStore: ObservableObject {
     private static func hasValidDateRange(startDate: Date?, endDate: Date?) -> Bool {
         guard let startDate, let endDate else { return true }
         return endDate >= startDate
+    }
+
+    private static func normalizedText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func normalized(_ trip: Trip) -> Trip {
