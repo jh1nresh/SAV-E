@@ -454,6 +454,11 @@ final class MapViewModel: ObservableObject {
         return result
     }
 
+    func placesForRoute(placeIDs: [UUID]) -> [Place] {
+        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        return placeIDs.compactMap { placeByID[$0] }
+    }
+
     var routePolyline: MKPolyline? {
         guard let polyline = calculatedRoute else {
             // Fallback to straight lines if no calculated route
@@ -793,7 +798,8 @@ final class MapViewModel: ObservableObject {
         )
     }
 
-    func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate, nameOverride: String? = nil) async throws {
+    @discardableResult
+    func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate, nameOverride: String? = nil) async throws -> Place {
         guard let userId = authService.currentUserId else {
             throw SupabaseError.notAuthenticated
         }
@@ -824,7 +830,7 @@ final class MapViewModel: ObservableObject {
                 selectedReviewCandidate = nil
             }
             focusSavedPlace(existing, showStampMoment: false)
-            throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
+            return existing
         }
 
         var updatedCandidate = candidate
@@ -864,6 +870,7 @@ final class MapViewModel: ObservableObject {
             selectedReviewCandidate = nil
         }
         revealImportedPlaces([place])
+        return place
     }
 
     func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws {
@@ -2106,9 +2113,8 @@ final class MapViewModel: ObservableObject {
             ))
 
         case .showRoute:
-            let orderedIds = action.placeIds ?? []
-            let idToPlace = Dictionary(uniqueKeysWithValues: places.map { ($0.id.uuidString, $0) })
-            let routePlaces = orderedIds.compactMap { idToPlace[$0] }
+            let orderedIds = (action.placeIds ?? []).compactMap(UUID.init(uuidString:))
+            let routePlaces = placesForRoute(placeIDs: orderedIds)
             let calculationID = invalidateRouteCalculation()
             routeCoordinates = routePlaces.map { $0.coordinate }
             activeFilter = Set(routePlaces.map { $0.id })

@@ -294,6 +294,8 @@ struct SharedTripData: Codable {
         let lng: Double
         let time: String?
         let note: String?
+        let day: Int?
+        let order: Int?
 
         var coordinate: CLLocationCoordinate2D {
             CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -304,12 +306,40 @@ struct SharedTripData: Codable {
 
     /// Decode from a SAV-E route token, with legacy `?d=` support.
     static func from(url: URL) -> SharedTripData? {
-        ShareRouteCodec.decode(SharedTripData.self, from: url, route: "trip")
+        guard let payload = ShareRouteCodec.decode(
+            SharedTripData.self,
+            from: url,
+            route: "trip",
+            maxTokenCharacters: ShareRoutePayloadLimits.embeddedTokenMaxCharacters
+        ), payload.isShareable else { return nil }
+        return payload
     }
 
     /// Encode to a shareable URL.
     func toURL(baseURL: String = "https://sav-e-app.vercel.app/trip") -> URL? {
-        ShareRouteCodec.url(for: self, baseURL: baseURL)
+        guard isShareable, ShareRoutePayloadLimits.allowsTripPayload(self) else { return nil }
+        guard let url = ShareRouteCodec.url(for: self, baseURL: baseURL),
+              url.lastPathComponent.count <= ShareRoutePayloadLimits.embeddedTokenMaxCharacters
+        else { return nil }
+        return url
+    }
+
+    private var isShareable: Bool {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name.utf8.count <= 256,
+              city.utf8.count <= 256,
+              (1...100).contains(stops.count)
+        else { return false }
+        return stops.allSatisfy { stop in
+            !stop.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                stop.name.utf8.count <= 512 &&
+                stop.address.utf8.count <= 2_048 &&
+                stop.lat.isFinite && stop.lng.isFinite &&
+                (-90...90).contains(stop.lat) && (-180...180).contains(stop.lng) &&
+                (stop.lat != 0 || stop.lng != 0) &&
+                (stop.day.map { $0 >= 1 } ?? true) &&
+                (stop.order.map { $0 >= 0 } ?? true)
+        }
     }
 
     var routeSummary: String {
@@ -321,6 +351,9 @@ struct SharedTripData: Codable {
 
 enum ShareRoutePayloadLimits {
     static let placePayloadMaxBytes = 12 * 1024
+    // Base64 expands by roughly one third. Keep raw Trip JSON at or below
+    // 12 KiB and verify the final token so every generated link can reopen.
+    static let tripPayloadMaxBytes = 12 * 1024
     static let embeddedTokenMaxCharacters = 16 * 1024
     static let pendingPlaceURLMaxBytes = 20 * 1024
     static let receiptResponseMaxBytes = 32 * 1024
@@ -329,6 +362,11 @@ enum ShareRoutePayloadLimits {
     static func allowsPlacePayload<T: Encodable>(_ payload: T) -> Bool {
         guard let data = try? JSONEncoder().encode(payload) else { return false }
         return data.count <= placePayloadMaxBytes
+    }
+
+    static func allowsTripPayload<T: Encodable>(_ payload: T) -> Bool {
+        guard let data = try? JSONEncoder().encode(payload) else { return false }
+        return data.count <= tripPayloadMaxBytes
     }
 }
 

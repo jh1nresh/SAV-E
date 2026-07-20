@@ -767,7 +767,7 @@ struct ClipContentView: View {
             tripData = nil
             listData = nil
             updateCamera(for: referral.featuredPlaces.map {
-                SharedTripData.SharedStop(id: $0.id, name: $0.name, address: $0.address, lat: $0.lat, lng: $0.lng, time: nil, note: $0.signal)
+                SharedTripData.SharedStop(id: $0.id, name: $0.name, address: $0.address, lat: $0.lat, lng: $0.lng, time: nil, note: $0.signal, day: nil, order: nil)
             })
             isLoading = false
             return
@@ -781,7 +781,7 @@ struct ClipContentView: View {
                 placeReceipt = nil
                 tripData = nil
                 referralData = nil
-                updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note) })
+                updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note, day: nil, order: nil) })
             }
             isLoading = false
             return
@@ -818,7 +818,7 @@ struct ClipContentView: View {
             referralData = nil
             if let data = SharedPlaceData.from(url: url) {
                 placeReceipt = .embedded(data)
-                updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
+                updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note, day: nil, order: nil)])
                 isLoading = false
                 return
             } else if SharedPlaceData.shortCode(from: url) != nil {
@@ -834,7 +834,7 @@ struct ClipContentView: View {
                         tripData = nil
                         listData = nil
                         referralData = nil
-                        updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note)])
+                        updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note, day: nil, order: nil)])
                         isLoading = false
                         if let code = receipt.code {
                             guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
@@ -1053,9 +1053,9 @@ extension SharedTripData {
         name: "SF Food Tour",
         city: "San Francisco",
         stops: [
-            SharedStop(id: UUID().uuidString, name: "Tartine Bakery", address: "600 Guerrero St, SF", lat: 37.7614, lng: -122.4241, time: "9:00 AM", note: "Must try the morning bun"),
-            SharedStop(id: UUID().uuidString, name: "Dolores Park", address: "Dolores St, SF", lat: 37.7596, lng: -122.4269, time: "10:30 AM", note: nil),
-            SharedStop(id: UUID().uuidString, name: "Bi-Rite Creamery", address: "3692 18th St, SF", lat: 37.7618, lng: -122.4256, time: "12:00 PM", note: "Salted caramel ice cream"),
+            SharedStop(id: UUID().uuidString, name: "Tartine Bakery", address: "600 Guerrero St, SF", lat: 37.7614, lng: -122.4241, time: "9:00 AM", note: "Must try the morning bun", day: 1, order: 0),
+            SharedStop(id: UUID().uuidString, name: "Dolores Park", address: "Dolores St, SF", lat: 37.7596, lng: -122.4269, time: "10:30 AM", note: nil, day: 1, order: 1),
+            SharedStop(id: UUID().uuidString, name: "Bi-Rite Creamery", address: "3692 18th St, SF", lat: 37.7618, lng: -122.4256, time: "12:00 PM", note: "Salted caramel ice cream", day: 1, order: 2),
         ]
     )
 }
