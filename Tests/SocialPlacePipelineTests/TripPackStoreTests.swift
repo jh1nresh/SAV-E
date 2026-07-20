@@ -52,6 +52,149 @@ final class TripPackStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testAddsConfirmedPlaceToRequestedDayAtThatDaysEnd() async throws {
+        let existing = makePlace(name: "Existing")
+        let added = makePlace(name: "Added")
+        let initial = trip(name: "Taipei", places: [stop(existing, day: 3, order: 8)])
+        let persistence = FakeTripPersistence(trips: [initial])
+        let store = TripPackStore(userID: "user-1", persistence: persistence)
+        await store.load()
+
+        let didAdd = await store.addConfirmedPlace(added, to: initial.id, day: 3)
+
+        XCTAssertTrue(didAdd)
+        XCTAssertEqual(persistence.updateCalls.count, 1)
+        let dayThree = try XCTUnwrap(persistence.trips.first).places.filter { $0.day == 3 }
+        XCTAssertEqual(dayThree.map(\.placeName), [existing.name, added.name])
+        XCTAssertEqual(dayThree.map(\.orderIndex), [0, 1])
+    }
+
+    @MainActor
+    func testCrossDayUpdateAppendsMetadataAndSurvivesReopen() async throws {
+        let first = makePlace(name: "First")
+        let second = makePlace(name: "Second")
+        let third = makePlace(name: "Third")
+        let firstStop = stop(first, day: 1, order: 0)
+        let initial = trip(
+            name: "Tokyo",
+            places: [
+                firstStop,
+                stop(second, day: 1, order: 1),
+                stop(third, day: 2, order: 0),
+            ]
+        )
+        let persistence = FakeTripPersistence(trips: [initial])
+        let store = TripPackStore(userID: "user-1", persistence: persistence)
+        await store.load()
+
+        let didUpdate = await store.updateStop(
+            firstStop.id,
+            in: initial.id,
+            day: 2,
+            startTime: " 09:30 ",
+            duration: 75,
+            note: " Breakfast stop "
+        )
+
+        XCTAssertTrue(didUpdate)
+        XCTAssertEqual(persistence.updateCalls.count, 1)
+
+        let reopened = TripPackStore(userID: "user-1", persistence: persistence)
+        await reopened.load()
+        let saved = try XCTUnwrap(reopened.trips.first)
+        XCTAssertEqual(saved.places.map(\.placeName), [second.name, third.name, first.name])
+        XCTAssertEqual(saved.places.map(\.day), [1, 2, 2])
+        XCTAssertEqual(saved.places.map(\.orderIndex), [0, 0, 1])
+        let updated = try XCTUnwrap(saved.places.first { $0.id == firstStop.id })
+        XCTAssertEqual(updated.startTime, "09:30")
+        XCTAssertEqual(updated.duration, 75)
+        XCTAssertEqual(updated.note, "Breakfast stop")
+    }
+
+    @MainActor
+    func testRemoveStopNormalizesRemainingDayOrder() async throws {
+        let first = makePlace(name: "First")
+        let removed = makePlace(name: "Removed")
+        let last = makePlace(name: "Last")
+        let removedStop = stop(removed, day: 2, order: 1)
+        let initial = trip(
+            name: "Taipei",
+            places: [
+                stop(first, day: 2, order: 0),
+                removedStop,
+                stop(last, day: 2, order: 2),
+            ]
+        )
+        let persistence = FakeTripPersistence(trips: [initial])
+        let store = TripPackStore(userID: "user-1", persistence: persistence)
+        await store.load()
+
+        let didRemove = await store.removeStop(removedStop.id, from: initial.id)
+
+        XCTAssertTrue(didRemove)
+        XCTAssertEqual(persistence.updateCalls.count, 1)
+        let dayTwo = try XCTUnwrap(persistence.trips.first).places.filter { $0.day == 2 }
+        XCTAssertEqual(dayTwo.map(\.placeName), [first.name, last.name])
+        XCTAssertEqual(dayTwo.map(\.orderIndex), [0, 1])
+    }
+
+    @MainActor
+    func testInvalidStopInputsDoNotPersist() async {
+        let existing = makePlace(name: "Existing")
+        let newPlace = makePlace(name: "New")
+        let existingStop = stop(existing, order: 0)
+        let initial = trip(name: "Taipei", places: [existingStop])
+        let persistence = FakeTripPersistence(trips: [initial])
+        let store = TripPackStore(userID: "user-1", persistence: persistence)
+        await store.load()
+
+        let invalidLowerDayAdd = await store.addConfirmedPlace(newPlace, to: initial.id, day: 0)
+        let invalidUpperDayAdd = await store.addConfirmedPlace(newPlace, to: initial.id, day: 366)
+        let invalidDayUpdate = await store.updateStop(
+            existingStop.id,
+            in: initial.id,
+            day: 0,
+            startTime: nil,
+            duration: nil,
+            note: nil
+        )
+        let invalidDurationUpdate = await store.updateStop(
+            existingStop.id,
+            in: initial.id,
+            day: 1,
+            startTime: nil,
+            duration: 1441,
+            note: nil
+        )
+        let invalidStartTimeUpdate = await store.updateStop(
+            existingStop.id,
+            in: initial.id,
+            day: 1,
+            startTime: String(repeating: "時", count: 22),
+            duration: nil,
+            note: nil
+        )
+        let invalidNoteUpdate = await store.updateStop(
+            existingStop.id,
+            in: initial.id,
+            day: 1,
+            startTime: nil,
+            duration: nil,
+            note: String(repeating: "記", count: 1_366)
+        )
+
+        XCTAssertFalse(invalidLowerDayAdd)
+        XCTAssertFalse(invalidUpperDayAdd)
+        XCTAssertFalse(invalidDayUpdate)
+        XCTAssertFalse(invalidDurationUpdate)
+        XCTAssertFalse(invalidStartTimeUpdate)
+        XCTAssertFalse(invalidNoteUpdate)
+        XCTAssertTrue(persistence.saveCalls.isEmpty)
+        XCTAssertTrue(persistence.updateCalls.isEmpty)
+        XCTAssertEqual(persistence.trips, [initial])
+    }
+
+    @MainActor
     func testReorderNormalizesIndexesAndSurvivesReload() async throws {
         let placeA = makePlace(name: "A")
         let placeB = makePlace(name: "B")
@@ -109,6 +252,65 @@ final class TripPackStoreTests: XCTestCase {
         XCTAssertEqual(persistence.updateCalls[1].places.map(\.placeName), ["B", "C", "A"])
         XCTAssertEqual(try XCTUnwrap(persistence.trips.first).places.map(\.placeName), ["B", "C", "A"])
         XCTAssertEqual(try XCTUnwrap(store.trips.first).places.map(\.placeName), ["B", "C", "A"])
+    }
+
+    @MainActor
+    func testRapidMixedStopMutationsSerializeWithoutLosingChanges() async throws {
+        let placeA = makePlace(name: "A")
+        let placeB = makePlace(name: "B")
+        let placeC = makePlace(name: "C")
+        let stopA = stop(placeA, order: 0)
+        let stopC = stop(placeC, order: 2)
+        let initial = trip(
+            name: "Rapid mixed",
+            places: [stopA, stop(placeB, order: 1), stopC]
+        )
+        let persistence = FakeTripPersistence(
+            trips: [initial],
+            updateDelayNanoseconds: 50_000_000
+        )
+        let store = TripPackStore(userID: "user-1", persistence: persistence)
+        await store.load()
+
+        let move = Task { await store.moveStop(stopA.id, in: initial.id, by: 1) }
+        for _ in 0..<100 where persistence.updateCalls.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(persistence.updateCalls.count, 1)
+
+        let update = Task {
+            await store.updateStop(
+                stopA.id,
+                in: initial.id,
+                day: 1,
+                startTime: "09:30",
+                duration: 45,
+                note: "Breakfast"
+            )
+        }
+        let moveResult = await move.value
+        XCTAssertTrue(moveResult)
+        for _ in 0..<100 where persistence.updateCalls.count < 2 {
+            await Task.yield()
+        }
+        XCTAssertEqual(persistence.updateCalls.count, 2)
+
+        let remove = Task { await store.removeStop(stopC.id, from: initial.id) }
+        let updateResult = await update.value
+        let removeResult = await remove.value
+        XCTAssertTrue(updateResult)
+        XCTAssertTrue(removeResult)
+
+        XCTAssertEqual(persistence.updateCalls.count, 3)
+        XCTAssertEqual(persistence.updateCalls[0].places.map(\.placeName), ["B", "A", "C"])
+        XCTAssertEqual(persistence.updateCalls[1].places.map(\.placeName), ["B", "A", "C"])
+        XCTAssertEqual(persistence.updateCalls[2].places.map(\.placeName), ["B", "A"])
+        let updated = try XCTUnwrap(persistence.updateCalls[2].places.first { $0.id == stopA.id })
+        XCTAssertEqual(updated.startTime, "09:30")
+        XCTAssertEqual(updated.duration, 45)
+        XCTAssertEqual(updated.note, "Breakfast")
+        XCTAssertEqual(try XCTUnwrap(persistence.trips.first).places.map(\.placeName), ["B", "A"])
+        XCTAssertEqual(try XCTUnwrap(store.trips.first).places.map(\.placeName), ["B", "A"])
     }
 
     @MainActor
@@ -342,12 +544,12 @@ final class TripPackStoreTests: XCTestCase {
     }
 
     @MainActor
-    private func stop(_ place: Place, order: Int) -> TripStop {
+    private func stop(_ place: Place, day: Int = 1, order: Int) -> TripStop {
         TripStop(
             id: UUID(),
             placeId: place.id,
             placeName: place.name,
-            day: 1,
+            day: day,
             orderIndex: order,
             startTime: nil,
             duration: nil,

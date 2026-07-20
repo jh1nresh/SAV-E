@@ -353,6 +353,7 @@ private struct TripPlanView: View {
     let savedPlaces: [Place]
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsPlacePicker = false
+    @State private var selectedStop: TripStop?
 
     var body: some View {
         List {
@@ -375,6 +376,9 @@ private struct TripPlanView: View {
                                 stop: stop,
                                 canMoveEarlier: index > 0 && !store.isSaving,
                                 canMoveLater: index < group.stops.count - 1 && !store.isSaving,
+                                onEdit: {
+                                    selectedStop = stop
+                                },
                                 onMoveEarlier: {
                                     Task { _ = await store.moveStop(stop.id, in: trip.id, by: -1) }
                                 },
@@ -407,10 +411,32 @@ private struct TripPlanView: View {
             }
         }
         .sheet(isPresented: $showsPlacePicker) {
-            SavedPlacePicker(places: availablePlaces) { place in
-                Task { _ = await store.addConfirmedPlace(place, to: trip.id) }
+            SavedPlacePicker(places: availablePlaces, initialDay: suggestedAddDay) { place, day in
+                Task { _ = await store.addConfirmedPlace(place, to: trip.id, day: day) }
             }
         }
+        .sheet(item: $selectedStop) { stop in
+            TripStopEditorView(
+                stop: stop,
+                onSave: { day, startTime, duration, note in
+                    await store.updateStop(
+                        stop.id,
+                        in: trip.id,
+                        day: day,
+                        startTime: startTime,
+                        duration: duration,
+                        note: note
+                    )
+                },
+                onRemove: {
+                    await store.removeStop(stop.id, from: trip.id)
+                }
+            )
+        }
+    }
+
+    private var suggestedAddDay: Int {
+        min(max(trip.places.map(\.day).max() ?? 1, 1), 365)
     }
 
     private var groupedStops: [(day: Int, stops: [TripStop])] {
@@ -435,25 +461,38 @@ private struct TripStopRow: View {
     let stop: TripStop
     let canMoveEarlier: Bool
     let canMoveLater: Bool
+    let onEdit: () -> Void
     let onMoveEarlier: () -> Void
     let onMoveLater: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.title3)
-                .foregroundStyle(Color.saveCoral)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(stop.placeName)
-                    .font(.body.weight(.semibold))
-                if let startTime = stop.startTime, !startTime.isEmpty {
-                    Text(startTime)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Button(action: onEdit) {
+                HStack(spacing: 12) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(Color.saveCoral)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(stop.placeName)
+                            .font(.body.weight(.semibold))
+                        if !scheduleSummary.isEmpty {
+                            Text(scheduleSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
                 }
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .accessibilityLabel(localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)"))
+            .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).edit")
+
             HStack(spacing: 4) {
                 moveButton(systemImage: "arrow.up", enabled: canMoveEarlier, action: onMoveEarlier)
                     .accessibilityLabel(localized("Move earlier", "往前移"))
@@ -463,7 +502,20 @@ private struct TripStopRow: View {
                     .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).moveLater")
             }
         }
-        .accessibilityIdentifier("trip.stop.\(stop.id.uuidString)")
+    }
+
+    private var scheduleSummary: String {
+        [
+            stop.startTime?.trimmingCharacters(in: .whitespacesAndNewlines),
+            stop.duration.map {
+                localized("\($0) min", "\($0) 分鐘")
+            },
+        ]
+        .compactMap { value in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }
+        .joined(separator: " · ")
     }
 
     private func moveButton(systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
@@ -481,27 +533,190 @@ private struct TripStopRow: View {
     }
 }
 
-private struct SavedPlacePicker: View {
-    let places: [Place]
-    let onSelect: (Place) -> Void
+private struct TripStopEditorView: View {
+    let stop: TripStop
+    let onSave: (Int, String?, Int?, String?) async -> Bool
+    let onRemove: () async -> Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var query = ""
+    @State private var day: Int
+    @State private var startTime: String
+    @State private var duration: String
+    @State private var note: String
+    @State private var isSubmitting = false
+    @State private var showsRemoveConfirmation = false
+
+    init(
+        stop: TripStop,
+        onSave: @escaping (Int, String?, Int?, String?) async -> Bool,
+        onRemove: @escaping () async -> Bool
+    ) {
+        self.stop = stop
+        self.onSave = onSave
+        self.onRemove = onRemove
+        _day = State(initialValue: min(max(stop.day, 1), 365))
+        _startTime = State(initialValue: stop.startTime ?? "")
+        _duration = State(initialValue: stop.duration.map(String.init) ?? "")
+        _note = State(initialValue: stop.note ?? "")
+    }
 
     var body: some View {
         NavigationStack {
-            List(filteredPlaces) { place in
-                Button {
-                    onSelect(place)
-                    dismiss()
-                } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(place.name).font(.body.weight(.semibold))
-                        Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Form {
+                Section(localized("Schedule", "日程")) {
+                    Stepper(value: $day, in: 1...365) {
+                        LabeledContent(localized("Day", "天數"), value: "\(day)")
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("trip.stop.edit.dayPicker")
+
+                    TextField(localized("Start time (for example, 09:30)", "開始時間（例如 09:30）"), text: $startTime)
+                        .accessibilityIdentifier("trip.stop.edit.startTime")
+
+                    TextField(localized("Duration in minutes", "停留分鐘數"), text: $duration)
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("trip.stop.edit.duration")
+
+                    if !durationIsValid {
+                        Text(localized("Enter 1–1,440 minutes.", "請輸入 1 到 1,440 分鐘。"))
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
-                .buttonStyle(.plain)
+
+                Section(localized("Private note", "私人筆記")) {
+                    TextField(localized("Add a note", "加入筆記"), text: $note, axis: .vertical)
+                        .lineLimit(3...6)
+                        .accessibilityIdentifier("trip.stop.edit.note")
+                }
+
+                Section {
+                    Button(localized("Remove from Trip Pack", "從 Trip Pack 移除"), role: .destructive) {
+                        showsRemoveConfirmation = true
+                    }
+                    .disabled(isSubmitting)
+                    .accessibilityIdentifier("trip.stop.edit.remove")
+                }
+            }
+            .navigationTitle(stop.placeName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(localized("Cancel", "取消")) { dismiss() }
+                        .disabled(isSubmitting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(localized("Save", "保存")) {
+                        save()
+                    }
+                    .disabled(!durationIsValid || isSubmitting)
+                    .accessibilityIdentifier("trip.stop.edit.save")
+                }
+            }
+        }
+        .interactiveDismissDisabled(isSubmitting)
+        .alert(
+            localized("Remove this stop?", "移除這個行程地點？"),
+            isPresented: $showsRemoveConfirmation
+        ) {
+            Button(localized("Cancel", "取消"), role: .cancel) {}
+            Button(localized("Remove", "移除"), role: .destructive) {
+                remove()
+            }
+            .accessibilityIdentifier("trip.stop.edit.remove.confirm")
+        } message: {
+            Text(localized(
+                "The confirmed Map Stamp stays in SAV-E; only this Trip Pack stop is removed.",
+                "已確認地圖章仍會保留在 SAV-E，只會從這個 Trip Pack 移除。"
+            ))
+        }
+        .accessibilityIdentifier("trip.stop.edit")
+    }
+
+    private var trimmedDuration: String {
+        duration.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var durationIsValid: Bool {
+        trimmedDuration.isEmpty || (Int(trimmedDuration).map { (1...1_440).contains($0) } ?? false)
+    }
+
+    private func save() {
+        guard durationIsValid else { return }
+        isSubmitting = true
+        Task {
+            let didSave = await onSave(
+                day,
+                optionalValue(startTime),
+                trimmedDuration.isEmpty ? nil : Int(trimmedDuration),
+                optionalValue(note)
+            )
+            isSubmitting = false
+            if didSave {
+                dismiss()
+            }
+        }
+    }
+
+    private func remove() {
+        isSubmitting = true
+        Task {
+            let didRemove = await onRemove()
+            isSubmitting = false
+            if didRemove {
+                dismiss()
+            }
+        }
+    }
+
+    private func optionalValue(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct SavedPlacePicker: View {
+    let places: [Place]
+    let onSelect: (Place, Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var query = ""
+    @State private var selectedDay: Int
+
+    init(places: [Place], initialDay: Int, onSelect: @escaping (Place, Int) -> Void) {
+        self.places = places
+        self.onSelect = onSelect
+        _selectedDay = State(initialValue: min(max(initialDay, 1), 365))
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Stepper(value: $selectedDay, in: 1...365) {
+                        LabeledContent(localized("Destination day", "加入天數"), value: "\(selectedDay)")
+                    }
+                    .accessibilityIdentifier("trip.add.dayPicker")
+                }
+
+                Section(localized("Confirmed Map Stamps", "已確認地圖章")) {
+                    ForEach(filteredPlaces) { place in
+                        Button {
+                            onSelect(place, selectedDay)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(place.name).font(.body.weight(.semibold))
+                                Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .navigationTitle(localized("Add Map Stamp", "加入地圖章"))
             .navigationBarTitleDisplayMode(.inline)
