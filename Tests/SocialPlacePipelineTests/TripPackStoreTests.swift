@@ -2,6 +2,13 @@ import XCTest
 @testable import SAVE
 
 final class TripPackStoreTests: XCTestCase {
+    func testTripWorkspaceBadgeHidesZeroAndCapsLargeCounts() {
+        XCTAssertNil(TripWorkspaceBadge.label(for: 0))
+        XCTAssertEqual(TripWorkspaceBadge.label(for: 4), "4")
+        XCTAssertEqual(TripWorkspaceBadge.label(for: 99), "99")
+        XCTAssertEqual(TripWorkspaceBadge.label(for: 100), "99+")
+    }
+
     @MainActor
     func testClassifiesCurrentUpcomingPlanningAndPastAtDayBoundaries() async {
         let calendar = utcCalendar

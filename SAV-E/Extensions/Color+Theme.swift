@@ -120,6 +120,7 @@ extension Color {
     static let saveSignal = Color(light: "EE9C78", dark: "9F523F")
     static let saveSuccess = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCoral = Color(light: "EE9C78", dark: "9F523F")
+    static let saveCoralInk = Color(light: "9F523F", dark: "EE9C78")
     static let savePink = Color(light: "F6C1CB", dark: "96586B")
     static let saveBlush = Color(light: "FFF6F8", dark: "281A20")
     static let saveLavender = Color(light: "DCC8FF", dark: "44345F")
@@ -197,6 +198,20 @@ private extension UIColor {
 }
 
 extension View {
+    /// Keeps list and form content on the SAV-E notebook canvas while leaving
+    /// navigation and tab chrome to the system material.
+    func saveNotebookListCanvas() -> some View {
+        scrollContentBackground(.hidden)
+            .background(SaveDottedBackground().ignoresSafeArea())
+    }
+
+    /// A readable notebook page for rows; content stays opaque enough to avoid
+    /// competing with the canvas pattern beneath it.
+    func saveNotebookListRow(opacity: Double = 0.94) -> some View {
+        listRowBackground(Color.saveNotebookPage.opacity(opacity))
+            .listRowSeparatorTint(Color.saveNotebookLine.opacity(0.18))
+    }
+
     func saveNotebookPage(cornerRadius: CGFloat = 18) -> some View {
         background(Color.saveNotebookPage)
             .overlay(

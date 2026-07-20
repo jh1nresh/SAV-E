@@ -62,6 +62,7 @@ struct TripsHomeView: View {
                 await store.load()
             }
         }
+        .tint(Color.saveCoralInk)
         .sheet(isPresented: $showsCreateTrip) {
             NewTripPackView { name, city, startDate, endDate in
                 if let trip = await store.createTrip(
@@ -123,6 +124,7 @@ struct TripsHomeView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(Color.saveCoral)
+        .foregroundStyle(Color.saveInk)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
@@ -176,7 +178,7 @@ private struct TripPackCard: View {
         HStack(spacing: 14) {
             Image(systemName: "suitcase.rolling.fill")
                 .font(.title2)
-                .foregroundStyle(Color.saveCoral)
+                .foregroundStyle(Color.saveCoralInk)
                 .frame(width: 48, height: 48)
                 .background(Color.saveHoney.opacity(0.38), in: RoundedRectangle(cornerRadius: 15))
 
@@ -227,6 +229,7 @@ private struct NewTripPackView: View {
                     TextField(localized("Trip name", "行程名稱"), text: $name)
                     TextField(localized("City or area", "城市或區域"), text: $city)
                 }
+                .saveNotebookListRow()
                 Section {
                     Toggle(localized("Set dates", "設定日期"), isOn: $hasDates)
                     if hasDates {
@@ -239,7 +242,9 @@ private struct NewTripPackView: View {
                         )
                     }
                 }
+                .saveNotebookListRow()
             }
+            .saveNotebookListCanvas()
             .navigationTitle(localized("New Trip Pack", "新增 Trip Pack"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -278,6 +283,13 @@ private enum TripWorkspaceTab: Hashable {
     case share
 }
 
+enum TripWorkspaceBadge {
+    nonisolated static func label(for candidateCount: Int) -> String? {
+        guard candidateCount > 0 else { return nil }
+        return candidateCount > 99 ? "99+" : String(candidateCount)
+    }
+}
+
 private struct TripWorkspaceView: View {
     let tripID: UUID
     @ObservedObject var store: TripPackStore
@@ -307,7 +319,7 @@ private struct TripWorkspaceView: View {
                         onOpenCapture: onOpenCapture
                     )
                     .tabItem { Label(localized("Inbox", "收件匣"), systemImage: "tray") }
-                    .badge(mapViewModel.reviewCandidates.count)
+                    .badge(TripWorkspaceBadge.label(for: mapViewModel.reviewCandidates.count))
                     .tag(TripWorkspaceTab.inbox)
                     .accessibilityIdentifier("trip.tab.inbox")
 
@@ -337,8 +349,10 @@ private struct TripWorkspaceView: View {
                     systemImage: "suitcase.rolling",
                     description: Text(localized("Return to Trips and open it again.", "請回到行程首頁後重新打開。"))
                 )
+                .background(SaveDottedBackground().ignoresSafeArea())
             }
         }
+        .tint(Color.saveCoralInk)
         .onAppear { store.selectTrip(tripID) }
     }
 
@@ -368,6 +382,7 @@ private struct TripPlanView: View {
                 } actions: {
                     Button(localized("Add from SAV-E", "從 SAV-E 加入")) { showsPlacePicker = true }
                 }
+                .saveNotebookListRow()
             } else {
                 ForEach(groupedStops, id: \.day) { group in
                     Section(localized("Day \(group.day)", "第 \(group.day) 天")) {
@@ -388,6 +403,7 @@ private struct TripPlanView: View {
                             )
                         }
                     }
+                    .saveNotebookListRow()
                 }
             }
 
@@ -399,7 +415,10 @@ private struct TripPlanView: View {
                 }
                 .disabled(availablePlaces.isEmpty)
             }
+            .saveNotebookListRow()
         }
+        .listStyle(.insetGrouped)
+        .saveNotebookListCanvas()
         .overlay(alignment: .top) {
             if store.isSaving {
                 ProgressView(localized("Saving…", "正在保存…"))
@@ -472,7 +491,7 @@ private struct TripStopRow: View {
                 HStack(spacing: 12) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(Color.saveCoral)
+                        .foregroundStyle(Color.saveCoralInk)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(stop.placeName)
                             .font(.body.weight(.semibold))
@@ -582,12 +601,14 @@ private struct TripStopEditorView: View {
                             .foregroundStyle(.red)
                     }
                 }
+                .saveNotebookListRow()
 
                 Section(localized("Private note", "私人筆記")) {
                     TextField(localized("Add a note", "加入筆記"), text: $note, axis: .vertical)
                         .lineLimit(3...6)
                         .accessibilityIdentifier("trip.stop.edit.note")
                 }
+                .saveNotebookListRow()
 
                 Section {
                     Button(localized("Remove from Trip Pack", "從 Trip Pack 移除"), role: .destructive) {
@@ -596,7 +617,9 @@ private struct TripStopEditorView: View {
                     .disabled(isSubmitting)
                     .accessibilityIdentifier("trip.stop.edit.remove")
                 }
+                .saveNotebookListRow()
             }
+            .saveNotebookListCanvas()
             .navigationTitle(stop.placeName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -701,6 +724,7 @@ private struct SavedPlacePicker: View {
                     }
                     .accessibilityIdentifier("trip.add.dayPicker")
                 }
+                .saveNotebookListRow()
 
                 Section(localized("Confirmed Map Stamps", "已確認地圖章")) {
                     ForEach(filteredPlaces) { place in
@@ -717,7 +741,10 @@ private struct SavedPlacePicker: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .saveNotebookListRow()
             }
+            .listStyle(.insetGrouped)
+            .saveNotebookListCanvas()
             .navigationTitle(localized("Add Map Stamp", "加入地圖章"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query)
@@ -792,6 +819,7 @@ private struct TripInboxView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             }
+            .saveNotebookListRow()
 
             Section(localized("Waiting for confirmation", "等待確認")) {
                 if candidates.isEmpty {
@@ -819,13 +847,17 @@ private struct TripInboxView: View {
                     }
                 }
             }
+            .saveNotebookListRow()
 
             Section {
                 Button(action: onOpenCapture) {
                     Label(localized("Paste / Share Link", "貼上／分享連結"), systemImage: "link.badge.plus")
                 }
             }
+            .saveNotebookListRow()
         }
+        .listStyle(.insetGrouped)
+        .saveNotebookListCanvas()
         .accessibilityIdentifier("trip.inbox")
     }
 
@@ -881,7 +913,10 @@ private struct TripPackShareView: View {
                     "SAV-E 連結與 KML 只包含已確認地點；私人備註不會輸出。"
                 ))
             }
+            .saveNotebookListRow()
         }
+        .listStyle(.insetGrouped)
+        .saveNotebookListCanvas()
         .sheet(item: $kmlShareItem, onDismiss: cleanupKMLFile) { item in
             ShareSheet(items: [item.url])
                 .accessibilityIdentifier("trip.share.kml.sheet")
