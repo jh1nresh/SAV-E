@@ -5,6 +5,7 @@ final class SavePetStageVisualTests: XCTestCase {
     func testAllPresetAndStageVisualsRender() {
         let app = XCUIApplication()
         app.launchArguments += [
+            "--enable-internal-companions",
             "--uitest-pet-stage-gallery",
             "-save.appLanguage", "en",
         ]

@@ -1,8 +1,22 @@
+import Foundation
+
 enum SaveCompanionAvailability {
-    // Only internal Debug builds explicitly opt in while companion art is provisional.
+    static let optInArgument = "--enable-internal-companions"
+
 #if SAVE_INTERNAL_COMPANIONS
-    static let isEnabled = true
+    private static let internalBuild = true
 #else
-    static let isEnabled = false
+    private static let internalBuild = false
 #endif
+
+    // Companion art stays provisional. Internal builds must still opt in at
+    // launch so normal Debug, reviewer-demo, and screenshot flows match Release.
+    static let isEnabled = shouldEnable(
+        arguments: ProcessInfo.processInfo.arguments,
+        internalBuild: internalBuild
+    )
+
+    static func shouldEnable(arguments: [String], internalBuild: Bool) -> Bool {
+        internalBuild && arguments.contains(optInArgument)
+    }
 }

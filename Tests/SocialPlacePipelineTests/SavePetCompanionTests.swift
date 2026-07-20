@@ -3,6 +3,24 @@ import XCTest
 
 @MainActor
 final class SavePetCompanionTests: XCTestCase {
+    func testCompanionAvailabilityRequiresInternalLaunchOptIn() {
+        XCTAssertFalse(
+            SaveCompanionAvailability.shouldEnable(arguments: [], internalBuild: true)
+        )
+        XCTAssertTrue(
+            SaveCompanionAvailability.shouldEnable(
+                arguments: [SaveCompanionAvailability.optInArgument],
+                internalBuild: true
+            )
+        )
+        XCTAssertFalse(
+            SaveCompanionAvailability.shouldEnable(
+                arguments: [SaveCompanionAvailability.optInArgument],
+                internalBuild: false
+            )
+        )
+    }
+
     func testEvolutionMatchesTomaThresholds() {
         XCTAssertEqual(SavePetStage(xp: 0), .hatchling)
         XCTAssertEqual(SavePetStage(xp: 19), .hatchling)
