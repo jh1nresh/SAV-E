@@ -75,7 +75,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         attach(app, name: "screenshot-03-trip-map")
 
         tabBar.buttons["Inbox"].tap()
-        XCTAssertTrue(app.buttons["Paste / Share Link"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(pasteShareLinkButton(in: app).waitForExistence(timeout: stepTimeout))
         sleep(1)
         attach(app, name: "screenshot-04-trip-inbox")
 
@@ -119,7 +119,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
         tabBar.buttons["Inbox"].tap()
-        XCTAssertTrue(app.buttons["Paste / Share Link"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(pasteShareLinkButton(in: app).waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
@@ -297,6 +297,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private func pasteShareLinkButton(in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] 'Paste' AND label CONTAINS[c] 'Share Link'")
+        ).firstMatch
+    }
 
     @MainActor
     private func replaceText(in field: XCUIElement, with replacement: String) {
