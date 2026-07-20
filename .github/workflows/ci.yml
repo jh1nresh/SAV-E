@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Check secrets packaging
+        run: scripts/test-package-google-places-secrets.sh
+
+      - name: Build without booting a simulator
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      - name: Create focused test simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl create \
+            'SAV-E CI' \
+            'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -only-testing:SAVETests \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test
+
+      - name: Tear down simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true
