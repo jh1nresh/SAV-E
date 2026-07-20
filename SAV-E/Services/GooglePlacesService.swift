@@ -318,13 +318,19 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
 
     private let apiKey: String?
     private let session: URLSession
+    private let bundleIdentifier: String?
 
-    init(apiKey: String? = nil, session: URLSession? = nil) {
+    init(
+        apiKey: String? = nil,
+        session: URLSession? = nil,
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier
+    ) {
         self.apiKey = Self.normalizedAPIKey(
             apiKey
                 ?? ProcessInfo.processInfo.environment["GOOGLE_PLACES_API_KEY"]
                 ?? SAVEProductionConfig.keyFromPlist("GOOGLE_PLACES_API_KEY")
         )
+        self.bundleIdentifier = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let session {
             self.session = session
         } else {
@@ -366,7 +372,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.noResults
         }
 
-        let (data, _) = try await session.data(from: url)
+        let (data, _) = try await session.data(for: authorizedRequest(for: url))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let results = json?["results"] as? [[String: Any]], !results.isEmpty else {
@@ -413,7 +419,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.noResults
         }
 
-        let (data, _) = try await session.data(from: url)
+        let (data, _) = try await session.data(for: authorizedRequest(for: url))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let result = json?["result"] as? [String: Any] else {
@@ -455,6 +461,21 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
         guard GooglePlacesPhotoURL.isGooglePlacesPhotoURL(persistedURL) else { return persistedURL }
         guard let apiKey else { return nil }
         return GooglePlacesPhotoURL.authorizedURL(persistedURL, apiKey: apiKey)
+    }
+
+    func authorizedPhotoRequest(for persistedURL: URL) -> URLRequest? {
+        guard let requestURL = authorizedPhotoURL(for: persistedURL) else { return nil }
+        return GooglePlacesPhotoURL.isGooglePlacesPhotoURL(persistedURL)
+            ? authorizedRequest(for: requestURL)
+            : URLRequest(url: requestURL)
+    }
+
+    private func authorizedRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
+            request.setValue(bundleIdentifier, forHTTPHeaderField: "X-Ios-Bundle-Identifier")
+        }
+        return request
     }
 }
 

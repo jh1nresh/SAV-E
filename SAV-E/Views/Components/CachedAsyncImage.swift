@@ -83,15 +83,16 @@ final class CachedImageStore {
         }
 
         let isGooglePlacesPhoto = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL)
-        guard let requestURL = GooglePlacesService.shared.authorizedPhotoURL(for: cacheURL) else {
+        guard var request = GooglePlacesService.shared.authorizedPhotoRequest(for: cacheURL) else {
             throw URLError(.userAuthenticationRequired)
         }
-        let request = URLRequest(
-            url: requestURL,
-            cachePolicy: isGooglePlacesPhoto ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
-        )
+        request.cachePolicy = isGooglePlacesPhoto ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
         let requestSession = isGooglePlacesPhoto ? sensitiveSession : session
-        let (data, _) = try await requestSession.data(for: request)
+        let (data, response) = try await requestSession.data(for: request)
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200..<300).contains(httpResponse.statusCode) {
+            throw URLError(.badServerResponse)
+        }
         guard let image = UIImage(data: data) else {
             throw URLError(.cannotDecodeContentData)
         }

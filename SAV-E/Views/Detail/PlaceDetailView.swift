@@ -13,6 +13,7 @@ struct PlaceDetailView: View {
     @State private var deleteError: String?
     @State private var enrichedPlace: Place?
     @State private var localVisibility: PlaceVisibility?
+    @State private var isEnrichingBusinessDetails = false
 
     private var detailPlace: Place {
         var value = enrichedPlace?.id == place.id ? enrichedPlace ?? place : place
@@ -27,7 +28,10 @@ struct PlaceDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 memoryHeader
 
-                PlaceBusinessPhotoCarousel(imageURLs: detailPlace.businessPhotoURLStrings)
+                PlaceBusinessPhotoCarousel(
+                    imageURLs: detailPlace.businessPhotoURLStrings,
+                    isSearching: isEnrichingBusinessDetails
+                )
                     .padding(.horizontal)
 
                 PlaceBasicInfoPanel(place: detailPlace)
@@ -199,6 +203,8 @@ struct PlaceDetailView: View {
     }
 
     private func enrichBusinessDetails() async {
+        isEnrichingBusinessDetails = true
+        defer { isEnrichingBusinessDetails = false }
         guard let updatedPlace = await PlaceBusinessEnricher.enrich(detailPlace) else { return }
         guard place.id == updatedPlace.id else { return }
         enrichedPlace = updatedPlace

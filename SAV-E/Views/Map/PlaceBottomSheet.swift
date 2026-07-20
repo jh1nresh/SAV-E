@@ -11,6 +11,7 @@ struct PlaceBottomSheet: View {
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var enrichedPlace: Place?
+    @State private var isEnrichingBusinessDetails = false
 
     /// Place rendered by the sheet: prefers the background-enriched copy so
     /// photos/rating/hours fill in without blocking the initial open.
@@ -77,7 +78,10 @@ struct PlaceBottomSheet: View {
                 }
             }
 
-            PlaceBusinessPhotoCarousel(imageURLs: displayPlace.businessPhotoURLStrings)
+            PlaceBusinessPhotoCarousel(
+                imageURLs: displayPlace.businessPhotoURLStrings,
+                isSearching: isEnrichingBusinessDetails
+            )
 
             PlaceBasicInfoPanel(place: displayPlace)
             PlaceInsightSummaryPanel(place: displayPlace, fallbackSummary: memorySummary)
@@ -167,6 +171,8 @@ struct PlaceBottomSheet: View {
     }
 
     private func enrichBusinessDetails() async {
+        isEnrichingBusinessDetails = true
+        defer { isEnrichingBusinessDetails = false }
         guard let updatedPlace = await PlaceBusinessEnricher.enrich(displayPlace) else { return }
         guard place.id == updatedPlace.id else { return }
         enrichedPlace = updatedPlace
@@ -732,7 +738,9 @@ private struct PlaceSummaryLine: View {
 }
 
 struct PlaceBusinessPhotoCarousel: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     var imageURLs: [String]
+    var isSearching = false
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -768,9 +776,9 @@ struct PlaceBusinessPhotoCarousel: View {
             }
 
             HStack(spacing: 6) {
-                Image(systemName: photoURLs.isEmpty ? "photo" : "camera.fill")
+                Image(systemName: photoURLs.isEmpty ? (isSearching ? "hourglass" : "photo") : "camera.fill")
                     .font(.caption2.weight(.bold))
-                Text(photoURLs.isEmpty ? "Finding business photo" : photoLabel)
+                Text(photoURLs.isEmpty ? emptyPhotoLabel : photoLabel)
                     .font(.caption2.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -795,7 +803,18 @@ struct PlaceBusinessPhotoCarousel: View {
     }
 
     private var photoLabel: String {
-        photoURLs.count > 1 ? "\(photoURLs.count) business photos" : "Business photo"
+        photoURLs.count > 1
+            ? languageSettings.localized(
+                english: "\(photoURLs.count) business photos",
+                traditionalChinese: "\(photoURLs.count) 張商家照片"
+            )
+            : languageSettings.localized(english: "Business photo", traditionalChinese: "商家照片")
+    }
+
+    private var emptyPhotoLabel: String {
+        isSearching
+            ? languageSettings.localized(english: "Finding business photo", traditionalChinese: "正在尋找商家照片")
+            : languageSettings.localized(english: "No business photo available", traditionalChinese: "尚無商家照片")
     }
 
     private var fallbackVisual: some View {

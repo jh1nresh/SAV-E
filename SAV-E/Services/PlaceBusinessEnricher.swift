@@ -74,11 +74,27 @@ enum PlaceBusinessEnricher {
         for place: Place,
         service: GooglePlacesServiceProtocol
     ) async -> Update? {
-        let details: GooglePlaceDetails?
-        let fallbackMatch: GooglePlaceMatch?
+        var details: GooglePlaceDetails?
+        var fallbackMatch: GooglePlaceMatch?
         if let googlePlaceId = place.googlePlaceId {
             details = try? await service.getPlaceDetails(placeId: googlePlaceId)
-            fallbackMatch = nil
+
+            // Saved provider IDs can become stale or point to a record without
+            // photos. Recover by matching the current name, address, and
+            // coordinates instead of leaving the sheet permanently empty.
+            if details?.photoReferences?.isEmpty != false {
+                fallbackMatch = await bestGoogleMatch(
+                    name: place.name,
+                    alternateName: place.businessLookupName,
+                    address: place.address,
+                    coordinate: place.coordinate,
+                    service: service
+                )
+                if let fallbackMatch,
+                   let recoveredDetails = try? await service.getPlaceDetails(placeId: fallbackMatch.id) {
+                    details = recoveredDetails
+                }
+            }
         } else {
             guard let match = await bestGoogleMatch(
                 name: place.name,
