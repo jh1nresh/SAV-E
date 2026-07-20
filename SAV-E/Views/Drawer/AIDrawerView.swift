@@ -2810,6 +2810,7 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var editName = ""
     @State private var editAddress = ""
     @State private var editError: String?
+    @State private var isEnrichingBusinessDetails = false
 
     private var detailPlace: Place {
         if let enrichedPlace, enrichedPlace.id == place.id {
@@ -2820,7 +2821,10 @@ private struct SavedMapDetailDrawerContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PlaceBusinessPhotoCarousel(imageURLs: detailPlace.businessPhotoURLStrings)
+            PlaceBusinessPhotoCarousel(
+                imageURLs: detailPlace.businessPhotoURLStrings,
+                isSearching: isEnrichingBusinessDetails
+            )
 
             FlowLayout(spacing: 8) {
                 CategoryPill(category: detailPlace.category, isSelected: true)
@@ -2925,80 +2929,11 @@ private struct SavedMapDetailDrawerContent: View {
     }
 
     private func enrichBusinessDetails() async {
-        guard detailPlace.businessPhotoURLStrings.count < 2 ||
-                detailPlace.googleRating == nil ||
-                detailPlace.priceRange == nil ||
-                detailPlace.openingHours == nil
-        else { return }
-        guard let update = await businessDetails(for: detailPlace) else { return }
-        guard place.id == detailPlace.id else { return }
-
-        var updatedPlace = detailPlace
-        if !update.photoURLs.isEmpty {
-            let urls = update.photoURLs.map(\.absoluteString)
-            updatedPlace.sourceImageUrl = updatedPlace.sourceImageUrl ?? urls.first
-            updatedPlace.businessPhotoUrls = urls
-        }
-        updatedPlace.googleRating = updatedPlace.googleRating ?? update.rating
-        updatedPlace.priceRange = updatedPlace.priceRange ?? update.priceRange
-        updatedPlace.openingHours = updatedPlace.openingHours ?? update.openingHours
+        isEnrichingBusinessDetails = true
+        defer { isEnrichingBusinessDetails = false }
+        guard let updatedPlace = await PlaceBusinessEnricher.enrich(detailPlace) else { return }
+        guard place.id == updatedPlace.id else { return }
         enrichedPlace = updatedPlace
-    }
-
-    private func businessDetails(for place: Place) async -> (photoURLs: [URL], rating: Double?, priceRange: String?, openingHours: String?)? {
-        let service = GooglePlacesService.shared
-        let details: GooglePlaceDetails?
-        let fallbackMatch: GooglePlaceMatch?
-        if let googlePlaceId = place.googlePlaceId {
-            details = try? await service.getPlaceDetails(placeId: googlePlaceId)
-            fallbackMatch = nil
-        } else {
-            guard let match = await bestGoogleMatch(for: place, service: service) else { return nil }
-            details = try? await service.getPlaceDetails(placeId: match.id)
-            fallbackMatch = match
-        }
-
-        let photoReferences = details?.photoReferences?.isEmpty == false
-            ? details?.photoReferences ?? []
-            : [fallbackMatch?.photoReference].compactMap { $0 }
-        let photoURLs = photoReferences
-            .prefix(6)
-            .compactMap { service.photoURL(reference: $0, maxWidth: 900) }
-        let priceLevel = details?.priceLevel ?? fallbackMatch?.priceLevel
-        let hasDetails = !photoURLs.isEmpty ||
-            details?.rating != nil ||
-            fallbackMatch?.rating != nil ||
-            priceLevel != nil ||
-            details?.openingHours?.isEmpty == false
-        guard hasDetails else { return nil }
-
-        return (
-            photoURLs,
-            details?.rating ?? fallbackMatch?.rating,
-            priceLevel.map { String(repeating: "$", count: max(1, $0)) },
-            details?.openingHours?.first
-        )
-    }
-
-    private func bestGoogleMatch(for place: Place, service: GooglePlacesServiceProtocol) async -> GooglePlaceMatch? {
-        do {
-            let matches = try await service.searchPlace(
-                query: "\(place.name) \(place.address)",
-                near: place.coordinate
-            )
-            let placeLocation = CLLocation(latitude: place.latitude, longitude: place.longitude)
-            return matches.first { match in
-                let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                let sameArea = placeLocation.distance(from: matchLocation) < 250
-                let sameName = match.name.localizedCaseInsensitiveContains(place.name) ||
-                    place.name.localizedCaseInsensitiveContains(match.name) ||
-                    match.name.localizedCaseInsensitiveContains(place.businessLookupName) ||
-                    place.businessLookupName.localizedCaseInsensitiveContains(match.name)
-                return sameArea || sameName
-            }
-        } catch {
-            return nil
-        }
     }
 
     private var placeEditor: some View {
@@ -4643,6 +4578,7 @@ private struct UnsavedMapCandidateCard: View {
     var isWorking: Bool
     var onSave: () -> Void
     @State private var enrichedPhotoURLStrings: [String]?
+    @State private var isEnrichingPhoto = false
 
     /// Photos shown by the carousel: prefers freshly enriched Google Places
     /// photos, otherwise falls back to whatever the candidate already carries.
@@ -4688,7 +4624,10 @@ private struct UnsavedMapCandidateCard: View {
             }
             .padding(.vertical, 2)
 
-            PlaceBusinessPhotoCarousel(imageURLs: displayPhotoURLStrings)
+            PlaceBusinessPhotoCarousel(
+                imageURLs: displayPhotoURLStrings,
+                isSearching: isEnrichingPhoto
+            )
 
             UnsavedCandidateGlassSection(title: languageSettings.localized(english: "Basic info", traditionalChinese: "基本資訊"), systemImage: "info.circle.fill") {
                 VStack(spacing: 8) {
@@ -4737,6 +4676,8 @@ private struct UnsavedMapCandidateCard: View {
         // B never keeps showing candidate A's enriched photos.
         enrichedPhotoURLStrings = nil
         guard candidate.businessPhotoURLStrings.count < 2 else { return }
+        isEnrichingPhoto = true
+        defer { isEnrichingPhoto = false }
         guard let urls = await PlaceBusinessEnricher.candidatePhotoURLs(for: candidate) else { return }
         // The .task is cancelled when candidate.id changes, so this guards against
         // writing a stale result after the card was reused.

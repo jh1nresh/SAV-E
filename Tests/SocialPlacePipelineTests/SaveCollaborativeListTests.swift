@@ -107,7 +107,10 @@ final class SaveCollaborativeListTests: XCTestCase {
 
     @MainActor
     func testGooglePhotoKeyIsAddedOnlyForTheTransientRequest() throws {
-        let service = GooglePlacesService(apiKey: "TEST_ONLY_NON_SECRET_VALUE")
+        let service = GooglePlacesService(
+            apiKey: "TEST_ONLY_NON_SECRET_VALUE",
+            bundleIdentifier: "com.wanderly.app"
+        )
         let persistedURL = try XCTUnwrap(service.photoURL(reference: "photo/reference+value", maxWidth: 900))
         let persistedItems = try XCTUnwrap(URLComponents(url: persistedURL, resolvingAgainstBaseURL: false)?.queryItems)
 
@@ -120,6 +123,26 @@ final class SaveCollaborativeListTests: XCTestCase {
         let requestItems = try XCTUnwrap(URLComponents(url: requestURL, resolvingAgainstBaseURL: false)?.queryItems)
         XCTAssertEqual(requestItems.first(where: { $0.name == "key" })?.value, "TEST_ONLY_NON_SECRET_VALUE")
         XCTAssertEqual(GooglePlacesPhotoURL.persistableURL(requestURL), persistedURL)
+
+        let request = try XCTUnwrap(service.authorizedPhotoRequest(for: persistedURL))
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Ios-Bundle-Identifier"), "com.wanderly.app")
+    }
+
+    @MainActor
+    func testBusinessPhotoEnrichmentFallsBackWhenSavedGooglePlaceIDIsStale() async throws {
+        var saved = place(name: "amamotobros", category: .food)
+        saved.address = "No. 377, Section 4, Ren'ai Road, Taipei"
+        saved.latitude = 25.0386
+        saved.longitude = 121.5557
+        saved.googlePlaceId = "stale-place-id"
+        let service = StaleGooglePlaceIDService()
+
+        let result = await PlaceBusinessEnricher.enrich(saved, service: service)
+        let enriched = try XCTUnwrap(result)
+
+        XCTAssertEqual(service.requestedDetailIDs, ["stale-place-id", "fresh-place-id"])
+        XCTAssertEqual(enriched.businessPhotoURLStrings, ["https://example.com/amamotobros.jpg"])
+        XCTAssertEqual(enriched.googleRating, 4.8)
     }
 
     @MainActor
@@ -170,5 +193,48 @@ final class SaveCollaborativeListTests: XCTestCase {
             openingHours: nil,
             createdAt: Date()
         )
+    }
+}
+
+@MainActor
+private final class StaleGooglePlaceIDService: GooglePlacesServiceProtocol {
+    private(set) var requestedDetailIDs: [String] = []
+
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        [
+            GooglePlaceMatch(
+                id: "fresh-place-id",
+                name: "amamotobros",
+                address: "No. 377, Section 4, Ren'ai Road, Taipei",
+                latitude: 25.0386,
+                longitude: 121.5557,
+                rating: 4.8,
+                photoReference: "amamotobros-photo"
+            )
+        ]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        requestedDetailIDs.append(placeId)
+        guard placeId == "fresh-place-id" else {
+            throw URLError(.badServerResponse)
+        }
+        return GooglePlaceDetails(
+            placeId: placeId,
+            name: "amamotobros",
+            formattedAddress: "No. 377, Section 4, Ren'ai Road, Taipei",
+            latitude: 25.0386,
+            longitude: 121.5557,
+            rating: 4.8,
+            priceLevel: nil,
+            openingHours: nil,
+            phoneNumber: nil,
+            websiteUrl: nil,
+            photoReferences: ["amamotobros-photo"]
+        )
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/amamotobros.jpg")
     }
 }

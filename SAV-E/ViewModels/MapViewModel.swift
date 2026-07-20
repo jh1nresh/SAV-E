@@ -1639,18 +1639,12 @@ final class MapViewModel: ObservableObject {
     }
 
     private func enrichSelectedPlacePhoto(_ place: Place) async {
-        guard let update = await businessDetails(for: place) else { return }
+        guard let updatedPlace = await PlaceBusinessEnricher.enrich(
+            place,
+            service: googlePlacesService
+        ) else { return }
         guard selectedPlace?.id == place.id else { return }
 
-        var updatedPlace = place
-        if !update.photoURLs.isEmpty {
-            let urls = update.photoURLs.map(\.absoluteString)
-            updatedPlace.sourceImageUrl = updatedPlace.sourceImageUrl ?? urls.first
-            updatedPlace.businessPhotoUrls = urls
-        }
-        updatedPlace.googleRating = updatedPlace.googleRating ?? update.rating
-        updatedPlace.priceRange = updatedPlace.priceRange ?? update.priceRange
-        updatedPlace.openingHours = updatedPlace.openingHours ?? update.openingHours
         selectedPlace = updatedPlace
         if let index = places.firstIndex(where: { $0.id == place.id }) {
             places[index] = updatedPlace
@@ -1664,75 +1658,6 @@ final class MapViewModel: ObservableObject {
                 print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
             }
         }
-    }
-
-    private func businessDetails(for place: Place) async -> (photoURLs: [URL], rating: Double?, priceRange: String?, openingHours: String?)? {
-        let details: GooglePlaceDetails?
-        let fallbackMatch: GooglePlaceMatch?
-        if let googlePlaceId = place.googlePlaceId {
-            details = try? await googlePlacesService.getPlaceDetails(placeId: googlePlaceId)
-            fallbackMatch = nil
-        } else {
-            guard let match = await bestGoogleMatch(for: place) else { return nil }
-            details = try? await googlePlacesService.getPlaceDetails(placeId: match.id)
-            fallbackMatch = match
-        }
-
-        let photoReferences = details?.photoReferences?.isEmpty == false
-            ? details?.photoReferences ?? []
-            : [fallbackMatch?.photoReference].compactMap { $0 }
-        let photoURLs = photoReferences
-            .prefix(6)
-            .compactMap { googlePlacesService.photoURL(reference: $0, maxWidth: 900) }
-        let priceLevel = details?.priceLevel ?? fallbackMatch?.priceLevel
-        let hasDetails = !photoURLs.isEmpty || details?.rating != nil || fallbackMatch?.rating != nil || priceLevel != nil || details?.openingHours?.isEmpty == false
-        guard hasDetails else { return nil }
-
-        return (
-            photoURLs,
-            details?.rating ?? fallbackMatch?.rating,
-            priceLevel.map { String(repeating: "$", count: max(1, $0)) },
-            details?.openingHours?.first
-        )
-    }
-
-    private func bestGoogleMatch(for place: Place) async -> GooglePlaceMatch? {
-        for query in googleMatchQueries(for: place) {
-            do {
-                let matches = try await googlePlacesService.searchPlace(
-                    query: query,
-                    near: place.coordinate
-                )
-                let placeLocation = CLLocation(latitude: place.latitude, longitude: place.longitude)
-                if let match = matches.first(where: { match in
-                    let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                    let sameArea = placeLocation.distance(from: matchLocation) < 250
-                    let sameName = match.name.localizedCaseInsensitiveContains(place.name) ||
-                        place.name.localizedCaseInsensitiveContains(match.name) ||
-                        match.name.localizedCaseInsensitiveContains(place.businessLookupName) ||
-                        place.businessLookupName.localizedCaseInsensitiveContains(match.name)
-                    return sameArea || sameName
-                }) {
-                    return match
-                }
-            } catch {
-                continue
-            }
-        }
-        return nil
-    }
-
-    private func googleMatchQueries(for place: Place) -> [String] {
-        var seen: Set<String> = []
-        return [
-            "\(place.name) \(place.address)",
-            "\(place.businessLookupName) \(place.address)",
-            place.businessLookupName,
-            place.address,
-        ]
-        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty }
-        .filter { seen.insert($0).inserted }
     }
 
     func selectReviewCandidate(_ candidate: PlaceReviewCandidate) {
