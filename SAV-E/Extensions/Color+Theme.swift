@@ -120,6 +120,7 @@ extension Color {
     static let saveSignal = Color(light: "EE9C78", dark: "9F523F")
     static let saveSuccess = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCoral = Color(light: "EE9C78", dark: "9F523F")
+    static let saveCoralInk = Color(light: "9F523F", dark: "EE9C78")
     static let savePink = Color(light: "F6C1CB", dark: "96586B")
     static let saveBlush = Color(light: "FFF6F8", dark: "281A20")
     static let saveLavender = Color(light: "DCC8FF", dark: "44345F")

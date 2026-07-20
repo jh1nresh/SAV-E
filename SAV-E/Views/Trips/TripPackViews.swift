@@ -62,7 +62,7 @@ struct TripsHomeView: View {
                 await store.load()
             }
         }
-        .tint(Color.saveCoral)
+        .tint(Color.saveCoralInk)
         .sheet(isPresented: $showsCreateTrip) {
             NewTripPackView { name, city, startDate, endDate in
                 if let trip = await store.createTrip(
@@ -124,6 +124,7 @@ struct TripsHomeView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(Color.saveCoral)
+        .foregroundStyle(Color.saveInk)
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
@@ -177,7 +178,7 @@ private struct TripPackCard: View {
         HStack(spacing: 14) {
             Image(systemName: "suitcase.rolling.fill")
                 .font(.title2)
-                .foregroundStyle(Color.saveCoral)
+                .foregroundStyle(Color.saveCoralInk)
                 .frame(width: 48, height: 48)
                 .background(Color.saveHoney.opacity(0.38), in: RoundedRectangle(cornerRadius: 15))
 
@@ -351,7 +352,7 @@ private struct TripWorkspaceView: View {
                 .background(SaveDottedBackground().ignoresSafeArea())
             }
         }
-        .tint(Color.saveCoral)
+        .tint(Color.saveCoralInk)
         .onAppear { store.selectTrip(tripID) }
     }
 
@@ -490,7 +491,7 @@ private struct TripStopRow: View {
                 HStack(spacing: 12) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(Color.saveCoral)
+                        .foregroundStyle(Color.saveCoralInk)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(stop.placeName)
                             .font(.body.weight(.semibold))
