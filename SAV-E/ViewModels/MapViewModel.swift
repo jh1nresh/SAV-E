@@ -706,14 +706,20 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    func importURLAsReviewCandidates(_ url: URL) async throws -> Int {
+    func importSharedTextAsReviewCandidates(_ sharedText: String) async throws -> [UUID] {
         guard let userId = authService.currentUserId else {
             throw SupabaseError.notAuthenticated
         }
 
-        _ = try? saveLocalVaultService.saveSourceOnly(url: url)
-        let candidates = try await socialLinkReviewCandidateService.reviewCandidates(from: url)
-        var importedCount = candidates.count
+        let normalizedShare = SocialShareTextNormalizer.normalize(sharedText)
+        guard let sourceURL = normalizedShare.primaryURL,
+              let analysisInput = normalizedShare.privacyScopedAnalysisInput
+        else {
+            throw URLError(.badURL)
+        }
+        _ = try? saveLocalVaultService.saveSourceOnly(url: sourceURL)
+        let candidates = await socialLinkReviewCandidateService.reviewCandidates(fromSharedText: analysisInput)
+        var importedCandidateIDs: [UUID] = []
         for candidate in candidates {
             mirrorToLocalVault(candidate)
             var run: PlaceRecoveryWorkflowRun?
@@ -730,14 +736,18 @@ final class MapViewModel: ObservableObject {
                     userId: userId,
                     workflowRunId: createdRun.id
                 )
+                importedCandidateIDs.append(candidateId)
                 failedStep = "write_receipt"
                 _ = try await supabaseService.recordPlaceRecoveryResult(
                     placeRecoveryResult(for: candidate, candidateId: candidateId),
                     for: createdRun.id
                 )
                 if candidate.isSourceOnly {
-                    let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
-                    importedCount += recovered?.createdCandidates.count ?? 0
+                    let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(
+                        captureId: captureId,
+                        workflowRunId: createdRun.id
+                    )
+                    importedCandidateIDs.append(contentsOf: recovered?.createdCandidates.map(\.id) ?? [])
                 }
             } catch {
                 if failedStep != "write_receipt" {
@@ -752,7 +762,7 @@ final class MapViewModel: ObservableObject {
             }
         }
         try await refreshReviewCandidates()
-        return importedCount
+        return Array(Set(importedCandidateIDs))
     }
 
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {

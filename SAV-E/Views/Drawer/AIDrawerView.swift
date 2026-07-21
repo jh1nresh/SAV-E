@@ -33,7 +33,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .saved: return "Stamps"
+        case .saved: return "Saved"
         case .review: return "Review"
         case .lists: return "Lists"
         case .friends: return "Friends"
@@ -43,7 +43,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
     func title(language: AppLanguage) -> String {
         switch self {
         case .saved:
-            return language.localized(english: "Stamps", traditionalChinese: "地圖章")
+            return language.localized(english: "Saved", traditionalChinese: "收藏")
         case .review:
             return language.localized(english: "Review", traditionalChinese: "待確認")
         case .lists:
@@ -55,7 +55,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
 
     var systemImage: String {
         switch self {
-        case .saved: return "list.bullet.rectangle"
+        case .saved: return "bookmark.fill"
         case .review: return "checklist.unchecked"
         case .lists: return "person.2.wave.2.fill"
         case .friends: return "person.2.fill"
@@ -63,13 +63,37 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
     }
 }
 
+enum DrawerLaunchTarget: Equatable {
+    case addLink
+    case saved
+    case review
+}
+
+struct DrawerLaunchRequest: Equatable {
+    let id: UUID
+    let target: DrawerLaunchTarget
+
+    init(id: UUID = UUID(), target: DrawerLaunchTarget) {
+        self.id = id
+        self.target = target
+    }
+}
+
 struct AIDrawerView: View {
+    private enum LinkAnalysisState: Equatable {
+        case idle
+        case analyzing
+        case ready(Set<UUID>)
+        case failed(String)
+    }
+
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var viewModel: AIDrawerViewModel
     @Binding var drawerDetent: PresentationDetent
     @Binding var mapDetailDrawerItem: MapDetailDrawerItem?
+    var launchRequest: DrawerLaunchRequest = DrawerLaunchRequest(target: .review)
     var existingPlacesForImport: [Place] = []
     var reviewCandidates: [PlaceReviewCandidate] = []
     var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
@@ -84,7 +108,8 @@ struct AIDrawerView: View {
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
-    var onImportURLAsReviewCandidates: (URL) async throws -> Int = { _ in 0 }
+    var onImportSharedTextAsReviewCandidates: (String) async throws -> [UUID] = { _ in [] }
+    var onAddPlaceToTrip: (Place) -> Void = { _ in }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var onClearMapSearchResults: () -> Void = {}
     var collaborativeLists: [SaveCollaborativeList] = []
@@ -125,6 +150,7 @@ struct AIDrawerView: View {
     @State private var showReviewInbox = false
     @State private var showSavedCategories = false
     @State private var isImportingURL = false
+    @State private var linkAnalysisState: LinkAnalysisState = .idle
     @State private var showsSlowLoadingHint = false
     @State private var showProfile = false
     @State private var showLists = false
@@ -157,6 +183,7 @@ struct AIDrawerView: View {
                 }
             }
         }
+        .accessibilityIdentifier("drawer.root")
         .sheet(isPresented: $showGoogleTakeoutImport) {
             GoogleTakeoutImportView(
                 existingPlaces: existingPlacesForImport,
@@ -188,6 +215,13 @@ struct AIDrawerView: View {
                     drawerDetent = r.componentType == .tripItinerary ? .large : .medium
                 }
             }
+        }
+        .onAppear {
+            guard mapDetailDrawerItem == nil else { return }
+            applyLaunchRequest(launchRequest)
+        }
+        .onChange(of: launchRequest) { _, request in
+            applyLaunchRequest(request)
         }
         .onChange(of: voiceQuery.transcript) { _, transcript in
             guard voiceQuery.isListening else { return }
@@ -307,6 +341,7 @@ struct AIDrawerView: View {
             onUpdatePlace: { place in
                 try await onUpdatePlace(place)
             },
+            onAddPlaceToTrip: onAddPlaceToTrip,
             onCreateList: createListForPicker,
             onAddPlaceToList: onAddPlaceToList
         )
@@ -339,6 +374,7 @@ struct AIDrawerView: View {
                 .onTapGesture {
                     withAnimation { drawerDetent = .medium }
                 }
+                .accessibilityIdentifier("drawer.commandField")
 
             if isLoading {
                 Button(action: {
@@ -401,6 +437,41 @@ struct AIDrawerView: View {
 
     private var commandBarSecondaryText: Color {
         colorScheme == .dark ? Color.white.opacity(0.66) : Color.saveCocoa.opacity(0.72)
+    }
+
+    private func applyLaunchRequest(_ request: DrawerLaunchRequest) {
+        mapDetailDrawerItem = nil
+        onDismissMapDetail()
+        viewModel.returnToCommands()
+        showSavedCategories = false
+        showReviewInbox = false
+        showLists = false
+        searchFocused = false
+
+        switch request.target {
+        case .addLink:
+            if !isImportingURL {
+                linkAnalysisState = .idle
+            }
+            viewModel.activeCommandTab = .review
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            Task { @MainActor in
+                await Task.yield()
+                searchFocused = true
+            }
+        case .saved:
+            viewModel.activeCommandTab = .saved
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+        case .review:
+            viewModel.activeCommandTab = .review
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .large
+            }
+        }
     }
 
     @ViewBuilder
@@ -1569,6 +1640,9 @@ struct AIDrawerView: View {
     private var reviewInboxView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                linkAnalysisPrivacyNotice
+                linkAnalysisStatusCard
+
                 if reviewCandidates.isEmpty {
                     EmptyStateView(
                         icon: "checklist.unchecked",
@@ -1581,18 +1655,26 @@ struct AIDrawerView: View {
                         action: { searchFocused = true }
                     )
                 } else {
-                    if !needsReviewCandidates.isEmpty {
+                    if !latestLinkCandidates.isEmpty {
                         ReviewCandidatesSection(
-                            title: languageSettings.localized(english: "Needs Review", traditionalChinese: "需要確認"),
-                            candidates: needsReviewCandidates,
+                            title: languageSettings.localized(english: "From this link", traditionalChinese: "這次連結的結果"),
+                            candidates: latestLinkCandidates,
                             limit: nil,
                             onSelect: openReviewCandidateDetail
                         )
                     }
-                    if !sourceOnlyCandidates.isEmpty {
+                    if !remainingNeedsReviewCandidates.isEmpty {
+                        ReviewCandidatesSection(
+                            title: languageSettings.localized(english: "Needs Review", traditionalChinese: "需要確認"),
+                            candidates: remainingNeedsReviewCandidates,
+                            limit: nil,
+                            onSelect: openReviewCandidateDetail
+                        )
+                    }
+                    if !remainingSourceOnlyCandidates.isEmpty {
                         ReviewCandidatesSection(
                             title: languageSettings.localized(english: "Source-only Clues", traditionalChinese: "只留來源的線索"),
-                            candidates: sourceOnlyCandidates,
+                            candidates: remainingSourceOnlyCandidates,
                             limit: nil,
                             onSelect: openReviewCandidateDetail
                         )
@@ -1613,12 +1695,46 @@ struct AIDrawerView: View {
         .accessibilityIdentifier("drawer.review.root")
     }
 
+    private var linkAnalysisPrivacyNotice: some View {
+        Label {
+            Text(languageSettings.localized(
+                english: "Supported social shares use the cleaned caption and link. Other links send only the URL. Evidence stays in your private Review, and no place is saved until you confirm.",
+                traditionalChinese: "支援的社群分享會分析清理後的貼文說明與連結；其他連結只送出網址。線索只留在你的私人待確認區，必須由你確認才會收藏地點。"
+            ))
+            .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "lock.shield.fill")
+        }
+        .font(.caption)
+        .foregroundStyle(Color.saveCocoa.opacity(0.78))
+        .padding(12)
+        .saveNotebookPage(cornerRadius: 14)
+        .accessibilityIdentifier("drawer.linkAnalysis.privacy")
+    }
+
+    private var latestLinkCandidateIDs: Set<UUID> {
+        guard case .ready(let candidateIDs) = linkAnalysisState else { return [] }
+        return candidateIDs
+    }
+
+    private var latestLinkCandidates: [PlaceReviewCandidate] {
+        reviewCandidates.filter { latestLinkCandidateIDs.contains($0.id) }
+    }
+
     private var needsReviewCandidates: [PlaceReviewCandidate] {
         reviewCandidates.filter { $0.status != "source_only" }
     }
 
     private var sourceOnlyCandidates: [PlaceReviewCandidate] {
         reviewCandidates.filter { $0.status == "source_only" }
+    }
+
+    private var remainingNeedsReviewCandidates: [PlaceReviewCandidate] {
+        needsReviewCandidates.filter { !latestLinkCandidateIDs.contains($0.id) }
+    }
+
+    private var remainingSourceOnlyCandidates: [PlaceReviewCandidate] {
+        sourceOnlyCandidates.filter { !latestLinkCandidateIDs.contains($0.id) }
     }
 
     private var collaborativeListsView: some View {
@@ -1890,8 +2006,8 @@ struct AIDrawerView: View {
         SaveHaptics.tap()
         voiceQuery.stop()
         searchFocused = false
-        if let url = firstURL(in: viewModel.query) {
-            importURLToReviewCandidates(url)
+        if firstURL(in: viewModel.query) != nil {
+            importSharedTextToReviewCandidates(viewModel.query)
         } else if viewModel.shouldSearchNearbyUnsavedCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
         } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
@@ -2044,35 +2160,77 @@ struct AIDrawerView: View {
         }
     }
 
-    private func importURLToReviewCandidates(_ url: URL) {
+    private func importSharedTextToReviewCandidates(_ sharedText: String) {
         guard !isImportingURL else { return }
         showSavedCategories = false
         showReviewInbox = false
         showLists = false
         searchFocused = false
         isImportingURL = true
-        addSpotStatus = languageSettings.localized(
-            english: "Checking the link and saving possible places to Review...",
-            traditionalChinese: "正在檢查連結，可能的地點會先放到待確認。"
-        )
+        linkAnalysisState = .analyzing
+        addSpotStatus = nil
         viewModel.returnToCommands()
+        viewModel.activeCommandTab = .review
         withAnimation { drawerDetent = .medium }
 
         Task {
             do {
-                let count = try await onImportURLAsReviewCandidates(url)
-                addSpotStatus = count == 1
-                    ? languageSettings.localized(english: "Saved 1 possible place to Review. Check the receipt, then save it.", traditionalChinese: "已將 1 個可能地點放到待確認。請先看憑證，再保存。")
-                    : languageSettings.localized(english: "Saved \(count) possible places to Review. Check receipts before saving them.", traditionalChinese: "已將 \(count) 個可能地點放到待確認。保存前請先看憑證。")
+                let candidateIDs = try await onImportSharedTextAsReviewCandidates(sharedText)
+                linkAnalysisState = .ready(Set(candidateIDs))
                 openReviewInbox()
             } catch {
-                addSpotStatus = error.localizedDescription
-                viewModel.showMessage(
-                    title: languageSettings.localized(english: "Couldn’t add review candidate", traditionalChinese: "無法加入待確認地點"),
-                    message: error.localizedDescription
-                )
+                linkAnalysisState = .failed(error.localizedDescription)
+                viewModel.returnToCommands()
+                viewModel.activeCommandTab = .review
+                withAnimation { drawerDetent = .medium }
             }
             isImportingURL = false
+        }
+    }
+
+    @ViewBuilder
+    private var linkAnalysisStatusCard: some View {
+        switch linkAnalysisState {
+        case .idle:
+            EmptyView()
+        case .analyzing:
+            LinkAnalysisStatusCard(
+                systemImage: "link.badge.plus",
+                title: languageSettings.localized(english: "Analyzing link", traditionalChinese: "正在分析連結"),
+                message: languageSettings.localized(
+                    english: "SAV-E is checking the source and extracting possible places. Nothing is saved to your map yet.",
+                    traditionalChinese: "SAV-E 正在檢查來源並找出可能地點；目前還不會存進你的地圖。"
+                ),
+                isLoading: true,
+                tone: .saveHoney
+            )
+        case .ready(let candidateIDs):
+            let count = candidateIDs.count
+            LinkAnalysisStatusCard(
+                systemImage: count == 0 ? "questionmark.circle.fill" : "checkmark.seal.fill",
+                title: languageSettings.localized(
+                    english: count == 0 ? "Needs another clue" : "Analysis ready",
+                    traditionalChinese: count == 0 ? "需要更多線索" : "分析完成"
+                ),
+                message: languageSettings.localized(
+                    english: count == 0
+                        ? "No new place could be isolated. Try a map link, address, or clearer caption; no place was saved."
+                        : "Found \(count) possible place\(count == 1 ? "" : "s"). Open each receipt, then confirm only the exact places you want to save.",
+                    traditionalChinese: count == 0
+                        ? "目前無法辨識出新地點。請補上地圖連結、地址或更清楚的貼文說明；尚未收藏任何地點。"
+                        : "找到 \(count) 個可能地點。請先打開分析憑證，只確認你要收藏的精確地點。"
+                ),
+                isLoading: false,
+                tone: count == 0 ? .saveHoney : .saveMint
+            )
+        case .failed(let message):
+            LinkAnalysisStatusCard(
+                systemImage: "exclamationmark.triangle.fill",
+                title: languageSettings.localized(english: "Link analysis failed", traditionalChinese: "連結分析失敗"),
+                message: message,
+                isLoading: false,
+                tone: .saveCoral
+            )
         }
     }
 
@@ -2140,6 +2298,48 @@ struct AIDrawerView: View {
             viewModel.activeCommandTab = .lists
             withAnimation { drawerDetent = .large }
         }
+    }
+}
+
+private struct LinkAnalysisStatusCard: View {
+    let systemImage: String
+    let title: String
+    let message: String
+    let isLoading: Bool
+    let tone: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .tint(.saveInk)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.saveInk)
+                }
+            }
+            .frame(width: 34, height: 34)
+            .background(tone.opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.saveInk)
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.saveCocoa.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .saveNotebookPage(cornerRadius: 14)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drawer.linkAnalysis.status")
     }
 }
 
@@ -2215,6 +2415,7 @@ private struct MapDetailDrawerView: View {
     let onSaveSocialPlace: (Place) -> Void
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
+    let onAddPlaceToTrip: (Place) -> Void
     let onCreateList: () -> SaveCollaborativeList
     let onAddPlaceToList: (Place, UUID) throws -> Void
     @State private var statusMessage: String?
@@ -2317,6 +2518,7 @@ private struct MapDetailDrawerView: View {
                         place: place,
                         onRecommendOrder: { onRecommendOrder(place) },
                         onPlanAroundPlace: { onPlanAroundPlace(place) },
+                        onAddToTrip: { onAddPlaceToTrip(place) },
                         onDeletePlace: {
                             try await onDeletePlace(place)
                         },
@@ -2797,6 +2999,7 @@ private struct SavedMapDetailDrawerContent: View {
     let place: Place
     let onRecommendOrder: () -> Void
     let onPlanAroundPlace: () -> Void
+    let onAddToTrip: () -> Void
     let onDeletePlace: () async throws -> Void
     let onUpdateVisibility: (PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
@@ -2845,9 +3048,28 @@ private struct SavedMapDetailDrawerContent: View {
                 placeEditor
             }
 
+            Button(action: onAddToTrip) {
+                Label(
+                    languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"),
+                    systemImage: "suitcase.rolling.fill"
+                )
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.saveInk)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.saveCoral.opacity(0.72))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("drawer.saved.addToTrip")
+
             HStack(spacing: 8) {
                 Button(action: onPlanAroundPlace) {
-                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveHoney.opacity(0.56))
+                    PlaceDetailActionLabel(title: languageSettings.localized(english: "AI plan", traditionalChinese: "AI 規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveHoney.opacity(0.56))
                 }
 
                 Button {
@@ -4110,6 +4332,20 @@ private struct ReviewCandidateDetailCard: View {
 
                 ReviewCandidateNextStepPanel(candidate: candidate)
 
+                DisclosureGroup {
+                    ReviewCandidateProofPanel(candidate: candidate)
+                        .padding(.top, 6)
+                } label: {
+                    Label(
+                        languageSettings.localized(english: "Analysis receipt", traditionalChinese: "分析憑證"),
+                        systemImage: "doc.text.magnifyingglass"
+                    )
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.saveInk)
+                }
+                .tint(.saveInk)
+                .accessibilityIdentifier("drawer.review.analysisReceipt")
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
                         .font(.caption2.weight(.bold))
@@ -4130,7 +4366,7 @@ private struct ReviewCandidateDetailCard: View {
 
                 HStack(spacing: 8) {
                     CandidateActionButton(
-                        title: primaryAction.kind.displayName(language: languageSettings.language),
+                        title: primaryActionTitle,
                         systemImage: primaryAction.systemImage,
                         fill: .saveHoney,
                         disabled: isWorking,
@@ -4145,29 +4381,30 @@ private struct ReviewCandidateDetailCard: View {
                     )
                 }
 
-                HStack(spacing: 7) {
-                    CandidateActionButton(
-                        title: languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"),
-                        systemImage: "arrow.triangle.branch",
-                        fill: .saveNotebookPage,
-                        disabled: isWorking,
-                        action: onWrongBranch
-                    )
-                    CandidateActionButton(
-                        title: languageSettings.localized(english: "Source only", traditionalChinese: "只留來源"),
-                        systemImage: "tray.and.arrow.down",
-                        fill: .saveMint.opacity(0.46),
-                        disabled: isWorking,
-                        action: onSaveSourceOnly
-                    )
-                    CandidateActionButton(
-                        title: languageSettings.localized(english: "Not this", traditionalChinese: "不是這間"),
-                        systemImage: "xmark",
-                        fill: .saveCoral.opacity(0.36),
-                        disabled: isWorking,
-                        action: onReject
-                    )
+                Menu {
+                    Button(action: onWrongBranch) {
+                        Label(languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"), systemImage: "arrow.triangle.branch")
+                    }
+                    Button(action: onSaveSourceOnly) {
+                        Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
+                    }
+                    Button(role: .destructive, action: onReject) {
+                        Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
+                    }
+                } label: {
+                    Label(languageSettings.localized(english: "More review actions", traditionalChinese: "更多確認動作"), systemImage: "ellipsis.circle")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.saveCocoa)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(Color.saveNotebookPage.opacity(0.28))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.saveNotebookLine.opacity(0.3), lineWidth: 1)
+                        )
                 }
+                .disabled(isWorking)
             }
             .padding(12)
         }
@@ -4181,6 +4418,13 @@ private struct ReviewCandidateDetailCard: View {
 
     private var primaryAction: SavePlaceActionResolution {
         SavePlaceActionResolution(candidate: candidate)
+    }
+
+    private var primaryActionTitle: String {
+        if primaryAction.confirmsMapStamp {
+            return languageSettings.localized(english: "Confirm & save", traditionalChinese: "確認並收藏")
+        }
+        return primaryAction.kind.displayName(language: languageSettings.language)
     }
 
     private var presentationEyebrow: String {

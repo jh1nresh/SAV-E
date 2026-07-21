@@ -75,7 +75,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         attach(app, name: "screenshot-03-trip-map")
 
         tabBar.buttons["Inbox"].tap()
-        XCTAssertTrue(pasteShareLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
         sleep(1)
         attach(app, name: "screenshot-04-trip-inbox")
 
@@ -119,7 +119,45 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
         tabBar.buttons["Inbox"].tap()
-        XCTAssertTrue(pasteShareLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
+    func testDrawerLauncherCanBePulledUpManually() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        let launcher = app.descendants(matching: .any)["drawer.launcher"]
+        XCTAssertTrue(launcher.waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["trips.saved"].isHittable)
+        XCTAssertTrue(app.buttons["trips.review"].isHittable)
+
+        let commandField = app.textFields["drawer.commandField"]
+        let dragStart = launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+        dragStart.press(
+            forDuration: 0.15,
+            thenDragTo: dragStart.withOffset(CGVector(dx: 0, dy: -24))
+        )
+        XCTAssertFalse(commandField.waitForExistence(timeout: 0.5))
+
+        let openDragStart = launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+        openDragStart.press(
+            forDuration: 0.15,
+            thenDragTo: openDragStart.withOffset(CGVector(dx: 0, dy: -96))
+        )
+
+        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["drawer.tab.saved"].exists)
+        XCTAssertTrue(app.buttons["drawer.tab.review"].exists)
+        XCTAssertTrue(app.buttons["drawer.tab.friends"].exists)
     }
 
     @MainActor
@@ -172,7 +210,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.alerts.buttons["Cancel"].tap()
         app.navigationBars.buttons["Cancel"].tap()
 
-        let addMapStamp = app.buttons["Add confirmed Map Stamp"]
+        let addMapStamp = app.buttons["Add saved place"]
         XCTAssertTrue(addMapStamp.waitForExistence(timeout: stepTimeout))
         addMapStamp.tap()
         XCTAssertTrue(app.steppers["trip.add.dayPicker"].waitForExistence(timeout: stepTimeout))
@@ -299,10 +337,8 @@ final class SAVEScreenshotRailTests: XCTestCase {
     // MARK: - Helpers
 
     @MainActor
-    private func pasteShareLinkButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons.matching(
-            NSPredicate(format: "label CONTAINS[c] 'Paste' AND label CONTAINS[c] 'Share Link'")
-        ).firstMatch
+    private func addLinkButton(in app: XCUIApplication) -> XCUIElement {
+        app.buttons["trip.inbox.addLink"]
     }
 
     @MainActor

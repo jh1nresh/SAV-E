@@ -125,6 +125,15 @@ enum SocialSharePlatform: String, Codable {
     case appleMaps
     case chinaMaps
     case generic
+
+    var includesCaptionInAnalysis: Bool {
+        switch self {
+        case .douyin, .xiaohongshu, .dianping, .meituan, .taobaoInstantCommerce, .tiktok, .instagram:
+            return true
+        case .googleMaps, .appleMaps, .chinaMaps, .generic:
+            return false
+        }
+    }
 }
 
 struct SocialShareSourceBundle: Hashable {
@@ -141,6 +150,17 @@ struct SocialShareSourceBundle: Hashable {
 
     var hasResolvableURL: Bool {
         primaryURL != nil
+    }
+
+    /// The smallest user-provided payload allowed to cross the analysis boundary.
+    /// Generic and map links never carry adjacent clipboard text. Supported social
+    /// shares may include their cleaned caption because it contains place evidence.
+    var privacyScopedAnalysisInput: String? {
+        guard let primaryURLString else { return nil }
+        guard platform.includesCaptionInAnalysis, !captionEvidence.isEmpty else {
+            return primaryURLString
+        }
+        return "\(captionEvidence)\n\(primaryURLString)"
     }
 }
 

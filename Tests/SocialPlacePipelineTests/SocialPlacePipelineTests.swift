@@ -3283,6 +3283,34 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(bundle.primaryURLString, "https://maps.app.goo.gl/AbCdEf123")
         XCTAssertEqual(bundle.platform, .googleMaps)
         XCTAssertTrue(bundle.captionEvidence.contains("看看這個"))
+        XCTAssertEqual(bundle.privacyScopedAnalysisInput, "https://maps.app.goo.gl/AbCdEf123")
+    }
+
+    @MainActor
+    func testGenericURLAnalysisDropsIncidentalPrivateClipboardText() throws {
+        let marker = "PRIVATE_NOTE_do_not_send"
+        let bundle = SocialShareTextNormalizer.normalize(
+            "\(marker) https://example.com/places/coffee"
+        )
+
+        XCTAssertEqual(bundle.platform, .generic)
+        XCTAssertEqual(bundle.privacyScopedAnalysisInput, "https://example.com/places/coffee")
+        XCTAssertFalse(try XCTUnwrap(bundle.privacyScopedAnalysisInput).contains(marker))
+    }
+
+    @MainActor
+    func testSupportedSocialAnalysisKeepsOnlyCleanCaptionAndPrimaryURL() throws {
+        let bundle = SocialShareTextNormalizer.normalize(
+            "東京咖啡散步 https://www.instagram.com/reel/ABC123/"
+        )
+        let analysisInput = try XCTUnwrap(bundle.privacyScopedAnalysisInput)
+
+        XCTAssertEqual(bundle.platform, .instagram)
+        XCTAssertTrue(analysisInput.contains("東京咖啡散步"))
+        XCTAssertTrue(analysisInput.contains("https://www.instagram.com/reel/ABC123/"))
+        let expectedInput = [bundle.captionEvidence, bundle.primaryURLString ?? ""]
+            .joined(separator: "\n")
+        XCTAssertEqual(analysisInput, expectedInput)
     }
 
     @MainActor

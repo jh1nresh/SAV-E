@@ -41,6 +41,10 @@ struct ContentView: View {
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
     @State private var pendingTripAssignmentPlace: Place?
+    @State private var isCreatingTripForAssignment = false
+    @State private var pendingCaptureTripID: UUID?
+    @State private var activeTripID: UUID?
+    @State private var drawerLaunchRequest: DrawerLaunchRequest
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -52,6 +56,7 @@ struct ContentView: View {
         self.storageScope = storageScope
         _isRootSheetPresented = State(initialValue: incomingPlaceReceipt.wrappedValue != nil)
         _drawerDetent = State(initialValue: .large)
+        _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
     }
 
     var body: some View {
@@ -59,7 +64,9 @@ struct ContentView: View {
             store: tripStore,
             mapViewModel: mapVM,
             storageScope: storageScope,
-            onOpenCapture: openCapture
+            onOpenDrawer: openDrawer,
+            onOpenReviewCandidate: openReviewCandidate,
+            onActiveTripChange: { activeTripID = $0 }
         )
         .environment(\.appLanguageSettings, languageSettings)
         .alert(
@@ -79,21 +86,55 @@ struct ContentView: View {
         .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
             rootSheetContent
         }
+        .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: finishTripAssignment) {
+            NewTripPackView { name, city, startDate, endDate in
+                guard let place = pendingTripAssignmentPlace else {
+                    finishTripAssignment()
+                    return
+                }
+
+                if let trip = await tripStore.createTrip(
+                    name: name,
+                    city: city,
+                    startDate: startDate,
+                    endDate: endDate
+                ) {
+                    await addConfirmedPlaceToTrip(place, tripID: trip.id)
+                }
+                finishTripAssignment()
+            }
+            .environment(\.appLanguageSettings, languageSettings)
+        }
         .confirmationDialog(
             languageSettings.localized(
-                english: "Add this place to a Trip Pack?",
-                traditionalChinese: "要把這個地點加入 Trip Pack 嗎？"
+                english: "Saved. Add it to a Trip?",
+                traditionalChinese: "已收藏。要加入行程嗎？"
             ),
             isPresented: Binding(
-                get: { pendingTripAssignmentPlace != nil },
-                set: { if !$0 { pendingTripAssignmentPlace = nil } }
+                get: { pendingTripAssignmentPlace != nil && !isCreatingTripForAssignment },
+                set: { isPresented in
+                    if !isPresented && !isCreatingTripForAssignment {
+                        finishTripAssignment()
+                    }
+                }
             ),
             titleVisibility: .visible
         ) {
-            Button(addToTripButtonTitle) {
-                guard let place = pendingTripAssignmentPlace else { return }
-                pendingTripAssignmentPlace = nil
-                Task { await addConfirmedPlaceToTrip(place) }
+            ForEach(tripAssignmentChoices) { trip in
+                Button(languageSettings.localized(
+                    english: "Add to \(trip.name)",
+                    traditionalChinese: "加入「\(trip.name)」"
+                )) {
+                    guard let place = pendingTripAssignmentPlace else { return }
+                    finishTripAssignment()
+                    Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
+                }
+            }
+            Button(languageSettings.localized(
+                english: "Create new Trip and add",
+                traditionalChinese: "新增行程並加入"
+            )) {
+                isCreatingTripForAssignment = true
             }
             Button(
                 languageSettings.localized(
@@ -102,12 +143,16 @@ struct ContentView: View {
                 ),
                 role: .cancel
             ) {
-                pendingTripAssignmentPlace = nil
+                finishTripAssignment()
             }
         } message: {
             Text(languageSettings.localized(
-                english: "The Map Stamp is saved. A Trip Pack is always a separate, explicit choice.",
-                traditionalChinese: "地圖章已保存；是否加入 Trip Pack 仍由你另外確認。"
+                english: tripAssignmentChoices.isEmpty
+                    ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
+                    : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
+                traditionalChinese: tripAssignmentChoices.isEmpty
+                    ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
+                    : "請選擇現有行程、建立新行程，或只保留在收藏。"
             ))
         }
         .onChange(of: drawerVM.mapAction) { _, action in
@@ -191,6 +236,7 @@ struct ContentView: View {
             viewModel: drawerVM,
             drawerDetent: $drawerDetent,
             mapDetailDrawerItem: $mapDetailDrawerItem,
+            launchRequest: drawerLaunchRequest,
             existingPlacesForImport: mapVM.places,
             reviewCandidates: mapVM.reviewCandidates,
             onSaveGoogleTakeoutImport: { drafts in
@@ -201,8 +247,7 @@ struct ContentView: View {
             },
             onSaveCandidate: { candidate, nameOverride in
                 let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                pendingTripAssignmentPlace = place
-                isRootSheetPresented = false
+                requestTripAssignment(for: place)
             },
             onRejectCandidate: { candidate in
                 try await mapVM.rejectReviewCandidate(candidate)
@@ -225,9 +270,10 @@ struct ContentView: View {
             onUpdatePlace: { place in
                 try await mapVM.updatePlace(place)
             },
-            onImportURLAsReviewCandidates: { url in
-                try await mapVM.importURLAsReviewCandidates(url)
+            onImportSharedTextAsReviewCandidates: { sharedText in
+                try await mapVM.importSharedTextAsReviewCandidates(sharedText)
             },
+            onAddPlaceToTrip: requestTripAssignment,
             onPrepareMapSearch: { query in
                 await mapVM.prepareMapCandidatesForDrawerQuery(query)
             },
@@ -289,6 +335,7 @@ struct ContentView: View {
         .environment(\.appLanguageSettings, languageSettings)
         .presentationDetents([.height(88), .height(104), .height(160), .fraction(0.34), .fraction(0.38), .medium, .large], selection: $drawerDetent)
         .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.resizes)
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         .presentationBackground(.clear)
         .presentationCornerRadius(32)
@@ -296,6 +343,9 @@ struct ContentView: View {
 
     private func openMapDetail(_ item: MapDetailDrawerItem) {
         guard incomingPlaceReceipt == nil else { return }
+        if pendingCaptureTripID == nil {
+            pendingCaptureTripID = activeTripID
+        }
         drawerVM.returnToCommands()
         mapDetailDrawerItem = item
         withAnimation(SaveTheme.Motion.standardSpring) {
@@ -304,19 +354,29 @@ struct ContentView: View {
         isRootSheetPresented = true
     }
 
-    private func openCapture() {
+    private func openDrawer(_ target: DrawerLaunchTarget, tripID: UUID?) {
         guard incomingPlaceReceipt == nil else { return }
+        pendingCaptureTripID = tripID
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
-        drawerDetent = .large
+        drawerLaunchRequest = DrawerLaunchRequest(target: target)
+        drawerDetent = target == .review ? .large : .medium
         isRootSheetPresented = true
+    }
+
+    private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
+        pendingCaptureTripID = tripID
+        mapVM.selectReviewCandidate(candidate)
     }
 
     private func handleRootSheetDismiss() {
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
         incomingPlaceReceipt = nil
+        if pendingTripAssignmentPlace == nil {
+            pendingCaptureTripID = nil
+        }
         drawerVM.returnToCommands()
         mapDetailDrawerItem = pendingDetail
         if pendingDetail == nil {
@@ -331,31 +391,28 @@ struct ContentView: View {
         }
     }
 
-    private var addToTripButtonTitle: String {
-        if let trip = tripStore.selectedTrip ?? tripStore.suggestedTrip {
-            return languageSettings.localized(
-                english: "Add to \(trip.name)",
-                traditionalChinese: "加入「\(trip.name)」"
-            )
-        }
-        return languageSettings.localized(
-            english: "Add to a new Trip Pack",
-            traditionalChinese: "加入新的 Trip Pack"
-        )
+    private var tripAssignmentChoices: [Trip] {
+        let availableTrips = tripStore.currentTrips + tripStore.upcomingTrips + tripStore.planningTrips
+        var seen = Set<UUID>()
+        let uniqueTrips = availableTrips.filter { seen.insert($0.id).inserted }
+        guard let pendingCaptureTripID,
+              let originTrip = uniqueTrips.first(where: { $0.id == pendingCaptureTripID })
+        else { return uniqueTrips }
+        return [originTrip] + uniqueTrips.filter { $0.id != pendingCaptureTripID }
     }
 
-    private func addConfirmedPlaceToTrip(_ place: Place) async {
-        if let trip = tripStore.selectedTrip ?? tripStore.suggestedTrip {
-            _ = await tripStore.addConfirmedPlace(place, to: trip.id)
-            return
-        }
+    private func requestTripAssignment(for place: Place) {
+        pendingTripAssignmentPlace = place
+        isRootSheetPresented = false
+    }
 
-        let defaultName = languageSettings.localized(
-            english: "My Trip",
-            traditionalChinese: "我的行程"
-        )
-        guard let trip = await tripStore.createTrip(name: defaultName) else { return }
-        _ = await tripStore.addConfirmedPlace(place, to: trip.id)
+    private func finishTripAssignment() {
+        pendingTripAssignmentPlace = nil
+        pendingCaptureTripID = nil
+    }
+
+    private func addConfirmedPlaceToTrip(_ place: Place, tripID: UUID) async {
+        _ = await tripStore.addConfirmedPlace(place, to: tripID)
     }
 
     private func refreshSelectedMapDetailPlace(from places: [Place]) {
