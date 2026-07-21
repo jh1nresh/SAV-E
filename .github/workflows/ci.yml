@@ -16,10 +16,10 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Select Xcode 26.6
         run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
@@ -69,3 +69,54 @@ jobs:
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true
+
+  backend:
+    uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
+    with:
+      node-version: "22"
+      working-directory: backend
+      lockfile: backend/package-lock.json
+      check-script: test
+      audit-production: true
+      job-key: save-backend
+      timeout-minutes: 12
+
+  save-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: save-rn/package-lock.json
+
+      - name: Install dependencies
+        working-directory: save-rn
+        run: npm ci
+
+      - name: Validate import, sharing, card, and action fixtures
+        working-directory: save-rn
+        run: |
+          npm run check:import-links
+          npm run check:friend-share
+          npm run check:save-cards
+          npm run check:save-actions
+
+      - name: Audit production dependencies
+        working-directory: save-rn
+        run: npm audit --omit=dev --audit-level=high
+
+  evidence-rubric:
+    uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
+    with:
+      node-version: "22"
+      working-directory: services/evidence-rubric
+      lockfile: services/evidence-rubric/package-lock.json
+      check-script: test
+      audit-production: true
+      job-key: save-evidence-rubric
+      timeout-minutes: 8
