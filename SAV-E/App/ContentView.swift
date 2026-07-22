@@ -237,6 +237,7 @@ struct ContentView: View {
             drawerDetent: $drawerDetent,
             mapDetailDrawerItem: $mapDetailDrawerItem,
             launchRequest: drawerLaunchRequest,
+            captureTripName: captureTripName,
             existingPlacesForImport: mapVM.places,
             reviewCandidates: mapVM.reviewCandidates,
             onSaveGoogleTakeoutImport: { drafts in
@@ -399,6 +400,11 @@ struct ContentView: View {
               let originTrip = uniqueTrips.first(where: { $0.id == pendingCaptureTripID })
         else { return uniqueTrips }
         return [originTrip] + uniqueTrips.filter { $0.id != pendingCaptureTripID }
+    }
+
+    private var captureTripName: String? {
+        guard let pendingCaptureTripID else { return nil }
+        return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
     }
 
     private func requestTripAssignment(for place: Place) {

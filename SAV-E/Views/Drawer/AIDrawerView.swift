@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 import AVFoundation
 import Speech
 import CoreLocation
@@ -94,6 +95,7 @@ struct AIDrawerView: View {
     @Binding var drawerDetent: PresentationDetent
     @Binding var mapDetailDrawerItem: MapDetailDrawerItem?
     var launchRequest: DrawerLaunchRequest = DrawerLaunchRequest(target: .review)
+    var captureTripName: String?
     var existingPlacesForImport: [Place] = []
     var reviewCandidates: [PlaceReviewCandidate] = []
     var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
@@ -251,6 +253,7 @@ struct AIDrawerView: View {
         MapDetailDrawerView(
             item: item,
             detent: $drawerDetent,
+            captureTripName: captureTripName,
             editableLists: collaborativeLists.filter(\.canEdit),
             isWorkingReviewCandidateID: candidateActionInFlight,
             isWorkingMapCandidateID: mapCandidateActionInFlight,
@@ -715,6 +718,7 @@ struct AIDrawerView: View {
             ScrollView {
                 ReviewCandidateDetailCard(
                     candidate: candidate,
+                    captureTripName: captureTripName,
                     isWorking: candidateActionInFlight == candidate.id,
                     onFindExactPlace: {
                         findExactPlace(for: candidate)
@@ -1640,6 +1644,9 @@ struct AIDrawerView: View {
     private var reviewInboxView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                if let captureTripName = normalizedCaptureTripName {
+                    CaptureTripContextCard(tripName: captureTripName)
+                }
                 linkAnalysisPrivacyNotice
                 linkAnalysisStatusCard
 
@@ -1693,6 +1700,12 @@ struct AIDrawerView: View {
             .padding(.bottom, 24)
         }
         .accessibilityIdentifier("drawer.review.root")
+    }
+
+    private var normalizedCaptureTripName: String? {
+        guard let captureTripName else { return nil }
+        let trimmed = captureTripName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private var linkAnalysisPrivacyNotice: some View {
@@ -2343,6 +2356,50 @@ private struct LinkAnalysisStatusCard: View {
     }
 }
 
+private struct CaptureTripContextCard: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let tripName: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "suitcase.rolling.fill")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.saveInk)
+                .frame(width: 34, height: 34)
+                .background(Color.saveCoral.opacity(0.78))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(languageSettings.localized(
+                    english: "Collecting for \(tripName)",
+                    traditionalChinese: "正在為「\(tripName)」收集"
+                ))
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.saveInk)
+
+                Text(languageSettings.localized(
+                    english: "Review the place first. SAV-E will ask before adding the confirmed Map Stamp to this Trip.",
+                    traditionalChinese: "先確認地點；成為地圖章後，SAV-E 才會詢問是否加入這個行程。"
+                ))
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.78))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .saveNotebookPage(cornerRadius: 14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.saveCoral.opacity(0.48), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("drawer.capture.tripContext")
+    }
+}
+
 private struct DrawerGlassBackground: View {
     let colorScheme: ColorScheme
 
@@ -2397,6 +2454,7 @@ private struct MapDetailDrawerView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
+    let captureTripName: String?
     let editableLists: [SaveCollaborativeList]
     let isWorkingReviewCandidateID: UUID?
     let isWorkingMapCandidateID: String?
@@ -2547,6 +2605,7 @@ private struct MapDetailDrawerView: View {
                 case .reviewCandidate(let candidate):
                     ReviewCandidateDetailCard(
                         candidate: candidate,
+                        captureTripName: captureTripName,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
@@ -4253,6 +4312,7 @@ private struct ReviewCandidatesEmptyState: View {
 private struct ReviewCandidateDetailCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: PlaceReviewCandidate
+    var captureTripName: String?
     var isWorking: Bool
     var onFindExactPlace: () -> Void
     var onSave: (String?) -> Void
@@ -4264,6 +4324,7 @@ private struct ReviewCandidateDetailCard: View {
 
     init(
         candidate: PlaceReviewCandidate,
+        captureTripName: String?,
         isWorking: Bool,
         onFindExactPlace: @escaping () -> Void,
         onSave: @escaping (String?) -> Void,
@@ -4273,6 +4334,7 @@ private struct ReviewCandidateDetailCard: View {
         onInvestigateMore: @escaping () -> Void
     ) {
         self.candidate = candidate
+        self.captureTripName = captureTripName
         self.isWorking = isWorking
         self.onFindExactPlace = onFindExactPlace
         self.onSave = onSave
@@ -4288,47 +4350,13 @@ private struct ReviewCandidateDetailCard: View {
             NotebookSpine(color: candidate.hasReliableCoordinates ? .saveSignal : .saveNotebookSpine)
 
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 11) {
-                    ReviewCandidateDetailIcon(candidate: candidate)
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(presentationEyebrow)
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.saveCocoa)
-                            .lineLimit(1)
-
-                        Text(presentation.title)
-                            .font(.headline)
-                            .fontWeight(.black)
-                            .foregroundColor(.saveInk)
-                            .lineLimit(2)
-
-                        Text(presentationContextLine)
-                            .font(.caption)
-                            .foregroundColor(.saveCocoa.opacity(0.74))
-                            .lineLimit(2)
-
-                        HStack(spacing: 6) {
-                            if let confidence = candidate.confidence {
-                                StampChip(
-                                    text: languageSettings.localized(
-                                        english: "\(Int(confidence * 100))% confidence",
-                                        traditionalChinese: "\(Int(confidence * 100))% 信心"
-                                    ),
-                                    color: .saveCocoa
-                                )
-                            }
-                            StampChip(
-                                text: candidate.hasReliableCoordinates
-                                    ? languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
-                                    : languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點"),
-                                color: .saveHoney
-                            )
-                        }
-                    }
-
-                    Spacer(minLength: 0)
-                }
+                ReviewCandidateContextHero(
+                    candidate: candidate,
+                    captureTripName: captureTripName,
+                    eyebrow: presentationEyebrow,
+                    title: presentation.title,
+                    contextLine: presentationContextLine
+                )
 
                 ReviewCandidateNextStepPanel(candidate: candidate)
 
@@ -4372,6 +4400,7 @@ private struct ReviewCandidateDetailCard: View {
                         disabled: isWorking,
                         action: performPrimaryAction
                     )
+                    .accessibilityIdentifier("drawer.review.primaryAction")
                     CandidateActionButton(
                         title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
                         systemImage: "sparkle.magnifyingglass",
@@ -4475,15 +4504,189 @@ private struct ReviewCandidateDetailCard: View {
     }
 }
 
-private struct ReviewCandidateDetailIcon: View {
-    var candidate: PlaceReviewCandidate
+private struct ReviewCandidateContextHero: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let candidate: PlaceReviewCandidate
+    let captureTripName: String?
+    let eyebrow: String
+    let title: String
+    let contextLine: String
 
     var body: some View {
-        Image(systemName: "mappin.circle.fill")
-            .font(.system(size: 30, weight: .semibold))
-            .foregroundStyle(.red)
-            .frame(width: 40, height: 40)
+        ZStack(alignment: .bottomLeading) {
+            contextCanvas
+                .frame(minHeight: heroHeight)
+
+            VStack(alignment: .leading, spacing: 7) {
+                if let captureTripName = normalizedCaptureTripName {
+                    Label(
+                        languageSettings.localized(
+                            english: "Collecting for \(captureTripName)",
+                            traditionalChinese: "為「\(captureTripName)」收集"
+                        ),
+                        systemImage: "suitcase.rolling.fill"
+                    )
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Color.saveCoral.opacity(0.82),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+                }
+
+                Text(eyebrow)
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.saveCocoa)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+                Text(contextLine)
+                    .font(.caption)
+                    .foregroundColor(.saveCocoa.opacity(0.78))
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+                statusChips
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.regularMaterial)
+                    .overlay(Color.saveNotebookPage.opacity(0.34))
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(10)
+        }
+        .frame(maxWidth: .infinity)
+        .background(Color.saveNotebookPage.opacity(0.54))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.saveCoral.opacity(0.42), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier("drawer.review.contextHero")
+    }
+
+    @ViewBuilder
+    private var contextCanvas: some View {
+        if let coordinate {
+            Map(
+                position: .constant(.region(MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
+                ))),
+                interactionModes: []
+            ) {
+                Marker(title, coordinate: coordinate)
+                    .tint(Color.saveCoral)
+            }
+            .allowsHitTesting(false)
             .accessibilityHidden(true)
+        } else {
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color.saveBlush,
+                        Color.saveSky.opacity(0.62),
+                        Color.saveNotebookSpine.opacity(0.72)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Image(systemName: "link.badge.plus")
+                    .font(.system(size: 58, weight: .semibold))
+                    .foregroundColor(.saveInk.opacity(0.28))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var heroHeight: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 300 : 220
+    }
+
+    @ViewBuilder
+    private var statusChips: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                statusChip
+                confidenceChip
+            }
+        } else {
+            HStack(spacing: 6) {
+                statusChip
+                confidenceChip
+            }
+        }
+    }
+
+    private var statusChip: some View {
+        StampChip(text: statusText, color: .saveCoral)
+    }
+
+    @ViewBuilder
+    private var confidenceChip: some View {
+        if let confidenceText {
+            StampChip(text: confidenceText, color: .saveCocoa)
+        }
+    }
+
+    private var statusText: String {
+        candidate.hasReliableCoordinates
+            ? languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
+            : languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點")
+    }
+
+    private var confidenceText: String? {
+        guard let confidence = candidate.confidence else { return nil }
+        return languageSettings.localized(
+            english: "\(Int(confidence * 100))% confidence",
+            traditionalChinese: "\(Int(confidence * 100))% 信心"
+        )
+    }
+
+    private var coordinate: CLLocationCoordinate2D? {
+        guard candidate.hasReliableCoordinates,
+              let latitude = candidate.latitude,
+              let longitude = candidate.longitude,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude)
+        else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private var normalizedCaptureTripName: String? {
+        guard let captureTripName else { return nil }
+        let trimmed = captureTripName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [eyebrow, title, contextLine, statusText]
+        if let confidenceText {
+            parts.append(confidenceText)
+        }
+        if let normalizedCaptureTripName {
+            parts.append(languageSettings.localized(
+                english: "Collecting for trip \(normalizedCaptureTripName)",
+                traditionalChinese: "正在為行程「\(normalizedCaptureTripName)」收集"
+            ))
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
