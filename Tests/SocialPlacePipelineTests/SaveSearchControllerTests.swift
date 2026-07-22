@@ -5,6 +5,102 @@ import CoreLocation
 
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
+    func testReviewSourceReceiptPresentationKeepsXiaohongshuProvenance() throws {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Taipei cafe clue",
+            address: "",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Corroboration URL: https://maps.google.com/?q=Da%27an+Forest+Park",
+                "Source URL: https://www.xiaohongshu.com/explore/65abc123",
+                "Creator handle: @taipei.cafe.hop",
+                "Caption: Quiet pour-over cafe near Da'an Forest Park",
+                "Evidence tier: source only",
+            ],
+            confidence: 0.42,
+            missingInfo: ["Verified address", "Verified coordinates"],
+            status: "source_only",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        let presentation = ReviewSourceReceiptPresentation(candidate: candidate)
+
+        XCTAssertEqual(presentation.sourcePlatform, .xiaohongshu)
+        XCTAssertEqual(presentation.domain, "xiaohongshu.com")
+        XCTAssertEqual(presentation.handle, "@taipei.cafe.hop")
+        XCTAssertEqual(presentation.summary, "Quiet pour-over cafe near Da'an Forest Park")
+        XCTAssertEqual(presentation.sourceURL?.absoluteString, "https://www.xiaohongshu.com/explore/65abc123")
+    }
+
+    @MainActor
+    func testReviewSourceReceiptPresentationIgnoresAmbiguousDerivedContent() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Soba clue",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Source URL: https://www.instagram.com/reel/example/",
+                "Venue handle: @tokyo.noodles",
+                "Location clue: Shibuya",
+                "Address clue: 1-2-3 Jingumae",
+                "Diagnostic: parser guessed a cafe",
+            ],
+            confidence: nil,
+            missingInfo: ["Exact place"],
+            status: "source_only",
+            createdAt: Date(),
+            placeHighlights: ["Handmade soba and a quiet courtyard"],
+            sourceHandle: "tokyo.noodles"
+        )
+
+        let presentation = ReviewSourceReceiptPresentation(candidate: candidate)
+
+        XCTAssertEqual(presentation.sourcePlatform, .instagram)
+        XCTAssertEqual(presentation.domain, "instagram.com")
+        XCTAssertNil(presentation.handle)
+        XCTAssertNil(presentation.summary)
+    }
+
+    @MainActor
+    func testReviewSourceReceiptPresentationUsesExplicitSourceFieldsAndCapsSummary() {
+        let longCaption = String(repeating: "a", count: 180)
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Cafe clue",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Source handle: taipei.cafe.hop",
+                "Caption snippet: \(longCaption)",
+            ],
+            confidence: nil,
+            missingInfo: ["Exact place"],
+            status: "source_only",
+            createdAt: Date()
+        )
+
+        let presentation = ReviewSourceReceiptPresentation(candidate: candidate)
+
+        XCTAssertNil(presentation.sourceURL)
+        XCTAssertEqual(presentation.sourcePlatform, .other)
+        XCTAssertNil(presentation.domain)
+        XCTAssertEqual(presentation.handle, "@taipei.cafe.hop")
+        XCTAssertEqual(presentation.summary?.count, 148)
+        XCTAssertTrue(presentation.summary?.hasSuffix("…") == true)
+    }
+
+    @MainActor
     func testFollowedFriendDecodesPublicProfileProjection() throws {
         let data = Data(#"{"items":[{"id":"follow-1","displayName":"Memo Friend","handle":"memo-friend","avatarUrl":null}],"nextCursor":"cursor-2"}"#.utf8)
         let page = try JSONDecoder().decode(SaveFollowedFriendsPage.self, from: data)
