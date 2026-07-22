@@ -4214,6 +4214,7 @@ private struct ReviewCandidatesSection: View {
 
 private struct ReviewCandidatePlaceRow: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var candidate: PlaceReviewCandidate
     var onSelect: () -> Void
 
@@ -4235,21 +4236,26 @@ private struct ReviewCandidatePlaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                Image(systemName: candidate.status == "source_only" ? "tray.full.fill" : "mappin.circle.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.red)
-                    .frame(width: 42, height: 42)
+                SaveIconTile(
+                    systemName: candidate.status == "source_only" ? "tray.full.fill" : "mappin.circle.fill",
+                    size: 42,
+                    iconSize: 22,
+                    fill: Color.saveCoral.opacity(0.72),
+                    foreground: .saveInk,
+                    strokeOpacity: 0.32,
+                    cornerRadius: 13
+                )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(candidate.name)
                         .font(.body.weight(.semibold))
                         .foregroundColor(.saveInk)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
                     Text(addressText)
                         .font(.subheadline)
                         .foregroundColor(.saveMutedText)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 }
 
                 Spacer(minLength: 8)
@@ -4265,8 +4271,9 @@ private struct ReviewCandidatePlaceRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(candidate.name), \(statusText)")
+        .accessibilityLabel("\(candidate.name), \(addressText), \(statusText)")
         .accessibilityHint(languageSettings.localized(english: "Open review details before saving", traditionalChinese: "保存前先打開確認詳情"))
+        .accessibilityIdentifier("drawer.review.candidate.\(candidate.status == "source_only" ? "source" : "place").\(candidate.id.uuidString)")
     }
 
 }
@@ -4504,6 +4511,75 @@ private struct ReviewCandidateDetailCard: View {
     }
 }
 
+struct ReviewSourceReceiptPresentation: Equatable {
+    let sourceURL: URL?
+    let sourcePlatform: SourcePlatform
+    let domain: String?
+    let handle: String?
+    let summary: String?
+
+    init(candidate: PlaceReviewCandidate) {
+        let sourceURL = Self.evidenceValue(after: ["Source URL:"], in: candidate.evidence)
+            .flatMap(Self.firstURL(in:))
+        self.sourceURL = sourceURL
+        sourcePlatform = SourcePlatform.from(urlString: sourceURL?.absoluteString)
+        if let host = sourceURL?.host()?.lowercased() {
+            domain = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        } else {
+            domain = nil
+        }
+        handle = Self.normalizedHandle(Self.evidenceValue(
+            after: ["Creator handle:", "Source handle:"],
+            in: candidate.evidence
+        ))
+        summary = Self.summary(for: candidate)
+    }
+
+    private static func firstURL(in line: String) -> URL? {
+        line
+            .split(whereSeparator: \.isWhitespace)
+            .compactMap { rawToken -> URL? in
+                let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "<>()[]{}.,;\"'"))
+                guard token.hasPrefix("http://") || token.hasPrefix("https://") else { return nil }
+                return URL(string: token)
+            }
+            .first
+    }
+
+    private static func evidenceValue(after prefixes: [String], in evidence: [String]) -> String? {
+        for line in evidence.flatMap({ $0.components(separatedBy: .newlines) }) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let prefix = prefixes.first(where: {
+                trimmed.range(of: $0, options: [.anchored, .caseInsensitive]) != nil
+            }) {
+                let value = String(trimmed.dropFirst(prefix.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty { return value }
+            }
+        }
+        return nil
+    }
+
+    private static func normalizedHandle(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.hasPrefix("@") ? trimmed : "@\(trimmed)"
+    }
+
+    private static func summary(for candidate: PlaceReviewCandidate) -> String? {
+        let preferredPrefixes = [
+            "Caption:", "Post caption:", "Caption snippet:", "Source text:", "Source title:"
+        ]
+        return evidenceValue(after: preferredPrefixes, in: candidate.evidence).map(limited)
+    }
+
+    private static func limited(_ value: String) -> String {
+        guard value.count > 150 else { return value }
+        return "\(value.prefix(147))…"
+    }
+}
+
 private struct ReviewCandidateContextHero: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -4514,60 +4590,21 @@ private struct ReviewCandidateContextHero: View {
     let contextLine: String
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            contextCanvas
-                .frame(minHeight: heroHeight)
-
-            VStack(alignment: .leading, spacing: 7) {
-                if let captureTripName = normalizedCaptureTripName {
-                    Label(
-                        languageSettings.localized(
-                            english: "Collecting for \(captureTripName)",
-                            traditionalChinese: "為「\(captureTripName)」收集"
-                        ),
-                        systemImage: "suitcase.rolling.fill"
-                    )
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        Color.saveCoral.opacity(0.82),
-                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    )
+        Group {
+            if coordinate != nil {
+                ZStack(alignment: .bottomLeading) {
+                    contextCanvas
+                        .frame(minHeight: mapHeroHeight)
+                    contextDetails
+                        .padding(10)
                 }
-
-                Text(eyebrow)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveCocoa)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-
-                Text(title)
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-
-                Text(contextLine)
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.78))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-
-                statusChips
+            } else {
+                VStack(spacing: 0) {
+                    sourceReceiptCanvas
+                    contextDetails
+                        .padding(10)
+                }
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.regularMaterial)
-                    .overlay(Color.saveNotebookPage.opacity(0.34))
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .padding(10)
         }
         .frame(maxWidth: .infinity)
         .background(Color.saveNotebookPage.opacity(0.54))
@@ -4579,6 +4616,58 @@ private struct ReviewCandidateContextHero: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier("drawer.review.contextHero")
+    }
+
+    private var contextDetails: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            if let captureTripName = normalizedCaptureTripName {
+                Label(
+                    languageSettings.localized(
+                        english: "Collecting for \(captureTripName)",
+                        traditionalChinese: "為「\(captureTripName)」收集"
+                    ),
+                    systemImage: "suitcase.rolling.fill"
+                )
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.saveInk)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Color.saveCoral.opacity(0.82),
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+            }
+
+            Text(eyebrow)
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.saveCocoa)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundColor(.saveInk)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+            Text(contextLine)
+                .font(.caption)
+                .foregroundColor(.saveCocoa.opacity(0.78))
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+
+            statusChips
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay(Color.saveNotebookPage.opacity(0.34))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder
@@ -4597,26 +4686,110 @@ private struct ReviewCandidateContextHero: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         } else {
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color.saveBlush,
-                        Color.saveSky.opacity(0.62),
-                        Color.saveNotebookSpine.opacity(0.72)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Image(systemName: "link.badge.plus")
-                    .font(.system(size: 58, weight: .semibold))
-                    .foregroundColor(.saveInk.opacity(0.28))
-                    .accessibilityHidden(true)
-            }
+            sourceReceiptCanvas
         }
     }
 
-    private var heroHeight: CGFloat {
+    private var mapHeroHeight: CGFloat {
         dynamicTypeSize.isAccessibilitySize ? 300 : 220
+    }
+
+    private var sourceReceiptCanvas: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(sourcePlatformLabel, systemImage: sourcePlatformSymbol)
+                .font(.caption.weight(.bold))
+                .foregroundColor(.saveInk)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(
+                    Color.saveCoral.opacity(0.82),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+
+            if let handle = sourceReceipt.handle {
+                Text(languageSettings.localized(
+                    english: "Source account \(handle)",
+                    traditionalChinese: "來源帳號 \(handle)"
+                ))
+                .font(.title3.weight(.bold))
+                .foregroundColor(.saveInk)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+            } else if let domain = sourceReceipt.domain {
+                Text(domain)
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(.saveInk)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+            }
+
+            Text(sourceReceipt.summary ?? languageSettings.localized(
+                english: "Source preserved. Add an address, map link, or clearer caption to identify the exact place.",
+                traditionalChinese: "來源已保留。補上地址、地圖連結或更清楚的貼文說明，才能找到精確地點。"
+            ))
+            .font(.caption.weight(.medium))
+            .foregroundColor(.saveCocoa.opacity(0.82))
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.saveBlush,
+                    Color.saveSky.opacity(0.62),
+                    Color.saveNotebookSpine.opacity(0.72)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .accessibilityHidden(true)
+    }
+
+    private var sourceReceipt: ReviewSourceReceiptPresentation {
+        ReviewSourceReceiptPresentation(candidate: candidate)
+    }
+
+    private var sourcePlatformLabel: String {
+        switch sourceReceipt.sourcePlatform {
+        case .instagram:
+            return "Instagram"
+        case .threads:
+            return "Threads"
+        case .xiaohongshu:
+            return languageSettings.localized(english: "Xiaohongshu", traditionalChinese: "小紅書")
+        case .douyin:
+            return languageSettings.localized(english: "Douyin", traditionalChinese: "抖音")
+        case .dianping:
+            return languageSettings.localized(english: "Dianping", traditionalChinese: "大眾點評")
+        case .meituan:
+            return languageSettings.localized(english: "Meituan", traditionalChinese: "美團")
+        case .taobaoInstantCommerce:
+            return languageSettings.localized(english: "Taobao Instant Commerce", traditionalChinese: "淘寶閃購")
+        case .googleMaps:
+            return "Google Maps"
+        case .appleMaps:
+            return languageSettings.localized(english: "Apple Maps", traditionalChinese: "Apple 地圖")
+        case .amap:
+            return languageSettings.localized(english: "Amap", traditionalChinese: "高德地圖")
+        case .baidu:
+            return languageSettings.localized(english: "Baidu Maps", traditionalChinese: "百度地圖")
+        case .other:
+            return languageSettings.localized(english: "Web source", traditionalChinese: "網頁來源")
+        }
+    }
+
+    private var sourcePlatformSymbol: String {
+        switch sourceReceipt.sourcePlatform {
+        case .instagram: return "camera.fill"
+        case .threads: return "text.bubble.fill"
+        case .xiaohongshu: return "book.closed.fill"
+        case .douyin: return "music.note"
+        case .dianping, .meituan, .taobaoInstantCommerce: return "fork.knife"
+        case .googleMaps, .appleMaps, .amap, .baidu: return "map.fill"
+        case .other: return "link"
+        }
     }
 
     @ViewBuilder
@@ -4677,6 +4850,17 @@ private struct ReviewCandidateContextHero: View {
 
     private var accessibilityLabel: String {
         var parts = [eyebrow, title, contextLine, statusText]
+        if coordinate == nil {
+            parts.append(sourcePlatformLabel)
+            if let handle = sourceReceipt.handle {
+                parts.append(handle)
+            } else if let domain = sourceReceipt.domain {
+                parts.append(domain)
+            }
+            if let summary = sourceReceipt.summary {
+                parts.append(summary)
+            }
+        }
         if let confidenceText {
             parts.append(confidenceText)
         }
