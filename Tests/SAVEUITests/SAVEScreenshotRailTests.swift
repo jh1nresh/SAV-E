@@ -119,7 +119,14 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
         tabBar.buttons["Inbox"].tap()
-        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+        let addLink = addLinkButton(in: app)
+        XCTAssertTrue(addLink.waitForExistence(timeout: stepTimeout))
+        addLink.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.capture.tripContext"]
+                .waitForExistence(timeout: stepTimeout),
+            "Capture launched from a Trip should keep that Trip visible during review."
+        )
     }
 
     @MainActor
