@@ -92,7 +92,7 @@ export type SourceMetadata = {
   videoURL?: string;
 };
 
-type FetchText = (url: string) => Promise<string>;
+type FetchText = (url: string, signal?: AbortSignal) => Promise<string>;
 type FetchMediaEvidence = (metadata: SourceMetadata) => Promise<SourceMediaEvidence[]>;
 type SourceDocumentResolver = (url: string) => Promise<ResolvedSourceDocument>;
 type SourceDocumentFetchResult = {
@@ -163,8 +163,7 @@ export async function runSourceSearchRecovery(
 
   for (const query of queries) {
     try {
-      const html = await fetchText(duckDuckGoHTMLURL(query));
-      searchResults.push(...parseDuckDuckGoResults(html, query).slice(0, maxResultsPerQuery));
+      searchResults.push(...await searchPublicWebResults(query, fetchText, maxResultsPerQuery));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown search error";
       errors.push(`${query}: ${message}`);
@@ -1022,11 +1021,25 @@ function duckDuckGoHTMLURL(query: string): string {
   return `https://duckduckgo.com/html/?${params.toString()}`;
 }
 
-export async function defaultFetchText(url: string): Promise<string> {
+export async function searchPublicWebResults(
+  query: string,
+  fetchText: FetchText = defaultFetchText,
+  limit = maxResultsPerQuery,
+  signal?: AbortSignal,
+): Promise<SourceSearchResult[]> {
+  const boundedLimit = Math.max(1, Math.min(10, Math.trunc(limit)));
+  const html = await fetchText(duckDuckGoHTMLURL(query), signal);
+  return parseDuckDuckGoResults(html, query).slice(0, boundedLimit);
+}
+
+export async function defaultFetchText(url: string, signal?: AbortSignal): Promise<string> {
   const parsed = safeURL(url);
   if (!parsed || !(await isSafePublicHTTPURL(parsed))) throw new Error("Blocked non-public URL");
 
   const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", abortFromParent, { once: true });
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
     const response = await fetch(parsed.toString(), {
@@ -1042,6 +1055,7 @@ export async function defaultFetchText(url: string): Promise<string> {
     return await boundedResponseText(response, maxTextFetchBytes);
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromParent);
   }
 }
 

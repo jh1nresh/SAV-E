@@ -86,6 +86,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `GET /profile`
 - `PATCH /profile`
 - `POST /memory/captures/:id/search-recovery` — runs public search recovery for source-only captures and writes search-derived results back as review-only place candidates.
+- `POST /v0/places/:id/related-sources` — Privy bearer-only and owner-rate-limited; re-verifies an owned Google-confirmed public venue through a bounded cache, then searches a bounded public index for likely same-place Instagram, TikTok, YouTube, Xiaohongshu, Douyin, Threads, or X links. The owner-scoped response contains candidate-only sources plus per-platform coverage and a private retrieval receipt; it performs no place, claim, Trip, or source-edge writes.
 - `GET /v0/places/:id/verified-claims` — returns owner-scoped place claims; raw evidence refs are omitted unless `includePrivateEvidence=true`.
 - `POST /v0/places/:id/verified-claims` — attaches an owner-scoped claim with proof level, confidence, visibility, context, ratings, and evidence refs.
 - `GET /v0/places/:id/trust-summary` — returns a compact agent-readable proof summary for a saved place.
