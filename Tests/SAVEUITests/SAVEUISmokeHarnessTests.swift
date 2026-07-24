@@ -2,6 +2,47 @@ import XCTest
 
 final class SAVEUISmokeHarnessTests: XCTestCase {
     @MainActor
+    func testRelatedSourcesRequireExplicitTapAndShowReceipt() {
+        let app = XCUIApplication()
+        app.launchArguments.append("-SAVERelatedSourcesHarness")
+        app.launch()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["related-sources-harness-root"]
+                .waitForExistence(timeout: 10)
+        )
+
+        let findSources = app.buttons["drawer.saved.relatedSources.find"]
+        XCTAssertTrue(findSources.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.saved.relatedSources.loading"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.saved.relatedSources.coverage"].exists)
+
+        findSources.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.saved.relatedSources.coverage"]
+                .waitForExistence(timeout: 10)
+        )
+        let expectedCoverageLabels = [
+            "Instagram, searched, 1 results",
+            "TikTok, partial, 0 results",
+            "YouTube, searched, 0 results",
+            "Xiaohongshu, searched, 0 results",
+            "Douyin, searched, 0 results",
+            "Threads, searched, 0 results",
+            "X, failed, 0 results",
+        ]
+        for label in expectedCoverageLabels {
+            XCTAssertTrue(
+                app.descendants(matching: .any)[label].exists,
+                "Missing coverage receipt: \(label)"
+            )
+        }
+        XCTAssertTrue(app.buttons["drawer.saved.relatedSources.result.instagram.0"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.saved.relatedSources.error"].exists)
+    }
+
+    @MainActor
     func testFivePathSmokeHarnessPasses() {
         let app = XCUIApplication()
         app.launchArguments.append("-SAVEUISmokeHarness")
