@@ -31,6 +31,16 @@ import {
   type SourceSearchCandidate,
 } from "./sourceSearchWorker.js";
 import {
+  normalizeRelatedPlaceSourcesRequest,
+  RelatedPlaceSourcesInputError,
+} from "./relatedPlaceSources.js";
+import { createCachedGooglePublicVenueVerifier } from "./googlePublicVenueVerifier.js";
+import {
+  executeRelatedPlaceSourcesEndpoint,
+  hasAccountBearerAuthorization,
+  RelatedPlaceSourcesOwnerRateLimiter,
+} from "./relatedPlaceSourcesEndpoint.js";
+import {
   defaultGeminiText,
   defaultPlacesSearch,
   defaultPlacesReviews,
@@ -176,6 +186,10 @@ const guestSessionSecret = process.env.SAVE_GUEST_SESSION_SECRET?.trim() || rand
 const defaultJsonBodyMaxBytes = 256 * 1024;
 const geminiProxyRequestMaxBytes = 64 * 1024;
 const geminiProxyResponseMaxBytes = 512 * 1024;
+const relatedPlaceSourcesRateLimiter = new RelatedPlaceSourcesOwnerRateLimiter();
+const verifyRelatedSourcesPublicVenue = createCachedGooglePublicVenueVerifier({
+  apiKey: process.env.GOOGLE_PLACES_API_KEY,
+});
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -976,6 +990,9 @@ createServer(async (request, response) => {
     if (isV0 && resource === "places" && id && segments[2] === "maat-analysis") {
       return await handlePlaceMaatAnalysis(request, response, id, url, userId);
     }
+    if (isV0 && resource === "places" && id && segments[2] === "related-sources") {
+      return await handlePlaceRelatedSources(request, response, id, userId);
+    }
     if (isV0 && resource === "places" && id && segments[2] === "trust-summary") {
       return await handlePlaceTrustSummary(request, response, id, userId);
     }
@@ -1366,6 +1383,58 @@ async function handlePlaces(
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+async function handlePlaceRelatedSources(
+  request: IncomingMessage,
+  response: ServerResponse,
+  placeId: string,
+  userId: string,
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Vary", "Authorization");
+
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported related-sources route" }, 405);
+  }
+  if (!hasAccountBearerAuthorization(request.headers.authorization)) {
+    return sendJson(response, { error: "Bearer account required" }, 401);
+  }
+
+  const body = await readJson(request, 2_048);
+
+  try {
+    const requestBody = normalizeRelatedPlaceSourcesRequest(body);
+    const quota = relatedPlaceSourcesRateLimiter.consume(userId);
+    if (!quota.allowed) {
+      response.setHeader("Retry-After", String(quota.retryAfterSeconds));
+      return sendJson(response, { error: "Related-source request limit reached" }, 429);
+    }
+    const result = await executeRelatedPlaceSourcesEndpoint(
+      placeId,
+      userId,
+      requestBody,
+      {
+        loadOwnedPlace: async (ownedPlaceId, ownerId) => {
+          const place = await ownedPlaceForAnalysis(ownedPlaceId, ownerId);
+          return {
+            id: String(place.id),
+            googlePlaceId: stringValue(place.google_place_id),
+            name: stringValue(place.name),
+            category: stringValue(place.category),
+            sourceUrl: stringValue(place.source_url),
+          };
+        },
+        verifyPublicVenue: verifyRelatedSourcesPublicVenue,
+      },
+    );
+    return sendJson(response, result.body, result.statusCode);
+  } catch (error) {
+    if (error instanceof RelatedPlaceSourcesInputError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    throw error;
+  }
 }
 
 async function fetchPlacesWithOptionalVisibility(userId: string): Promise<JsonBody[]> {
