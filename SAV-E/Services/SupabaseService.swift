@@ -55,6 +55,14 @@ protocol SupabaseServiceProtocol {
     func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt
 }
 
+protocol RelatedPlaceSourcesProviding {
+    func discoverRelatedSources(
+        for placeId: UUID,
+        platforms: [RelatedSourcePlatform],
+        maxResultsPerPlatform: Int
+    ) async throws -> RelatedPlaceSourcePack
+}
+
 // MARK: - Errors
 
 enum SupabaseError: LocalizedError {
@@ -79,7 +87,7 @@ enum SupabaseError: LocalizedError {
 
 // MARK: - Implementation
 
-final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
+final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProviding, AccountStatusProviding {
     static let shared = SupabaseService()
 
     private let apiBaseURL: String?
@@ -243,6 +251,57 @@ final class SupabaseService: SupabaseServiceProtocol, AccountStatusProviding {
             return .notAuthenticated
         }
         return .apiError(statusCode, body)
+    }
+
+    // MARK: - Related Public Sources
+
+    func discoverRelatedSources(
+        for placeId: UUID,
+        platforms: [RelatedSourcePlatform] = RelatedSourcePlatform.allCases,
+        maxResultsPerPlatform: Int = 3
+    ) async throws -> RelatedPlaceSourcePack {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.relatedPlaceSourcesRequestBody(
+            platforms: platforms,
+            maxResultsPerPlatform: maxResultsPerPlatform
+        )
+        let data = try await request(
+            path: "/v0/places/\(placeId.uuidString.lowercased())/related-sources",
+            method: "POST",
+            body: body
+        )
+        let pack: RelatedPlaceSourcePack
+        do {
+            pack = try JSONDecoder.supabase.decode(RelatedPlaceSourcePack.self, from: data)
+        } catch {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid related-source receipt")
+        }
+        guard pack.place.id == placeId else {
+            throw SupabaseError.invalidResponse("SAV-E returned a related-source receipt for another place")
+        }
+        return pack
+    }
+
+    static func relatedPlaceSourcesRequestBody(
+        platforms: [RelatedSourcePlatform],
+        maxResultsPerPlatform: Int
+    ) throws -> Data {
+        var seen = Set<RelatedSourcePlatform>()
+        let uniquePlatforms = platforms.filter { seen.insert($0).inserted }
+        guard !uniquePlatforms.isEmpty,
+              uniquePlatforms.count <= RelatedSourcePlatform.allCases.count
+        else {
+            throw RelatedPlaceSourcesClientError.invalidPlatforms
+        }
+        guard (1...5).contains(maxResultsPerPlatform) else {
+            throw RelatedPlaceSourcesClientError.invalidMaxResults
+        }
+
+        return try JSONEncoder.supabase.encode(RelatedPlaceSourcesRequestBody(
+            platforms: uniquePlatforms.map(\.rawValue),
+            maxResultsPerPlatform: maxResultsPerPlatform
+        ))
     }
 
     // MARK: - Verified Place Claims
@@ -1802,6 +1861,16 @@ private struct SharedPlaceLinkCreateBody: Encodable {
     let payload: SharedPlaceData
     let source_place_id: String?
     let note_consent_version: Int?
+}
+
+private struct RelatedPlaceSourcesRequestBody: Encodable {
+    let platforms: [String]
+    let maxResultsPerPlatform: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case platforms
+        case maxResultsPerPlatform = "max_results_per_platform"
+    }
 }
 
 private final class KmlRootElementParserDelegate: NSObject, XMLParserDelegate {

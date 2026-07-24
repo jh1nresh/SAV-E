@@ -338,3 +338,87 @@ pricing or paywall is added before measured provider cost and user usefulness.
 - no new social-search credential, new dependency, schema mutation, direct save,
   or TREK source copy is introduced;
 - the diff passes review and ships as one atomic PR.
+
+## P2: confirmed Map Stamp related-source review
+
+The next independently testable slice exposes P1 from the confirmed Map Stamp
+detail surface. Discovery is explicit and read-only:
+
+```text
+confirmed Map Stamp
+-> user taps Find related sources
+-> authenticated owner-scoped request
+-> candidate links + per-platform coverage receipt
+-> user may open a public link
+```
+
+P2 does not persist a source, change the Map Stamp, or add anything to a Trip.
+The App Review demo guest cannot call this account-only endpoint.
+
+### P2 acceptance scenarios
+
+1. A confirmed Map Stamp shows one `Find related sources` action. Opening the
+   detail does not start a request.
+2. One tap sends the Map Stamp UUID to
+   `POST /v0/places/:id/related-sources` with the seven supported platform
+   identifiers and at most three results per platform.
+3. Loading, populated, honest-empty, partial-coverage, and retryable-error states
+   are visually distinct. Cancellation from leaving the surface is not shown as
+   an error.
+4. Every result remains labeled as a candidate. `same_place` and
+   `mentions_place` are distinguishable without implying user confirmation.
+5. Coverage shows which supported platforms were searched, partially searched,
+   or failed. A successful platform remains visible when another platform fails.
+6. A source URL opens only after the user taps it. The iOS model independently
+   requires an allowlisted platform host over HTTPS.
+7. `400`, `401/403`, `404`, `409`, `429`, `503`, network, and malformed-response
+   failures map to bounded localized guidance. Raw backend/provider bodies are
+   never rendered.
+8. The view does not call a guest-token path, mutate persistence, create a
+   Review Candidate, change a Map Stamp, or add a Trip Stop.
+
+### P2 Xcode context receipt
+
+```text
+Product/repo: SAV-E / /Users/jhinresh/projects/wanderly-current
+Platform: iOS SwiftUI with existing Node backend
+Project: SAV-E.xcodeproj (project.yml is the XcodeGen source)
+Scheme / target: SAV-E / SAVE
+Deployment target: iOS 17.0
+Verification tier: generic build during implementation, one final UI runtime
+Generic destination: generic/platform=iOS Simulator
+Runtime device: iPhone 16 Pro, iOS 26.5, FA3C4BA8-6E62-4F31-84DC-10787DF785FA
+Simulator reason: prove the explicit CTA and candidate/coverage presentation
+Canonical DerivedData: /Users/jhinresh/Library/Developer/Xcode/DerivedData/SAV-E-ahydqktpduridpbzrzurshjbxqni
+XcodeBuildMCP: unavailable; use scripts/xcodebuild-clean.sh
+Primary route: swift-xcode-workflow + swiftui-ui-patterns
+```
+
+### P2 verification
+
+```bash
+scripts/xcodebuild-clean.sh \
+  -project SAV-E.xcodeproj \
+  -scheme SAV-E \
+  -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath '/Users/jhinresh/Library/Developer/Xcode/DerivedData/SAV-E-ahydqktpduridpbzrzurshjbxqni' \
+  CODE_SIGNING_ALLOWED=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
+
+scripts/xcodebuild-clean.sh \
+  -project SAV-E.xcodeproj \
+  -scheme SAV-E \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,id=FA3C4BA8-6E62-4F31-84DC-10787DF785FA' \
+  -derivedDataPath '/Users/jhinresh/Library/Developer/Xcode/DerivedData/SAV-E-ahydqktpduridpbzrzurshjbxqni' \
+  -only-testing:SAVETests \
+  CODE_SIGNING_ALLOWED=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  test
+```
+
+The real-place precision bakeoff remains the promotion gate after P2. It needs a
+frozen held-out fixture set and must not be replaced by UI screenshots or mock
+response volume.

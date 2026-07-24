@@ -4,14 +4,172 @@ import SwiftUI
 
 enum SaveSmokeHarness {
     static let launchArgument = "-SAVEUISmokeHarness"
+    static let relatedSourcesLaunchArgument = "-SAVERelatedSourcesHarness"
 
     static var isLaunchEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains(launchArgument) ||
             ProcessInfo.processInfo.environment["SAVE_UI_SMOKE_HARNESS"] == "1"
     }
 
+    static var isRelatedSourcesLaunchEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains(relatedSourcesLaunchArgument)
+    }
+
     static func isSmokeURL(_ url: URL) -> Bool {
         url.scheme == "wanderly" && url.host == "smoke"
+    }
+}
+
+struct SaveRelatedSourcesHarnessView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Related-source review harness")
+                    .font(.headline)
+                    .foregroundColor(.saveInk)
+                    .accessibilityIdentifier("related-sources-harness-root")
+
+                RelatedPlaceSourcesPanel(
+                    place: samplePlace,
+                    discover: { _ in
+                        try await Task.sleep(for: .milliseconds(120))
+                        return fixturePack
+                    }
+                )
+            }
+            .padding()
+        }
+        .background(Color.saveCream.ignoresSafeArea())
+    }
+
+    private var samplePlace: Place {
+        Place(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            name: "Fujin Tree 353 Cafe",
+            address: "No. 16, Lane 105, Fujin Street, Taipei",
+            latitude: 25.0598,
+            longitude: 121.5604,
+            googlePlaceId: "google-fujin-tree",
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+    }
+
+    private var fixturePack: RelatedPlaceSourcePack {
+        let data = """
+        {
+          "place": {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "name": "Fujin Tree 353 Cafe",
+            "address": "No. 16, Lane 105, Fujin Street, Taipei",
+            "latitude": 25.0598,
+            "longitude": 121.5604,
+            "google_place_id": "google-fujin-tree"
+          },
+          "sources": [
+            {
+              "platform": "instagram",
+              "url": "https://www.instagram.com/p/fujin-tree-example",
+              "title": "Fujin Tree 353 Cafe",
+              "snippet": "Public-index candidate for this confirmed place.",
+              "query": "site:instagram.com Fujin Tree 353 Cafe",
+              "relation": "same_place",
+              "identity_status": "candidate",
+              "match_confidence": 0.92
+            }
+          ],
+          "coverage": [
+            {
+              "platform": "instagram",
+              "method": "public_index",
+              "status": "searched",
+              "queries": ["site:instagram.com Fujin Tree 353 Cafe"],
+              "inspected_count": 2,
+              "result_count": 1,
+              "blocked_reason": null
+            },
+            {
+              "platform": "tiktok",
+              "method": "public_index",
+              "status": "partial",
+              "queries": ["site:tiktok.com Fujin Tree 353 Cafe"],
+              "inspected_count": 1,
+              "result_count": 0,
+              "blocked_reason": "public_search_failed"
+            },
+            {
+              "platform": "youtube",
+              "method": "public_index",
+              "status": "searched",
+              "queries": ["site:youtube.com Fujin Tree 353 Cafe"],
+              "inspected_count": 0,
+              "result_count": 0,
+              "blocked_reason": null
+            },
+            {
+              "platform": "xiaohongshu",
+              "method": "public_index",
+              "status": "searched",
+              "queries": ["site:xiaohongshu.com Fujin Tree 353 Cafe"],
+              "inspected_count": 0,
+              "result_count": 0,
+              "blocked_reason": null
+            },
+            {
+              "platform": "douyin",
+              "method": "public_index",
+              "status": "searched",
+              "queries": ["site:douyin.com Fujin Tree 353 Cafe"],
+              "inspected_count": 0,
+              "result_count": 0,
+              "blocked_reason": null
+            },
+            {
+              "platform": "threads",
+              "method": "public_index",
+              "status": "searched",
+              "queries": ["site:threads.net Fujin Tree 353 Cafe"],
+              "inspected_count": 0,
+              "result_count": 0,
+              "blocked_reason": null
+            },
+            {
+              "platform": "x",
+              "method": "public_index",
+              "status": "failed",
+              "queries": ["site:x.com Fujin Tree 353 Cafe"],
+              "inspected_count": 0,
+              "result_count": 0,
+              "blocked_reason": "public_search_failed"
+            }
+          ],
+          "receipt": {
+            "source_boundary": "public_web_index",
+            "privacy": "owner_private",
+            "checked_at": "2026-07-24T08:00:00.000Z",
+            "requested_platforms": ["instagram", "tiktok", "youtube", "xiaohongshu", "douyin", "threads", "x"],
+            "searched_platforms": ["instagram", "tiktok", "youtube", "xiaohongshu", "douyin", "threads"],
+            "failed_platforms": ["x"],
+            "raw_result_count": 3,
+            "independent_result_count": 1,
+            "missing": ["tiktok: public search incomplete", "x: public search unavailable"]
+          }
+        }
+        """.data(using: .utf8)!
+
+        return try! JSONDecoder.supabase.decode(RelatedPlaceSourcePack.self, from: data)
     }
 }
 

@@ -391,6 +391,7 @@ final class MapViewModel: ObservableObject {
     @Published var stampMoment: SaveStampMoment?
 
     private let supabaseService: SupabaseServiceProtocol
+    private let relatedPlaceSourcesService: RelatedPlaceSourcesProviding
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
     private let locationService: LocationService
@@ -426,9 +427,11 @@ final class MapViewModel: ObservableObject {
         saveSearchController: SaveSearchController = SaveSearchController(),
         saveSearchIntentParser: SaveSearchIntentParser = SaveSearchIntentParser(),
         collaborativeListStore: SaveCollaborativeListStore = .shared,
-        referralHandoffStore: SaveReferralHandoffStore = .shared
+        referralHandoffStore: SaveReferralHandoffStore = .shared,
+        relatedPlaceSourcesService: RelatedPlaceSourcesProviding = SupabaseService.shared
     ) {
         self.supabaseService = supabaseService
+        self.relatedPlaceSourcesService = relatedPlaceSourcesService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
         self.locationService = locationService ?? .shared
@@ -1848,6 +1851,14 @@ final class MapViewModel: ObservableObject {
             }
             throw error
         }
+    }
+
+    func discoverRelatedSources(for place: Place) async throws -> RelatedPlaceSourcePack {
+        try await relatedPlaceSourcesService.discoverRelatedSources(
+            for: place.id,
+            platforms: RelatedSourcePlatform.allCases,
+            maxResultsPerPlatform: 3
+        )
     }
 
     private func hydrateSelectedMapCandidateDistance(_ candidate: SaveMapCandidate) async {

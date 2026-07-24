@@ -27,6 +27,7 @@ struct SaveApp: App {
     @State private var minimumOpeningAnimationCompleted = false
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
+    private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let petStageGalleryActive = ProcessInfo.processInfo.arguments.contains("--uitest-pet-stage-gallery")
 #endif
@@ -122,6 +123,8 @@ struct SaveApp: App {
 #if DEBUG
         if petStageGalleryActive {
             SavePetStageGalleryView()
+        } else if relatedSourcesHarnessActive {
+            SaveRelatedSourcesHarnessView()
         } else if smokeHarnessActive {
             SaveSmokeHarnessView()
         } else {
