@@ -188,6 +188,7 @@ struct AIDrawerView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.root")
         .sheet(isPresented: $showGoogleTakeoutImport) {
             GoogleTakeoutImportView(
