@@ -1,5 +1,38 @@
 import SwiftUI
 
+enum SaveRootTab: Hashable {
+    case home
+    case saves
+    case trips
+    case map
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .home:
+            return language.localized(english: "Home", traditionalChinese: "首頁")
+        case .saves:
+            return language.localized(english: "Saves", traditionalChinese: "收藏")
+        case .trips:
+            return language.localized(english: "Trips", traditionalChinese: "行程")
+        case .map:
+            return language.localized(english: "Map", traditionalChinese: "地圖")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .home: return "house.fill"
+        case .saves: return "bookmark.fill"
+        case .trips: return "suitcase.rolling.fill"
+        case .map: return "map.fill"
+        }
+    }
+}
+
+enum SaveRootRoute: Hashable {
+    case trip(UUID)
+}
+
 enum ContentStorageScope: Equatable {
     case production
     case reviewerDemo
@@ -45,6 +78,8 @@ struct ContentView: View {
     @State private var pendingCaptureTripID: UUID?
     @State private var activeTripID: UUID?
     @State private var drawerLaunchRequest: DrawerLaunchRequest
+    @State private var selectedRootTab: SaveRootTab
+    @State private var rootPath: [SaveRootRoute]
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -57,17 +92,12 @@ struct ContentView: View {
         _isRootSheetPresented = State(initialValue: incomingPlaceReceipt.wrappedValue != nil)
         _drawerDetent = State(initialValue: .large)
         _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
+        _selectedRootTab = State(initialValue: .home)
+        _rootPath = State(initialValue: [])
     }
 
     var body: some View {
-        TripsHomeView(
-            store: tripStore,
-            mapViewModel: mapVM,
-            storageScope: storageScope,
-            onOpenDrawer: openDrawer,
-            onOpenReviewCandidate: openReviewCandidate,
-            onActiveTripChange: { activeTripID = $0 }
-        )
+        rootTabs
         .environment(\.appLanguageSettings, languageSettings)
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
@@ -210,6 +240,86 @@ struct ContentView: View {
             await tripStore.load()
             if storageScope == .reviewerDemo {
                 await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
+            }
+        }
+    }
+
+    private var rootTabs: some View {
+        NavigationStack(path: $rootPath) {
+            TabView(selection: $selectedRootTab) {
+                SaveHomeView(
+                    store: tripStore,
+                    mapViewModel: mapVM,
+                    onOpenDrawer: openDrawer,
+                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                    onOpenSaves: { selectedRootTab = .saves },
+                    onOpenTrips: { selectedRootTab = .trips },
+                    onOpenTrip: { rootPath.append(.trip($0)) }
+                )
+                .tabItem {
+                    Label(
+                        SaveRootTab.home.title(language: languageSettings.language),
+                        systemImage: SaveRootTab.home.systemImage
+                    )
+                }
+                .tag(SaveRootTab.home)
+
+                SaveLibraryView(
+                    places: mapVM.places,
+                    reviewCandidates: mapVM.reviewCandidates,
+                    onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+                    onOpenReview: { openDrawer(.review, tripID: nil) },
+                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
+                )
+                .tabItem {
+                    Label(
+                        SaveRootTab.saves.title(language: languageSettings.language),
+                        systemImage: SaveRootTab.saves.systemImage
+                    )
+                }
+                .tag(SaveRootTab.saves)
+
+                TripsHomeView(
+                    store: tripStore,
+                    onOpenDrawer: openDrawer,
+                    onOpenTrip: { rootPath.append(.trip($0)) }
+                )
+                .tabItem {
+                    Label(
+                        SaveRootTab.trips.title(language: languageSettings.language),
+                        systemImage: SaveRootTab.trips.systemImage
+                    )
+                }
+                .tag(SaveRootTab.trips)
+
+                SaveMapRootView(
+                    mapViewModel: mapVM,
+                    shouldFocusOnUserLocation: selectedRootTab == .map,
+                    onOpenCapture: { openDrawer(.addLink, tripID: nil) }
+                )
+                .tabItem {
+                    Label(
+                        SaveRootTab.map.title(language: languageSettings.language),
+                        systemImage: SaveRootTab.map.systemImage
+                    )
+                }
+                .tag(SaveRootTab.map)
+            }
+            .tint(Color.saveCoralInk)
+            .accessibilityIdentifier("root.tabs")
+            .navigationDestination(for: SaveRootRoute.self) { route in
+                switch route {
+                case .trip(let tripID):
+                    TripWorkspaceView(
+                        tripID: tripID,
+                        store: tripStore,
+                        mapViewModel: mapVM,
+                        storageScope: storageScope,
+                        onOpenDrawer: openDrawer,
+                        onOpenReviewCandidate: openReviewCandidate,
+                        onActiveTripChange: { activeTripID = $0 }
+                    )
+                }
             }
         }
     }

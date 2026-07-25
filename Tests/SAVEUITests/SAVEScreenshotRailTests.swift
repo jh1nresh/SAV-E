@@ -1,9 +1,9 @@
 import XCTest
 
-/// App Store screenshot rail for the Trip Pack-first product shell.
+/// App Store screenshot rail for the SAV-E root shell and Trip workspace.
 ///
 /// The review-demo session is local and deterministic. The five screenshots
-/// cover Trips home plus the exact Plan / Map / Inbox / Share workspace.
+/// cover Home plus the exact Plan / Map / Inbox / Share Trip workspace.
 ///
 /// Extract the PNGs with `specs/capture-app-screenshots.sh`. The test skips
 /// (never hard-fails) when a step of the demo flow can't be reached, so a
@@ -46,13 +46,16 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        let tripsHome = app.descendants(matching: .any)["trips.home"]
-        guard tripsHome.waitForExistence(timeout: 45) else {
+        let home = app.descendants(matching: .any)["home.root"]
+        guard home.waitForExistence(timeout: 45) else {
             attach(app, name: "debug-after-signin")
-            throw XCTSkip("Trips home never appeared after demo sign-in.")
+            throw XCTSkip("Home never appeared after demo sign-in.")
         }
-        XCTAssertTrue(app.buttons["trips.capture"].exists)
-        attach(app, name: "screenshot-01-trips-home")
+        XCTAssertTrue(app.buttons["home.capture"].exists)
+        attach(app, name: "screenshot-01-home")
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -87,7 +90,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testTripPackFirstShellKeepsCaptureAndMapReachable() throws {
+    func testGlobalTabsAreReachableAndTripUsesScopedTabs() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -99,8 +102,38 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
-        XCTAssertTrue(app.buttons["trips.capture"].isHittable)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["home.capture"].exists)
+        XCTAssertTrue(app.buttons["home.review"].exists)
+        XCTAssertTrue(app.buttons["home.saves"].exists)
+        let continueTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.trip.'")
+        ).firstMatch
+        XCTAssertTrue(continueTrip.waitForExistence(timeout: 20))
+
+        let recentSaves = app.descendants(matching: .any)["home.recentSaves"]
+        if !recentSaves.waitForExistence(timeout: 1) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(recentSaves.waitForExistence(timeout: stepTimeout))
+
+        let rootTabBar = app.tabBars.firstMatch
+        for tab in ["Home", "Saves", "Trips", "Map"] {
+            XCTAssertTrue(rootTabBar.buttons[tab].waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
+        }
+        XCTAssertEqual(rootTabBar.buttons.count, 4)
+        XCTAssertTrue(rootTabBar.buttons["Home"].isSelected)
+
+        openRootTab("Saves", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -113,6 +146,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
             XCTAssertTrue(tabBar.buttons[tab].waitForExistence(timeout: stepTimeout), "Missing \(tab) tab")
         }
         XCTAssertEqual(tabBar.buttons.count, 4)
+        for rootTab in ["Home", "Saves", "Trips"] {
+            XCTAssertFalse(tabBar.buttons[rootTab].exists, "Root tab \(rootTab) should be hidden inside a Trip")
+        }
 
         tabBar.buttons["Map"].tap()
         dismissLocationAlertIfPresent()
@@ -121,16 +157,24 @@ final class SAVEScreenshotRailTests: XCTestCase {
         tabBar.buttons["Inbox"].tap()
         let addLink = addLinkButton(in: app)
         XCTAssertTrue(addLink.waitForExistence(timeout: stepTimeout))
-        addLink.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["drawer.capture.tripContext"]
-                .waitForExistence(timeout: stepTimeout),
-            "Capture launched from a Trip should keep that Trip visible during review."
-        )
+
+        let backButton = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(backButton.waitForExistence(timeout: stepTimeout))
+        backButton.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+
+        let restoredRootTabBar = app.tabBars.firstMatch
+        for rootTab in ["Home", "Saves", "Trips", "Map"] {
+            XCTAssertTrue(
+                restoredRootTabBar.buttons[rootTab].waitForExistence(timeout: stepTimeout),
+                "Missing \(rootTab) after leaving a Trip"
+            )
+        }
+        XCTAssertEqual(restoredRootTabBar.buttons.count, 4)
     }
 
     @MainActor
-    func testDrawerLauncherCanBePulledUpManually() throws {
+    func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -142,26 +186,21 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        let launcher = app.descendants(matching: .any)["drawer.launcher"]
-        XCTAssertTrue(launcher.waitForExistence(timeout: 45))
-        XCTAssertTrue(app.buttons["trips.saved"].isHittable)
-        XCTAssertTrue(app.buttons["trips.review"].isHittable)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.launcher"].exists)
 
-        let commandField = app.textFields["drawer.commandField"]
-        let dragStart = launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
-        dragStart.press(
-            forDuration: 0.15,
-            thenDragTo: dragStart.withOffset(CGVector(dx: 0, dy: -24))
+        let captureButtons = app.buttons.matching(identifier: "home.capture")
+        XCTAssertEqual(captureButtons.count, 1)
+        XCTAssertTrue(captureButtons.firstMatch.isHittable)
+        captureButtons.firstMatch.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Only one command drawer should be presented."
         )
-        XCTAssertFalse(commandField.waitForExistence(timeout: 0.5))
-
-        let openDragStart = launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
-        openDragStart.press(
-            forDuration: 0.15,
-            thenDragTo: openDragStart.withOffset(CGVector(dx: 0, dy: -96))
-        )
-
-        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["drawer.commandField"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["drawer.tab.saved"].exists)
         XCTAssertTrue(app.buttons["drawer.tab.review"].exists)
         XCTAssertTrue(app.buttons["drawer.tab.friends"].exists)
@@ -179,6 +218,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -236,7 +278,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        let capture = app.buttons["trips.capture"]
+        let capture = app.buttons["home.capture"]
         XCTAssertTrue(capture.waitForExistence(timeout: 45))
         capture.tap()
 
@@ -264,6 +306,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         app.launch()
 
         try signInViaReviewDemo(app: app)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -299,7 +344,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         // The opening animation holds the screen for ~2s before SignInView.
         guard emailField.waitForExistence(timeout: 20) else {
             // A previous demo session may already be signed in.
-            if app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout) {
+            if app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout) {
                 return
             }
             throw XCTSkip("Email sign-in field never appeared — cannot reach the demo session.")
@@ -346,6 +391,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     private func addLinkButton(in app: XCUIApplication) -> XCUIElement {
         app.buttons["trip.inbox.addLink"]
+    }
+
+    @MainActor
+    private func openRootTab(_ title: String, app: XCUIApplication) {
+        let tab = app.tabBars.firstMatch.buttons[title]
+        XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout), "Missing \(title) root tab")
+        tab.tap()
     }
 
     @MainActor
