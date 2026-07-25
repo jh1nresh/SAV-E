@@ -12,11 +12,14 @@ const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "save-friend-share-"));
 execFileSync(
   path.join(repoRoot, "node_modules", ".bin", "tsc"),
   [
+    "--ignoreConfig",
     "--target",
     "ES2022",
     "--module",
-    "commonjs",
+    "node16",
     "--moduleResolution",
+    "node16",
+    "--types",
     "node",
     "--skipLibCheck",
     "--outDir",
