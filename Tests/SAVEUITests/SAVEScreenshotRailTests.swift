@@ -195,6 +195,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         captureButtons.firstMatch.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Only one command drawer should be presented."
+        )
         XCTAssertTrue(app.textFields["drawer.commandField"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["drawer.tab.saved"].exists)
         XCTAssertTrue(app.buttons["drawer.tab.review"].exists)

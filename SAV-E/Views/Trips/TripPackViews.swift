@@ -820,6 +820,14 @@ private struct TripInboxView: View {
             }
             .saveNotebookListRow()
 
+            Section {
+                Button(action: onOpenCapture) {
+                    Label(localized("Add a link", "加入連結"), systemImage: "link.badge.plus")
+                }
+                .accessibilityIdentifier("trip.inbox.addLink")
+            }
+            .saveNotebookListRow()
+
             Section(localized("SAV-E Needs Review", "SAV-E 待確認")) {
                 if candidates.isEmpty {
                     ContentUnavailableView(
@@ -845,14 +853,6 @@ private struct TripInboxView: View {
                         .accessibilityIdentifier("trip.inbox.candidate.\(candidate.id.uuidString)")
                     }
                 }
-            }
-            .saveNotebookListRow()
-
-            Section {
-                Button(action: onOpenCapture) {
-                    Label(localized("Add a link", "加入連結"), systemImage: "link.badge.plus")
-                }
-                .accessibilityIdentifier("trip.inbox.addLink")
             }
             .saveNotebookListRow()
         }
