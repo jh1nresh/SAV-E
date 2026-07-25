@@ -12,12 +12,13 @@ const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "save-import-link-"));
 execFileSync(
   path.join(repoRoot, "node_modules", ".bin", "tsc"),
   [
+    "--ignoreConfig",
     "--target",
     "ES2022",
     "--module",
-    "commonjs",
+    "node16",
     "--moduleResolution",
-    "node",
+    "node16",
     "--skipLibCheck",
     "--outDir",
     outDir,
