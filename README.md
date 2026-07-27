@@ -203,6 +203,11 @@ swift scripts/check-social-ocr-fixtures.swift
 swift scripts/check-social-places-refine-fixtures.swift
 ```
 
+The social place regression command reuses the canonical DerivedData path. It
+uses the caller-owned `SAVE_TEST_SIMULATOR_UDID` when supplied; otherwise it
+creates one temporary headless simulator, then shuts it down and deletes it
+after the focused XCTest. It requires at least 10 GiB of free disk space.
+
 ## TestFlight archive
 
 Set `APPLE_TEAM_ID` to the 10-character Apple Developer Team ID for the account that owns the App IDs. XcodeGen passes it into all iOS targets as `DEVELOPMENT_TEAM`.

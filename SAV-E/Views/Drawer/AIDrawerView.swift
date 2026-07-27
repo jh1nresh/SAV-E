@@ -532,6 +532,7 @@ struct AIDrawerView: View {
                     .foregroundColor(commandBarTextColor)
             }
             .accessibilityLabel(languageSettings.localized(english: "Ask SAV-E", traditionalChinese: "詢問 SAV-E"))
+            .accessibilityIdentifier("drawer.submitCommand")
         } else {
             Button(action: toggleVoiceInput) {
                 Image(systemName: voiceQuery.buttonIconName)
@@ -2535,6 +2536,7 @@ private struct MapDetailDrawerView: View {
             .padding(.top, SaveTheme.Spacing.lg)
             .padding(.bottom, 28)
         }
+        .accessibilityIdentifier("place.detail.scroll")
     }
 
 }

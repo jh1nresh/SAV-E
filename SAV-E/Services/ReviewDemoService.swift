@@ -29,6 +29,33 @@ enum ReviewDemo {
     /// UserDefaults flag so the isolated demo vault is seeded only once.
     static let seededDefaultsKey = "reviewDemoSeeded"
 
+    /// Keeps the ReviewDemo UI-test path deterministic and fully local. The
+    /// launch flag is DEBUG-only so App Review and production sessions keep
+    /// their existing behavior.
+    static var isOfflineUITestMode: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-review-demo-offline")
+#else
+        false
+#endif
+    }
+
+    /// A per-test suffix prevents UI tests from reading or overwriting the
+    /// normal reviewer-demo vault. Only a conservative filename-safe subset is
+    /// accepted so an environment value cannot escape the demo directory.
+    static var uiTestStorageIdentifier: String? {
+#if DEBUG
+        guard isOfflineUITestMode,
+              let value = ProcessInfo.processInfo.environment["SAVE_UI_TEST_STORAGE_ID"]
+        else { return nil }
+        let normalized = value.filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        guard !normalized.isEmpty else { return nil }
+        return String(normalized.prefix(64))
+#else
+        nil
+#endif
+    }
+
     /// Case-insensitive, whitespace-trimmed match on the email so the reviewer
     /// isn't tripped up by autocapitalization or trailing spaces.
     static func isDemoEmail(_ value: String) -> Bool {
@@ -50,16 +77,25 @@ enum ReviewDemo {
 
 @MainActor
 enum ReviewDemoStorage {
+    private static let defaultsSuiteName = ReviewDemo.uiTestStorageIdentifier
+        .map { "com.wanderly.app.review-demo.ui-test.\($0)" }
+        ?? "com.wanderly.app.review-demo"
+
     static let directoryURL: URL = {
         let fileManager = FileManager.default
         let baseURL = fileManager.containerURL(
             forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName
         ) ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
-        return baseURL.appendingPathComponent("review-demo-v1", isDirectory: true)
+        let directoryName = ReviewDemo.uiTestStorageIdentifier
+            .map { "review-demo-ui-test-\($0)" }
+            ?? "review-demo-v1"
+        return baseURL.appendingPathComponent(directoryName, isDirectory: true)
     }()
 
-    static let defaults = UserDefaults(suiteName: "com.wanderly.app.review-demo")!
+    static let defaults: UserDefaults = {
+        UserDefaults(suiteName: defaultsSuiteName)!
+    }()
     static let localVaultService = SaveLocalVaultService(
         overrideVaultURL: directoryURL.appendingPathComponent("save-memory-records.json")
     )
@@ -72,13 +108,25 @@ enum ReviewDemoStorage {
     static let collaborativeListStore = SaveCollaborativeListStore(defaults: defaults)
     static let referralHandoffStore = SaveReferralHandoffStore(defaults: defaults)
 
+    static func resetUITestStorageIfRequested() {
+#if DEBUG
+        guard ReviewDemo.isOfflineUITestMode,
+              ReviewDemo.uiTestStorageIdentifier != nil,
+              ProcessInfo.processInfo.arguments.contains("--uitest-reset-review-demo-storage")
+        else { return }
+        try? FileManager.default.removeItem(at: directoryURL)
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+#endif
+    }
+
     static func makeMapViewModel() -> MapViewModel {
         MapViewModel(
             pendingImportService: pendingImportService,
             saveLocalVaultService: localVaultService,
             correctionEventStore: correctionEventStore,
             collaborativeListStore: collaborativeListStore,
-            referralHandoffStore: referralHandoffStore
+            referralHandoffStore: referralHandoffStore,
+            usesRemotePersistence: !ReviewDemo.isOfflineUITestMode
         )
     }
 }

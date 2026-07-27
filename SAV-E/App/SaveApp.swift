@@ -45,6 +45,7 @@ struct SaveApp: App {
             diskCapacity: 200 * 1024 * 1024
         )
 #if DEBUG
+        ReviewDemoStorage.resetUITestStorageIfRequested()
         // UI tests cannot use "-hasCompletedOnboarding NO": NSArgumentDomain outranks
         // the persistent domain, so the in-app write back to true would never be read.
         if ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding") {

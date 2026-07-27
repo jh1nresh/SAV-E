@@ -64,11 +64,38 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
+      - name: Run link-to-Trip persistence UI test
+        timeout-minutes: 12
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test
+
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''
         run: |
+          cleanup_status=0
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
-          xcrun simctl delete '${{ steps.simulator.outputs.udid }}' || true
+          if ! xcrun simctl list devices |
+            grep -F '${{ steps.simulator.outputs.udid }}' |
+            grep -Fq '(Shutdown)'; then
+            echo 'Simulator shutdown could not be verified.' >&2
+            cleanup_status=1
+          fi
+          if ! xcrun simctl delete '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion failed.' >&2
+            cleanup_status=1
+          elif xcrun simctl list devices | grep -Fq '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion could not be verified.' >&2
+            cleanup_status=1
+          fi
+          exit "$cleanup_status"
 
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'

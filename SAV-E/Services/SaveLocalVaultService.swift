@@ -52,6 +52,18 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
+    func reviewCandidates(limit: Int = 250) throws -> [PlaceReviewCandidate] {
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Array(
+                    try loadRecords(from: url)
+                        .compactMap(\.reviewCandidate)
+                        .prefix(limit)
+                )
+            }
+        }
+    }
+
     func saveSourceOnly(url: URL, note: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(
@@ -81,6 +93,12 @@ final class SaveLocalVaultService: Sendable {
             vibeTags: candidate.vibeTags,
             accessNotes: candidate.accessNotes,
             sourceHandle: candidate.sourceHandle,
+            latitude: candidate.isSourceOnly ? nil : candidate.latitude,
+            longitude: candidate.isSourceOnly ? nil : candidate.longitude,
+            category: candidate.isSourceOnly
+                ? nil
+                : PlaceCategory(rawValue: candidate.category)
+                    ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
             createdAt: candidate.savedAt
         )
         try append(record)
@@ -89,6 +107,7 @@ final class SaveLocalVaultService: Sendable {
 
     func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {
         let record = SaveMemoryRecord(
+            id: candidate.id,
             state: .reviewCandidate,
             title: candidate.name,
             placeName: candidate.name,
@@ -99,6 +118,9 @@ final class SaveLocalVaultService: Sendable {
             vibeTags: candidate.vibeTags,
             accessNotes: candidate.accessNotes,
             sourceHandle: candidate.sourceHandle,
+            latitude: candidate.latitude,
+            longitude: candidate.longitude,
+            category: PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             createdAt: candidate.createdAt
         )
         try append(record)
@@ -155,6 +177,16 @@ final class SaveLocalVaultService: Sendable {
                     guard let confirmed = record.confirmedPlace else { return false }
                     return confirmed.id == place.id || confirmed.matches(place)
                 }
+                try save(records, to: url)
+            }
+        }
+    }
+
+    func removeReviewCandidate(_ candidateID: UUID) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll { $0.state == .reviewCandidate && $0.id == candidateID }
                 try save(records, to: url)
             }
         }
@@ -368,6 +400,32 @@ final class SaveLocalVaultService: Sendable {
 }
 
 private extension SaveMemoryRecord {
+    var reviewCandidate: PlaceReviewCandidate? {
+        guard state == .reviewCandidate else { return nil }
+        let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+
+        return PlaceReviewCandidate(
+            id: id,
+            captureId: nil,
+            name: name,
+            address: (address ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+            city: nil,
+            latitude: latitude,
+            longitude: longitude,
+            evidence: evidence,
+            confidence: nil,
+            missingInfo: evidenceDiagnostic?.missingFields ?? [],
+            status: "review",
+            createdAt: createdAt,
+            placeHighlights: placeHighlights,
+            recommendedItems: recommendedItems,
+            vibeTags: vibeTags,
+            accessNotes: accessNotes,
+            sourceHandle: sourceHandle
+        )
+    }
+
     var confirmedPlace: Place? {
         guard state == .confirmedPlace else { return nil }
         guard let latitude, let longitude, latitude != 0 || longitude != 0 else { return nil }
