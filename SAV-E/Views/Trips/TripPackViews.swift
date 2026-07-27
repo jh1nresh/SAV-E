@@ -41,7 +41,7 @@ struct TripsHomeView: View {
             .padding(.top, 12)
             .padding(.bottom, 28)
         }
-        .background(Color.saveCream.ignoresSafeArea())
+        .background(SaveDottedBackground().ignoresSafeArea())
         .navigationTitle(localized("Trips", "行程"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -89,7 +89,12 @@ struct TripsHomeView: View {
             if store.isLoading && store.trips.isEmpty {
                 ProgressView(localized("Loading Trip Packs…", "正在載入 Trip Packs…"))
                     .padding(20)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+                    .saveNotebookSurface(
+                        cornerRadius: 18,
+                        opacity: 0.96,
+                        strokeOpacity: 0.42,
+                        lineWidth: 1.4
+                    )
             }
         }
         .accessibilityIdentifier("trips.home")
@@ -105,7 +110,8 @@ struct TripsHomeView: View {
                 "貼上或分享連結後，SAV-E 會先分析；只有你確認的地點才能加入 Trip Pack。"
             ))
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.saveMutedText)
+            .fixedSize(horizontal: false, vertical: true)
 
             Text(localized(
                 "Analyze  →  Review  →  Save  →  Plan",
@@ -119,7 +125,12 @@ struct TripsHomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .saveNotebookSurface(
+            cornerRadius: 20,
+            opacity: 0.96,
+            strokeOpacity: 0.42,
+            lineWidth: 1.4
+        )
     }
 
     @ViewBuilder
@@ -132,9 +143,14 @@ struct TripsHomeView: View {
             if trips.isEmpty {
                 Text(emptyText)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.saveMutedText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
+                    .padding(16)
+                    .saveNotebookSurface(
+                        cornerRadius: 18,
+                        opacity: 0.94,
+                        strokeOpacity: 0.34
+                    )
             } else {
                 ForEach(trips) { trip in
                     Button {
@@ -160,12 +176,14 @@ private struct TripPackCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "suitcase.rolling.fill")
-                .font(.title2)
-                .foregroundStyle(Color.saveCoralInk)
-                .frame(width: 48, height: 48)
-                .background(Color.saveHoney.opacity(0.38), in: RoundedRectangle(cornerRadius: 15))
+        HStack(alignment: .top, spacing: 14) {
+            SaveIconTile(
+                systemName: "suitcase.rolling.fill",
+                size: 48,
+                fill: .saveHoney,
+                foreground: .saveInk,
+                cornerRadius: 15
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(trip.name)
@@ -173,26 +191,28 @@ private struct TripPackCard: View {
                     .foregroundStyle(Color.saveInk)
                 Text([trip.city, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .foregroundStyle(Color.saveMutedText)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(languageSettings.localized(
                     english: "\(trip.places.count) confirmed stops",
                     traditionalChinese: "\(trip.places.count) 個已確認地點"
                 ))
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.saveCocoa)
+                .foregroundStyle(Color.saveCoralInk)
             }
-            Spacer()
+            Spacer(minLength: 8)
             Image(systemName: "chevron.right")
                 .font(.caption.bold())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.saveMutedText)
+                .padding(.top, 16)
         }
         .padding(16)
-        .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1)
-        }
+        .saveNotebookSurface(
+            cornerRadius: 20,
+            opacity: 0.96,
+            strokeOpacity: 0.42,
+            lineWidth: 1.4
+        )
     }
 }
 
@@ -380,13 +400,22 @@ private struct TripPlanView: View {
                 } actions: {
                     Button(localized("Add saved place", "加入收藏地點")) { showsPlacePicker = true }
                 }
-                .saveNotebookListRow()
+                .padding(.vertical, 16)
+                .saveNotebookSurface(
+                    cornerRadius: 18,
+                    opacity: 0.96,
+                    strokeOpacity: 0.42
+                )
+                .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             } else {
                 ForEach(groupedStops, id: \.day) { group in
-                    Section(localized("Day \(group.day)", "第 \(group.day) 天")) {
+                    Section {
                         ForEach(Array(group.stops.enumerated()), id: \.element.id) { index, stop in
                             TripStopRow(
                                 stop: stop,
+                                position: index + 1,
                                 canMoveEarlier: index > 0 && !store.isSaving,
                                 canMoveLater: index < group.stops.count - 1 && !store.isSaving,
                                 onEdit: {
@@ -399,9 +428,19 @@ private struct TripPlanView: View {
                                     Task { _ = await store.moveStop(stop.id, in: trip.id, by: 1) }
                                 }
                             )
+                            .padding(12)
+                            .saveNotebookSurface(
+                                cornerRadius: 18,
+                                opacity: 0.96,
+                                strokeOpacity: 0.42
+                            )
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                         }
+                    } header: {
+                        TripDayHeader(title: localized("Day \(group.day)", "第 \(group.day) 天"))
                     }
-                    .saveNotebookListRow()
                 }
             }
 
@@ -410,20 +449,40 @@ private struct TripPlanView: View {
                     showsPlacePicker = true
                 } label: {
                     Label(localized("Add saved place", "加入收藏地點"), systemImage: "plus.circle")
+                        .font(.headline)
+                        .foregroundStyle(Color.saveInk)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .saveNotebookSurface(
+                            cornerRadius: 16,
+                            fill: .saveHoney,
+                            opacity: 0.34,
+                            strokeOpacity: 0.46,
+                            lineWidth: 1.4
+                        )
                 }
+                .buttonStyle(.plain)
                 .disabled(availablePlaces.isEmpty)
             }
-            .saveNotebookListRow()
+            .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 20, trailing: 20))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 1)
         .saveNotebookListCanvas()
         .overlay(alignment: .top) {
             if store.isSaving {
                 ProgressView(localized("Saving…", "正在保存…"))
-                    .font(.caption)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.saveInk)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.regularMaterial, in: Capsule())
+                    .saveNotebookSurface(
+                        cornerRadius: 40,
+                        opacity: 0.98,
+                        strokeOpacity: 0.44
+                    )
                     .padding(.top, 8)
             }
         }
@@ -474,51 +533,119 @@ private struct TripPlanView: View {
     }
 }
 
+private struct TripDayHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            SaveIconTile(
+                systemName: "calendar.day.timeline.left",
+                size: 32,
+                iconSize: 14,
+                fill: .saveHoney,
+                foreground: .saveInk,
+                cornerRadius: 10
+            )
+            .accessibilityHidden(true)
+
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Color.saveInk)
+                .textCase(nil)
+
+            Rectangle()
+                .fill(Color.saveNotebookLine.opacity(0.28))
+                .frame(height: 1)
+                .accessibilityHidden(true)
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct TripStopRow: View {
     let stop: TripStop
+    let position: Int
     let canMoveEarlier: Bool
     let canMoveLater: Bool
     let onEdit: () -> Void
     let onMoveEarlier: () -> Void
     let onMoveLater: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onEdit) {
-                HStack(spacing: 12) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(Color.saveCoralInk)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(stop.placeName)
-                            .font(.body.weight(.semibold))
-                        if !scheduleSummary.isEmpty {
-                            Text(scheduleSummary)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    editButton
+                    moveControls
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)"))
-            .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).edit")
-
-            HStack(spacing: 4) {
-                moveButton(systemImage: "arrow.up", enabled: canMoveEarlier, action: onMoveEarlier)
-                    .accessibilityLabel(localized("Move earlier", "往前移"))
-                    .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).moveEarlier")
-                moveButton(systemImage: "arrow.down", enabled: canMoveLater, action: onMoveLater)
-                    .accessibilityLabel(localized("Move later", "往後移"))
-                    .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).moveLater")
+            } else {
+                HStack(spacing: 8) {
+                    editButton
+                    moveControls
+                }
             }
         }
+    }
+
+    private var editButton: some View {
+        Button(action: onEdit) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("\(position)")
+                    .font(.headline.weight(.black).monospacedDigit())
+                    .foregroundStyle(Color.saveInk)
+                    .frame(width: 44, height: 44)
+                    .saveNotebookSurface(
+                        cornerRadius: 13,
+                        fill: .saveHoney,
+                        opacity: 0.54,
+                        strokeOpacity: 0.5,
+                        lineWidth: 1.4
+                    )
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(stop.placeName)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.saveInk)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !scheduleSummary.isEmpty {
+                        Text(scheduleSummary)
+                            .font(.caption)
+                            .foregroundStyle(Color.saveMutedText)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(Color.saveMutedText)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityLabel(localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)"))
+        .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).edit")
+    }
+
+    private var moveControls: some View {
+        HStack(spacing: 6) {
+            moveButton(systemImage: "arrow.up", enabled: canMoveEarlier, action: onMoveEarlier)
+                .accessibilityLabel(localized("Move earlier", "往前移"))
+                .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).moveEarlier")
+            moveButton(systemImage: "arrow.down", enabled: canMoveLater, action: onMoveLater)
+                .accessibilityLabel(localized("Move later", "往後移"))
+                .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).moveLater")
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var scheduleSummary: String {
@@ -537,12 +664,20 @@ private struct TripStopRow: View {
 
     private func moveButton(systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .frame(width: 44, height: 44)
+            SaveIconTile(
+                systemName: systemImage,
+                size: 44,
+                iconSize: 15,
+                fill: .saveNotebookPage,
+                foreground: .saveCoralInk,
+                cornerRadius: 13
+            )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(minWidth: 44, minHeight: 44)
         .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.34)
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {

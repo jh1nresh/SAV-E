@@ -207,6 +207,43 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testSavedPlaceEntryUsesSingleCanonicalDetail() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Saves", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 45))
+
+        let firstMapStamp = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")
+        ).firstMatch
+        XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
+        firstMapStamp.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "A Map Stamp should stay inside the one global drawer."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
+            1,
+            "Every saved-place entry should use one canonical detail renderer."
+        )
+        XCTAssertTrue(app.buttons["drawer.saved.addToTrip"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
     func testTripStopEditorSurfaceIsReachable() throws {
         let app = XCUIApplication()
         app.launchArguments += [

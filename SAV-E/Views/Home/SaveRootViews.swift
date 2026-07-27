@@ -61,11 +61,7 @@ struct SaveHomeView: View {
             .accessibilityIdentifier("home.capture")
         }
         .padding(18)
-        .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1)
-        }
+        .saveNotebookPage(cornerRadius: 22)
     }
 
     private var nextActions: some View {
@@ -79,7 +75,7 @@ struct SaveHomeView: View {
                     title: localized("Review", "待確認"),
                     value: "\(mapViewModel.reviewCandidates.count)",
                     systemImage: "checklist.unchecked",
-                    tint: .saveHoney,
+                    tint: .saveCoral,
                     action: { onOpenDrawer(.review, nil) }
                 )
                 .accessibilityIdentifier("home.review")
@@ -87,7 +83,7 @@ struct SaveHomeView: View {
                 SaveHomeMetricButton(
                     title: localized("Map Stamps", "地圖章"),
                     value: "\(mapViewModel.places.count)",
-                    systemImage: "bookmark.fill",
+                    systemImage: "checkmark.seal.fill",
                     tint: .saveMint,
                     action: onOpenSaves
                 )
@@ -115,11 +111,12 @@ struct SaveHomeView: View {
             } else {
                 Button(action: onOpenTrips) {
                     HStack(spacing: 14) {
-                        Image(systemName: "suitcase.rolling.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color.saveCoralInk)
-                            .frame(width: 48, height: 48)
-                            .background(Color.saveHoney.opacity(0.38), in: RoundedRectangle(cornerRadius: 15))
+                        SaveIconTile(
+                            systemName: "suitcase.rolling.fill",
+                            size: 48,
+                            fill: Color.saveHoney.opacity(0.38),
+                            foreground: .saveCoralInk
+                        )
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(localized("Start a Trip Pack", "建立 Trip Pack"))
@@ -138,7 +135,7 @@ struct SaveHomeView: View {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(16)
-                    .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .saveNotebookPage(cornerRadius: 20)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.openTrips")
@@ -150,13 +147,14 @@ struct SaveHomeView: View {
     private var recentSavesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(localized("Recent Saves", "最近收藏"))
+                Text(localized("Recent Map Stamps", "最近地圖章"))
                     .font(.title2.bold())
                     .foregroundStyle(Color.saveInk)
                 Spacer()
                 if !recentPlaces.isEmpty {
                     Button(localized("See all", "查看全部"), action: onOpenSaves)
                         .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.saveCocoa)
                 }
             }
 
@@ -169,7 +167,7 @@ struct SaveHomeView: View {
                 .foregroundStyle(Color.saveMutedText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .saveNotebookPage(cornerRadius: 18)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(recentPlaces.enumerated()), id: \.element.id) { index, place in
@@ -182,7 +180,7 @@ struct SaveHomeView: View {
                         }
                     }
                 }
-                .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .saveNotebookPage(cornerRadius: 20)
             }
         }
         .accessibilityIdentifier("home.recentSaves")
@@ -230,11 +228,7 @@ struct SaveLibraryView: View {
     private var reviewCard: some View {
         Button(action: onOpenReview) {
             HStack(spacing: 14) {
-                Image(systemName: "checklist.unchecked")
-                    .font(.title3.bold())
-                    .foregroundStyle(Color.saveInk)
-                    .frame(width: 48, height: 48)
-                    .background(Color.saveHoney, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                SaveMemoryBadge(state: .ready, size: 48)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(localized("Waiting for Review", "等待確認"))
@@ -243,8 +237,8 @@ struct SaveLibraryView: View {
                     Text(reviewCandidates.isEmpty
                          ? localized("No clues need your decision.", "目前沒有需要你確認的線索。")
                          : localized(
-                            "\(reviewCandidates.count) clues need your decision before becoming Map Stamps.",
-                            "\(reviewCandidates.count) 個線索需要確認，才會成為地圖章。"
+                            "Clues need your decision before becoming Map Stamps.",
+                            "線索需要確認，才會成為地圖章。"
                          ))
                     .font(.subheadline)
                     .foregroundStyle(Color.saveMutedText)
@@ -252,11 +246,25 @@ struct SaveLibraryView: View {
                 }
 
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.tertiary)
+                VStack(spacing: 6) {
+                    Text("\(reviewCandidates.count)")
+                        .font(.title3.monospacedDigit().bold())
+                        .foregroundStyle(Color.saveInk)
+                        .frame(minWidth: 40, minHeight: 40)
+                        .saveNotebookSurface(
+                            cornerRadius: 12,
+                            fill: .saveCoral,
+                            opacity: 0.72,
+                            strokeOpacity: 0.5
+                        )
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
             }
             .padding(16)
-            .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .saveNotebookPage(cornerRadius: 20)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("saves.review")
@@ -270,9 +278,22 @@ struct SaveLibraryView: View {
                     .font(.title2.bold())
                     .foregroundStyle(Color.saveInk)
                 Spacer()
-                Text("\(places.count)")
-                    .font(.subheadline.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(Color.saveMutedText)
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                    Text(localized("Confirmed", "已確認"))
+                    Text("\(places.count)")
+                        .monospacedDigit()
+                }
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color.saveInk)
+                .padding(.horizontal, 10)
+                .frame(minHeight: 32)
+                .saveNotebookSurface(
+                    cornerRadius: 11,
+                    fill: .saveMint,
+                    opacity: 0.72,
+                    strokeOpacity: 0.5
+                )
             }
 
             if sortedPlaces.isEmpty {
@@ -303,7 +324,7 @@ struct SaveLibraryView: View {
                     .buttonStyle(.plain)
                 }
                 .padding(18)
-                .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .saveNotebookPage(cornerRadius: 20)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(sortedPlaces.enumerated()), id: \.element.id) { index, place in
@@ -317,7 +338,7 @@ struct SaveLibraryView: View {
                         }
                     }
                 }
-                .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .saveNotebookPage(cornerRadius: 20)
             }
         }
     }
@@ -380,8 +401,12 @@ private struct SaveHomeMetricButton: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Image(systemName: systemImage)
-                        .font(.headline)
+                    SaveIconTile(
+                        systemName: systemImage,
+                        size: 34,
+                        fill: tint,
+                        foreground: .saveInk
+                    )
                     Spacer()
                     Text(value)
                         .font(.title2.monospacedDigit().bold())
@@ -392,7 +417,7 @@ private struct SaveHomeMetricButton: View {
             .foregroundStyle(Color.saveInk)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .background(tint.opacity(0.58), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .saveNotebookPage(cornerRadius: 18)
         }
         .buttonStyle(.plain)
     }
@@ -404,11 +429,12 @@ private struct SaveHomeTripCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Image(systemName: "suitcase.rolling.fill")
-                .font(.title2)
-                .foregroundStyle(Color.saveCoralInk)
-                .frame(width: 48, height: 48)
-                .background(Color.saveHoney.opacity(0.38), in: RoundedRectangle(cornerRadius: 15))
+            SaveIconTile(
+                systemName: "suitcase.rolling.fill",
+                size: 48,
+                fill: Color.saveHoney.opacity(0.38),
+                foreground: .saveCoralInk
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(trip.name)
@@ -432,11 +458,7 @@ private struct SaveHomeTripCard: View {
                 .foregroundStyle(.tertiary)
         }
         .padding(16)
-        .background(Color.savePaper, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1)
-        }
+        .saveNotebookPage(cornerRadius: 20)
     }
 }
 
@@ -448,11 +470,7 @@ private struct SaveRootPlaceRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: place.category.iconName)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(Color.saveCocoa, in: Circle())
+                SaveMemoryBadge(state: .saved(place.category), size: 42)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
