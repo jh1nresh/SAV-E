@@ -20,6 +20,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertNil(shareTemplate["WANDERLY_SHARE_BASE_URL"])
         XCTAssertNil(mainTemplate["GEMINI_API_KEY"])
         XCTAssertNil(shareTemplate["GEMINI_API_KEY"])
+        XCTAssertNil(mainTemplate["AMAP_WEB_SERVICE_KEY"])
+        XCTAssertNil(mainTemplate["BAIDU_MAP_WEB_SERVICE_KEY"])
     }
 
     @MainActor
@@ -56,37 +58,27 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    func testChinaProviderConfigurationRejectsPlaceholderKeys() {
+    func testChinaProviderConfigurationUsesAppleMapsWithoutClientProviderKeys() {
         let status = ChinaPlaceResolverConfiguration.status(
             backendAPIBaseURL: nil,
-            accessTokenProviderConfigured: false,
-            amapWebServiceKey: "AMAP_WEB_SERVICE_KEY",
-            baiduMapWebServiceKey: "BAIDU_MAP_WEB_SERVICE_KEY"
-        )
-
-        XCTAssertFalse(status.canResolveChinaPOI)
-        XCTAssertTrue(status.configuredProviders.isEmpty)
-        XCTAssertEqual(status.missingRequirements, [
-            "SAVE_API_URL with authenticated backend place resolver",
-            "AMAP_WEB_SERVICE_KEY",
-            "BAIDU_MAP_WEB_SERVICE_KEY"
-        ])
-    }
-
-    @MainActor
-    func testChinaProviderConfigurationReportsConfiguredProvidersWithoutLeakingKeys() {
-        let status = ChinaPlaceResolverConfiguration.status(
-            backendAPIBaseURL: "https://wanderly-api-production.up.railway.app",
-            accessTokenProviderConfigured: true,
-            amapWebServiceKey: "amap-test-key",
-            baiduMapWebServiceKey: "baidu-test-key"
+            accessTokenProviderConfigured: false
         )
 
         XCTAssertTrue(status.canResolveChinaPOI)
-        XCTAssertEqual(status.configuredProviders, ["backend_proxy", "amap", "baidu"])
+        XCTAssertEqual(status.configuredProviders, ["apple_maps"])
         XCTAssertTrue(status.missingRequirements.isEmpty)
-        XCTAssertFalse(status.configuredProviders.contains("amap-test-key"))
-        XCTAssertFalse(status.configuredProviders.contains("baidu-test-key"))
+    }
+
+    @MainActor
+    func testChinaProviderConfigurationReportsOptionalBackendWithoutSecrets() {
+        let status = ChinaPlaceResolverConfiguration.status(
+            backendAPIBaseURL: "https://wanderly-api-production.up.railway.app",
+            accessTokenProviderConfigured: true
+        )
+
+        XCTAssertTrue(status.canResolveChinaPOI)
+        XCTAssertEqual(status.configuredProviders, ["apple_maps", "backend_proxy"])
+        XCTAssertTrue(status.missingRequirements.isEmpty)
     }
 
     private func plistTemplate(at relativePath: String) throws -> [String: Any] {

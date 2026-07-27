@@ -334,6 +334,231 @@ enum SocialShareTextNormalizer {
     }
 }
 
+enum SharedMapLinkProvider: String, Codable, Hashable {
+    case amap
+    case baidu
+}
+
+enum SharedMapLinkCoordinateSystem: String, Codable, Hashable {
+    case wgs84 = "WGS84"
+    case gcj02 = "GCJ-02"
+    case bd09 = "BD-09"
+}
+
+struct SharedMapLinkMatch: Codable, Hashable {
+    var provider: SharedMapLinkProvider
+    var id: String
+    var name: String
+    var address: String
+    var latitude: Double
+    var longitude: Double
+    var coordinateSystem: SharedMapLinkCoordinateSystem
+}
+
+/// Resolves only link identity. It never treats a login/error shell as the
+/// user's source and only unwraps Dianping redirects back to another trusted
+/// Dianping HTTPS host.
+enum SocialShareURLCanonicalizer {
+    static func analysisURL(originalURL: URL, resolvedURL: URL?) -> URL {
+        guard let resolvedURL else { return originalURL }
+        if let target = trustedDianpingRedirectTarget(in: resolvedURL) {
+            return target
+        }
+        if isDianpingURL(originalURL),
+           (!isDianpingURL(resolvedURL) || isDianpingDeadEnd(resolvedURL)) {
+            return originalURL
+        }
+        return resolvedURL
+    }
+
+    private static func trustedDianpingRedirectTarget(in url: URL) -> URL? {
+        guard isDianpingURL(url),
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else {
+            return nil
+        }
+        let redirectKeys = Set(["redir", "redirect", "redirect_url", "redirecturl", "returnurl"])
+        for item in items where redirectKeys.contains(item.name.lowercased()) {
+            guard let value = item.value,
+                  let target = URL(string: value),
+                  target.scheme?.lowercased() == "https",
+                  isDianpingURL(target) else {
+                continue
+            }
+            return target
+        }
+        return nil
+    }
+
+    private static func isDianpingDeadEnd(_ url: URL) -> Bool {
+        guard isDianpingURL(url) else { return false }
+        let path = url.path.lowercased()
+        return path.contains("login") ||
+            path.contains("/shopinfo/error") ||
+            path == "/error" ||
+            path.contains("/404") ||
+            path.contains("notfound")
+    }
+
+    private static func isDianpingURL(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        return isHost(host, domain: "dianping.com") || isHost(host, domain: "dpurl.cn")
+    }
+
+    private static func isHost(_ host: String, domain: String) -> Bool {
+        host == domain || host.hasSuffix("." + domain)
+    }
+}
+
+/// Foundation-only China map parsing shared by the app and Share Extension.
+/// Coordinates retain their provider coordinate system so GCJ-02 / BD-09 data
+/// cannot silently masquerade as an Apple Maps WGS-84 pin.
+enum SharedChinaMapLinkParser {
+    static func match(from urlString: String) -> SharedMapLinkMatch? {
+        guard let url = URL(string: urlString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return nil
+        }
+        let scheme = url.scheme?.lowercased()
+        let host = url.host?.lowercased()
+        if scheme == "iosamap" || scheme == "amapuri" || host.map({ isHost($0, domain: "amap.com") }) == true {
+            return amapMatch(from: url)
+        }
+        if scheme == "baidumap" || host.map({ isHost($0, domain: "baidu.com") }) == true {
+            return baiduMatch(from: url)
+        }
+        return nil
+    }
+
+    private static func amapMatch(from url: URL) -> SharedMapLinkMatch? {
+        let query = queryValues(in: url)
+        let coordinate = coordinateFromLngLat(query["position"] ?? query["location"] ?? query["lnglat"])
+            ?? coordinateFromSeparateValues(
+                latitude: query["lat"] ?? query["latitude"] ?? query["dlat"],
+                longitude: query["lng"] ?? query["lon"] ?? query["longitude"] ?? query["dlon"]
+            )
+        guard let coordinate else { return nil }
+
+        let coordinateSystem: SharedMapLinkCoordinateSystem =
+            query["coordinate"]?.lowercased() == "wgs84" ? .wgs84 : .gcj02
+        let name = firstNonEmpty(
+            query["name"],
+            query["poiname"],
+            query["keywords"],
+            query["dname"],
+            titleFromPath(url)
+        ) ?? "Amap place"
+        let address = firstNonEmpty(query["address"], query["addr"]) ?? ""
+        return SharedMapLinkMatch(
+            provider: .amap,
+            id: firstNonEmpty(query["poiid"]) ?? "amap-url-\(coordinate.latitude)-\(coordinate.longitude)",
+            name: decoded(name),
+            address: decoded(address),
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            coordinateSystem: coordinateSystem
+        )
+    }
+
+    private static func baiduMatch(from url: URL) -> SharedMapLinkMatch? {
+        let query = queryValues(in: url)
+        let coordinate = coordinateFromLatLng(query["location"] ?? query["center"])
+            ?? coordinateFromLngLat(query["coord"])
+        guard let coordinate else { return nil }
+
+        let name = firstNonEmpty(
+            query["title"],
+            query["name"],
+            query["query"],
+            titleFromPath(url)
+        ) ?? "Baidu Maps place"
+        let address = firstNonEmpty(query["content"], query["address"]) ?? ""
+        return SharedMapLinkMatch(
+            provider: .baidu,
+            id: firstNonEmpty(query["uid"]) ?? "baidu-url-\(coordinate.latitude)-\(coordinate.longitude)",
+            name: decoded(name),
+            address: decoded(address),
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            coordinateSystem: .bd09
+        )
+    }
+
+    private static func queryValues(in url: URL) -> [String: String] {
+        (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+            .reduce(into: [:]) { values, item in
+                let key = item.name.lowercased()
+                guard values[key] == nil, let value = item.value, !value.isEmpty else { return }
+                values[key] = value
+            }
+    }
+
+    private static func coordinateFromSeparateValues(latitude: String?, longitude: String?) -> (latitude: Double, longitude: Double)? {
+        guard let latitude = latitude.flatMap(Double.init),
+              let longitude = longitude.flatMap(Double.init) else {
+            return nil
+        }
+        return validatedCoordinate(latitude: latitude, longitude: longitude)
+    }
+
+    private static func coordinateFromLngLat(_ value: String?) -> (latitude: Double, longitude: Double)? {
+        guard let parts = coordinateParts(value),
+              let longitude = Double(parts[0]),
+              let latitude = Double(parts[1]) else {
+            return nil
+        }
+        return validatedCoordinate(latitude: latitude, longitude: longitude)
+    }
+
+    private static func coordinateFromLatLng(_ value: String?) -> (latitude: Double, longitude: Double)? {
+        guard let parts = coordinateParts(value),
+              let latitude = Double(parts[0]),
+              let longitude = Double(parts[1]) else {
+            return nil
+        }
+        return validatedCoordinate(latitude: latitude, longitude: longitude)
+    }
+
+    private static func coordinateParts(_ value: String?) -> [String]? {
+        let parts = value?
+            .split(separator: ",", omittingEmptySubsequences: false)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        return parts?.count == 2 ? parts : nil
+    }
+
+    private static func validatedCoordinate(latitude: Double, longitude: Double) -> (latitude: Double, longitude: Double)? {
+        guard latitude.isFinite,
+              longitude.isFinite,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude),
+              !(latitude == 0 && longitude == 0) else {
+            return nil
+        }
+        return (latitude, longitude)
+    }
+
+    private static func titleFromPath(_ url: URL) -> String? {
+        url.pathComponents.reversed().first { component in
+            component != "/" &&
+                component.count > 1 &&
+                component.rangeOfCharacter(from: .decimalDigits.inverted) != nil
+        }
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        values.compactMap { value in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed?.isEmpty == false ? trimmed : nil
+        }.first
+    }
+
+    private static func decoded(_ value: String) -> String {
+        value.removingPercentEncoding ?? value
+    }
+
+    private static func isHost(_ host: String, domain: String) -> Bool {
+        host == domain || host.hasSuffix("." + domain)
+    }
+}
+
 struct SocialEvidenceAtom {
     var source: SocialEvidenceSource
     var role: SocialEvidenceRole
