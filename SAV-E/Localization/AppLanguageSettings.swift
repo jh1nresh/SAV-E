@@ -200,7 +200,6 @@ enum SaveTextKey {
     case commands
     case loadingSubtitle
     case answerSubtitle
-    case placeDetailSubtitle
     case errorSubtitle
 }
 
@@ -341,8 +340,6 @@ enum SaveText {
             return localized(english: "You can cancel and keep using SAV-E.", traditionalChinese: "你可以取消，繼續使用 SAV-E。", language: language)
         case .answerSubtitle:
             return localized(english: "Back returns to commands.", traditionalChinese: "返回會回到指令列表。", language: language)
-        case .placeDetailSubtitle:
-            return localized(english: "Back returns to your command drawer.", traditionalChinese: "返回會回到 SAV-E 抽屜。", language: language)
         case .errorSubtitle:
             return localized(english: "Try again or return to commands.", traditionalChinese: "你可以再試一次，或回到指令列表。", language: language)
         }

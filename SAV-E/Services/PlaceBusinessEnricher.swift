@@ -1,10 +1,10 @@
 import Foundation
 import CoreLocation
 
-/// Shared business-details enrichment used by both `PlaceDetailView` and
-/// `PlaceBottomSheet` so they stay in sync. Resolves Google Places photo
-/// references / rating / price / hours for a place and returns an updated
-/// `Place` with the new values merged in (existing values win).
+/// Shared business-details enrichment for the canonical saved-place detail.
+/// Resolves Google Places photo references / rating / price / hours for a place
+/// and returns an updated `Place` with the new values merged in (existing
+/// values win).
 enum PlaceBusinessEnricher {
     struct Update {
         let photoURLs: [URL]

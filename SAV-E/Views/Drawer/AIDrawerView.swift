@@ -213,9 +213,6 @@ struct AIDrawerView: View {
                 case .idle:             drawerDetent = collapsedDrawerDetent
                 case .loading:          drawerDetent = .medium
                 case .error:            drawerDetent = .medium
-                case .placeDetail:      drawerDetent = .medium
-                case .reviewCandidateDetail: drawerDetent = .medium
-                case .mapCandidateDetail: drawerDetent = .medium
                 case .saveSearchResults: drawerDetent = .medium
                 case .displaying(let r):
                     drawerDetent = r.componentType == .tripItinerary ? .large : .medium
@@ -686,108 +683,6 @@ struct AIDrawerView: View {
                 .padding(.vertical, SaveTheme.Spacing.lg)
             }
 
-        case .placeDetail(let place):
-            ScrollView {
-                VStack(spacing: 12) {
-                    PlaceBottomSheet(place: place) {
-                        try await onDeletePlace(place)
-                        viewModel.removePlace(place)
-                        withAnimation(SaveTheme.Motion.standardSpring) {
-                            drawerDetent = collapsedDrawerDetent
-                        }
-                    } onPlanAround: {
-                        withAnimation { drawerDetent = .large }
-                        await viewModel.showPlanAround(
-                            anchor: place,
-                            reviewCandidates: reviewCandidates,
-                            outputLanguage: languageSettings.language
-                        )
-                    }
-
-                    AddToListPanel(
-                        title: "Add this Map Stamp to a list",
-                        lists: collaborativeLists.filter(\.canEdit),
-                        onCreateList: createListForPicker,
-                        onAddToList: { listID in
-                            do {
-                                try onAddPlaceToList(place, listID)
-                                addSpotStatus = "Added \(place.name) to list."
-                            } catch {
-                                addSpotStatus = error.localizedDescription
-                            }
-                        }
-                    )
-                }
-                .padding(SaveTheme.Spacing.lg)
-            }
-
-        case .reviewCandidateDetail(let candidate):
-            ScrollView {
-                ReviewCandidateDetailCard(
-                    candidate: candidate,
-                    captureTripName: captureTripName,
-                    isWorking: candidateActionInFlight == candidate.id,
-                    onFindExactPlace: {
-                        findExactPlace(for: candidate)
-                    },
-                    onSave: { nameOverride in
-                        performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
-                            try await onSaveCandidate(candidate, nameOverride)
-                            viewModel.returnToCommands()
-                            showSavedCategories = false
-                            showReviewInbox = false
-                            showLists = false
-                        }
-                    },
-                    onReject: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Removed from Review.", traditionalChinese: "已從待確認移除。")) {
-                            try await onRejectCandidate(candidate)
-                            viewModel.returnToCommands()
-                        }
-                    },
-                    onSaveSourceOnly: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Source kept without creating a Map Stamp.", traditionalChinese: "已保留來源，不會建立地圖章。")) {
-                            try await onSaveCandidateAsSourceOnly(candidate)
-                            openReviewInbox()
-                        }
-                    },
-                    onWrongBranch: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Marked as the wrong branch.", traditionalChinese: "已標記為錯誤分店。")) {
-                            try await onMarkCandidateWrongBranch(candidate)
-                            findExactPlace(for: candidate)
-                        }
-                    },
-                    onInvestigateMore: {
-                        performCandidateAction(candidate, successMessage: languageSettings.localized(english: "Kept in Review for more investigation.", traditionalChinese: "已留在待確認，等待進一步調查。")) {
-                            try await onInvestigateCandidateMore(candidate)
-                            addMoreClue(for: candidate)
-                        }
-                    }
-                )
-                .id(candidate.id)
-                .padding(SaveTheme.Spacing.lg)
-            }
-
-        case .mapCandidateDetail(let candidate):
-            ScrollView {
-                VStack(spacing: 12) {
-                    UnsavedMapCandidateCard(
-                        candidate: candidate,
-                        isWorking: mapCandidateActionInFlight == candidate.id,
-                        onSave: {
-                            performMapCandidateAction(candidate) {
-                                try await onSaveMapCandidate(candidate)
-                                viewModel.returnToCommands()
-                                showSavedCategories = false
-                                showReviewInbox = false
-                                showLists = false
-                            }
-                        }
-                    )
-                }
-                .padding(SaveTheme.Spacing.lg)
-            }
-
         case .error(let msg):
             VStack(spacing: 10) {
                 Spacer()
@@ -972,7 +867,7 @@ struct AIDrawerView: View {
         switch viewModel.drawerState {
         case .idle:
             return false
-        case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .mapCandidateDetail, .error:
+        case .loading, .displaying, .saveSearchResults, .error:
             return true
         }
     }
@@ -987,12 +882,6 @@ struct AIDrawerView: View {
             return response.title ?? languageSettings.text(.answer)
         case .saveSearchResults:
             return "SAV-E results"
-        case .placeDetail(let place):
-            return place.name
-        case .reviewCandidateDetail(let candidate):
-            return candidate.name
-        case .mapCandidateDetail(let candidate):
-            return candidate.title
         case .error:
             return languageSettings.text(.couldntFinish)
         }
@@ -1008,12 +897,6 @@ struct AIDrawerView: View {
             return languageSettings.text(.answerSubtitle)
         case .saveSearchResults:
             return "Memory first, public discovery separate"
-        case .placeDetail:
-            return languageSettings.text(.placeDetailSubtitle)
-        case .reviewCandidateDetail(let candidate):
-            return candidate.hasReliableCoordinates ? "Map-ready Review Candidate" : "Needs address confirmation"
-        case .mapCandidateDetail:
-            return "Visible map place · not saved yet"
         case .error:
             return languageSettings.text(.errorSubtitle)
         }
@@ -1062,7 +945,7 @@ struct AIDrawerView: View {
         switch viewModel.drawerState {
         case .idle:
             return false
-        case .loading, .displaying, .saveSearchResults, .placeDetail, .reviewCandidateDetail, .mapCandidateDetail, .error:
+        case .loading, .displaying, .saveSearchResults, .error:
             return true
         }
     }
@@ -1948,7 +1831,6 @@ struct AIDrawerView: View {
 
     private func openSavedPlace(_ place: Place) {
         prepareMapDetailOpening()
-        viewModel.showPlace(place)
         viewModel.returnToCommands()
         mapDetailDrawerItem = .savedPlace(place)
         withAnimation(SaveTheme.Motion.standardSpring) {
@@ -1958,7 +1840,6 @@ struct AIDrawerView: View {
 
     private func openReviewCandidateDetail(_ candidate: PlaceReviewCandidate) {
         prepareMapDetailOpening()
-        viewModel.showReviewCandidate(candidate)
         viewModel.returnToCommands()
         mapDetailDrawerItem = .reviewCandidate(candidate)
         withAnimation(SaveTheme.Motion.standardSpring) {
@@ -1968,7 +1849,6 @@ struct AIDrawerView: View {
 
     private func openMapCandidateDetail(_ candidate: SaveMapCandidate) {
         prepareMapDetailOpening()
-        viewModel.showMapCandidate(candidate)
         viewModel.returnToCommands()
         mapDetailDrawerItem = .unsavedCandidate(candidate)
         withAnimation(SaveTheme.Motion.standardSpring) {
@@ -2120,7 +2000,7 @@ struct AIDrawerView: View {
                     english: "No exact map match found for \(candidate.name). Add a city, address, or map link as another clue.",
                     traditionalChinese: "找不到「\(candidate.name)」的精確地點。請再補城市、地址或地圖連結作為線索。"
                 )
-                viewModel.showReviewCandidate(candidate)
+                openReviewCandidateDetail(candidate)
             } else {
                 viewModel.mapCandidates = candidates
                 addSpotStatus = languageSettings.localized(
@@ -2512,6 +2392,8 @@ private struct MapDetailDrawerView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("place.detail.root")
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -2598,6 +2480,7 @@ private struct MapDetailDrawerView: View {
                             try await onFindRelatedSources(selectedPlace)
                         }
                     )
+                    .id(place.id)
 
                     AddToListPanel(
                         title: languageSettings.localized(english: "Add this Map Stamp to a list", traditionalChinese: "將這個地圖章加入清單"),
@@ -3085,20 +2968,29 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var editAddress = ""
     @State private var editError: String?
     @State private var isEnrichingBusinessDetails = false
+    @State private var localVisibility: PlaceVisibility?
+    @State private var isUpdatingVisibility = false
+    @State private var visibilityError: String?
 
     private var detailPlace: Place {
+        var value = place
         if let enrichedPlace, enrichedPlace.id == place.id {
-            return enrichedPlace
+            value = enrichedPlace
         }
-        return place
+        if let localVisibility {
+            value.visibility = localVisibility
+        }
+        return value
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PlaceBusinessPhotoCarousel(
-                imageURLs: detailPlace.businessPhotoURLStrings,
-                isSearching: isEnrichingBusinessDetails
-            )
+            if !detailPlace.businessPhotoURLStrings.isEmpty {
+                PlaceBusinessPhotoCarousel(
+                    imageURLs: detailPlace.businessPhotoURLStrings,
+                    isSearching: isEnrichingBusinessDetails
+                )
+            }
 
             FlowLayout(spacing: 8) {
                 CategoryPill(category: detailPlace.category, isSelected: true)
@@ -3112,17 +3004,6 @@ private struct SavedMapDetailDrawerContent: View {
                     MapDetailChip(icon: chip.icon, text: chip.text)
                 }
             }
-
-            PlaceBasicInfoPanel(place: detailPlace)
-            PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
-            if isEditingPlace {
-                placeEditor
-            }
-
-            RelatedPlaceSourcesPanel(
-                place: detailPlace,
-                discover: onFindRelatedSources
-            )
 
             Button(action: onAddToTrip) {
                 Label(
@@ -3142,6 +3023,9 @@ private struct SavedMapDetailDrawerContent: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("drawer.saved.addToTrip")
+
+            PlaceBasicInfoPanel(place: detailPlace)
+            PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
 
             HStack(spacing: 8) {
                 Button(action: onPlanAroundPlace) {
@@ -3163,18 +3047,28 @@ private struct SavedMapDetailDrawerContent: View {
                 }
             }
 
-            Button(action: beginPlaceEdit) {
-                PlaceDetailActionLabel(
-                    title: isEditingPlace
-                        ? languageSettings.localized(english: "Editing", traditionalChinese: "編輯中")
-                        : languageSettings.text(.edit),
-                    systemImage: "pencil",
-                    fill: Color.saveNotebookPage
-                )
+            if isEditingPlace {
+                placeEditor
             }
-            .disabled(isSavingPlaceEdit)
 
             Menu {
+                Button(action: beginPlaceEdit) {
+                    Label(languageSettings.text(.edit), systemImage: "pencil")
+                }
+
+                Section(languageSettings.localized(english: "Visibility", traditionalChinese: "可見範圍")) {
+                    ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
+                        Button {
+                            Task { await updateVisibility(visibility) }
+                        } label: {
+                            Label(
+                                visibility.displayName(language: languageSettings.language),
+                                systemImage: visibility.systemImage
+                            )
+                        }
+                    }
+                }
+
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
@@ -3184,8 +3078,7 @@ private struct SavedMapDetailDrawerContent: View {
                 Label(languageSettings.localized(english: "More", traditionalChinese: "更多"), systemImage: "ellipsis.circle")
                     .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.saveNotebookPage.opacity(0.24))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
@@ -3193,6 +3086,13 @@ private struct SavedMapDetailDrawerContent: View {
                             .stroke(Color.saveNotebookLine.opacity(0.3), lineWidth: 1)
                     )
             }
+            .disabled(isSavingPlaceEdit || isUpdatingVisibility)
+            .accessibilityIdentifier("drawer.saved.more")
+
+            RelatedPlaceSourcesPanel(
+                place: detailPlace,
+                discover: onFindRelatedSources
+            )
 
             if let deleteError {
                 Text(deleteError)
@@ -3203,6 +3103,11 @@ private struct SavedMapDetailDrawerContent: View {
                 Text(editError)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.red)
+            }
+            if let visibilityError {
+                Text(visibilityError)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveError)
             }
         }
         .confirmationDialog(
@@ -3287,6 +3192,22 @@ private struct SavedMapDetailDrawerContent: View {
         editAddress = detailPlace.address
         editError = nil
         isEditingPlace = true
+    }
+
+    private func updateVisibility(_ visibility: PlaceVisibility) async {
+        guard visibility != detailPlace.effectiveVisibility else { return }
+        let previousVisibility = localVisibility
+        isUpdatingVisibility = true
+        visibilityError = nil
+        localVisibility = visibility
+        defer { isUpdatingVisibility = false }
+
+        do {
+            try await onUpdateVisibility(visibility)
+        } catch {
+            localVisibility = previousVisibility
+            visibilityError = error.localizedDescription
+        }
     }
 
     private func savePlaceEdit() {
@@ -4162,7 +4083,6 @@ private struct SavedPlacesEmptyState: View {
 
 private struct ReviewCandidatesSection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
     var title: String? = nil
     var candidates: [PlaceReviewCandidate]
     var limit: Int? = 4
@@ -4187,15 +4107,10 @@ private struct ReviewCandidatesSection: View {
                         }
                     }
                 }
-                .background {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.regularMaterial)
-                        .overlay(groupTint)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.12), lineWidth: 1)
+                .saveNotebookSurface(
+                    cornerRadius: 22,
+                    opacity: 0.88,
+                    strokeOpacity: 0.24
                 )
             }
         }
@@ -4217,10 +4132,6 @@ private struct ReviewCandidatesSection: View {
                 .foregroundColor(.saveCocoa.opacity(0.78))
         }
         .padding(.horizontal, 2)
-    }
-
-    private var groupTint: Color {
-        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.58) : Color.white.opacity(0.30)
     }
 
     private var displayedCandidates: [PlaceReviewCandidate] {
@@ -4253,14 +4164,9 @@ private struct ReviewCandidatePlaceRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
-                SaveIconTile(
-                    systemName: candidate.status == "source_only" ? "tray.full.fill" : "mappin.circle.fill",
-                    size: 42,
-                    iconSize: 22,
-                    fill: Color.saveCoral.opacity(0.72),
-                    foreground: .saveInk,
-                    strokeOpacity: 0.32,
-                    cornerRadius: 13
+                SaveMemoryBadge(
+                    state: candidate.status == "source_only" ? .clue : .ready,
+                    size: 42
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -4420,7 +4326,7 @@ private struct ReviewCandidateDetailCard: View {
                     CandidateActionButton(
                         title: primaryActionTitle,
                         systemImage: primaryAction.systemImage,
-                        fill: .saveHoney,
+                        fill: .saveCoral,
                         disabled: isWorking,
                         action: performPrimaryAction
                     )
@@ -4475,7 +4381,7 @@ private struct ReviewCandidateDetailCard: View {
 
     private var primaryActionTitle: String {
         if primaryAction.confirmsMapStamp {
-            return languageSettings.localized(english: "Confirm & save", traditionalChinese: "確認並收藏")
+            return languageSettings.localized(english: "Confirm candidate", traditionalChinese: "確認地點")
         }
         return primaryAction.kind.displayName(language: languageSettings.language)
     }
@@ -4675,16 +4581,11 @@ private struct ReviewCandidateContextHero: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
-                .overlay(Color.saveNotebookPage.opacity(0.34))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1)
+        .saveNotebookSurface(
+            cornerRadius: 14,
+            opacity: 0.82,
+            strokeOpacity: 0.28
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder

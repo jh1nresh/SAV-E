@@ -19,9 +19,6 @@ final class AIDrawerViewModel: ObservableObject {
         case loading
         case displaying(SaveAIResponse)
         case saveSearchResults(SaveSearchResponse)
-        case placeDetail(Place)
-        case reviewCandidateDetail(PlaceReviewCandidate)
-        case mapCandidateDetail(SaveMapCandidate)
         case error(String)
     }
 
@@ -198,20 +195,8 @@ final class AIDrawerViewModel: ObservableObject {
         }
     }
 
-    func showPlace(_ place: Place) {
-        drawerState = .placeDetail(place)
-        mapAction = MapActionData(type: .focusRegion, placeIds: nil,
-                                  lat: place.latitude, lng: place.longitude, span: 0.01)
-    }
-
     func showSearchResult(_ result: SaveSearchResult) {
         switch result.objectType {
-        case .savedPlace, .triedMemory:
-            guard let place = place(for: result) else { return }
-            showPlace(place)
-        case .mapVisibleUnsavedPlace:
-            guard let candidate = mapCandidate(for: result) else { return }
-            showMapCandidate(candidate)
         case .pendingCandidate, .sourceOnlyClue:
             showSearchResultFallback(result)
         default:
@@ -247,25 +232,8 @@ final class AIDrawerViewModel: ObservableObject {
         ))
     }
 
-    func showReviewCandidate(_ candidate: PlaceReviewCandidate) {
-        drawerState = .reviewCandidateDetail(candidate)
-        if let latitude = candidate.latitude, let longitude = candidate.longitude {
-            mapAction = MapActionData(type: .focusRegion, placeIds: nil,
-                                      lat: latitude, lng: longitude, span: 0.01)
-        }
-    }
-
-    func showMapCandidate(_ candidate: SaveMapCandidate) {
-        drawerState = .mapCandidateDetail(candidate)
-        mapAction = MapActionData(type: .focusRegion, placeIds: nil,
-                                  lat: candidate.latitude, lng: candidate.longitude, span: 0.01)
-    }
-
     func removePlace(_ place: Place) {
         places.removeAll { $0.id == place.id }
-        if case .placeDetail(let selected) = drawerState, selected.id == place.id {
-            drawerState = .idle
-        }
         mapAction = MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil)
     }
 
@@ -418,19 +386,6 @@ final class AIDrawerViewModel: ObservableObject {
     func resolvePlace(id: String?) -> Place? {
         guard let id, let uuid = UUID(uuidString: id) else { return nil }
         return places.first { $0.id == uuid }
-    }
-
-    private func place(for result: SaveSearchResult) -> Place? {
-        guard result.id.hasPrefix("place-") else { return nil }
-        let rawID = String(result.id.dropFirst("place-".count))
-        guard let uuid = UUID(uuidString: rawID) else { return nil }
-        return places.first { $0.id == uuid }
-    }
-
-    private func mapCandidate(for result: SaveSearchResult) -> SaveMapCandidate? {
-        guard result.id.hasPrefix("map-candidate-") else { return nil }
-        let rawID = String(result.id.dropFirst("map-candidate-".count))
-        return mapCandidates.first { $0.id == rawID }
     }
 
     private func mapAction(for response: SaveSearchResponse) -> MapActionData? {

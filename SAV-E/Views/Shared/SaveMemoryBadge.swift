@@ -51,7 +51,7 @@ struct SaveMemoryBadge: View {
         case .clue:
             return .saveNotebookPage
         case .ready:
-            return .saveHoney
+            return .saveCoral
         case .saved(let category):
             return Color.saveStampColor(for: category)
         }
@@ -84,7 +84,7 @@ struct SaveMemoryBadge: View {
         case .clue:
             return Color.saveNotebookLine.opacity(0.45)
         case .ready:
-            return Color.saveCocoa.opacity(0.28)
+            return Color.saveCoralInk.opacity(0.56)
         case .saved(let category):
             return Color.saveStampColor(for: category).opacity(0.72)
         }
@@ -95,7 +95,7 @@ struct SaveMemoryBadge: View {
         case .clue:
             return .saveCocoa
         case .ready:
-            return .saveHoney
+            return .saveCoral
         case .saved(let category):
             return Color.saveStampColor(for: category)
         }
