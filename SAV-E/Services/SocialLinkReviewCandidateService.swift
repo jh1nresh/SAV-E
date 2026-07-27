@@ -1071,6 +1071,7 @@ final class SocialLinkReviewCandidateService {
             .placesFound
             .filter { $0.displayName != "Address-only place clue" }
             .map { pendingReviewCandidate(from: $0, sourceURL: sourceURL, sourceText: evidenceText) }
+            .map(markAsAnalyzedCandidate)
         let heuristicCandidates = analyzedCandidates(from: evidenceText, sourceURL: sourceURL)
         return rankedCandidates(parserCandidates + heuristicCandidates)
     }
@@ -1176,6 +1177,7 @@ final class SocialLinkReviewCandidateService {
             guard let candidate = candidateNameFromCaptionLine(line),
                   isLikelyCaptionPlaceName(candidate),
                   !looksLikeAddressLine(candidate),
+                  !looksLikeCityOnlyAddress(candidate),
                   !looksLikeMarketingLine(candidate) else { continue }
             return candidate
         }
@@ -3353,7 +3355,10 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func looksLikeCityOnlyAddress(_ value: String) -> Bool {
-        value.range(of: #"^[A-Za-z .'-]{2,40},\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO)$"#, options: .regularExpression) != nil
+        value.range(
+            of: #"^[A-Za-z .'-]{2,40},\s*(?:CA|NY|TX|FL|WA|IL|NV|AZ|OR|MA|HI|UT|CO|Taiwan|Japan)$"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
     }
 
     private func cleanMarkedCandidateName(_ value: String) -> String {

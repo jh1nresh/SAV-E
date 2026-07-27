@@ -73,6 +73,12 @@ final class PrivyAuthService: ObservableObject {
         self.appId = appId
         self.clientId = clientId
 
+        if ReviewDemo.isOfflineUITestMode {
+            self.privy = nil
+            self.authState = .unauthenticated
+            return
+        }
+
         guard !appId.isEmpty, !clientId.isEmpty else {
             self.privy = nil
             self.authState = .unauthenticated
@@ -172,7 +178,12 @@ final class PrivyAuthService: ObservableObject {
     /// Never throws — if the network call fails we still enter local-only demo so
     /// the reviewer is never blocked at the door.
     func enterReviewerDemo() async {
-        let guestToken = await fetchGuestToken()
+        let guestToken: String?
+        if ReviewDemo.isOfflineUITestMode {
+            guestToken = nil
+        } else {
+            guestToken = await fetchGuestToken()
+        }
         isReviewerDemo = true
         demoGuestToken = guestToken
         ReviewDemoGuestTokenHolder.shared.set(demoGuestToken)

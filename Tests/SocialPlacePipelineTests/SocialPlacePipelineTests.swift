@@ -3052,6 +3052,31 @@ final class SocialPlacePipelineTests: XCTestCase {
     func testSocialPipelineRegressionCasesStayStable() {
         let service = SocialLinkReviewCandidateService()
 
+        let niuYu = service.reviewCandidates(
+            fromEvidenceText: """
+            4foodie Victoria & Ava 還有她們的夥伴們 on Instagram: "當熱炒在吃的火鍋店😂😂
+            📍Taipei, Taiwan
+            牛寓 / 以下餐點及價位
+            泡椒辣炒脆牛心 $320
+            美味程度：🌕🌕🌕🌕🌕
+            💡補充💡我的第一名！不敢吃牛心的人也會愛！點就對了，請先打電話預訂！中辣～
+
+            自家醃製酸高麗炒牛肉 $350
+            美味程度：🌕🌕🌕🌕🌖
+            整體
+            環境衛生：🌕🌕🌕🌕🌑
+            服務態度：🌕🌕🌕🌕🌑
+            再訪意願：🌕🌕🌕🌕🌖
+            🗺台北市松山區民權東路三段106巷3弄51號
+            "
+            """,
+            sourceURL: "https://www.instagram.com/reel/DYZqnVMxt_0/"
+        )
+        XCTAssertEqual(niuYu.first?.candidateName, "牛寓")
+        XCTAssertNotEqual(niuYu.first?.candidateName, "整體")
+        XCTAssertNotEqual(niuYu.first?.candidateName, "自家醃製酸高麗炒牛肉 $350")
+        XCTAssertTrue(niuYu.first?.evidence.contains(where: { $0.contains("Analysis pipeline") }) == true)
+
         let yakiniku = service.reviewCandidates(
             fromEvidenceText: """
             4foodie Victoria & Ava 還有她們的夥伴們 on Instagram: "📍Tokyo, Japan
@@ -3067,6 +3092,23 @@ final class SocialPlacePipelineTests: XCTestCase {
         )
         XCTAssertEqual(yakiniku.first?.candidateName, "YAKINIKU 37west NY")
         XCTAssertNotEqual(yakiniku.first?.candidateName, "再訪意願：🌕🌕🌕🌕🌗")
+        XCTAssertTrue(yakiniku.first?.evidence.contains(where: { $0.contains("Analysis pipeline") }) == true)
+
+        let mikan = service.reviewCandidates(
+            fromEvidenceText: """
+            @mikantaichung
+            #台中美食 #壽喜燒
+            勤美附近
+            棉花糖壽喜燒
+            關西、關東兩種風格
+            """,
+            sourceURL: "https://www.instagram.com/p/DX_cUWNmNxH/"
+        )
+        XCTAssertEqual(mikan.first?.candidateName, "蜜柑 關西風壽喜燒")
+        XCTAssertNotEqual(mikan.first?.candidateName, "Mikantaichung")
+        XCTAssertNotEqual(mikan.first?.candidateName, "勤美附近")
+        XCTAssertNotEqual(mikan.first?.candidateName, "棉花糖壽喜燒")
+        XCTAssertTrue(mikan.first?.evidence.contains(where: { $0.contains("Analysis pipeline") }) == true)
 
         let ushigoro = service.reviewCandidates(
             fromEvidenceText: """

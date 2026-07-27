@@ -166,6 +166,7 @@ struct ContentView: View {
             )) {
                 isCreatingTripForAssignment = true
             }
+            .accessibilityIdentifier("saved.addToTrip.create")
             Button(
                 languageSettings.localized(
                     english: "Keep in SAV-E only",
@@ -235,7 +236,9 @@ struct ContentView: View {
         .task {
             drawerVM.places = mapVM.places
             drawerVM.mapCandidates = mapVM.mapCandidates
-            await drawerVM.loadMemoryPreferences()
+            if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
+                await drawerVM.loadMemoryPreferences()
+            }
             await mapVM.loadPlaces()
             await tripStore.load()
             if storageScope == .reviewerDemo {

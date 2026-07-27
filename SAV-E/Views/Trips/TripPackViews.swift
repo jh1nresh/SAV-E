@@ -232,7 +232,9 @@ struct NewTripPackView: View {
             Form {
                 Section {
                     TextField(localized("Trip name", "行程名稱"), text: $name)
+                        .accessibilityIdentifier("trip.create.name")
                     TextField(localized("City or area", "城市或區域"), text: $city)
+                        .accessibilityIdentifier("trip.create.city")
                 }
                 .saveNotebookListRow()
                 Section {
@@ -271,9 +273,11 @@ struct NewTripPackView: View {
                         }
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
+                    .accessibilityIdentifier("trip.create.submit")
                 }
             }
         }
+        .accessibilityIdentifier("trip.create.sheet")
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {

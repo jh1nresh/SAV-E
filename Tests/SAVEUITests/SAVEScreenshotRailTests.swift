@@ -371,6 +371,95 @@ final class SAVEScreenshotRailTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch() throws {
+        let storageID = UUID().uuidString.lowercased()
+        let tripName = "Link Trip \(storageID.prefix(8))"
+        let placeName = "Quarter Sheets Pizza Club"
+        let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
+        let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
+            "-save.appLanguage", "en",
+        ]
+
+        app.launch()
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+
+        let capture = app.buttons["home.capture"]
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+
+        let commandField = app.textFields["drawer.commandField"]
+        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
+        commandField.tap()
+        commandField.typeText(mapURL)
+        let submitCommand = app.buttons["drawer.submitCommand"]
+        XCTAssertTrue(submitCommand.waitForExistence(timeout: stepTimeout))
+        submitCommand.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.review.root"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        let candidate = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'drawer.review.candidate.place.'")
+        ).firstMatch
+        XCTAssertTrue(
+            candidate.waitForExistence(timeout: 20),
+            "Expected a map-ready Review Candidate.\n\(app.debugDescription)"
+        )
+        candidate.tap()
+
+        let placeDetailScroll = app.scrollViews["place.detail.scroll"]
+        XCTAssertTrue(placeDetailScroll.waitForExistence(timeout: stepTimeout))
+        let confirmCandidate = app.buttons["drawer.review.primaryAction"]
+        XCTAssertTrue(
+            scrollUntilHittable(confirmCandidate, in: placeDetailScroll),
+            "Confirm candidate never became tappable.\n\(app.debugDescription)"
+        )
+        confirmCandidate.tap()
+
+        let createTripAndAdd = app.buttons
+            .matching(identifier: "saved.addToTrip.create")
+            .firstMatch
+        XCTAssertTrue(createTripAndAdd.waitForExistence(timeout: stepTimeout))
+        createTripAndAdd.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["trip.create.sheet"].waitForExistence(timeout: stepTimeout))
+        let tripNameField = app.textFields["trip.create.name"]
+        XCTAssertTrue(tripNameField.waitForExistence(timeout: stepTimeout))
+        tripNameField.tap()
+        tripNameField.typeText(tripName)
+        let cityField = app.textFields["trip.create.city"]
+        cityField.tap()
+        cityField.typeText("Los Angeles")
+        app.buttons["trip.create.submit"].tap()
+
+        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].waitForExistence(timeout: 10))
+        try assertSavedPlaceAndTripStopPersist(
+            app: app,
+            placeName: placeName,
+            tripName: tripName
+        )
+
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
+        app.launch()
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        try assertSavedPlaceAndTripStopPersist(
+            app: app,
+            placeName: placeName,
+            tripName: tripName
+        )
+    }
+
     // MARK: - Demo sign-in
 
     /// Types the App Review demo email + code (native SwiftUI fields — the
@@ -412,6 +501,38 @@ final class SAVEScreenshotRailTests: XCTestCase {
         verify.tap()
     }
 
+    @MainActor
+    private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
+        let emailField = app.textFields["signin.emailField"]
+        if !emailField.waitForExistence(timeout: 20) {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout),
+                "Email sign-in and Home were both unavailable."
+            )
+            return
+        }
+
+        emailField.tap()
+        emailField.typeText("appreview@wanderly.app")
+        dismissKeyboard(app: app)
+
+        let sendCode = app.buttons["signin.sendCode"]
+        XCTAssertTrue(sendCode.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(sendCode.isHittable)
+        sendCode.tap()
+
+        let codeField = app.textFields["signin.codeField"]
+        XCTAssertTrue(codeField.waitForExistence(timeout: stepTimeout))
+        codeField.tap()
+        codeField.typeText("424242")
+        dismissKeyboard(app: app)
+
+        let verify = app.buttons["signin.verify"]
+        XCTAssertTrue(verify.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(verify.isHittable)
+        verify.tap()
+    }
+
     /// Taps the keyboard-toolbar Done button (signin.keyboardDone) so the
     /// buttons hidden underneath the keyboard become hittable again. No-op if
     /// the software keyboard isn't showing (e.g. hardware keyboard connected).
@@ -446,6 +567,65 @@ final class SAVEScreenshotRailTests: XCTestCase {
             field.typeKey("a", modifierFlags: .command)
         }
         field.typeText(replacement)
+    }
+
+    @MainActor
+    private func scrollUntilHittable(_ element: XCUIElement, in scrollView: XCUIElement) -> Bool {
+        for _ in 0..<5 {
+            if element.exists, element.isHittable { return true }
+            scrollView.swipeUp()
+        }
+        return element.exists && element.isHittable
+    }
+
+    @MainActor
+    private func assertSavedPlaceAndTripStopPersist(
+        app: XCUIApplication,
+        placeName: String,
+        tripName: String
+    ) throws {
+        openRootTab("Saves", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let savedPlace = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@",
+                placeName
+            )
+        ).firstMatch
+        XCTAssertTrue(scrollUntilExists(savedPlace, app: app), "Saved Map Stamp is missing.")
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        let tripCard = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'trips.card.' AND label CONTAINS[c] %@",
+                tripName
+            )
+        ).firstMatch
+        XCTAssertTrue(scrollUntilExists(tripCard, app: app), "Created Trip is missing.")
+        tripCard.tap()
+
+        XCTAssertTrue(app.tabBars.buttons["Plan"].waitForExistence(timeout: stepTimeout))
+        let tripStop = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'trip.stop.' AND identifier ENDSWITH '.edit' AND label == %@",
+                "Edit \(placeName)"
+            )
+        ).firstMatch
+        XCTAssertTrue(scrollUntilExists(tripStop, app: app), "Confirmed Trip stop is missing.")
+
+        let backButton = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(backButton.waitForExistence(timeout: stepTimeout))
+        backButton.tap()
+    }
+
+    @MainActor
+    private func scrollUntilExists(_ element: XCUIElement, app: XCUIApplication) -> Bool {
+        for _ in 0..<6 {
+            if element.waitForExistence(timeout: 1) { return true }
+            app.swipeUp()
+        }
+        return element.waitForExistence(timeout: 1)
     }
 
     /// Dismisses the system location permission alert if it is on screen.

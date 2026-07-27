@@ -404,6 +404,7 @@ final class MapViewModel: ObservableObject {
     private let saveSearchIntentParser: SaveSearchIntentParser
     private let collaborativeListStore: SaveCollaborativeListStore
     private let referralHandoffStore: SaveReferralHandoffStore
+    private let usesRemotePersistence: Bool
     private var importedPendingKeys: Set<String> = []
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
@@ -428,7 +429,8 @@ final class MapViewModel: ObservableObject {
         saveSearchIntentParser: SaveSearchIntentParser = SaveSearchIntentParser(),
         collaborativeListStore: SaveCollaborativeListStore = .shared,
         referralHandoffStore: SaveReferralHandoffStore = .shared,
-        relatedPlaceSourcesService: RelatedPlaceSourcesProviding = SupabaseService.shared
+        relatedPlaceSourcesService: RelatedPlaceSourcesProviding = SupabaseService.shared,
+        usesRemotePersistence: Bool = true
     ) {
         self.supabaseService = supabaseService
         self.relatedPlaceSourcesService = relatedPlaceSourcesService
@@ -444,6 +446,7 @@ final class MapViewModel: ObservableObject {
         self.saveSearchIntentParser = saveSearchIntentParser
         self.collaborativeListStore = collaborativeListStore
         self.referralHandoffStore = referralHandoffStore
+        self.usesRemotePersistence = usesRemotePersistence
         self.collaborativeLists = collaborativeListStore.load()
     }
 
@@ -510,6 +513,13 @@ final class MapViewModel: ObservableObject {
             hasLoadedPlaces = true
         }
 
+        if !usesRemotePersistence {
+            places = localConfirmedPlaces()
+            reviewCandidates = localReviewCandidates()
+            socialPlaces = []
+            return
+        }
+
         guard let userId = authService.currentUserId else {
             places = mergeRemotePlaces([], withLocalPlaces: localConfirmedPlaces())
             importPendingPlacesForLocalUse()
@@ -546,6 +556,12 @@ final class MapViewModel: ObservableObject {
             return
         }
         guard !isLoadingPlaces else { return }
+
+        if !usesRemotePersistence {
+            places = localConfirmedPlaces()
+            reviewCandidates = localReviewCandidates()
+            return
+        }
 
         guard let userId = authService.currentUserId else {
             importPendingPlacesForLocalUse()
@@ -594,6 +610,15 @@ final class MapViewModel: ObservableObject {
             return try saveLocalVaultService.confirmedPlaces(limit: 500)
         } catch {
             print("MapViewModel: failed to load local confirmed places: \(error)")
+            return []
+        }
+    }
+
+    private func localReviewCandidates() -> [PlaceReviewCandidate] {
+        do {
+            return try saveLocalVaultService.reviewCandidates(limit: 500)
+        } catch {
+            print("MapViewModel: failed to load local review candidates: \(error)")
             return []
         }
     }
@@ -721,7 +746,39 @@ final class MapViewModel: ObservableObject {
             throw URLError(.badURL)
         }
         _ = try? saveLocalVaultService.saveSourceOnly(url: sourceURL)
-        let candidates = await socialLinkReviewCandidateService.reviewCandidates(fromSharedText: analysisInput)
+        let candidates: [PendingReviewCandidate]
+        if !usesRemotePersistence {
+            candidates = socialLinkReviewCandidateService.reviewCandidatesOrSourceOnly(
+                fromEvidenceText: normalizedShare.captionEvidence,
+                sourceURL: sourceURL.absoluteString
+            )
+            let importedCandidates = try candidates.map { pendingCandidate in
+                let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
+                return PlaceReviewCandidate(
+                    id: record.id,
+                    captureId: nil,
+                    name: pendingCandidate.candidateName,
+                    address: pendingCandidate.address,
+                    city: nil,
+                    latitude: pendingCandidate.latitude,
+                    longitude: pendingCandidate.longitude,
+                    evidence: pendingCandidate.evidence,
+                    confidence: pendingCandidate.confidence,
+                    missingInfo: pendingCandidate.missingInfo,
+                    status: pendingCandidate.isSourceOnly ? "source_only" : "review",
+                    createdAt: pendingCandidate.savedAt,
+                    placeHighlights: pendingCandidate.placeHighlights,
+                    recommendedItems: pendingCandidate.recommendedItems,
+                    vibeTags: pendingCandidate.vibeTags,
+                    accessNotes: pendingCandidate.accessNotes,
+                    sourceHandle: pendingCandidate.sourceHandle
+                )
+            }
+            reviewCandidates = importedCandidates + reviewCandidates
+            return importedCandidates.map(\.id)
+        }
+
+        candidates = await socialLinkReviewCandidateService.reviewCandidates(fromSharedText: analysisInput)
         var importedCandidateIDs: [UUID] = []
         for candidate in candidates {
             mirrorToLocalVault(candidate)
@@ -816,12 +873,42 @@ final class MapViewModel: ObservableObject {
         guard let userId = authService.currentUserId else {
             throw SupabaseError.notAuthenticated
         }
+        guard candidate.status != "source_only" else {
+            throw ReviewCandidateError.needsReliableCoordinates
+        }
 
-        let refinedMatch = try await refinedMatchIfNeeded(for: candidate)
+        let refinedMatch: GooglePlaceMatch?
+        if usesRemotePersistence {
+            refinedMatch = try await refinedMatchIfNeeded(for: candidate)
+        } else {
+            refinedMatch = nil
+        }
         let place = Place.from(candidate, refinedMatch: refinedMatch, nameOverride: nameOverride)
 
         guard place.latitude != 0 || place.longitude != 0 else {
             throw ReviewCandidateError.needsReliableCoordinates
+        }
+
+        if !usesRemotePersistence {
+            if let existing = existingSavedPlace(matching: place) {
+                try saveLocalVaultService.removeReviewCandidate(candidate.id)
+                reviewCandidates.removeAll { $0.id == candidate.id }
+                if selectedReviewCandidate?.id == candidate.id {
+                    selectedReviewCandidate = nil
+                }
+                focusSavedPlace(existing, showStampMoment: false)
+                return existing
+            }
+
+            _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            try saveLocalVaultService.removeReviewCandidate(candidate.id)
+            places = [place] + places
+            reviewCandidates.removeAll { $0.id == candidate.id }
+            if selectedReviewCandidate?.id == candidate.id {
+                selectedReviewCandidate = nil
+            }
+            revealImportedPlaces([place])
+            return place
         }
 
         if let existing = existingSavedPlace(matching: place) {
