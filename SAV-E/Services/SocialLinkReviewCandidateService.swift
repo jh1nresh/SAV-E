@@ -714,9 +714,8 @@ final class SocialLinkReviewCandidateService {
             var unresolved = candidate
             let failureMessages = containsCJK(query)
                 ? [
-                    PlaceMatchProvider.googlePlaces.refinementFailureMessage,
-                    PlaceMatchProvider.amap.refinementFailureMessage,
-                    PlaceMatchProvider.baidu.refinementFailureMessage
+                    PlaceMatchProvider.appleMaps.refinementFailureMessage,
+                    PlaceMatchProvider.googlePlaces.refinementFailureMessage
                 ]
                 : [PlaceMatchProvider.googlePlaces.refinementFailureMessage]
             unresolved.missingInfo = appendUnique(
@@ -1242,6 +1241,13 @@ final class SocialLinkReviewCandidateService {
             .filter { !$0.isEmpty }
         for urlString in mapURLStrings {
             guard let match = ChinaMapDeepLinkParser.match(from: urlString) else { continue }
+            let hasAppleCompatibleCoordinates = match.coordinateSystem == .wgs84
+            let coordinateEvidence = hasAppleCompatibleCoordinates
+                ? "Verified \(match.coordinateEvidenceLabel): \(match.latitude), \(match.longitude)"
+                : "\(match.provider.displayName) reference coordinates (\(match.coordinateSystem.rawValue)): \(match.latitude), \(match.longitude)"
+            let missingFields = hasAppleCompatibleCoordinates
+                ? ["User confirmation required"]
+                : ["Apple Maps match", "WGS84 coordinates", "User confirmation required"]
             let diagnostic = SocialPlaceEvidenceDiagnostic(
                 found: appendUnique(
                     [],
@@ -1249,31 +1255,38 @@ final class SocialLinkReviewCandidateService {
                         "Source URL: \(sourceURL)",
                         "Direct \(match.provider.displayName) map link: \(match.name)",
                         match.address.isEmpty ? "" : "Verified address: \(match.address)",
-                        "Verified coordinates: \(match.latitude), \(match.longitude)",
+                        coordinateEvidence,
                         "Coordinate system: \(match.coordinateSystem.rawValue)"
                     ]
                 ),
                 attempts: appendUnique(
                     analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
-                    ["Parsed shared map deep link before public metadata recovery"]
+                    [
+                        "Parsed shared map deep link before public metadata recovery",
+                        hasAppleCompatibleCoordinates
+                            ? "Kept explicit WGS84 coordinates for confirmation"
+                            : "Kept provider coordinates as reference evidence and queued Apple Maps refinement"
+                    ]
                 ),
-                missingFields: [],
-                nextBestClue: "Confirm this \(match.provider.displayName) deep-link match before saving it as a Map Stamp."
+                missingFields: missingFields,
+                nextBestClue: hasAppleCompatibleCoordinates
+                    ? "Confirm this \(match.provider.displayName) deep-link match before saving it as a Map Stamp."
+                    : "Confirm the Apple Maps match before saving this \(match.provider.displayName) clue as a Map Stamp."
             )
             return PendingReviewCandidate(
                 candidateName: match.name,
                 address: match.address,
                 category: category(from: "\(match.name) \(match.address)"),
-                latitude: match.latitude,
-                longitude: match.longitude,
+                latitude: hasAppleCompatibleCoordinates ? match.latitude : nil,
+                longitude: hasAppleCompatibleCoordinates ? match.longitude : nil,
                 sourceURL: sourceURL,
                 sourceText: evidenceText.isEmpty ? nil : evidenceText,
-                evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.provider.rawValue)", "\(match.coordinateEvidenceLabel): \(match.latitude), \(match.longitude)"],
-                confidence: 0.86,
-                missingInfo: ["User confirmation required"],
+                evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.provider.rawValue)"],
+                confidence: hasAppleCompatibleCoordinates ? 0.86 : 0.72,
+                missingInfo: missingFields,
                 savedAt: Date(),
                 evidenceDiagnostic: diagnostic,
-                reviewState: "map_match_ready"
+                reviewState: hasAppleCompatibleCoordinates ? "map_match_ready" : "review_candidate"
             )
         }
         return nil
@@ -1476,16 +1489,25 @@ final class SocialLinkReviewCandidateService {
         for attempt in 1...maxAttempts {
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
+                let canonicalURL = SocialShareURLCanonicalizer.analysisURL(
+                    originalURL: url,
+                    resolvedURL: response.url
+                )
+                // Login/error-shell metadata is not place evidence. Keep the
+                // recovered source identity but discard the shell document.
+                let shouldUseResponseMetadata = response.url == nil || canonicalURL == response.url
                 // Lossy decode keeps partially valid UTF-8 metadata readable.
-                let html = String(decoding: data.prefix(300_000), as: UTF8.self)
+                let html = shouldUseResponseMetadata
+                    ? String(decoding: data.prefix(300_000), as: UTF8.self)
+                    : ""
                 let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
                 let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
                 let keywords = metadataValue(in: html, keys: ["keywords"])
-                let imageURL = metadataImageURL(in: html, baseURL: response.url ?? url)
-                let videoURL = metadataVideoURL(in: html, baseURL: response.url ?? url)
+                let imageURL = metadataImageURL(in: html, baseURL: canonicalURL)
+                let videoURL = metadataVideoURL(in: html, baseURL: canonicalURL)
                 let jsonCaption = embeddedSocialCaption(in: html)
                 return PublicMetadata(
-                    resolvedURL: response.url?.absoluteString ?? url.absoluteString,
+                    resolvedURL: canonicalURL.absoluteString,
                     title: title,
                     description: description,
                     keywords: keywords,
@@ -2075,7 +2097,7 @@ final class SocialLinkReviewCandidateService {
     private func bestAcceptableRefinement(in matches: [PlaceProviderMatch], for candidate: PendingReviewCandidate) -> PlaceProviderMatch? {
         matches
             .map { (match: $0, score: refinementScore($0, for: candidate)) }
-            .filter { $0.score >= 0.62 }
+            .filter { $0.score >= 0.62 && isAcceptableRefinement($0.match, for: candidate) }
             .sorted { $0.score > $1.score }
             .first?.match
     }
@@ -2115,7 +2137,10 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func isAcceptableRefinement(_ match: PlaceProviderMatch, for candidate: PendingReviewCandidate) -> Bool {
-        guard match.latitude != 0 || match.longitude != 0 else { return false }
+        guard match.coordinateSystem == .wgs84,
+              isValidMapCoordinate(latitude: match.latitude, longitude: match.longitude) else {
+            return false
+        }
 
         // Refinement still requires similarity; address evidence may support a
         // match, but it must not accept the first non-zero Places result.
@@ -2128,6 +2153,12 @@ final class SocialLinkReviewCandidateService {
         let matchName = normalizedName(match.name)
         let candidateAddress = normalizedName(candidate.address)
         let matchAddress = normalizedName(match.address)
+
+        if candidateName == matchName,
+           candidateName.count >= 2,
+           containsCJK(candidateName) {
+            return true
+        }
 
         if candidateName.count >= minimumComparableLength, matchName.count >= minimumComparableLength {
             if matchName.contains(candidateName) || candidateName.contains(matchName) { return true }

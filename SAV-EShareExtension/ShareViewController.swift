@@ -399,6 +399,8 @@ private struct PendingReviewCandidate: Codable {
     var candidateName: String
     var address: String
     var category: String
+    var latitude: Double? = nil
+    var longitude: Double? = nil
     var sourceURL: String?
     var sourceText: String?
     var evidence: [String]
@@ -1161,6 +1163,17 @@ struct ShareExtensionView: View {
             return
         }
 
+        if let chinaMapCandidate = deterministicChinaMapReviewCandidate(
+            from: parseContent,
+            title: sharedTitle,
+            text: sharedText
+        ) {
+            reviewCandidates = [chinaMapCandidate]
+            selectedCategory = chinaMapCandidate.category
+            isParsing = false
+            return
+        }
+
         if let mapPlace = deterministicMapPlace(from: parseContent, title: sharedTitle, text: sharedText) {
             parsedPlace = mapPlace
             selectedCategory = mapPlace.category
@@ -1365,13 +1378,19 @@ struct ShareExtensionView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            let resolvedURL = response.url?.absoluteString ?? url.absoluteString
-            let html = String(data: data.prefix(shareMetadataHTMLByteLimit), encoding: .utf8) ?? ""
+            let canonicalURL = SocialShareURLCanonicalizer.analysisURL(
+                originalURL: url,
+                resolvedURL: response.url
+            )
+            let shouldUseResponseMetadata = response.url == nil || canonicalURL == response.url
+            let html = shouldUseResponseMetadata
+                ? String(data: data.prefix(shareMetadataHTMLByteLimit), encoding: .utf8) ?? ""
+                : ""
             return ShareMetadata(
-                resolvedURL: resolvedURL,
+                resolvedURL: canonicalURL.absoluteString,
                 title: metadataValue(in: html, keys: ["og:title", "twitter:title", "title"]),
                 description: metadataValue(in: html, keys: ["og:description", "twitter:description", "description"]),
-                imageURL: metadataImageURL(in: html, baseURL: response.url ?? url),
+                imageURL: metadataImageURL(in: html, baseURL: canonicalURL),
                 htmlText: html
             )
         } catch {
@@ -3136,6 +3155,60 @@ struct ShareExtensionView: View {
             longitude: coordinates.longitude,
             dishes: [],
             priceRange: nil
+        )
+    }
+
+    private func deterministicChinaMapReviewCandidate(
+        from content: String,
+        title: String,
+        text: String
+    ) -> PendingReviewCandidate? {
+        guard let match = SharedChinaMapLinkParser.match(from: content) else { return nil }
+        let providerName = match.provider == .amap ? "Amap" : "Baidu Maps"
+        let hasAppleCompatibleCoordinates = match.coordinateSystem == .wgs84
+        let coordinateEvidence = hasAppleCompatibleCoordinates
+            ? "Verified \(providerName) coordinates (WGS84): \(match.latitude), \(match.longitude)"
+            : "\(providerName) reference coordinates (\(match.coordinateSystem.rawValue)): \(match.latitude), \(match.longitude)"
+        let evidence = appendUniqueEvidence([], [
+            "Source URL: \(content)",
+            "Direct \(providerName) map link: \(match.name)",
+            match.address.isEmpty ? nil : "Address clue: \(match.address)",
+            coordinateEvidence,
+            hasAppleCompatibleCoordinates
+                ? "Kept explicit WGS84 coordinates for user confirmation"
+                : "Kept provider coordinates as reference evidence; Apple Maps confirmation is required before saving"
+        ].compactMap { $0 })
+        let missingFields = hasAppleCompatibleCoordinates
+            ? ["User confirmation required"]
+            : ["Apple Maps match", "WGS84 coordinates", "User confirmation required"]
+        let diagnostic = SocialPlaceEvidenceDiagnostic(
+            found: evidence,
+            attempts: ["Parsed the shared China map link with the same parser used by the SAV-E app"],
+            missingFields: missingFields,
+            nextBestClue: hasAppleCompatibleCoordinates
+                ? "Open SAV-E Review and confirm this map match before saving it as a Map Stamp."
+                : "Open SAV-E Review and confirm the Apple Maps match before saving this as a Map Stamp."
+        )
+        let sourceText = [title, text]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        let category = fallbackCategory(from: [match.name, match.address, sourceText].joined(separator: " "))
+
+        return PendingReviewCandidate(
+            candidateName: match.name,
+            address: match.address,
+            category: category,
+            latitude: hasAppleCompatibleCoordinates ? match.latitude : nil,
+            longitude: hasAppleCompatibleCoordinates ? match.longitude : nil,
+            sourceURL: content,
+            sourceText: sourceText.isEmpty ? nil : sourceText,
+            evidence: evidence,
+            confidence: 0.72,
+            missingInfo: missingFields,
+            savedAt: Date(),
+            evidenceDiagnostic: diagnostic,
+            reviewState: hasAppleCompatibleCoordinates ? "map_match_ready" : "review_candidate"
         )
     }
 

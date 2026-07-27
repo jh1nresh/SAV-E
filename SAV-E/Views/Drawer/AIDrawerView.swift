@@ -1800,6 +1800,9 @@ struct AIDrawerView: View {
     }
 
     private func firstURL(in text: String) -> URL? {
+        if let normalizedURL = SocialShareTextNormalizer.normalize(text).primaryURL {
+            return normalizedURL
+        }
         let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         return detector?

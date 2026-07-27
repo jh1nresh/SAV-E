@@ -199,8 +199,8 @@ private final class StubPlaceResolverService: PlaceResolverServiceProtocol {
         if query.contains("蟹尊苑") {
             return [
                 PlaceProviderMatch(
-                    provider: .amap,
-                    id: "amap-xiezunyuan",
+                    provider: .appleMaps,
+                    id: "apple-xiezunyuan",
                     name: "蟹尊苑",
                     address: "上海市黄浦区广东路59号",
                     latitude: 31.2389,
@@ -209,15 +209,15 @@ private final class StubPlaceResolverService: PlaceResolverServiceProtocol {
                     reviewCount: nil,
                     priceLevel: nil,
                     types: ["餐饮服务"],
-                    coordinateSystem: .gcj02
+                    coordinateSystem: .wgs84
                 )
             ]
         }
         if query.contains("奢海陌野民宿") {
             return [
                 PlaceProviderMatch(
-                    provider: .amap,
-                    id: "amap-shehai-moye",
+                    provider: .appleMaps,
+                    id: "apple-shehai-moye",
                     name: "奢海陌野民宿",
                     address: "青岛市崂山区雕龙嘴村",
                     latitude: 36.1689,
@@ -226,7 +226,7 @@ private final class StubPlaceResolverService: PlaceResolverServiceProtocol {
                     reviewCount: 42,
                     priceLevel: nil,
                     types: ["住宿服务"],
-                    coordinateSystem: .gcj02
+                    coordinateSystem: .wgs84
                 )
             ]
         }
@@ -1092,9 +1092,9 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(refined.latitude, 31.2389)
         XCTAssertEqual(refined.longitude, 121.4962)
         XCTAssertTrue(resolver.queries.contains { $0.contains("蟹尊苑") && $0.contains("上海") })
-        XCTAssertTrue(refined.evidence.contains("Amap refined match: 蟹尊苑"))
-        XCTAssertTrue(refined.evidence.contains("Amap coordinates (GCJ-02): 31.2389, 121.4962"))
-        XCTAssertEqual(refined.evidenceDiagnostic?.nextBestClue, "Confirm this Amap match before saving it as a Map Stamp.")
+        XCTAssertTrue(refined.evidence.contains("Apple Maps refined match: 蟹尊苑"))
+        XCTAssertTrue(refined.evidence.contains("Apple Maps coordinates: 31.2389, 121.4962"))
+        XCTAssertEqual(refined.evidenceDiagnostic?.nextBestClue, "Confirm this Apple Maps match before saving it as a Map Stamp.")
     }
 
     @MainActor
@@ -1113,7 +1113,79 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
-    func testAmapMapDeepLinkBecomesMapReadyReviewCandidate() throws {
+    func testAmapResolvedRegeoUsesSharedParserAndPreservesGCJ02() throws {
+        let match = try XCTUnwrap(SharedChinaMapLinkParser.match(
+            from: "https://ditu.amap.com/regeo?lng=121.4962&lat=31.2389&name=%E8%9F%B9%E5%B0%8A%E8%8B%91&src=save&lng=999"
+        ))
+
+        XCTAssertEqual(match.provider, .amap)
+        XCTAssertEqual(match.name, "蟹尊苑")
+        XCTAssertEqual(match.latitude, 31.2389)
+        XCTAssertEqual(match.longitude, 121.4962)
+        XCTAssertEqual(match.coordinateSystem, .gcj02)
+    }
+
+    @MainActor
+    func testShareNormalizerKeepsAmapCustomSchemeAsPrimaryURL() {
+        let bundle = SocialShareTextNormalizer.normalize(
+            "高德地图 iosamap://viewMap?sourceApplication=SAV-E&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
+        )
+
+        XCTAssertEqual(bundle.platform, .chinaMaps)
+        XCTAssertEqual(
+            bundle.primaryURLString,
+            "iosamap://viewMap?sourceApplication=SAV-E&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
+        )
+    }
+
+    @MainActor
+    func testChinaMapParserRejectsLookalikeHostsAndInvalidCoordinates() {
+        XCTAssertNil(SharedChinaMapLinkParser.match(
+            from: "https://uri.amap.com.evil.example/marker?position=121.4962,31.2389&name=%E8%9F%B9%E5%B0%8A%E8%8B%91"
+        ))
+        XCTAssertNil(SharedChinaMapLinkParser.match(
+            from: "https://uri.amap.com/marker?position=181,31.2389&name=%E8%9F%B9%E5%B0%8A%E8%8B%91"
+        ))
+        XCTAssertNil(SharedChinaMapLinkParser.match(
+            from: "https://uri.amap.com/marker?position=0,0&name=%E8%9F%B9%E5%B0%8A%E8%8B%91"
+        ))
+    }
+
+    @MainActor
+    func testDianpingCanonicalizerKeepsFeedIdentityAcrossLoginAndErrorShells() throws {
+        let original = try XCTUnwrap(URL(string: "https://m.dianping.com/feeddetail/466776750"))
+        let errorShell = try XCTUnwrap(URL(string: "https://m.dianping.com/shopinfo/error?title=content-unavailable"))
+        XCTAssertEqual(
+            SocialShareURLCanonicalizer.analysisURL(originalURL: original, resolvedURL: errorShell),
+            original
+        )
+
+        let canonicalFeed = "https://www.dianping.com/feeddetail/466776750"
+        var login = URLComponents(string: "https://account.dianping.com/pclogin")
+        login?.queryItems = [URLQueryItem(name: "redir", value: canonicalFeed)]
+        XCTAssertEqual(
+            SocialShareURLCanonicalizer.analysisURL(
+                originalURL: original,
+                resolvedURL: try XCTUnwrap(login?.url)
+            ).absoluteString,
+            canonicalFeed
+        )
+
+        var untrustedLogin = URLComponents(string: "https://account.dianping.com/pclogin")
+        untrustedLogin?.queryItems = [
+            URLQueryItem(name: "redir", value: "https://dianping.com.evil.example/feeddetail/466776750")
+        ]
+        XCTAssertEqual(
+            SocialShareURLCanonicalizer.analysisURL(
+                originalURL: original,
+                resolvedURL: try XCTUnwrap(untrustedLogin?.url)
+            ),
+            original
+        )
+    }
+
+    @MainActor
+    func testAmapMapDeepLinkRequiresAppleMapsMatchBeforeMapStamp() throws {
         let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
         let candidates = service.reviewCandidatesOrSourceOnly(
             fromEvidenceText: "朋友分享高德地图 https://uri.amap.com/marker?position=121.4962,31.2389&name=%E8%9F%B9%E5%B0%8A%E8%8B%91&src=save",
@@ -1122,35 +1194,79 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         let candidate = try XCTUnwrap(candidates.first)
         XCTAssertEqual(candidate.candidateName, "蟹尊苑")
-        XCTAssertEqual(candidate.reviewState, "map_match_ready")
-        XCTAssertEqual(candidate.latitude, 31.2389)
-        XCTAssertEqual(candidate.longitude, 121.4962)
-        XCTAssertTrue(candidate.evidence.contains("Amap coordinates (GCJ-02): 31.2389, 121.4962"))
-        XCTAssertEqual(candidate.evidenceDiagnostic?.nextBestClue, "Confirm this Amap deep-link match before saving it as a Map Stamp.")
+        XCTAssertEqual(candidate.reviewState, "review_candidate")
+        XCTAssertNil(candidate.latitude)
+        XCTAssertNil(candidate.longitude)
+        XCTAssertTrue(candidate.evidence.contains("Amap reference coordinates (GCJ-02): 31.2389, 121.4962"))
+        XCTAssertTrue(candidate.missingInfo.contains("Apple Maps match"))
+        XCTAssertEqual(candidate.evidenceDiagnostic?.nextBestClue, "Confirm the Apple Maps match before saving this Amap clue as a Map Stamp.")
     }
 
     @MainActor
-    func testChinaResolverKeepsBaiduFallbackAfterAmapAndProxyMiss() async throws {
+    func testChinaResolverUsesAppleMapsBeforeServerAndGoogleFallbacks() async throws {
         final class EmptyBackend: BackendPlaceResolverServiceProtocol {
             func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] { [] }
         }
-        final class EmptyAmap: AmapPlaceSearchServiceProtocol {
-            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] { [] }
-        }
-        final class BaiduOnly: BaiduPlaceSearchServiceProtocol {
+        final class AppleOnly: AppleMapsPlaceSearchServiceProtocol {
+            var queries: [String] = []
+
             func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
-                [PlaceProviderMatch(
-                    provider: .baidu,
-                    id: "baidu-xiezunyuan",
+                queries.append(query)
+                return [PlaceProviderMatch(
+                    provider: .appleMaps,
+                    id: "apple-xiezunyuan",
                     name: "蟹尊苑",
                     address: "上海市黄浦区广东路59号",
-                    latitude: 31.2391,
-                    longitude: 121.4964,
-                    rating: 4.6,
-                    reviewCount: 88,
+                    latitude: 31.2389,
+                    longitude: 121.4962,
+                    rating: nil,
+                    reviewCount: nil,
                     priceLevel: nil,
                     types: ["美食"],
-                    coordinateSystem: .bd09
+                    coordinateSystem: .wgs84
+                )]
+            }
+        }
+        final class EmptyGoogle: GooglePlacesServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] { [] }
+            func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails { throw GooglePlacesError.noResults }
+            func photoURL(reference: String, maxWidth: Int) -> URL? { nil }
+        }
+
+        let apple = AppleOnly()
+        let resolver = PlaceResolverService(
+            googlePlacesService: EmptyGoogle(),
+            appleMapsPlaceSearchService: apple,
+            backendPlaceResolverService: EmptyBackend()
+        )
+
+        let matches = try await resolver.searchPlace(query: "上海 蟹尊苑 黄浦", near: nil)
+
+        XCTAssertEqual(apple.queries, ["上海 蟹尊苑 黄浦"])
+        XCTAssertEqual(matches.first?.provider, .appleMaps)
+        XCTAssertEqual(matches.first?.coordinateSystem, .wgs84)
+        XCTAssertEqual(matches.first?.coordinateEvidenceLabel, "Apple Maps coordinates")
+    }
+
+    @MainActor
+    func testAppleMissDoesNotPromoteBackendGCJ02CoordinatesToMapStamp() async {
+        final class EmptyApple: AppleMapsPlaceSearchServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] { [] }
+        }
+        final class AmapBackend: BackendPlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                [PlaceProviderMatch(
+                    provider: .amap,
+                    id: "amap-xiezunyuan",
+                    name: "蟹尊苑",
+                    address: "上海市黄浦区广东路59号",
+                    latitude: 31.2389,
+                    longitude: 121.4962,
+                    rating: nil,
+                    reviewCount: nil,
+                    priceLevel: nil,
+                    types: ["餐饮服务"],
+                    coordinateSystem: .gcj02
                 )]
             }
         }
@@ -1162,16 +1278,75 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         let resolver = PlaceResolverService(
             googlePlacesService: EmptyGoogle(),
-            amapPlaceSearchService: EmptyAmap(),
-            baiduPlaceSearchService: BaiduOnly(),
-            backendPlaceResolverService: EmptyBackend()
+            appleMapsPlaceSearchService: EmptyApple(),
+            backendPlaceResolverService: AmapBackend()
+        )
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGoogle(),
+            placeResolverService: resolver
+        )
+        let candidate = PendingReviewCandidate(
+            candidateName: "蟹尊苑",
+            address: "上海市黄浦区广东路59号",
+            category: "food",
+            sourceURL: "https://m.dianping.com/feeddetail/466776750",
+            sourceText: "上海 蟹尊苑",
+            evidence: ["Dianping business clue: 蟹尊苑"],
+            confidence: 0.62,
+            missingInfo: ["Verified coordinates"],
+            savedAt: Date()
         )
 
-        let matches = try await resolver.searchPlace(query: "上海 蟹尊苑 黄浦", near: nil)
+        let refined = await service.refineCandidate(candidate, evidenceText: "上海 蟹尊苑")
 
-        XCTAssertEqual(matches.first?.provider, .baidu)
-        XCTAssertEqual(matches.first?.coordinateSystem, .bd09)
-        XCTAssertEqual(matches.first?.coordinateEvidenceLabel, "Baidu Maps coordinates (BD-09)")
+        XCTAssertNil(refined.latitude)
+        XCTAssertNil(refined.longitude)
+        XCTAssertNotEqual(refined.reviewState, "map_match_ready")
+        XCTAssertFalse(refined.evidence.contains { $0.contains("Amap coordinates (GCJ-02)") })
+    }
+
+    @MainActor
+    func testExactTwoCharacterChineseAppleMatchCanRefine() async {
+        final class PalaceAppleResolver: PlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                [PlaceProviderMatch(
+                    provider: .appleMaps,
+                    id: "apple-gugong",
+                    name: "故宫",
+                    address: "北京市东城区景山前街4号",
+                    latitude: 39.9163,
+                    longitude: 116.3972,
+                    rating: nil,
+                    reviewCount: nil,
+                    priceLevel: nil,
+                    types: ["museum"],
+                    coordinateSystem: .wgs84
+                )]
+            }
+        }
+
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            placeResolverService: PalaceAppleResolver()
+        )
+        let candidate = PendingReviewCandidate(
+            candidateName: "故宫",
+            address: "",
+            category: "attraction",
+            sourceURL: "https://example.com/beijing",
+            sourceText: "北京 故宫",
+            evidence: ["Venue name: 故宫"],
+            confidence: 0.6,
+            missingInfo: ["Verified coordinates"],
+            savedAt: Date()
+        )
+
+        let refined = await service.refineCandidate(candidate, evidenceText: "北京 故宫")
+
+        XCTAssertEqual(refined.reviewState, "map_match_ready")
+        XCTAssertEqual(refined.latitude, 39.9163)
+        XCTAssertEqual(refined.longitude, 116.3972)
+        XCTAssertTrue(refined.evidence.contains("Apple Maps refined match: 故宫"))
     }
 
     @MainActor
@@ -1306,7 +1481,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
-    func testDianpingKeywordOutranksGenericTitleAndRefinementKeepsAmapProvenance() async throws {
+    func testDianpingKeywordOutranksGenericTitleAndRefinementUsesAppleMaps() async throws {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: StubGooglePlacesService(),
@@ -1330,7 +1505,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidate.latitude, 36.1689)
         XCTAssertEqual(candidate.longitude, 120.6651)
         XCTAssertTrue(resolver.queries.contains { $0.contains("奢海陌野民宿") })
-        XCTAssertTrue(candidate.evidence.contains("Amap coordinates (GCJ-02): 36.1689, 120.6651"))
+        XCTAssertTrue(candidate.evidence.contains("Apple Maps coordinates: 36.1689, 120.6651"))
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Dianping feed id: 466776750") == true)
     }
 
