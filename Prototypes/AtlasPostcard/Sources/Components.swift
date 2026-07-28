@@ -8,6 +8,7 @@ struct MemoMark: View {
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
+            .scaleEffect(1.6)
             .accessibilityLabel("Memo")
     }
 }
@@ -17,17 +18,17 @@ struct BrandHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            MemoMark(size: 31)
+            MemoMark(size: 40)
+
             Text("SAV-E")
-                .font(.system(size: 20, weight: .black, design: .rounded))
+                .font(AtlasType.strong(24))
                 .tracking(1.1)
                 .foregroundStyle(AtlasPalette.forest)
 
             Spacer()
             trailing()
         }
-        .frame(height: 50)
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 11)
     }
 }
 
@@ -36,273 +37,176 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let selection: Item
     let title: KeyPath<Item, String>
     let icon: KeyPath<Item, String>
+    let accessibilityPrefix: String
     let onSelect: (Item) -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(items) { item in
                 Button {
                     onSelect(item)
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: item[keyPath: icon])
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 23, weight: .regular))
+                            .frame(height: 27)
+
                         Text(item[keyPath: title])
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .font(AtlasType.display(12))
                     }
-                    .foregroundStyle(selection == item ? AtlasPalette.forest : AtlasPalette.ink)
-                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 64)
                     .background {
                         if selection == item {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(AtlasPalette.mint.opacity(0.80))
+                            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                .fill(AtlasPalette.mint.opacity(0.82))
+                                .frame(width: 90, height: 64)
                         }
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("prototype.tab.\(item[keyPath: title].lowercased())")
+                .accessibilityLabel(item[keyPath: title])
+                .accessibilityIdentifier(
+                    "prototype.\(accessibilityPrefix).\(item[keyPath: title].lowercased())"
+                )
             }
         }
-        .padding(6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 23, style: .continuous))
+        .padding(.horizontal, 4)
+        .frame(width: 402, height: 76)
+        .background(AtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 21, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 23, style: .continuous)
-                .stroke(AtlasPalette.ink.opacity(0.11), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
-        .shadow(color: AtlasPalette.ink.opacity(0.07), radius: 12, y: 4)
-        .padding(.horizontal, 14)
-        .padding(.top, 5)
-        .padding(.bottom, 5)
-        .background(AtlasPalette.canvas.opacity(0.90))
+        .shadow(color: AtlasPalette.ink.opacity(0.035), radius: 5, y: 1)
     }
 }
 
-struct AtlasMapArt: View {
-    enum Variant {
-        case home
-        case full
+struct RoundStamp: View {
+    enum Style {
+        case mapStamp
+        case tripStop
     }
 
-    let variant: Variant
-
-    var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            ZStack {
-                Canvas { context, canvas in
-                    context.fill(Path(CGRect(origin: .zero, size: canvas)), with: .color(AtlasPalette.paper))
-
-                    drawLand(in: &context, size: canvas)
-                    drawRiver(in: &context, size: canvas)
-                    drawRoads(in: &context, size: canvas)
-                    drawBlocks(in: &context, size: canvas)
-                    if variant == .full {
-                        drawRoute(in: &context, size: canvas)
-                    }
-                }
-
-                atlasLabels(size: size)
-                atlasLandmarks(size: size)
-                atlasPins(size: size)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: variant == .home ? 22 : 0, style: .continuous))
-            .overlay {
-                if variant == .home {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(AtlasPalette.forest.opacity(0.14), lineWidth: 1)
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Illustrated Tokyo atlas")
-    }
-
-    private func drawLand(in context: inout GraphicsContext, size: CGSize) {
-        var park = Path()
-        park.move(to: CGPoint(x: size.width * 0.54, y: 0))
-        park.addCurve(
-            to: CGPoint(x: size.width * 0.92, y: size.height),
-            control1: CGPoint(x: size.width * 0.74, y: size.height * 0.22),
-            control2: CGPoint(x: size.width * 0.58, y: size.height * 0.72)
-        )
-        park.addLine(to: CGPoint(x: size.width, y: size.height))
-        park.addLine(to: CGPoint(x: size.width, y: 0))
-        park.closeSubpath()
-        context.fill(park, with: .color(AtlasPalette.leaf.opacity(0.43)))
-    }
-
-    private func drawRiver(in context: inout GraphicsContext, size: CGSize) {
-        var river = Path()
-        river.move(to: CGPoint(x: size.width * 0.15, y: -12))
-        river.addCurve(
-            to: CGPoint(x: size.width * 0.37, y: size.height + 12),
-            control1: CGPoint(x: size.width * 0.38, y: size.height * 0.25),
-            control2: CGPoint(x: size.width * 0.10, y: size.height * 0.70)
-        )
-        context.stroke(river, with: .color(AtlasPalette.water), lineWidth: variant == .home ? 34 : 48)
-        context.stroke(river, with: .color(.white.opacity(0.65)), style: StrokeStyle(lineWidth: 2, dash: [8, 8]))
-    }
-
-    private func drawRoads(in context: inout GraphicsContext, size: CGSize) {
-        let roadColor = Color.white.opacity(0.92)
-        for fraction in [0.12, 0.31, 0.52, 0.74, 0.90] {
-            var horizontal = Path()
-            horizontal.move(to: CGPoint(x: -20, y: size.height * fraction))
-            horizontal.addCurve(
-                to: CGPoint(x: size.width + 20, y: size.height * (fraction + 0.04)),
-                control1: CGPoint(x: size.width * 0.35, y: size.height * (fraction - 0.04)),
-                control2: CGPoint(x: size.width * 0.67, y: size.height * (fraction + 0.08))
-            )
-            context.stroke(horizontal, with: .color(roadColor), lineWidth: 10)
-            context.stroke(horizontal, with: .color(AtlasPalette.ink.opacity(0.10)), lineWidth: 1)
-        }
-
-        for fraction in [0.08, 0.44, 0.68, 0.88] {
-            var vertical = Path()
-            vertical.move(to: CGPoint(x: size.width * fraction, y: -20))
-            vertical.addCurve(
-                to: CGPoint(x: size.width * (fraction + 0.05), y: size.height + 20),
-                control1: CGPoint(x: size.width * (fraction - 0.06), y: size.height * 0.35),
-                control2: CGPoint(x: size.width * (fraction + 0.10), y: size.height * 0.64)
-            )
-            context.stroke(vertical, with: .color(roadColor), lineWidth: 8)
-            context.stroke(vertical, with: .color(AtlasPalette.ink.opacity(0.10)), lineWidth: 1)
-        }
-    }
-
-    private func drawBlocks(in context: inout GraphicsContext, size: CGSize) {
-        let blocks: [(CGFloat, CGFloat, CGFloat, CGFloat, Color)] = [
-            (0.04, 0.17, 0.16, 0.10, AtlasPalette.lavender),
-            (0.40, 0.08, 0.18, 0.13, AtlasPalette.sky),
-            (0.64, 0.27, 0.23, 0.12, AtlasPalette.kraft),
-            (0.08, 0.58, 0.19, 0.14, AtlasPalette.mint),
-            (0.46, 0.66, 0.20, 0.12, AtlasPalette.lavender),
-            (0.74, 0.78, 0.16, 0.11, AtlasPalette.sky),
-        ]
-        for block in blocks {
-            let rect = CGRect(
-                x: size.width * block.0,
-                y: size.height * block.1,
-                width: size.width * block.2,
-                height: size.height * block.3
-            )
-            context.fill(
-                Path(roundedRect: rect, cornerRadius: 8),
-                with: .color(block.4.opacity(0.50))
-            )
-            context.stroke(
-                Path(roundedRect: rect, cornerRadius: 8),
-                with: .color(AtlasPalette.ink.opacity(0.09)),
-                lineWidth: 1
-            )
-        }
-    }
-
-    private func drawRoute(in context: inout GraphicsContext, size: CGSize) {
-        var route = Path()
-        route.move(to: CGPoint(x: size.width * 0.22, y: size.height * 0.75))
-        route.addCurve(
-            to: CGPoint(x: size.width * 0.75, y: size.height * 0.21),
-            control1: CGPoint(x: size.width * 0.57, y: size.height * 0.91),
-            control2: CGPoint(x: size.width * 0.40, y: size.height * 0.38)
-        )
-        context.stroke(
-            route,
-            with: .color(AtlasPalette.routeInk),
-            style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 5])
-        )
-    }
-
-    @ViewBuilder
-    private func atlasLabels(size: CGSize) -> some View {
-        Group {
-            AtlasLabel(text: "SHIBUYA")
-                .position(x: size.width * 0.22, y: size.height * 0.46)
-            AtlasLabel(text: "CHUO")
-                .position(x: size.width * 0.70, y: size.height * 0.48)
-            AtlasLabel(text: "SHINJUKU")
-                .position(x: size.width * 0.69, y: size.height * 0.08)
-        }
-    }
-
-    @ViewBuilder
-    private func atlasLandmarks(size: CGSize) -> some View {
-        AtlasLandmark(icon: "building.columns.fill", tint: AtlasPalette.coral)
-            .position(x: size.width * 0.75, y: size.height * 0.15)
-        AtlasLandmark(icon: "tree.fill", tint: AtlasPalette.forest)
-            .position(x: size.width * 0.81, y: size.height * 0.62)
-        AtlasLandmark(icon: "tram.fill", tint: AtlasPalette.sky)
-            .position(x: size.width * 0.43, y: size.height * 0.30)
-    }
-
-    @ViewBuilder
-    private func atlasPins(size: CGSize) -> some View {
-        if variant == .home {
-            AtlasSavedPin()
-                .position(x: size.width * 0.20, y: size.height * 0.24)
-            AtlasSavedPin()
-                .position(x: size.width * 0.68, y: size.height * 0.39)
-        } else {
-            AtlasSavedPin()
-                .position(x: size.width * 0.20, y: size.height * 0.22)
-            AtlasRoutePin(number: 1)
-                .position(x: size.width * 0.25, y: size.height * 0.74)
-            AtlasRoutePin(number: 2)
-                .position(x: size.width * 0.47, y: size.height * 0.55)
-            AtlasRoutePin(number: 3)
-                .position(x: size.width * 0.72, y: size.height * 0.29)
-            AtlasSavedPin()
-                .position(x: size.width * 0.80, y: size.height * 0.50)
-        }
-    }
-}
-
-private struct AtlasLabel: View {
     let text: String
+    let style: Style
 
     var body: some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold, design: .rounded))
-            .tracking(1.8)
-            .foregroundStyle(AtlasPalette.forest.opacity(0.54))
+        Group {
+            switch style {
+            case .mapStamp:
+                Image(systemName: "star.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AtlasPalette.forest)
+                    .frame(width: 35, height: 35)
+                    .background(AtlasPalette.mint, in: Circle())
+            case .tripStop:
+                Text(text)
+                    .font(AtlasType.strong(17))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: 38, height: 38)
+                    .background(AtlasPalette.coral.opacity(0.90), in: Circle())
+                    .overlay {
+                        Circle().stroke(AtlasPalette.coral, lineWidth: 1)
+                    }
+            }
+        }
     }
 }
 
-private struct AtlasLandmark: View {
-    let icon: String
+struct ScallopedRectangle: Shape {
+    var depth: CGFloat = 4
+    var pitch: CGFloat = 11
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = pitch / 2
+        path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY + depth))
+
+        var x = rect.minX + radius
+        while x < rect.maxX - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x + pitch, y: rect.minY + depth),
+                control: CGPoint(x: x + radius, y: rect.minY - depth)
+            )
+            x += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - depth, y: rect.minY + radius))
+        var y = rect.minY + radius
+        while y < rect.maxY - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX - depth, y: y + pitch),
+                control: CGPoint(x: rect.maxX + depth, y: y + radius)
+            )
+            y += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY - depth))
+        x = rect.maxX - radius
+        while x > rect.minX + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x - pitch, y: rect.maxY - depth),
+                control: CGPoint(x: x - radius, y: rect.maxY + depth)
+            )
+            x -= pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.minX + depth, y: rect.maxY - radius))
+        y = rect.maxY - radius
+        while y > rect.minY + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + depth, y: y - pitch),
+                control: CGPoint(x: rect.minX - depth, y: y - radius)
+            )
+            y -= pitch
+        }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct PerforatedMedallion: View {
+    let systemName: String
     let tint: Color
 
     var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: 19, weight: .bold))
-            .foregroundStyle(tint)
-            .frame(width: 36, height: 36)
-            .background(AtlasPalette.paper.opacity(0.90), in: Circle())
-            .overlay { Circle().stroke(AtlasPalette.ink.opacity(0.12), lineWidth: 1) }
+        Image(systemName: systemName)
+            .font(.system(size: 21, weight: .regular))
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 52, height: 52)
+            .background(tint, in: SealShape())
+            .overlay {
+                SealShape()
+                    .stroke(AtlasPalette.ink.opacity(0.16), lineWidth: 1)
+            }
     }
 }
 
-struct AtlasSavedPin: View {
-    var body: some View {
-        Image(systemName: "star.fill")
-            .font(.system(size: 13, weight: .black))
-            .foregroundStyle(.white)
-            .frame(width: 32, height: 32)
-            .background(AtlasPalette.forest, in: Circle())
-            .overlay { Circle().stroke(AtlasPalette.paper, lineWidth: 3) }
-            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 4, y: 2)
-    }
-}
+private struct SealShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let baseRadius = min(rect.width, rect.height) / 2 - 2
+        let steps = 128
+        var path = Path()
 
-struct AtlasRoutePin: View {
-    let number: Int
-
-    var body: some View {
-        Text("\(number)")
-            .font(.system(size: 13, weight: .black, design: .rounded))
-            .foregroundStyle(.white)
-            .frame(width: 31, height: 31)
-            .background(AtlasPalette.coral, in: Circle())
-            .overlay { Circle().stroke(AtlasPalette.paper, lineWidth: 3) }
+        for step in 0...steps {
+            let angle = CGFloat(step) / CGFloat(steps) * .pi * 2 - .pi / 2
+            let radius = baseRadius + cos(angle * 16) * 2
+            let point = CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            if step == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 }

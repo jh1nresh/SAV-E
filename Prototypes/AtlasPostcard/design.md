@@ -89,7 +89,9 @@ geography, never competing primary actions.
 
 ## Shape and type
 
-- System rounded type, three weights maximum.
+- Avenir Next Condensed is the prototype display and body family, with three
+  weights maximum. The approved raster is the baseline; do not substitute
+  SF Rounded or guess a different editorial font per page.
 - Screen title 28 pt maximum; place title 16–18 pt.
 - Tickets have a dashed/perforated edge; ordinary rows do not.
 - Envelope uses a different silhouette from cards.
@@ -107,3 +109,20 @@ Reject the prototype if three or more are true:
 - the paper metaphor could be removed without changing the Saves silhouette;
 - Home, Saves, Plan, and Map could belong to four different apps;
 - primary content requires scrolling in the 402 × 874 pt review viewport.
+
+## Fidelity implementation contract
+
+- All four pages render in one fixed 402 × 874 reference viewport. The top
+  48 pt is system-owned; app content uses the measured anchors in
+  `Reference/layout-metrics.json`.
+- Keep the existing root/trip navigation state, but do not use `ScrollView`,
+  `safeAreaInset`, or flexible spacers to place primary sections.
+- Approved illustrations come from the local, section-level assets declared in
+  `Reference/asset-manifest.json`. A whole-screen screenshot background is
+  forbidden.
+- Live SwiftUI remains responsible for titles, counts, ticket actions, stop
+  rows, place details, and both tab shells.
+- Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
+  `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
+  combines tolerant edge overlap (35%) with per-pixel appearance similarity
+  (65%). Every page must score at least 0.90.

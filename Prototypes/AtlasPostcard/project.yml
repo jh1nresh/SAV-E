@@ -43,5 +43,9 @@ schemes:
         AtlasPostcardPrototype: all
         AtlasPostcardPrototypeUITests: [test]
     test:
+      captureScreenshotsAutomatically: false
+      preferredScreenCaptureFormat: screenshots
       targets:
-        - AtlasPostcardPrototypeUITests
+        - name: AtlasPostcardPrototypeUITests
+          parallelizable: false
+          randomExecutionOrder: false

@@ -1,0 +1,246 @@
+{
+  "policy": {
+    "wholeScreenScreenshotBackgroundsAllowed": false,
+    "sfSymbolsMayReplaceApprovedIllustrations": false,
+    "referenceDerivedAssets": "allowed for this founder-approved visual prototype",
+    "productionReuse": "requires a separate asset provenance and resolution review"
+  },
+  "extraction": {
+    "script": "Scripts/extract-reference-assets.mjs",
+    "targetViewportPixels": {
+      "width": 402,
+      "height": 874
+    },
+    "prerequisites": [
+      "Node.js 22+",
+      "Python 3",
+      "Pillow"
+    ],
+    "note": "Only local illustration fragments are extracted; no whole-screen screenshot is used as a background."
+  },
+  "assets": [
+    {
+      "name": "MemoMascot",
+      "role": "existing SAV-E brand mark",
+      "source": "production SAV-E asset copied unchanged",
+      "status": "complete",
+      "output": {
+        "imageset": "MemoMascot.imageset",
+        "filename": "memo-mascot.png",
+        "width": 512,
+        "height": 512,
+        "scale": "1x"
+      }
+    },
+    {
+      "name": "HomeAtlasScene",
+      "role": "illustrated Tokyo atlas and contextual Memo peek behind review card",
+      "source": "Reference/Targets/home.png",
+      "sourceCrop": {
+        "x": 0,
+        "y": 99,
+        "width": 402,
+        "height": 275
+      },
+      "transform": "none",
+      "output": {
+        "imageset": "HomeAtlasScene.imageset",
+        "filename": "home-atlas-scene.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "SavesMemoSorting",
+      "role": "Memo sorting saved link cards",
+      "source": "Reference/Targets/saves.png",
+      "sourceCrop": {
+        "x": 286,
+        "y": 100,
+        "width": 112,
+        "height": 112
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "SavesMemoSorting.imageset",
+        "filename": "saves-memo-sorting.png",
+        "width": 112,
+        "height": 112,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "SavesEnvelope",
+      "role": "kraft paper pocket texture, postmark, and empty seal decoration; live title and count are supplied by SwiftUI",
+      "source": "Reference/Targets/saves.png",
+      "sourceCrop": {
+        "x": 0,
+        "y": 568,
+        "width": 402,
+        "height": 207
+      },
+      "transform": "envelopeDecorationWithoutLiveContent",
+      "output": {
+        "imageset": "SavesEnvelope.imageset",
+        "filename": "saves-envelope.png",
+        "width": 402,
+        "height": 207,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "PlanRouteRibbon",
+      "role": "multicolor route ribbon and numbered route nodes",
+      "source": "Reference/Targets/plan.png",
+      "sourceCrop": {
+        "x": 0,
+        "y": 229,
+        "width": 64,
+        "height": 493
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "PlanRouteRibbon.imageset",
+        "filename": "plan-route-ribbon.png",
+        "width": 64,
+        "height": 493,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "TsukijiThumbnail",
+      "role": "Tsukiji Outer Market stop image",
+      "source": "Reference/Targets/plan.png",
+      "sourceCrop": {
+        "x": 74,
+        "y": 248,
+        "width": 74,
+        "height": 78
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "TsukijiThumbnail.imageset",
+        "filename": "tsukiji-thumbnail.png",
+        "width": 74,
+        "height": 78,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "KoffeeMameyaThumbnail",
+      "role": "Koffee Mameya stop image",
+      "source": "Reference/Targets/plan.png",
+      "sourceCrop": {
+        "x": 74,
+        "y": 372,
+        "width": 74,
+        "height": 82
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "KoffeeMameyaThumbnail.imageset",
+        "filename": "koffee-mameya-thumbnail.png",
+        "width": 74,
+        "height": 82,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "TeamLabThumbnail",
+      "role": "teamLab Borderless stop image",
+      "source": "Reference/Targets/plan.png",
+      "sourceCrop": {
+        "x": 74,
+        "y": 497,
+        "width": 74,
+        "height": 83
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "TeamLabThumbnail.imageset",
+        "filename": "teamlab-thumbnail.png",
+        "width": 74,
+        "height": 83,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "ShibuyaSkyThumbnail",
+      "role": "Shibuya Sky stop image",
+      "source": "Reference/Targets/plan.png",
+      "sourceCrop": {
+        "x": 74,
+        "y": 624,
+        "width": 74,
+        "height": 84
+      },
+      "transform": "borderBackgroundCutout",
+      "output": {
+        "imageset": "ShibuyaSkyThumbnail.imageset",
+        "filename": "shibuya-sky-thumbnail.png",
+        "width": 74,
+        "height": 84,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "MapAtlasScene",
+      "role": "illustrated Tokyo map, route, landmarks, pins, and contextual Memo pose",
+      "source": "Reference/Targets/map.png",
+      "sourceCrop": {
+        "x": 0,
+        "y": 91,
+        "width": 402,
+        "height": 480
+      },
+      "transform": "none",
+      "output": {
+        "imageset": "MapAtlasScene.imageset",
+        "filename": "map-atlas-scene.png",
+        "width": 402,
+        "height": 480,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "PaperTexture",
+      "role": "seamless cream paper canvas texture tile",
+      "source": "Reference/Targets/saves.png",
+      "sourceCrop": {
+        "x": 170,
+        "y": 262,
+        "width": 32,
+        "height": 32
+      },
+      "transform": "mirroredSeamlessTile",
+      "output": {
+        "imageset": "PaperTexture.imageset",
+        "filename": "paper-texture.png",
+        "width": 64,
+        "height": 64,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    }
+  ]
+}

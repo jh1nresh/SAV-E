@@ -2,285 +2,332 @@ import SwiftUI
 
 struct HomeAtlasScreen: View {
     var body: some View {
-        ZStack {
-            DottedCanvas()
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
 
-            VStack(spacing: 0) {
-                BrandHeader {
-                    Button(action: {}) {
-                        Label("Paste a link", systemImage: "link.badge.plus")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(AtlasPalette.forest)
-                            .padding(.horizontal, 11)
-                            .frame(height: 34)
-                            .background(AtlasPalette.paper, in: Capsule())
-                            .overlay { Capsule().stroke(AtlasPalette.ink.opacity(0.18), lineWidth: 1) }
+            BrandHeader {
+                Button(action: {}) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "link")
+                            .font(.system(size: 15, weight: .medium))
+                        Text("Paste a link")
+                            .font(AtlasType.display(13))
                     }
-                    .buttonStyle(.plain)
-                }
-
-                ZStack(alignment: .bottom) {
-                    AtlasMapArt(variant: .home)
-
-                    VStack(spacing: 0) {
-                        MemoMark(size: 78)
-                            .offset(y: 16)
-                            .zIndex(1)
-
-                        VStack(spacing: 9) {
-                            Text("3 clues need your help")
-                                .font(.system(size: 20, weight: .black, design: .rounded))
-                                .foregroundStyle(AtlasPalette.forest)
-
-                            Text("Review and decide what’s worth saving.")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(AtlasPalette.muted)
-
-                            Button(action: {}) {
-                                HStack {
-                                    Text("Review clues")
-                                    Spacer()
-                                    Image(systemName: "arrow.right")
-                                }
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .frame(height: 40)
-                                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
-                            }
-                            .buttonStyle(.plain)
-
-                            HStack(spacing: 0) {
-                                HomeMetric(value: "3", label: "to review", icon: "clock.fill", tint: AtlasPalette.lavender)
-                                Divider().frame(height: 30)
-                                HomeMetric(value: "18", label: "Map Stamps", icon: "arrow.up.right", tint: AtlasPalette.mint)
-                            }
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 10)
-                        .padding(.bottom, 12)
-                        .atlasPaper(radius: 18, shadow: true)
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: 120, height: 35)
+                    .background(AtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
                 }
-                .frame(height: 360)
-                .padding(.horizontal, 12)
-
-                TripPreviewRow()
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
-
-                RecentStampRows()
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
-
-                Spacer(minLength: 4)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("prototype.action.pasteLink")
             }
+            .placed(x: 0, y: 48, width: 402, height: 51)
+            .accessibilityIdentifier("prototype.home.header")
+
+            Image("HomeAtlasScene")
+                .resizable()
+                .scaledToFill()
+                .clipped()
+                .placed(x: 0, y: 99, width: 402, height: 274)
+                .accessibilityLabel("Illustrated Tokyo atlas")
+                .accessibilityIdentifier("prototype.home.atlas")
+
+            HomeReviewCard()
+                .placed(x: 5, y: 354, width: 392, height: 182)
+                .accessibilityIdentifier("prototype.home.reviewCard")
+
+            HomeNextTrip()
+                .placed(x: 10, y: 542, width: 382, height: 105)
+                .accessibilityIdentifier("prototype.home.nextTrip")
+
+            HomeRecentStamps()
+                .placed(x: 10, y: 650, width: 382, height: 133)
+                .accessibilityIdentifier("prototype.home.recentStamps")
         }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.home")
+    }
+}
+
+private struct HomeReviewCard: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                .fill(AtlasPalette.paper)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                        .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+                }
+                .shadow(color: AtlasPalette.ink.opacity(0.04), radius: 4, y: 1)
+
+            Text("3 clues need your help")
+                .font(AtlasType.strong(24))
+                .foregroundStyle(AtlasPalette.forest)
+                .position(x: 196, y: 32)
+
+            Text("Review and decide what’s worth saving.")
+                .font(AtlasType.body(13))
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 196, y: 58)
+
+            Button(action: {}) {
+                HStack {
+                    Spacer()
+                    Text("Review clues")
+                        .font(AtlasType.strong(16))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .regular))
+                        .padding(.trailing, 14)
+                }
+                .foregroundStyle(.white)
+                .frame(width: 296, height: 41)
+                .background(
+                    LinearGradient(
+                        colors: [AtlasPalette.coral, AtlasPalette.coral.opacity(0.90)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+            .position(x: 196, y: 93)
+            .accessibilityIdentifier("prototype.action.reviewClues")
+
+            Rectangle()
+                .fill(AtlasPalette.line.opacity(0.30))
+                .frame(width: 1, height: 39)
+                .position(x: 196, y: 151)
+
+            HomeMetric(
+                value: "3",
+                label: "to review",
+                systemName: "timer",
+                tint: AtlasPalette.lavender
+            )
+            .frame(width: 150, height: 42)
+            .position(x: 121, y: 150)
+
+            HomeMetric(
+                value: "18",
+                label: "Map Stamps",
+                systemName: "arrow.up.right",
+                tint: AtlasPalette.mint
+            )
+            .frame(width: 150, height: 42)
+            .position(x: 274, y: 150)
+        }
     }
 }
 
 private struct HomeMetric: View {
     let value: String
     let label: String
-    let icon: String
+    let systemName: String
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-                .frame(width: 28, height: 28)
+        HStack(spacing: 10) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(AtlasPalette.ink)
+                .frame(width: 38, height: 38)
                 .background(tint, in: Circle())
 
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: -1) {
                 Text(value)
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AtlasType.strong(22))
+                    .foregroundStyle(AtlasPalette.forest)
                 Text(label)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(AtlasType.body(12))
                     .foregroundStyle(AtlasPalette.muted)
             }
-            .foregroundStyle(AtlasPalette.forest)
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
-private struct TripPreviewRow: View {
+private struct HomeNextTrip: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("NEXT UP")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(1.3)
-                    .foregroundStyle(AtlasPalette.muted)
-                Spacer()
-                Text("Day 2 of 3")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(AtlasPalette.forest)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(AtlasPalette.lavender, in: Capsule())
-            }
+        ZStack(alignment: .topLeading) {
+            Text("NEXT UP")
+                .font(AtlasType.strong(11))
+                .tracking(1.2)
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 30, y: 12)
 
-            HStack(spacing: 10) {
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 19, weight: .bold))
-                    .foregroundStyle(AtlasPalette.forest)
+            Text("Tokyo Weekend")
+                .font(AtlasType.strong(21))
+                .foregroundStyle(AtlasPalette.forest)
+                .position(x: 75, y: 37)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Tokyo Weekend")
-                        .font(.system(size: 17, weight: .black, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                    Text("4 stops planned · Next: Tsukiji · 9:00 AM")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(AtlasPalette.muted)
-                }
-                Spacer()
-                Image(systemName: "arrow.right")
-                    .font(.caption.bold())
-                    .foregroundStyle(AtlasPalette.muted)
-            }
+            Text("Day 2 of 3")
+                .font(AtlasType.display(12))
+                .foregroundStyle(AtlasPalette.ink)
+                .frame(width: 83, height: 28)
+                .background(AtlasPalette.lavender, in: Capsule())
+                .position(x: 340, y: 36)
+
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(AtlasPalette.forest)
+                .position(x: 17, y: 70)
+
+            Text("4 stops planned")
+                .font(AtlasType.body(12))
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 92, y: 68)
+
+            Text("Next stop: Tsukiji Outer Market · 9:00 AM")
+                .font(AtlasType.regular(12))
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 179, y: 91)
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 368, y: 77)
+
+            Rectangle()
+                .fill(AtlasPalette.line.opacity(0.30))
+                .frame(width: 382, height: 1)
+                .position(x: 191, y: 104)
         }
     }
 }
 
-private struct RecentStampRows: View {
+private struct HomeRecentStamps: View {
     var body: some View {
-        VStack(spacing: 5) {
-            HStack {
-                Text("RECENT MAP STAMPS")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .tracking(1.3)
-                    .foregroundStyle(AtlasPalette.muted)
-                Spacer()
-                Text("See all")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(AtlasPalette.ink)
-            }
+        ZStack(alignment: .topLeading) {
+            Text("RECENT MAP STAMPS")
+                .font(AtlasType.strong(11))
+                .tracking(1.1)
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 78, y: 14)
 
-            StampRow(name: "Shibuya Backstreets", area: "Tokyo", day: "Today")
-            StampRow(name: "Koffee Mameya", area: "Shibuya", day: "Yesterday")
+            Text("See all")
+                .font(AtlasType.display(12))
+                .foregroundStyle(AtlasPalette.ink)
+                .position(x: 354, y: 14)
+
+            HomeStampRow(name: "Shibuya Backstreets", area: "Shibuya", day: "Today")
+                .placed(x: 0, y: 27, width: 382, height: 51)
+
+            HomeStampRow(name: "Koffee Mameya", area: "Shibuya", day: "Yesterday")
+                .placed(x: 0, y: 78, width: 382, height: 51)
         }
     }
 }
 
-private struct StampRow: View {
+private struct HomeStampRow: View {
     let name: String
     let area: String
     let day: String
 
     var body: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "star.fill")
-                .font(.system(size: 11, weight: .black))
-                .foregroundStyle(AtlasPalette.forest)
-                .frame(width: 29, height: 29)
-                .background(AtlasPalette.mint, in: Circle())
+        HStack(spacing: 10) {
+            RoundStamp(text: "", style: .mapStamp)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(name)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AtlasType.strong(15))
                     .foregroundStyle(AtlasPalette.ink)
                 Text("\(area) · Confirmed")
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(AtlasType.regular(11))
                     .foregroundStyle(AtlasPalette.muted)
             }
+
             Spacer()
+
             Text(day)
-                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .font(AtlasType.regular(11))
                 .foregroundStyle(AtlasPalette.muted)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .bold))
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(AtlasPalette.muted)
         }
-        .frame(height: 34)
+        .padding(.horizontal, 3)
     }
 }
 
 struct SavesPocketScreen: View {
     var body: some View {
-        ZStack {
-            DottedCanvas()
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
 
-            VStack(spacing: 0) {
-                BrandHeader {
-                    Button(action: {}) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(AtlasPalette.forest)
-                            .frame(width: 38, height: 38)
-                            .background(AtlasPalette.honey.opacity(0.78), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
+            BrandHeader {
+                Button(action: {}) {
+                    Image(systemName: "link")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 40, height: 40)
+                        .background(AtlasPalette.honey.opacity(0.78), in: RoundedRectangle(cornerRadius: 13))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13)
+                                .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
+                        }
                 }
-
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("YOUR PLACE MEMORY")
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .tracking(1.3)
-                            .foregroundStyle(AtlasPalette.muted)
-                        Text("Saves")
-                            .font(.system(size: 29, weight: .black, design: .rounded))
-                            .foregroundStyle(AtlasPalette.forest)
-                        Text("Clues you’ve saved from links and notes.")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(AtlasPalette.muted)
-                    }
-                    Spacer()
-                    MemoMark(size: 83)
-                }
-                .padding(.horizontal, 18)
-                .frame(height: 105)
-
-                HStack(spacing: 7) {
-                    PocketCount(label: "Review", value: "3", tint: AtlasPalette.coral.opacity(0.36))
-                    PocketCount(label: "Map Stamps", value: "18", tint: AtlasPalette.mint)
-                    PocketCount(label: "Failed", value: "2", tint: AtlasPalette.coral.opacity(0.23))
-                }
-                .padding(.horizontal, 18)
-
-                ZStack(alignment: .top) {
-                    EnvelopePocket()
-                        .padding(.top, 250)
-
-                    VStack(spacing: -8) {
-                        ReviewTicket(
-                            kind: "REVIEW CANDIDATE",
-                            name: "Tsukiji Outer Market",
-                            detail: "From Xiaohongshu",
-                            action: "Review",
-                            tint: AtlasPalette.sky,
-                            icon: "camera.fill"
-                        )
-                        ReviewTicket(
-                            kind: "REVIEW CANDIDATE",
-                            name: "Koffee Mameya",
-                            detail: "From Instagram",
-                            action: "Review",
-                            tint: AtlasPalette.sky,
-                            icon: "camera.fill"
-                        )
-                        ReviewTicket(
-                            kind: "SOURCE CLUE",
-                            name: "Yasaka Pagoda",
-                            detail: "Missing exact place",
-                            action: "Find exact",
-                            tint: AtlasPalette.coral.opacity(0.30),
-                            icon: "magnifyingglass"
-                        )
-                    }
-                    .padding(.horizontal, 18)
-                }
-                .frame(height: 480)
-
-                Spacer(minLength: 0)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("prototype.action.pasteLink")
             }
+            .placed(x: 0, y: 48, width: 402, height: 50)
+            .accessibilityIdentifier("prototype.saves.header")
+
+            SavesTitleBlock()
+                .placed(x: 10, y: 103, width: 382, height: 101)
+                .accessibilityIdentifier("prototype.saves.title")
+
+            Image("SavesMemoSorting")
+                .resizable()
+                .scaledToFit()
+                .placed(x: 286, y: 100, width: 112, height: 112)
+                .accessibilityLabel("Memo sorting saved cards")
+
+            HStack(spacing: 10) {
+                PocketCount(label: "Review", value: "3", tint: AtlasPalette.coral.opacity(0.52))
+                PocketCount(label: "Map Stamps", value: "18", tint: AtlasPalette.mint)
+                PocketCount(label: "Failed", value: "2", tint: AtlasPalette.coral.opacity(0.35))
+            }
+            .placed(x: 10, y: 216, width: 382, height: 43)
+            .accessibilityIdentifier("prototype.saves.counts")
+
+            SavesTickets()
+                .placed(x: 10, y: 278, width: 382, height: 333)
+                .accessibilityIdentifier("prototype.saves.tickets")
+
+            SavesEnvelopePanel()
+                .placed(x: 0, y: 568, width: 402, height: 207)
+                .accessibilityIdentifier("prototype.saves.envelope")
         }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.saves")
+    }
+}
+
+private struct SavesTitleBlock: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("YOUR PLACE MEMORY")
+                .font(AtlasType.strong(11))
+                .tracking(1.15)
+                .foregroundStyle(AtlasPalette.muted)
+
+            Text("Saves")
+                .font(AtlasType.strong(34))
+                .foregroundStyle(AtlasPalette.forest)
+
+            Text("Clues you’ve saved from links and notes.")
+                .font(AtlasType.body(15))
+                .foregroundStyle(AtlasPalette.muted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -290,22 +337,98 @@ private struct PocketCount: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Text(label)
             Text(value)
-                .fontWeight(.black)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(tint, in: Capsule())
+                .font(AtlasType.strong(16))
+                .frame(width: 25, height: 25)
+                .background(tint, in: Circle())
         }
-        .font(.system(size: 10, weight: .bold, design: .rounded))
+        .font(AtlasType.display(14))
         .foregroundStyle(AtlasPalette.ink)
-        .frame(maxWidth: .infinity)
-        .frame(height: 34)
-        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 11))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 11)
-                .stroke(AtlasPalette.ink.opacity(0.13), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+        }
+    }
+}
+
+private struct SavesEnvelopePanel: View {
+    private let sealInk = Color(red: 0.66, green: 0.32, blue: 0.22)
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Image("SavesEnvelope")
+                .resizable()
+                .scaledToFill()
+                .clipped()
+
+            Text("Full review queue")
+                .font(AtlasType.editorial(20))
+                .foregroundStyle(AtlasPalette.ink)
+                .position(x: 181, y: 82)
+
+            Path { path in
+                path.move(to: CGPoint(x: 111, y: 105))
+                path.addLine(to: CGPoint(x: 253, y: 105))
+            }
+            .stroke(
+                AtlasPalette.line.opacity(0.68),
+                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+            )
+
+            VStack(spacing: -3) {
+                Text("3")
+                    .font(AtlasType.editorial(29))
+                Text("need your\nreview")
+                    .font(AtlasType.regular(10))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(-2)
+            }
+            .foregroundStyle(sealInk)
+            .frame(width: 58, height: 78)
+            .position(x: 333, y: 91)
+        }
+        .frame(width: 402, height: 207)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Full review queue, 3 need your review")
+    }
+}
+
+private struct SavesTickets: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ReviewTicket(
+                kind: "REVIEW CANDIDATE",
+                name: "Tsukiji Outer Market",
+                detail: "From Xiaohongshu",
+                action: "Review",
+                tint: AtlasPalette.sky,
+                icon: "camera"
+            )
+            .placed(x: 0, y: 0, width: 382, height: 111)
+
+            ReviewTicket(
+                kind: "REVIEW CANDIDATE",
+                name: "Koffee Mameya",
+                detail: "From Instagram",
+                action: "Review",
+                tint: AtlasPalette.sky,
+                icon: "camera"
+            )
+            .placed(x: 0, y: 107, width: 382, height: 111)
+
+            ReviewTicket(
+                kind: "SOURCE CLUE",
+                name: "Yasaka Pagoda",
+                detail: "Missing exact place",
+                action: "Find exact",
+                tint: Color(red: 1.0, green: 0.79, blue: 0.72),
+                icon: "magnifyingglass"
+            )
+            .placed(x: 0, y: 210, width: 382, height: 118)
         }
     }
 }
@@ -319,127 +442,57 @@ private struct ReviewTicket: View {
     let icon: String
 
     var body: some View {
-        HStack(spacing: 11) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(AtlasPalette.forest)
-                .frame(width: 43, height: 43)
-                .background(tint, in: ScallopBadge())
+        ZStack(alignment: .topLeading) {
+            ScallopedRectangle(depth: 3, pitch: 10)
+                .fill(tint.opacity(0.94))
+                .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 4, y: 2)
 
-            VStack(alignment: .leading, spacing: 2) {
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(AtlasPalette.paper)
+                .padding(5)
+
+            PerforatedMedallion(systemName: icon, tint: tint)
+                .position(x: 47, y: 55)
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text(kind)
-                    .font(.system(size: 8, weight: .black, design: .rounded))
-                    .tracking(0.7)
-                    .foregroundStyle(kind == "SOURCE CLUE" ? AtlasPalette.coral : AtlasPalette.forest)
+                    .font(AtlasType.strong(11))
+                    .tracking(0.6)
+                    .foregroundStyle(
+                        kind == "SOURCE CLUE" ? AtlasPalette.coral : Color(red: 0.10, green: 0.48, blue: 0.70)
+                    )
                 Text(name)
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .font(AtlasType.strong(19))
                     .foregroundStyle(AtlasPalette.ink)
+                    .lineLimit(1)
                 Text(detail)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(AtlasType.body(13))
                     .foregroundStyle(AtlasPalette.muted)
             }
+            .frame(width: 190, alignment: .leading)
+            .position(x: 181, y: 55)
 
-            Spacer()
-
-            Text(action)
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(AtlasPalette.forest)
-                .padding(.horizontal, 10)
-                .frame(height: 31)
-                .background(tint, in: RoundedRectangle(cornerRadius: 9))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 9)
-                        .stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
+            Button(action: {}) {
+                Text(action)
+                    .font(AtlasType.display(14))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: action == "Find exact" ? 82 : 68, height: 38)
+                    .background(tint.opacity(0.84), in: RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AtlasPalette.ink.opacity(0.22), lineWidth: 1)
+                    }
                 }
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 92)
-        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    kind == "SOURCE CLUE" ? AtlasPalette.coral : AtlasPalette.sky,
-                    style: StrokeStyle(lineWidth: 1.5, dash: [5, 3])
+                .buttonStyle(.plain)
+                .frame(width: action == "Find exact" ? 88 : 74, height: 44)
+                .position(x: action == "Find exact" ? 313 : 316, y: 55)
+                .accessibilityLabel("\(action) \(name)")
+                .accessibilityHint("Prototype action")
+                .accessibilityIdentifier(
+                    "prototype.saves.\(action == "Find exact" ? "findExact" : "review")."
+                        + name.lowercased().replacingOccurrences(of: " ", with: "-")
                 )
         }
-        .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 6, y: 3)
-    }
-}
-
-private struct ScallopBadge: Shape {
-    func path(in rect: CGRect) -> Path {
-        Path(roundedRect: rect, cornerRadius: 13)
-    }
-}
-
-private struct EnvelopePocket: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(AtlasPalette.kraft)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(AtlasPalette.ink.opacity(0.25), lineWidth: 1)
-                }
-
-            EnvelopeFlap()
-                .fill(AtlasPalette.kraft.opacity(0.78))
-                .overlay {
-                    EnvelopeFlap()
-                        .stroke(AtlasPalette.ink.opacity(0.16), lineWidth: 1)
-                }
-
-            VStack(spacing: 13) {
-                HStack {
-                    Image(systemName: "envelope.open.fill")
-                        .font(.system(size: 18, weight: .bold))
-                    Text("Full review queue")
-                        .font(.system(size: 18, weight: .black, design: .serif))
-                    Spacer()
-                    VStack(spacing: 0) {
-                        Text("3")
-                            .font(.system(size: 23, weight: .black, design: .rounded))
-                        Text("need your\nreview")
-                            .font(.system(size: 7, weight: .bold, design: .rounded))
-                            .multilineTextAlignment(.center)
-                    }
-                    .foregroundStyle(AtlasPalette.coral)
-                    .frame(width: 58, height: 58)
-                    .background(AtlasPalette.paper.opacity(0.55), in: Circle())
-                    .overlay {
-                        Circle().stroke(
-                            AtlasPalette.coral.opacity(0.75),
-                            style: StrokeStyle(lineWidth: 1.5, dash: [3, 2])
-                        )
-                    }
-                }
-
-                HStack {
-                    Image(systemName: "airplane")
-                    Rectangle()
-                        .fill(AtlasPalette.ink.opacity(0.24))
-                        .frame(height: 1)
-                    Image(systemName: "mappin.and.ellipse")
-                }
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(AtlasPalette.coral.opacity(0.75))
-            }
-            .foregroundStyle(AtlasPalette.forest)
-            .padding(18)
-        }
-        .frame(height: 205)
-        .padding(.horizontal, 6)
-    }
-}
-
-private struct EnvelopeFlap: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.height * 0.55))
-        path.addLine(to: CGPoint(x: rect.maxX, y: 0))
-        path.closeSubpath()
-        return path
     }
 }
 
@@ -447,108 +500,140 @@ struct TripPlanScreen: View {
     let onBack: () -> Void
 
     private let stops = [
-        ("Tsukiji Outer Market", "9:00 AM", "Seafood stalls & breakfast", "ferry.fill", AtlasPalette.sky),
-        ("Koffee Mameya", "11:30 AM", "Coffee & people watching", "cup.and.heat.waves.fill", AtlasPalette.kraft),
-        ("teamLab Borderless", "2:30 PM", "Immersive digital art", "sparkles", AtlasPalette.lavender),
-        ("Shibuya Sky", "6:30 PM", "Sunset city views", "sun.max.fill", AtlasPalette.mint),
+        PlanStop(
+            name: "Tsukiji Outer Market",
+            time: "9:00 AM",
+            note: "Seafood stalls & breakfast",
+            image: "TsukijiThumbnail",
+            imageHeight: 78
+        ),
+        PlanStop(
+            name: "Koffee Mameya",
+            time: "11:30 AM",
+            note: "Coffee & people watching",
+            image: "KoffeeMameyaThumbnail",
+            imageHeight: 82
+        ),
+        PlanStop(
+            name: "teamLab Borderless",
+            time: "2:30 PM",
+            note: "Immersive digital art",
+            image: "TeamLabThumbnail",
+            imageHeight: 83
+        ),
+        PlanStop(
+            name: "Shibuya Sky",
+            time: "6:30 PM",
+            note: "Sunset city views",
+            image: "ShibuyaSkyThumbnail",
+            imageHeight: 84
+        ),
     ]
 
     var body: some View {
-        ZStack {
-            DottedCanvas()
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
 
-            VStack(spacing: 0) {
-                HStack {
-                    Button(action: onBack) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(AtlasPalette.ink)
-                            .frame(width: 38, height: 38)
-                            .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(AtlasPalette.ink.opacity(0.16), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("prototype.trip.back")
-                    .accessibilityLabel("Back")
+            TripHeader(onBack: onBack)
+                .placed(x: 0, y: 48, width: 402, height: 54)
+                .accessibilityIdentifier("prototype.plan.header")
 
-                    Spacer()
-                    Text("Tokyo Weekend")
-                        .font(.system(size: 18, weight: .black, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                    Spacer()
-                    MemoMark(size: 39)
+            DayTabs()
+                .placed(x: 0, y: 102, width: 402, height: 47)
+                .accessibilityIdentifier("prototype.plan.dayTabs")
+
+            PlanTitleBlock()
+                .placed(x: 6, y: 168, width: 390, height: 58)
+
+            Image("PlanRouteRibbon")
+                .resizable()
+                .scaledToFill()
+                .clipped()
+                .placed(x: 0, y: 229, width: 64, height: 493)
+                .accessibilityLabel("Day 2 route")
+                .accessibilityIdentifier("prototype.plan.route")
+
+            PlanStops(stops: stops)
+                .placed(x: 61, y: 238, width: 332, height: 478)
+                .accessibilityIdentifier("prototype.plan.stops")
+
+            Button(action: {}) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 18, weight: .regular))
+                    Text("Add stop")
+                        .font(AtlasType.display(16))
                 }
-                .frame(height: 52)
-                .padding(.horizontal, 18)
-
-                HStack(spacing: 0) {
-                    DayTab(title: "Day 1", tint: AtlasPalette.paper, selected: false)
-                    DayTab(title: "Day 2", tint: AtlasPalette.mint, selected: true)
-                    DayTab(title: "Day 3", tint: AtlasPalette.lavender, selected: false)
+                .foregroundStyle(AtlasPalette.ink)
+                .frame(width: 140, height: 40)
+                .background(AtlasPalette.mint, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AtlasPalette.forest.opacity(0.30), lineWidth: 1)
                 }
-                .padding(.horizontal, 18)
-
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TUESDAY, OCTOBER 13")
-                            .font(.system(size: 8, weight: .bold, design: .rounded))
-                            .tracking(1.2)
-                            .foregroundStyle(AtlasPalette.muted)
-                        Text("Tokyo highlights")
-                            .font(.system(size: 23, weight: .black, design: .rounded))
-                            .foregroundStyle(AtlasPalette.forest)
-                    }
-                    Spacer()
-                    Text("4 stops")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(AtlasPalette.mint, in: Capsule())
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 15)
-                .padding(.bottom, 8)
-
-                ZStack(alignment: .topLeading) {
-                    RouteRibbon()
-                        .frame(width: 74)
-                        .padding(.leading, 17)
-
-                    VStack(spacing: 9) {
-                        ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
-                            ItineraryStop(
-                                number: index + 1,
-                                name: stop.0,
-                                time: stop.1,
-                                note: stop.2,
-                                icon: stop.3,
-                                tint: stop.4
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal, 18)
-
-                Button(action: {}) {
-                    Label("Add stop", systemImage: "plus.circle")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                        .padding(.horizontal, 18)
-                        .frame(height: 37)
-                        .background(AtlasPalette.mint, in: Capsule())
-                        .overlay { Capsule().stroke(AtlasPalette.forest.opacity(0.18), lineWidth: 1) }
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 10)
-
-                Spacer(minLength: 2)
             }
+            .buttonStyle(.plain)
+            .placed(x: 122, y: 728, width: 140, height: 40)
+            .accessibilityIdentifier("prototype.action.addStop")
         }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.plan")
+    }
+}
+
+private struct PlanStop {
+    let name: String
+    let time: String
+    let note: String
+    let image: String
+    let imageHeight: CGFloat
+}
+
+private struct TripHeader: View {
+    let onBack: () -> Void
+
+    var body: some View {
+        ZStack {
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: 40, height: 40)
+                    .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 11))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 11)
+                            .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .position(x: 22, y: 27)
+            .accessibilityLabel("Back")
+            .accessibilityIdentifier("prototype.trip.back")
+
+            Text("Tokyo Weekend")
+                .font(AtlasType.strong(23))
+                .foregroundStyle(AtlasPalette.forest)
+
+            MemoMark(size: 48)
+                .position(x: 375, y: 26)
+        }
+    }
+}
+
+private struct DayTabs: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            DayTab(title: "Day 1", tint: AtlasPalette.paper, selected: false)
+            DayTab(title: "Day 2", tint: AtlasPalette.mint, selected: true)
+            DayTab(title: "Day 3", tint: AtlasPalette.lavender, selected: false)
+        }
+        .padding(.horizontal, 4)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(AtlasPalette.line.opacity(0.26))
+                .frame(height: 1)
+        }
     }
 }
 
@@ -559,181 +644,464 @@ private struct DayTab: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 11, weight: selected ? .black : .medium, design: .rounded))
+            .font(selected ? AtlasType.strong(15) : AtlasType.body(15))
             .foregroundStyle(AtlasPalette.ink)
-            .frame(maxWidth: .infinity)
-            .frame(height: 38)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(tint)
+            .clipShape(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 13,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 13
+                )
+            )
             .overlay {
-                RoundedRectangle(cornerRadius: 11)
-                    .stroke(AtlasPalette.ink.opacity(selected ? 0.26 : 0.14), lineWidth: 1)
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 13,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 13
+                )
+                .stroke(AtlasPalette.line.opacity(selected ? 0.32 : 0.24), lineWidth: 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 11))
+    }
+}
+
+private struct PlanTitleBlock: View {
+    var body: some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("TUESDAY, OCTOBER 13")
+                    .font(AtlasType.strong(11))
+                    .tracking(0.8)
+                    .foregroundStyle(AtlasPalette.muted)
+
+                Text("Tokyo highlights")
+                    .font(AtlasType.strong(26))
+                    .foregroundStyle(AtlasPalette.forest)
+            }
+
+            Spacer()
+
+            Text("4 stops")
+                .font(AtlasType.display(14))
+                .foregroundStyle(AtlasPalette.ink)
+                .frame(width: 70, height: 29)
+                .background(AtlasPalette.mint, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
+                }
+        }
+    }
+}
+
+private struct PlanStops: View {
+    let stops: [PlanStop]
+    private let frames: [CGRect] = [
+        CGRect(x: 0, y: 0, width: 332, height: 101),
+        CGRect(x: 0, y: 122, width: 332, height: 105),
+        CGRect(x: 0, y: 250, width: 332, height: 105),
+        CGRect(x: 0, y: 376, width: 332, height: 102),
+    ]
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
+                ItineraryStop(stop: stop)
+                    .placed(
+                        x: frames[index].minX,
+                        y: frames[index].minY,
+                        width: frames[index].width,
+                        height: frames[index].height
+                    )
+            }
+        }
     }
 }
 
 private struct ItineraryStop: View {
-    let number: Int
-    let name: String
-    let time: String
-    let note: String
-    let icon: String
-    let tint: Color
+    let stop: PlanStop
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text("\(number)")
-                .font(.system(size: 15, weight: .black, design: .rounded))
-                .foregroundStyle(AtlasPalette.ink)
-                .frame(width: 34, height: 34)
-                .background(AtlasPalette.coral.opacity(0.80), in: Circle())
-                .overlay { Circle().stroke(AtlasPalette.coral, lineWidth: 1) }
-
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AtlasPalette.forest)
-                .frame(width: 54, height: 54)
-                .background(tint, in: RoundedRectangle(cornerRadius: 13))
+        HStack(spacing: 18) {
+            Image(stop.image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 74, height: stop.imageHeight)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                Text(stop.name)
+                    .font(AtlasType.strong(17))
                     .foregroundStyle(AtlasPalette.ink)
                     .lineLimit(1)
-                Label(time, systemImage: "clock")
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundStyle(AtlasPalette.muted)
-                Text(note)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+
+                HStack(spacing: 6) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 13, weight: .regular))
+                    Text(stop.time)
+                        .font(AtlasType.body(13))
+                }
+                .foregroundStyle(AtlasPalette.muted)
+
+                Text(stop.note)
+                    .font(AtlasType.regular(13))
                     .foregroundStyle(AtlasPalette.muted)
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 0)
+
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(AtlasPalette.muted)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(AtlasPalette.ink)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 76)
-        .background(AtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 15))
+        .padding(.leading, 11)
+        .padding(.trailing, 16)
+        .background(AtlasPalette.paper.opacity(0.97), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(AtlasPalette.ink.opacity(0.14), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
         }
     }
 }
 
-private struct RouteRibbon: View {
+struct TripAtlasMapScreen: View {
+    let onBack: () -> Void
+
     var body: some View {
-        Canvas { context, size in
-            var ribbon = Path()
-            ribbon.move(to: CGPoint(x: size.width * 0.55, y: 0))
-            ribbon.addCurve(
-                to: CGPoint(x: size.width * 0.44, y: size.height),
-                control1: CGPoint(x: 0, y: size.height * 0.28),
-                control2: CGPoint(x: size.width, y: size.height * 0.70)
-            )
-            context.stroke(ribbon, with: .color(AtlasPalette.sky.opacity(0.55)), lineWidth: 42)
-            context.stroke(
-                ribbon,
-                with: .color(AtlasPalette.routeInk),
-                style: StrokeStyle(lineWidth: 1.5, dash: [4, 5])
-            )
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
+
+            TripHeader(onBack: onBack)
+                .placed(x: 0, y: 48, width: 402, height: 54)
+                .accessibilityIdentifier("prototype.trip.map.header")
+
+            Image("MapAtlasScene")
+                .resizable()
+                .scaledToFill()
+                .clipped()
+                .placed(x: 0, y: 102, width: 402, height: 450)
+                .accessibilityLabel("Tokyo Weekend route map")
+                .accessibilityIdentifier("prototype.trip.map.atlas")
+
+            HStack(spacing: 7) {
+                Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    .font(.system(size: 14, weight: .regular))
+                Text("DAY 2 · 4 STOPS")
+                    .font(AtlasType.display(13))
+            }
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 145, height: 31)
+            .background(AtlasPalette.mint, in: Capsule())
+            .overlay {
+                Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
+            }
+            .placed(x: 128, y: 114, width: 145, height: 31)
+            .accessibilityLabel("Day 2, 4 stops")
+
+            TripMapPlaceCard()
+                .placed(x: 15, y: 550, width: 372, height: 226)
+                .accessibilityIdentifier("prototype.trip.map.placeCard")
         }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("prototype.trip.map")
+    }
+}
+
+private struct TripMapPlaceCard: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(AtlasPalette.paper)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+                }
+                .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 7, y: 2)
+
+            RoundStamp(text: "2", style: .tripStop)
+                .position(x: 44, y: 42)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("STOP 2 · 11:30 AM")
+                    .font(AtlasType.display(11))
+                    .tracking(0.7)
+                    .foregroundStyle(AtlasPalette.muted)
+
+                Text("Koffee Mameya")
+                    .font(AtlasType.strong(23))
+                    .foregroundStyle(AtlasPalette.forest)
+            }
+            .position(x: 176, y: 40)
+
+            HStack(spacing: 6) {
+                Image(systemName: "star.circle")
+                    .font(.system(size: 13, weight: .regular))
+                Text("Confirmed Map Stamp")
+                    .font(AtlasType.display(13))
+            }
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 183, height: 30)
+            .background(AtlasPalette.mint, in: Capsule())
+            .overlay {
+                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
+            }
+            .position(x: 168, y: 91)
+
+            Text("Tsukiji Outer Market  →  Koffee Mameya  →  teamLab")
+                .font(AtlasType.body(13))
+                .foregroundStyle(AtlasPalette.muted)
+                .lineLimit(1)
+                .position(x: 186, y: 132)
+
+            Text("Next stop · teamLab Borderless at 2:30 PM")
+                .font(AtlasType.regular(14))
+                .foregroundStyle(AtlasPalette.muted)
+                .position(x: 171, y: 158)
+
+            Button(action: {}) {
+                HStack(spacing: 10) {
+                    Text("Open stop")
+                        .font(AtlasType.strong(17))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .regular))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 160, height: 42)
+                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .position(x: 95, y: 198)
+            .accessibilityIdentifier("prototype.action.openTripStop")
+        }
+    }
+}
+
+struct TripInboxPlaceholderScreen: View {
+    let onBack: () -> Void
+
+    var body: some View {
+        TripPrototypePlaceholder(
+            onBack: onBack,
+            icon: "tray.full",
+            eyebrow: "TRIP INBOX",
+            title: "Trip Inbox",
+            message: "Trip-only links and review candidates will appear here.",
+            note: "Not wired in this visual prototype",
+            tint: AtlasPalette.sky,
+            identifier: "prototype.trip.inbox"
+        )
+    }
+}
+
+struct TripSharePlaceholderScreen: View {
+    let onBack: () -> Void
+
+    var body: some View {
+        TripPrototypePlaceholder(
+            onBack: onBack,
+            icon: "square.and.arrow.up",
+            eyebrow: "TRIP SHARE",
+            title: "Share this Trip",
+            message: "SAV-E link and KML export will appear here.",
+            note: "Not wired in this visual prototype",
+            tint: AtlasPalette.lavender,
+            identifier: "prototype.trip.share"
+        )
+    }
+}
+
+private struct TripPrototypePlaceholder: View {
+    let onBack: () -> Void
+    let icon: String
+    let eyebrow: String
+    let title: String
+    let message: String
+    let note: String
+    let tint: Color
+    let identifier: String
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
+
+            TripHeader(onBack: onBack)
+                .placed(x: 0, y: 48, width: 402, height: 54)
+                .accessibilityIdentifier("\(identifier).header")
+
+            VStack(spacing: 18) {
+                MemoMark(size: 88)
+                    .frame(height: 104)
+
+                Image(systemName: icon)
+                    .font(.system(size: 34, weight: .regular))
+                    .foregroundStyle(AtlasPalette.forest)
+                    .frame(width: 68, height: 68)
+                    .background(tint, in: Circle())
+
+                VStack(spacing: 7) {
+                    Text(eyebrow)
+                        .font(AtlasType.display(12))
+                        .tracking(0.9)
+                        .foregroundStyle(AtlasPalette.muted)
+
+                    Text(title)
+                        .font(AtlasType.strong(28))
+                        .foregroundStyle(AtlasPalette.forest)
+
+                    Text(message)
+                        .font(AtlasType.regular(16))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 285)
+                }
+
+                Text(note)
+                    .font(AtlasType.display(13))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
+                    .background(tint.opacity(0.72), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(AtlasPalette.forest.opacity(0.22), lineWidth: 1)
+                    }
+            }
+            .frame(width: 350, height: 480)
+            .background(AtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
+            }
+            .placed(x: 26, y: 170, width: 350, height: 480)
+        }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(identifier)
     }
 }
 
 struct RootAtlasMapScreen: View {
     var body: some View {
-        ZStack {
-            AtlasMapArt(variant: .full)
-                .ignoresSafeArea(edges: .bottom)
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
 
-            VStack(spacing: 0) {
-                BrandHeader {
-                    Label("18 Map Stamps", systemImage: "star.circle.fill")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                        .padding(.horizontal, 10)
-                        .frame(height: 32)
-                        .background(AtlasPalette.mint, in: Capsule())
-                        .overlay { Capsule().stroke(AtlasPalette.forest.opacity(0.15), lineWidth: 1) }
+            Image("MapAtlasScene")
+                .resizable()
+                .scaledToFill()
+                .clipped()
+                .placed(x: 0, y: 91, width: 402, height: 480)
+                .accessibilityLabel("Illustrated Tokyo route map")
+                .accessibilityIdentifier("prototype.map.atlas")
+
+            BrandHeader {
+                HStack(spacing: 7) {
+                    Image(systemName: "star.circle")
+                        .font(.system(size: 16, weight: .regular))
+                    Text("18 Map Stamps")
+                        .font(AtlasType.display(14))
                 }
-                .background(AtlasPalette.canvas.opacity(0.90))
-
-                Spacer()
-
-                ZStack(alignment: .topTrailing) {
-                    PlaceAtlasCard()
-                    MemoMark(size: 76)
-                        .offset(x: -20, y: -48)
+                .foregroundStyle(AtlasPalette.ink)
+                .frame(width: 157, height: 34)
+                .background(AtlasPalette.mint, in: Capsule())
+                .overlay {
+                    Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 10)
             }
+            .background(AtlasPalette.canvas.opacity(0.96))
+            .placed(x: 0, y: 48, width: 402, height: 50)
+            .accessibilityIdentifier("prototype.map.header")
+
+            PlaceAtlasCard()
+                .placed(x: 15, y: 550, width: 372, height: 238)
+                .accessibilityIdentifier("prototype.map.placeCard")
         }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.map")
     }
 }
 
 private struct PlaceAtlasCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                AtlasRoutePin(number: 2)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Koffee Mameya")
-                        .font(.system(size: 19, weight: .black, design: .rounded))
-                        .foregroundStyle(AtlasPalette.forest)
-                    Text("Shibuya")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(AtlasPalette.muted)
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(AtlasPalette.paper)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
                 }
-                Spacer()
-            }
+                .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 7, y: 2)
 
-            Label("Confirmed Map Stamp", systemImage: "checkmark.seal.fill")
-                .font(.system(size: 9, weight: .bold, design: .rounded))
+            RoundStamp(text: "2", style: .tripStop)
+                .position(x: 44, y: 42)
+
+            Text("Koffee Mameya")
+                .font(AtlasType.strong(23))
                 .foregroundStyle(AtlasPalette.forest)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(AtlasPalette.mint, in: Capsule())
+                .position(x: 170, y: 33)
 
-            Text("Cozy coffee shop known for house blend and quiet corners.")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+            Text("Shibuya")
+                .font(AtlasType.body(14))
                 .foregroundStyle(AtlasPalette.muted)
+                .position(x: 111, y: 62)
 
-            HStack(spacing: 9) {
-                Button(action: {}) {
-                    HStack {
-                        Text("Open details")
-                        Spacer()
-                        Image(systemName: "arrow.right")
-                    }
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .frame(height: 38)
-                    .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: {}) {
-                    Image(systemName: "bookmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AtlasPalette.forest)
-                        .frame(width: 40, height: 38)
-                        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(AtlasPalette.ink.opacity(0.18), lineWidth: 1)
-                        }
-                }
-                .buttonStyle(.plain)
+            HStack(spacing: 6) {
+                Image(systemName: "star.circle")
+                    .font(.system(size: 13, weight: .regular))
+                Text("Confirmed Map Stamp")
+                    .font(AtlasType.display(13))
             }
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 183, height: 30)
+            .background(AtlasPalette.mint, in: Capsule())
+            .overlay {
+                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
+            }
+            .position(x: 168, y: 91)
+
+            Text("Cozy coffee shop known for house\nblend and quiet corners.")
+                .font(AtlasType.regular(14))
+                .foregroundStyle(AtlasPalette.muted)
+                .lineSpacing(3)
+                .position(x: 182, y: 139)
+
+            Button(action: {}) {
+                HStack {
+                    Spacer()
+                    Text("Open details")
+                        .font(AtlasType.strong(17))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 18, weight: .regular))
+                        .padding(.trailing, 14)
+                }
+                .foregroundStyle(.white)
+                .frame(width: 226, height: 42)
+                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .position(x: 133, y: 202)
+            .accessibilityIdentifier("prototype.action.openDetails")
+
+            Button(action: {}) {
+                Image(systemName: "bookmark")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(AtlasPalette.forest)
+                    .frame(width: 49, height: 42)
+                    .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(AtlasPalette.line.opacity(0.35), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .position(x: 328, y: 202)
+            .accessibilityIdentifier("prototype.action.bookmark")
         }
-        .padding(16)
-        .atlasPaper(radius: 21, shadow: true)
     }
 }

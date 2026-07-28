@@ -29,10 +29,10 @@ private enum RootDestination: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .home: "house.fill"
-        case .saves: "bookmark.fill"
-        case .trips: "suitcase.fill"
-        case .map: "map.fill"
+        case .home: "house"
+        case .saves: "bookmark"
+        case .trips: "briefcase"
+        case .map: "globe"
         }
     }
 }
@@ -56,10 +56,10 @@ private enum TripDestination: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .plan: "list.number"
-        case .map: "map.fill"
-        case .inbox: "tray.fill"
-        case .share: "square.and.arrow.up.fill"
+        case .plan: "map"
+        case .map: "globe.asia.australia"
+        case .inbox: "envelope"
+        case .share: "point.3.connected.trianglepath.dotted"
         }
     }
 }
@@ -69,41 +69,58 @@ private struct PrototypeShell: View {
     @State private var trip: TripDestination = .plan
 
     var body: some View {
-        ZStack {
-            AtlasPalette.canvas.ignoresSafeArea()
-
-            Group {
-                switch root {
-                case .home:
-                    HomeAtlasScreen()
-                case .saves:
-                    SavesPocketScreen()
-                case .trips:
-                    TripPlanScreen(onBack: { root = .home })
-                case .map:
-                    RootAtlasMapScreen()
+        ReferenceViewport {
+            ZStack(alignment: .topLeading) {
+                Group {
+                    switch root {
+                    case .home:
+                        HomeAtlasScreen()
+                    case .saves:
+                        SavesPocketScreen()
+                    case .trips:
+                        switch trip {
+                        case .plan:
+                            TripPlanScreen(onBack: { root = .home })
+                        case .map:
+                            TripAtlasMapScreen(onBack: { root = .home })
+                        case .inbox:
+                            TripInboxPlaceholderScreen(onBack: { root = .home })
+                        case .share:
+                            TripSharePlaceholderScreen(onBack: { root = .home })
+                        }
+                    case .map:
+                        RootAtlasMapScreen()
+                    }
                 }
-            }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if root == .trips {
-                AtlasTabBar(
-                    items: TripDestination.allCases,
-                    selection: trip,
-                    title: \.title,
-                    icon: \.icon,
-                    onSelect: { trip = $0 }
-                )
-                .accessibilityIdentifier("prototype.tripTabs")
-            } else {
-                AtlasTabBar(
-                    items: RootDestination.allCases,
-                    selection: root,
-                    title: \.title,
-                    icon: \.icon,
-                    onSelect: { root = $0 }
-                )
-                .accessibilityIdentifier("prototype.rootTabs")
+
+                if root == .trips {
+                    AtlasTabBar(
+                        items: TripDestination.allCases,
+                        selection: trip,
+                        title: \.title,
+                        icon: \.icon,
+                        accessibilityPrefix: "tripTab",
+                        onSelect: { trip = $0 }
+                    )
+                    .placed(x: 0, y: 786, width: 402, height: 76)
+                    .accessibilityIdentifier("prototype.tripTabs")
+                } else {
+                    AtlasTabBar(
+                        items: RootDestination.allCases,
+                        selection: root,
+                        title: \.title,
+                        icon: \.icon,
+                        accessibilityPrefix: "rootTab",
+                        onSelect: { root = $0 }
+                    )
+                    .placed(
+                        x: 0,
+                        y: root == .map ? 788 : 786,
+                        width: 402,
+                        height: 76
+                    )
+                    .accessibilityIdentifier("prototype.rootTabs")
+                }
             }
         }
         .tint(AtlasPalette.forest)

@@ -23,6 +23,34 @@ xcodebuild \
   build
 ```
 
+## Regenerate approved section assets
+
+```bash
+cd Prototypes/AtlasPostcard
+node Scripts/extract-reference-assets.mjs
+```
+
+The extractor is local and deterministic. It creates only section-level
+illustrations and thumbnails listed in `Reference/asset-manifest.json`; it
+does not create a whole-screen screenshot background. It requires Python 3
+with Pillow and exits with an installation hint when Pillow is unavailable.
+
+## Visual parity gate
+
+Use one task-owned 402 × 874 iPhone Simulator:
+
+```bash
+Scripts/run-visual-parity.sh \
+  --destination 'platform=iOS Simulator,id=<UDID>' \
+  --artifacts /absolute/path/to/new-empty-artifact-directory
+```
+
+The runner captures Home, Saves, Plan, and Map, then writes matching
+`reference/`, `output/`, `diff/`, and `results/` directories. All four pages
+must score at least `0.90`. XCTest locks the application window to 402 × 874
+points; the comparator accepts only exact, uniform Retina pixel multiples of
+that viewport and rejects other dimensions.
+
 ## Boundaries
 
 - Seeded display data only.
