@@ -154,7 +154,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
             1,
             "A Saves Review Candidate should open in the one global drawer."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout),
+            "A Saves Review Candidate should render its canonical review detail."
+        )
     }
 
     @MainActor
