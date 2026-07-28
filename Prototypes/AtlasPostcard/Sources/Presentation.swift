@@ -76,6 +76,8 @@ struct AtlasPresentation: @unchecked Sendable {
     var onOpenSaves: () -> Void
     var onOpenPlace: (String) -> Void
     var onOpenReview: (String) -> Void
+    var onSelectReview: () -> Void
+    var onSelectMapStamps: () -> Void
     var onSelectDay: (Int) -> Void
     var onOpenStop: (String) -> Void
     var onAddStop: () -> Void
@@ -151,6 +153,8 @@ struct AtlasPresentation: @unchecked Sendable {
         onOpenSaves: {},
         onOpenPlace: { _ in },
         onOpenReview: { _ in },
+        onSelectReview: {},
+        onSelectMapStamps: {},
         onSelectDay: { _ in },
         onOpenStop: { _ in },
         onAddStop: {}

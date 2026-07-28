@@ -26,7 +26,6 @@ struct HomeAtlasScreen: View {
                 .accessibilityIdentifier("home.capture")
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
-            .accessibilityIdentifier("prototype.home.header")
 
             Image("HomeAtlasScene")
                 .resizable()
@@ -38,15 +37,12 @@ struct HomeAtlasScreen: View {
 
             HomeReviewCard()
                 .placed(x: 5, y: 354, width: 392, height: 182)
-                .accessibilityIdentifier("prototype.home.reviewCard")
 
             HomeNextTrip()
                 .placed(x: 10, y: 542, width: 382, height: 105)
-                .accessibilityIdentifier("prototype.home.nextTrip")
 
             HomeRecentStamps()
                 .placed(x: 10, y: 650, width: 382, height: 133)
-                .accessibilityIdentifier("prototype.home.recentStamps")
         }
         .frame(width: 402, height: 874)
         .clipped()
@@ -309,7 +305,6 @@ struct SavesPocketScreen: View {
                 .accessibilityIdentifier("root.capture")
             }
             .placed(x: 0, y: 48, width: 402, height: 50)
-            .accessibilityIdentifier("prototype.saves.header")
 
             SavesTitleBlock()
                 .placed(x: 10, y: 103, width: 382, height: 101)
@@ -322,16 +317,26 @@ struct SavesPocketScreen: View {
                 .accessibilityLabel("Memo sorting saved cards")
 
             HStack(spacing: 10) {
-                PocketCount(
-                    label: "Review",
-                    value: "\(presentation.reviewCount)",
-                    tint: AtlasPalette.coral.opacity(0.52)
-                )
-                PocketCount(
-                    label: "Map Stamps",
-                    value: "\(presentation.mapStampCount)",
-                    tint: AtlasPalette.mint
-                )
+                Button(action: presentation.onSelectReview) {
+                    PocketCount(
+                        label: "Review",
+                        value: "\(presentation.reviewCount)",
+                        tint: AtlasPalette.coral.opacity(0.52)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("saves.segment.review")
+
+                Button(action: presentation.onSelectMapStamps) {
+                    PocketCount(
+                        label: "Map Stamps",
+                        value: "\(presentation.mapStampCount)",
+                        tint: AtlasPalette.mint
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("saves.segment.mapStamps")
+
                 PocketCount(
                     label: "Failed",
                     value: "\(presentation.failedCount)",
@@ -343,7 +348,6 @@ struct SavesPocketScreen: View {
 
             SavesTickets()
                 .placed(x: 10, y: 278, width: 382, height: 333)
-                .accessibilityIdentifier("prototype.saves.tickets")
 
             SavesEnvelopePanel()
                 .placed(x: 0, y: 568, width: 402, height: 207)

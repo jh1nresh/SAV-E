@@ -58,7 +58,9 @@ enum SaveAtlasPresentationFactory {
         onCapture: @escaping () -> Void,
         onReviewAll: @escaping () -> Void,
         onOpenPlace: @escaping (Place) -> Void,
-        onOpenReview: @escaping (PlaceReviewCandidate) -> Void
+        onOpenReview: @escaping (PlaceReviewCandidate) -> Void,
+        onSelectReview: @escaping () -> Void,
+        onSelectMapStamps: @escaping () -> Void
     ) -> AtlasPresentation {
         var presentation = SaveAtlasRuntime.usesParityFixture
             ? AtlasPresentation.reference
@@ -80,6 +82,8 @@ enum SaveAtlasPresentationFactory {
             }
             onOpenReview(candidate)
         }
+        presentation.onSelectReview = onSelectReview
+        presentation.onSelectMapStamps = onSelectMapStamps
         return presentation
     }
 

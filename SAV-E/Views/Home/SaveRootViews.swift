@@ -319,8 +319,18 @@ struct SaveLibraryView: View {
     @State private var selectedMode: SaveLibraryMode?
 
     var body: some View {
-        SavesPocketScreen()
-        .environment(\.atlasPresentation, atlasPresentation)
+        Group {
+            switch effectiveMode {
+            case .review:
+                SavesPocketScreen()
+                    .environment(\.atlasPresentation, atlasPresentation)
+            case .mapStamps:
+                ScrollView(showsIndicators: false) {
+                    savesContent
+                }
+                .background(SaveAtlasPalette.canvas)
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
@@ -333,7 +343,13 @@ struct SaveLibraryView: View {
             onCapture: onOpenCapture,
             onReviewAll: onOpenReview,
             onOpenPlace: onOpenSavedPlace,
-            onOpenReview: onOpenReviewCandidate
+            onOpenReview: onOpenReviewCandidate,
+            onSelectReview: {
+                selectedMode = .review
+            },
+            onSelectMapStamps: {
+                selectedMode = .mapStamps
+            }
         )
     }
 

@@ -277,6 +277,7 @@ struct NewTripPackView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trip.create.sheet")
     }
 
