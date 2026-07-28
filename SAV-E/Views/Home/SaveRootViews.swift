@@ -361,7 +361,7 @@ struct SaveMapRootView: View {
     var body: some View {
         MapView(
             viewModel: mapViewModel,
-            shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation
+            shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation && !usesUITestMapStampFocus
         )
         .navigationTitle(languageSettings.localized(english: "Map", traditionalChinese: "地圖"))
         .navigationBarTitleDisplayMode(.inline)
@@ -371,6 +371,24 @@ struct SaveMapRootView: View {
             }
         }
         .accessibilityIdentifier("map.root")
+        .task(id: mapViewModel.places.first?.id) {
+            guard usesUITestMapStampFocus, let place = mapViewModel.places.first else { return }
+            mapViewModel.apply(MapActionData(
+                type: .focusRegion,
+                placeIds: nil,
+                lat: place.latitude,
+                lng: place.longitude,
+                span: 0.01
+            ))
+        }
+    }
+
+    private var usesUITestMapStampFocus: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-focus-map-stamp")
+#else
+        false
+#endif
     }
 }
 

@@ -64,7 +64,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
-      - name: Run link-to-Trip persistence UI test
+      - name: Run focused navigation and persistence UI tests
         timeout-minutes: 12
         run: |
           scripts/xcodebuild-clean.sh \
@@ -73,6 +73,7 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testMapStampDetailClosesBackToRootTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test

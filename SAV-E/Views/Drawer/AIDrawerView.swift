@@ -2343,6 +2343,7 @@ private struct DrawerGlassBackground: View {
 
 private struct MapDetailDrawerView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dismiss) private var dismiss
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
     let captureTripName: String?
@@ -2377,7 +2378,7 @@ private struct MapDetailDrawerView: View {
                     item: item,
                     onExpand: expandDetail,
                     onOpenInbox: onOpenInbox,
-                    onClose: onClose
+                    onClose: dismissPlaceDetail
                 )
                 .padding(.horizontal, 18)
                 .padding(.top, 6)
@@ -2431,11 +2432,12 @@ private struct MapDetailDrawerView: View {
             .accessibilityIdentifier("drawer.openReview")
             .frame(width: 44, height: 44)
 
-            Button(action: onClose) {
+            Button(action: dismissPlaceDetail) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
             }
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
+            .accessibilityIdentifier("place.detail.close")
             .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 18)
@@ -2455,6 +2457,11 @@ private struct MapDetailDrawerView: View {
         withAnimation(SaveTheme.Motion.standardSpring) {
             detent = .fraction(0.38)
         }
+    }
+
+    private func dismissPlaceDetail() {
+        onClose()
+        dismiss()
     }
 
     private var itemEyebrow: String {
@@ -2599,6 +2606,7 @@ private struct SelectedPlaceCapsule: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Close selected place", traditionalChinese: "關閉已選地點"))
+            .accessibilityIdentifier("place.detail.close")
             .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 2)

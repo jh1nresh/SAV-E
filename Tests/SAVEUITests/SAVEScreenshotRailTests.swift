@@ -207,40 +207,64 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testSavedPlaceEntryUsesSingleCanonicalDetail() throws {
+    func testMapStampDetailClosesBackToRootTabs() throws {
+        let storageID = UUID().uuidString.lowercased()
         let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
         app.launchArguments += [
             "--uitest-complete-onboarding",
             "--skip-map-tour",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
             "--uitest-repair-review-demo-seed",
+            "--uitest-focus-map-stamp",
             "-save.appLanguage", "en",
         ]
         app.launch()
 
-        try signInViaReviewDemo(app: app)
+        try signInViaReviewDemoRequired(app: app)
 
-        openRootTab("Saves", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 45))
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
 
-        let firstMapStamp = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")
+        let firstMapStampPin = app.buttons.matching(
+            NSPredicate(format: "label ENDSWITH[c] %@", "Map Stamp")
         ).firstMatch
-        XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
-        firstMapStamp.tap()
+        XCTAssertTrue(
+            firstMapStampPin.waitForExistence(timeout: 20),
+            "Expected the deterministic reviewer-demo Map Stamp pin.\n\(app.debugDescription)"
+        )
+        XCTAssertTrue(firstMapStampPin.isHittable)
+        firstMapStampPin.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
             app.descendants(matching: .any).matching(identifier: "drawer.root").count,
             1,
-            "A Map Stamp should stay inside the one global drawer."
+            "A tapped Map Stamp should stay inside the one global drawer."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        let closeDetail = app.buttons["place.detail.close"]
+        XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
+            app.buttons.matching(identifier: "place.detail.close").count,
             1,
-            "Every saved-place entry should use one canonical detail renderer."
+            "A Map Stamp should expose one canonical close action."
         )
         XCTAssertTrue(app.buttons["drawer.saved.addToTrip"].waitForExistence(timeout: stepTimeout))
+
+        closeDetail.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.root"].waitForNonExistence(timeout: stepTimeout),
+            "Closing place detail should dismiss the global drawer instead of leaving it over the root tabs."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+
+        let rootTabBar = app.tabBars.firstMatch
+        XCTAssertTrue(rootTabBar.buttons["Map"].isSelected)
+        XCTAssertTrue(rootTabBar.buttons["Saves"].isHittable)
+        rootTabBar.buttons["Saves"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
