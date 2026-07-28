@@ -246,25 +246,31 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testTripMapMarkerDetailReturnsToScopedTabs() throws {
+        let storageID = UUID().uuidString.lowercased()
         let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
         app.launchArguments += [
             "--uitest-complete-onboarding",
             "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
             "-save.appLanguage", "en",
         ]
         app.launch()
 
-        try signInViaReviewDemo(app: app)
+        try signInViaReviewDemoRequired(app: app)
 
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
 
-        let firstTrip = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        let routeTrip = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'trips.card.' AND label CONTAINS[c] %@",
+                "Tokyo Weekend"
+            )
         ).firstMatch
-        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
-        firstTrip.tap()
+        XCTAssertTrue(routeTrip.waitForExistence(timeout: stepTimeout))
+        routeTrip.tap()
 
         let tripTabBar = app.tabBars.firstMatch
         let mapTab = tripTabBar.buttons["Map"]
