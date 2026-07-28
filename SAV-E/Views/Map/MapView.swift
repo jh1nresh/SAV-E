@@ -6,17 +6,23 @@ struct MapView: View {
     let shouldFocusOnUserLocationOnLaunch: Bool
     let displayedPlaces: [Place]?
     let showsAuxiliaryPins: Bool
+    let numberedPlacePositions: [UUID: Int]
+    let contextBadgeText: String?
 
     init(
         viewModel: MapViewModel,
         shouldFocusOnUserLocationOnLaunch: Bool,
         displayedPlaces: [Place]? = nil,
-        showsAuxiliaryPins: Bool = true
+        showsAuxiliaryPins: Bool = true,
+        numberedPlacePositions: [UUID: Int] = [:],
+        contextBadgeText: String? = nil
     ) {
         self.viewModel = viewModel
         self.shouldFocusOnUserLocationOnLaunch = shouldFocusOnUserLocationOnLaunch
         self.displayedPlaces = displayedPlaces
         self.showsAuxiliaryPins = showsAuxiliaryPins
+        self.numberedPlacePositions = numberedPlacePositions
+        self.contextBadgeText = contextBadgeText
     }
 
     var body: some View {
@@ -29,7 +35,8 @@ struct MapView: View {
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(
                                 place: place,
-                                isSelected: viewModel.selectedPlace?.id == place.id
+                                isSelected: viewModel.selectedPlace?.id == place.id,
+                                position: numberedPlacePositions[place.id]
                             ) {
                                 viewModel.selectPlace(place)
                             }
@@ -73,7 +80,15 @@ struct MapView: View {
 
                     if let polyline = viewModel.routePolyline {
                         MapPolyline(polyline)
-                            .stroke(Color.saveCocoa, lineWidth: 3)
+                            .stroke(
+                                SaveAtlasPalette.ink.opacity(0.76),
+                                style: StrokeStyle(
+                                    lineWidth: 3,
+                                    lineCap: .round,
+                                    lineJoin: .round,
+                                    dash: [7, 5]
+                                )
+                            )
                     }
                 }
                 .mapStyle(.standard)
@@ -85,6 +100,17 @@ struct MapView: View {
                 }
                 .onChange(of: viewModel.selectedMapFeature) { _, feature in
                     viewModel.selectMapFeature(feature)
+                }
+
+                if let contextBadgeText {
+                    VStack {
+                        AtlasMapContextBadge(text: contextBadgeText)
+                            .accessibilityIdentifier("map.contextBadge")
+                            .padding(.top, max(geo.safeAreaInsets.top + 10, 12))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .allowsHitTesting(false)
                 }
 
                 VStack {
@@ -100,6 +126,7 @@ struct MapView: View {
                         )
                         .padding(.trailing, 18)
                         .padding(.bottom, max(geo.safeAreaInsets.bottom + 96, 112))
+                        .accessibilityIdentifier("map.currentLocation")
                     }
                 }
 
@@ -193,6 +220,7 @@ struct PlaceMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
     var isSelected = false
+    var position: Int?
     let onTap: () -> Void
 
     var body: some View {
@@ -200,11 +228,17 @@ struct PlaceMapPin: View {
             SaveHaptics.select()
             onTap()
         } label: {
-            DefaultPOIMarker(
-                systemName: place.category.iconName,
-                tint: place.category.mapMarkerTint,
-                state: .saved
-            )
+            Group {
+                if let position {
+                    TripMapOrderMarker(position: position)
+                } else {
+                    DefaultPOIMarker(
+                        systemName: "star.fill",
+                        tint: SaveAtlasPalette.forest,
+                        state: .saved
+                    )
+                }
+            }
             .scaleEffect(isSelected ? 1.24 : 1)
             .overlay {
                 if isSelected {
@@ -219,6 +253,7 @@ struct PlaceMapPin: View {
         .buttonStyle(.plain)
         .zIndex(isSelected ? 10 : 0)
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
+        .accessibilityIdentifier("map.pin.saved.\(place.id.uuidString)")
     }
 }
 
@@ -241,6 +276,7 @@ private struct SocialPlaceMapPin: View {
         .buttonStyle(.plain)
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) social place", traditionalChinese: "\(place.name) 社交地點"))
         .accessibilityHint(place.socialSignal?.displayText ?? languageSettings.localized(english: "Opens a place from your social map", traditionalChinese: "打開社交地圖裡的地點"))
+        .accessibilityIdentifier("map.pin.social.\(place.id.uuidString)")
     }
 }
 
@@ -263,6 +299,7 @@ private struct ReviewCandidateMapPin: View {
         .buttonStyle(.plain)
         .accessibilityLabel(languageSettings.localized(english: "\(candidate.name) Review Candidate", traditionalChinese: "\(candidate.name) 待確認地點"))
         .accessibilityHint(languageSettings.localized(english: "Opens the Review Candidate before saving it as a Map Stamp", traditionalChinese: "先打開待確認地點，再存成地圖章"))
+        .accessibilityIdentifier("map.pin.review.\(candidate.id.uuidString)")
     }
 }
 
@@ -289,6 +326,48 @@ private struct UnsavedMapCandidatePin: View {
         .zIndex(isSelected ? 10 : 0)
         .accessibilityLabel(languageSettings.localized(english: "\(candidate.title) Unsaved Candidate", traditionalChinese: "\(candidate.title) 未保存候選地點"))
         .accessibilityHint(languageSettings.localized(english: "Opens this visible map place before saving it as a Map Stamp", traditionalChinese: "打開這個地圖候選地點，確認後再存成地圖章"))
+        .accessibilityIdentifier("map.pin.unsaved.\(candidate.id)")
+    }
+}
+
+private struct AtlasMapContextBadge: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                .font(.system(size: 14, weight: .semibold))
+            Text(text)
+                .font(SaveAtlasType.display(13))
+        }
+        .foregroundStyle(SaveAtlasPalette.ink)
+        .padding(.horizontal, 14)
+        .frame(minHeight: 32)
+        .background(SaveAtlasPalette.mint.opacity(0.94), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(SaveAtlasPalette.forest.opacity(0.24), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.08), radius: 5, y: 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct TripMapOrderMarker: View {
+    let position: Int
+
+    var body: some View {
+        Text("\(position)")
+            .font(SaveAtlasType.strong(17))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .frame(width: 38, height: 38)
+            .background(SaveAtlasPalette.coral, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(SaveAtlasPalette.paper, lineWidth: 3)
+            }
+            .shadow(color: SaveAtlasPalette.ink.opacity(0.18), radius: 3, y: 2)
+            .frame(width: 44, height: 44)
     }
 }
 

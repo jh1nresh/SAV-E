@@ -165,6 +165,55 @@ extension Color {
     }
 }
 
+enum SaveAtlasPalette {
+    static let canvas = Color(light: "FDF8F3", dark: "11161C")
+    static let paper = Color(light: "FFFDF7", dark: "1B2027")
+    static let forest = Color(light: "0E4A33", dark: "B9E0C9")
+    static let ink = Color(light: "2E2117", dark: "FFF8ED")
+    static let muted = Color(light: "62594F", dark: "CFC4B8")
+    static let coral = Color(light: "F26B4A", dark: "D97861")
+    static let mint = Color(light: "D6E8C4", dark: "4F7258")
+    static let sky = Color(light: "B5E3F5", dark: "3F758B")
+    static let lavender = Color(light: "E3D6F7", dark: "57466F")
+    static let kraft = Color(light: "F0CFA1", dark: "71543C")
+    static let honey = Color(light: "FFCC4F", dark: "A87328")
+    static let line = Color(light: "A68F78", dark: "807365")
+}
+
+enum SaveAtlasType {
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+    }
+
+    static func strong(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+    }
+
+    static func body(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+    }
+
+    static func regular(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Regular", size: size, relativeTo: style)
+    }
+
+    static func editorial(_ size: CGFloat) -> Font {
+        .custom("Georgia-Italic", size: size, relativeTo: .headline)
+    }
+}
+
 private extension UIColor {
     nonisolated static func adaptive(lightHex: String, darkHex: String) -> UIColor {
         UIColor { traits in
@@ -198,6 +247,22 @@ private extension UIColor {
 }
 
 extension View {
+    func saveAtlasPaper(radius: CGFloat, shadow: Bool = false) -> some View {
+        background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+        }
+        .shadow(
+            color: shadow ? SaveAtlasPalette.ink.opacity(0.07) : .clear,
+            radius: shadow ? 7 : 0,
+            y: shadow ? 3 : 0
+        )
+    }
+
     /// Keeps list and form content on the SAV-E notebook canvas while leaving
     /// navigation and tab chrome to the system material.
     func saveNotebookListCanvas() -> some View {

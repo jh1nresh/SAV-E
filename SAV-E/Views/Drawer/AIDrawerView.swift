@@ -142,6 +142,7 @@ struct AIDrawerView: View {
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
+    var onDismissMapDetailSheet: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
@@ -258,7 +259,10 @@ struct AIDrawerView: View {
             editableLists: collaborativeLists.filter(\.canEdit),
             isWorkingReviewCandidateID: candidateActionInFlight,
             isWorkingMapCandidateID: mapCandidateActionInFlight,
-            onClose: closeMapDetail,
+            onClose: {
+                closeMapDetail()
+                onDismissMapDetailSheet()
+            },
             onOpenInbox: openReviewInbox,
             onDeletePlace: { place in
                 try await onDeletePlace(place)
@@ -2436,6 +2440,7 @@ private struct MapDetailDrawerView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
+            .accessibilityIdentifier("drawer.place.close")
             .frame(width: 44, height: 44)
         }
         .padding(.horizontal, 18)

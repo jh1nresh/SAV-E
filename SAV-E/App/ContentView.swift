@@ -309,7 +309,7 @@ struct ContentView: View {
                 }
                 .tag(SaveRootTab.map)
             }
-            .tint(Color.saveCoralInk)
+            .tint(SaveAtlasPalette.forest)
             .accessibilityIdentifier("root.tabs")
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {
@@ -445,6 +445,9 @@ struct ContentView: View {
             selectedCategories: mapVM.selectedCategories,
             onToggleCategory: { category in
                 mapVM.toggleCategory(category)
+            },
+            onDismissMapDetailSheet: {
+                isRootSheetPresented = false
             },
             onDismissMapDetail: {
                 mapVM.clearSelectedMapObject()
