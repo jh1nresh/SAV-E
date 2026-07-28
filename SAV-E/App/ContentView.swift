@@ -272,6 +272,7 @@ struct ContentView: View {
                     reviewCandidates: mapVM.reviewCandidates,
                     onOpenCapture: { openDrawer(.addLink, tripID: nil) },
                     onOpenReview: { openDrawer(.review, tripID: nil) },
+                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
                     onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
                 )
                 .tabItem {
