@@ -485,7 +485,7 @@ struct ContentView: View {
 
     private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
         pendingCaptureTripID = tripID
-        mapVM.selectReviewCandidate(candidate)
+        openMapDetail(.reviewCandidate(candidate))
     }
 
     private func handleRootSheetDismiss() {
