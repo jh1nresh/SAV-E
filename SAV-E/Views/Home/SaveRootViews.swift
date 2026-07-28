@@ -657,11 +657,26 @@ struct SaveMapRootView: View {
     var body: some View {
         MapView(
             viewModel: mapViewModel,
-            shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation
+            shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation,
+            contextBadgeText: languageSettings.savedCountText(mapViewModel.places.count)
         )
-        .navigationTitle(languageSettings.localized(english: "Map", traditionalChinese: "地圖"))
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 7) {
+                    MemoMascotMark(size: 30, framed: false)
+                    Text("SAV-E")
+                        .font(SaveAtlasType.strong(21, relativeTo: .headline))
+                        .tracking(1)
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(
+                    languageSettings.localized(english: "SAV-E Map", traditionalChinese: "SAV-E 地圖")
+                )
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 SaveGlobalCaptureToolbarButton(action: onOpenCapture)
             }
@@ -689,73 +704,6 @@ struct SaveGlobalCaptureToolbarButton: View {
 private enum SaveLibraryMode {
     case review
     case mapStamps
-}
-
-private enum SaveAtlasPalette {
-    static let canvas = Color(light: "FDF8F3", dark: "11161C")
-    static let paper = Color(light: "FFFDF7", dark: "1B2027")
-    static let forest = Color(light: "0E4A33", dark: "B9E0C9")
-    static let ink = Color(light: "2E2117", dark: "FFF8ED")
-    static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
-    static let mint = Color(light: "D6E8C4", dark: "4F7258")
-    static let sky = Color(light: "B5E3F5", dark: "3F758B")
-    static let lavender = Color(light: "E3D6F7", dark: "57466F")
-    static let kraft = Color(light: "F0CFA1", dark: "71543C")
-    static let honey = Color(light: "FFCC4F", dark: "A87328")
-    static let line = Color(light: "A68F78", dark: "807365")
-}
-
-private enum SaveAtlasType {
-    static func display(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
-    }
-
-    static func strong(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
-    }
-
-    static func body(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
-    }
-
-    static func regular(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        .custom("AvenirNextCondensed-Regular", size: size, relativeTo: style)
-    }
-
-    static func editorial(_ size: CGFloat) -> Font {
-        .custom("Georgia-Italic", size: size, relativeTo: .headline)
-    }
-}
-
-private extension View {
-    func saveAtlasPaper(radius: CGFloat, shadow: Bool = false) -> some View {
-        background(
-            SaveAtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
-        }
-        .shadow(
-            color: shadow ? SaveAtlasPalette.ink.opacity(0.07) : .clear,
-            radius: shadow ? 7 : 0,
-            y: shadow ? 3 : 0
-        )
-    }
 }
 
 private struct SaveAtlasBrandHeader<Trailing: View>: View {

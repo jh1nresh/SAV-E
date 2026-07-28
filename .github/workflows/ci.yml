@@ -64,7 +64,7 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
-      - name: Run Home-Saves and link-to-Trip persistence UI tests
+      - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
         timeout-minutes: 12
         run: |
           scripts/xcodebuild-clean.sh \
@@ -75,6 +75,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 

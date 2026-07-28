@@ -317,12 +317,10 @@ struct TripWorkspaceView: View {
                     TripPlanView(trip: trip, store: store, savedPlaces: mapViewModel.places)
                         .tabItem { Label(localized("Plan", "日程"), systemImage: "list.number") }
                         .tag(TripWorkspaceTab.plan)
-                        .accessibilityIdentifier("trip.tab.plan")
 
                     TripMapView(trip: trip, mapViewModel: mapViewModel)
                         .tabItem { Label(localized("Map", "地圖"), systemImage: "map") }
                         .tag(TripWorkspaceTab.map)
-                        .accessibilityIdentifier("trip.tab.map")
 
                     TripInboxView(
                         tripName: trip.name,
@@ -333,7 +331,6 @@ struct TripWorkspaceView: View {
                     .tabItem { Label(localized("Inbox", "收件匣"), systemImage: "tray") }
                     .badge(TripWorkspaceBadge.label(for: mapViewModel.reviewCandidates.count))
                     .tag(TripWorkspaceTab.inbox)
-                    .accessibilityIdentifier("trip.tab.inbox")
 
                     TripPackShareView(
                         trip: trip,
@@ -342,19 +339,21 @@ struct TripWorkspaceView: View {
                     )
                         .tabItem { Label(localized("Share", "分享"), systemImage: "square.and.arrow.up") }
                         .tag(TripWorkspaceTab.share)
-                        .accessibilityIdentifier("trip.tab.share")
                 }
                 .navigationTitle(trip.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if selectedTab != .inbox {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItemGroup(placement: .topBarTrailing) {
                             Button {
                                 onOpenDrawer(.addLink, trip.id)
                             } label: {
                                 Image(systemName: "link.badge.plus")
                             }
                             .accessibilityLabel(localized("Paste or share link", "貼上或分享連結"))
+
+                            MemoMascotMark(size: 30, framed: false)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
@@ -368,7 +367,7 @@ struct TripWorkspaceView: View {
                 .background(SaveDottedBackground().ignoresSafeArea())
             }
         }
-        .tint(Color.saveCoralInk)
+        .tint(SaveAtlasPalette.forest)
         .onAppear {
             store.selectTrip(tripID)
             onActiveTripChange(tripID)
@@ -390,9 +389,31 @@ private struct TripPlanView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsPlacePicker = false
     @State private var selectedStop: TripStop?
+    @State private var selectedDay = 1
 
     var body: some View {
         List {
+            if !trip.places.isEmpty {
+                TripDayTabs(
+                    days: availableDays,
+                    selectedDay: resolvedSelectedDay,
+                    dayTitle: { localized("Day \($0)", "第 \($0) 天") },
+                    onSelect: { selectedDay = $0 }
+                )
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
+                .listRowBackground(SaveAtlasPalette.canvas)
+                .listRowSeparator(.hidden)
+
+                TripPlanTitleBlock(
+                    eyebrow: selectedDateText,
+                    title: tripHighlightsTitle,
+                    stopCount: stopCountText
+                )
+                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+
             if trip.places.isEmpty {
                 ContentUnavailableView {
                     Label(localized("No stops yet", "還沒有行程地點"), systemImage: "mappin.and.ellipse")
@@ -404,22 +425,22 @@ private struct TripPlanView: View {
                 } actions: {
                     Button(localized("Add saved place", "加入收藏地點")) { showsPlacePicker = true }
                 }
-                .padding(.vertical, 16)
-                .saveNotebookSurface(
-                    cornerRadius: 18,
-                    opacity: 0.96,
-                    strokeOpacity: 0.42
-                )
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.vertical, 24)
+                .saveAtlasPaper(radius: 24, shadow: true)
                 .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             } else {
-                ForEach(groupedStops, id: \.day) { group in
+                ForEach(displayedGroups, id: \.day) { group in
                     Section {
                         ForEach(Array(group.stops.enumerated()), id: \.element.id) { index, stop in
                             TripStopRow(
                                 stop: stop,
+                                place: savedPlace(for: stop),
                                 position: index + 1,
+                                isLast: index == group.stops.count - 1,
                                 canMoveEarlier: index > 0 && !store.isSaving,
                                 canMoveLater: index < group.stops.count - 1 && !store.isSaving,
                                 onEdit: {
@@ -432,18 +453,10 @@ private struct TripPlanView: View {
                                     Task { _ = await store.moveStop(stop.id, in: trip.id, by: 1) }
                                 }
                             )
-                            .padding(12)
-                            .saveNotebookSurface(
-                                cornerRadius: 18,
-                                opacity: 0.96,
-                                strokeOpacity: 0.42
-                            )
-                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 16))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                         }
-                    } header: {
-                        TripDayHeader(title: localized("Day \(group.day)", "第 \(group.day) 天"))
                     }
                 }
             }
@@ -452,46 +465,47 @@ private struct TripPlanView: View {
                 Button {
                     showsPlacePicker = true
                 } label: {
-                    Label(localized("Add saved place", "加入收藏地點"), systemImage: "plus.circle")
-                        .font(.headline)
-                        .foregroundStyle(Color.saveInk)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .padding(.horizontal, 14)
-                        .saveNotebookSurface(
-                            cornerRadius: 16,
-                            fill: .saveHoney,
-                            opacity: 0.34,
-                            strokeOpacity: 0.46,
-                            lineWidth: 1.4
-                        )
+                    HStack(spacing: 9) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(localized("Add stop", "新增停靠點"))
+                            .font(SaveAtlasType.display(16))
+                    }
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(SaveAtlasPalette.mint, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(SaveAtlasPalette.forest.opacity(0.30), lineWidth: 1)
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(availablePlaces.isEmpty)
+                .opacity(availablePlaces.isEmpty ? 0.48 : 1)
+                .accessibilityLabel(localized("Add saved place", "加入收藏地點"))
+                .accessibilityIdentifier("trip.plan.addStop")
             }
-            .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 20, trailing: 20))
+            .listRowInsets(EdgeInsets(top: 12, leading: 58, bottom: 20, trailing: 20))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
         }
         .listStyle(.plain)
         .environment(\.defaultMinListRowHeight, 1)
-        .saveNotebookListCanvas()
+        .scrollContentBackground(.hidden)
+        .background(SaveAtlasPalette.canvas.ignoresSafeArea())
         .overlay(alignment: .top) {
             if store.isSaving {
                 ProgressView(localized("Saving…", "正在保存…"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.saveInk)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .saveNotebookSurface(
-                        cornerRadius: 40,
-                        opacity: 0.98,
-                        strokeOpacity: 0.44
-                    )
+                    .font(SaveAtlasType.display(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .saveAtlasPaper(radius: 40, shadow: true)
                     .padding(.top, 8)
             }
         }
         .sheet(isPresented: $showsPlacePicker) {
-            SavedPlacePicker(places: availablePlaces, initialDay: suggestedAddDay) { place, day in
+            SavedPlacePicker(places: availablePlaces, initialDay: resolvedSelectedDay) { place, day in
                 Task { _ = await store.addConfirmedPlace(place, to: trip.id, day: day) }
             }
         }
@@ -513,10 +527,17 @@ private struct TripPlanView: View {
                 }
             )
         }
+        .onAppear(perform: normalizeSelectedDay)
+        .onChange(of: availableDays) { _, _ in normalizeSelectedDay() }
+        .accessibilityIdentifier("trip.plan")
     }
 
-    private var suggestedAddDay: Int {
-        min(max(trip.places.map(\.day).max() ?? 1, 1), 365)
+    private var availableDays: [Int] {
+        Set(trip.places.map(\.day)).sorted()
+    }
+
+    private var resolvedSelectedDay: Int {
+        availableDays.contains(selectedDay) ? selectedDay : (availableDays.first ?? 1)
     }
 
     private var groupedStops: [(day: Int, stops: [TripStop])] {
@@ -527,9 +548,52 @@ private struct TripPlanView: View {
             .sorted { $0.day < $1.day }
     }
 
+    private var displayedGroups: [(day: Int, stops: [TripStop])] {
+        groupedStops.filter { $0.day == resolvedSelectedDay }
+    }
+
+    private var selectedDateText: String {
+        guard let startDate = trip.startDate,
+              let date = Calendar.current.date(byAdding: .day, value: resolvedSelectedDay - 1, to: startDate)
+        else {
+            return localized("DAY \(resolvedSelectedDay)", "第 \(resolvedSelectedDay) 天")
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: languageSettings.language == .english ? "en_US" : "zh_Hant_TW")
+        formatter.dateFormat = languageSettings.language == .english ? "EEEE, MMMM d" : "M月d日 EEEE"
+        return formatter.string(from: date).uppercased()
+    }
+
+    private var tripHighlightsTitle: String {
+        let city = trip.city.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !city.isEmpty else {
+            return localized("Trip highlights", "行程精選")
+        }
+        return localized("\(city) highlights", "\(city)精選")
+    }
+
+    private var stopCountText: String {
+        let count = displayedGroups.first?.stops.count ?? 0
+        return localized(
+            count == 1 ? "1 stop" : "\(count) stops",
+            "\(count) 個停靠點"
+        )
+    }
+
     private var availablePlaces: [Place] {
         let usedIDs = Set(trip.places.map(\.placeId))
         return savedPlaces.filter { !usedIDs.contains($0.id) }
+    }
+
+    private func savedPlace(for stop: TripStop) -> Place? {
+        savedPlaces.first { $0.id == stop.placeId }
+    }
+
+    private func normalizeSelectedDay() {
+        if !availableDays.isEmpty, !availableDays.contains(selectedDay) {
+            selectedDay = availableDays[0]
+        }
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -537,40 +601,115 @@ private struct TripPlanView: View {
     }
 }
 
-private struct TripDayHeader: View {
-    let title: String
+private struct TripDayTabs: View {
+    let days: [Int]
+    let selectedDay: Int
+    let dayTitle: (Int) -> String
+    let onSelect: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            SaveIconTile(
-                systemName: "calendar.day.timeline.left",
-                size: 32,
-                iconSize: 14,
-                fill: .saveHoney,
-                foreground: .saveInk,
-                cornerRadius: 10
-            )
-            .accessibilityHidden(true)
-
-            Text(title)
-                .font(.title3.weight(.bold))
-                .foregroundStyle(Color.saveInk)
-                .textCase(nil)
-
-            Rectangle()
-                .fill(Color.saveNotebookLine.opacity(0.28))
-                .frame(height: 1)
-                .accessibilityHidden(true)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(days, id: \.self) { day in
+                    Button {
+                        onSelect(day)
+                    } label: {
+                        Text(dayTitle(day))
+                            .font(
+                                day == selectedDay
+                                    ? SaveAtlasType.strong(15)
+                                    : SaveAtlasType.body(15)
+                            )
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .frame(minWidth: 92, minHeight: 44)
+                            .padding(.horizontal, 8)
+                            .background(dayTint(for: day, selected: day == selectedDay))
+                            .clipShape(
+                                UnevenRoundedRectangle(
+                                    topLeadingRadius: 13,
+                                    bottomLeadingRadius: 0,
+                                    bottomTrailingRadius: 0,
+                                    topTrailingRadius: 13
+                                )
+                            )
+                            .overlay {
+                                UnevenRoundedRectangle(
+                                    topLeadingRadius: 13,
+                                    bottomLeadingRadius: 0,
+                                    bottomTrailingRadius: 0,
+                                    topTrailingRadius: 13
+                                )
+                                .stroke(
+                                    SaveAtlasPalette.line.opacity(day == selectedDay ? 0.38 : 0.24),
+                                    lineWidth: 1
+                                )
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(day == selectedDay ? .isSelected : [])
+                    .accessibilityIdentifier("trip.day.\(day)")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 2)
         }
-        .padding(.top, 12)
-        .padding(.bottom, 2)
+        .frame(minHeight: 48)
+        .background(SaveAtlasPalette.canvas)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SaveAtlasPalette.line.opacity(0.26))
+                .frame(height: 1)
+        }
+    }
+
+    private func dayTint(for day: Int, selected: Bool) -> Color {
+        guard selected else { return SaveAtlasPalette.paper }
+        return day.isMultiple(of: 2) ? SaveAtlasPalette.mint : SaveAtlasPalette.lavender
+    }
+}
+
+private struct TripPlanTitleBlock: View {
+    let eyebrow: String
+    let title: String
+    let stopCount: String
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(eyebrow)
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.8)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+
+                Text(title)
+                    .font(SaveAtlasType.strong(26, relativeTo: .title2))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            Text(stopCount)
+                .font(SaveAtlasType.display(14))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 30)
+                .background(SaveAtlasPalette.mint, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(SaveAtlasPalette.forest.opacity(0.24), lineWidth: 1)
+                }
+        }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("trip.plan.summary")
     }
 }
 
 private struct TripStopRow: View {
     let stop: TripStop
+    let place: Place?
     let position: Int
+    let isLast: Bool
     let canMoveEarlier: Bool
     let canMoveLater: Bool
     let onEdit: () -> Void
@@ -580,57 +719,40 @@ private struct TripStopRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 10) {
-                    editButton
-                    moveControls
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            } else {
-                HStack(spacing: 8) {
-                    editButton
-                    moveControls
-                }
+        HStack(alignment: .top, spacing: 8) {
+            TripRouteNode(position: position, isLast: isLast)
+
+            VStack(spacing: 8) {
+                editButton
+                moveControls
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .padding(10)
+            .saveAtlasPaper(radius: 18, shadow: true)
         }
     }
 
     private var editButton: some View {
         Button(action: onEdit) {
-            HStack(alignment: .center, spacing: 12) {
-                Text("\(position)")
-                    .font(.headline.weight(.black).monospacedDigit())
-                    .foregroundStyle(Color.saveInk)
-                    .frame(width: 44, height: 44)
-                    .saveNotebookSurface(
-                        cornerRadius: 13,
-                        fill: .saveHoney,
-                        opacity: 0.54,
-                        strokeOpacity: 0.5,
-                        lineWidth: 1.4
-                    )
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(stop.placeName)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.saveInk)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !scheduleSummary.isEmpty {
-                        Text(scheduleSummary)
-                            .font(.caption)
-                            .foregroundStyle(Color.saveMutedText)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TripStopThumbnail(place: place)
+                        stopDetails
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        TripStopThumbnail(place: place)
+                        stopDetails
+                        Spacer(minLength: 2)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(SaveAtlasPalette.ink)
                     }
                 }
-
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.bold())
-                    .foregroundStyle(Color.saveMutedText)
             }
             .contentShape(Rectangle())
         }
@@ -638,6 +760,32 @@ private struct TripStopRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityLabel(localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)"))
         .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).edit")
+    }
+
+    private var stopDetails: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(stop.placeName)
+                .font(SaveAtlasType.strong(17, relativeTo: .headline))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .multilineTextAlignment(.leading)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 2)
+
+            if !scheduleSummary.isEmpty {
+                Label(scheduleSummary, systemImage: "clock")
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(1)
+            }
+
+            if !noteSummary.isEmpty {
+                Text(noteSummary)
+                    .font(SaveAtlasType.regular(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var moveControls: some View {
@@ -666,26 +814,120 @@ private struct TripStopRow: View {
         .joined(separator: " · ")
     }
 
+    private var noteSummary: String {
+        if let note = stop.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !note.isEmpty {
+            return note
+        }
+        return place?.address.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     private func moveButton(systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            SaveIconTile(
-                systemName: systemImage,
-                size: 44,
-                iconSize: 15,
-                fill: .saveNotebookPage,
-                foreground: .saveCoralInk,
-                cornerRadius: 13
-            )
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 36, height: 36)
+                .background(SaveAtlasPalette.mint.opacity(0.78), in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(SaveAtlasPalette.forest.opacity(0.24), lineWidth: 1)
+                }
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(minWidth: 44, minHeight: 44)
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.34)
+        .opacity(enabled ? 1 : 0.30)
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct TripRouteNode: View {
+    let position: Int
+    let isLast: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text("\(position)")
+                .font(SaveAtlasType.strong(17))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .frame(width: 38, height: 38)
+                .background(SaveAtlasPalette.coral.opacity(0.90), in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(SaveAtlasPalette.coral, lineWidth: 1)
+                }
+
+            if !isLast {
+                VStack(spacing: 4) {
+                    ForEach(0..<11, id: \.self) { _ in
+                        Circle()
+                            .fill(SaveAtlasPalette.line.opacity(0.58))
+                            .frame(width: 2.5, height: 2.5)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .frame(width: 42)
+        .background(alignment: .top) {
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                .fill(
+                    position.isMultiple(of: 2)
+                        ? SaveAtlasPalette.lavender.opacity(0.50)
+                        : SaveAtlasPalette.sky.opacity(0.42)
+                )
+                .frame(width: 30, height: isLast ? 46 : 104)
+                .offset(y: 6)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct TripStopThumbnail: View {
+    let place: Place?
+
+    var body: some View {
+        Group {
+            if let urlString = place?.businessPhotoURLStrings.first,
+               let url = URL(string: urlString) {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .empty:
+                        ProgressView()
+                            .tint(SaveAtlasPalette.forest)
+                    case .failure:
+                        fallback
+                    @unknown default:
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 70, height: 72)
+        .background(SaveAtlasPalette.mint.opacity(0.66))
+        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+        }
+    }
+
+    private var fallback: some View {
+        Image(systemName: place?.category.iconName ?? "mappin.and.ellipse")
+            .font(.system(size: 23, weight: .semibold))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -910,33 +1152,74 @@ private struct SavedPlacePicker: View {
 private struct TripMapView: View {
     let trip: Trip
     @ObservedObject var mapViewModel: MapViewModel
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         MapView(
             viewModel: mapViewModel,
-            shouldFocusOnUserLocationOnLaunch: true,
-            displayedPlaces: mapViewModel.placesForRoute(placeIDs: orderedPlaceIDs),
-            showsAuxiliaryPins: false
+            shouldFocusOnUserLocationOnLaunch: false,
+            displayedPlaces: routePlaces,
+            showsAuxiliaryPins: false,
+            numberedPlacePositions: numberedPlacePositions,
+            contextBadgeText: routeSummary
         )
             .onAppear {
-                mapViewModel.apply(MapActionData(
-                    type: .showRoute,
-                    placeIds: orderedPlaceIDs.map(\.uuidString),
-                    lat: nil,
-                    lng: nil,
-                    span: nil
-                ))
+                applyRoute()
+            }
+            .onChange(of: routePoints) { _, _ in
+                applyRoute()
             }
             .onDisappear {
                 mapViewModel.apply(MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil))
             }
-            .accessibilityIdentifier("trip.map")
     }
 
     private var orderedPlaceIDs: [UUID] {
         trip.places
             .sorted { ($0.day, $0.orderIndex) < ($1.day, $1.orderIndex) }
             .map(\.placeId)
+    }
+
+    private var routePlaces: [Place] {
+        mapViewModel.placesForRoute(placeIDs: orderedPlaceIDs)
+    }
+
+    private var routePoints: [RoutePoint] {
+        routePlaces.map {
+            RoutePoint(id: $0.id, latitude: $0.latitude, longitude: $0.longitude)
+        }
+    }
+
+    private var numberedPlacePositions: [UUID: Int] {
+        var positions: [UUID: Int] = [:]
+        for (index, id) in routePoints.map(\.id).enumerated() where positions[id] == nil {
+            positions[id] = index + 1
+        }
+        return positions
+    }
+
+    private var routeSummary: String {
+        let count = routePoints.count
+        return languageSettings.localized(
+            english: count == 1 ? "1 confirmed stop" : "\(count) confirmed stops",
+            traditionalChinese: "\(count) 個已確認停靠點"
+        )
+    }
+
+    private func applyRoute() {
+        mapViewModel.apply(MapActionData(
+            type: .showRoute,
+            placeIds: routePoints.map(\.id.uuidString),
+            lat: nil,
+            lng: nil,
+            span: nil
+        ))
+    }
+
+    private struct RoutePoint: Hashable {
+        let id: UUID
+        let latitude: Double
+        let longitude: Double
     }
 }
 

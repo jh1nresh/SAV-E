@@ -245,6 +245,79 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testTripMapMarkerDetailReturnsToScopedTabs() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
+        firstTrip.tap()
+
+        let tripTabBar = app.tabBars.firstMatch
+        let mapTab = tripTabBar.buttons["Map"]
+        XCTAssertTrue(mapTab.waitForExistence(timeout: stepTimeout))
+        mapTab.tap()
+
+        XCTAssertTrue(mapTab.isSelected)
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+
+        let routePins = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.pin.saved.'")
+        )
+        XCTAssertTrue(
+            routePins.firstMatch.waitForExistence(timeout: 20),
+            "A route-framed Trip Map should expose at least one numbered saved-place marker."
+        )
+        guard let firstHittableRoutePin = routePins.allElementsBoundByIndex.first(where: \.isHittable) else {
+            XCTFail("A Trip Map route marker exists, but none are hittable.")
+            return
+        }
+        firstHittableRoutePin.tap()
+
+        let drawer = app.descendants(matching: .any)["drawer.root"]
+        XCTAssertTrue(drawer.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "A Trip marker should use the one global drawer."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+
+        let closeDetail = app.buttons["drawer.place.close"]
+        XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
+        closeDetail.tap()
+        XCTAssertTrue(drawer.waitForNonExistence(timeout: stepTimeout))
+
+        for tab in ["Plan", "Map", "Inbox", "Share"] {
+            let tabButton = tripTabBar.buttons[tab]
+            XCTAssertTrue(tabButton.waitForExistence(timeout: stepTimeout), "Missing \(tab) after closing a Trip Map detail.")
+            XCTAssertTrue(tabButton.isHittable, "\(tab) is still covered after closing a Trip Map detail.")
+        }
+        XCTAssertEqual(tripTabBar.buttons.count, 4)
+        XCTAssertTrue(tripTabBar.buttons["Map"].isSelected)
+        for rootTab in ["Home", "Saves", "Trips"] {
+            XCTAssertFalse(tripTabBar.buttons[rootTab].exists)
+        }
+
+        let planTab = tripTabBar.buttons["Plan"]
+        planTab.tap()
+        XCTAssertTrue(planTab.isSelected)
+    }
+
+    @MainActor
     func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
