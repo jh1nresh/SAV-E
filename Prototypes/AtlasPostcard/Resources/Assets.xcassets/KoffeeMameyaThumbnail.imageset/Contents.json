@@ -1,0 +1,13 @@
+{
+  "images": [
+    {
+      "filename": "koffee-mameya-thumbnail.png",
+      "idiom": "universal",
+      "scale": "1x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
