@@ -64,6 +64,11 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
+      - name: Reset focused simulator before UI tests
+        run: |
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
+
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
         timeout-minutes: 12
         run: |

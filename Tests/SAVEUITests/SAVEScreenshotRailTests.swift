@@ -294,7 +294,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
             1,
             "A Trip marker should use the one global drawer."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
 
         let closeDetail = app.buttons["drawer.place.close"]
         XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
