@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct SaveHomeView: View {
@@ -9,97 +10,190 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                captureCard
-                nextActions
-                tripSection
-                recentSavesSection
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView(showsIndicators: false) {
+                    homeContent
+                }
+            } else {
+                ViewThatFits(in: .vertical) {
+                    homeContent
+
+                    ScrollView(showsIndicators: false) {
+                        homeContent
+                    }
+                }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 28)
         }
         .background(SaveDottedBackground().ignoresSafeArea())
-        .navigationTitle(localized("Home", "首頁"))
+        .toolbar(.hidden, for: .navigationBar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
     }
 
-    private var captureCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Label(
-                localized("Turn a clue into a place you can use", "把線索變成真正能使用的地點"),
-                systemImage: "link.badge.plus"
-            )
-            .font(.title3.bold())
-            .foregroundStyle(Color.saveInk)
-
-            Text(localized(
-                "Paste or share a social post, map link, or message. SAV-E investigates it before anything reaches your map or trip.",
-                "貼上或分享社群貼文、地圖連結或訊息。SAV-E 會先分析，確認後才會進入地圖或行程。"
-            ))
-            .font(.subheadline)
-            .foregroundStyle(Color.saveMutedText)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                onOpenDrawer(.addLink, nil)
-            } label: {
-                Label(
-                    localized("Paste or share link", "貼上／分享連結"),
-                    systemImage: "plus"
-                )
-                .font(.headline)
-                .foregroundStyle(Color.saveInk)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 52)
-                .background(Color.saveCoral, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    private var homeContent: some View {
+        VStack(spacing: 0) {
+            SaveAtlasBrandHeader {
+                Button {
+                    onOpenDrawer(.addLink, nil)
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "link")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(localized("Paste a link", "貼上連結"))
+                            .font(SaveAtlasType.display(13))
+                    }
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .padding(.horizontal, 13)
+                    .frame(minHeight: 38)
+                    .background(SaveAtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home.capture")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("home.capture")
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            SaveAtlasMapPreview(
+                places: recentPlaces,
+                isLoading: mapViewModel.isLoading
+            )
+            .frame(height: 214)
+
+            reviewCard
+                .padding(.horizontal, 10)
+                .padding(.top, -22)
+
+            tripSection
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+
+            recentSavesSection
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
         }
-        .padding(18)
-        .saveNotebookPage(cornerRadius: 22)
+        .padding(.bottom, 14)
     }
 
-    private var nextActions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localized("Next", "下一步"))
-                .font(.title2.bold())
-                .foregroundStyle(Color.saveInk)
+    private var reviewCard: some View {
+        VStack(spacing: 10) {
+            VStack(spacing: 2) {
+                Text(reviewHeadline)
+                    .font(SaveAtlasType.strong(24, relativeTo: .title2))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .multilineTextAlignment(.center)
 
-            HStack(spacing: 12) {
-                SaveHomeMetricButton(
-                    title: localized("Review", "待確認"),
-                    value: "\(mapViewModel.reviewCandidates.count)",
-                    systemImage: "checklist.unchecked",
-                    tint: .saveCoral,
-                    action: { onOpenDrawer(.review, nil) }
-                )
-                .accessibilityIdentifier("home.review")
+                Text(localized(
+                    "Review and decide what’s worth saving.",
+                    "確認線索，再決定哪些值得收藏。"
+                ))
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .multilineTextAlignment(.center)
+            }
 
-                SaveHomeMetricButton(
-                    title: localized("Map Stamps", "地圖章"),
-                    value: "\(mapViewModel.places.count)",
-                    systemImage: "checkmark.seal.fill",
-                    tint: .saveMint,
-                    action: onOpenSaves
+            Button {
+                onOpenDrawer(.review, nil)
+            } label: {
+                HStack {
+                    Spacer()
+                    Text(localized("Review clues", "確認線索"))
+                        .font(SaveAtlasType.strong(16))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .padding(.trailing, 4)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 42)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            SaveAtlasPalette.coral,
+                            SaveAtlasPalette.coral.opacity(0.88),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
                 )
+            }
+            .buttonStyle(.plain)
+            .disabled(mapViewModel.isLoading)
+            .opacity(mapViewModel.isLoading ? 0.62 : 1)
+            .accessibilityIdentifier("home.review")
+
+            HStack(spacing: 0) {
+                SaveAtlasHomeMetric(
+                    value: mapViewModel.isLoading ? "–" : "\(mapViewModel.reviewCandidates.count)",
+                    label: localized("to review", "待確認"),
+                    systemName: "timer",
+                    tint: SaveAtlasPalette.lavender
+                )
+
+                Rectangle()
+                    .fill(SaveAtlasPalette.line.opacity(0.30))
+                    .frame(width: 1, height: 38)
+                    .padding(.horizontal, 7)
+
+                Button(action: onOpenSaves) {
+                    SaveAtlasHomeMetric(
+                        value: mapViewModel.isLoading ? "–" : "\(mapViewModel.places.count)",
+                        label: localized("Map Stamps", "地圖章"),
+                        systemName: "arrow.up.right",
+                        tint: SaveAtlasPalette.mint
+                    )
+                }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("home.saves")
             }
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .saveAtlasPaper(radius: 22, shadow: true)
     }
 
     @ViewBuilder
     private var tripSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(localized("Continue", "繼續"))
-                .font(.title2.bold())
-                .foregroundStyle(Color.saveInk)
+        VStack(alignment: .leading, spacing: 5) {
+            Text(localized("NEXT UP", "下一站"))
+                .font(SaveAtlasType.strong(11))
+                .tracking(1.1)
+                .foregroundStyle(SaveAtlasPalette.muted)
 
-            if let trip = store.suggestedTrip {
+            if store.isLoading {
+                SaveAtlasLoadingRow(
+                    title: localized("Loading your Trip Packs…", "正在載入行程包…")
+                )
+            } else if let errorMessage = store.errorMessage {
+                Button {
+                    Task { await store.load() }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.clockwise")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(localized("Couldn’t load Trips", "無法載入行程"))
+                                .font(SaveAtlasType.strong(17))
+                            Text(errorMessage)
+                                .font(SaveAtlasType.regular(12))
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                    }
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: 54)
+                }
+                .buttonStyle(.plain)
+            } else if let trip = store.suggestedTrip {
                 Button {
                     store.selectTrip(trip.id)
                     onOpenTrip(trip.id)
@@ -111,31 +205,31 @@ struct SaveHomeView: View {
             } else {
                 Button(action: onOpenTrips) {
                     HStack(spacing: 14) {
-                        SaveIconTile(
-                            systemName: "suitcase.rolling.fill",
-                            size: 48,
-                            fill: Color.saveHoney.opacity(0.38),
-                            foreground: .saveCoralInk
-                        )
+                        Image(systemName: "suitcase.rolling.fill")
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(width: 38, height: 38)
+                            .background(SaveAtlasPalette.mint, in: Circle())
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(localized("Start a Trip Pack", "建立 Trip Pack"))
-                                .font(.headline)
-                                .foregroundStyle(Color.saveInk)
+                                .font(SaveAtlasType.strong(17))
+                                .foregroundStyle(SaveAtlasPalette.forest)
                             Text(localized(
                                 "Plan only when your confirmed places are ready.",
                                 "等已確認地點準備好，再開始規劃。"
                             ))
-                            .font(.subheadline)
-                            .foregroundStyle(Color.saveMutedText)
+                            .font(SaveAtlasType.regular(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(2)
                         }
 
                         Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.right")
+                            .foregroundStyle(SaveAtlasPalette.muted)
                     }
-                    .padding(16)
-                    .saveNotebookPage(cornerRadius: 20)
+                    .frame(minHeight: 58)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.openTrips")
@@ -145,29 +239,33 @@ struct SaveHomeView: View {
 
     @ViewBuilder
     private var recentSavesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(localized("Recent Map Stamps", "最近地圖章"))
-                    .font(.title2.bold())
-                    .foregroundStyle(Color.saveInk)
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer()
                 if !recentPlaces.isEmpty {
                     Button(localized("See all", "查看全部"), action: onOpenSaves)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.saveCocoa)
+                        .font(SaveAtlasType.display(12))
+                        .foregroundStyle(SaveAtlasPalette.ink)
                 }
             }
 
-            if recentPlaces.isEmpty {
+            if mapViewModel.isLoading {
+                SaveAtlasLoadingRow(
+                    title: localized("Loading Map Stamps…", "正在載入地圖章…")
+                )
+            } else if recentPlaces.isEmpty {
                 Text(localized(
                     "Confirmed places will appear here after Review.",
                     "完成確認後，收藏地點會出現在這裡。"
                 ))
-                .font(.subheadline)
-                .foregroundStyle(Color.saveMutedText)
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .saveNotebookPage(cornerRadius: 18)
+                .frame(minHeight: 48)
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(recentPlaces.enumerated()), id: \.element.id) { index, place in
@@ -176,18 +274,33 @@ struct SaveHomeView: View {
                         }
 
                         if index < recentPlaces.count - 1 {
-                            Divider().padding(.leading, 64)
+                            Divider()
+                                .overlay(SaveAtlasPalette.line.opacity(0.22))
+                                .padding(.leading, 45)
                         }
                     }
                 }
-                .saveNotebookPage(cornerRadius: 20)
             }
         }
         .accessibilityIdentifier("home.recentSaves")
     }
 
     private var recentPlaces: [Place] {
-        Array(mapViewModel.places.sorted { $0.createdAt > $1.createdAt }.prefix(3))
+        Array(mapViewModel.places.sorted { $0.createdAt > $1.createdAt }.prefix(2))
+    }
+
+    private var reviewHeadline: String {
+        if mapViewModel.isLoading {
+            return localized("Loading your place memory…", "正在載入地點記憶…")
+        }
+        let count = mapViewModel.reviewCandidates.count
+        if count == 0 {
+            return localized("You’re all caught up", "所有線索都確認完了")
+        }
+        return localized(
+            "\(count) \(count == 1 ? "clue needs" : "clues need") your help",
+            "\(count) 個線索等你確認"
+        )
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -200,100 +313,222 @@ struct SaveLibraryView: View {
     let reviewCandidates: [PlaceReviewCandidate]
     let onOpenCapture: () -> Void
     let onOpenReview: () -> Void
+    let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var selectedMode: SaveLibraryMode?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                reviewCard
-                savedPlacesSection
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 28)
-        }
-        .background(SaveDottedBackground().ignoresSafeArea())
-        .navigationTitle(localized("Saves", "收藏"))
-        .toolbar {
-            if !places.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    SaveGlobalCaptureToolbarButton(action: onOpenCapture)
+        Group {
+            if effectiveMode == .review && !dynamicTypeSize.isAccessibilitySize {
+                ViewThatFits(in: .vertical) {
+                    savesContent
+
+                    ScrollView(showsIndicators: false) {
+                        savesContent
+                    }
+                }
+            } else {
+                ScrollView(showsIndicators: false) {
+                    savesContent
                 }
             }
         }
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
     }
 
-    private var reviewCard: some View {
-        Button(action: onOpenReview) {
-            HStack(spacing: 14) {
-                SaveMemoryBadge(state: .ready, size: 48)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(localized("Waiting for Review", "等待確認"))
-                        .font(.headline)
-                        .foregroundStyle(Color.saveInk)
-                    Text(reviewCandidates.isEmpty
-                         ? localized("No clues need your decision.", "目前沒有需要你確認的線索。")
-                         : localized(
-                            "Clues need your decision before becoming Map Stamps.",
-                            "線索需要確認，才會成為地圖章。"
-                         ))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.saveMutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-                VStack(spacing: 6) {
-                    Text("\(reviewCandidates.count)")
-                        .font(.title3.monospacedDigit().bold())
-                        .foregroundStyle(Color.saveInk)
-                        .frame(minWidth: 40, minHeight: 40)
-                        .saveNotebookSurface(
-                            cornerRadius: 12,
-                            fill: .saveCoral,
-                            opacity: 0.72,
-                            strokeOpacity: 0.5
+    private var savesContent: some View {
+        VStack(spacing: 0) {
+            SaveAtlasBrandHeader {
+                Button(action: onOpenCapture) {
+                    Image(systemName: "link")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 42, height: 42)
+                        .background(
+                            SaveAtlasPalette.honey.opacity(0.82),
+                            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
                         )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(localized("Paste or share link", "貼上／分享連結"))
+                .accessibilityIdentifier("root.capture")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
 
-                    Image(systemName: "chevron.right")
-                        .font(.caption.bold())
-                        .foregroundStyle(.tertiary)
+            titleBlock
+                .padding(.horizontal, 16)
+
+            modePicker
+                .padding(.horizontal, 14)
+                .padding(.top, 4)
+
+            Group {
+                switch effectiveMode {
+                case .review:
+                    reviewContent
+                case .mapStamps:
+                    savedPlacesContent
                 }
             }
-            .padding(16)
-            .saveNotebookPage(cornerRadius: 20)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("saves.review")
+        .padding(.bottom, 14)
+    }
+
+    private var titleBlock: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(localized("YOUR PLACE MEMORY", "你的地點記憶"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Text(localized("Saves", "收藏"))
+                    .font(SaveAtlasType.strong(34, relativeTo: .largeTitle))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(localized(
+                    "Clues you’ve saved from links and notes.",
+                    "從連結與筆記留下的地點線索。"
+                ))
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+            MemoMascotMark(size: 82, framed: false)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 100)
+    }
+
+    private var modePicker: some View {
+        HStack(spacing: 10) {
+            SaveAtlasPocketCount(
+                label: localized("Review", "待確認"),
+                value: reviewCandidates.count,
+                tint: SaveAtlasPalette.coral.opacity(0.56),
+                isSelected: effectiveMode == .review
+            ) {
+                withAnimation(SaveTheme.Motion.standardSpring) {
+                    selectedMode = .review
+                }
+            }
+            .accessibilityIdentifier("saves.segment.review")
+
+            SaveAtlasPocketCount(
+                label: localized("Map Stamps", "地圖章"),
+                value: places.count,
+                tint: SaveAtlasPalette.mint,
+                isSelected: effectiveMode == .mapStamps
+            ) {
+                withAnimation(SaveTheme.Motion.standardSpring) {
+                    selectedMode = .mapStamps
+                }
+            }
+            .accessibilityIdentifier("saves.segment.mapStamps")
+        }
+        .frame(minHeight: 44)
     }
 
     @ViewBuilder
-    private var savedPlacesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(localized("Map Stamps", "地圖章"))
-                    .font(.title2.bold())
-                    .foregroundStyle(Color.saveInk)
-                Spacer()
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill")
-                    Text(localized("Confirmed", "已確認"))
-                    Text("\(places.count)")
-                        .monospacedDigit()
+    private var reviewContent: some View {
+        VStack(spacing: 8) {
+            if sortedCandidates.isEmpty {
+                VStack(spacing: 8) {
+                    MemoMascotMark(size: 72, framed: false)
+                    Text(localized("No clues waiting", "沒有待確認線索"))
+                        .font(SaveAtlasType.strong(21))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(localized(
+                        "Share a link whenever you find a place worth remembering.",
+                        "看到值得記住的地點時，分享連結給 SAV-E。"
+                    ))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Button(action: onOpenCapture) {
+                        Label(
+                            localized("Paste a link", "貼上連結"),
+                            systemImage: "link.badge.plus"
+                        )
+                        .font(SaveAtlasType.strong(15))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .background(
+                            SaveAtlasPalette.honey,
+                            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color.saveInk)
-                .padding(.horizontal, 10)
-                .frame(minHeight: 32)
-                .saveNotebookSurface(
-                    cornerRadius: 11,
-                    fill: .saveMint,
-                    opacity: 0.72,
-                    strokeOpacity: 0.5
+                .frame(maxWidth: .infinity)
+                .padding(18)
+                .saveAtlasPaper(radius: 18)
+            } else {
+                ForEach(Array(sortedCandidates.prefix(3))) { candidate in
+                    Button {
+                        onOpenReviewCandidate(candidate)
+                    } label: {
+                        SaveAtlasReviewTicket(
+                            candidate: candidate,
+                            detail: candidateDetail(candidate),
+                            kind: candidateKind(candidate),
+                            actionTitle: candidateActionTitle(candidate)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        "\(candidateKindTitle(candidate)), \(candidate.name), \(candidateDetail(candidate))"
+                    )
+                    .accessibilityHint(localized(
+                        "Open this clue in Review",
+                        "在待確認中打開這個線索"
+                    ))
+                    .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
+                }
+            }
+
+            Button(action: onOpenReview) {
+                SaveAtlasReviewPocket(
+                    count: reviewCandidates.count,
+                    title: localized("Full review queue", "完整待確認清單"),
+                    countLabel: localized("need your review", "等待你確認")
                 )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("saves.review")
+        }
+    }
+
+    @ViewBuilder
+    private var savedPlacesContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(localized("MAP STAMPS", "地圖章"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Spacer()
+                Label(
+                    localized("\(places.count) confirmed", "\(places.count) 個已確認"),
+                    systemImage: "checkmark.seal.fill"
+                )
+                .font(SaveAtlasType.display(12))
+                .foregroundStyle(SaveAtlasPalette.forest)
             }
 
             if sortedPlaces.isEmpty {
@@ -302,31 +537,34 @@ struct SaveLibraryView: View {
                         localized("No confirmed places yet", "還沒有已確認地點"),
                         systemImage: "mappin.slash"
                     )
-                    .font(.headline)
-                    .foregroundStyle(Color.saveInk)
+                    .font(SaveAtlasType.strong(19))
+                    .foregroundStyle(SaveAtlasPalette.forest)
 
                     Text(localized(
                         "Add a link first. SAV-E keeps uncertain clues in Review instead of placing guesses on your map.",
                         "先加入連結。SAV-E 會把不確定的線索留在待確認，不會把猜測直接放上地圖。"
                     ))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.saveMutedText)
+                    .font(SaveAtlasType.body(14))
+                    .foregroundStyle(SaveAtlasPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
 
                     Button(action: onOpenCapture) {
                         Label(localized("Paste or share link", "貼上／分享連結"), systemImage: "link.badge.plus")
-                            .font(.headline)
-                            .foregroundStyle(Color.saveInk)
+                            .font(SaveAtlasType.strong(16))
+                            .foregroundStyle(SaveAtlasPalette.ink)
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 48)
-                            .background(Color.saveCoral, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                            .background(
+                                SaveAtlasPalette.honey,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            )
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(18)
-                .saveNotebookPage(cornerRadius: 20)
+                .saveAtlasPaper(radius: 20)
             } else {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(Array(sortedPlaces.enumerated()), id: \.element.id) { index, place in
                         SaveRootPlaceRow(place: place) {
                             onOpenSavedPlace(place)
@@ -334,17 +572,75 @@ struct SaveLibraryView: View {
                         .accessibilityIdentifier("saves.place.\(place.id.uuidString)")
 
                         if index < sortedPlaces.count - 1 {
-                            Divider().padding(.leading, 64)
+                            Divider()
+                                .overlay(SaveAtlasPalette.line.opacity(0.22))
+                                .padding(.leading, 60)
                         }
                     }
                 }
-                .saveNotebookPage(cornerRadius: 20)
+                .padding(.vertical, 4)
+                .saveAtlasPaper(radius: 20)
             }
         }
     }
 
+    private var effectiveMode: SaveLibraryMode {
+        selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
+    }
+
     private var sortedPlaces: [Place] {
         places.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var sortedCandidates: [PlaceReviewCandidate] {
+        reviewCandidates.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func candidateKind(_ candidate: PlaceReviewCandidate) -> SaveAtlasReviewTicketKind {
+        candidate.status == "source_only" || !candidate.hasReliableCoordinates
+            ? .sourceClue
+            : .reviewCandidate
+    }
+
+    private func candidateActionTitle(_ candidate: PlaceReviewCandidate) -> String {
+        candidateKind(candidate) == .sourceClue
+            ? localized("Find exact", "找出地點")
+            : localized("Review", "確認")
+    }
+
+    private func candidateKindTitle(_ candidate: PlaceReviewCandidate) -> String {
+        candidateKind(candidate) == .sourceClue
+            ? localized("Source Clue", "來源線索")
+            : localized("Review Candidate", "待確認地點")
+    }
+
+    private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
+        if candidateKind(candidate) == .sourceClue {
+            return localized("Missing exact place", "缺少精確地點")
+        }
+
+        let source = ReviewSourceReceiptPresentation(candidate: candidate)
+        if let handle = candidate.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !handle.isEmpty {
+            return localized("From \(handle)", "來自 \(handle)")
+        }
+        if let handle = source.handle {
+            return localized("From \(handle)", "來自 \(handle)")
+        }
+        if source.sourcePlatform != .other {
+            return localized(
+                "From \(source.sourcePlatform.displayName)",
+                "來自 \(source.sourcePlatform.displayName)"
+            )
+        }
+        if let city = candidate.city?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !city.isEmpty {
+            return city
+        }
+        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty
+            ? localized("Shared link", "分享連結")
+            : address
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -390,36 +686,621 @@ struct SaveGlobalCaptureToolbarButton: View {
     }
 }
 
-private struct SaveHomeMetricButton: View {
-    let title: String
+private enum SaveLibraryMode {
+    case review
+    case mapStamps
+}
+
+private enum SaveAtlasPalette {
+    static let canvas = Color(light: "FDF8F3", dark: "11161C")
+    static let paper = Color(light: "FFFDF7", dark: "1B2027")
+    static let forest = Color(light: "0E4A33", dark: "B9E0C9")
+    static let ink = Color(light: "2E2117", dark: "FFF8ED")
+    static let muted = Color(light: "62594F", dark: "CFC4B8")
+    static let coral = Color(light: "F26B4A", dark: "D97861")
+    static let mint = Color(light: "D6E8C4", dark: "4F7258")
+    static let sky = Color(light: "B5E3F5", dark: "3F758B")
+    static let lavender = Color(light: "E3D6F7", dark: "57466F")
+    static let kraft = Color(light: "F0CFA1", dark: "71543C")
+    static let honey = Color(light: "FFCC4F", dark: "A87328")
+    static let line = Color(light: "A68F78", dark: "807365")
+}
+
+private enum SaveAtlasType {
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+    }
+
+    static func strong(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+    }
+
+    static func body(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+    }
+
+    static func regular(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        .custom("AvenirNextCondensed-Regular", size: size, relativeTo: style)
+    }
+
+    static func editorial(_ size: CGFloat) -> Font {
+        .custom("Georgia-Italic", size: size, relativeTo: .headline)
+    }
+}
+
+private extension View {
+    func saveAtlasPaper(radius: CGFloat, shadow: Bool = false) -> some View {
+        background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+        }
+        .shadow(
+            color: shadow ? SaveAtlasPalette.ink.opacity(0.07) : .clear,
+            radius: shadow ? 7 : 0,
+            y: shadow ? 3 : 0
+        )
+    }
+}
+
+private struct SaveAtlasBrandHeader<Trailing: View>: View {
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: 8) {
+            MemoMascotMark(size: 38, framed: false)
+
+            Text("SAV-E")
+                .font(SaveAtlasType.strong(24, relativeTo: .title3))
+                .tracking(1.1)
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .frame(minHeight: 48)
+    }
+}
+
+private struct SaveAtlasMapPreview: View {
+    let places: [Place]
+    let isLoading: Bool
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if let anchor = places.first {
+                Map(
+                    initialPosition: .region(region(centeredOn: anchor)),
+                    interactionModes: []
+                ) {
+                    ForEach(visiblePlaces(around: anchor)) { place in
+                        Annotation("", coordinate: place.coordinate, anchor: .bottom) {
+                            VStack(spacing: 3) {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(SaveAtlasPalette.forest)
+                                    .frame(width: 34, height: 34)
+                                    .background(SaveAtlasPalette.mint, in: Circle())
+                                    .overlay {
+                                        Circle()
+                                            .stroke(SaveAtlasPalette.paper, lineWidth: 3)
+                                    }
+
+                                Text(place.name)
+                                    .font(SaveAtlasType.strong(11))
+                                    .foregroundStyle(SaveAtlasPalette.ink)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(SaveAtlasPalette.paper.opacity(0.94), in: Capsule())
+                            }
+                        }
+                    }
+                }
+                .mapStyle(.standard)
+                .id(anchor.id)
+                .accessibilityHidden(true)
+            } else {
+                SaveDottedBackground()
+
+                if isLoading {
+                    ProgressView()
+                        .tint(SaveAtlasPalette.forest)
+                        .accessibilityLabel(localized(
+                            "Loading map preview",
+                            "正在載入地圖預覽"
+                        ))
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "map")
+                            .font(.system(size: 30, weight: .regular))
+                        Text(localized(
+                            "Your first Map Stamp will begin this atlas.",
+                            "第一個地圖章會從這本圖冊開始。"
+                        ))
+                            .font(SaveAtlasType.body(14))
+                            .multilineTextAlignment(.center)
+                    }
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .padding(.horizontal, 32)
+                }
+            }
+
+            LinearGradient(
+                colors: [.clear, SaveAtlasPalette.canvas.opacity(0.84)],
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .frame(height: 54)
+            .allowsHitTesting(false)
+
+            HStack {
+                Text(localized("YOUR PLACE ATLAS", "你的地點圖冊"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                Spacer()
+                if let cityLabel {
+                    Text(cityLabel)
+                        .font(SaveAtlasType.display(12))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 8)
+        }
+        .clipped()
+        .overlay(alignment: .bottomTrailing) {
+            MemoMascotMark(size: 76, framed: false)
+                .offset(x: 3, y: 18)
+                .allowsHitTesting(false)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            places.isEmpty
+                ? localized(
+                    "Place atlas, no Map Stamps yet",
+                    "地點圖冊，目前還沒有地圖章"
+                )
+                : localized(
+                    "Place atlas, \(places.count) recent Map Stamps",
+                    "地點圖冊，\(places.count) 個最近地圖章"
+                )
+        )
+    }
+
+    private var cityLabel: String? {
+        guard let address = places.first?.address else { return nil }
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.count >= 2 ? parts[parts.count - 2] : parts.first
+    }
+
+    private func region(centeredOn place: Place) -> MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: place.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.16, longitudeDelta: 0.16)
+        )
+    }
+
+    private func visiblePlaces(around anchor: Place) -> [Place] {
+        let origin = CLLocation(latitude: anchor.latitude, longitude: anchor.longitude)
+        return Array(places.filter { place in
+            origin.distance(from: CLLocation(
+                latitude: place.latitude,
+                longitude: place.longitude
+            )) <= 60_000
+        }.prefix(3))
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct SaveAtlasHomeMetric: View {
     let value: String
-    let systemImage: String
+    let label: String
+    let systemName: String
     let tint: Color
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .frame(width: 37, height: 37)
+                .background(tint, in: Circle())
+
+            VStack(alignment: .leading, spacing: -2) {
+                Text(value)
+                    .font(SaveAtlasType.strong(22, relativeTo: .title3))
+                    .monospacedDigit()
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(label)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct SaveAtlasLoadingRow: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(SaveAtlasPalette.forest)
+            Text(title)
+                .font(SaveAtlasType.body(14))
+                .foregroundStyle(SaveAtlasPalette.muted)
+            Spacer()
+        }
+        .frame(minHeight: 54)
+    }
+}
+
+private struct SaveAtlasPocketCount: View {
+    let label: String
+    let value: Int
+    let tint: Color
+    let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    SaveIconTile(
-                        systemName: systemImage,
-                        size: 34,
-                        fill: tint,
-                        foreground: .saveInk
-                    )
-                    Spacer()
-                    Text(value)
-                        .font(.title2.monospacedDigit().bold())
-                }
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
+            HStack(spacing: 6) {
+                Text(label)
+                    .lineLimit(1)
+                Text("\(value)")
+                    .font(SaveAtlasType.strong(15))
+                    .monospacedDigit()
+                    .frame(width: 25, height: 25)
+                    .background(tint, in: Circle())
             }
-            .foregroundStyle(Color.saveInk)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
-            .saveNotebookPage(cornerRadius: 18)
+            .font(SaveAtlasType.display(14))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                isSelected
+                    ? tint.opacity(0.38)
+                    : SaveAtlasPalette.paper,
+                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(
+                        isSelected
+                            ? SaveAtlasPalette.forest.opacity(0.44)
+                            : SaveAtlasPalette.line.opacity(0.30),
+                        lineWidth: isSelected ? 1.4 : 1
+                    )
+            }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private enum SaveAtlasReviewTicketKind: Equatable {
+    case reviewCandidate
+    case sourceClue
+}
+
+private struct SaveAtlasReviewTicket: View {
+    let candidate: PlaceReviewCandidate
+    let detail: String
+    let kind: SaveAtlasReviewTicketKind
+    let actionTitle: String
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    private var tint: Color {
+        kind == .sourceClue
+            ? SaveAtlasPalette.coral.opacity(0.42)
+            : SaveAtlasPalette.sky
+    }
+
+    var body: some View {
+        HStack(spacing: 11) {
+            SaveAtlasPerforatedMedallion(
+                systemName: kind == .sourceClue ? "magnifyingglass" : "camera",
+                tint: tint
+            )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kindTitle.uppercased())
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.6)
+                    .foregroundStyle(
+                        kind == .sourceClue
+                            ? SaveAtlasPalette.coral
+                            : Color.saveBlueInk
+                    )
+
+                Text(candidate.name.isEmpty
+                    ? localized("Untitled clue", "未命名線索")
+                    : candidate.name
+                )
+                    .font(SaveAtlasType.strong(18, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+
+                Text(detail)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 4)
+
+            Text(actionTitle)
+                .font(SaveAtlasType.display(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .frame(minHeight: 38)
+                .background(tint.opacity(0.84), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(SaveAtlasPalette.ink.opacity(0.22), lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+        .background(SaveAtlasPalette.paper)
+        .padding(5)
+        .background(
+            SaveAtlasScallopedRectangle(depth: 3, pitch: 10)
+                .fill(tint.opacity(0.94))
+        )
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 4, y: 2)
+        .contentShape(Rectangle())
+    }
+
+    private var kindTitle: String {
+        kind == .sourceClue
+            ? localized("Source Clue", "來源線索")
+            : localized("Review Candidate", "待確認地點")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct SaveAtlasReviewPocket: View {
+    let count: Int
+    let title: String
+    let countLabel: String
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    SaveAtlasPalette.kraft.opacity(0.72),
+                    SaveAtlasPalette.kraft,
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            SaveAtlasPocketStitch()
+            .stroke(
+                SaveAtlasPalette.line.opacity(0.54),
+                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+            )
+
+            HStack(spacing: 14) {
+                SaveAtlasPostmark()
+
+                VStack(spacing: 7) {
+                    Text(title)
+                        .font(SaveAtlasType.editorial(19))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.5))
+                        .frame(height: 1)
+
+                    Text(count == 0
+                        ? localized("All caught up", "全部完成")
+                        : localized("Open Review", "打開待確認")
+                    )
+                        .font(SaveAtlasType.display(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+
+                VStack(spacing: -2) {
+                    Text("\(count)")
+                        .font(SaveAtlasType.editorial(28))
+                        .monospacedDigit()
+                    Text(countLabel)
+                        .font(SaveAtlasType.regular(10))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                .foregroundStyle(SaveAtlasPalette.coral)
+                .frame(width: 66, height: 66)
+                .background(SaveAtlasPalette.paper.opacity(0.34), in: SaveAtlasSealShape())
+                .overlay {
+                    SaveAtlasSealShape()
+                        .stroke(SaveAtlasPalette.coral.opacity(0.52), lineWidth: 1)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .frame(minHeight: 126)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(count) \(countLabel)")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct SaveAtlasPocketStitch: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let edgeY = rect.minY + rect.height * 0.16
+        let centerY = rect.minY + rect.height * 0.30
+        let controlY = rect.minY + rect.height * 0.56
+        path.move(to: CGPoint(x: rect.minX, y: edgeY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX, y: centerY),
+            control: CGPoint(x: rect.minX + rect.width * 0.25, y: controlY)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: edgeY),
+            control: CGPoint(x: rect.minX + rect.width * 0.75, y: controlY)
+        )
+        return path
+    }
+}
+
+private struct SaveAtlasPostmark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(SaveAtlasPalette.line.opacity(0.66), lineWidth: 1)
+                .frame(width: 48, height: 48)
+            Image(systemName: "airplane")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.line)
+        }
+        .overlay(alignment: .trailing) {
+            VStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.58))
+                        .frame(width: 28, height: 1)
+                }
+            }
+            .offset(x: 22)
+        }
+        .frame(width: 68)
+    }
+}
+
+private struct SaveAtlasPerforatedMedallion: View {
+    let systemName: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 20, weight: .regular))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .frame(width: 49, height: 49)
+            .background(tint, in: SaveAtlasSealShape())
+            .overlay {
+                SaveAtlasSealShape()
+                    .stroke(SaveAtlasPalette.ink.opacity(0.16), lineWidth: 1)
+            }
+    }
+}
+
+private struct SaveAtlasScallopedRectangle: Shape {
+    var depth: CGFloat = 4
+    var pitch: CGFloat = 11
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = pitch / 2
+        path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY + depth))
+
+        var x = rect.minX + radius
+        while x < rect.maxX - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x + pitch, y: rect.minY + depth),
+                control: CGPoint(x: x + radius, y: rect.minY - depth)
+            )
+            x += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - depth, y: rect.minY + radius))
+        var y = rect.minY + radius
+        while y < rect.maxY - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX - depth, y: y + pitch),
+                control: CGPoint(x: rect.maxX + depth, y: y + radius)
+            )
+            y += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY - depth))
+        x = rect.maxX - radius
+        while x > rect.minX + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x - pitch, y: rect.maxY - depth),
+                control: CGPoint(x: x - radius, y: rect.maxY + depth)
+            )
+            x -= pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.minX + depth, y: rect.maxY - radius))
+        y = rect.maxY - radius
+        while y > rect.minY + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + depth, y: y - pitch),
+                control: CGPoint(x: rect.minX - depth, y: y - radius)
+            )
+            y -= pitch
+        }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct SaveAtlasSealShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let baseRadius = min(rect.width, rect.height) / 2 - 2
+        let steps = 96
+        var path = Path()
+
+        for step in 0...steps {
+            let angle = CGFloat(step) / CGFloat(steps) * .pi * 2 - .pi / 2
+            let radius = baseRadius + cos(angle * 16) * 2
+            let point = CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            if step == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -428,37 +1309,44 @@ private struct SaveHomeTripCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        HStack(spacing: 14) {
-            SaveIconTile(
-                systemName: "suitcase.rolling.fill",
-                size: 48,
-                fill: Color.saveHoney.opacity(0.38),
-                foreground: .saveCoralInk
-            )
+        HStack(spacing: 11) {
+            Image(systemName: "point.3.connected.trianglepath.dotted")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 38, height: 38)
+                .background(SaveAtlasPalette.mint, in: Circle())
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(trip.name)
-                    .font(.headline)
-                    .foregroundStyle(Color.saveInk)
-                Text([trip.city, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.saveMutedText)
+                    .font(SaveAtlasType.strong(19, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                     .lineLimit(1)
                 Text(languageSettings.localized(
-                    english: "\(trip.places.count) confirmed stops",
-                    traditionalChinese: "\(trip.places.count) 個已確認地點"
+                    english: "\(trip.places.count) stops planned",
+                    traditionalChinese: "已規劃 \(trip.places.count) 站"
                 ))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.saveCocoa)
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
             }
 
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.bold())
-                .foregroundStyle(.tertiary)
+
+            if !trip.city.isEmpty {
+                Text(trip.city)
+                    .font(SaveAtlasType.display(11))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 28)
+                    .background(SaveAtlasPalette.lavender, in: Capsule())
+            }
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.muted)
         }
-        .padding(16)
-        .saveNotebookPage(cornerRadius: 20)
+        .frame(minHeight: 58)
+        .contentShape(Rectangle())
     }
 }
 
@@ -470,26 +1358,37 @@ private struct SaveRootPlaceRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                SaveMemoryBadge(state: .saved(place.category), size: 42)
+                SaveAtlasPlaceThumbnail(place: place)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.saveInk)
+                        .font(SaveAtlasType.strong(15))
+                        .foregroundStyle(SaveAtlasPalette.ink)
                         .lineLimit(1)
                     Text(addressText)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.saveMutedText)
+                        .font(SaveAtlasType.regular(11))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.bold())
-                    .foregroundStyle(.tertiary)
+
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(place.status.memoryCardLabel(language: languageSettings.language))
+                        .font(SaveAtlasType.display(10))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .padding(.horizontal, 8)
+                        .frame(minHeight: 24)
+                        .background(SaveAtlasPalette.mint, in: Capsule())
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .frame(minHeight: 56)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -506,5 +1405,48 @@ private struct SaveRootPlaceRow: View {
         return address.isEmpty
             ? languageSettings.localized(english: "Selected on map", traditionalChinese: "從地圖選取")
             : address
+    }
+}
+
+private struct SaveAtlasPlaceThumbnail: View {
+    let place: Place
+
+    var body: some View {
+        Group {
+            if let urlString = place.businessPhotoURLStrings.first,
+               let url = URL(string: urlString) {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .empty:
+                        ProgressView()
+                            .tint(SaveAtlasPalette.forest)
+                    case .failure:
+                        fallback
+                    @unknown default:
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 44, height: 44)
+        .background(SaveAtlasPalette.mint.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+        }
+    }
+
+    private var fallback: some View {
+        Image(systemName: place.category.iconName)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

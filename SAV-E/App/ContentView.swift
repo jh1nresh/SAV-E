@@ -272,6 +272,7 @@ struct ContentView: View {
                     reviewCandidates: mapVM.reviewCandidates,
                     onOpenCapture: { openDrawer(.addLink, tripID: nil) },
                     onOpenReview: { openDrawer(.review, tripID: nil) },
+                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
                     onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
                 )
                 .tabItem {
@@ -484,7 +485,7 @@ struct ContentView: View {
 
     private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
         pendingCaptureTripID = tripID
-        mapVM.selectReviewCandidate(candidate)
+        openMapDetail(.reviewCandidate(candidate))
     }
 
     private func handleRootSheetDismiss() {

@@ -90,6 +90,77 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testAtlasHomeAndSavesRenderPersistedPlaceData() throws {
+        let storageID = UUID().uuidString.lowercased()
+        let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
+        let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
+            "-save.appLanguage", "en",
+        ]
+
+        app.launch()
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+
+        let capture = app.buttons["home.capture"]
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+
+        let commandField = app.textFields["drawer.commandField"]
+        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
+        commandField.tap()
+        commandField.typeText(mapURL)
+        let submitCommand = app.buttons["drawer.submitCommand"]
+        XCTAssertTrue(submitCommand.waitForExistence(timeout: stepTimeout))
+        submitCommand.tap()
+
+        let analyzedCandidate = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'drawer.review.candidate.place.'")
+        ).firstMatch
+        XCTAssertTrue(
+            analyzedCandidate.waitForExistence(timeout: 20),
+            "Expected the analyzed link to persist as a Review Candidate."
+        )
+
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
+        app.launch()
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.staticTexts["1 clue needs your help"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-production-home")
+
+        openRootTab("Saves", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let savedCandidate = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                "Quarter Sheets Pizza Club"
+            )
+        ).firstMatch
+        XCTAssertTrue(savedCandidate.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-production-saves")
+
+        savedCandidate.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "A Saves Review Candidate should open in the one global drawer."
+        )
+        XCTAssertTrue(
+            app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout),
+            "A Saves Review Candidate should render its canonical review detail."
+        )
+    }
+
+    @MainActor
     func testGlobalTabsAreReachableAndTripUsesScopedTabs() throws {
         let app = XCUIApplication()
         app.launchArguments += [
