@@ -99,7 +99,7 @@ private struct PrototypeShell: View {
                         selection: trip,
                         title: \.title,
                         icon: \.icon,
-                        accessibilityPrefix: "tripTab",
+                        accessibilityPrefix: "prototype.tripTab",
                         onSelect: { trip = $0 }
                     )
                     .placed(x: 0, y: 786, width: 402, height: 76)
@@ -110,7 +110,7 @@ private struct PrototypeShell: View {
                         selection: root,
                         title: \.title,
                         icon: \.icon,
-                        accessibilityPrefix: "rootTab",
+                        accessibilityPrefix: "prototype.rootTab",
                         onSelect: { root = $0 }
                     )
                     .placed(

@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "filename" : "tsukiji-thumbnail.png", "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "tsukiji-thumbnail@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "tsukiji-thumbnail@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

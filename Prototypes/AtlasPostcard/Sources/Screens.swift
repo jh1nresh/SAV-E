@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct HomeAtlasScreen: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
             BrandHeader {
-                Button(action: {}) {
+                Button(action: presentation.onCapture) {
                     HStack(spacing: 7) {
                         Image(systemName: "link")
                             .font(.system(size: 15, weight: .medium))
@@ -21,7 +23,7 @@ struct HomeAtlasScreen: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("prototype.action.pasteLink")
+                .accessibilityIdentifier("home.capture")
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
             .accessibilityIdentifier("prototype.home.header")
@@ -54,6 +56,8 @@ struct HomeAtlasScreen: View {
 }
 
 private struct HomeReviewCard: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 21, style: .continuous)
@@ -64,7 +68,7 @@ private struct HomeReviewCard: View {
                 }
                 .shadow(color: AtlasPalette.ink.opacity(0.04), radius: 4, y: 1)
 
-            Text("3 clues need your help")
+            Text(reviewHeadline)
                 .font(AtlasType.strong(24))
                 .foregroundStyle(AtlasPalette.forest)
                 .position(x: 196, y: 32)
@@ -74,7 +78,7 @@ private struct HomeReviewCard: View {
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 196, y: 58)
 
-            Button(action: {}) {
+            Button(action: presentation.onReviewAll) {
                 HStack {
                     Spacer()
                     Text("Review clues")
@@ -97,7 +101,7 @@ private struct HomeReviewCard: View {
             }
             .buttonStyle(.plain)
             .position(x: 196, y: 93)
-            .accessibilityIdentifier("prototype.action.reviewClues")
+            .accessibilityIdentifier("home.review")
 
             Rectangle()
                 .fill(AtlasPalette.line.opacity(0.30))
@@ -105,7 +109,7 @@ private struct HomeReviewCard: View {
                 .position(x: 196, y: 151)
 
             HomeMetric(
-                value: "3",
+                value: "\(presentation.reviewCount)",
                 label: "to review",
                 systemName: "timer",
                 tint: AtlasPalette.lavender
@@ -114,7 +118,7 @@ private struct HomeReviewCard: View {
             .position(x: 121, y: 150)
 
             HomeMetric(
-                value: "18",
+                value: "\(presentation.mapStampCount)",
                 label: "Map Stamps",
                 systemName: "arrow.up.right",
                 tint: AtlasPalette.mint
@@ -122,6 +126,12 @@ private struct HomeReviewCard: View {
             .frame(width: 150, height: 42)
             .position(x: 274, y: 150)
         }
+    }
+
+    private var reviewHeadline: String {
+        let count = presentation.reviewCount
+        guard count > 0 else { return "You’re all caught up" }
+        return "\(count) \(count == 1 ? "clue needs" : "clues need") your help"
     }
 }
 
@@ -152,6 +162,8 @@ private struct HomeMetric: View {
 }
 
 private struct HomeNextTrip: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Text("NEXT UP")
@@ -160,12 +172,12 @@ private struct HomeNextTrip: View {
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 30, y: 12)
 
-            Text("Tokyo Weekend")
+            Text(presentation.tripName)
                 .font(AtlasType.strong(21))
                 .foregroundStyle(AtlasPalette.forest)
                 .position(x: 75, y: 37)
 
-            Text("Day 2 of 3")
+            Text("Day \(presentation.selectedDay) of \(presentation.tripDayCount)")
                 .font(AtlasType.display(12))
                 .foregroundStyle(AtlasPalette.ink)
                 .frame(width: 83, height: 28)
@@ -177,12 +189,12 @@ private struct HomeNextTrip: View {
                 .foregroundStyle(AtlasPalette.forest)
                 .position(x: 17, y: 70)
 
-            Text("4 stops planned")
+            Text("\(presentation.tripStops.count) stops planned")
                 .font(AtlasType.body(12))
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 92, y: 68)
 
-            Text("Next stop: Tsukiji Outer Market · 9:00 AM")
+            Text(nextStopText)
                 .font(AtlasType.regular(12))
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 179, y: 91)
@@ -197,10 +209,21 @@ private struct HomeNextTrip: View {
                 .frame(width: 382, height: 1)
                 .position(x: 191, y: 104)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: presentation.onOpenTrip)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("home.trip.current")
+    }
+
+    private var nextStopText: String {
+        guard let stop = presentation.tripStops.first else { return "No stops planned yet" }
+        return "Next stop: \(stop.name) · \(stop.time)"
     }
 }
 
 private struct HomeRecentStamps: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             Text("RECENT MAP STAMPS")
@@ -209,59 +232,69 @@ private struct HomeRecentStamps: View {
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 78, y: 14)
 
-            Text("See all")
+            Button("See all", action: presentation.onOpenSaves)
                 .font(AtlasType.display(12))
                 .foregroundStyle(AtlasPalette.ink)
+                .buttonStyle(.plain)
                 .position(x: 354, y: 14)
+                .accessibilityIdentifier("home.saves")
 
-            HomeStampRow(name: "Shibuya Backstreets", area: "Shibuya", day: "Today")
-                .placed(x: 0, y: 27, width: 382, height: 51)
-
-            HomeStampRow(name: "Koffee Mameya", area: "Shibuya", day: "Yesterday")
-                .placed(x: 0, y: 78, width: 382, height: 51)
+            ForEach(Array(presentation.recentPlaces.prefix(2).enumerated()), id: \.element.id) { index, place in
+                HomeStampRow(place: place) {
+                    presentation.onOpenPlace(place.id)
+                }
+                .placed(x: 0, y: 27 + CGFloat(index * 51), width: 382, height: 51)
+            }
         }
+        .accessibilityIdentifier("home.recentSaves")
     }
 }
 
 private struct HomeStampRow: View {
-    let name: String
-    let area: String
-    let day: String
+    let place: AtlasPlacePresentation
+    let onOpen: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            RoundStamp(text: "", style: .mapStamp)
+        Button(action: onOpen) {
+            HStack(spacing: 10) {
+                RoundStamp(text: "", style: .mapStamp)
 
-            VStack(alignment: .leading, spacing: 0) {
-                Text(name)
-                    .font(AtlasType.strong(15))
-                    .foregroundStyle(AtlasPalette.ink)
-                Text("\(area) · Confirmed")
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(place.name)
+                        .font(AtlasType.strong(15))
+                        .foregroundStyle(AtlasPalette.ink)
+                    Text("\(place.area) · Confirmed")
+                        .font(AtlasType.regular(11))
+                        .foregroundStyle(AtlasPalette.muted)
+                }
+
+                Spacer()
+
+                Text(place.relativeDay)
                     .font(AtlasType.regular(11))
                     .foregroundStyle(AtlasPalette.muted)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(AtlasPalette.muted)
             }
-
-            Spacer()
-
-            Text(day)
-                .font(AtlasType.regular(11))
-                .foregroundStyle(AtlasPalette.muted)
-
-            Image(systemName: "arrow.right")
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(AtlasPalette.muted)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, 3)
+        .accessibilityIdentifier("saves.place.\(place.id)")
     }
 }
 
 struct SavesPocketScreen: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
             BrandHeader {
-                Button(action: {}) {
+                Button(action: presentation.onCapture) {
                     Image(systemName: "link")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(AtlasPalette.ink)
@@ -273,7 +306,7 @@ struct SavesPocketScreen: View {
                         }
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("prototype.action.pasteLink")
+                .accessibilityIdentifier("root.capture")
             }
             .placed(x: 0, y: 48, width: 402, height: 50)
             .accessibilityIdentifier("prototype.saves.header")
@@ -289,9 +322,21 @@ struct SavesPocketScreen: View {
                 .accessibilityLabel("Memo sorting saved cards")
 
             HStack(spacing: 10) {
-                PocketCount(label: "Review", value: "3", tint: AtlasPalette.coral.opacity(0.52))
-                PocketCount(label: "Map Stamps", value: "18", tint: AtlasPalette.mint)
-                PocketCount(label: "Failed", value: "2", tint: AtlasPalette.coral.opacity(0.35))
+                PocketCount(
+                    label: "Review",
+                    value: "\(presentation.reviewCount)",
+                    tint: AtlasPalette.coral.opacity(0.52)
+                )
+                PocketCount(
+                    label: "Map Stamps",
+                    value: "\(presentation.mapStampCount)",
+                    tint: AtlasPalette.mint
+                )
+                PocketCount(
+                    label: "Failed",
+                    value: "\(presentation.failedCount)",
+                    tint: AtlasPalette.coral.opacity(0.35)
+                )
             }
             .placed(x: 10, y: 216, width: 382, height: 43)
             .accessibilityIdentifier("prototype.saves.counts")
@@ -357,6 +402,7 @@ private struct PocketCount: View {
 
 private struct SavesEnvelopePanel: View {
     private let sealInk = Color(red: 0.66, green: 0.32, blue: 0.22)
+    @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -380,7 +426,7 @@ private struct SavesEnvelopePanel: View {
             )
 
             VStack(spacing: -3) {
-                Text("3")
+                Text("\(presentation.reviewCount)")
                     .font(AtlasType.editorial(29))
                 Text("need your\nreview")
                     .font(AtlasType.regular(10))
@@ -393,53 +439,43 @@ private struct SavesEnvelopePanel: View {
         }
         .frame(width: 402, height: 207)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Full review queue, 3 need your review")
+        .accessibilityLabel("Full review queue, \(presentation.reviewCount) need your review")
     }
 }
 
 private struct SavesTickets: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            ReviewTicket(
-                kind: "REVIEW CANDIDATE",
-                name: "Tsukiji Outer Market",
-                detail: "From Xiaohongshu",
-                action: "Review",
-                tint: AtlasPalette.sky,
-                icon: "camera"
-            )
-            .placed(x: 0, y: 0, width: 382, height: 111)
-
-            ReviewTicket(
-                kind: "REVIEW CANDIDATE",
-                name: "Koffee Mameya",
-                detail: "From Instagram",
-                action: "Review",
-                tint: AtlasPalette.sky,
-                icon: "camera"
-            )
-            .placed(x: 0, y: 107, width: 382, height: 111)
-
-            ReviewTicket(
-                kind: "SOURCE CLUE",
-                name: "Yasaka Pagoda",
-                detail: "Missing exact place",
-                action: "Find exact",
-                tint: Color(red: 1.0, green: 0.79, blue: 0.72),
-                icon: "magnifyingglass"
-            )
-            .placed(x: 0, y: 210, width: 382, height: 118)
+            ForEach(Array(presentation.reviewItems.prefix(3).enumerated()), id: \.element.id) { index, item in
+                ReviewTicket(item: item) {
+                    presentation.onOpenReview(item.id)
+                }
+                .placed(
+                    x: 0,
+                    y: ticketY(index),
+                    width: 382,
+                    height: index == 2 ? 118 : 111
+                )
+            }
         }
+    }
+
+    private func ticketY(_ index: Int) -> CGFloat {
+        [0, 107, 210][min(index, 2)]
     }
 }
 
 private struct ReviewTicket: View {
-    let kind: String
-    let name: String
-    let detail: String
-    let action: String
-    let tint: Color
-    let icon: String
+    let item: AtlasReviewPresentation
+    let onOpen: () -> Void
+
+    private var tint: Color {
+        item.kind == .sourceOnly
+            ? Color(red: 1.0, green: 0.79, blue: 0.72)
+            : AtlasPalette.sky
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -451,32 +487,32 @@ private struct ReviewTicket: View {
                 .fill(AtlasPalette.paper)
                 .padding(5)
 
-            PerforatedMedallion(systemName: icon, tint: tint)
+            PerforatedMedallion(systemName: item.icon, tint: tint)
                 .position(x: 47, y: 55)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(kind)
+                Text(item.eyebrow)
                     .font(AtlasType.strong(11))
                     .tracking(0.6)
                     .foregroundStyle(
-                        kind == "SOURCE CLUE" ? AtlasPalette.coral : Color(red: 0.10, green: 0.48, blue: 0.70)
+                        item.kind == .sourceOnly ? AtlasPalette.coral : Color(red: 0.10, green: 0.48, blue: 0.70)
                     )
-                Text(name)
+                Text(item.name)
                     .font(AtlasType.strong(19))
                     .foregroundStyle(AtlasPalette.ink)
                     .lineLimit(1)
-                Text(detail)
+                Text(item.detail)
                     .font(AtlasType.body(13))
                     .foregroundStyle(AtlasPalette.muted)
             }
             .frame(width: 190, alignment: .leading)
             .position(x: 181, y: 55)
 
-            Button(action: {}) {
-                Text(action)
+            Button(action: onOpen) {
+                Text(item.actionTitle)
                     .font(AtlasType.display(14))
                     .foregroundStyle(AtlasPalette.ink)
-                    .frame(width: action == "Find exact" ? 82 : 68, height: 38)
+                    .frame(width: item.kind == .sourceOnly ? 82 : 68, height: 38)
                     .background(tint.opacity(0.84), in: RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
@@ -484,51 +520,17 @@ private struct ReviewTicket: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .frame(width: action == "Find exact" ? 88 : 74, height: 44)
-                .position(x: action == "Find exact" ? 313 : 316, y: 55)
-                .accessibilityLabel("\(action) \(name)")
-                .accessibilityHint("Prototype action")
-                .accessibilityIdentifier(
-                    "prototype.saves.\(action == "Find exact" ? "findExact" : "review")."
-                        + name.lowercased().replacingOccurrences(of: " ", with: "-")
-                )
+                .frame(width: item.kind == .sourceOnly ? 88 : 74, height: 44)
+                .position(x: item.kind == .sourceOnly ? 313 : 316, y: 55)
+                .accessibilityLabel("\(item.actionTitle) \(item.name)")
+                .accessibilityIdentifier("saves.reviewCandidate.\(item.id)")
         }
     }
 }
 
 struct TripPlanScreen: View {
     let onBack: () -> Void
-
-    private let stops = [
-        PlanStop(
-            name: "Tsukiji Outer Market",
-            time: "9:00 AM",
-            note: "Seafood stalls & breakfast",
-            image: "TsukijiThumbnail",
-            imageHeight: 78
-        ),
-        PlanStop(
-            name: "Koffee Mameya",
-            time: "11:30 AM",
-            note: "Coffee & people watching",
-            image: "KoffeeMameyaThumbnail",
-            imageHeight: 82
-        ),
-        PlanStop(
-            name: "teamLab Borderless",
-            time: "2:30 PM",
-            note: "Immersive digital art",
-            image: "TeamLabThumbnail",
-            imageHeight: 83
-        ),
-        PlanStop(
-            name: "Shibuya Sky",
-            time: "6:30 PM",
-            note: "Sunset city views",
-            image: "ShibuyaSkyThumbnail",
-            imageHeight: 84
-        ),
-    ]
+    @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -536,11 +538,9 @@ struct TripPlanScreen: View {
 
             TripHeader(onBack: onBack)
                 .placed(x: 0, y: 48, width: 402, height: 54)
-                .accessibilityIdentifier("prototype.plan.header")
 
             DayTabs()
                 .placed(x: 0, y: 102, width: 402, height: 47)
-                .accessibilityIdentifier("prototype.plan.dayTabs")
 
             PlanTitleBlock()
                 .placed(x: 6, y: 168, width: 390, height: 58)
@@ -553,11 +553,10 @@ struct TripPlanScreen: View {
                 .accessibilityLabel("Day 2 route")
                 .accessibilityIdentifier("prototype.plan.route")
 
-            PlanStops(stops: stops)
+            PlanStops(stops: Array(presentation.tripStops.prefix(4)))
                 .placed(x: 61, y: 238, width: 332, height: 478)
-                .accessibilityIdentifier("prototype.plan.stops")
 
-            Button(action: {}) {
+            Button(action: presentation.onAddStop) {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 18, weight: .regular))
@@ -573,7 +572,7 @@ struct TripPlanScreen: View {
             }
             .buttonStyle(.plain)
             .placed(x: 122, y: 728, width: 140, height: 40)
-            .accessibilityIdentifier("prototype.action.addStop")
+            .accessibilityIdentifier("trip.plan.addStop")
         }
         .frame(width: 402, height: 874)
         .clipped()
@@ -582,16 +581,9 @@ struct TripPlanScreen: View {
     }
 }
 
-private struct PlanStop {
-    let name: String
-    let time: String
-    let note: String
-    let image: String
-    let imageHeight: CGFloat
-}
-
-private struct TripHeader: View {
+struct TripHeader: View {
     let onBack: () -> Void
+    @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
         ZStack {
@@ -609,9 +601,9 @@ private struct TripHeader: View {
             .buttonStyle(.plain)
             .position(x: 22, y: 27)
             .accessibilityLabel("Back")
-            .accessibilityIdentifier("prototype.trip.back")
+            .accessibilityIdentifier("trip.back")
 
-            Text("Tokyo Weekend")
+            Text(presentation.tripName)
                 .font(AtlasType.strong(23))
                 .foregroundStyle(AtlasPalette.forest)
 
@@ -622,11 +614,24 @@ private struct TripHeader: View {
 }
 
 private struct DayTabs: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         HStack(spacing: 8) {
-            DayTab(title: "Day 1", tint: AtlasPalette.paper, selected: false)
-            DayTab(title: "Day 2", tint: AtlasPalette.mint, selected: true)
-            DayTab(title: "Day 3", tint: AtlasPalette.lavender, selected: false)
+            ForEach(1...max(1, presentation.tripDayCount), id: \.self) { day in
+                Button {
+                    presentation.onSelectDay(day)
+                } label: {
+                    DayTab(
+                        title: "Day \(day)",
+                        tint: dayTint(day),
+                        selected: day == presentation.selectedDay
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(day == presentation.selectedDay ? .isSelected : [])
+                .accessibilityIdentifier("trip.day.\(day)")
+            }
         }
         .padding(.horizontal, 4)
         .overlay(alignment: .bottom) {
@@ -634,6 +639,11 @@ private struct DayTabs: View {
                 .fill(AtlasPalette.line.opacity(0.26))
                 .frame(height: 1)
         }
+    }
+
+    private func dayTint(_ day: Int) -> Color {
+        guard day == presentation.selectedDay else { return AtlasPalette.paper }
+        return day.isMultiple(of: 2) ? AtlasPalette.mint : AtlasPalette.lavender
     }
 }
 
@@ -669,22 +679,24 @@ private struct DayTab: View {
 }
 
 private struct PlanTitleBlock: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         HStack(alignment: .bottom) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("TUESDAY, OCTOBER 13")
+                Text(presentation.tripDateLabel)
                     .font(AtlasType.strong(11))
                     .tracking(0.8)
                     .foregroundStyle(AtlasPalette.muted)
 
-                Text("Tokyo highlights")
+                Text("\(presentation.tripCity) highlights")
                     .font(AtlasType.strong(26))
                     .foregroundStyle(AtlasPalette.forest)
             }
 
             Spacer()
 
-            Text("4 stops")
+            Text("\(presentation.tripStops.count) stops")
                 .font(AtlasType.display(14))
                 .foregroundStyle(AtlasPalette.ink)
                 .frame(width: 70, height: 29)
@@ -697,7 +709,7 @@ private struct PlanTitleBlock: View {
 }
 
 private struct PlanStops: View {
-    let stops: [PlanStop]
+    let stops: [AtlasStopPresentation]
     private let frames: [CGRect] = [
         CGRect(x: 0, y: 0, width: 332, height: 101),
         CGRect(x: 0, y: 122, width: 332, height: 105),
@@ -708,7 +720,7 @@ private struct PlanStops: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
-                ItineraryStop(stop: stop)
+                AtlasItineraryStop(stop: stop)
                     .placed(
                         x: frames[index].minX,
                         y: frames[index].minY,
@@ -720,42 +732,49 @@ private struct PlanStops: View {
     }
 }
 
-private struct ItineraryStop: View {
-    let stop: PlanStop
+private struct AtlasItineraryStop: View {
+    let stop: AtlasStopPresentation
+    @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
-        HStack(spacing: 18) {
-            Image(stop.image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 74, height: stop.imageHeight)
+        Button {
+            presentation.onOpenStop(stop.id)
+        } label: {
+            HStack(spacing: 18) {
+                Image(stop.imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 74, height: stop.imageHeight)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(stop.name)
-                    .font(AtlasType.strong(17))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stop.name)
+                        .font(AtlasType.strong(17))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .lineLimit(1)
 
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.system(size: 13, weight: .regular))
-                    Text(stop.time)
-                        .font(AtlasType.body(13))
-                }
-                .foregroundStyle(AtlasPalette.muted)
-
-                Text(stop.note)
-                    .font(AtlasType.regular(13))
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 13, weight: .regular))
+                        Text(stop.time)
+                            .font(AtlasType.body(13))
+                    }
                     .foregroundStyle(AtlasPalette.muted)
-                    .lineLimit(1)
+
+                    Text(stop.note)
+                        .font(AtlasType.regular(13))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(AtlasPalette.ink)
             }
-
-            Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(AtlasPalette.ink)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .padding(.leading, 11)
         .padding(.trailing, 16)
         .background(AtlasPalette.paper.opacity(0.97), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -763,11 +782,13 @@ private struct ItineraryStop: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
         }
+        .accessibilityIdentifier("trip.stop.\(stop.id).edit")
     }
 }
 
 struct TripAtlasMapScreen: View {
     let onBack: () -> Void
+    @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -788,7 +809,7 @@ struct TripAtlasMapScreen: View {
             HStack(spacing: 7) {
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
                     .font(.system(size: 14, weight: .regular))
-                Text("DAY 2 · 4 STOPS")
+                Text("DAY \(presentation.selectedDay) · \(presentation.tripStops.count) STOPS")
                     .font(AtlasType.display(13))
             }
             .foregroundStyle(AtlasPalette.ink)
@@ -798,7 +819,9 @@ struct TripAtlasMapScreen: View {
                 Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
             }
             .placed(x: 128, y: 114, width: 145, height: 31)
-            .accessibilityLabel("Day 2, 4 stops")
+            .accessibilityLabel(
+                "Day \(presentation.selectedDay), \(presentation.tripStops.count) stops"
+            )
 
             TripMapPlaceCard()
                 .placed(x: 15, y: 550, width: 372, height: 226)
@@ -812,6 +835,8 @@ struct TripAtlasMapScreen: View {
 }
 
 private struct TripMapPlaceCard: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -826,12 +851,12 @@ private struct TripMapPlaceCard: View {
                 .position(x: 44, y: 42)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("STOP 2 · 11:30 AM")
+                Text(stopEyebrow)
                     .font(AtlasType.display(11))
                     .tracking(0.7)
                     .foregroundStyle(AtlasPalette.muted)
 
-                Text("Koffee Mameya")
+                Text(presentation.selectedMapPlace.name)
                     .font(AtlasType.strong(23))
                     .foregroundStyle(AtlasPalette.forest)
             }
@@ -851,18 +876,20 @@ private struct TripMapPlaceCard: View {
             }
             .position(x: 168, y: 91)
 
-            Text("Tsukiji Outer Market  →  Koffee Mameya  →  teamLab")
+            Text(routeSummary)
                 .font(AtlasType.body(13))
                 .foregroundStyle(AtlasPalette.muted)
                 .lineLimit(1)
                 .position(x: 186, y: 132)
 
-            Text("Next stop · teamLab Borderless at 2:30 PM")
+            Text(nextStopSummary)
                 .font(AtlasType.regular(14))
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 171, y: 158)
 
-            Button(action: {}) {
+            Button {
+                presentation.onOpenPlace(presentation.selectedMapPlace.id)
+            } label: {
                 HStack(spacing: 10) {
                     Text("Open stop")
                         .font(AtlasType.strong(17))
@@ -875,8 +902,36 @@ private struct TripMapPlaceCard: View {
             }
             .buttonStyle(.plain)
             .position(x: 95, y: 198)
-            .accessibilityIdentifier("prototype.action.openTripStop")
+            .accessibilityIdentifier("trip.map.openStop")
         }
+    }
+
+    private var selectedStopIndex: Int {
+        let index = presentation.tripStops.firstIndex {
+            $0.name == presentation.selectedMapPlace.name
+        } ?? min(1, max(0, presentation.tripStops.count - 1))
+        return index
+    }
+
+    private var stopEyebrow: String {
+        guard presentation.tripStops.indices.contains(selectedStopIndex) else {
+            return "CONFIRMED STOP"
+        }
+        let stop = presentation.tripStops[selectedStopIndex]
+        return "STOP \(selectedStopIndex + 1) · \(stop.time)"
+    }
+
+    private var routeSummary: String {
+        presentation.tripStops.prefix(3).map(\.name).joined(separator: "  →  ")
+    }
+
+    private var nextStopSummary: String {
+        let nextIndex = selectedStopIndex + 1
+        guard presentation.tripStops.indices.contains(nextIndex) else {
+            return "Last stop of the day"
+        }
+        let next = presentation.tripStops[nextIndex]
+        return "Next stop · \(next.name) at \(next.time)"
     }
 }
 
@@ -985,6 +1040,8 @@ private struct TripPrototypePlaceholder: View {
 }
 
 struct RootAtlasMapScreen: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
@@ -1001,7 +1058,7 @@ struct RootAtlasMapScreen: View {
                 HStack(spacing: 7) {
                     Image(systemName: "star.circle")
                         .font(.system(size: 16, weight: .regular))
-                    Text("18 Map Stamps")
+                    Text("\(presentation.mapStampCount) Map Stamps")
                         .font(AtlasType.display(14))
                 }
                 .foregroundStyle(AtlasPalette.ink)
@@ -1026,7 +1083,9 @@ struct RootAtlasMapScreen: View {
     }
 }
 
-private struct PlaceAtlasCard: View {
+struct PlaceAtlasCard: View {
+    @Environment(\.atlasPresentation) private var presentation
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -1040,12 +1099,12 @@ private struct PlaceAtlasCard: View {
             RoundStamp(text: "2", style: .tripStop)
                 .position(x: 44, y: 42)
 
-            Text("Koffee Mameya")
+            Text(presentation.selectedMapPlace.name)
                 .font(AtlasType.strong(23))
                 .foregroundStyle(AtlasPalette.forest)
                 .position(x: 170, y: 33)
 
-            Text("Shibuya")
+            Text(presentation.selectedMapPlace.area)
                 .font(AtlasType.body(14))
                 .foregroundStyle(AtlasPalette.muted)
                 .position(x: 111, y: 62)
@@ -1064,13 +1123,15 @@ private struct PlaceAtlasCard: View {
             }
             .position(x: 168, y: 91)
 
-            Text("Cozy coffee shop known for house\nblend and quiet corners.")
+            Text(presentation.selectedMapPlace.note)
                 .font(AtlasType.regular(14))
                 .foregroundStyle(AtlasPalette.muted)
                 .lineSpacing(3)
                 .position(x: 182, y: 139)
 
-            Button(action: {}) {
+            Button {
+                presentation.onOpenPlace(presentation.selectedMapPlace.id)
+            } label: {
                 HStack {
                     Spacer()
                     Text("Open details")
@@ -1086,7 +1147,7 @@ private struct PlaceAtlasCard: View {
             }
             .buttonStyle(.plain)
             .position(x: 133, y: 202)
-            .accessibilityIdentifier("prototype.action.openDetails")
+            .accessibilityIdentifier("map.place.openDetails")
 
             Button(action: {}) {
                 Image(systemName: "bookmark")

@@ -33,6 +33,9 @@ targets:
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
       - path: SAV-EShared
+      - path: Prototypes/AtlasPostcard/Sources
+        excludes:
+          - AtlasPostcardApp.swift
     postBuildScripts:
       - name: Package App Secrets.plist
         script: '"${SRCROOT}/scripts/package-google-places-secrets.sh"'

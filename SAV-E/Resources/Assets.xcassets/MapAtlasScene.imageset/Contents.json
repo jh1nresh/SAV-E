@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "filename" : "map-atlas-scene.png", "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "map-atlas-scene@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "map-atlas-scene@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
