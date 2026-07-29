@@ -69,8 +69,9 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(item[keyPath: title])
                 .accessibilityIdentifier(
-                    "prototype.\(accessibilityPrefix).\(item[keyPath: title].lowercased())"
+                    "\(accessibilityPrefix).\(item[keyPath: title].lowercased())"
                 )
+                .accessibilityAddTraits(selection == item ? .isSelected : [])
             }
         }
         .padding(.horizontal, 4)

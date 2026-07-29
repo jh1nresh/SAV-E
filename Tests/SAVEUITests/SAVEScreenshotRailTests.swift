@@ -17,6 +17,46 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureAtlasProductionParity() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-atlas-parity-fixture",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        attach(app, name: "atlas-home")
+
+        openRootTab("Saves", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-saves")
+
+        openRootTab("Trips", app: app)
+        let trip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: 20))
+        trip.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-plan")
+
+        let back = app.buttons["trip.back"]
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
+        back.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-map")
+    }
+
+    @MainActor
     func testCaptureAppStoreScreens() throws {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -65,24 +105,24 @@ final class SAVEScreenshotRailTests: XCTestCase {
         }
         firstTrip.tap()
 
-        let tabBar = app.tabBars.firstMatch
-        guard tabBar.buttons["Plan"].waitForExistence(timeout: stepTimeout) else {
+        let planTab = tripTabButton("Plan", app: app)
+        guard planTab.waitForExistence(timeout: stepTimeout) else {
             throw XCTSkip("Trip workspace did not open.")
         }
         attach(app, name: "screenshot-02-trip-plan")
 
-        tabBar.buttons["Map"].tap()
+        tripTabButton("Map", app: app).tap()
         dismissLocationAlertIfPresent()
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
         sleep(2)
         attach(app, name: "screenshot-03-trip-map")
 
-        tabBar.buttons["Inbox"].tap()
+        tripTabButton("Inbox", app: app).tap()
         XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
         sleep(1)
         attach(app, name: "screenshot-04-trip-inbox")
 
-        tabBar.buttons["Share"].tap()
+        tripTabButton("Share", app: app).tap()
         XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["trip.share.kml"].exists)
         sleep(1)
@@ -188,12 +228,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
         }
         XCTAssertTrue(recentSaves.waitForExistence(timeout: stepTimeout))
 
-        let rootTabBar = app.tabBars.firstMatch
         for tab in ["Home", "Saves", "Trips", "Map"] {
-            XCTAssertTrue(rootTabBar.buttons[tab].waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
+            XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
         }
-        XCTAssertEqual(rootTabBar.buttons.count, 4)
-        XCTAssertTrue(rootTabBar.buttons["Home"].isSelected)
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
 
         openRootTab("Saves", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
@@ -212,36 +250,33 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
         firstTrip.tap()
 
-        let tabBar = app.tabBars.firstMatch
         for tab in ["Plan", "Map", "Inbox", "Share"] {
-            XCTAssertTrue(tabBar.buttons[tab].waitForExistence(timeout: stepTimeout), "Missing \(tab) tab")
-        }
-        XCTAssertEqual(tabBar.buttons.count, 4)
-        for rootTab in ["Home", "Saves", "Trips"] {
-            XCTAssertFalse(tabBar.buttons[rootTab].exists, "Root tab \(rootTab) should be hidden inside a Trip")
+            XCTAssertTrue(tripTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) tab")
         }
 
-        tabBar.buttons["Map"].tap()
+        for rootTab in ["Home", "Saves", "Trips"] {
+            XCTAssertFalse(rootTabButton(rootTab, app: app).exists, "Root tab \(rootTab) should be hidden inside a Trip")
+        }
+
+        tripTabButton("Map", app: app).tap()
         dismissLocationAlertIfPresent()
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
-        tabBar.buttons["Inbox"].tap()
+        tripTabButton("Inbox", app: app).tap()
         let addLink = addLinkButton(in: app)
         XCTAssertTrue(addLink.waitForExistence(timeout: stepTimeout))
 
-        let backButton = app.navigationBars.buttons.firstMatch
+        let backButton = app.buttons["trip.back"]
         XCTAssertTrue(backButton.waitForExistence(timeout: stepTimeout))
         backButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
-        let restoredRootTabBar = app.tabBars.firstMatch
         for rootTab in ["Home", "Saves", "Trips", "Map"] {
             XCTAssertTrue(
-                restoredRootTabBar.buttons[rootTab].waitForExistence(timeout: stepTimeout),
+                rootTabButton(rootTab, app: app).waitForExistence(timeout: stepTimeout),
                 "Missing \(rootTab) after leaving a Trip"
             )
         }
-        XCTAssertEqual(restoredRootTabBar.buttons.count, 4)
     }
 
     @MainActor
@@ -272,8 +307,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(routeTrip.waitForExistence(timeout: stepTimeout))
         routeTrip.tap()
 
-        let tripTabBar = app.tabBars.firstMatch
-        let mapTab = tripTabBar.buttons["Map"]
+        let mapTab = tripTabButton("Map", app: app)
         XCTAssertTrue(mapTab.waitForExistence(timeout: stepTimeout))
         mapTab.tap()
 
@@ -307,17 +341,16 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(drawer.waitForNonExistence(timeout: stepTimeout))
 
         for tab in ["Plan", "Map", "Inbox", "Share"] {
-            let tabButton = tripTabBar.buttons[tab]
+            let tabButton = tripTabButton(tab, app: app)
             XCTAssertTrue(tabButton.waitForExistence(timeout: stepTimeout), "Missing \(tab) after closing a Trip Map detail.")
             XCTAssertTrue(tabButton.isHittable, "\(tab) is still covered after closing a Trip Map detail.")
         }
-        XCTAssertEqual(tripTabBar.buttons.count, 4)
-        XCTAssertTrue(tripTabBar.buttons["Map"].isSelected)
+        XCTAssertTrue(tripTabButton("Map", app: app).isSelected)
         for rootTab in ["Home", "Saves", "Trips"] {
-            XCTAssertFalse(tripTabBar.buttons[rootTab].exists)
+            XCTAssertFalse(rootTabButton(rootTab, app: app).exists)
         }
 
-        let planTab = tripTabBar.buttons["Plan"]
+        let planTab = tripTabButton("Plan", app: app)
         planTab.tap()
         XCTAssertTrue(planTab.isSelected)
     }
@@ -502,7 +535,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
         firstTrip.tap()
 
-        let shareTab = app.tabBars.buttons["Share"]
+        let shareTab = tripTabButton("Share", app: app)
         XCTAssertTrue(shareTab.waitForExistence(timeout: stepTimeout))
         shareTab.tap()
 
@@ -702,9 +735,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
-        let tab = app.tabBars.firstMatch.buttons[title]
+        let tab = rootTabButton(title, app: app)
         XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout), "Missing \(title) root tab")
         tab.tap()
+    }
+
+    @MainActor
+    private func rootTabButton(_ title: String, app: XCUIApplication) -> XCUIElement {
+        app.buttons["root.tab.\(title.lowercased())"]
+    }
+
+    @MainActor
+    private func tripTabButton(_ title: String, app: XCUIApplication) -> XCUIElement {
+        app.buttons["trip.tab.\(title.lowercased())"]
     }
 
     @MainActor
@@ -754,7 +797,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(scrollUntilExists(tripCard, app: app), "Created Trip is missing.")
         tripCard.tap()
 
-        XCTAssertTrue(app.tabBars.buttons["Plan"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(tripTabButton("Plan", app: app).waitForExistence(timeout: stepTimeout))
         let tripStop = app.buttons.matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'trip.stop.' AND identifier ENDSWITH '.edit' AND label == %@",
@@ -763,7 +806,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(scrollUntilExists(tripStop, app: app), "Confirmed Trip stop is missing.")
 
-        let backButton = app.navigationBars.buttons.firstMatch
+        let backButton = app.buttons["trip.back"]
         XCTAssertTrue(backButton.waitForExistence(timeout: stepTimeout))
         backButton.tap()
     }

@@ -1,7 +1,13 @@
 # SAV-E Little Atlas + Postcard Pocket
 
-Status: locked prototype direction
+Status: locked production direction
 Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png)
+
+This file is the canonical SAV-E visual specification for Home, Saves, Trip
+Plan, and Root Map. Where an older production spec conflicts with the fixed
+composition, assets, type scale, or one-viewport rule below, this file wins.
+Product behavior, persistence, authentication, confirmation, and the single
+canonical place-detail drawer remain governed by their existing contracts.
 
 ## Direction
 

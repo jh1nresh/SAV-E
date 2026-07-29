@@ -1,0 +1,30 @@
+{
+  "reviewedAt": "2026-07-28",
+  "scope": "SAV-E production Home, Saves, Trip Plan, and Root Map",
+  "authorization": {
+    "basis": "founder-provided and founder-approved repository reference",
+    "externalDownloadMetadataFound": false,
+    "thirdPartyAssetURLsFound": false,
+    "exclusiveRightsClaimed": false,
+    "releaseBoundary": "Founder must retain the source-generation record before asserting exclusive illustration rights outside this private repository."
+  },
+  "rendering": {
+    "sourceScale": "1x reference sections",
+    "productionScales": ["1x", "2x", "3x"],
+    "upscaleMethod": "deterministic macOS sips resampling",
+    "reason": "Preserve the approved composition and the 0.90 pixel-parity contract; generative recreation would intentionally change the approved pixels."
+  },
+  "assets": [
+    "HomeAtlasScene",
+    "KoffeeMameyaThumbnail",
+    "MapAtlasScene",
+    "MemoMascot",
+    "PaperTexture",
+    "PlanRouteRibbon",
+    "SavesEnvelope",
+    "SavesMemoSorting",
+    "ShibuyaSkyThumbnail",
+    "TeamLabThumbnail",
+    "TsukijiThumbnail"
+  ]
+}

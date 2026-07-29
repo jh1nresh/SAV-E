@@ -78,11 +78,20 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
+
+      - name: Enforce Atlas production visual parity
+        run: |
+          Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
+            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
+            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
+            --threshold 0.90
 
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''
@@ -103,6 +112,15 @@ jobs:
             cleanup_status=1
           fi
           exit "$cleanup_status"
+
+      - name: Upload Atlas parity evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-atlas-parity-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-Atlas-Parity
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'

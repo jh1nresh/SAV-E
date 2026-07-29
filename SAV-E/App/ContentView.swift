@@ -1,10 +1,30 @@
 import SwiftUI
 
-enum SaveRootTab: Hashable {
+enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     case home
     case saves
     case trips
     case map
+
+    var id: Self { self }
+
+    var atlasTitle: String {
+        switch self {
+        case .home: "Home"
+        case .saves: "Saves"
+        case .trips: "Trips"
+        case .map: "Map"
+        }
+    }
+
+    var atlasIcon: String {
+        switch self {
+        case .home: "house"
+        case .saves: "bookmark"
+        case .trips: "briefcase"
+        case .map: "globe"
+        }
+    }
 
     func title(language: AppLanguage) -> String {
         switch self {
@@ -74,6 +94,8 @@ struct ContentView: View {
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
     @State private var pendingTripAssignmentPlace: Place?
+    @State private var isTripAssignmentDialogPresented = false
+    @State private var isTransitioningToTripCreation = false
     @State private var isCreatingTripForAssignment = false
     @State private var pendingCaptureTripID: UUID?
     @State private var activeTripID: UUID?
@@ -140,14 +162,7 @@ struct ContentView: View {
                 english: "Saved. Add it to a Trip?",
                 traditionalChinese: "已收藏。要加入行程嗎？"
             ),
-            isPresented: Binding(
-                get: { pendingTripAssignmentPlace != nil && !isCreatingTripForAssignment },
-                set: { isPresented in
-                    if !isPresented && !isCreatingTripForAssignment {
-                        finishTripAssignment()
-                    }
-                }
-            ),
+            isPresented: $isTripAssignmentDialogPresented,
             titleVisibility: .visible
         ) {
             ForEach(tripAssignmentChoices) { trip in
@@ -164,7 +179,17 @@ struct ContentView: View {
                 english: "Create new Trip and add",
                 traditionalChinese: "新增行程並加入"
             )) {
-                isCreatingTripForAssignment = true
+                isTransitioningToTripCreation = true
+                isTripAssignmentDialogPresented = false
+                Task { @MainActor in
+                    await Task.yield()
+                    guard pendingTripAssignmentPlace != nil else {
+                        isTransitioningToTripCreation = false
+                        return
+                    }
+                    isCreatingTripForAssignment = true
+                    isTransitioningToTripCreation = false
+                }
             }
             .accessibilityIdentifier("saved.addToTrip.create")
             Button(
@@ -186,6 +211,14 @@ struct ContentView: View {
                     : "請選擇現有行程、建立新行程，或只保留在收藏。"
             ))
         }
+        .onChange(of: isTripAssignmentDialogPresented) { _, isPresented in
+            guard !isPresented,
+                  !isCreatingTripForAssignment,
+                  !isTransitioningToTripCreation,
+                  pendingTripAssignmentPlace != nil
+            else { return }
+            finishTripAssignment()
+        }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
@@ -202,6 +235,7 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }
+            guard selectedRootTab != .map else { return }
             openMapDetail(.savedPlace(place))
         }
         .onChange(of: mapVM.selectedReviewCandidate) { _, candidate in
@@ -249,68 +283,67 @@ struct ContentView: View {
 
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
-            TabView(selection: $selectedRootTab) {
-                SaveHomeView(
-                    store: tripStore,
-                    mapViewModel: mapVM,
-                    onOpenDrawer: openDrawer,
-                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                    onOpenSaves: { selectedRootTab = .saves },
-                    onOpenTrips: { selectedRootTab = .trips },
-                    onOpenTrip: { rootPath.append(.trip($0)) }
-                )
-                .tabItem {
-                    Label(
-                        SaveRootTab.home.title(language: languageSettings.language),
-                        systemImage: SaveRootTab.home.systemImage
-                    )
-                }
-                .tag(SaveRootTab.home)
+            ReferenceViewport {
+                ZStack(alignment: .topLeading) {
+                    Group {
+                        switch selectedRootTab {
+                        case .home:
+                            SaveHomeView(
+                                store: tripStore,
+                                mapViewModel: mapVM,
+                                onOpenDrawer: openDrawer,
+                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenSaves: { selectedRootTab = .saves },
+                                onOpenTrips: { selectedRootTab = .trips },
+                                onOpenTrip: { rootPath.append(.trip($0)) }
+                            )
+                        case .saves:
+                            SaveLibraryView(
+                                places: mapVM.places,
+                                reviewCandidates: mapVM.reviewCandidates,
+                                onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+                                onOpenReview: { openDrawer(.review, tripID: nil) },
+                                onOpenReviewCandidate: {
+                                    openReviewCandidate($0, tripID: nil)
+                                },
+                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
+                            )
+                        case .trips:
+                            TripsHomeView(
+                                store: tripStore,
+                                onOpenDrawer: openDrawer,
+                                onOpenTrip: { rootPath.append(.trip($0)) }
+                            )
+                            .frame(width: 402, height: 786)
+                            .clipped()
+                        case .map:
+                            SaveMapRootView(
+                                mapViewModel: mapVM,
+                                shouldFocusOnUserLocation: true,
+                                onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
+                            )
+                        }
+                    }
 
-                SaveLibraryView(
-                    places: mapVM.places,
-                    reviewCandidates: mapVM.reviewCandidates,
-                    onOpenCapture: { openDrawer(.addLink, tripID: nil) },
-                    onOpenReview: { openDrawer(.review, tripID: nil) },
-                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
-                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
-                )
-                .tabItem {
-                    Label(
-                        SaveRootTab.saves.title(language: languageSettings.language),
-                        systemImage: SaveRootTab.saves.systemImage
+                    AtlasTabBar(
+                        items: SaveRootTab.allCases,
+                        selection: selectedRootTab,
+                        title: \.atlasTitle,
+                        icon: \.atlasIcon,
+                        accessibilityPrefix: "root.tab",
+                        onSelect: { selectedRootTab = $0 }
+                    )
+                    .placed(
+                        x: 0,
+                        y: selectedRootTab == .map ? 788 : 786,
+                        width: 402,
+                        height: 76
                     )
                 }
-                .tag(SaveRootTab.saves)
-
-                TripsHomeView(
-                    store: tripStore,
-                    onOpenDrawer: openDrawer,
-                    onOpenTrip: { rootPath.append(.trip($0)) }
-                )
-                .tabItem {
-                    Label(
-                        SaveRootTab.trips.title(language: languageSettings.language),
-                        systemImage: SaveRootTab.trips.systemImage
-                    )
-                }
-                .tag(SaveRootTab.trips)
-
-                SaveMapRootView(
-                    mapViewModel: mapVM,
-                    shouldFocusOnUserLocation: selectedRootTab == .map,
-                    onOpenCapture: { openDrawer(.addLink, tripID: nil) }
-                )
-                .tabItem {
-                    Label(
-                        SaveRootTab.map.title(language: languageSettings.language),
-                        systemImage: SaveRootTab.map.systemImage
-                    )
-                }
-                .tag(SaveRootTab.map)
             }
             .tint(SaveAtlasPalette.forest)
-            .accessibilityIdentifier("root.tabs")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {
                 case .trip(let tripID):
@@ -321,6 +354,7 @@ struct ContentView: View {
                         storageScope: storageScope,
                         onOpenDrawer: openDrawer,
                         onOpenReviewCandidate: openReviewCandidate,
+                        onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                         onActiveTripChange: { activeTripID = $0 }
                     )
                 }
@@ -500,6 +534,12 @@ struct ContentView: View {
         }
         drawerVM.returnToCommands()
         mapDetailDrawerItem = pendingDetail
+        if pendingTripAssignmentPlace != nil {
+            Task { @MainActor in
+                await Task.yield()
+                isTripAssignmentDialogPresented = true
+            }
+        }
         if pendingDetail == nil {
             mapVM.clearSelectedMapObject()
             return
@@ -533,6 +573,8 @@ struct ContentView: View {
     }
 
     private func finishTripAssignment() {
+        isTripAssignmentDialogPresented = false
+        isTransitioningToTripCreation = false
         pendingTripAssignmentPlace = nil
         pendingCaptureTripID = nil
     }

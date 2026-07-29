@@ -13,25 +13,24 @@ struct SaveHomeView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                ScrollView(showsIndicators: false) {
-                    homeContent
-                }
-            } else {
-                ViewThatFits(in: .vertical) {
-                    homeContent
-
-                    ScrollView(showsIndicators: false) {
-                        homeContent
-                    }
-                }
-            }
-        }
-        .background(SaveDottedBackground().ignoresSafeArea())
+        HomeAtlasScreen()
+        .environment(\.atlasPresentation, atlasPresentation)
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.root(
+            store: store,
+            mapViewModel: mapViewModel,
+            onCapture: { onOpenDrawer(.addLink, nil) },
+            onReviewAll: { onOpenDrawer(.review, nil) },
+            onOpenTrip: onOpenTrip,
+            onOpenSaves: onOpenSaves,
+            onOpenPlace: onOpenSavedPlace,
+            onOpenReview: { _ in onOpenDrawer(.review, nil) }
+        )
     }
 
     private var homeContent: some View {
@@ -321,24 +320,37 @@ struct SaveLibraryView: View {
 
     var body: some View {
         Group {
-            if effectiveMode == .review && !dynamicTypeSize.isAccessibilitySize {
-                ViewThatFits(in: .vertical) {
-                    savesContent
-
-                    ScrollView(showsIndicators: false) {
-                        savesContent
-                    }
-                }
-            } else {
+            switch effectiveMode {
+            case .review:
+                SavesPocketScreen()
+                    .environment(\.atlasPresentation, atlasPresentation)
+            case .mapStamps:
                 ScrollView(showsIndicators: false) {
                     savesContent
                 }
+                .background(SaveAtlasPalette.canvas)
             }
         }
-        .background(SaveDottedBackground().ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.library(
+            places: places,
+            candidates: reviewCandidates,
+            onCapture: onOpenCapture,
+            onReviewAll: onOpenReview,
+            onOpenPlace: onOpenSavedPlace,
+            onOpenReview: onOpenReviewCandidate,
+            onSelectReview: {
+                selectedMode = .review
+            },
+            onSelectMapStamps: {
+                selectedMode = .mapStamps
+            }
+        )
     }
 
     private var savesContent: some View {
@@ -585,7 +597,10 @@ struct SaveLibraryView: View {
     }
 
     private var effectiveMode: SaveLibraryMode {
-        selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
+        if SaveAtlasRuntime.usesParityFixture {
+            return .review
+        }
+        return selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
     }
 
     private var sortedPlaces: [Place] {
@@ -652,36 +667,31 @@ struct SaveMapRootView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let shouldFocusOnUserLocation: Bool
     let onOpenCapture: () -> Void
+    let onOpenSavedPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        MapView(
-            viewModel: mapViewModel,
-            shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation,
-            contextBadgeText: languageSettings.savedCountText(mapViewModel.places.count)
-        )
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 7) {
-                    MemoMascotMark(size: 30, framed: false)
-                    Text("SAV-E")
-                        .font(SaveAtlasType.strong(21, relativeTo: .headline))
-                        .tracking(1)
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    languageSettings.localized(english: "SAV-E Map", traditionalChinese: "SAV-E 地圖")
+        Group {
+            if SaveAtlasRuntime.usesParityFixture {
+                RootAtlasMapScreen()
+                    .environment(\.atlasPresentation, atlasPresentation)
+            } else {
+                SaveAtlasInteractiveRootMap(
+                    mapViewModel: mapViewModel,
+                    shouldFocusOnUserLocation: shouldFocusOnUserLocation,
+                    presentation: atlasPresentation
                 )
             }
-
-            ToolbarItem(placement: .topBarTrailing) {
-                SaveGlobalCaptureToolbarButton(action: onOpenCapture)
-            }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .accessibilityIdentifier("map.root")
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.map(
+            mapViewModel: mapViewModel,
+            onOpenPlace: onOpenSavedPlace
+        )
     }
 }
 

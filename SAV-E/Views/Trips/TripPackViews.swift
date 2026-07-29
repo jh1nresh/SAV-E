@@ -277,6 +277,7 @@ struct NewTripPackView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trip.create.sheet")
     }
 
@@ -285,11 +286,31 @@ struct NewTripPackView: View {
     }
 }
 
-private enum TripWorkspaceTab: Hashable {
+private enum TripWorkspaceTab: Hashable, CaseIterable, Identifiable {
     case plan
     case map
     case inbox
     case share
+
+    var id: Self { self }
+
+    var atlasTitle: String {
+        switch self {
+        case .plan: "Plan"
+        case .map: "Map"
+        case .inbox: "Inbox"
+        case .share: "Share"
+        }
+    }
+
+    var atlasIcon: String {
+        switch self {
+        case .plan: "map"
+        case .map: "globe.asia.australia"
+        case .inbox: "envelope"
+        case .share: "point.3.connected.trianglepath.dotted"
+        }
+    }
 }
 
 enum TripWorkspaceBadge {
@@ -306,58 +327,65 @@ struct TripWorkspaceView: View {
     let storageScope: ContentStorageScope
     let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate, UUID?) -> Void
+    let onOpenSavedPlace: (Place) -> Void
     let onActiveTripChange: (UUID?) -> Void
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var selectedTab: TripWorkspaceTab = .plan
 
     var body: some View {
         Group {
             if let trip = store.trips.first(where: { $0.id == tripID }) {
-                TabView(selection: $selectedTab) {
-                    TripPlanView(trip: trip, store: store, savedPlaces: mapViewModel.places)
-                        .tabItem { Label(localized("Plan", "日程"), systemImage: "list.number") }
-                        .tag(TripWorkspaceTab.plan)
-
-                    TripMapView(trip: trip, mapViewModel: mapViewModel)
-                        .tabItem { Label(localized("Map", "地圖"), systemImage: "map") }
-                        .tag(TripWorkspaceTab.map)
-
-                    TripInboxView(
-                        tripName: trip.name,
-                        candidates: mapViewModel.reviewCandidates,
-                        onSelect: { onOpenReviewCandidate($0, trip.id) },
-                        onOpenCapture: { onOpenDrawer(.addLink, trip.id) }
-                    )
-                    .tabItem { Label(localized("Inbox", "收件匣"), systemImage: "tray") }
-                    .badge(TripWorkspaceBadge.label(for: mapViewModel.reviewCandidates.count))
-                    .tag(TripWorkspaceTab.inbox)
-
-                    TripPackShareView(
-                        trip: trip,
-                        places: mapViewModel.places,
-                        storageScope: storageScope
-                    )
-                        .tabItem { Label(localized("Share", "分享"), systemImage: "square.and.arrow.up") }
-                        .tag(TripWorkspaceTab.share)
-                }
-                .navigationTitle(trip.name)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    if selectedTab != .inbox {
-                        ToolbarItemGroup(placement: .topBarTrailing) {
-                            Button {
-                                onOpenDrawer(.addLink, trip.id)
-                            } label: {
-                                Image(systemName: "link.badge.plus")
+                ReferenceViewport {
+                    ZStack(alignment: .topLeading) {
+                        Group {
+                            switch selectedTab {
+                            case .plan:
+                                TripPlanView(
+                                    trip: trip,
+                                    store: store,
+                                    savedPlaces: mapViewModel.places,
+                                    onBack: { dismiss() }
+                                )
+                            case .map:
+                                TripMapView(
+                                    trip: trip,
+                                    mapViewModel: mapViewModel,
+                                    onBack: { dismiss() },
+                                    onOpenPlace: onOpenSavedPlace
+                                )
+                            case .inbox:
+                                TripInboxView(
+                                    tripName: trip.name,
+                                    candidates: mapViewModel.reviewCandidates,
+                                    onSelect: { onOpenReviewCandidate($0, trip.id) },
+                                    onOpenCapture: { onOpenDrawer(.addLink, trip.id) }
+                                )
+                                .frame(width: 402, height: 786)
+                                .clipped()
+                            case .share:
+                                TripPackShareView(
+                                    trip: trip,
+                                    places: mapViewModel.places,
+                                    storageScope: storageScope
+                                )
+                                .frame(width: 402, height: 786)
+                                .clipped()
                             }
-                            .accessibilityLabel(localized("Paste or share link", "貼上或分享連結"))
-
-                            MemoMascotMark(size: 30, framed: false)
-                                .accessibilityHidden(true)
                         }
+
+                        AtlasTabBar(
+                            items: TripWorkspaceTab.allCases,
+                            selection: selectedTab,
+                            title: \.atlasTitle,
+                            icon: \.atlasIcon,
+                            accessibilityPrefix: "trip.tab",
+                            onSelect: { selectedTab = $0 }
+                        )
+                        .placed(x: 0, y: 786, width: 402, height: 76)
                     }
                 }
-                .accessibilityIdentifier("trip.workspace.\(trip.id.uuidString)")
+                .toolbar(.hidden, for: .navigationBar)
             } else {
                 ContentUnavailableView(
                     localized("Trip unavailable", "找不到行程"),
@@ -386,113 +414,15 @@ private struct TripPlanView: View {
     let trip: Trip
     @ObservedObject var store: TripPackStore
     let savedPlaces: [Place]
+    let onBack: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsPlacePicker = false
     @State private var selectedStop: TripStop?
     @State private var selectedDay = 1
 
     var body: some View {
-        List {
-            if !trip.places.isEmpty {
-                TripDayTabs(
-                    days: availableDays,
-                    selectedDay: resolvedSelectedDay,
-                    dayTitle: { localized("Day \($0)", "第 \($0) 天") },
-                    onSelect: { selectedDay = $0 }
-                )
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
-                .listRowBackground(SaveAtlasPalette.canvas)
-                .listRowSeparator(.hidden)
-
-                TripPlanTitleBlock(
-                    eyebrow: selectedDateText,
-                    title: tripHighlightsTitle,
-                    stopCount: stopCountText
-                )
-                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            }
-
-            if trip.places.isEmpty {
-                ContentUnavailableView {
-                    Label(localized("No stops yet", "還沒有行程地點"), systemImage: "mappin.and.ellipse")
-                } description: {
-                    Text(localized(
-                        "Confirm a link in Review, or choose an existing saved place.",
-                        "先在待確認中確認連結，或選擇既有收藏地點。"
-                    ))
-                } actions: {
-                    Button(localized("Add saved place", "加入收藏地點")) { showsPlacePicker = true }
-                }
-                .font(SaveAtlasType.body(15))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .padding(.vertical, 24)
-                .saveAtlasPaper(radius: 24, shadow: true)
-                .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            } else {
-                ForEach(displayedGroups, id: \.day) { group in
-                    Section {
-                        ForEach(Array(group.stops.enumerated()), id: \.element.id) { index, stop in
-                            TripStopRow(
-                                stop: stop,
-                                place: savedPlace(for: stop),
-                                position: index + 1,
-                                isLast: index == group.stops.count - 1,
-                                canMoveEarlier: index > 0 && !store.isSaving,
-                                canMoveLater: index < group.stops.count - 1 && !store.isSaving,
-                                onEdit: {
-                                    selectedStop = stop
-                                },
-                                onMoveEarlier: {
-                                    Task { _ = await store.moveStop(stop.id, in: trip.id, by: -1) }
-                                },
-                                onMoveLater: {
-                                    Task { _ = await store.moveStop(stop.id, in: trip.id, by: 1) }
-                                }
-                            )
-                            .listRowInsets(EdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                }
-            }
-
-            Section {
-                Button {
-                    showsPlacePicker = true
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text(localized("Add stop", "新增停靠點"))
-                            .font(SaveAtlasType.display(16))
-                    }
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .background(SaveAtlasPalette.mint, in: Capsule())
-                    .overlay {
-                        Capsule()
-                            .stroke(SaveAtlasPalette.forest.opacity(0.30), lineWidth: 1)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(availablePlaces.isEmpty)
-                .opacity(availablePlaces.isEmpty ? 0.48 : 1)
-                .accessibilityLabel(localized("Add saved place", "加入收藏地點"))
-                .accessibilityIdentifier("trip.plan.addStop")
-            }
-            .listRowInsets(EdgeInsets(top: 12, leading: 58, bottom: 20, trailing: 20))
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-        }
-        .listStyle(.plain)
-        .environment(\.defaultMinListRowHeight, 1)
-        .scrollContentBackground(.hidden)
-        .background(SaveAtlasPalette.canvas.ignoresSafeArea())
+        TripPlanScreen(onBack: onBack)
+        .environment(\.atlasPresentation, atlasPresentation)
         .overlay(alignment: .top) {
             if store.isSaving {
                 ProgressView(localized("Saving…", "正在保存…"))
@@ -530,6 +460,18 @@ private struct TripPlanView: View {
         .onAppear(perform: normalizeSelectedDay)
         .onChange(of: availableDays) { _, _ in normalizeSelectedDay() }
         .accessibilityIdentifier("trip.plan")
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.trip(
+            trip: trip,
+            selectedDay: resolvedSelectedDay,
+            places: savedPlaces,
+            onSelectDay: { selectedDay = $0 },
+            onOpenStop: { selectedStop = $0 },
+            onAddStop: { showsPlacePicker = true },
+            onOpenPlace: { _ in }
+        )
     }
 
     private var availableDays: [Int] {
@@ -1152,26 +1094,36 @@ private struct SavedPlacePicker: View {
 private struct TripMapView: View {
     let trip: Trip
     @ObservedObject var mapViewModel: MapViewModel
+    let onBack: () -> Void
+    let onOpenPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        MapView(
-            viewModel: mapViewModel,
-            shouldFocusOnUserLocationOnLaunch: false,
-            displayedPlaces: routePlaces,
-            showsAuxiliaryPins: false,
-            numberedPlacePositions: numberedPlacePositions,
-            contextBadgeText: routeSummary
+        Group {
+            if SaveAtlasRuntime.usesParityFixture {
+                TripAtlasMapScreen(onBack: onBack)
+                    .environment(\.atlasPresentation, atlasPresentation)
+            } else {
+                SaveAtlasInteractiveTripMap(
+                    mapViewModel: mapViewModel,
+                    trip: trip,
+                    presentation: atlasPresentation,
+                    onBack: onBack
+                )
+            }
+        }
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.trip(
+            trip: trip,
+            selectedDay: trip.places.map(\.day).min() ?? 1,
+            places: mapViewModel.places,
+            onSelectDay: { _ in },
+            onOpenStop: { _ in },
+            onAddStop: {},
+            onOpenPlace: onOpenPlace
         )
-            .onAppear {
-                applyRoute()
-            }
-            .onChange(of: routePoints) { _, _ in
-                applyRoute()
-            }
-            .onDisappear {
-                mapViewModel.apply(MapActionData(type: .resetPins, placeIds: nil, lat: nil, lng: nil, span: nil))
-            }
     }
 
     private var orderedPlaceIDs: [UUID] {
