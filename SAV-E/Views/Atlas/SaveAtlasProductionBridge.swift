@@ -89,6 +89,7 @@ enum SaveAtlasPresentationFactory {
 
     static func map(
         mapViewModel: MapViewModel,
+        onOpenAssistant: @escaping () -> Void,
         onOpenPlace: @escaping (Place) -> Void
     ) -> AtlasPresentation {
         var presentation = SaveAtlasRuntime.usesParityFixture
@@ -105,12 +106,14 @@ enum SaveAtlasPresentationFactory {
             }
             onOpenPlace(place)
         }
+        presentation.onOpenAssistant = onOpenAssistant
         return presentation
     }
 
     static func trips(
         store: TripPackStore,
         onCapture: @escaping () -> Void,
+        onOpenAssistant: @escaping () -> Void,
         onCreateTrip: @escaping () -> Void,
         onOpenTrip: @escaping (UUID) -> Void
     ) -> AtlasPresentation {
@@ -126,6 +129,7 @@ enum SaveAtlasPresentationFactory {
         }
 
         presentation.onCapture = onCapture
+        presentation.onOpenAssistant = onOpenAssistant
         presentation.onCreateTrip = onCreateTrip
         presentation.onOpenTripID = { id in
             let selectedTrip = UUID(uuidString: id)
@@ -378,6 +382,7 @@ struct SaveAtlasInteractiveRootMap: View {
     @ObservedObject var mapViewModel: MapViewModel
     let shouldFocusOnUserLocation: Bool
     let presentation: AtlasPresentation
+    let onClearSelection: () -> Void
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -388,7 +393,7 @@ struct SaveAtlasInteractiveRootMap: View {
                 shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation
             )
             .clipped()
-            .placed(x: 0, y: 91, width: 402, height: 480)
+            .placed(x: 0, y: 91, width: 402, height: 697)
 
             BrandHeader {
                 HStack(spacing: 7) {
@@ -407,15 +412,27 @@ struct SaveAtlasInteractiveRootMap: View {
             .background(AtlasPalette.canvas.opacity(0.96))
             .placed(x: 0, y: 48, width: 402, height: 50)
 
-            SaveAtlasLivePlaceCard(
-                place: mapViewModel.selectedPlace ?? mapViewModel.places.first,
-                onOpen: { place in
-                    presentation.onOpenPlace(place.id.uuidString)
-                }
-            )
-                .id(mapViewModel.selectedPlace?.id ?? mapViewModel.places.first?.id)
-                .placed(x: 15, y: 550, width: 372, height: 238)
+            if let place = mapViewModel.selectedPlace {
+                SaveAtlasLivePlaceCard(
+                    place: place,
+                    onClose: onClearSelection,
+                    onOpen: {
+                        presentation.onOpenPlace(place.id.uuidString)
+                    }
+                )
+                .id(place.id)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .placed(x: 15, y: 568, width: 372, height: 220)
+            } else {
+                SaveAtlasMapCommandShelf(
+                    mapStampCount: presentation.mapStampCount,
+                    onOpenAssistant: presentation.onOpenAssistant
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .placed(x: 15, y: 676, width: 372, height: 112)
+            }
         }
+        .animation(SaveTheme.Motion.standardSpring, value: mapViewModel.selectedPlace?.id)
         .frame(width: 402, height: 874)
         .clipped()
         .environment(\.atlasPresentation, presentation)
@@ -424,34 +441,93 @@ struct SaveAtlasInteractiveRootMap: View {
     }
 }
 
-private struct SaveAtlasLivePlaceCard: View {
-    let place: Place?
-    let onOpen: (Place) -> Void
+private struct SaveAtlasMapCommandShelf: View {
+    let mapStampCount: Int
+    let onOpenAssistant: () -> Void
 
     var body: some View {
-        Group {
-            if let place {
-                placeCard(place)
-            } else {
-                emptyCard
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            AtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
-        }
-        .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 7, y: 2)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.place.card")
-    }
+        Button(action: onOpenAssistant) {
+            VStack(spacing: 8) {
+                Capsule()
+                    .fill(AtlasPalette.line.opacity(0.48))
+                    .frame(width: 38, height: 4)
+                    .accessibilityHidden(true)
 
-    private func placeCard(_ place: Place) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.forest)
+
+                    Text("Search places or ask SAV-E")
+                        .font(AtlasType.strong(16))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 31, height: 31)
+                        .background(AtlasPalette.coral, in: Circle())
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "star.circle.fill")
+                        .foregroundStyle(AtlasPalette.forest)
+                    Text("\(mapStampCount) confirmed Map Stamps")
+                    Spacer()
+                    MemoMascotMark(size: 24, framed: false)
+                }
+                .font(AtlasType.regular(12))
+                .foregroundStyle(AtlasPalette.muted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                AtlasPalette.paper,
+                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+            }
+            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Search places or ask SAV-E")
+        .accessibilityHint("Opens the SAV-E assistant")
+        .accessibilityIdentifier("map.command.search")
+    }
+}
+
+private struct SaveAtlasLivePlaceCard: View {
+    let place: Place
+    let onClose: () -> Void
+    let onOpen: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Capsule()
+                    .fill(AtlasPalette.line.opacity(0.48))
+                    .frame(width: 38, height: 4)
+                    .frame(maxWidth: .infinity)
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 32, height: 32)
+                        .background(AtlasPalette.canvas, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close place preview")
+                .accessibilityIdentifier("map.place.close")
+            }
+            .frame(height: 24)
+
             HStack(alignment: .top, spacing: 12) {
                 SaveAtlasMapPlaceThumbnail(place: place)
 
@@ -492,18 +568,13 @@ private struct SaveAtlasLivePlaceCard: View {
                         .frame(minHeight: 27)
                         .background(AtlasPalette.honey.opacity(0.82), in: Capsule())
                 }
+
+                Spacer(minLength: 0)
             }
             .foregroundStyle(AtlasPalette.ink)
             .accessibilityIdentifier("map.place.context")
 
-            Text(detailLine(for: place))
-                .font(AtlasType.regular(13))
-                .foregroundStyle(AtlasPalette.muted)
-                .lineLimit(2)
-
-            Button {
-                onOpen(place)
-            } label: {
+            Button(action: onOpen) {
                 HStack {
                     Spacer()
                     Text("Open details")
@@ -519,22 +590,20 @@ private struct SaveAtlasLivePlaceCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("map.place.openDetails")
         }
-        .padding(16)
-    }
-
-    private var emptyCard: some View {
-        VStack(spacing: 10) {
-            MemoMascotMark(size: 54, framed: false)
-            Text("No Map Stamps yet")
-                .font(AtlasType.strong(21))
-                .foregroundStyle(AtlasPalette.forest)
-            Text("Confirm a place in Saves and it will appear here.")
-                .font(AtlasType.body(14))
-                .foregroundStyle(AtlasPalette.muted)
-                .multilineTextAlignment(.center)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            AtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
         }
-        .padding(20)
-        .accessibilityIdentifier("map.place.empty")
+        .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.place.card")
     }
 
     private func primaryLocation(for place: Place) -> String {
@@ -544,15 +613,6 @@ private struct SaveAtlasLivePlaceCard: View {
         return address.isEmpty ? "Saved place" : address
     }
 
-    private func detailLine(for place: Place) -> String {
-        if let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !note.isEmpty {
-            return note
-        }
-        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !address.isEmpty { return address }
-        return "Saved from \(place.sourcePlatform.displayName)"
-    }
 }
 
 private struct SaveAtlasMapPlaceThumbnail: View {

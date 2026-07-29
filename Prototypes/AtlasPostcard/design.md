@@ -67,8 +67,11 @@ Root Map  = Little Atlas
   postcard; it is not a generic dashboard hero.
 - At most two upcoming or planning Trip tickets are visible in the fixed
   viewport.
-- One coral New Trip action. Opening a Trip changes the navigation shell to
-  Plan / Map / Inbox / Share.
+- One cream planning chatbar opens the existing SAV-E assistant with focus.
+  Chat is an input surface only; Trip cards and Day Plan remain the durable
+  output.
+- One adjacent coral New Trip action remains directly reachable. Opening a Trip
+  changes the navigation shell to Plan / Map / Inbox / Share.
 - Root tabs remain visible and the page does not scroll.
 
 ### Trip Plan
@@ -81,10 +84,19 @@ Root Map  = Little Atlas
 
 ### Root Map
 
-- Illustrated atlas fills the viewport.
-- Pins and dashed route are part of the atlas composition.
-- One compact place card sits above the fixed Root tabs.
-- No modal sheet and no second drawer in this prototype.
+- Live MapKit fills the viewport below the SAV-E header. Owned landmark, Memo,
+  pin, and route accents may sit above it without obscuring geographic truth.
+- One cream Map command shelf sits above the fixed Root tabs. Its default state
+  contains a grabber, `Search places or ask SAV-E`, and the confirmed Map Stamp
+  count.
+- Selecting a pin changes that same shelf into a compact place peek. Closing it
+  returns to search; `Open details` transitions to the single canonical
+  place-detail surface.
+- The persistent Map shelf exists only on Root Map and Trip Map. Home and Saves
+  may still present task-specific capture/review sheets, but never a permanent
+  Map drawer.
+- Never show a top search bar and bottom search drawer together, a default
+  arbitrary first-place card, or two place renderers at the same time.
 
 ## Tokens
 
@@ -153,6 +165,7 @@ The approved Map raster establishes composition, palette, card geometry, and
 navigation—not permission to replace the product map with a static image.
 Production Root Map and Trip Map keep MapKit, location, saved pins, numbered
 stops, selection, and route interaction. Use a flat muted MapKit style under
-the approved header and place-card geometry. The illustrated fixture remains a
-visual-direction comparison; a separate UI test must exercise the live MapKit
-component tree and return from place detail to the correct fixed tabs.
+the approved header and single command-shelf geometry. The illustrated fixture
+remains a visual-direction comparison; a separate UI test must exercise the
+live MapKit component tree, both shelf states, and return from place detail to
+the correct fixed tabs.

@@ -401,6 +401,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
         XCTAssertTrue(app.buttons["trips.capture"].exists)
+        XCTAssertTrue(app.buttons["trips.assistant"].exists)
         XCTAssertTrue(app.buttons["trips.create"].exists)
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -425,7 +426,8 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
         XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.place.openDetails"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.command.search"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["map.place.openDetails"].exists)
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
         attach(app, name: "atlas-root-map-live")
     }
@@ -470,6 +472,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
             "--uitest-complete-onboarding",
             "--skip-map-tour",
             "--uitest-repair-review-demo-seed",
+            "--uitest-map-place-selected",
             "-save.appLanguage", "en",
         ]
         app.launch()
@@ -529,6 +532,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
+        XCTAssertFalse(
+            app.buttons["map.command.search"].exists,
+            "The selected place must replace, not stack above, the Map search shelf."
+        )
 
         XCTAssertTrue(
             app.descendants(matching: .any)["map.place.name"].waitForExistence(timeout: stepTimeout),
@@ -542,6 +549,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
             app.descendants(matching: .any)["map.place.context"].exists,
             "Selecting a root-map place should expose category and status context."
         )
+        XCTAssertTrue(app.buttons["map.place.close"].exists)
 
         let openMapDetails = app.buttons["map.place.openDetails"]
         XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))

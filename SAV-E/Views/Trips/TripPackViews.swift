@@ -54,6 +54,7 @@ struct TripsHomeView: View {
         SaveAtlasPresentationFactory.trips(
             store: store,
             onCapture: { onOpenDrawer(.addLink, nil) },
+            onOpenAssistant: { onOpenDrawer(.ask, nil) },
             onCreateTrip: { showsCreateTrip = true },
             onOpenTrip: { tripID in
                 store.selectTrip(tripID)

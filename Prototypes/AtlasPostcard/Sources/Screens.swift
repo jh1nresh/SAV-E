@@ -617,20 +617,51 @@ struct TripsAtlasScreen: View {
             }
             .placed(x: 17, y: 433, width: 368, height: 208)
 
-            Button(action: presentation.onCreateTrip) {
-                HStack(spacing: 9) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 17, weight: .semibold))
-                    Text("Start a new Trip")
-                        .font(AtlasType.strong(17))
+            HStack(spacing: 10) {
+                Button(action: presentation.onOpenAssistant) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AtlasPalette.forest)
+
+                        Text("Ask SAV-E to plan from your Map Stamps")
+                            .font(AtlasType.strong(14))
+                            .foregroundStyle(AtlasPalette.ink)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 31, height: 31)
+                            .background(AtlasPalette.coral, in: Circle())
+                    }
+                    .padding(.horizontal, 13)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                    }
+                    .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 6, y: 2)
                 }
-                .foregroundStyle(.white)
-                .frame(width: 242, height: 46)
-                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 12))
+                .buttonStyle(.plain)
+                .accessibilityLabel("Ask SAV-E to plan from your Map Stamps")
+                .accessibilityIdentifier("trips.assistant")
+
+                Button(action: presentation.onCreateTrip) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 50, height: 50)
+                        .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Start a new Trip")
+                .accessibilityIdentifier("trips.create")
             }
-            .buttonStyle(.plain)
-            .placed(x: 80, y: 677, width: 242, height: 46)
-            .accessibilityIdentifier("trips.create")
+            .placed(x: 17, y: 670, width: 368, height: 54)
         }
         .frame(width: 402, height: 874)
         .clipped()
