@@ -85,6 +85,16 @@ final class SAVEScreenshotRailTests: XCTestCase {
             ("--uitest-home-region-guangzhou", "home.cityAtlas.guangzhou", "Guangzhou", "atlas-home-city-guangzhou"),
             ("--uitest-home-region-shenzhen", "home.cityAtlas.shenzhen", "Shenzhen", "atlas-home-city-shenzhen"),
             ("--uitest-home-region-chengdu", "home.cityAtlas.chengdu", "Chengdu", "atlas-home-city-chengdu"),
+            ("--uitest-home-region-chongqing", "home.cityAtlas.chongqing", "Chongqing", "atlas-home-city-chongqing"),
+            ("--uitest-home-region-tianjin", "home.cityAtlas.tianjin", "Tianjin", "atlas-home-city-tianjin"),
+            ("--uitest-home-region-hangzhou", "home.cityAtlas.hangzhou", "Hangzhou", "atlas-home-city-hangzhou"),
+            ("--uitest-home-region-nanjing", "home.cityAtlas.nanjing", "Nanjing", "atlas-home-city-nanjing"),
+            ("--uitest-home-region-wuhan", "home.cityAtlas.wuhan", "Wuhan", "atlas-home-city-wuhan"),
+            ("--uitest-home-region-xian", "home.cityAtlas.xian", "Xi'an", "atlas-home-city-xian"),
+            ("--uitest-home-region-suzhou", "home.cityAtlas.suzhou", "Suzhou", "atlas-home-city-suzhou"),
+            ("--uitest-home-region-qingdao", "home.cityAtlas.qingdao", "Qingdao", "atlas-home-city-qingdao"),
+            ("--uitest-home-region-xiamen", "home.cityAtlas.xiamen", "Xiamen", "atlas-home-city-xiamen"),
+            ("--uitest-home-region-changsha", "home.cityAtlas.changsha", "Changsha", "atlas-home-city-changsha"),
         ]
 
         for (launchArgument, identifier, city, attachmentName) in fixtures {

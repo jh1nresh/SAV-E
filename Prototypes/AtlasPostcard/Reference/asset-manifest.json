@@ -198,6 +198,166 @@
       "status": "complete"
     },
     {
+      "name": "HomeAtlasSceneChongqing",
+      "role": "original illustrated Chongqing atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#chongqing",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneChongqing.imageset",
+        "filename": "home-atlas-scene-chongqing.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneTianjin",
+      "role": "original illustrated Tianjin atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#tianjin",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneTianjin.imageset",
+        "filename": "home-atlas-scene-tianjin.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneHangzhou",
+      "role": "original illustrated Hangzhou atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#hangzhou",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneHangzhou.imageset",
+        "filename": "home-atlas-scene-hangzhou.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneNanjing",
+      "role": "original illustrated Nanjing atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#nanjing",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneNanjing.imageset",
+        "filename": "home-atlas-scene-nanjing.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneWuhan",
+      "role": "original illustrated Wuhan atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#wuhan",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneWuhan.imageset",
+        "filename": "home-atlas-scene-wuhan.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneXian",
+      "role": "original illustrated Xi'an atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#xian",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneXian.imageset",
+        "filename": "home-atlas-scene-xian.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneSuzhou",
+      "role": "original illustrated Suzhou atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#suzhou",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneSuzhou.imageset",
+        "filename": "home-atlas-scene-suzhou.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneQingdao",
+      "role": "original illustrated Qingdao atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#qingdao",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneQingdao.imageset",
+        "filename": "home-atlas-scene-qingdao.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneXiamen",
+      "role": "original illustrated Xiamen atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#xiamen",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneXiamen.imageset",
+        "filename": "home-atlas-scene-xiamen.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneChangsha",
+      "role": "original illustrated Changsha atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#changsha",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneChangsha.imageset",
+        "filename": "home-atlas-scene-changsha.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "SavesMemoSorting",
       "role": "Memo sorting saved link cards",
       "source": "Reference/Targets/saves.png",

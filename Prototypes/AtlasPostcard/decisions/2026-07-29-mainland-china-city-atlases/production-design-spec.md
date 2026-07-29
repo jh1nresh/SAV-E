@@ -8,15 +8,15 @@ Canonical visual source: `Prototypes/AtlasPostcard/design.md`
 
 - **Paid user job / observed failure:** a SAV-E user in a major mainland China
   city should see a local illustrated keepsake on Home rather than a generic
-  regional map. Shanghai already has an owned scene; Beijing, Guangzhou,
-  Shenzhen, and Chengdu do not.
+  regional map. Shanghai already has an owned scene; fourteen additional
+  mainland cities now form the reviewed launch set.
 - **Acceptance criteria:** reviewed city names or bounded city coordinates
-  select one owned scene for Beijing, Guangzhou, Shenzhen, or Chengdu; the
-  resolved city name remains live SwiftUI; nearby unsupported cities keep the
-  regional live-map fallback.
-- **Failure fixtures:** Beijing, Guangzhou, Shenzhen, and Chengdu coordinates
-  must select their matching scenes. Tianjin, Foshan, Dongguan, and Chongqing
-  must not borrow one.
+  select one owned scene for every selected city; the resolved city name
+  remains live SwiftUI; nearby unsupported cities keep the regional live-map
+  fallback.
+- **Failure fixtures:** every selected city coordinate must select its matching
+  scene. Foshan, Dongguan, Jinan, Wuxi, Ningbo, Hefei, and Zhengzhou must not
+  borrow one.
 - **Classification:** narrow product presentation slice.
 - **Demand proof:** the founder explicitly requested more mainland China city
   scenes after selecting the existing regional-atlas direction.
@@ -24,9 +24,9 @@ Canonical visual source: `Prototypes/AtlasPostcard/design.md`
   first-open trust and retention inside the existing product.
 - **First distribution format:** PR asset preview plus deterministic unit and
   UI fixtures. TestFlight remains a separate human-controlled release action.
-- **Files and systems in scope:** Atlas Home scene selection, four Home asset
-  catalog entries, generation prompts/provenance, deterministic fixtures, and
-  focused tests.
+- **Files and systems in scope:** Atlas Home scene selection, fourteen Home
+  asset catalog entries, generation prompts/provenance, deterministic fixtures,
+  and focused tests.
 - **Verification:** asset dimension and manifest validation; focused scene
   selection unit tests; generic unsigned iOS Simulator build; CI-owned runtime
   checks; diff and secret-pattern checks.
@@ -43,7 +43,17 @@ Canonical visual source: `Prototypes/AtlasPostcard/design.md`
 | Beijing | Temple of Heaven, Forbidden City roofs, hutong courts, CCTV Headquarters, lakes | Tianjin |
 | Guangzhou | Canton Tower, Pearl River, Chen Clan roofs, Shamian arcades, banyan-lined blocks | Foshan |
 | Shenzhen | Futian skyline, Ping An Finance Centre, Shenzhen Bay, Lianhuashan, mangroves | Dongguan |
-| Chengdu | West Pearl Tower, Kuanzhai roofs, shrine garden, Jin River, bamboo and foothills | Chongqing |
+| Chengdu | West Pearl Tower, Kuanzhai roofs, shrine garden, Jin River, bamboo and foothills | Zhengzhou |
+| Chongqing | steep river city, stilt houses, cable car, bridges and hills | Guiyang |
+| Tianjin | Hai River, Tianjin Eye, historic roofs and riverfront | Shijiazhuang |
+| Hangzhou | West Lake, pagoda, causeways, willows and tea hills | Ningbo |
+| Nanjing | Ming wall, gate tower, Qinhuai water and Purple Mountain | Hefei |
+| Wuhan | Yellow Crane Tower, two rivers, bridges and skyline | Nanchang |
+| Xi'an | city wall, Bell Tower, Big Wild Goose Pagoda and Qinling foothills | Zhengzhou |
+| Suzhou | canals, white walls, stone bridges, gardens and Tiger Hill Pagoda | Wuxi |
+| Qingdao | red-roof hillside, Zhanqiao Pier, Signal Hill and sailing boats | Jinan |
+| Xiamen | Gulangyu, Sunlight Rock, ferries, banyans and twin towers | Fuzhou |
+| Changsha | Yuelu roofs, mountain, Xiang River, bridges and skyline | Nanchang |
 
 The set deliberately adds geographic and visual range. Shanghai remains the
 east-coast scene; another generic skyline-only city would add less recognition.
@@ -56,8 +66,8 @@ east-coast scene; another generic skyline-only city would add less recognition.
 - **Scheme/target:** `SAV-E`
 - **Verification tier:** build-only locally; logic tests and UI checks in CI
 - **Generic destination:** `generic/platform=iOS Simulator`
-- **Simulator reason:** local runtime gate blocked because free disk was 9.6
-  GiB, below the repository's 10 GiB minimum; CI owns the temporary simulator
+- **Simulator reason:** local runtime is unnecessary for this build-only
+  iteration; CI owns the deterministic runtime fixtures
 - **Simulator lifecycle:** not started locally
 - **Deployment target:** iOS 17
 - **Existing build command:** repository `scripts/xcodebuild-clean.sh` generic
@@ -71,8 +81,8 @@ east-coast scene; another generic skyline-only city would add less recognition.
 - **Selected skill route:** `swift-xcode-workflow` plus
   `build-ios-apps:swiftui-ui-patterns`
 - **Verification command:** focused unit test and generic build; CI read-back
-- **Skipped verification reason:** local UI runtime skipped only because the
-  disk-space safety gate blocks it
+- **Skipped verification reason:** local UI runtime skipped because this
+  iteration does not require runtime-only evidence; CI covers the UI fixtures
 
 ## Scene boundary
 

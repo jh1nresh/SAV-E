@@ -153,6 +153,76 @@ struct SaveHomeView: View {
                 latitude: 30.5728,
                 longitude: 104.0668
             ),
+            "--uitest-home-region-chongqing": .currentRegion(
+                title: "Chongqing",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 29.5630,
+                longitude: 106.5516
+            ),
+            "--uitest-home-region-tianjin": .currentRegion(
+                title: "Tianjin",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 39.0851,
+                longitude: 117.1994
+            ),
+            "--uitest-home-region-hangzhou": .currentRegion(
+                title: "Hangzhou",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 30.2741,
+                longitude: 120.1551
+            ),
+            "--uitest-home-region-nanjing": .currentRegion(
+                title: "Nanjing",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 32.0603,
+                longitude: 118.7969
+            ),
+            "--uitest-home-region-wuhan": .currentRegion(
+                title: "Wuhan",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 30.5928,
+                longitude: 114.3055
+            ),
+            "--uitest-home-region-xian": .currentRegion(
+                title: "Xi'an",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 34.3416,
+                longitude: 108.9398
+            ),
+            "--uitest-home-region-suzhou": .currentRegion(
+                title: "Suzhou",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 31.2989,
+                longitude: 120.5853
+            ),
+            "--uitest-home-region-qingdao": .currentRegion(
+                title: "Qingdao",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 36.0671,
+                longitude: 120.3826
+            ),
+            "--uitest-home-region-xiamen": .currentRegion(
+                title: "Xiamen",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 24.4798,
+                longitude: 118.0894
+            ),
+            "--uitest-home-region-changsha": .currentRegion(
+                title: "Changsha",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 28.2282,
+                longitude: 112.9388
+            ),
             "--uitest-home-region-seoul": .currentRegion(
                 title: "Seoul",
                 subtitle: "South Korea",
