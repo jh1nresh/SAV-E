@@ -48,8 +48,8 @@ Root Map  = Little Atlas
 
 - Memo + SAV-E lockup, small link capsule.
 - An owned illustrated city atlas fills the upper half when the resolved city
-  is Tokyo, Taipei, New York, Shanghai, Seoul, or the Los Angeles–Orange County
-  region.
+  is Tokyo, Taipei, New York, Shanghai, Beijing, Guangzhou, Shenzhen, Chengdu,
+  Seoul, or the Los Angeles–Orange County region.
 - All other cities use the regional live-map basic scene. Never borrow a nearby
   supported city's landmarks just because the country matches.
 - Memo peeks from behind one review sheet.

@@ -78,3 +78,173 @@ approved Taipei scene as a style/composition reference. The source was
 center-cropped and deterministically resampled to 402 x 275, 804 x 550, and
 1206 x 825. The original generated source remains in Codex's generated-image
 archive; production consumes only the reviewed asset-catalog copies.
+
+## Mainland China expansion v0
+
+All fourteen expansion assets use the approved Taipei
+`HomeAtlasSceneTaipei@3x` image only as a style and composition reference. Each
+output is original, center-cropped, and deterministically resampled to
+402 x 275, 804 x 550, and 1206 x 825. Live SwiftUI supplies the city name and
+Memo overlay.
+
+### Beijing
+
+- Asset: `HomeAtlasSceneBeijing`
+- Landmarks: Temple of Heaven, Forbidden City roofs, hutong courtyards, CCTV
+  Headquarters, lakes and canals
+- Detection: Beijing／Peking／北京 or the bounded Beijing urban coordinate box
+
+Prompt:
+
+> Create an original Beijing city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue water, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of the Temple of Heaven, Forbidden City roofs, hutong courtyards, CCTV
+> Headquarters, tree-lined avenues, lakes, and canals. Preserve a large quiet
+> center for live city text and lower-center space for Memo. Do not include
+> text, labels, pins, badges, logo, mascot, UI, watermark, photorealism,
+> people, flags, political symbols, or third-party characters.
+
+### Guangzhou
+
+- Asset: `HomeAtlasSceneGuangzhou`
+- Landmarks: Canton Tower, Pearl River, Chen Clan roofs, Shamian arcades,
+  banyan-lined Lingnan blocks
+- Detection: Guangzhou／Canton／廣州／广州 or the bounded Guangzhou urban
+  coordinate box
+
+Prompt:
+
+> Create an original Guangzhou city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue river, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of Canton Tower, the Pearl River and bridges, Chen Clan Ancestral Hall
+> roofs, Shamian-style arcades, banyan trees, and Lingnan neighborhoods.
+> Preserve a large quiet center for live city text and lower-center space for
+> Memo. Do not include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, or third-party characters.
+
+### Shenzhen
+
+- Asset: `HomeAtlasSceneShenzhen`
+- Landmarks: Futian skyline, Ping An Finance Centre, Shenzhen Bay bridge,
+  Lianhuashan, mangroves and harbor
+- Detection: Shenzhen／深圳 or the bounded Shenzhen urban coordinate box
+
+Prompt:
+
+> Create an original Shenzhen coastal city atlas in SAV-E's warm Little Atlas
+> and Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue bay, and restrained coral,
+> forest-green, and muted-teal accents. Include friendly simplified forms of
+> the Futian skyline, Ping An Finance Centre, Shenzhen Bay and bridge,
+> Lianhuashan, mangroves, neighborhoods, and a small sailboat harbor. Preserve
+> a large quiet center for live city text and lower-center space for Memo. Do
+> not include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, company logos, theme parks, or third-party
+> characters.
+
+### Chengdu
+
+- Asset: `HomeAtlasSceneChengdu`
+- Landmarks: West Pearl Tower, Kuanzhai roofs, shrine garden, Jin River,
+  bamboo groves and Sichuan foothills
+- Detection: Chengdu／成都 or the bounded Chengdu urban coordinate box
+
+Prompt:
+
+> Create an original Chengdu city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue waterways, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of West Pearl Tower, Kuanzhai Alley roofs, a red-walled shrine garden,
+> Jin River bridges, bamboo groves, and distant Sichuan foothills. Preserve a
+> large quiet center for live city text and lower-center space for Memo. Do not
+> include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, brand marks, or third-party characters.
+
+### Shared prompt for the second mainland city batch
+
+> Create a production-ready, hand-painted watercolor atlas illustration for
+> the SAV-E iOS Home hero. Match the approved Taipei reference image's warm
+> cream paper, gentle pastel washes, whimsical travel-journal charm, thin
+> dark-green/brown ink outlines, soft depth, and polished mobile-app asset
+> quality. Use a wide landscape composition with recognizable city landmarks
+> arranged around the perimeter and a large calm, uncluttered central map or
+> water area suitable for overlay UI. No words, labels, letters, logos, brands,
+> UI controls, pins, route lines, mascot, people, political symbols, flags, or
+> watermark. No photorealism, 3D render, generic stock-vector look, or hard
+> gradients. Keep every landmark clearly inside the crop-safe area.
+
+### Chongqing
+
+- Asset: `HomeAtlasSceneChongqing`
+- Landmarks: steep river city, layered stilt houses, cable car, bridges, modern
+  skyline and forested hills
+- Detection: Chongqing／重慶／重庆 or the bounded Chongqing urban coordinate box
+
+### Tianjin
+
+- Asset: `HomeAtlasSceneTianjin`
+- Landmarks: Hai River, Tianjin Eye, red-roof historic streets, bridges and
+  modern riverfront
+- Detection: Tianjin／天津 or the bounded Tianjin urban coordinate box
+
+### Hangzhou
+
+- Asset: `HomeAtlasSceneHangzhou`
+- Landmarks: West Lake, Leifeng Pagoda, arched causeways, willows, tea hills
+- Detection: Hangzhou／杭州 or the bounded Hangzhou urban coordinate box
+
+### Nanjing
+
+- Asset: `HomeAtlasSceneNanjing`
+- Landmarks: Ming city wall, gate tower, Sun Yat-sen Mausoleum-inspired stairs,
+  Qinhuai waterways and Purple Mountain
+- Detection: Nanjing／南京 or the bounded Nanjing urban coordinate box
+
+### Wuhan
+
+- Asset: `HomeAtlasSceneWuhan`
+- Landmarks: Yellow Crane Tower, Yangtze and Han rivers, bridges and riverfront
+  skyline
+- Detection: Wuhan／武漢／武汉 or the bounded Wuhan urban coordinate box
+
+### Xian
+
+- Asset: `HomeAtlasSceneXian`
+- Landmarks: ancient city wall, Bell Tower, Big Wild Goose Pagoda, ginkgo
+  foliage and Qinling foothills
+- Detection: Xi'an／Xian／西安 or the bounded Xi'an urban coordinate box
+
+### Suzhou
+
+- Asset: `HomeAtlasSceneSuzhou`
+- Landmarks: whitewashed canal houses, stone bridges, scholar garden, moon gate
+  and Tiger Hill Pagoda
+- Detection: Suzhou／蘇州／苏州 or the bounded Suzhou urban coordinate box
+
+### Qingdao
+
+- Asset: `HomeAtlasSceneQingdao`
+- Landmarks: red-roof hillside architecture, Zhanqiao Pier pavilion, Signal
+  Hill, curved waterfront and sailing boats
+- Detection: Qingdao／青島／青岛 or the bounded Qingdao urban coordinate box
+- Exclusion: no beer bottle, brewery brand, or logo
+
+### Xiamen
+
+- Asset: `HomeAtlasSceneXiamen`
+- Landmarks: Gulangyu villas, Sunlight Rock, island ferries, banyans,
+  bougainvillea and distant twin towers
+- Detection: Xiamen／廈門／厦门 or the bounded Xiamen urban coordinate box
+
+### Changsha
+
+- Asset: `HomeAtlasSceneChangsha`
+- Landmarks: Yuelu Academy-style roofs, Yuelu Mountain, Xiang River, Orange
+  Isle greenery, bridges and skyline
+- Detection: Changsha／長沙／长沙 or the bounded Changsha urban coordinate box
+- Exclusion: no statues, portraits, slogans, or political symbols

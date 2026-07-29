@@ -59,6 +59,90 @@ struct HomeAtlasScreen: View {
                         assetName: "HomeAtlasSceneShanghai",
                         accessibilityIdentifier: "home.cityAtlas.shanghai"
                     )
+                case .beijing:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneBeijing",
+                        accessibilityIdentifier: "home.cityAtlas.beijing"
+                    )
+                case .guangzhou:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneGuangzhou",
+                        accessibilityIdentifier: "home.cityAtlas.guangzhou"
+                    )
+                case .shenzhen:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneShenzhen",
+                        accessibilityIdentifier: "home.cityAtlas.shenzhen"
+                    )
+                case .chengdu:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneChengdu",
+                        accessibilityIdentifier: "home.cityAtlas.chengdu"
+                    )
+                case .chongqing:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneChongqing",
+                        accessibilityIdentifier: "home.cityAtlas.chongqing"
+                    )
+                case .tianjin:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneTianjin",
+                        accessibilityIdentifier: "home.cityAtlas.tianjin"
+                    )
+                case .hangzhou:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneHangzhou",
+                        accessibilityIdentifier: "home.cityAtlas.hangzhou"
+                    )
+                case .nanjing:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneNanjing",
+                        accessibilityIdentifier: "home.cityAtlas.nanjing"
+                    )
+                case .wuhan:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneWuhan",
+                        accessibilityIdentifier: "home.cityAtlas.wuhan"
+                    )
+                case .xian:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneXian",
+                        accessibilityIdentifier: "home.cityAtlas.xian"
+                    )
+                case .suzhou:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneSuzhou",
+                        accessibilityIdentifier: "home.cityAtlas.suzhou"
+                    )
+                case .qingdao:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneQingdao",
+                        accessibilityIdentifier: "home.cityAtlas.qingdao"
+                    )
+                case .xiamen:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneXiamen",
+                        accessibilityIdentifier: "home.cityAtlas.xiamen"
+                    )
+                case .changsha:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneChangsha",
+                        accessibilityIdentifier: "home.cityAtlas.changsha"
+                    )
                 case .seoul:
                     AtlasIllustratedCityHero(
                         hero: presentation.homeHero,

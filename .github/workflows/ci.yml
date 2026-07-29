@@ -70,7 +70,7 @@ jobs:
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
 
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
-        timeout-minutes: 12
+        timeout-minutes: 15
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \

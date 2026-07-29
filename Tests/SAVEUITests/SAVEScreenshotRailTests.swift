@@ -79,6 +79,49 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeUsesOwnedMainlandChinaScenes() throws {
+        let fixtures = [
+            ("--uitest-home-region-beijing", "home.cityAtlas.beijing", "Beijing", "atlas-home-city-beijing"),
+            ("--uitest-home-region-guangzhou", "home.cityAtlas.guangzhou", "Guangzhou", "atlas-home-city-guangzhou"),
+            ("--uitest-home-region-shenzhen", "home.cityAtlas.shenzhen", "Shenzhen", "atlas-home-city-shenzhen"),
+            ("--uitest-home-region-chengdu", "home.cityAtlas.chengdu", "Chengdu", "atlas-home-city-chengdu"),
+            ("--uitest-home-region-chongqing", "home.cityAtlas.chongqing", "Chongqing", "atlas-home-city-chongqing"),
+            ("--uitest-home-region-tianjin", "home.cityAtlas.tianjin", "Tianjin", "atlas-home-city-tianjin"),
+            ("--uitest-home-region-hangzhou", "home.cityAtlas.hangzhou", "Hangzhou", "atlas-home-city-hangzhou"),
+            ("--uitest-home-region-nanjing", "home.cityAtlas.nanjing", "Nanjing", "atlas-home-city-nanjing"),
+            ("--uitest-home-region-wuhan", "home.cityAtlas.wuhan", "Wuhan", "atlas-home-city-wuhan"),
+            ("--uitest-home-region-xian", "home.cityAtlas.xian", "Xi'an", "atlas-home-city-xian"),
+            ("--uitest-home-region-suzhou", "home.cityAtlas.suzhou", "Suzhou", "atlas-home-city-suzhou"),
+            ("--uitest-home-region-qingdao", "home.cityAtlas.qingdao", "Qingdao", "atlas-home-city-qingdao"),
+            ("--uitest-home-region-xiamen", "home.cityAtlas.xiamen", "Xiamen", "atlas-home-city-xiamen"),
+            ("--uitest-home-region-changsha", "home.cityAtlas.changsha", "Changsha", "atlas-home-city-changsha"),
+        ]
+
+        for (launchArgument, identifier, city, attachmentName) in fixtures {
+            let app = XCUIApplication()
+            app.launchArguments += [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                launchArgument,
+                "-save.appLanguage", "en",
+            ]
+            app.launch()
+            try signInViaReviewDemo(app: app)
+
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(
+                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
+                "Production Home should render the owned \(city) city atlas."
+            )
+            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
+            attach(app, name: attachmentName)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
         let ownedSceneApp = XCUIApplication()
         ownedSceneApp.launchArguments += [

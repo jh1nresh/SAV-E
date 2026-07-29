@@ -13,6 +13,20 @@ struct AtlasHomeHeroPresentation: Equatable {
         case taipei
         case newYork
         case shanghai
+        case beijing
+        case guangzhou
+        case shenzhen
+        case chengdu
+        case chongqing
+        case tianjin
+        case hangzhou
+        case nanjing
+        case wuhan
+        case xian
+        case suzhou
+        case qingdao
+        case xiamen
+        case changsha
         case seoul
         case southernCalifornia
         case regionalMap
@@ -124,10 +138,105 @@ struct AtlasHomeHeroPresentation: Equatable {
             return .newYork
         }
 
+        if normalizedTitle.contains("suzhou")
+            || normalizedTitle.contains("蘇州")
+            || normalizedTitle.contains("苏州")
+            || (30.95...31.65).contains(latitude) && (120.40...120.85).contains(longitude) {
+            return .suzhou
+        }
+
         if normalizedTitle.contains("shanghai")
             || normalizedTitle.contains("上海")
             || (30.85...31.55).contains(latitude) && (120.85...121.95).contains(longitude) {
             return .shanghai
+        }
+
+        if normalizedTitle.contains("beijing")
+            || normalizedTitle.contains("peking")
+            || normalizedTitle.contains("北京")
+            || (39.45...40.35).contains(latitude) && (115.70...117.40).contains(longitude) {
+            return .beijing
+        }
+
+        if normalizedTitle.contains("guangzhou")
+            || normalizedTitle.contains("canton")
+            || normalizedTitle.contains("廣州")
+            || normalizedTitle.contains("广州")
+            || (22.95...23.55).contains(latitude) && (113.15...113.70).contains(longitude) {
+            return .guangzhou
+        }
+
+        if normalizedTitle.contains("shenzhen")
+            || normalizedTitle.contains("深圳")
+            || (22.35...22.85).contains(latitude) && (113.75...114.65).contains(longitude) {
+            return .shenzhen
+        }
+
+        if normalizedTitle.contains("chengdu")
+            || normalizedTitle.contains("成都")
+            || (30.20...31.00).contains(latitude) && (103.60...104.60).contains(longitude) {
+            return .chengdu
+        }
+
+        if normalizedTitle.contains("chongqing")
+            || normalizedTitle.contains("重慶")
+            || normalizedTitle.contains("重庆")
+            || (29.25...30.10).contains(latitude) && (106.15...107.10).contains(longitude) {
+            return .chongqing
+        }
+
+        if normalizedTitle.contains("tianjin")
+            || normalizedTitle.contains("天津")
+            || (38.55...39.40).contains(latitude) && (116.70...117.90).contains(longitude) {
+            return .tianjin
+        }
+
+        if normalizedTitle.contains("hangzhou")
+            || normalizedTitle.contains("杭州")
+            || (29.85...30.55).contains(latitude) && (119.80...120.60).contains(longitude) {
+            return .hangzhou
+        }
+
+        if normalizedTitle.contains("nanjing")
+            || normalizedTitle.contains("南京")
+            || (31.65...32.45).contains(latitude) && (118.30...119.25).contains(longitude) {
+            return .nanjing
+        }
+
+        if normalizedTitle.contains("wuhan")
+            || normalizedTitle.contains("武漢")
+            || normalizedTitle.contains("武汉")
+            || (30.25...30.95).contains(latitude) && (113.75...114.90).contains(longitude) {
+            return .wuhan
+        }
+
+        if normalizedTitle.contains("xi'an")
+            || normalizedTitle.contains("xi’an")
+            || normalizedTitle.contains("xian")
+            || normalizedTitle.contains("西安")
+            || (33.75...34.60).contains(latitude) && (108.45...109.50).contains(longitude) {
+            return .xian
+        }
+
+        if normalizedTitle.contains("qingdao")
+            || normalizedTitle.contains("青島")
+            || normalizedTitle.contains("青岛")
+            || (35.75...36.45).contains(latitude) && (119.70...120.80).contains(longitude) {
+            return .qingdao
+        }
+
+        if normalizedTitle.contains("xiamen")
+            || normalizedTitle.contains("廈門")
+            || normalizedTitle.contains("厦门")
+            || (24.20...24.85).contains(latitude) && (117.75...118.55).contains(longitude) {
+            return .xiamen
+        }
+
+        if normalizedTitle.contains("changsha")
+            || normalizedTitle.contains("長沙")
+            || normalizedTitle.contains("长沙")
+            || (27.85...28.55).contains(latitude) && (112.55...113.35).contains(longitude) {
+            return .changsha
         }
 
         if normalizedTitle.contains("seoul")
