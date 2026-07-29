@@ -779,6 +779,7 @@ private struct AtlasItineraryStop: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("Edit \(stop.name)")
         .padding(.leading, 11)
         .padding(.trailing, 16)
         .background(AtlasPalette.paper.opacity(0.97), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
