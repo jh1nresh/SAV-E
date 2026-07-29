@@ -597,7 +597,10 @@ struct SaveLibraryView: View {
     }
 
     private var effectiveMode: SaveLibraryMode {
-        selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
+        if SaveAtlasRuntime.usesParityFixture {
+            return .review
+        }
+        return selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
     }
 
     private var sortedPlaces: [Place] {
