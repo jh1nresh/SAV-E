@@ -60,14 +60,8 @@ struct SaveHomeView: View {
     private func resolveHomeHero() async {
         guard !SaveAtlasRuntime.usesParityFixture else { return }
 
-        if ProcessInfo.processInfo.arguments.contains("--uitest-home-region-taipei") {
-            resolvedHomeHero = .currentRegion(
-                title: "Taipei",
-                subtitle: "Taiwan",
-                countryCode: "TW",
-                latitude: 25.033,
-                longitude: 121.5654
-            )
+        if let fixture = homeHeroFixture {
+            resolvedHomeHero = fixture
             return
         }
 
@@ -106,6 +100,41 @@ struct SaveHomeView: View {
             latitude: location.coordinate.latitude,
             longitude: location.coordinate.longitude
         )
+    }
+
+    private var homeHeroFixture: AtlasHomeHeroPresentation? {
+        let fixtures: [String: AtlasHomeHeroPresentation] = [
+            "--uitest-home-region-taipei": .currentRegion(
+                title: "Taipei",
+                subtitle: "Taiwan",
+                countryCode: "TW",
+                latitude: 25.033,
+                longitude: 121.5654
+            ),
+            "--uitest-home-region-new-york": .currentRegion(
+                title: "New York",
+                subtitle: "United States",
+                countryCode: "US",
+                latitude: 40.7128,
+                longitude: -74.0060
+            ),
+            "--uitest-home-region-shanghai": .currentRegion(
+                title: "Shanghai",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 31.2304,
+                longitude: 121.4737
+            ),
+            "--uitest-home-region-seoul": .currentRegion(
+                title: "Seoul",
+                subtitle: "South Korea",
+                countryCode: "KR",
+                latitude: 37.5665,
+                longitude: 126.9780
+            ),
+        ]
+        let arguments = ProcessInfo.processInfo.arguments
+        return fixtures.first { arguments.contains($0.key) }?.value
     }
 
     private func uniqueStrings(_ values: [String]) -> [String] {

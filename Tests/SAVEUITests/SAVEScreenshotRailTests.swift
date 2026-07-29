@@ -47,6 +47,38 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeUsesOwnedNewYorkShanghaiAndSeoulScenes() throws {
+        let fixtures = [
+            ("--uitest-home-region-new-york", "home.cityAtlas.newYork", "New York", "atlas-home-city-new-york"),
+            ("--uitest-home-region-shanghai", "home.cityAtlas.shanghai", "Shanghai", "atlas-home-city-shanghai"),
+            ("--uitest-home-region-seoul", "home.cityAtlas.seoul", "Seoul", "atlas-home-city-seoul"),
+        ]
+
+        for (launchArgument, identifier, city, attachmentName) in fixtures {
+            let app = XCUIApplication()
+            app.launchArguments += [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                launchArgument,
+                "-save.appLanguage", "en",
+            ]
+            app.launch()
+            try signInViaReviewDemo(app: app)
+
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(
+                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
+                "Production Home should render the owned \(city) city atlas."
+            )
+            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
+            attach(app, name: attachmentName)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testCaptureAtlasProductionParity() throws {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -181,6 +213,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.postcardChrome"].waitForExistence(timeout: stepTimeout),
+            "Capture and assistant entry points should use the Postcard Drawer chrome."
+        )
+        attach(app, name: "atlas-postcard-command-drawer")
         let commandField = app.textFields["drawer.commandField"]
         XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
         commandField.tap()
@@ -228,6 +265,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
             app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout),
             "A Saves Review Candidate should render its canonical review detail."
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["place.detail.postcardChrome"].waitForExistence(timeout: stepTimeout),
+            "Every place detail should use the canonical Postcard Drawer chrome."
+        )
+        attach(app, name: "atlas-postcard-review-drawer")
     }
 
     @MainActor

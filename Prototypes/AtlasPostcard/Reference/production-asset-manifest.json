@@ -1,6 +1,6 @@
 {
-  "reviewedAt": "2026-07-28",
-  "scope": "SAV-E production Home, Saves, Trip Plan, and Root Map",
+  "reviewedAt": "2026-07-29",
+  "scope": "SAV-E production Home, Saves, Trip Plan, Root Map, and canonical Postcard Drawer",
   "authorization": {
     "basis": "founder-provided and founder-approved repository reference",
     "externalDownloadMetadataFound": false,
@@ -12,11 +12,14 @@
     "sourceScale": "1x reference sections",
     "productionScales": ["1x", "2x", "3x"],
     "upscaleMethod": "deterministic macOS sips resampling",
-    "reason": "Preserve the approved composition and the 0.90 pixel-parity contract; generative recreation would intentionally change the approved pixels."
+    "reason": "Preserve the approved composition and the 0.90 pixel-parity contract for locked reference assets. New city scenes use owned generation records and the same deterministic scale pipeline."
   },
   "assets": [
     "HomeAtlasScene",
     "HomeAtlasSceneTaipei",
+    "HomeAtlasSceneNewYork",
+    "HomeAtlasSceneShanghai",
+    "HomeAtlasSceneSeoul",
     "KoffeeMameyaThumbnail",
     "MapAtlasScene",
     "MemoMascot",
