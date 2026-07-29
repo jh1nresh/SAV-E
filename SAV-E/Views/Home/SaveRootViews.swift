@@ -736,7 +736,7 @@ struct SaveLibraryView: View {
 struct SaveMapRootView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let shouldFocusOnUserLocation: Bool
-    let onOpenCapture: () -> Void
+    let onOpenSearch: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
@@ -749,11 +749,21 @@ struct SaveMapRootView: View {
                 SaveAtlasInteractiveRootMap(
                     mapViewModel: mapViewModel,
                     shouldFocusOnUserLocation: shouldFocusOnUserLocation,
-                    presentation: atlasPresentation
+                    presentation: atlasPresentation,
+                    onClearSelection: mapViewModel.clearSelectedMapObject
                 )
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+#if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
+               mapViewModel.selectedPlace == nil,
+               let firstPlace = mapViewModel.places.first {
+                mapViewModel.selectedPlace = firstPlace
+            }
+#endif
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
     }
@@ -761,6 +771,7 @@ struct SaveMapRootView: View {
     private var atlasPresentation: AtlasPresentation {
         SaveAtlasPresentationFactory.map(
             mapViewModel: mapViewModel,
+            onOpenAssistant: onOpenSearch,
             onOpenPlace: onOpenSavedPlace
         )
     }

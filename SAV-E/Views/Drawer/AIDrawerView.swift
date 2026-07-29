@@ -65,6 +65,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
 }
 
 enum DrawerLaunchTarget: Equatable {
+    case ask
     case addLink
     case saved
     case review
@@ -460,6 +461,15 @@ struct AIDrawerView: View {
         searchFocused = false
 
         switch request.target {
+        case .ask:
+            viewModel.activeCommandTab = .saved
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            Task { @MainActor in
+                await Task.yield()
+                searchFocused = true
+            }
         case .addLink:
             if !isImportingURL {
                 linkAnalysisState = .idle
