@@ -132,6 +132,20 @@ struct SaveHomeView: View {
                 latitude: 37.5665,
                 longitude: 126.9780
             ),
+            "--uitest-home-region-tustin": .currentRegion(
+                title: "Tustin",
+                subtitle: "California · United States",
+                countryCode: "US",
+                latitude: 33.7459,
+                longitude: -117.8265
+            ),
+            "--uitest-home-region-san-francisco": .currentRegion(
+                title: "San Francisco",
+                subtitle: "California · United States",
+                countryCode: "US",
+                latitude: 37.7749,
+                longitude: -122.4194
+            ),
         ]
         let arguments = ProcessInfo.processInfo.arguments
         return fixtures.first { arguments.contains($0.key) }?.value

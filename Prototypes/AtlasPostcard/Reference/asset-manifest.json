@@ -118,6 +118,22 @@
       "status": "complete"
     },
     {
+      "name": "HomeAtlasSceneSouthernCalifornia",
+      "role": "original illustrated Los Angeles and Orange County atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#southern-california-v0",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneSouthernCalifornia.imageset",
+        "filename": "home-atlas-scene-southern-california.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "SavesMemoSorting",
       "role": "Memo sorting saved link cards",
       "source": "Reference/Targets/saves.png",

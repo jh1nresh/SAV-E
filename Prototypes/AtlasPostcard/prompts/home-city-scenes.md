@@ -49,3 +49,32 @@ the approved Taipei scene as a style/composition reference. Each source was
 center-cropped and deterministically resampled to 402 x 275, 804 x 550, and
 1206 x 825. Text, Memo, pins, badges, logo, UI, and watermarks remain forbidden
 inside the bitmap.
+
+## Southern California v0
+
+- Asset: `HomeAtlasSceneSouthernCalifornia`
+- Region: Los Angeles basin and Orange County, including Tustin
+- Landmarks: Los Angeles skyline, Griffith Observatory, Santa Monica Pier,
+  Pacific coast, coastal pier, palm-lined low-rise Orange County neighborhoods
+- Detection: reviewed LA/OC names or the bounded LA basin and Orange County
+  coordinate box
+
+Prompt:
+
+> Create an original illustrated Los Angeles–Orange County / Southern
+> California regional city atlas in SAV-E's warm Little Atlas and Postcard
+> Pocket visual family. Use soft gouache and watercolor on cream paper, a pale
+> mint street grid, powder-blue Pacific Ocean, restrained coral and
+> forest-green accents, and rounded friendly landmarks. Include a compact Los
+> Angeles skyline, Griffith Observatory, Santa Monica Pier with a small ferris
+> wheel, a coastal pier, palm-lined low-rise Orange County neighborhoods, and
+> subtle freeway geometry. Preserve quiet center space for live city text and
+> lower-center space for Memo. Do not include text, the Hollywood sign,
+> Disneyland or a theme-park castle, characters, pins, badges, mascot, logo,
+> UI, watermark, or photorealism.
+
+The asset was generated with the built-in image-generation path using the
+approved Taipei scene as a style/composition reference. The source was
+center-cropped and deterministically resampled to 402 x 275, 804 x 550, and
+1206 x 825. The original generated source remains in Codex's generated-image
+archive; production consumes only the reviewed asset-catalog copies.
