@@ -57,6 +57,15 @@ struct AtlasStopPresentation: Identifiable, Equatable {
     let imageHeight: CGFloat
 }
 
+struct AtlasTripSummaryPresentation: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let city: String
+    let dateRange: String
+    let stopCount: Int
+    let timing: String
+}
+
 struct AtlasPresentation: @unchecked Sendable {
     var reviewCount: Int
     var mapStampCount: Int
@@ -70,6 +79,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var recentPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
+    var tripSummaries: [AtlasTripSummaryPresentation]
     var onCapture: () -> Void
     var onReviewAll: () -> Void
     var onOpenTrip: () -> Void
@@ -81,6 +91,8 @@ struct AtlasPresentation: @unchecked Sendable {
     var onSelectDay: (Int) -> Void
     var onOpenStop: (String) -> Void
     var onAddStop: () -> Void
+    var onOpenTripID: (String) -> Void
+    var onCreateTrip: () -> Void
 
     static let reference = AtlasPresentation(
         reviewCount: 3,
@@ -147,6 +159,32 @@ struct AtlasPresentation: @unchecked Sendable {
             ),
         ],
         selectedMapPlace: .koffeeMameya,
+        tripSummaries: [
+            AtlasTripSummaryPresentation(
+                id: "tokyo-weekend",
+                name: "Tokyo Weekend",
+                city: "Tokyo",
+                dateRange: "Oct 12 – 14",
+                stopCount: 4,
+                timing: "CURRENT"
+            ),
+            AtlasTripSummaryPresentation(
+                id: "kyoto-autumn",
+                name: "Kyoto Autumn",
+                city: "Kyoto",
+                dateRange: "Nov 7 – 10",
+                stopCount: 6,
+                timing: "UPCOMING"
+            ),
+            AtlasTripSummaryPresentation(
+                id: "taipei-night-notes",
+                name: "Taipei Night Notes",
+                city: "Taipei",
+                dateRange: "Dates to decide",
+                stopCount: 3,
+                timing: "PLANNING"
+            ),
+        ],
         onCapture: {},
         onReviewAll: {},
         onOpenTrip: {},
@@ -157,7 +195,9 @@ struct AtlasPresentation: @unchecked Sendable {
         onSelectMapStamps: {},
         onSelectDay: { _ in },
         onOpenStop: { _ in },
-        onAddStop: {}
+        onAddStop: {},
+        onOpenTripID: { _ in },
+        onCreateTrip: {}
     )
 }
 

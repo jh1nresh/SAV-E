@@ -356,6 +356,51 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureAtlasTripsAndLiveMaps() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["trips.capture"].exists)
+        XCTAssertTrue(app.buttons["trips.create"].exists)
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trips-live")
+
+        firstTrip.tap()
+        let tripMap = tripTabButton("Map", app: app)
+        XCTAssertTrue(tripMap.waitForExistence(timeout: stepTimeout))
+        tripMap.tap()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["trip.map.openStop"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trip-map-live")
+
+        let back = app.buttons["trip.back"]
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
+        back.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.place.openDetails"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "atlas-root-map-live")
+    }
+
+    @MainActor
     func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [

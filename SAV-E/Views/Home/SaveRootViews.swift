@@ -684,6 +684,7 @@ struct SaveMapRootView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
     }
 

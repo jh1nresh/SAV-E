@@ -91,7 +91,16 @@ struct MapView: View {
                             )
                     }
                 }
-                .mapStyle(.standard)
+                .mapStyle(
+                    .standard(
+                        elevation: .flat,
+                        emphasis: .muted,
+                        pointsOfInterest: .excludingAll,
+                        showsTraffic: false
+                    )
+                )
+                .saturation(0.78)
+                .contrast(0.96)
                 .mapFeatureSelectionDisabled { feature in
                     feature.kind != .pointOfInterest
                 }
@@ -101,34 +110,34 @@ struct MapView: View {
                 .onChange(of: viewModel.selectedMapFeature) { _, feature in
                     viewModel.selectMapFeature(feature)
                 }
+                .accessibilityIdentifier("map.liveSurface")
+
+                AtlasPalette.canvas
+                    .opacity(0.06)
+                    .allowsHitTesting(false)
 
                 if let contextBadgeText {
                     VStack {
                         AtlasMapContextBadge(text: contextBadgeText)
                             .accessibilityIdentifier("map.contextBadge")
-                            .padding(.top, max(geo.safeAreaInsets.top + 10, 12))
+                            .padding(.top, 12)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
                     .allowsHitTesting(false)
                 }
 
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        CurrentLocationButton(
-                            isLocating: viewModel.isLocatingUser,
-                            action: {
-                                SaveHaptics.tap()
-                                Task { await viewModel.focusOnUserLocation() }
-                            }
-                        )
-                        .padding(.trailing, 18)
-                        .padding(.bottom, max(geo.safeAreaInsets.bottom + 96, 112))
-                        .accessibilityIdentifier("map.currentLocation")
+                CurrentLocationButton(
+                    isLocating: viewModel.isLocatingUser,
+                    action: {
+                        SaveHaptics.tap()
+                        Task { await viewModel.focusOnUserLocation() }
                     }
-                }
+                )
+                .padding(.trailing, 16)
+                .padding(.bottom, 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .accessibilityIdentifier("map.currentLocation")
 
                 if let moment = viewModel.stampMoment {
                     VStack {

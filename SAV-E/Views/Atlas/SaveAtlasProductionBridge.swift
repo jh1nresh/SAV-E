@@ -108,6 +108,35 @@ enum SaveAtlasPresentationFactory {
         return presentation
     }
 
+    static func trips(
+        store: TripPackStore,
+        onCapture: @escaping () -> Void,
+        onCreateTrip: @escaping () -> Void,
+        onOpenTrip: @escaping (UUID) -> Void
+    ) -> AtlasPresentation {
+        var presentation = AtlasPresentation.reference
+
+        if !SaveAtlasRuntime.usesParityFixture {
+            presentation.tripSummaries = (
+                store.currentTrips.map { tripSummary($0, timing: "CURRENT") }
+                    + store.upcomingTrips.map { tripSummary($0, timing: "UPCOMING") }
+                    + store.planningTrips.map { tripSummary($0, timing: "PLANNING") }
+                    + store.pastTrips.map { tripSummary($0, timing: "PAST") }
+            )
+        }
+
+        presentation.onCapture = onCapture
+        presentation.onCreateTrip = onCreateTrip
+        presentation.onOpenTripID = { id in
+            let selectedTrip = UUID(uuidString: id)
+                .flatMap { tripID in store.trips.first(where: { $0.id == tripID }) }
+                ?? store.suggestedTrip
+            guard let selectedTrip else { return }
+            onOpenTrip(selectedTrip.id)
+        }
+        return presentation
+    }
+
     static func trip(
         trip: Trip,
         selectedDay: Int,
@@ -330,6 +359,20 @@ enum SaveAtlasPresentationFactory {
             "ShibuyaSkyThumbnail",
         ][min(index, 3)]
     }
+
+    private static func tripSummary(
+        _ trip: Trip,
+        timing: String
+    ) -> AtlasTripSummaryPresentation {
+        AtlasTripSummaryPresentation(
+            id: trip.id.uuidString,
+            name: trip.name,
+            city: trip.city,
+            dateRange: trip.dateRangeText,
+            stopCount: trip.places.count,
+            timing: timing
+        )
+    }
 }
 
 struct SaveAtlasInteractiveRootMap: View {
@@ -346,7 +389,7 @@ struct SaveAtlasInteractiveRootMap: View {
                 shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation
             )
             .clipped()
-            .placed(x: 0, y: 98, width: 402, height: 473)
+            .placed(x: 0, y: 91, width: 402, height: 480)
 
             BrandHeader {
                 HStack(spacing: 7) {
@@ -371,6 +414,7 @@ struct SaveAtlasInteractiveRootMap: View {
         .frame(width: 402, height: 874)
         .clipped()
         .environment(\.atlasPresentation, presentation)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
     }
 }
@@ -394,17 +438,18 @@ struct SaveAtlasInteractiveTripMap: View {
                 displayedPlaces: routePlaces,
                 showsAuxiliaryPins: false,
                 numberedPlacePositions: numberedPlacePositions,
-                contextBadgeText: routeSummary
+                contextBadgeText: "DAY \(presentation.selectedDay) · \(routeSummary.uppercased())"
             )
             .clipped()
             .placed(x: 0, y: 102, width: 402, height: 450)
 
-            PlaceAtlasCard()
+            TripMapPlaceCard()
                 .placed(x: 15, y: 550, width: 372, height: 226)
         }
         .frame(width: 402, height: 874)
         .clipped()
         .environment(\.atlasPresentation, presentation)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trip.map")
         .onAppear(perform: applyRoute)
         .onChange(of: routePoints) { _, _ in applyRoute() }
