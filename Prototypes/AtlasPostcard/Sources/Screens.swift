@@ -29,14 +29,25 @@ struct HomeAtlasScreen: View {
             .placed(x: 0, y: 48, width: 402, height: 51)
 
             Group {
-                if presentation.homeHero.source == .referenceTokyo {
+                switch presentation.homeHero.scene {
+                case .tokyo:
                     Image("HomeAtlasScene")
                         .resizable()
                         .scaledToFill()
                         .clipped()
                         .accessibilityLabel("Illustrated Tokyo atlas")
-                        .accessibilityIdentifier("prototype.home.atlas")
-                } else {
+                        .accessibilityIdentifier(
+                            presentation.homeHero.source == .referenceTokyo
+                                ? "prototype.home.atlas"
+                                : "home.cityAtlas.tokyo"
+                        )
+                case .taipei:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneTaipei",
+                        accessibilityIdentifier: "home.cityAtlas.taipei"
+                    )
+                case .regionalMap:
                     AtlasRegionalHomeHero(hero: presentation.homeHero)
                 }
             }
@@ -55,6 +66,49 @@ struct HomeAtlasScreen: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.home")
+    }
+}
+
+private struct AtlasIllustratedCityHero: View {
+    let hero: AtlasHomeHeroPresentation
+    let assetName: String
+    let accessibilityIdentifier: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isFloating = false
+
+    var body: some View {
+        ZStack {
+            Image(assetName)
+                .resizable()
+                .scaledToFill()
+                .clipped()
+
+            Text(hero.title.uppercased())
+                .font(AtlasType.strong(23))
+                .tracking(2.4)
+                .foregroundStyle(AtlasPalette.forest.opacity(0.76))
+                .position(x: 201, y: 126)
+                .accessibilityLabel(hero.title)
+                .accessibilityIdentifier("home.region.title")
+
+            Image("MemoMascot")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 94, height: 94)
+                .position(x: 201, y: 253)
+                .offset(y: reduceMotion ? 0 : (isFloating ? -3 : 1))
+                .accessibilityHidden(true)
+        }
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(hero.title), illustrated city atlas")
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                isFloating = true
+            }
+        }
     }
 }
 
