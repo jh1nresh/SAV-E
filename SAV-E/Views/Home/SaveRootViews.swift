@@ -29,11 +29,11 @@ struct SaveHomeView: View {
             store: store,
             mapViewModel: mapViewModel,
             onCapture: { onOpenDrawer(.addLink, nil) },
-            onReviewAll: { onOpenDrawer(.review, nil) },
+            onReviewAll: onOpenSaves,
             onOpenTrip: onOpenTrip,
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
-            onOpenReview: { _ in onOpenDrawer(.review, nil) }
+            onOpenReview: { _ in onOpenSaves() }
         )
         if !SaveAtlasRuntime.usesParityFixture {
             presentation.homeHero = resolvedHomeHero ?? savedPlaceHero ?? .neutral

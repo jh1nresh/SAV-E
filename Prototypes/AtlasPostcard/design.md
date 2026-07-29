@@ -53,6 +53,9 @@ Root Map  = Little Atlas
 - All other cities use the regional live-map basic scene. Never borrow a nearby
   supported city's landmarks just because the country matches.
 - Memo peeks from behind one review sheet.
+- The review sheet and `Review clues` action navigate directly to Saves. Home
+  never opens the review drawer; a Postcard Drawer appears only after the user
+  selects one Review Candidate in Saves.
 - Below: one Trip preview and exactly two recent Map Stamps.
 - Root tabs remain visible.
 
