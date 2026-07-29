@@ -320,15 +320,11 @@ struct SaveLibraryView: View {
 
     var body: some View {
         Group {
-            switch effectiveMode {
-            case .review:
+            if SaveAtlasRuntime.usesParityFixture {
                 SavesPocketScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
-            case .mapStamps:
-                ScrollView(showsIndicators: false) {
-                    savesContent
-                }
-                .background(SaveAtlasPalette.canvas)
+            } else {
+                savesContent
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -384,18 +380,21 @@ struct SaveLibraryView: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 4)
 
-            Group {
-                switch effectiveMode {
-                case .review:
-                    reviewContent
-                case .mapStamps:
-                    savedPlacesContent
+            ScrollView(showsIndicators: false) {
+                Group {
+                    switch effectiveMode {
+                    case .review:
+                        reviewContent
+                    case .mapStamps:
+                        savedPlacesContent
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 22)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
         }
-        .padding(.bottom, 14)
+        .background(SaveDottedBackground())
     }
 
     private var titleBlock: some View {
@@ -490,8 +489,9 @@ struct SaveLibraryView: View {
                 .frame(maxWidth: .infinity)
                 .padding(18)
                 .saveAtlasPaper(radius: 18)
+                .accessibilityIdentifier("saves.review.empty")
             } else {
-                ForEach(Array(sortedCandidates.prefix(3))) { candidate in
+                ForEach(sortedCandidates) { candidate in
                     Button {
                         onOpenReviewCandidate(candidate)
                     } label: {
@@ -513,16 +513,6 @@ struct SaveLibraryView: View {
                     .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
                 }
             }
-
-            Button(action: onOpenReview) {
-                SaveAtlasReviewPocket(
-                    count: reviewCandidates.count,
-                    title: localized("Full review queue", "完整待確認清單"),
-                    countLabel: localized("need your review", "等待你確認")
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("saves.review")
         }
     }
 
@@ -940,7 +930,8 @@ private struct SaveAtlasPocketCount: View {
             }
             .font(SaveAtlasType.display(14))
             .foregroundStyle(SaveAtlasPalette.ink)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
             .background(
                 isSelected
                     ? tint.opacity(0.38)
@@ -958,6 +949,7 @@ private struct SaveAtlasPocketCount: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

@@ -449,6 +449,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         openRootTab("Saves", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 45))
 
+        let mapStampsSegment = app.buttons["saves.segment.mapStamps"]
+        XCTAssertTrue(mapStampsSegment.waitForExistence(timeout: stepTimeout))
+        mapStampsSegment.tap()
+        XCTAssertTrue(mapStampsSegment.isSelected)
+
         let firstMapStamp = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")
         ).firstMatch
@@ -461,13 +466,63 @@ final class SAVEScreenshotRailTests: XCTestCase {
             1,
             "A Map Stamp should stay inside the one global drawer."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
+            app.descendants(matching: .any).matching(identifier: "place.detail.scroll").count,
             1,
             "Every saved-place entry should use one canonical detail renderer."
         )
         XCTAssertTrue(app.buttons["drawer.saved.addToTrip"].waitForExistence(timeout: stepTimeout))
+
+        let closeDetail = app.buttons["drawer.place.close"]
+        XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
+        closeDetail.tap()
+        XCTAssertFalse(
+            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: 2),
+            "Closing a Map Stamp must dismiss the drawer."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapStampsSegment.isSelected)
+        XCTAssertTrue(rootTabButton("Saves", app: app).isSelected)
+
+        let reviewSegment = app.buttons["saves.segment.review"]
+        XCTAssertTrue(reviewSegment.waitForExistence(timeout: stepTimeout))
+        reviewSegment.tap()
+        XCTAssertTrue(reviewSegment.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.review.empty"]
+                .waitForExistence(timeout: stepTimeout),
+            "Review should be an operable mode in the same Saves surface."
+        )
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.name"].waitForExistence(timeout: stepTimeout),
+            "The root map selection should expose its real name."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.location"].exists,
+            "Selecting a root-map place should expose its location."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.context"].exists,
+            "Selecting a root-map place should expose category and status context."
+        )
+
+        let openMapDetails = app.buttons["map.place.openDetails"]
+        XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))
+        openMapDetails.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
+
+        let closeMapDetail = app.buttons["drawer.place.close"]
+        XCTAssertTrue(closeMapDetail.waitForExistence(timeout: stepTimeout))
+        closeMapDetail.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
     }
 
     @MainActor

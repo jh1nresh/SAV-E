@@ -181,7 +181,6 @@ enum SaveAtlasPresentationFactory {
             .map(placePresentation)
         presentation.reviewItems = candidates
             .sorted { $0.createdAt > $1.createdAt }
-            .prefix(3)
             .map(reviewPresentation)
         presentation.selectedMapPlace = (selectedPlace ?? places.first)
             .map(placePresentation)
@@ -408,7 +407,13 @@ struct SaveAtlasInteractiveRootMap: View {
             .background(AtlasPalette.canvas.opacity(0.96))
             .placed(x: 0, y: 48, width: 402, height: 50)
 
-            PlaceAtlasCard()
+            SaveAtlasLivePlaceCard(
+                place: mapViewModel.selectedPlace ?? mapViewModel.places.first,
+                onOpen: { place in
+                    presentation.onOpenPlace(place.id.uuidString)
+                }
+            )
+                .id(mapViewModel.selectedPlace?.id ?? mapViewModel.places.first?.id)
                 .placed(x: 15, y: 550, width: 372, height: 238)
         }
         .frame(width: 402, height: 874)
@@ -416,6 +421,172 @@ struct SaveAtlasInteractiveRootMap: View {
         .environment(\.atlasPresentation, presentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
+    }
+}
+
+private struct SaveAtlasLivePlaceCard: View {
+    let place: Place?
+    let onOpen: (Place) -> Void
+
+    var body: some View {
+        Group {
+            if let place {
+                placeCard(place)
+            } else {
+                emptyCard
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            AtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+        }
+        .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 7, y: 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.place.card")
+    }
+
+    private func placeCard(_ place: Place) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                SaveAtlasMapPlaceThumbnail(place: place)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(place.name)
+                        .font(AtlasType.strong(22))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("map.place.name")
+
+                    Text(primaryLocation(for: place))
+                        .font(AtlasType.body(13))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("map.place.location")
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 7) {
+                Label("Map Stamp", systemImage: "star.circle.fill")
+                    .font(AtlasType.display(12))
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 27)
+                    .background(AtlasPalette.mint, in: Capsule())
+
+                Text(place.category.displayName)
+                    .font(AtlasType.display(12))
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 27)
+                    .background(AtlasPalette.sky.opacity(0.72), in: Capsule())
+
+                if let rating = place.googleRating ?? place.rating {
+                    Label(String(format: "%.1f", rating), systemImage: "star.fill")
+                        .font(AtlasType.display(12))
+                        .padding(.horizontal, 9)
+                        .frame(minHeight: 27)
+                        .background(AtlasPalette.honey.opacity(0.82), in: Capsule())
+                }
+            }
+            .foregroundStyle(AtlasPalette.ink)
+            .accessibilityIdentifier("map.place.context")
+
+            Text(detailLine(for: place))
+                .font(AtlasType.regular(13))
+                .foregroundStyle(AtlasPalette.muted)
+                .lineLimit(2)
+
+            Button {
+                onOpen(place)
+            } label: {
+                HStack {
+                    Spacer()
+                    Text("Open details")
+                        .font(AtlasType.strong(17))
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 16, weight: .semibold))
+                    Spacer()
+                }
+                .foregroundStyle(.white)
+                .frame(minHeight: 42)
+                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("map.place.openDetails")
+        }
+        .padding(16)
+    }
+
+    private var emptyCard: some View {
+        VStack(spacing: 10) {
+            MemoMascotMark(size: 54, framed: false)
+            Text("No Map Stamps yet")
+                .font(AtlasType.strong(21))
+                .foregroundStyle(AtlasPalette.forest)
+            Text("Confirm a place in Saves and it will appear here.")
+                .font(AtlasType.body(14))
+                .foregroundStyle(AtlasPalette.muted)
+                .multilineTextAlignment(.center)
+        }
+        .padding(20)
+        .accessibilityIdentifier("map.place.empty")
+    }
+
+    private func primaryLocation(for place: Place) -> String {
+        let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !area.isEmpty { return area }
+        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty ? "Saved place" : address
+    }
+
+    private func detailLine(for place: Place) -> String {
+        if let note = place.note?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !note.isEmpty {
+            return note
+        }
+        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !address.isEmpty { return address }
+        return "Saved from \(place.sourcePlatform.displayName)"
+    }
+}
+
+private struct SaveAtlasMapPlaceThumbnail: View {
+    let place: Place
+
+    var body: some View {
+        Group {
+            if let value = place.businessPhotoURLStrings.first,
+               let url = URL(string: value) {
+                CachedAsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFill()
+                    } else {
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 64, height: 64)
+        .background(AtlasPalette.mint.opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
+        }
+    }
+
+    private var fallback: some View {
+        Image(systemName: place.category.iconName)
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(AtlasPalette.forest)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
