@@ -14,6 +14,7 @@ struct AtlasHomeHeroPresentation: Equatable {
         case newYork
         case shanghai
         case seoul
+        case southernCalifornia
         case regionalMap
     }
 
@@ -135,6 +136,25 @@ struct AtlasHomeHeroPresentation: Equatable {
             || normalizedTitle.contains("首尔")
             || (37.35...37.75).contains(latitude) && (126.75...127.25).contains(longitude) {
             return .seoul
+        }
+
+        if normalizedTitle.contains("los angeles")
+            || normalizedTitle.contains("orange county")
+            || normalizedTitle.contains("tustin")
+            || normalizedTitle.contains("irvine")
+            || normalizedTitle.contains("anaheim")
+            || normalizedTitle.contains("santa ana")
+            || normalizedTitle.contains("newport beach")
+            || normalizedTitle.contains("costa mesa")
+            || normalizedTitle.contains("huntington beach")
+            || normalizedTitle.contains("laguna beach")
+            || normalizedTitle.contains("long beach")
+            || normalizedTitle.contains("洛杉磯")
+            || normalizedTitle.contains("洛杉矶")
+            || normalizedTitle.contains("橙縣")
+            || normalizedTitle.contains("橙县")
+            || (33.25...34.35).contains(latitude) && (-118.95 ... -117.30).contains(longitude) {
+            return .southernCalifornia
         }
 
         return .regionalMap

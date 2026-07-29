@@ -65,6 +65,12 @@ struct HomeAtlasScreen: View {
                         assetName: "HomeAtlasSceneSeoul",
                         accessibilityIdentifier: "home.cityAtlas.seoul"
                     )
+                case .southernCalifornia:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneSouthernCalifornia",
+                        accessibilityIdentifier: "home.cityAtlas.southernCalifornia"
+                    )
                 case .regionalMap:
                     AtlasRegionalHomeHero(hero: presentation.homeHero)
                 }

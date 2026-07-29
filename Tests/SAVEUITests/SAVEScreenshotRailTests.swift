@@ -79,6 +79,50 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
+        let ownedSceneApp = XCUIApplication()
+        ownedSceneApp.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-home-region-tustin",
+            "-save.appLanguage", "en",
+        ]
+        ownedSceneApp.launch()
+        try signInViaReviewDemo(app: ownedSceneApp)
+
+        XCTAssertTrue(ownedSceneApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(
+            ownedSceneApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"]
+                .waitForExistence(timeout: stepTimeout),
+            "Tustin should use the owned Southern California atlas."
+        )
+        XCTAssertTrue(ownedSceneApp.staticTexts["Tustin"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(ownedSceneApp.descendants(matching: .any)["home.regionalHero"].exists)
+        attach(ownedSceneApp, name: "atlas-home-city-southern-california")
+        ownedSceneApp.terminate()
+
+        let fallbackApp = XCUIApplication()
+        fallbackApp.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-home-region-san-francisco",
+            "-save.appLanguage", "en",
+        ]
+        fallbackApp.launch()
+        try signInViaReviewDemo(app: fallbackApp)
+
+        XCTAssertTrue(fallbackApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(
+            fallbackApp.descendants(matching: .any)["home.regionalHero"]
+                .waitForExistence(timeout: stepTimeout),
+            "San Francisco should keep the regional live-map fallback."
+        )
+        XCTAssertFalse(fallbackApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"].exists)
+    }
+
+    @MainActor
     func testCaptureAtlasProductionParity() throws {
         let app = XCUIApplication()
         app.launchArguments += [
