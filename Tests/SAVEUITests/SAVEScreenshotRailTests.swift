@@ -562,6 +562,37 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeReviewCluesOpensSavesWithoutDrawer() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        let reviewClues = app.buttons["home.review"]
+        XCTAssertTrue(reviewClues.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(reviewClues.isHittable)
+        reviewClues.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
+            "Home Review clues should navigate to Saves."
+        )
+        XCTAssertTrue(rootTabButton("Saves", app: app).isSelected)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["drawer.root"].exists,
+            "Home Review clues should not present a drawer."
+        )
+        attach(app, name: "home-review-opens-saves")
+    }
+
+    @MainActor
     func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
