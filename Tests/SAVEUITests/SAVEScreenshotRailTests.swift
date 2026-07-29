@@ -79,6 +79,39 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeUsesOwnedMainlandChinaScenes() throws {
+        let fixtures = [
+            ("--uitest-home-region-beijing", "home.cityAtlas.beijing", "Beijing", "atlas-home-city-beijing"),
+            ("--uitest-home-region-guangzhou", "home.cityAtlas.guangzhou", "Guangzhou", "atlas-home-city-guangzhou"),
+            ("--uitest-home-region-shenzhen", "home.cityAtlas.shenzhen", "Shenzhen", "atlas-home-city-shenzhen"),
+            ("--uitest-home-region-chengdu", "home.cityAtlas.chengdu", "Chengdu", "atlas-home-city-chengdu"),
+        ]
+
+        for (launchArgument, identifier, city, attachmentName) in fixtures {
+            let app = XCUIApplication()
+            app.launchArguments += [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                launchArgument,
+                "-save.appLanguage", "en",
+            ]
+            app.launch()
+            try signInViaReviewDemo(app: app)
+
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(
+                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
+                "Production Home should render the owned \(city) city atlas."
+            )
+            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
+            attach(app, name: attachmentName)
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
         let ownedSceneApp = XCUIApplication()
         ownedSceneApp.launchArguments += [

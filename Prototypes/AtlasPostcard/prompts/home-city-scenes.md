@@ -78,3 +78,88 @@ approved Taipei scene as a style/composition reference. The source was
 center-cropped and deterministically resampled to 402 x 275, 804 x 550, and
 1206 x 825. The original generated source remains in Codex's generated-image
 archive; production consumes only the reviewed asset-catalog copies.
+
+## Mainland China expansion v0
+
+All four assets use the approved Taipei `HomeAtlasSceneTaipei@3x` image only as
+a style and composition reference. Each output is original, center-cropped,
+and deterministically resampled to 402 x 275, 804 x 550, and 1206 x 825. Live
+SwiftUI supplies the city name and Memo overlay.
+
+### Beijing
+
+- Asset: `HomeAtlasSceneBeijing`
+- Landmarks: Temple of Heaven, Forbidden City roofs, hutong courtyards, CCTV
+  Headquarters, lakes and canals
+- Detection: Beijing／Peking／北京 or the bounded Beijing urban coordinate box
+
+Prompt:
+
+> Create an original Beijing city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue water, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of the Temple of Heaven, Forbidden City roofs, hutong courtyards, CCTV
+> Headquarters, tree-lined avenues, lakes, and canals. Preserve a large quiet
+> center for live city text and lower-center space for Memo. Do not include
+> text, labels, pins, badges, logo, mascot, UI, watermark, photorealism,
+> people, flags, political symbols, or third-party characters.
+
+### Guangzhou
+
+- Asset: `HomeAtlasSceneGuangzhou`
+- Landmarks: Canton Tower, Pearl River, Chen Clan roofs, Shamian arcades,
+  banyan-lined Lingnan blocks
+- Detection: Guangzhou／Canton／廣州／广州 or the bounded Guangzhou urban
+  coordinate box
+
+Prompt:
+
+> Create an original Guangzhou city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue river, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of Canton Tower, the Pearl River and bridges, Chen Clan Ancestral Hall
+> roofs, Shamian-style arcades, banyan trees, and Lingnan neighborhoods.
+> Preserve a large quiet center for live city text and lower-center space for
+> Memo. Do not include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, or third-party characters.
+
+### Shenzhen
+
+- Asset: `HomeAtlasSceneShenzhen`
+- Landmarks: Futian skyline, Ping An Finance Centre, Shenzhen Bay bridge,
+  Lianhuashan, mangroves and harbor
+- Detection: Shenzhen／深圳 or the bounded Shenzhen urban coordinate box
+
+Prompt:
+
+> Create an original Shenzhen coastal city atlas in SAV-E's warm Little Atlas
+> and Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue bay, and restrained coral,
+> forest-green, and muted-teal accents. Include friendly simplified forms of
+> the Futian skyline, Ping An Finance Centre, Shenzhen Bay and bridge,
+> Lianhuashan, mangroves, neighborhoods, and a small sailboat harbor. Preserve
+> a large quiet center for live city text and lower-center space for Memo. Do
+> not include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, company logos, theme parks, or third-party
+> characters.
+
+### Chengdu
+
+- Asset: `HomeAtlasSceneChengdu`
+- Landmarks: West Pearl Tower, Kuanzhai roofs, shrine garden, Jin River,
+  bamboo groves and Sichuan foothills
+- Detection: Chengdu／成都 or the bounded Chengdu urban coordinate box
+
+Prompt:
+
+> Create an original Chengdu city atlas in SAV-E's warm Little Atlas and
+> Postcard Pocket visual family. Use soft gouache and watercolor on cream
+> paper, a pale mint street grid, powder-blue waterways, and restrained coral,
+> ochre, forest-green, and muted-teal accents. Include friendly simplified
+> forms of West Pearl Tower, Kuanzhai Alley roofs, a red-walled shrine garden,
+> Jin River bridges, bamboo groves, and distant Sichuan foothills. Preserve a
+> large quiet center for live city text and lower-center space for Memo. Do not
+> include text, labels, pins, badges, logo, mascot, UI, watermark,
+> photorealism, people, flags, brand marks, or third-party characters.

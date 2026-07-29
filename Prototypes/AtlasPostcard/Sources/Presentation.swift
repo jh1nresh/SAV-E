@@ -13,6 +13,10 @@ struct AtlasHomeHeroPresentation: Equatable {
         case taipei
         case newYork
         case shanghai
+        case beijing
+        case guangzhou
+        case shenzhen
+        case chengdu
         case seoul
         case southernCalifornia
         case regionalMap
@@ -128,6 +132,33 @@ struct AtlasHomeHeroPresentation: Equatable {
             || normalizedTitle.contains("上海")
             || (30.85...31.55).contains(latitude) && (120.85...121.95).contains(longitude) {
             return .shanghai
+        }
+
+        if normalizedTitle.contains("beijing")
+            || normalizedTitle.contains("peking")
+            || normalizedTitle.contains("北京")
+            || (39.45...40.35).contains(latitude) && (115.70...117.40).contains(longitude) {
+            return .beijing
+        }
+
+        if normalizedTitle.contains("guangzhou")
+            || normalizedTitle.contains("canton")
+            || normalizedTitle.contains("廣州")
+            || normalizedTitle.contains("广州")
+            || (22.95...23.55).contains(latitude) && (113.15...113.70).contains(longitude) {
+            return .guangzhou
+        }
+
+        if normalizedTitle.contains("shenzhen")
+            || normalizedTitle.contains("深圳")
+            || (22.35...22.85).contains(latitude) && (113.75...114.65).contains(longitude) {
+            return .shenzhen
+        }
+
+        if normalizedTitle.contains("chengdu")
+            || normalizedTitle.contains("成都")
+            || (30.20...31.00).contains(latitude) && (103.60...104.60).contains(longitude) {
+            return .chengdu
         }
 
         if normalizedTitle.contains("seoul")

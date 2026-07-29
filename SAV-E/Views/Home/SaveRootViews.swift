@@ -125,6 +125,34 @@ struct SaveHomeView: View {
                 latitude: 31.2304,
                 longitude: 121.4737
             ),
+            "--uitest-home-region-beijing": .currentRegion(
+                title: "Beijing",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 39.9042,
+                longitude: 116.4074
+            ),
+            "--uitest-home-region-guangzhou": .currentRegion(
+                title: "Guangzhou",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 23.1291,
+                longitude: 113.2644
+            ),
+            "--uitest-home-region-shenzhen": .currentRegion(
+                title: "Shenzhen",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 22.5431,
+                longitude: 114.0579
+            ),
+            "--uitest-home-region-chengdu": .currentRegion(
+                title: "Chengdu",
+                subtitle: "China",
+                countryCode: "CN",
+                latitude: 30.5728,
+                longitude: 104.0668
+            ),
             "--uitest-home-region-seoul": .currentRegion(
                 title: "Seoul",
                 subtitle: "South Korea",

@@ -134,6 +134,70 @@
       "status": "complete"
     },
     {
+      "name": "HomeAtlasSceneBeijing",
+      "role": "original illustrated Beijing atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#beijing",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneBeijing.imageset",
+        "filename": "home-atlas-scene-beijing.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneGuangzhou",
+      "role": "original illustrated Guangzhou atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#guangzhou",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneGuangzhou.imageset",
+        "filename": "home-atlas-scene-guangzhou.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneShenzhen",
+      "role": "original illustrated Shenzhen atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#shenzhen",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneShenzhen.imageset",
+        "filename": "home-atlas-scene-shenzhen.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "HomeAtlasSceneChengdu",
+      "role": "original illustrated Chengdu atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the approved Taipei city scene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#chengdu",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneChengdu.imageset",
+        "filename": "home-atlas-scene-chengdu.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "SavesMemoSorting",
       "role": "Memo sorting saved link cards",
       "source": "Reference/Targets/saves.png",
