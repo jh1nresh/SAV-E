@@ -1,5 +1,77 @@
 import SwiftUI
 
+struct AtlasHomeHeroPresentation: Equatable {
+    enum Source: Equatable {
+        case referenceTokyo
+        case currentRegion
+        case savedPlace
+        case neutral
+    }
+
+    let source: Source
+    let title: String
+    let subtitle: String
+    let countryCode: String?
+    let latitude: Double?
+    let longitude: Double?
+
+    static let referenceTokyo = AtlasHomeHeroPresentation(
+        source: .referenceTokyo,
+        title: "Tokyo",
+        subtitle: "Illustrated city atlas",
+        countryCode: "JP",
+        latitude: nil,
+        longitude: nil
+    )
+
+    static let neutral = AtlasHomeHeroPresentation(
+        source: .neutral,
+        title: "Your place atlas",
+        subtitle: "Save a place or enable location to begin",
+        countryCode: nil,
+        latitude: nil,
+        longitude: nil
+    )
+
+    static func currentRegion(
+        title: String,
+        subtitle: String,
+        countryCode: String?,
+        latitude: Double,
+        longitude: Double
+    ) -> AtlasHomeHeroPresentation {
+        AtlasHomeHeroPresentation(
+            source: .currentRegion,
+            title: title,
+            subtitle: subtitle,
+            countryCode: countryCode,
+            latitude: coarse(latitude),
+            longitude: coarse(longitude)
+        )
+    }
+
+    static func savedPlace(
+        title: String,
+        subtitle: String,
+        countryCode: String? = nil,
+        latitude: Double,
+        longitude: Double
+    ) -> AtlasHomeHeroPresentation {
+        AtlasHomeHeroPresentation(
+            source: .savedPlace,
+            title: title,
+            subtitle: subtitle,
+            countryCode: countryCode,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+
+    private static func coarse(_ value: Double) -> Double {
+        (value * 20).rounded() / 20
+    }
+}
+
 struct AtlasPlacePresentation: Identifiable, Equatable {
     let id: String
     let name: String
@@ -57,7 +129,17 @@ struct AtlasStopPresentation: Identifiable, Equatable {
     let imageHeight: CGFloat
 }
 
+struct AtlasTripSummaryPresentation: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let city: String
+    let dateRange: String
+    let stopCount: Int
+    let timing: String
+}
+
 struct AtlasPresentation: @unchecked Sendable {
+    var homeHero: AtlasHomeHeroPresentation
     var reviewCount: Int
     var mapStampCount: Int
     var failedCount: Int
@@ -70,6 +152,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var recentPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
+    var tripSummaries: [AtlasTripSummaryPresentation]
     var onCapture: () -> Void
     var onReviewAll: () -> Void
     var onOpenTrip: () -> Void
@@ -81,8 +164,11 @@ struct AtlasPresentation: @unchecked Sendable {
     var onSelectDay: (Int) -> Void
     var onOpenStop: (String) -> Void
     var onAddStop: () -> Void
+    var onOpenTripID: (String) -> Void
+    var onCreateTrip: () -> Void
 
     static let reference = AtlasPresentation(
+        homeHero: .referenceTokyo,
         reviewCount: 3,
         mapStampCount: 18,
         failedCount: 2,
@@ -147,6 +233,32 @@ struct AtlasPresentation: @unchecked Sendable {
             ),
         ],
         selectedMapPlace: .koffeeMameya,
+        tripSummaries: [
+            AtlasTripSummaryPresentation(
+                id: "tokyo-weekend",
+                name: "Tokyo Weekend",
+                city: "Tokyo",
+                dateRange: "Oct 12 – 14",
+                stopCount: 4,
+                timing: "CURRENT"
+            ),
+            AtlasTripSummaryPresentation(
+                id: "kyoto-autumn",
+                name: "Kyoto Autumn",
+                city: "Kyoto",
+                dateRange: "Nov 7 – 10",
+                stopCount: 6,
+                timing: "UPCOMING"
+            ),
+            AtlasTripSummaryPresentation(
+                id: "taipei-night-notes",
+                name: "Taipei Night Notes",
+                city: "Taipei",
+                dateRange: "Dates to decide",
+                stopCount: 3,
+                timing: "PLANNING"
+            ),
+        ],
         onCapture: {},
         onReviewAll: {},
         onOpenTrip: {},
@@ -157,7 +269,9 @@ struct AtlasPresentation: @unchecked Sendable {
         onSelectMapStamps: {},
         onSelectDay: { _ in },
         onOpenStop: { _ in },
-        onAddStop: {}
+        onAddStop: {},
+        onOpenTripID: { _ in },
+        onCreateTrip: {}
     )
 }
 

@@ -1,4 +1,3 @@
-import MapKit
 import SwiftUI
 
 struct TripsHomeView: View {
@@ -9,57 +8,8 @@ struct TripsHomeView: View {
     @State private var showsCreateTrip = false
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                introCard
-                tripSection(
-                    title: localized("Current", "目前行程"),
-                    emptyText: localized("No trip is underway.", "目前沒有進行中的行程。"),
-                    trips: store.currentTrips
-                )
-                tripSection(
-                    title: localized("Upcoming", "即將到來"),
-                    emptyText: localized("Create your next Trip Pack when you are ready.", "準備好時，建立下一個 Trip Pack。"),
-                    trips: store.upcomingTrips
-                )
-                if !store.planningTrips.isEmpty {
-                    tripSection(
-                        title: localized("Planning", "規劃中"),
-                        emptyText: "",
-                        trips: store.planningTrips
-                    )
-                }
-                if !store.pastTrips.isEmpty {
-                    tripSection(
-                        title: localized("Past", "過往行程"),
-                        emptyText: "",
-                        trips: store.pastTrips
-                    )
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 28)
-        }
-        .background(SaveDottedBackground().ignoresSafeArea())
-        .navigationTitle(localized("Trips", "行程"))
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                SaveGlobalCaptureToolbarButton {
-                    onOpenDrawer(.addLink, nil)
-                }
-
-                Button {
-                    showsCreateTrip = true
-                } label: {
-                    Label(localized("New Trip", "新增行程"), systemImage: "plus")
-                }
-                .accessibilityIdentifier("trips.create")
-            }
-        }
-        .refreshable {
-            await store.load()
-        }
+        TripsAtlasScreen()
+        .environment(\.atlasPresentation, atlasPresentation)
         .tint(Color.saveCoralInk)
         .sheet(isPresented: $showsCreateTrip) {
             NewTripPackView { name, city, startDate, endDate in
@@ -100,119 +50,20 @@ struct TripsHomeView: View {
         .accessibilityIdentifier("trips.home")
     }
 
-    private var introCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(localized("Your confirmed places, arranged for the trip", "把已確認地點排成真正的行程"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                .font(.headline)
-                .foregroundStyle(Color.saveInk)
-            Text(localized(
-                "Paste or share a link. SAV-E investigates it first; only a place you confirm can enter a Trip Pack.",
-                "貼上或分享連結後，SAV-E 會先分析；只有你確認的地點才能加入 Trip Pack。"
-            ))
-            .font(.subheadline)
-            .foregroundStyle(Color.saveMutedText)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Text(localized(
-                "Analyze  →  Review  →  Save  →  Plan",
-                "分析  →  確認  →  收藏  →  規劃"
-            ))
-            .font(.caption.weight(.bold))
-            .foregroundStyle(Color.saveCoralInk)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.saveCoral.opacity(0.18), in: Capsule())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .saveNotebookSurface(
-            cornerRadius: 20,
-            opacity: 0.96,
-            strokeOpacity: 0.42,
-            lineWidth: 1.4
-        )
-    }
-
-    @ViewBuilder
-    private func tripSection(title: String, emptyText: String, trips: [Trip]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title2.bold())
-                .foregroundStyle(Color.saveInk)
-
-            if trips.isEmpty {
-                Text(emptyText)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.saveMutedText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .saveNotebookSurface(
-                        cornerRadius: 18,
-                        opacity: 0.94,
-                        strokeOpacity: 0.34
-                    )
-            } else {
-                ForEach(trips) { trip in
-                    Button {
-                        store.selectTrip(trip.id)
-                        onOpenTrip(trip.id)
-                    } label: {
-                        TripPackCard(trip: trip)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("trips.card.\(trip.id.uuidString)")
-                }
+    private var atlasPresentation: AtlasPresentation {
+        SaveAtlasPresentationFactory.trips(
+            store: store,
+            onCapture: { onOpenDrawer(.addLink, nil) },
+            onCreateTrip: { showsCreateTrip = true },
+            onOpenTrip: { tripID in
+                store.selectTrip(tripID)
+                onOpenTrip(tripID)
             }
-        }
+        )
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
-    }
-}
-
-private struct TripPackCard: View {
-    let trip: Trip
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            SaveIconTile(
-                systemName: "suitcase.rolling.fill",
-                size: 48,
-                fill: .saveHoney,
-                foreground: .saveInk,
-                cornerRadius: 15
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(trip.name)
-                    .font(.headline)
-                    .foregroundStyle(Color.saveInk)
-                Text([trip.city, trip.dateRangeText].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.subheadline)
-                    .foregroundStyle(Color.saveMutedText)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(languageSettings.localized(
-                    english: "\(trip.places.count) confirmed stops",
-                    traditionalChinese: "\(trip.places.count) 個已確認地點"
-                ))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.saveCoralInk)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right")
-                .font(.caption.bold())
-                .foregroundStyle(Color.saveMutedText)
-                .padding(.top, 16)
-        }
-        .padding(16)
-        .saveNotebookSurface(
-            cornerRadius: 20,
-            opacity: 0.96,
-            strokeOpacity: 0.42,
-            lineWidth: 1.4
-        )
     }
 }
 

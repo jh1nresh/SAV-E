@@ -3,8 +3,8 @@
 Status: locked production direction
 Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png)
 
-This file is the canonical SAV-E visual specification for Home, Saves, Trip
-Plan, and Root Map. Where an older production spec conflicts with the fixed
+This file is the canonical SAV-E visual specification for Home, Saves, Trips,
+Trip Plan, and Root Map. Where an older production spec conflicts with the fixed
 composition, assets, type scale, or one-viewport rule below, this file wins.
 Product behavior, persistence, authentication, confirmation, and the single
 canonical place-detail drawer remain governed by their existing contracts.
@@ -16,7 +16,7 @@ not a beige productivity dashboard with cute stickers.
 
 Two page archetypes share one shell:
 
-- **Little Atlas:** Home, Trip Plan, and Map. The map or route is the page
+- **Little Atlas:** Home, Trips, Trip Plan, and Map. The map or route is the page
   skeleton. Cards float on top of geography instead of replacing it.
 - **Postcard Pocket:** Saves. Unresolved clues are physical ticket/postcard
   objects inserted into one kraft envelope. Confirmed Map Stamps are counted,
@@ -39,6 +39,7 @@ Two page archetypes share one shell:
 ```text
 Home      = Little Atlas
 Saves     = Postcard Pocket
+Trips     = Little Atlas
 Trip Plan = Little Atlas
 Root Map  = Little Atlas
 ```
@@ -58,6 +59,17 @@ Root Map  = Little Atlas
 - Two blue Review Candidate tickets and one coral Source Clue ticket.
 - Tickets visibly enter one kraft envelope with a review-count seal.
 - Root tabs remain visible; no generic card list replaces the pocket.
+
+### Trips
+
+- Memo + SAV-E lockup, compact title, and the one global link entry.
+- A cropped atlas is the background for one featured current or next Trip
+  postcard; it is not a generic dashboard hero.
+- At most two upcoming or planning Trip tickets are visible in the fixed
+  viewport.
+- One coral New Trip action. Opening a Trip changes the navigation shell to
+  Plan / Map / Inbox / Share.
+- Root tabs remain visible and the page does not scroll.
 
 ### Trip Plan
 
@@ -118,7 +130,7 @@ Reject the prototype if three or more are true:
 
 ## Fidelity implementation contract
 
-- All four pages render in one fixed 402 × 874 reference viewport. The top
+- All five pages render in one fixed 402 × 874 reference viewport. The top
   48 pt is system-owned; app content uses the measured anchors in
   `Reference/layout-metrics.json`.
 - Keep the existing root/trip navigation state, but do not use `ScrollView`,
@@ -131,4 +143,16 @@ Reject the prototype if three or more are true:
 - Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
   `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
   combines tolerant edge overlap (35%) with per-pixel appearance similarity
-  (65%). Every page must score at least 0.90.
+  (65%). The four raster-approved pages must score at least 0.90. Trips uses
+  the same production component and structural UI gate until its own approved
+  raster is locked.
+
+## Live map exception
+
+The approved Map raster establishes composition, palette, card geometry, and
+navigation—not permission to replace the product map with a static image.
+Production Root Map and Trip Map keep MapKit, location, saved pins, numbered
+stops, selection, and route interaction. Use a flat muted MapKit style under
+the approved header and place-card geometry. The illustrated fixture remains a
+visual-direction comparison; a separate UI test must exercise the live MapKit
+component tree and return from place detail to the correct fixed tabs.

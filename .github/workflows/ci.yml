@@ -83,6 +83,7 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 

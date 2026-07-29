@@ -2390,7 +2390,7 @@ private struct MapDetailDrawerView: View {
                 VStack(spacing: 0) {
                     compactHeader
                     Divider()
-                        .opacity(colorScheme == .dark ? 0.18 : 0.24)
+                        .overlay(SaveAtlasPalette.line.opacity(0.28))
                         .padding(.horizontal, 18)
                     expandedContent
                 }
@@ -2413,14 +2413,15 @@ private struct MapDetailDrawerView: View {
 
             VStack(spacing: 4) {
                 Text(item.presentation.title)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(18, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
 
                 Text(itemEyebrow)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.76))
+                    .font(SaveAtlasType.display(11))
+                    .tracking(0.3)
+                    .foregroundStyle(SaveAtlasPalette.muted)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity)
             }
@@ -2564,22 +2565,22 @@ private struct SelectedPlaceCapsule: View {
             Button(action: onExpand) {
                 VStack(spacing: 2) {
                     Text(item.presentation.title)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(17, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                         .frame(maxWidth: .infinity)
 
                     Text(itemEyebrow)
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.72))
+                        .font(SaveAtlasType.display(10))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                         .frame(maxWidth: .infinity)
 
                     Text(itemContextLine)
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.saveCocoa.opacity(0.58))
+                        .font(SaveAtlasType.body(10))
+                        .foregroundStyle(SaveAtlasPalette.muted.opacity(0.86))
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                         .frame(maxWidth: .infinity)
@@ -2679,8 +2680,8 @@ private func localizedEyebrow(for item: MapDetailDrawerItem, language: AppLangua
 
 private struct SelectedPlaceCapsuleIcon: View {
     let systemImage: String
-    var fill: Color = Color.saveNotebookPage.opacity(0.72)
-    var foreground: Color = .saveInk
+    var fill: Color = SaveAtlasPalette.paper
+    var foreground: Color = SaveAtlasPalette.forest
 
     var body: some View {
         Image(systemName: systemImage)
@@ -2690,7 +2691,7 @@ private struct SelectedPlaceCapsuleIcon: View {
             .background(fill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -2916,44 +2917,37 @@ private struct MapDetailDrawerBackground: View {
     let colorScheme: ColorScheme
 
     var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .opacity(materialOpacity)
-            .background(baseTint)
+        SaveAtlasPalette.canvas
             .overlay {
                 LinearGradient(
-                    colors: tintStops,
-                    startPoint: .top,
-                    endPoint: .bottom
+                    colors: [
+                        SaveAtlasPalette.paper.opacity(colorScheme == .dark ? 0.40 : 0.86),
+                        SaveAtlasPalette.canvas.opacity(0.96)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+            }
+            .overlay {
+                Canvas { context, size in
+                    let spacing: CGFloat = 18
+                    for x in stride(from: CGFloat(9), through: size.width, by: spacing) {
+                        for y in stride(from: CGFloat(9), through: size.height, by: spacing) {
+                            context.fill(
+                                Path(ellipseIn: CGRect(x: x, y: y, width: 2, height: 2)),
+                                with: .color(SaveAtlasPalette.line.opacity(0.07))
+                            )
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
             }
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.42))
+                    .fill(SaveAtlasPalette.line.opacity(0.25))
                     .frame(height: 1)
             }
             .ignoresSafeArea()
-    }
-
-    private var tintStops: [Color] {
-        if colorScheme == .dark {
-            return [
-                Color.black.opacity(0.01),
-                Color.black.opacity(0.04)
-            ]
-        }
-        return [
-            Color.white.opacity(0.01),
-            Color.saveCream.opacity(0.02)
-        ]
-    }
-
-    private var baseTint: Color {
-        colorScheme == .dark ? Color.black.opacity(0.04) : Color.white.opacity(0.03)
-    }
-
-    private var materialOpacity: Double {
-        colorScheme == .dark ? 0.24 : 0.24
     }
 }
 

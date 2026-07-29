@@ -11,6 +11,7 @@ struct SaveHomeView: View {
     let onOpenTrip: (UUID) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var resolvedHomeHero: AtlasHomeHeroPresentation?
 
     var body: some View {
         HomeAtlasScreen()
@@ -18,10 +19,13 @@ struct SaveHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+        .task {
+            await resolveHomeHero()
+        }
     }
 
     private var atlasPresentation: AtlasPresentation {
-        SaveAtlasPresentationFactory.root(
+        var presentation = SaveAtlasPresentationFactory.root(
             store: store,
             mapViewModel: mapViewModel,
             onCapture: { onOpenDrawer(.addLink, nil) },
@@ -31,6 +35,82 @@ struct SaveHomeView: View {
             onOpenPlace: onOpenSavedPlace,
             onOpenReview: { _ in onOpenDrawer(.review, nil) }
         )
+        if !SaveAtlasRuntime.usesParityFixture {
+            presentation.homeHero = resolvedHomeHero ?? savedPlaceHero ?? .neutral
+        }
+        return presentation
+    }
+
+    private var savedPlaceHero: AtlasHomeHeroPresentation? {
+        guard let place = mapViewModel.places.max(by: { $0.createdAt < $1.createdAt }) else {
+            return nil
+        }
+        let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .savedPlace(
+            title: area.isEmpty ? localized("Recent Map Stamp", "最近的地圖章") : area,
+            subtitle: localized(
+                "Based on \(place.name)",
+                "依據 \(place.name)"
+            ),
+            latitude: place.latitude,
+            longitude: place.longitude
+        )
+    }
+
+    private func resolveHomeHero() async {
+        guard !SaveAtlasRuntime.usesParityFixture else { return }
+
+        if ProcessInfo.processInfo.arguments.contains("--uitest-home-region-taipei") {
+            resolvedHomeHero = .currentRegion(
+                title: "Taipei",
+                subtitle: "Taiwan",
+                countryCode: "TW",
+                latitude: 25.033,
+                longitude: 121.5654
+            )
+            return
+        }
+
+        guard let location = await LocationService.shared.requestCurrentLocation() else {
+            return
+        }
+
+        let placemark = try? await CLGeocoder()
+            .reverseGeocodeLocation(location, preferredLocale: Locale.current)
+            .first
+        let countryCode = placemark?.isoCountryCode
+        let title = [
+            placemark?.locality,
+            placemark?.subAdministrativeArea,
+            placemark?.administrativeArea,
+            placemark?.country,
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .first(where: { !$0.isEmpty })
+            ?? localized("Around you", "你附近")
+
+        let subtitleParts = [
+            placemark?.administrativeArea,
+            placemark?.country,
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty && $0.localizedCaseInsensitiveCompare(title) != .orderedSame }
+
+        let subtitle = uniqueStrings(subtitleParts).joined(separator: " · ")
+        resolvedHomeHero = .currentRegion(
+            title: title,
+            subtitle: subtitle.isEmpty
+                ? localized("Your current region", "你目前所在區域")
+                : subtitle,
+            countryCode: countryCode,
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
+    }
+
+    private func uniqueStrings(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        return values.filter { seen.insert($0.lowercased()).inserted }
     }
 
     private var homeContent: some View {
@@ -320,15 +400,11 @@ struct SaveLibraryView: View {
 
     var body: some View {
         Group {
-            switch effectiveMode {
-            case .review:
+            if SaveAtlasRuntime.usesParityFixture {
                 SavesPocketScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
-            case .mapStamps:
-                ScrollView(showsIndicators: false) {
-                    savesContent
-                }
-                .background(SaveAtlasPalette.canvas)
+            } else {
+                savesContent
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -384,18 +460,21 @@ struct SaveLibraryView: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 4)
 
-            Group {
-                switch effectiveMode {
-                case .review:
-                    reviewContent
-                case .mapStamps:
-                    savedPlacesContent
+            ScrollView(showsIndicators: false) {
+                Group {
+                    switch effectiveMode {
+                    case .review:
+                        reviewContent
+                    case .mapStamps:
+                        savedPlacesContent
+                    }
                 }
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 22)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
         }
-        .padding(.bottom, 14)
+        .background(SaveDottedBackground())
     }
 
     private var titleBlock: some View {
@@ -490,8 +569,9 @@ struct SaveLibraryView: View {
                 .frame(maxWidth: .infinity)
                 .padding(18)
                 .saveAtlasPaper(radius: 18)
+                .accessibilityIdentifier("saves.review.empty")
             } else {
-                ForEach(Array(sortedCandidates.prefix(3))) { candidate in
+                ForEach(sortedCandidates) { candidate in
                     Button {
                         onOpenReviewCandidate(candidate)
                     } label: {
@@ -513,16 +593,6 @@ struct SaveLibraryView: View {
                     .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
                 }
             }
-
-            Button(action: onOpenReview) {
-                SaveAtlasReviewPocket(
-                    count: reviewCandidates.count,
-                    title: localized("Full review queue", "完整待確認清單"),
-                    countLabel: localized("need your review", "等待你確認")
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("saves.review")
         }
     }
 
@@ -684,6 +754,7 @@ struct SaveMapRootView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
     }
 
@@ -939,7 +1010,8 @@ private struct SaveAtlasPocketCount: View {
             }
             .font(SaveAtlasType.display(14))
             .foregroundStyle(SaveAtlasPalette.ink)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
             .background(
                 isSelected
                     ? tint.opacity(0.38)
@@ -957,6 +1029,7 @@ private struct SaveAtlasPocketCount: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

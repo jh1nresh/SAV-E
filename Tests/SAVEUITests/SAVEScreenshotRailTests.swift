@@ -17,6 +17,37 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-home-region-taipei",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.regionalHero"].waitForExistence(timeout: stepTimeout),
+            "Production Home should render the location-aware regional hero."
+        )
+        XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Taiwan"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["prototype.home.atlas"].exists,
+            "Production Home must not keep the static Tokyo reference hero."
+        )
+        XCTAssertTrue(app.buttons["home.capture"].isHittable)
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
+
+        attach(app, name: "atlas-home-regional-taipei")
+    }
+
+    @MainActor
     func testCaptureAtlasProductionParity() throws {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -356,6 +387,51 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureAtlasTripsAndLiveMaps() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["trips.capture"].exists)
+        XCTAssertTrue(app.buttons["trips.create"].exists)
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trips-live")
+
+        firstTrip.tap()
+        let tripMap = tripTabButton("Map", app: app)
+        XCTAssertTrue(tripMap.waitForExistence(timeout: stepTimeout))
+        tripMap.tap()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["trip.map.openStop"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trip-map-live")
+
+        let back = app.buttons["trip.back"]
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
+        back.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.place.openDetails"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "atlas-root-map-live")
+    }
+
+    @MainActor
     func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
@@ -404,6 +480,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         openRootTab("Saves", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 45))
 
+        let mapStampsSegment = app.buttons["saves.segment.mapStamps"]
+        XCTAssertTrue(mapStampsSegment.waitForExistence(timeout: stepTimeout))
+        mapStampsSegment.tap()
+        XCTAssertTrue(mapStampsSegment.isSelected)
+
         let firstMapStamp = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")
         ).firstMatch
@@ -416,13 +497,63 @@ final class SAVEScreenshotRailTests: XCTestCase {
             1,
             "A Map Stamp should stay inside the one global drawer."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
+            app.descendants(matching: .any).matching(identifier: "place.detail.scroll").count,
             1,
             "Every saved-place entry should use one canonical detail renderer."
         )
         XCTAssertTrue(app.buttons["drawer.saved.addToTrip"].waitForExistence(timeout: stepTimeout))
+
+        let closeDetail = app.buttons["drawer.place.close"]
+        XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
+        closeDetail.tap()
+        XCTAssertFalse(
+            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: 2),
+            "Closing a Map Stamp must dismiss the drawer."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapStampsSegment.isSelected)
+        XCTAssertTrue(rootTabButton("Saves", app: app).isSelected)
+
+        let reviewSegment = app.buttons["saves.segment.review"]
+        XCTAssertTrue(reviewSegment.waitForExistence(timeout: stepTimeout))
+        reviewSegment.tap()
+        XCTAssertTrue(reviewSegment.isSelected)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.review.empty"]
+                .waitForExistence(timeout: stepTimeout),
+            "Review should be an operable mode in the same Saves surface."
+        )
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.name"].waitForExistence(timeout: stepTimeout),
+            "The root map selection should expose its real name."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.location"].exists,
+            "Selecting a root-map place should expose its location."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.context"].exists,
+            "Selecting a root-map place should expose category and status context."
+        )
+
+        let openMapDetails = app.buttons["map.place.openDetails"]
+        XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))
+        openMapDetails.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
+
+        let closeMapDetail = app.buttons["drawer.place.close"]
+        XCTAssertTrue(closeMapDetail.waitForExistence(timeout: stepTimeout))
+        closeMapDetail.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
     }
 
     @MainActor

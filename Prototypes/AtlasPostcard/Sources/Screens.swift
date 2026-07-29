@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct HomeAtlasScreen: View {
@@ -27,13 +28,19 @@ struct HomeAtlasScreen: View {
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
 
-            Image("HomeAtlasScene")
-                .resizable()
-                .scaledToFill()
-                .clipped()
-                .placed(x: 0, y: 99, width: 402, height: 274)
-                .accessibilityLabel("Illustrated Tokyo atlas")
-                .accessibilityIdentifier("prototype.home.atlas")
+            Group {
+                if presentation.homeHero.source == .referenceTokyo {
+                    Image("HomeAtlasScene")
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                        .accessibilityLabel("Illustrated Tokyo atlas")
+                        .accessibilityIdentifier("prototype.home.atlas")
+                } else {
+                    AtlasRegionalHomeHero(hero: presentation.homeHero)
+                }
+            }
+            .placed(x: 0, y: 99, width: 402, height: 274)
 
             HomeReviewCard()
                 .placed(x: 5, y: 354, width: 392, height: 182)
@@ -48,6 +55,193 @@ struct HomeAtlasScreen: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.home")
+    }
+}
+
+private struct AtlasRegionalHomeHero: View {
+    let hero: AtlasHomeHeroPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isFloating = false
+
+    var body: some View {
+        ZStack {
+            if let coordinate {
+                Map(
+                    initialPosition: .region(
+                        MKCoordinateRegion(
+                            center: coordinate,
+                            span: MKCoordinateSpan(
+                                latitudeDelta: 0.12,
+                                longitudeDelta: 0.12
+                            )
+                        )
+                    ),
+                    interactionModes: []
+                ) {
+                    Annotation("", coordinate: coordinate) {
+                        regionalMarker
+                    }
+                }
+                .mapStyle(.standard)
+                .saturation(0.76)
+                .contrast(0.96)
+            } else {
+                neutralAtlas
+            }
+
+            AtlasPalette.canvas
+                .opacity(0.08)
+                .allowsHitTesting(false)
+
+            LinearGradient(
+                colors: [
+                    AtlasPalette.canvas.opacity(0.06),
+                    .clear,
+                    AtlasPalette.canvas.opacity(0.90),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    regionalBadge
+                }
+                .padding(.top, 14)
+                .padding(.horizontal, 14)
+
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(hero.title)
+                            .font(AtlasType.strong(25))
+                            .foregroundStyle(AtlasPalette.forest)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .accessibilityIdentifier("home.region.title")
+
+                        Text(hero.subtitle)
+                            .font(AtlasType.body(12))
+                            .foregroundStyle(AtlasPalette.muted)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: landmarkSymbol)
+                        .font(.system(size: 23, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .frame(width: 48, height: 48)
+                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        }
+                        .offset(y: reduceMotion ? 0 : (isFloating ? -4 : 2))
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 17)
+            }
+        }
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(hero.title), \(hero.subtitle)")
+        .accessibilityIdentifier("home.regionalHero")
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                isFloating = true
+            }
+        }
+    }
+
+    private var coordinate: CLLocationCoordinate2D? {
+        guard let latitude = hero.latitude, let longitude = hero.longitude else {
+            return nil
+        }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private var regionalMarker: some View {
+        ZStack {
+            Circle()
+                .fill(AtlasPalette.coral.opacity(0.20))
+                .frame(width: isFloating && !reduceMotion ? 58 : 42)
+            Image(systemName: "location.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(AtlasPalette.coral, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(AtlasPalette.paper, lineWidth: 3)
+                }
+        }
+        .animation(
+            reduceMotion
+                ? nil
+                : .easeInOut(duration: 2.8).repeatForever(autoreverses: true),
+            value: isFloating
+        )
+    }
+
+    private var regionalBadge: some View {
+        Label(badgeTitle, systemImage: "location.circle.fill")
+            .font(AtlasType.display(12))
+            .foregroundStyle(AtlasPalette.ink)
+            .padding(.horizontal, 11)
+            .frame(minHeight: 31)
+            .background(AtlasPalette.paper.opacity(0.94), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+            }
+    }
+
+    private var badgeTitle: String {
+        switch hero.source {
+        case .currentRegion:
+            return "Around you"
+        case .savedPlace:
+            return "From your Map Stamps"
+        case .neutral, .referenceTokyo:
+            return "Your atlas"
+        }
+    }
+
+    private var landmarkSymbol: String {
+        switch hero.countryCode?.uppercased() {
+        case "JP", "TW", "KR", "CN", "TH", "SG":
+            return "building.columns.fill"
+        case "US", "CA", "MX":
+            return "building.2.fill"
+        case "FR", "GB", "DE", "IT", "ES", "NL", "CH", "AT":
+            return "tram.fill"
+        case "AU", "NZ":
+            return "water.waves"
+        default:
+            return "mountain.2.fill"
+        }
+    }
+
+    private var neutralAtlas: some View {
+        LinearGradient(
+            colors: [
+                AtlasPalette.sky.opacity(0.72),
+                AtlasPalette.mint.opacity(0.72),
+                AtlasPalette.canvas,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay {
+            Image(systemName: "globe.americas.fill")
+                .font(.system(size: 132, weight: .ultraLight))
+                .foregroundStyle(AtlasPalette.forest.opacity(0.18))
+        }
     }
 }
 
@@ -279,6 +473,238 @@ private struct HomeStampRow: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 3)
         .accessibilityIdentifier("saves.place.\(place.id)")
+    }
+}
+
+struct TripsAtlasScreen: View {
+    @Environment(\.atlasPresentation) private var presentation
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            AtlasCanvas()
+
+            BrandHeader {
+                Button(action: presentation.onCapture) {
+                    Image(systemName: "link")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 40, height: 40)
+                        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 13))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13)
+                                .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Paste or share a link")
+                .accessibilityIdentifier("trips.capture")
+            }
+            .placed(x: 0, y: 48, width: 402, height: 50)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("YOUR LITTLE ATLAS")
+                    .font(AtlasType.display(11))
+                    .tracking(1.1)
+                    .foregroundStyle(AtlasPalette.muted)
+                Text("Trips")
+                    .font(AtlasType.strong(30))
+                    .foregroundStyle(AtlasPalette.forest)
+                Text("Confirmed Map Stamps, arranged into journeys.")
+                    .font(AtlasType.regular(14))
+                    .foregroundStyle(AtlasPalette.muted)
+            }
+            .placed(x: 13, y: 105, width: 376, height: 65)
+
+            Image("MapAtlasScene")
+                .resizable()
+                .scaledToFill()
+                .saturation(0.82)
+                .clipped()
+                .overlay(AtlasPalette.canvas.opacity(0.08))
+                .placed(x: 0, y: 170, width: 402, height: 220)
+                .accessibilityHidden(true)
+
+            if let featured = presentation.tripSummaries.first {
+                FeaturedTripPostcard(trip: featured)
+                    .placed(x: 17, y: 242, width: 368, height: 139)
+            } else {
+                EmptyTripPostcard()
+                    .placed(x: 17, y: 242, width: 368, height: 139)
+            }
+
+            MemoMark(size: 67)
+                .placed(x: 298, y: 178, width: 72, height: 72)
+                .accessibilityHidden(true)
+
+            HStack {
+                Text("NEXT JOURNEYS")
+                    .font(AtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(AtlasPalette.muted)
+                Spacer()
+                Text("\(presentation.tripSummaries.count) total")
+                    .font(AtlasType.regular(12))
+                    .foregroundStyle(AtlasPalette.muted)
+            }
+            .placed(x: 17, y: 407, width: 368, height: 22)
+
+            VStack(spacing: 11) {
+                ForEach(Array(presentation.tripSummaries.dropFirst().prefix(2))) { trip in
+                    CompactTripTicket(trip: trip)
+                }
+
+                if presentation.tripSummaries.dropFirst().isEmpty {
+                    Text("Your next trip can begin with one confirmed Map Stamp.")
+                        .font(AtlasType.regular(14))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .atlasPaper(radius: 18)
+                }
+            }
+            .placed(x: 17, y: 433, width: 368, height: 208)
+
+            Button(action: presentation.onCreateTrip) {
+                HStack(spacing: 9) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("Start a new Trip")
+                        .font(AtlasType.strong(17))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 242, height: 46)
+                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .placed(x: 80, y: 677, width: 242, height: 46)
+            .accessibilityIdentifier("trips.create")
+        }
+        .frame(width: 402, height: 874)
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("trips.home")
+    }
+}
+
+private struct FeaturedTripPostcard: View {
+    @Environment(\.atlasPresentation) private var presentation
+    let trip: AtlasTripSummaryPresentation
+
+    var body: some View {
+        Button {
+            presentation.onOpenTripID(trip.id)
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Text(trip.timing)
+                        .font(AtlasType.strong(10))
+                        .tracking(1)
+                        .foregroundStyle(AtlasPalette.forest)
+                        .padding(.horizontal, 10)
+                        .frame(height: 25)
+                        .background(AtlasPalette.mint, in: Capsule())
+                    Spacer()
+                    Text(trip.dateRange)
+                        .font(AtlasType.display(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                }
+
+                Text(trip.name)
+                    .font(AtlasType.strong(25))
+                    .foregroundStyle(AtlasPalette.forest)
+
+                HStack(spacing: 7) {
+                    Image(systemName: "mappin.and.ellipse")
+                    Text(trip.city.isEmpty ? "Destination to decide" : trip.city)
+                    Text("·")
+                    Text("\(trip.stopCount) \(trip.stopCount == 1 ? "stop" : "stops")")
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                }
+                .font(AtlasType.regular(13))
+                .foregroundStyle(AtlasPalette.muted)
+            }
+            .padding(.horizontal, 17)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .background(AtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 20))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+            }
+            .shadow(color: AtlasPalette.ink.opacity(0.07), radius: 7, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("trips.card.\(trip.id)")
+    }
+}
+
+private struct CompactTripTicket: View {
+    @Environment(\.atlasPresentation) private var presentation
+    let trip: AtlasTripSummaryPresentation
+
+    var body: some View {
+        Button {
+            presentation.onOpenTripID(trip.id)
+        } label: {
+            HStack(spacing: 13) {
+                VStack(spacing: 1) {
+                    Image(systemName: "map")
+                        .font(.system(size: 20, weight: .regular))
+                    Text("\(trip.stopCount)")
+                        .font(AtlasType.strong(14))
+                }
+                .foregroundStyle(AtlasPalette.forest)
+                .frame(width: 52, height: 62)
+                .background(ticketTint, in: RoundedRectangle(cornerRadius: 15))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(trip.timing)
+                        .font(AtlasType.display(10))
+                        .tracking(0.9)
+                        .foregroundStyle(AtlasPalette.muted)
+                    Text(trip.name)
+                        .font(AtlasType.strong(18))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .lineLimit(1)
+                    Text([trip.city, trip.dateRange].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(AtlasType.regular(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.ink)
+            }
+            .padding(.horizontal, 13)
+            .frame(maxWidth: .infinity, minHeight: 94)
+            .atlasPaper(radius: 18, shadow: true)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("trips.card.\(trip.id)")
+    }
+
+    private var ticketTint: Color {
+        trip.timing == "UPCOMING" ? AtlasPalette.sky : AtlasPalette.lavender
+    }
+}
+
+private struct EmptyTripPostcard: View {
+    var body: some View {
+        VStack(spacing: 7) {
+            Image(systemName: "map")
+                .font(.system(size: 27, weight: .regular))
+                .foregroundStyle(AtlasPalette.forest)
+            Text("No journeys yet")
+                .font(AtlasType.strong(21))
+                .foregroundStyle(AtlasPalette.forest)
+            Text("Confirm a place, then start your first Trip.")
+                .font(AtlasType.regular(13))
+                .foregroundStyle(AtlasPalette.muted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .atlasPaper(radius: 20, shadow: true)
     }
 }
 
@@ -839,7 +1265,7 @@ struct TripAtlasMapScreen: View {
     }
 }
 
-private struct TripMapPlaceCard: View {
+struct TripMapPlaceCard: View {
     @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
