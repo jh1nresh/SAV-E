@@ -11,6 +11,9 @@ struct AtlasHomeHeroPresentation: Equatable {
     enum Scene: Equatable {
         case tokyo
         case taipei
+        case newYork
+        case shanghai
+        case seoul
         case regionalMap
     }
 
@@ -110,6 +113,28 @@ struct AtlasHomeHeroPresentation: Equatable {
             || normalizedTitle.contains("東京")
             || (35.45...35.90).contains(latitude) && (139.45...140.05).contains(longitude) {
             return .tokyo
+        }
+
+        if normalizedTitle.contains("new york")
+            || normalizedTitle.contains("nyc")
+            || normalizedTitle.contains("紐約")
+            || normalizedTitle.contains("纽约")
+            || (40.45...40.95).contains(latitude) && (-74.30 ... -73.65).contains(longitude) {
+            return .newYork
+        }
+
+        if normalizedTitle.contains("shanghai")
+            || normalizedTitle.contains("上海")
+            || (30.85...31.55).contains(latitude) && (120.85...121.95).contains(longitude) {
+            return .shanghai
+        }
+
+        if normalizedTitle.contains("seoul")
+            || normalizedTitle.contains("서울")
+            || normalizedTitle.contains("首爾")
+            || normalizedTitle.contains("首尔")
+            || (37.35...37.75).contains(latitude) && (126.75...127.25).contains(longitude) {
+            return .seoul
         }
 
         return .regionalMap

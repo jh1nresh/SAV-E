@@ -186,7 +186,7 @@ struct AIDrawerView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background {
-                    DrawerGlassBackground(colorScheme: colorScheme)
+                    AtlasPostcardDrawerBackground(colorScheme: colorScheme)
                 }
             }
         }
@@ -365,7 +365,7 @@ struct AIDrawerView: View {
         HStack(spacing: SaveTheme.Spacing.sm) {
             Image(systemName: commandBarIcon)
                 .foregroundColor(commandBarTextColor)
-                .font(.caption.weight(.bold))
+                .font(.system(size: 13, weight: .bold))
                 .frame(width: commandIconDimension, height: commandIconDimension)
                 .background(commandIconFill)
                 .overlay(
@@ -374,9 +374,10 @@ struct AIDrawerView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .symbolEffect(.pulse, isActive: isLoading)
+                .accessibilityIdentifier("drawer.postcardChrome")
 
             TextField(languageSettings.text(.askPlaceholder), text: $viewModel.query)
-                .font(.subheadline)
+                .font(SaveAtlasType.body(15))
                 .foregroundColor(commandBarTextColor)
                 .lineLimit(1)
                 .frame(minHeight: commandFieldMinHeight)
@@ -406,13 +407,7 @@ struct AIDrawerView: View {
         .frame(minHeight: commandBarMinHeight)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.thinMaterial)
-                .opacity(colorScheme == .dark ? 0.50 : 0.32)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.saveDrawerSurface.opacity(colorScheme == .dark ? 0.28 : 0.42))
-                )
-                .overlay(commandBarFill)
+                .fill(commandBarFill)
         }
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -432,11 +427,15 @@ struct AIDrawerView: View {
     }
 
     private var commandBarFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.12) : Color.saveCream.opacity(0.16)
+        colorScheme == .dark
+            ? Color.saveDrawerSurface.opacity(0.30)
+            : SaveAtlasPalette.paper.opacity(0.98)
     }
 
     private var commandIconFill: Color {
-        colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.28)
+        colorScheme == .dark
+            ? Color.white.opacity(0.12)
+            : SaveAtlasPalette.mint.opacity(0.82)
     }
 
     private var commandBarStroke: Color {
@@ -444,7 +443,7 @@ struct AIDrawerView: View {
     }
 
     private var commandBarTextColor: Color {
-        colorScheme == .dark ? .white : .saveInk
+        colorScheme == .dark ? .white : SaveAtlasPalette.forest
     }
 
     private var commandBarSecondaryText: Color {
@@ -2305,56 +2304,6 @@ private struct CaptureTripContextCard: View {
     }
 }
 
-private struct DrawerGlassBackground: View {
-    let colorScheme: ColorScheme
-
-    var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .opacity(materialOpacity)
-            .background(baseTint)
-            .overlay {
-                LinearGradient(
-                    colors: tintStops,
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            }
-            .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(topStroke)
-                    .frame(height: 1)
-            }
-            .ignoresSafeArea()
-    }
-
-    private var tintStops: [Color] {
-        // Warm the blur toward the cream notebook page instead of neutral glass.
-        if colorScheme == .dark {
-            return [
-                Color.saveDrawerSurface.opacity(0.06),
-                Color.saveDrawerSurface.opacity(0.14)
-            ]
-        }
-        return [
-            Color.saveDrawerSurface.opacity(0.10),
-            Color.saveDrawerSurface.opacity(0.22)
-        ]
-    }
-
-    private var baseTint: Color {
-        Color.saveDrawerSurface.opacity(colorScheme == .dark ? 0.16 : 0.24)
-    }
-
-    private var materialOpacity: Double {
-        colorScheme == .dark ? 0.24 : 0.24
-    }
-
-    private var topStroke: Color {
-        Color.saveDrawerStroke.opacity(colorScheme == .dark ? 0.12 : 0.20)
-    }
-}
-
 private struct MapDetailDrawerView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
@@ -2406,7 +2355,7 @@ private struct MapDetailDrawerView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background {
-                    MapDetailDrawerBackground(colorScheme: colorScheme)
+                    AtlasPostcardDrawerBackground(colorScheme: colorScheme)
                 }
             }
         }
@@ -2417,26 +2366,31 @@ private struct MapDetailDrawerView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var compactHeader: some View {
-        HStack(spacing: 12) {
-            shareAction
-                .frame(width: 44, height: 44)
+        HStack(spacing: 9) {
+            PostcardDrawerSeal(
+                systemImage: item.postcardSystemImage,
+                tint: item.postcardTint
+            )
 
-            VStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(item.presentation.title)
                     .font(SaveAtlasType.strong(18, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+                    .minimumScaleFactor(0.78)
 
                 Text(itemEyebrow)
-                    .font(SaveAtlasType.display(11))
-                    .tracking(0.3)
+                    .font(SaveAtlasType.display(10))
+                    .tracking(0.45)
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .lineLimit(1)
-                    .frame(maxWidth: .infinity)
+                    .minimumScaleFactor(0.72)
+                    .accessibilityIdentifier("place.detail.postcardChrome")
             }
-            .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+
+            shareAction
+                .frame(width: 38, height: 38)
 
             Button(action: onOpenInbox) {
                 SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
@@ -2444,7 +2398,7 @@ private struct MapDetailDrawerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
             .accessibilityIdentifier("drawer.openReview")
-            .frame(width: 44, height: 44)
+            .frame(width: 38, height: 38)
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
@@ -2452,9 +2406,9 @@ private struct MapDetailDrawerView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Close place detail", traditionalChinese: "關閉地點詳情"))
             .accessibilityIdentifier("drawer.place.close")
-            .frame(width: 44, height: 44)
+            .frame(width: 38, height: 38)
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 12)
     }
@@ -2587,6 +2541,7 @@ private struct SelectedPlaceCapsule: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                         .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("place.detail.postcardChrome")
 
                     Text(itemContextLine)
                         .font(SaveAtlasType.body(10))
@@ -2617,8 +2572,17 @@ private struct SelectedPlaceCapsule: View {
             .accessibilityLabel(languageSettings.localized(english: "Close selected place", traditionalChinese: "關閉已選地點"))
             .frame(width: 44, height: 44)
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 10)
         .frame(height: 74)
+        .background(
+            SaveAtlasPalette.paper.opacity(0.98),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 7, y: 3)
         .gesture(
             DragGesture(minimumDistance: 8)
                 .onEnded { value in
@@ -2707,7 +2671,57 @@ private struct SelectedPlaceCapsuleIcon: View {
     }
 }
 
+private struct PostcardDrawerSeal: View {
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 17, weight: .bold))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .frame(width: 42, height: 42)
+            .background(tint, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(
+                        SaveAtlasPalette.line.opacity(0.34),
+                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                    )
+                    .padding(2)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 private extension MapDetailDrawerItem {
+    var postcardSystemImage: String {
+        switch self {
+        case .savedPlace:
+            return "star.fill"
+        case .reviewCandidate(let candidate):
+            return candidate.hasReliableCoordinates ? "camera.fill" : "magnifyingglass"
+        case .unsavedCandidate:
+            return "mappin.and.ellipse"
+        case .socialPlace:
+            return "person.2.fill"
+        }
+    }
+
+    var postcardTint: Color {
+        switch self {
+        case .savedPlace:
+            return SaveAtlasPalette.mint
+        case .reviewCandidate(let candidate):
+            return candidate.hasReliableCoordinates
+                ? SaveAtlasPalette.sky
+                : SaveAtlasPalette.coral.opacity(0.34)
+        case .unsavedCandidate:
+            return SaveAtlasPalette.lavender
+        case .socialPlace:
+            return SaveAtlasPalette.honey.opacity(0.72)
+        }
+    }
+
     var presentation: SavePlaceDrawerPresentation {
         switch self {
         case .savedPlace(let place):
@@ -2923,11 +2937,16 @@ private struct SocialPlaceRow: View {
     }
 }
 
-private struct MapDetailDrawerBackground: View {
+private struct AtlasPostcardDrawerBackground: View {
     let colorScheme: ColorScheme
 
     var body: some View {
         SaveAtlasPalette.canvas
+            .overlay {
+                Image("PaperTexture")
+                    .resizable(resizingMode: .tile)
+                    .opacity(colorScheme == .dark ? 0.02 : 0.045)
+            }
             .overlay {
                 LinearGradient(
                     colors: [
@@ -2953,9 +2972,15 @@ private struct MapDetailDrawerBackground: View {
                 .allowsHitTesting(false)
             }
             .overlay(alignment: .top) {
-                Rectangle()
-                    .fill(SaveAtlasPalette.line.opacity(0.25))
-                    .frame(height: 1)
+                HStack(spacing: 7) {
+                    ForEach(0..<24, id: \.self) { _ in
+                        Circle()
+                            .fill(SaveAtlasPalette.line.opacity(0.18))
+                            .frame(width: 3, height: 3)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 8)
             }
             .ignoresSafeArea()
     }

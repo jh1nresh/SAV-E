@@ -22,3 +22,30 @@ Prompt:
 The generated source was center-cropped to the Home hero aspect ratio and
 deterministically resampled for the asset catalog. City text and Memo remain
 live SwiftUI layers.
+
+## New York v0
+
+- Asset: `HomeAtlasSceneNewYork`
+- Landmarks: Statue of Liberty, Empire State Building, Chrysler Building,
+  Brooklyn Bridge, Central Park
+- Detection: New York city names or the bounded New York City coordinate box
+
+## Shanghai v0
+
+- Asset: `HomeAtlasSceneShanghai`
+- Landmarks: Oriental Pearl Tower, Shanghai Tower, Jin Mao Tower, the Bund,
+  shikumen roofs, Huangpu River
+- Detection: Shanghai／上海／上海市 or the bounded Shanghai coordinate box
+
+## Seoul v0
+
+- Asset: `HomeAtlasSceneSeoul`
+- Landmarks: N Seoul Tower, Gyeongbokgung, hanok roofs, Lotte World Tower, Han
+  River bridges
+- Detection: Seoul／서울／首爾／首尔 or the bounded Seoul coordinate box
+
+All three assets were generated with the built-in image-generation path using
+the approved Taipei scene as a style/composition reference. Each source was
+center-cropped and deterministically resampled to 402 x 275, 804 x 550, and
+1206 x 825. Text, Memo, pins, badges, logo, UI, and watermarks remain forbidden
+inside the bitmap.

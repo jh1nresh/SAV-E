@@ -47,6 +47,24 @@ struct HomeAtlasScreen: View {
                         assetName: "HomeAtlasSceneTaipei",
                         accessibilityIdentifier: "home.cityAtlas.taipei"
                     )
+                case .newYork:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneNewYork",
+                        accessibilityIdentifier: "home.cityAtlas.newYork"
+                    )
+                case .shanghai:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneShanghai",
+                        accessibilityIdentifier: "home.cityAtlas.shanghai"
+                    )
+                case .seoul:
+                    AtlasIllustratedCityHero(
+                        hero: presentation.homeHero,
+                        assetName: "HomeAtlasSceneSeoul",
+                        accessibilityIdentifier: "home.cityAtlas.seoul"
+                    )
                 case .regionalMap:
                     AtlasRegionalHomeHero(hero: presentation.homeHero)
                 }

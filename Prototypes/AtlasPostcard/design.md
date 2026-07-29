@@ -47,7 +47,10 @@ Root Map  = Little Atlas
 ### Home
 
 - Memo + SAV-E lockup, small link capsule.
-- Illustrated Tokyo atlas fills the upper half.
+- An owned illustrated city atlas fills the upper half when the resolved city
+  is Tokyo, Taipei, New York, Shanghai, or Seoul.
+- All other cities use the regional live-map basic scene. Never borrow a nearby
+  supported city's landmarks just because the country matches.
 - Memo peeks from behind one review sheet.
 - Below: one Trip preview and exactly two recent Map Stamps.
 - Root tabs remain visible.
@@ -97,6 +100,17 @@ Root Map  = Little Atlas
   Map drawer.
 - Never show a top search bar and bottom search drawer together, a default
   arbitrary first-place card, or two place renderers at the same time.
+
+### Canonical Postcard Drawer
+
+- Home capture, Home review, Saves review, Saves Map Stamp, Root Map place,
+  Trip Map stop, public discovery, and social discovery share one drawer
+  chrome.
+- The chrome is cream paper with a subtle perforated top rule, forest title,
+  muted trust/source line, semantic seal, and outlined stamp controls.
+- Collapsed, medium, and large detents keep the same paper identity.
+- Existing data and actions remain live SwiftUI. The visual unification never
+  creates a second place-detail renderer or changes confirmation semantics.
 
 ## Tokens
 
