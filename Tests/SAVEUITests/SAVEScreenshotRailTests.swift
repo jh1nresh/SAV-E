@@ -32,11 +32,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.regionalHero"].waitForExistence(timeout: stepTimeout),
-            "Production Home should render the location-aware regional hero."
+            app.descendants(matching: .any)["home.cityAtlas.taipei"].waitForExistence(timeout: stepTimeout),
+            "Production Home should render the illustrated Taipei city atlas."
         )
         XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["Taiwan"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)["prototype.home.atlas"].exists,
             "Production Home must not keep the static Tokyo reference hero."

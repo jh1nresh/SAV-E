@@ -54,6 +54,22 @@
       "status": "complete"
     },
     {
+      "name": "HomeAtlasSceneTaipei",
+      "role": "original illustrated Taipei atlas background with live city label and Memo overlay",
+      "source": "built-in image generation using the founder-approved HomeAtlasScene as a style and composition reference",
+      "prompt": "prompts/home-city-scenes.md#taipei-v0",
+      "transform": "center crop to 402:275 and deterministic sips resampling",
+      "output": {
+        "imageset": "HomeAtlasSceneTaipei.imageset",
+        "filename": "home-atlas-scene-taipei.png",
+        "width": 402,
+        "height": 275,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "SavesMemoSorting",
       "role": "Memo sorting saved link cards",
       "source": "Reference/Targets/saves.png",

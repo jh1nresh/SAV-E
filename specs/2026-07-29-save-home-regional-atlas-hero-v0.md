@@ -14,16 +14,18 @@ schema, parser, account, payment, or trip-planning change.
 ## Acceptance criteria and failure fixtures
 
 1. Production Home does not always render the static Tokyo hero.
-2. With foreground location permission, the hero centers an Apple Map on the
-   current coarse region and labels the locality/region without displaying a
-   precise address.
-3. The hero includes restrained motion that does not move primary controls and
-   respects Reduce Motion.
+2. With foreground location permission, the resolved locality selects a
+   founder-approved illustrated city scene. Taipei renders recognizable Taipei
+   101, Chiang Kai-shek Memorial Hall, Longshan Temple, waterways, and nearby
+   mountain forms in the same visual family as the approved Tokyo scene.
+3. The hero includes restrained mascot motion that does not move primary
+   controls and respects Reduce Motion.
 4. If location is unavailable, Home uses the newest confirmed Map Stamp as its
    regional fallback.
-5. If neither signal exists, Home renders a neutral Atlas fallback with no
-   fabricated city.
-6. The parity fixture keeps the approved static Tokyo reference image.
+5. If SAV-E does not yet have a city scene for the resolved locality, Home
+   renders the regional-map fallback with no fabricated landmark.
+6. The parity fixture and a resolved Tokyo locality keep the approved Tokyo
+   illustration, including Tokyo Tower and the existing landmark composition.
 7. Existing Home actions and the fixed root tab remain reachable.
 8. Generic iOS Simulator build exits 0; one focused headless UI check verifies
    the production regional hero and its fallback.
@@ -38,12 +40,14 @@ schema, parser, account, payment, or trip-planning change.
 ## Scope
 
 - `SaveHomeView`
-- Atlas Home presentation and hero renderer
+- Atlas Home city-scene selection and hero renderer
+- founder-owned Taipei city-atlas raster asset at 1x, 2x, and 3x
 - existing `LocationService` consumption
 - focused Home UI coverage
 
 No new dependency, external asset license, backend endpoint, or persistent
-location field.
+location field. The Taipei illustration is generated specifically for SAV-E
+from the founder-approved local Tokyo scene as a style/composition reference.
 
 ## Security and privacy
 
@@ -72,8 +76,9 @@ location field.
 - Existing test: focused `SAVEUITests/SAVEScreenshotRailTests`
 - DerivedData: `~/Library/Developer/Xcode/DerivedData/SAVE-Codex`
 - XcodeBuildMCP: verify defaults before build/test
-- Touched surface: SwiftUI Home hero, in-memory location presentation, UI test
-- Skill route: `swift-xcode-workflow` + `swiftui-ui-patterns`
+- Touched surface: SwiftUI Home hero, city-scene asset selection, in-memory
+  location presentation, UI test
+- Skill route: `swift-xcode-workflow` + `swiftui-ui-patterns` + `imagegen`
 - Verification: generic build, focused production regional-hero UI test, and
   Atlas parity fixture UI test
 - Skipped verification: full suite; CI is the canonical full checker

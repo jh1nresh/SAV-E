@@ -8,7 +8,14 @@ struct AtlasHomeHeroPresentation: Equatable {
         case neutral
     }
 
+    enum Scene: Equatable {
+        case tokyo
+        case taipei
+        case regionalMap
+    }
+
     let source: Source
+    let scene: Scene
     let title: String
     let subtitle: String
     let countryCode: String?
@@ -17,6 +24,7 @@ struct AtlasHomeHeroPresentation: Equatable {
 
     static let referenceTokyo = AtlasHomeHeroPresentation(
         source: .referenceTokyo,
+        scene: .tokyo,
         title: "Tokyo",
         subtitle: "Illustrated city atlas",
         countryCode: "JP",
@@ -26,6 +34,7 @@ struct AtlasHomeHeroPresentation: Equatable {
 
     static let neutral = AtlasHomeHeroPresentation(
         source: .neutral,
+        scene: .regionalMap,
         title: "Your place atlas",
         subtitle: "Save a place or enable location to begin",
         countryCode: nil,
@@ -42,6 +51,11 @@ struct AtlasHomeHeroPresentation: Equatable {
     ) -> AtlasHomeHeroPresentation {
         AtlasHomeHeroPresentation(
             source: .currentRegion,
+            scene: scene(
+                title: title,
+                latitude: latitude,
+                longitude: longitude
+            ),
             title: title,
             subtitle: subtitle,
             countryCode: countryCode,
@@ -59,6 +73,11 @@ struct AtlasHomeHeroPresentation: Equatable {
     ) -> AtlasHomeHeroPresentation {
         AtlasHomeHeroPresentation(
             source: .savedPlace,
+            scene: scene(
+                title: title,
+                latitude: latitude,
+                longitude: longitude
+            ),
             title: title,
             subtitle: subtitle,
             countryCode: countryCode,
@@ -69,6 +88,31 @@ struct AtlasHomeHeroPresentation: Equatable {
 
     private static func coarse(_ value: Double) -> Double {
         (value * 20).rounded() / 20
+    }
+
+    private static func scene(
+        title: String,
+        latitude: Double,
+        longitude: Double
+    ) -> Scene {
+        let normalizedTitle = title.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: .current
+        )
+
+        if normalizedTitle.contains("taipei")
+            || normalizedTitle.contains("台北")
+            || (24.80...25.30).contains(latitude) && (121.30...121.80).contains(longitude) {
+            return .taipei
+        }
+
+        if normalizedTitle.contains("tokyo")
+            || normalizedTitle.contains("東京")
+            || (35.45...35.90).contains(latitude) && (139.45...140.05).contains(longitude) {
+            return .tokyo
+        }
+
+        return .regionalMap
     }
 }
 
