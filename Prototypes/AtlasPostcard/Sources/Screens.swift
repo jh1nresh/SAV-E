@@ -1,3 +1,4 @@
+import MapKit
 import SwiftUI
 
 struct HomeAtlasScreen: View {
@@ -27,13 +28,19 @@ struct HomeAtlasScreen: View {
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
 
-            Image("HomeAtlasScene")
-                .resizable()
-                .scaledToFill()
-                .clipped()
-                .placed(x: 0, y: 99, width: 402, height: 274)
-                .accessibilityLabel("Illustrated Tokyo atlas")
-                .accessibilityIdentifier("prototype.home.atlas")
+            Group {
+                if presentation.homeHero.source == .referenceTokyo {
+                    Image("HomeAtlasScene")
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                        .accessibilityLabel("Illustrated Tokyo atlas")
+                        .accessibilityIdentifier("prototype.home.atlas")
+                } else {
+                    AtlasRegionalHomeHero(hero: presentation.homeHero)
+                }
+            }
+            .placed(x: 0, y: 99, width: 402, height: 274)
 
             HomeReviewCard()
                 .placed(x: 5, y: 354, width: 392, height: 182)
@@ -48,6 +55,193 @@ struct HomeAtlasScreen: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.home")
+    }
+}
+
+private struct AtlasRegionalHomeHero: View {
+    let hero: AtlasHomeHeroPresentation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isFloating = false
+
+    var body: some View {
+        ZStack {
+            if let coordinate {
+                Map(
+                    initialPosition: .region(
+                        MKCoordinateRegion(
+                            center: coordinate,
+                            span: MKCoordinateSpan(
+                                latitudeDelta: 0.12,
+                                longitudeDelta: 0.12
+                            )
+                        )
+                    ),
+                    interactionModes: []
+                ) {
+                    Annotation("", coordinate: coordinate) {
+                        regionalMarker
+                    }
+                }
+                .mapStyle(.standard)
+                .saturation(0.76)
+                .contrast(0.96)
+            } else {
+                neutralAtlas
+            }
+
+            AtlasPalette.canvas
+                .opacity(0.08)
+                .allowsHitTesting(false)
+
+            LinearGradient(
+                colors: [
+                    AtlasPalette.canvas.opacity(0.06),
+                    .clear,
+                    AtlasPalette.canvas.opacity(0.90),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            VStack {
+                HStack {
+                    Spacer()
+                    regionalBadge
+                }
+                .padding(.top, 14)
+                .padding(.horizontal, 14)
+
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(hero.title)
+                            .font(AtlasType.strong(25))
+                            .foregroundStyle(AtlasPalette.forest)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                            .accessibilityIdentifier("home.region.title")
+
+                        Text(hero.subtitle)
+                            .font(AtlasType.body(12))
+                            .foregroundStyle(AtlasPalette.muted)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Image(systemName: landmarkSymbol)
+                        .font(.system(size: 23, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .frame(width: 48, height: 48)
+                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        }
+                        .offset(y: reduceMotion ? 0 : (isFloating ? -4 : 2))
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 17)
+            }
+        }
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(hero.title), \(hero.subtitle)")
+        .accessibilityIdentifier("home.regionalHero")
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                isFloating = true
+            }
+        }
+    }
+
+    private var coordinate: CLLocationCoordinate2D? {
+        guard let latitude = hero.latitude, let longitude = hero.longitude else {
+            return nil
+        }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private var regionalMarker: some View {
+        ZStack {
+            Circle()
+                .fill(AtlasPalette.coral.opacity(0.20))
+                .frame(width: isFloating && !reduceMotion ? 58 : 42)
+            Image(systemName: "location.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(AtlasPalette.coral, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(AtlasPalette.paper, lineWidth: 3)
+                }
+        }
+        .animation(
+            reduceMotion
+                ? nil
+                : .easeInOut(duration: 2.8).repeatForever(autoreverses: true),
+            value: isFloating
+        )
+    }
+
+    private var regionalBadge: some View {
+        Label(badgeTitle, systemImage: "location.circle.fill")
+            .font(AtlasType.display(12))
+            .foregroundStyle(AtlasPalette.ink)
+            .padding(.horizontal, 11)
+            .frame(minHeight: 31)
+            .background(AtlasPalette.paper.opacity(0.94), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+            }
+    }
+
+    private var badgeTitle: String {
+        switch hero.source {
+        case .currentRegion:
+            return "Around you"
+        case .savedPlace:
+            return "From your Map Stamps"
+        case .neutral, .referenceTokyo:
+            return "Your atlas"
+        }
+    }
+
+    private var landmarkSymbol: String {
+        switch hero.countryCode?.uppercased() {
+        case "JP", "TW", "KR", "CN", "TH", "SG":
+            return "building.columns.fill"
+        case "US", "CA", "MX":
+            return "building.2.fill"
+        case "FR", "GB", "DE", "IT", "ES", "NL", "CH", "AT":
+            return "tram.fill"
+        case "AU", "NZ":
+            return "water.waves"
+        default:
+            return "mountain.2.fill"
+        }
+    }
+
+    private var neutralAtlas: some View {
+        LinearGradient(
+            colors: [
+                AtlasPalette.sky.opacity(0.72),
+                AtlasPalette.mint.opacity(0.72),
+                AtlasPalette.canvas,
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .overlay {
+            Image(systemName: "globe.americas.fill")
+                .font(.system(size: 132, weight: .ultraLight))
+                .foregroundStyle(AtlasPalette.forest.opacity(0.18))
+        }
     }
 }
 

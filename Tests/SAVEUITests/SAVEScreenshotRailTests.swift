@@ -17,6 +17,37 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-home-region-taipei",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.regionalHero"].waitForExistence(timeout: stepTimeout),
+            "Production Home should render the location-aware regional hero."
+        )
+        XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Taiwan"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["prototype.home.atlas"].exists,
+            "Production Home must not keep the static Tokyo reference hero."
+        )
+        XCTAssertTrue(app.buttons["home.capture"].isHittable)
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
+
+        attach(app, name: "atlas-home-regional-taipei")
+    }
+
+    @MainActor
     func testCaptureAtlasProductionParity() throws {
         let app = XCUIApplication()
         app.launchArguments += [

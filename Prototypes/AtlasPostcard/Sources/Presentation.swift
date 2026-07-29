@@ -1,5 +1,77 @@
 import SwiftUI
 
+struct AtlasHomeHeroPresentation: Equatable {
+    enum Source: Equatable {
+        case referenceTokyo
+        case currentRegion
+        case savedPlace
+        case neutral
+    }
+
+    let source: Source
+    let title: String
+    let subtitle: String
+    let countryCode: String?
+    let latitude: Double?
+    let longitude: Double?
+
+    static let referenceTokyo = AtlasHomeHeroPresentation(
+        source: .referenceTokyo,
+        title: "Tokyo",
+        subtitle: "Illustrated city atlas",
+        countryCode: "JP",
+        latitude: nil,
+        longitude: nil
+    )
+
+    static let neutral = AtlasHomeHeroPresentation(
+        source: .neutral,
+        title: "Your place atlas",
+        subtitle: "Save a place or enable location to begin",
+        countryCode: nil,
+        latitude: nil,
+        longitude: nil
+    )
+
+    static func currentRegion(
+        title: String,
+        subtitle: String,
+        countryCode: String?,
+        latitude: Double,
+        longitude: Double
+    ) -> AtlasHomeHeroPresentation {
+        AtlasHomeHeroPresentation(
+            source: .currentRegion,
+            title: title,
+            subtitle: subtitle,
+            countryCode: countryCode,
+            latitude: coarse(latitude),
+            longitude: coarse(longitude)
+        )
+    }
+
+    static func savedPlace(
+        title: String,
+        subtitle: String,
+        countryCode: String? = nil,
+        latitude: Double,
+        longitude: Double
+    ) -> AtlasHomeHeroPresentation {
+        AtlasHomeHeroPresentation(
+            source: .savedPlace,
+            title: title,
+            subtitle: subtitle,
+            countryCode: countryCode,
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+
+    private static func coarse(_ value: Double) -> Double {
+        (value * 20).rounded() / 20
+    }
+}
+
 struct AtlasPlacePresentation: Identifiable, Equatable {
     let id: String
     let name: String
@@ -67,6 +139,7 @@ struct AtlasTripSummaryPresentation: Identifiable, Equatable {
 }
 
 struct AtlasPresentation: @unchecked Sendable {
+    var homeHero: AtlasHomeHeroPresentation
     var reviewCount: Int
     var mapStampCount: Int
     var failedCount: Int
@@ -95,6 +168,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var onCreateTrip: () -> Void
 
     static let reference = AtlasPresentation(
+        homeHero: .referenceTokyo,
         reviewCount: 3,
         mapStampCount: 18,
         failedCount: 2,
