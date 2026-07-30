@@ -268,12 +268,25 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         tripTabButton("Inbox", app: app).tap()
         XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.inbox.contextRibbon"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        assertTripInboxContent(in: app)
         sleep(1)
         attach(app, name: "screenshot-04-trip-inbox")
 
         tripTabButton("Share", app: app).tap()
         XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["trip.share.kml"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.share.postcard"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.share.privacyReceipt"]
+                .waitForExistence(timeout: stepTimeout)
+        )
         sleep(1)
         attach(app, name: "screenshot-05-trip-share")
     }
@@ -563,6 +576,50 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertFalse(app.buttons["map.place.openDetails"].exists)
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
         attach(app, name: "atlas-root-map-live")
+    }
+
+    @MainActor
+    func testTripInboxAndShareUsePostcardPocket() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+
+        let firstTrip = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+        ).firstMatch
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
+        firstTrip.tap()
+
+        tripTabButton("Inbox", app: app).tap()
+        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.inbox.contextRibbon"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        assertTripInboxContent(in: app)
+        attach(app, name: "atlas-trip-inbox-live")
+
+        tripTabButton("Share", app: app).tap()
+        XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["trip.share.kml"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.share.postcard"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.share.privacyReceipt"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        attach(app, name: "atlas-trip-share-live")
     }
 
     @MainActor
@@ -1224,6 +1281,17 @@ final class SAVEScreenshotRailTests: XCTestCase {
             }
         }
         return false
+    }
+
+    @MainActor
+    private func assertTripInboxContent(in app: XCUIApplication) {
+        let ticketStack = app.descendants(matching: .any)["trip.inbox.ticketStack"]
+        let emptyPostcard = app.descendants(matching: .any)["trip.inbox.empty"]
+        XCTAssertTrue(
+            ticketStack.waitForExistence(timeout: 2) ||
+                emptyPostcard.waitForExistence(timeout: stepTimeout),
+            "Trip Inbox should show review tickets or its Postcard Pocket empty state."
+        )
     }
 
     @MainActor

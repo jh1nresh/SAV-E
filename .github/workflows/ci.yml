@@ -16,7 +16,7 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,7 +70,7 @@ jobs:
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
 
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -86,6 +86,7 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripInboxAndShareUsePostcardPocket \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
