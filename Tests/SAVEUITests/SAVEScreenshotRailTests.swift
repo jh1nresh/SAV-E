@@ -353,8 +353,12 @@ final class SAVEScreenshotRailTests: XCTestCase {
             "A Saves Review Candidate should render its canonical review detail."
         )
         XCTAssertTrue(
-            app.descendants(matching: .any)["place.detail.postcardChrome"].waitForExistence(timeout: stepTimeout),
-            "Every place detail should use the canonical Postcard Drawer chrome."
+            app.descendants(matching: .any)["drawer.review.postcardBody"].waitForExistence(timeout: stepTimeout),
+            "Review detail should use the unresolved Postcard Drawer body."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.postcard.ticketHeader"].waitForExistence(timeout: stepTimeout),
+            "Every place detail should use the shared Postcard ticket header."
         )
         attach(app, name: "atlas-postcard-review-drawer")
     }
@@ -665,7 +669,12 @@ final class SAVEScreenshotRailTests: XCTestCase {
             1,
             "Every saved-place entry should use one canonical detail renderer."
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout),
+            "A saved Map Stamp should use the lifted saved-postcard body."
+        )
         XCTAssertTrue(app.buttons["drawer.saved.addToTrip"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-postcard-saved-drawer")
 
         let closeDetail = app.buttons["drawer.place.close"]
         XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
@@ -721,6 +730,61 @@ final class SAVEScreenshotRailTests: XCTestCase {
         closeMapDetail.tap()
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+    }
+
+    @MainActor
+    func testUnsavedAndSocialDetailsUsePostcardDrawerFamily() throws {
+        let fixtures = [
+            (
+                launchArgument: "--uitest-postcard-unsaved",
+                bodyIdentifier: "drawer.unsaved.postcardBody",
+                primaryActionIdentifier: "drawer.unsaved.primaryAction",
+                attachmentName: "atlas-postcard-unsaved-drawer"
+            ),
+            (
+                launchArgument: "--uitest-postcard-social",
+                bodyIdentifier: "drawer.social.postcardBody",
+                primaryActionIdentifier: "drawer.social.primaryAction",
+                attachmentName: "atlas-postcard-social-drawer"
+            ),
+        ]
+
+        for fixture in fixtures {
+            let app = XCUIApplication()
+            app.launchArguments += [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                fixture.launchArgument,
+                "-save.appLanguage", "en",
+            ]
+            app.launch()
+
+            try signInViaReviewDemo(app: app)
+
+            XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: 45))
+            XCTAssertEqual(
+                app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+                1,
+                "Discovery detail should stay inside the one global drawer."
+            )
+            XCTAssertTrue(
+                app.descendants(matching: .any)["drawer.postcard.ticketHeader"]
+                    .waitForExistence(timeout: stepTimeout),
+                "Discovery detail should use the shared scalloped Postcard header."
+            )
+            XCTAssertTrue(
+                app.descendants(matching: .any)[fixture.bodyIdentifier]
+                    .waitForExistence(timeout: stepTimeout),
+                "Discovery detail should use its Postcard body."
+            )
+            XCTAssertTrue(
+                app.buttons[fixture.primaryActionIdentifier].waitForExistence(timeout: stepTimeout),
+                "Discovery detail should keep one coral primary action."
+            )
+            attach(app, name: fixture.attachmentName)
+            app.terminate()
+        }
     }
 
     @MainActor

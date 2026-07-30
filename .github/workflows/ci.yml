@@ -81,6 +81,8 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDrawerFamily \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
