@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
@@ -81,52 +82,109 @@ struct NewTripPackView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField(localized("Trip name", "行程名稱"), text: $name)
-                        .accessibilityIdentifier("trip.create.name")
-                    TextField(localized("City or area", "城市或區域"), text: $city)
-                        .accessibilityIdentifier("trip.create.city")
-                }
-                .saveNotebookListRow()
-                Section {
-                    Toggle(localized("Set dates", "設定日期"), isOn: $hasDates)
-                    if hasDates {
-                        DatePicker(localized("Starts", "開始"), selection: $startDate, displayedComponents: .date)
-                        DatePicker(
-                            localized("Ends", "結束"),
-                            selection: $endDate,
-                            in: startDate...,
-                            displayedComponents: .date
+            ZStack {
+                SaveDottedBackground().ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        TripAtlasSheetHeader(
+                            eyebrow: localized("Little Atlas", "小小地圖集"),
+                            title: localized("Start a new Trip", "開始新行程"),
+                            subtitle: localized(
+                                "Give this route a name. You can keep shaping it as new Map Stamps arrive.",
+                                "先替路線命名，之後收到新的地圖章時可以繼續編排行程。"
+                            ),
+                            systemImage: "map.fill"
                         )
+
+                        TripAtlasFieldCard(title: localized("Trip identity", "行程資訊")) {
+                            TripAtlasTextField(
+                                title: localized("Trip name", "行程名稱"),
+                                placeholder: localized("Tokyo weekend", "東京週末"),
+                                text: $name
+                            )
+                            .accessibilityIdentifier("trip.create.name")
+
+                            TripAtlasDivider()
+
+                            TripAtlasTextField(
+                                title: localized("City or area", "城市或區域"),
+                                placeholder: localized("Tokyo", "東京"),
+                                text: $city
+                            )
+                            .accessibilityIdentifier("trip.create.city")
+                        }
+
+                        TripAtlasFieldCard(title: localized("Travel dates", "旅行日期")) {
+                            Toggle(localized("Set dates", "設定日期"), isOn: $hasDates)
+                                .font(SaveAtlasType.display(16))
+                                .tint(SaveAtlasPalette.forest)
+
+                            if hasDates {
+                                TripAtlasDivider()
+                                DatePicker(
+                                    localized("Starts", "開始"),
+                                    selection: $startDate,
+                                    displayedComponents: .date
+                                )
+                                .font(SaveAtlasType.body(15))
+
+                                TripAtlasDivider()
+                                DatePicker(
+                                    localized("Ends", "結束"),
+                                    selection: $endDate,
+                                    in: startDate...,
+                                    displayedComponents: .date
+                                )
+                                .font(SaveAtlasType.body(15))
+                            }
+                        }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 112)
                 }
-                .saveNotebookListRow()
             }
-            .saveNotebookListCanvas()
-            .navigationTitle(localized("New Trip Pack", "新增 Trip Pack"))
+            .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localized("Cancel", "取消")) { dismiss() }
+                        .foregroundStyle(SaveAtlasPalette.forest)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(localized("Create", "建立")) {
-                        isCreating = true
-                        Task {
-                            await onCreate(
-                                name.trimmingCharacters(in: .whitespacesAndNewlines),
-                                city.trimmingCharacters(in: .whitespacesAndNewlines),
-                                hasDates ? startDate : nil,
-                                hasDates ? endDate : nil
-                            )
-                            isCreating = false
-                            dismiss()
-                        }
+            }
+            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    isCreating = true
+                    Task {
+                        await onCreate(
+                            name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            city.trimmingCharacters(in: .whitespacesAndNewlines),
+                            hasDates ? startDate : nil,
+                            hasDates ? endDate : nil
+                        )
+                        isCreating = false
+                        dismiss()
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
-                    .accessibilityIdentifier("trip.create.submit")
+                } label: {
+                    HStack(spacing: 8) {
+                        if isCreating {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "arrow.triangle.branch")
+                        }
+                        Text(localized("Create Trip", "建立行程"))
+                    }
                 }
+                .buttonStyle(TripAtlasPrimaryButtonStyle())
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
+                .opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.48 : 1)
+                .accessibilityIdentifier("trip.create.submit")
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(SaveAtlasPalette.canvas.opacity(0.97))
             }
         }
         .accessibilityElement(children: .contain)
@@ -725,6 +783,168 @@ private struct TripStopThumbnail: View {
     }
 }
 
+private struct TripAtlasSheetHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(spacing: 4) {
+                Circle()
+                    .fill(SaveAtlasPalette.coral)
+                    .frame(width: 11, height: 11)
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                SaveAtlasPalette.coral,
+                                SaveAtlasPalette.lavender,
+                                SaveAtlasPalette.mint,
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 3, height: 62)
+                Circle()
+                    .fill(SaveAtlasPalette.mint)
+                    .frame(width: 11, height: 11)
+            }
+            .padding(.top, 7)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(eyebrow.uppercased())
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.8)
+                    .foregroundStyle(SaveAtlasPalette.coral)
+
+                Text(title)
+                    .font(SaveAtlasType.strong(31, relativeTo: .title))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(subtitle)
+                    .font(SaveAtlasType.body(15))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Image(systemName: systemImage)
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 46, height: 46)
+                .background(SaveAtlasPalette.mint.opacity(0.78))
+                .clipShape(Circle())
+                .overlay {
+                    Circle()
+                        .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
+                }
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct TripAtlasFieldCard<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title.uppercased())
+                .font(SaveAtlasType.strong(11))
+                .tracking(0.75)
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+            content
+        }
+        .padding(16)
+        .padding(.leading, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
+        }
+        .overlay(alignment: .leading) {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(SaveAtlasPalette.coral)
+                    .frame(width: 7, height: 7)
+                Rectangle()
+                    .fill(SaveAtlasPalette.line.opacity(0.42))
+                    .frame(width: 2)
+                Circle()
+                    .fill(SaveAtlasPalette.mint)
+                    .frame(width: 7, height: 7)
+            }
+            .padding(.vertical, 14)
+            .padding(.leading, 8)
+            .accessibilityHidden(true)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.045), radius: 5, y: 2)
+    }
+}
+
+private struct TripAtlasTextField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    var keyboardType: UIKeyboardType = .default
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.6)
+                .foregroundStyle(SaveAtlasPalette.muted)
+            TextField(placeholder, text: $text)
+                .font(SaveAtlasType.body(17))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .keyboardType(keyboardType)
+        }
+    }
+}
+
+private struct TripAtlasDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(SaveAtlasPalette.line.opacity(0.24))
+            .frame(height: 1)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct TripAtlasPrimaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(SaveAtlasType.strong(18))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 54)
+            .background(
+                SaveAtlasPalette.coral.opacity(configuration.isPressed ? 0.78 : 1),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(SaveAtlasPalette.ink.opacity(0.16), lineWidth: 1)
+            }
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(SaveTheme.Motion.standardSpring, value: configuration.isPressed)
+    }
+}
+
 private struct TripStopEditorView: View {
     let stop: TripStop
     let onSave: (Int, String?, Int?, String?) async -> Bool
@@ -754,59 +974,134 @@ private struct TripStopEditorView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section(localized("Schedule", "日程")) {
-                    Stepper(value: $day, in: 1...365) {
-                        LabeledContent(localized("Day", "天數"), value: "\(day)")
+            ZStack {
+                SaveDottedBackground().ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        TripAtlasSheetHeader(
+                            eyebrow: localized("Route stop", "路線停靠點"),
+                            title: stop.placeName,
+                            subtitle: localized(
+                                "Adjust where this Map Stamp sits in your Trip.",
+                                "調整這枚地圖章在行程中的位置。"
+                            ),
+                            systemImage: "mappin.and.ellipse"
+                        )
+
+                        TripAtlasFieldCard(title: localized("Schedule", "日程")) {
+                            Stepper(value: $day, in: 1...365) {
+                                LabeledContent(localized("Day", "天數"), value: "\(day)")
+                                    .font(SaveAtlasType.display(16))
+                            }
+                            .accessibilityIdentifier("trip.stop.edit.dayPicker")
+
+                            TripAtlasDivider()
+
+                            TripAtlasTextField(
+                                title: localized("Start time", "開始時間"),
+                                placeholder: "09:30",
+                                text: $startTime
+                            )
+                            .accessibilityIdentifier("trip.stop.edit.startTime")
+
+                            TripAtlasDivider()
+
+                            TripAtlasTextField(
+                                title: localized("Duration", "停留時間"),
+                                placeholder: localized("Minutes", "分鐘"),
+                                text: $duration,
+                                keyboardType: .numberPad
+                            )
+                            .accessibilityIdentifier("trip.stop.edit.duration")
+
+                            if !durationIsValid {
+                                Text(localized("Enter 1–1,440 minutes.", "請輸入 1 到 1,440 分鐘。"))
+                                    .font(SaveAtlasType.body(12))
+                                    .foregroundStyle(Color.saveError)
+                            }
+                        }
+
+                        TripAtlasFieldCard(title: localized("Private note", "私人筆記")) {
+                            TextField(
+                                localized("Add a note", "加入筆記"),
+                                text: $note,
+                                axis: .vertical
+                            )
+                            .font(SaveAtlasType.body(16))
+                            .lineLimit(3...6)
+                            .accessibilityIdentifier("trip.stop.edit.note")
+                        }
+
+                        Button(role: .destructive) {
+                            showsRemoveConfirmation = true
+                        } label: {
+                            Label(
+                                localized("Remove from Trip Pack", "從 Trip Pack 移除"),
+                                systemImage: "trash"
+                            )
+                            .font(SaveAtlasType.display(15))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.saveError)
+                        .background(SaveAtlasPalette.paper.opacity(0.92))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.saveError.opacity(0.34), lineWidth: 1)
+                        }
+                        .disabled(isSubmitting)
+                        .accessibilityIdentifier("trip.stop.edit.remove")
                     }
-                    .accessibilityIdentifier("trip.stop.edit.dayPicker")
-
-                    TextField(localized("Start time (for example, 09:30)", "開始時間（例如 09:30）"), text: $startTime)
-                        .accessibilityIdentifier("trip.stop.edit.startTime")
-
-                    TextField(localized("Duration in minutes", "停留分鐘數"), text: $duration)
-                        .keyboardType(.numberPad)
-                        .accessibilityIdentifier("trip.stop.edit.duration")
-
-                    if !durationIsValid {
-                        Text(localized("Enter 1–1,440 minutes.", "請輸入 1 到 1,440 分鐘。"))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 112)
                 }
-                .saveNotebookListRow()
-
-                Section(localized("Private note", "私人筆記")) {
-                    TextField(localized("Add a note", "加入筆記"), text: $note, axis: .vertical)
-                        .lineLimit(3...6)
-                        .accessibilityIdentifier("trip.stop.edit.note")
-                }
-                .saveNotebookListRow()
-
-                Section {
-                    Button(localized("Remove from Trip Pack", "從 Trip Pack 移除"), role: .destructive) {
-                        showsRemoveConfirmation = true
-                    }
-                    .disabled(isSubmitting)
-                    .accessibilityIdentifier("trip.stop.edit.remove")
-                }
-                .saveNotebookListRow()
             }
-            .saveNotebookListCanvas()
-            .navigationTitle(stop.placeName)
+            .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localized("Cancel", "取消")) { dismiss() }
                         .disabled(isSubmitting)
+                        .foregroundStyle(SaveAtlasPalette.forest)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(localized("Save", "保存")) {
-                        save()
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button(localized("Done", "完成")) {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil,
+                            from: nil,
+                            for: nil
+                        )
                     }
-                    .disabled(!durationIsValid || isSubmitting)
-                    .accessibilityIdentifier("trip.stop.edit.save")
+                    .accessibilityIdentifier("trip.stop.edit.keyboardDone")
                 }
+            }
+            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
+            .safeAreaInset(edge: .bottom) {
+                Button(action: save) {
+                    HStack(spacing: 8) {
+                        if isSubmitting {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "checkmark.seal.fill")
+                        }
+                        Text(localized("Save stop", "保存停靠點"))
+                    }
+                }
+                .buttonStyle(TripAtlasPrimaryButtonStyle())
+                .disabled(!durationIsValid || isSubmitting)
+                .opacity(durationIsValid ? 1 : 0.48)
+                .accessibilityIdentifier("trip.stop.edit.save")
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(SaveAtlasPalette.canvas.opacity(0.97))
             }
         }
         .interactiveDismissDisabled(isSubmitting)
@@ -890,43 +1185,78 @@ private struct SavedPlacePicker: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Stepper(value: $selectedDay, in: 1...365) {
-                        LabeledContent(localized("Destination day", "加入天數"), value: "\(selectedDay)")
-                    }
-                    .accessibilityIdentifier("trip.add.dayPicker")
-                }
-                .saveNotebookListRow()
+            ZStack {
+                SaveDottedBackground().ignoresSafeArea()
 
-                Section(localized("Saved places", "收藏地點")) {
-                    ForEach(filteredPlaces) { place in
-                        Button {
-                            onSelect(place, selectedDay)
-                            dismiss()
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(place.name).font(.body.weight(.semibold))
-                                Text(place.address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        TripAtlasSheetHeader(
+                            eyebrow: localized("Map Stamp library", "地圖章收藏庫"),
+                            title: localized("Add a saved place", "加入收藏地點"),
+                            subtitle: localized(
+                                "Choose one confirmed Map Stamp for this route.",
+                                "從已確認的地圖章中選一個加入路線。"
+                            ),
+                            systemImage: "star.fill"
+                        )
+
+                        TripAtlasFieldCard(title: localized("Destination day", "加入天數")) {
+                            Stepper(value: $selectedDay, in: 1...365) {
+                                LabeledContent(localized("Day", "天數"), value: "\(selectedDay)")
+                                    .font(SaveAtlasType.display(16))
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("trip.add.dayPicker")
                         }
-                        .buttonStyle(.plain)
+
+                        Text(localized("Saved Map Stamps", "已收藏地圖章").uppercased())
+                            .font(SaveAtlasType.strong(11))
+                            .tracking(0.7)
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .padding(.top, 4)
+
+                        ForEach(filteredPlaces) { place in
+                            Button {
+                                onSelect(place, selectedDay)
+                                dismiss()
+                            } label: {
+                                SavePostcardTicket(
+                                    eyebrow: localized("Confirmed Map Stamp", "已確認地圖章"),
+                                    title: place.name,
+                                    detail: place.address,
+                                    actionTitle: localized("Add", "加入"),
+                                    style: .confirmed
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("trip.add.place.\(place.id.uuidString)")
+                        }
+
+                        if filteredPlaces.isEmpty {
+                            ContentUnavailableView.search(text: query)
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                                .padding(.vertical, 24)
+                        }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, 32)
                 }
-                .saveNotebookListRow()
             }
-            .listStyle(.insetGrouped)
-            .saveNotebookListCanvas()
-            .navigationTitle(localized("Add saved place", "加入收藏地點"))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query)
+            .searchable(
+                text: $query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: localized("Search Map Stamps", "搜尋地圖章")
+            )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localized("Cancel", "取消")) { dismiss() }
+                        .foregroundStyle(SaveAtlasPalette.forest)
                 }
             }
+            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
         }
+        .accessibilityIdentifier("trip.add.sheet")
     }
 
     private var filteredPlaces: [Place] {
