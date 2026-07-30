@@ -9,6 +9,7 @@ struct SaveHomeView: View {
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var resolvedHomeHero: AtlasHomeHeroPresentation?
@@ -33,7 +34,8 @@ struct SaveHomeView: View {
             onOpenTrip: onOpenTrip,
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
-            onOpenReview: { _ in onOpenSaves() }
+            onOpenReview: { _ in onOpenSaves() },
+            onOpenPassport: onOpenPassport
         )
         if !SaveAtlasRuntime.usesParityFixture {
             presentation.homeHero = resolvedHomeHero ?? savedPlaceHero ?? .neutral
@@ -256,7 +258,7 @@ struct SaveHomeView: View {
 
     private var homeContent: some View {
         VStack(spacing: 0) {
-            SaveAtlasBrandHeader {
+            SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
                 Button {
                     onOpenDrawer(.addLink, nil)
                 } label: {
@@ -535,6 +537,7 @@ struct SaveLibraryView: View {
     let onOpenReview: () -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedMode: SaveLibraryMode?
@@ -566,13 +569,14 @@ struct SaveLibraryView: View {
             },
             onSelectMapStamps: {
                 selectedMode = .mapStamps
-            }
+            },
+            onOpenPassport: onOpenPassport
         )
     }
 
     private var savesContent: some View {
         VStack(spacing: 0) {
-            SaveAtlasBrandHeader {
+            SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
                 Button(action: onOpenCapture) {
                     Image(systemName: "link")
                         .font(.system(size: 16, weight: .semibold))
@@ -885,6 +889,7 @@ struct SaveMapRootView: View {
     let shouldFocusOnUserLocation: Bool
     let onOpenSearch: () -> Void
     let onOpenSavedPlace: (Place) -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
@@ -919,7 +924,8 @@ struct SaveMapRootView: View {
         SaveAtlasPresentationFactory.map(
             mapViewModel: mapViewModel,
             onOpenAssistant: onOpenSearch,
-            onOpenPlace: onOpenSavedPlace
+            onOpenPlace: onOpenSavedPlace,
+            onOpenPassport: onOpenPassport
         )
     }
 }
@@ -946,16 +952,36 @@ private enum SaveLibraryMode {
 }
 
 private struct SaveAtlasBrandHeader<Trailing: View>: View {
+    let onOpenPassport: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
         HStack(spacing: 8) {
-            MemoMascotMark(size: 32, framed: false)
+            Button(action: onOpenPassport) {
+                HStack(spacing: 8) {
+                    MemoMascotMark(size: 32, framed: false)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "book.closed.fill")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundStyle(SaveAtlasPalette.forest)
+                                .frame(width: 14, height: 14)
+                                .background(SaveAtlasPalette.mint, in: Circle())
+                                .overlay {
+                                    Circle().stroke(SaveAtlasPalette.paper, lineWidth: 1.5)
+                                }
+                                .offset(x: 3, y: 2)
+                        }
 
-            Text("SAV-E")
-                .font(SaveAtlasType.strong(22, relativeTo: .title3))
-                .tracking(1.1)
-                .foregroundStyle(SaveAtlasPalette.forest)
+                    Text("SAV-E")
+                        .font(SaveAtlasType.strong(22, relativeTo: .title3))
+                        .tracking(1.1)
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open SAV-E Passport")
+            .accessibilityIdentifier("root.passport")
 
             Spacer(minLength: 8)
             trailing()

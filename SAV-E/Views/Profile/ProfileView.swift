@@ -49,11 +49,7 @@ struct ProfileView: View {
                         profile: viewModel.profile
                     )
                     .padding(.horizontal)
-
-                    SavePetCompanionCard(profile: viewModel.profile)
-                        .padding(.horizontal)
-
-                    StatsView(stats: passportStats)
+                    .accessibilityIdentifier("profile.cover")
 
                     if let errorMessage = viewModel.errorMessage {
                         HStack(spacing: SaveTheme.Spacing.sm) {
@@ -71,11 +67,7 @@ struct ProfileView: View {
                     }
 
                     PassportStampSection(profile: viewModel.profile, stats: passportStats)
-                    PassportCountingRulesPanel(stats: passportStats)
-                    PassportVisibilityPanel(
-                        places: passportPlaces,
-                        onUpdate: updatePlaceVisibility
-                    )
+                        .accessibilityIdentifier("profile.stampLedger")
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                         Text(languageSettings.text(.passportControls))
@@ -87,12 +79,12 @@ struct ProfileView: View {
                             icon: "globe.asia.australia",
                             title: languageSettings.text(.language),
                             detail: languageSettings.language.displayName,
-                            color: .saveCocoa
+                            color: .saveCocoa,
+                            accessibilityIdentifier: "profile.language"
                         ) {
                             SaveHaptics.tap()
                             showLanguageSettings = true
                         }
-                        .accessibilityIdentifier("profile.language")
 
                         NavigationLink {
                             SaveMemoryDebugView(
@@ -122,22 +114,50 @@ struct ProfileView: View {
                                 english: "Deliver historical place exports to SAV-E",
                                 traditionalChinese: "把歷史地點匯出檔送進 SAV-E"
                             ),
-                            color: SaveAtlasPalette.kraft
+                            color: SaveAtlasPalette.kraft,
+                            accessibilityIdentifier: "profile.importGoogleTakeout"
                         ) {
                             SaveHaptics.tap()
                             showGoogleTakeoutImport = true
                         }
-                        .accessibilityIdentifier("profile.importGoogleTakeout")
 
-                        SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .saveError) {
+                        SettingsRow(
+                            icon: "arrow.right.square",
+                            title: languageSettings.text(.signOut),
+                            color: .saveError,
+                            accessibilityIdentifier: "profile.signOut"
+                        ) {
                             SaveHaptics.tap()
                             Task { await viewModel.signOut() }
                         }
-                        .accessibilityIdentifier("profile.signOut")
                     }
-                    .padding(SaveTheme.Spacing.md)
-                    .saveNotebookSurface(cornerRadius: 18)
+                    .padding(.horizontal, SaveTheme.Spacing.md)
+                    .padding(.top, SaveTheme.Spacing.lg)
+                    .padding(.bottom, SaveTheme.Spacing.xl)
+                    .background {
+                        SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                            .fill(SaveAtlasPalette.kraft.opacity(0.24))
+                    }
+                    .overlay {
+                        SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                            .stroke(
+                                SaveAtlasPalette.kraft.opacity(0.72),
+                                style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                            )
+                    }
                     .padding(.horizontal)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("profile.controlPocket")
+
+                    SavePetCompanionCard(profile: viewModel.profile)
+                        .padding(.horizontal)
+
+                    PassportCountingRulesPanel(stats: passportStats)
+
+                    PassportVisibilityPanel(
+                        places: passportPlaces,
+                        onUpdate: updatePlaceVisibility
+                    )
                 }
                 .padding(.bottom, SaveTheme.Spacing.xl)
                 .padding(.top, 2)
@@ -374,13 +394,15 @@ private struct PassportTopBar: View {
     var body: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
             PassportIconButton(systemName: "xmark", action: onClose)
+                .accessibilityIdentifier("profile.close")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(languageSettings.text(.profileTitle))
-                    .font(SaveAtlasType.strong(24, relativeTo: .title2))
+                Text("SAV-E · \(languageSettings.text(.profileTitle).uppercased())")
+                    .font(SaveAtlasType.strong(12))
+                    .tracking(1.2)
                     .foregroundStyle(SaveAtlasPalette.forest)
                 Text(languageSettings.memoWaitingText(waitingClues))
-                    .font(SaveAtlasType.body(13))
+                    .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
 
@@ -388,32 +410,22 @@ private struct PassportTopBar: View {
 
             if allowsEditing {
                 Button(action: onEdit) {
-                    HStack(spacing: SaveTheme.Spacing.xs) {
-                        Image(systemName: "pencil")
-                            .font(.caption.weight(.bold))
-                        Text(languageSettings.text(.edit))
-                            .font(SaveAtlasType.strong(13))
-                    }
+                    Image(systemName: "pencil")
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.ink)
-                        .padding(.horizontal, SaveTheme.Spacing.md)
-                        .frame(height: 38)
-                        .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .frame(width: 38, height: 38)
+                        .background(SaveAtlasPalette.honey, in: SavePostcardSealShape())
                         .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
+                            SavePostcardSealShape()
+                                .stroke(SaveAtlasPalette.kraft.opacity(0.68), lineWidth: 1)
                         }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.text(.edit))
                 .accessibilityIdentifier("profile.edit")
             }
         }
-        .padding(SaveTheme.Spacing.sm)
-        .background(SaveAtlasPalette.paper.opacity(0.96))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
-        }
+        .padding(.vertical, SaveTheme.Spacing.xs)
     }
 }
 
@@ -423,15 +435,14 @@ private struct PassportIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            SaveIconTile(
-                systemName: systemName,
-                size: 36,
-                iconSize: 15,
-                fill: Color.saveCream.opacity(0.16),
-                foreground: .saveCocoa,
-                strokeOpacity: 0.48,
-                cornerRadius: 10
-            )
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .frame(width: 38, height: 38)
+                .background(SaveAtlasPalette.paper.opacity(0.90), in: Circle())
+                .overlay {
+                    Circle().stroke(SaveAtlasPalette.line.opacity(0.40), lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
@@ -443,18 +454,33 @@ private struct PassportHero: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            PassportNotebookSpine(color: .saveNotebookSpine)
+            PassportNotebookSpine(color: SaveAtlasPalette.kraft)
 
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+                HStack {
+                    Text("SAV-E MEMORY PASSPORT")
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(1.15)
+                        .foregroundStyle(SaveAtlasPalette.mint)
+
+                    Spacer()
+
+                    SavePostcardPostmark()
+                        .scaleEffect(0.76)
+                        .frame(width: 52, height: 34)
+                        .colorInvert()
+                        .opacity(0.70)
+                }
+
                 HStack(alignment: .top, spacing: SaveTheme.Spacing.md) {
                     ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 78)
                         .overlay(alignment: .bottomTrailing) {
                             Image(systemName: "book.closed")
                                 // Intentional one-off badge glyph size; no token maps cleanly.
                                 .font(.system(size: 18, weight: .black))
-                                .foregroundColor(.saveInk)
+                                .foregroundStyle(SaveAtlasPalette.forest)
                                 .frame(width: 28, height: 28)
-                                .background(Color.saveNotebookPage)
+                                .background(SaveAtlasPalette.mint)
                                 .clipShape(Circle())
                                 .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
                                 .offset(x: 6, y: 6)
@@ -464,29 +490,50 @@ private struct PassportHero: View {
                         Text(languageSettings.text(.profileTitle))
                             .font(SaveAtlasType.strong(11))
                             .tracking(0.75)
-                            .foregroundStyle(SaveAtlasPalette.coral)
+                            .foregroundStyle(SaveAtlasPalette.honey)
                         Text(profile.displayName)
                             .font(SaveAtlasType.strong(28, relativeTo: .title2))
-                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .foregroundStyle(SaveAtlasPalette.paper)
                             .lineLimit(2)
                         Text(profile.email ?? languageSettings.text(.localMemoHelper))
                             .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .foregroundStyle(SaveAtlasPalette.paper.opacity(0.70))
                             .lineLimit(1)
                     }
 
                     Spacer(minLength: 0)
                 }
 
-                HStack(spacing: SaveTheme.Spacing.sm) {
-                    PassportBadge(text: languageSettings.text(.memoHelper), color: .saveHoney)
-                    PassportBadge(text: visitedBadgeText, color: .saveSignal)
+                HStack(alignment: .bottom, spacing: SaveTheme.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(languageSettings.text(.memberSince).uppercased())
+                            .font(SaveAtlasType.strong(9))
+                            .tracking(0.8)
+                        Text(profile.createdAt.formatted(date: .abbreviated, time: .omitted))
+                            .font(SaveAtlasType.editorial(16))
+                    }
+                    .foregroundStyle(SaveAtlasPalette.paper.opacity(0.88))
+
                     Spacer()
+
+                    Text(visitedBadgeText)
+                        .font(SaveAtlasType.strong(9))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 38)
+                        .background(SaveAtlasPalette.mint, in: SavePostcardSealShape())
                 }
             }
             .padding(SaveTheme.Spacing.lg)
         }
-        .saveNotebookPage(cornerRadius: 22)
+        .background(SaveAtlasPalette.forest)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1.5)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 8, y: 4)
     }
 
     private var visitedBadgeText: String {
@@ -615,35 +662,45 @@ private struct PassportStampSection: View {
     let stats: PassportStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(languageSettings.text(.passportStamps))
-                    .font(SaveTheme.Typography.cardTitle)
-                    .foregroundColor(.saveInk)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.text(.passportStamps).uppercased())
+                        .font(SaveAtlasType.strong(11))
+                        .tracking(1)
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(languageSettings.text(.memoBook))
+                        .font(SaveAtlasType.editorial(18))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                }
+
                 Spacer()
-                Text(languageSettings.text(.memoBook))
-                    .font(SaveTheme.Typography.stamp)
-                    .foregroundColor(.saveCocoa)
-                    .padding(.horizontal, SaveTheme.Spacing.sm)
-                    .padding(.vertical, SaveTheme.Spacing.xs)
-                    .background(Color.saveHoney.opacity(0.18))
-                    .clipShape(Capsule())
+
+                SavePostcardPostmark()
+                    .scaleEffect(0.78)
+                    .frame(width: 58, height: 48)
             }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 8)
 
             PassportStampRow(
                 icon: "rectangle.stack",
+                tint: SaveAtlasPalette.sky,
                 title: languageSettings.text(.memoryCards),
                 value: languageSettings.savedCountText(stats.savedCount),
                 detail: mapStampDetail
             )
             PassportStampRow(
                 icon: "figure.walk",
+                tint: SaveAtlasPalette.mint,
                 title: languageSettings.text(.visited),
                 value: languageSettings.visitedCountText(stats.visitedCount),
                 detail: visitedDetail
             )
             PassportStampRow(
                 icon: "building.2",
+                tint: SaveAtlasPalette.honey,
                 title: languageSettings.text(.cities),
                 value: languageSettings.cityCountText(stats.citiesCount),
                 detail: citiesDetail
@@ -653,14 +710,39 @@ private struct PassportStampSection: View {
             }
             PassportStampRow(
                 icon: "circle.hexagongrid",
+                tint: SaveAtlasPalette.coral.opacity(0.58),
                 title: languageSettings.text(.waitingClues),
                 value: languageSettings.waitingPlaceText(stats.waitingClues),
                 detail: waitingClueDetail
             )
-            PassportStampRow(icon: "calendar", title: languageSettings.text(.memberSince), value: profile.createdAt.formatted(date: .abbreviated, time: .omitted))
+
+            HStack {
+                Text(languageSettings.localized(
+                    english: "Issued to \(profile.displayName)",
+                    traditionalChinese: "發給 \(profile.displayName)"
+                ))
+                    .font(SaveAtlasType.editorial(15))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Spacer()
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(SaveAtlasPalette.forest)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 15)
+            .background(SaveAtlasPalette.mint.opacity(0.22))
         }
-        .padding(SaveTheme.Spacing.lg)
-        .saveNotebookSurface(cornerRadius: 18)
+        .background {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .stroke(
+                    SaveAtlasPalette.sky.opacity(0.82),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
         .padding(.horizontal)
     }
 
@@ -695,39 +777,47 @@ private struct PassportStampSection: View {
 
 private struct PassportStampRow: View {
     let icon: String
+    let tint: Color
     let title: String
     let value: String
     var detail: String? = nil
 
     var body: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            SaveIconTile(
+            SavePostcardPerforatedMedallion(
                 systemName: icon,
-                size: 32,
-                iconSize: 13,
-                fill: Color.saveHoney.opacity(0.16),
-                foreground: .saveCocoa,
-                strokeOpacity: 0.48,
-                cornerRadius: 10
+                tint: tint,
+                edge: SaveAtlasPalette.forest
             )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(SaveTheme.Typography.rowTitle)
-                    .foregroundColor(.saveInk)
-                Text(value)
-                    .font(SaveTheme.Typography.supporting)
-                    .foregroundColor(.saveMutedText)
-                    .lineLimit(1)
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                 if let detail {
                     Text(detail)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .font(SaveAtlasType.body(11))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
             Spacer()
+
+            Text(value)
+                .font(SaveAtlasType.editorial(18))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.76)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SaveAtlasPalette.line.opacity(0.22))
+                .frame(height: 1)
+                .padding(.leading, 82)
         }
     }
 }
@@ -752,6 +842,8 @@ private struct PassportCityStrip: View {
             }
             .padding(.vertical, 1)
         }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
     }
 }
 
@@ -760,24 +852,34 @@ private struct PassportCountingRulesPanel: View {
     let stats: PassportStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            HStack(spacing: SaveTheme.Spacing.sm) {
-                Image(systemName: "seal")
-                    .font(SaveTheme.Typography.sectionLabel)
-                    .foregroundColor(.saveCocoa)
-                Text(title)
-                    .font(SaveTheme.Typography.sectionLabel)
-                    .foregroundColor(.saveCocoa)
-                Spacer()
-            }
+        HStack(alignment: .top, spacing: 16) {
+            SavePostcardPostmark()
+                .scaleEffect(0.82)
+                .frame(width: 66, height: 56)
 
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                PassportRuleLine(icon: "building.2", text: cityRule)
-                PassportRuleLine(icon: "figure.walk", text: visitedRule)
+                Text(title.uppercased())
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.9)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(cityRule)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Text(visitedRule)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
         }
-        .padding(SaveTheme.Spacing.md)
-        .saveNotebookSurface(cornerRadius: 16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background(SaveAtlasPalette.paper.opacity(0.74))
+        .overlay {
+            RoundedRectangle(cornerRadius: 2)
+                .stroke(
+                    SaveAtlasPalette.line.opacity(0.48),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                )
+        }
         .padding(.horizontal)
     }
 
@@ -811,12 +913,18 @@ private struct PassportVisibilityPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(spacing: SaveTheme.Spacing.sm) {
-                Image(systemName: "person.2.wave.2.fill")
-                    .font(SaveTheme.Typography.sectionLabel)
-                    .foregroundColor(.saveCocoa)
-                Text(languageSettings.localized(english: "Sharing controls", traditionalChinese: "分享設定"))
-                    .font(SaveTheme.Typography.sectionLabel)
-                    .foregroundColor(.saveCocoa)
+                SavePostcardPerforatedMedallion(
+                    systemName: "person.2.wave.2.fill",
+                    tint: SaveAtlasPalette.mint,
+                    edge: SaveAtlasPalette.forest
+                )
+                Text(languageSettings.localized(
+                    english: "SHARING RECEIPT",
+                    traditionalChinese: "分享收據"
+                ))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundStyle(SaveAtlasPalette.forest)
                 Spacer()
             }
 
@@ -842,8 +950,18 @@ private struct PassportVisibilityPanel: View {
                 }
             }
         }
-        .padding(SaveTheme.Spacing.md)
-        .saveNotebookSurface(cornerRadius: 16)
+        .padding(18)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.mint.opacity(0.90),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        }
         .padding(.horizontal)
     }
 }
@@ -908,8 +1026,12 @@ private struct PassportVisibilityRow: View {
             .disabled(isUpdating)
             .accessibilityIdentifier("profile.visibility.\(place.id)")
         }
-        .padding(SaveTheme.Spacing.sm)
-        .saveNotebookSurface(cornerRadius: 12, opacity: 0.6)
+        .padding(.vertical, SaveTheme.Spacing.sm)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SaveAtlasPalette.line.opacity(0.22))
+                .frame(height: 1)
+        }
         .onChange(of: place.effectiveVisibility) { _, visibility in
             selectedVisibility = visibility
         }
@@ -970,19 +1092,16 @@ struct SettingsRow: View {
     let title: String
     var detail: String? = nil
     let color: Color
+    var accessibilityIdentifier: String? = nil
     var action: (() -> Void)?
 
     var body: some View {
         Button(action: { action?() }) {
             HStack(spacing: SaveTheme.Spacing.md) {
-                SaveIconTile(
+                SavePostcardPerforatedMedallion(
                     systemName: icon,
-                    size: 32,
-                    iconSize: 13,
-                    fill: color.opacity(0.16),
-                    foreground: .saveCocoa,
-                    strokeOpacity: 0.48,
-                    cornerRadius: 10
+                    tint: color.opacity(0.30),
+                    edge: color
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1003,16 +1122,16 @@ struct SettingsRow: View {
                     .font(.caption2)
                     .foregroundColor(.saveMutedText)
             }
-            .padding(.vertical, SaveTheme.Spacing.md)
-            .padding(.horizontal, SaveTheme.Spacing.sm)
-            .background(SaveAtlasPalette.paper.opacity(0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(color.opacity(0.24), lineWidth: 1)
+            .padding(.vertical, SaveTheme.Spacing.sm)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(SaveAtlasPalette.kraft.opacity(0.32))
+                    .frame(height: 1)
+                    .padding(.leading, 62)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 }
 

@@ -5,6 +5,7 @@ struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
     let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
     let onOpenTrip: (UUID) -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsCreateTrip = false
 
@@ -60,7 +61,8 @@ struct TripsHomeView: View {
             onOpenTrip: { tripID in
                 store.selectTrip(tripID)
                 onOpenTrip(tripID)
-            }
+            },
+            onOpenPassport: onOpenPassport
         )
     }
 

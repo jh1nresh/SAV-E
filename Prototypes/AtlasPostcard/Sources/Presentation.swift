@@ -365,6 +365,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var onOpenTripID: (String) -> Void
     var onCreateTrip: () -> Void
     var onOpenAssistant: () -> Void
+    var onOpenPassport: () -> Void
 
     static let reference = AtlasPresentation(
         homeHero: .referenceTokyo,
@@ -471,7 +472,8 @@ struct AtlasPresentation: @unchecked Sendable {
         onAddStop: {},
         onOpenTripID: { _ in },
         onCreateTrip: {},
-        onOpenAssistant: {}
+        onOpenAssistant: {},
+        onOpenPassport: {}
     )
 }
 
