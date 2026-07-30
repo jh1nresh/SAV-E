@@ -846,22 +846,28 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testTripStopEditorSurfaceIsReachable() throws {
+        let storageID = UUID().uuidString.lowercased()
         let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
         app.launchArguments += [
             "--uitest-complete-onboarding",
             "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
             "-save.appLanguage", "en",
         ]
         app.launch()
 
-        try signInViaReviewDemo(app: app)
+        try signInViaReviewDemoRequired(app: app)
 
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
+            NSPredicate(
+                format: "identifier BEGINSWITH 'trips.card.' AND label CONTAINS[c] %@",
+                "Tokyo Weekend"
+            )
         ).firstMatch
         XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
         firstTrip.tap()
@@ -876,13 +882,23 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.steppers["trip.stop.edit.dayPicker"].exists)
         XCTAssertTrue(app.textFields["trip.stop.edit.startTime"].exists)
         XCTAssertTrue(app.textFields["trip.stop.edit.duration"].exists)
-        XCTAssertTrue(app.textFields["trip.stop.edit.note"].exists)
+        let noteField = app.descendants(matching: .any)["trip.stop.edit.note"]
+        XCTAssertTrue(noteField.exists)
         XCTAssertTrue(app.buttons["trip.stop.edit.save"].exists)
         XCTAssertTrue(app.buttons["trip.stop.edit.remove"].exists)
+        attach(app, name: "atlas-trip-stop-editor-sheet")
 
         replaceText(in: app.textFields["trip.stop.edit.startTime"], with: "09:30")
         replaceText(in: app.textFields["trip.stop.edit.duration"], with: "45")
-        replaceText(in: app.textFields["trip.stop.edit.note"], with: "UI smoke")
+        let keyboardDone = app.buttons["trip.stop.edit.keyboardDone"]
+        XCTAssertTrue(keyboardDone.waitForExistence(timeout: stepTimeout))
+        keyboardDone.tap()
+        replaceText(
+            in: app.descendants(matching: .any)["trip.stop.edit.note"],
+            with: "UI smoke"
+        )
+        XCTAssertTrue(keyboardDone.waitForExistence(timeout: stepTimeout))
+        keyboardDone.tap()
         app.buttons["trip.stop.edit.save"].tap()
         XCTAssertFalse(app.descendants(matching: .any)["trip.stop.edit"].waitForExistence(timeout: 2))
 
@@ -890,17 +906,22 @@ final class SAVEScreenshotRailTests: XCTestCase {
         firstStopEditor.tap()
         XCTAssertEqual(app.textFields["trip.stop.edit.startTime"].value as? String, "09:30")
         XCTAssertEqual(app.textFields["trip.stop.edit.duration"].value as? String, "45")
-        XCTAssertEqual(app.textFields["trip.stop.edit.note"].value as? String, "UI smoke")
+        XCTAssertEqual(
+            app.descendants(matching: .any)["trip.stop.edit.note"].value as? String,
+            "UI smoke"
+        )
 
         app.buttons["trip.stop.edit.remove"].tap()
         XCTAssertTrue(app.buttons["trip.stop.edit.remove.confirm"].waitForExistence(timeout: stepTimeout))
         app.alerts.buttons["Cancel"].tap()
         app.navigationBars.buttons["Cancel"].tap()
 
-        let addMapStamp = app.buttons["Add saved place"]
+        let addMapStamp = app.buttons["trip.plan.addStop"]
         XCTAssertTrue(addMapStamp.waitForExistence(timeout: stepTimeout))
         addMapStamp.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trip.add.sheet"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.steppers["trip.add.dayPicker"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trip-add-saved-place-sheet")
     }
 
     @MainActor
@@ -1035,6 +1056,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["trip.create.sheet"].waitForExistence(timeout: stepTimeout))
         let tripNameField = app.textFields["trip.create.name"]
         XCTAssertTrue(tripNameField.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-trip-create-sheet")
         tripNameField.tap()
         tripNameField.typeText(tripName)
         let cityField = app.textFields["trip.create.city"]
@@ -1157,6 +1179,21 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let tab = rootTabButton(title, app: app)
         XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout), "Missing \(title) root tab")
         tab.tap()
+        if let screenIdentifier = rootScreenIdentifier(for: title),
+           !app.descendants(matching: .any)[screenIdentifier].waitForExistence(timeout: 2) {
+            tab.tap()
+        }
+    }
+
+    @MainActor
+    private func rootScreenIdentifier(for title: String) -> String? {
+        switch title {
+        case "Home": return "home.root"
+        case "Saves": return "saves.root"
+        case "Trips": return "trips.home"
+        case "Map": return "map.root"
+        default: return nil
+        }
     }
 
     @MainActor
