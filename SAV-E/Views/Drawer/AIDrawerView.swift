@@ -2511,9 +2511,25 @@ private struct MapDetailDrawerView: View {
             .accessibilityIdentifier("drawer.place.close")
             .frame(width: 38, height: 38)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 76)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(item.postcardTint.opacity(0.58))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.58),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 9)
+        .padding(.bottom, 10)
+        .accessibilityIdentifier("drawer.postcard.ticketHeader")
     }
 
     @ViewBuilder
@@ -2793,6 +2809,91 @@ private struct PostcardDrawerSeal: View {
                     .padding(2)
             }
             .accessibilityHidden(true)
+    }
+}
+
+private struct PostcardDetailPaper<Content: View>: View {
+    let tint: Color
+    let accessibilityIdentifier: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(14)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .stroke(
+                    tint.opacity(0.88),
+                    style: StrokeStyle(lineWidth: 1.15, dash: [2.5, 2.5])
+                )
+        }
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .stroke(tint.opacity(0.56), lineWidth: 1.2)
+                .frame(width: 46, height: 46)
+                .overlay {
+                    Circle()
+                        .stroke(tint.opacity(0.32), lineWidth: 1)
+                        .frame(width: 34, height: 34)
+                }
+                .offset(x: -12, y: 10)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(accessibilityIdentifier)
+    }
+}
+
+private struct PostcardReceiptSection<Content: View>: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = SaveAtlasPalette.line
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: systemImage)
+                    .font(SaveAtlasType.strong(12))
+                Text(title.uppercased())
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.55)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(SaveAtlasPalette.forest)
+
+            content()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background {
+            SaveAtlasPalette.paper
+                .overlay {
+                    VStack(spacing: 18) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            Rectangle()
+                                .fill(SaveAtlasPalette.line.opacity(0.13))
+                                .frame(height: 1)
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                }
+        }
+        .overlay {
+            Rectangle()
+                .stroke(
+                    tint.opacity(0.54),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
     }
 }
 
@@ -3609,68 +3710,79 @@ private struct SocialPlaceDetailCard: View {
     let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        PostcardDetailPaper(
+            tint: SaveAtlasPalette.honey,
+            accessibilityIdentifier: "drawer.social.postcardBody"
+        ) {
             PlaceBusinessPhotoCarousel(imageURLs: place.businessPhotoURLStrings)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(place.name)
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(.saveInk)
-                    Spacer()
-                    CategoryPill(category: place.category, isSelected: true)
+            HStack(spacing: 8) {
+                CategoryPill(category: place.category, isSelected: true)
+                if let rating = place.googleRating ?? place.rating {
+                    MapDetailChip(icon: "star.fill", text: String(format: "%.1f", rating))
                 }
-
-                Text(place.address)
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.76))
+                Spacer(minLength: 0)
             }
 
             if let signal = place.socialSignal {
-                VStack(alignment: .leading, spacing: 6) {
+                PostcardReceiptSection(
+                    title: languageSettings.localized(english: "Social signal", traditionalChinese: "社群訊號"),
+                    systemImage: signal.kind.pinSystemImage,
+                    tint: SaveAtlasPalette.honey
+                ) {
                     Label(signal.displayText, systemImage: signal.kind.pinSystemImage)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(13))
+                        .foregroundStyle(SaveAtlasPalette.ink)
                     Text(signal.detailText)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.saveCocoa.opacity(0.78))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                 }
-                .padding(12)
-                .background(Color.saveCream.opacity(signal.kind == .trending ? 0.40 : 0.56))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
-            PlaceBasicInfoPanel(place: place)
-            PlaceInsightSummaryPanel(
-                place: place,
-                fallbackSummary: languageSettings.localized(
-                    english: "This is a social map result. Save it to make it part of your own SAV-E memory.",
-                    traditionalChinese: "這是社交地圖結果。保存後才會成為你自己的 SAV-E 記憶。"
-                )
-            )
+            PostcardReceiptSection(
+                title: languageSettings.localized(english: "Place receipt", traditionalChinese: "地點憑證"),
+                systemImage: "mappin.and.ellipse",
+                tint: SaveAtlasPalette.honey
+            ) {
+                VStack(spacing: 8) {
+                    UnsavedCandidateInfoRow(
+                        title: languageSettings.localized(english: "Category", traditionalChinese: "類別"),
+                        value: place.category.displayName(language: languageSettings.language)
+                    )
+                    UnsavedCandidateInfoRow(
+                        title: languageSettings.localized(english: "Address", traditionalChinese: "地址"),
+                        value: place.address.isEmpty
+                            ? languageSettings.localized(english: "Address not confirmed", traditionalChinese: "地址尚未確認")
+                            : place.address
+                    )
+                    UnsavedCandidateInfoRow(
+                        title: languageSettings.localized(english: "Source", traditionalChinese: "來源"),
+                        value: place.sourceConfirmationLabel(language: languageSettings.language)
+                    )
+                }
+
+                Text(place.memorySummary(language: languageSettings.language))
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button(action: onSave) {
                 Label(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"), systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(14))
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color.saveHoney)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(SaveAtlasPalette.coral)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("drawer.social.primaryAction")
         }
-        .padding(SaveTheme.Spacing.lg)
-        .background(Color.saveNotebookPage.opacity(0.52))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1)
-        )
     }
 }
 
@@ -4623,9 +4735,10 @@ private struct ReviewCandidateDetailCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            NotebookSpine(color: candidate.hasReliableCoordinates ? .saveSignal : .saveNotebookSpine)
-
+        PostcardDetailPaper(
+            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral,
+            accessibilityIdentifier: "drawer.review.postcardBody"
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 ReviewCandidateContextHero(
                     candidate: candidate,
@@ -4657,23 +4770,26 @@ private struct ReviewCandidateDetailCard: View {
                         .foregroundColor(.saveCocoa.opacity(0.74))
                     TextField(candidate.name, text: $displayNameDraft)
                         .textFieldStyle(.plain)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.body(15))
+                        .foregroundStyle(SaveAtlasPalette.ink)
                         .padding(.horizontal, 10)
                         .frame(minHeight: 44)
-                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .background(SaveAtlasPalette.paper)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.56), lineWidth: 1.2)
+                            Rectangle()
+                                .stroke(
+                                    SaveAtlasPalette.sky.opacity(0.92),
+                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                                )
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
                 HStack(spacing: 8) {
                     CandidateActionButton(
                         title: primaryActionTitle,
                         systemImage: primaryAction.systemImage,
-                        fill: .saveCoral,
+                        fill: SaveAtlasPalette.coral,
+                        foreground: .white,
                         disabled: isWorking,
                         action: performPrimaryAction
                     )
@@ -4681,7 +4797,7 @@ private struct ReviewCandidateDetailCard: View {
                     CandidateActionButton(
                         title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
                         systemImage: "sparkle.magnifyingglass",
-                        fill: .saveNotebookPage,
+                        fill: SaveAtlasPalette.paper,
                         disabled: isWorking,
                         action: onInvestigateMore
                     )
@@ -4699,22 +4815,22 @@ private struct ReviewCandidateDetailCard: View {
                     }
                 } label: {
                     Label(languageSettings.localized(english: "More review actions", traditionalChinese: "更多確認動作"), systemImage: "ellipsis.circle")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveCocoa)
+                        .font(SaveAtlasType.strong(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
-                        .background(Color.saveNotebookPage.opacity(0.28))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(SaveAtlasPalette.paper)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.3), lineWidth: 1)
+                            Rectangle()
+                                .stroke(
+                                    SaveAtlasPalette.line.opacity(0.42),
+                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                                )
                         )
                 }
                 .disabled(isWorking)
             }
-            .padding(12)
         }
-        .saveNotebookPage(cornerRadius: 16)
         .opacity(isWorking ? 0.65 : 1)
     }
 
@@ -4877,12 +4993,20 @@ private struct ReviewCandidateContextHero: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .background(Color.saveNotebookPage.opacity(0.54))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveCoral.opacity(0.42), lineWidth: 1)
-        )
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .clipShape(SavePostcardScallopedRectangle(depth: 3, pitch: 10))
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    candidate.hasReliableCoordinates
+                        ? SaveAtlasPalette.sky
+                        : SaveAtlasPalette.coral,
+                    style: StrokeStyle(lineWidth: 1.1, dash: [2.5, 2.5])
+                )
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier("drawer.review.contextHero")
@@ -4910,29 +5034,33 @@ private struct ReviewCandidateContextHero: View {
             }
 
             Text(eyebrow)
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa)
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.55)
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
             Text(title)
-                .font(.title3.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(20, relativeTo: .headline))
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
             Text(contextLine)
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.78))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
             statusChips
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .saveNotebookSurface(
-            cornerRadius: 14,
-            opacity: 0.82,
-            strokeOpacity: 0.28
-        )
+        .background(SaveAtlasPalette.paper.opacity(0.96))
+        .overlay {
+            Rectangle()
+                .stroke(
+                    SaveAtlasPalette.line.opacity(0.36),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
     }
 
     @ViewBuilder
@@ -5145,29 +5273,18 @@ private struct ReviewCandidateNextStepPanel: View {
     var candidate: PlaceReviewCandidate
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "sparkle.magnifyingglass")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 24, height: 24)
-                    .background(Color.saveHoney.opacity(0.72))
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(languageSettings.localized(english: "Next step", traditionalChinese: "下一步"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.72))
-                    Text(nextStepText)
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
+        PostcardReceiptSection(
+            title: languageSettings.localized(english: "Next step", traditionalChinese: "下一步"),
+            systemImage: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "sparkle.magnifyingglass",
+            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
+        ) {
+            Text(nextStepText)
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
             Text(summaryText)
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.78))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let sourceURL {
@@ -5175,25 +5292,18 @@ private struct ReviewCandidateNextStepPanel: View {
                     openURL(sourceURL)
                 } label: {
                     Label(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"), systemImage: "link")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(11))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 5)
-                        .background(Color.saveNotebookPage.opacity(0.74))
+                        .background(SaveAtlasPalette.sky.opacity(0.52))
                         .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.32), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(languageSettings.localized(english: "Open review candidate source", traditionalChinese: "打開待確認地點來源"))
             }
         }
-        .padding(10)
-        .background(Color.saveNotebookPage.opacity(0.42))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
-        )
     }
 
     private var nextStepText: String {
@@ -5265,7 +5375,11 @@ private struct ReviewCandidateProofPanel: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        PostcardReceiptSection(
+            title: languageSettings.localized(english: "Verification receipt", traditionalChinese: "確認憑證"),
+            systemImage: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass",
+            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
+        ) {
             HStack(spacing: 7) {
                 Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass")
                     .font(.caption.weight(.bold))
@@ -5297,13 +5411,6 @@ private struct ReviewCandidateProofPanel: View {
             proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: .saveCream)
             nextActionRow
         }
-        .padding(10)
-        .background(Color.saveNotebookPage.opacity(0.42))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
-        )
     }
 
     private func proofSection(title: String, systemImage: String, items: [String], tone: Color) -> some View {
@@ -5486,29 +5593,10 @@ private struct UnsavedMapCandidateCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                CandidateActionButton(
-                    title: isWorking
-                        ? languageSettings.localized(english: "Saving", traditionalChinese: "保存中")
-                        : SaveSearchPrimaryAction.savePlace.displayName(language: languageSettings.language),
-                    systemImage: presentation.primaryActionSystemImage,
-                    fill: .saveHoney,
-                    disabled: isWorking,
-                    action: onSave
-                )
-
-                if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
-                    Link(destination: url) {
-                        CandidateActionLabel(
-                            title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
-                            systemImage: "map",
-                            fill: .saveNotebookPage
-                        )
-                    }
-                }
-            }
-
+        PostcardDetailPaper(
+            tint: SaveAtlasPalette.lavender,
+            accessibilityIdentifier: "drawer.unsaved.postcardBody"
+        ) {
             HStack(alignment: .top, spacing: 8) {
                 UnsavedCandidateFact(title: languageSettings.localized(english: "Rating", traditionalChinese: "評分"), value: ratingText)
                 UnsavedCandidateFact(title: languageSettings.localized(english: "Reviews", traditionalChinese: "評論"), value: reviewText ?? "—")
@@ -5525,7 +5613,11 @@ private struct UnsavedMapCandidateCard: View {
                 isSearching: isEnrichingPhoto
             )
 
-            UnsavedCandidateGlassSection(title: languageSettings.localized(english: "Basic info", traditionalChinese: "基本資訊"), systemImage: "info.circle.fill") {
+            PostcardReceiptSection(
+                title: languageSettings.localized(english: "Place receipt", traditionalChinese: "地點憑證"),
+                systemImage: "info.circle.fill",
+                tint: SaveAtlasPalette.lavender
+            ) {
                 VStack(spacing: 8) {
                     UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Rating", traditionalChinese: "評分"), value: ratingText)
                     if let reviewText {
@@ -5547,7 +5639,11 @@ private struct UnsavedMapCandidateCard: View {
                 }
             }
 
-            UnsavedCandidateGlassSection(title: languageSettings.localized(english: "Quick take", traditionalChinese: "快速判斷"), systemImage: "text.alignleft") {
+            PostcardReceiptSection(
+                title: languageSettings.localized(english: "Quick take", traditionalChinese: "快速判斷"),
+                systemImage: "text.alignleft",
+                tint: SaveAtlasPalette.lavender
+            ) {
                 VStack(alignment: .leading, spacing: 8) {
                     UnsavedCandidateQuickLine(text: quickTakeSummary)
                     if let ratingSummary {
@@ -5555,8 +5651,31 @@ private struct UnsavedMapCandidateCard: View {
                     }
                 }
             }
+
+            HStack(spacing: 8) {
+                CandidateActionButton(
+                    title: isWorking
+                        ? languageSettings.localized(english: "Saving", traditionalChinese: "保存中")
+                        : SaveSearchPrimaryAction.savePlace.displayName(language: languageSettings.language),
+                    systemImage: presentation.primaryActionSystemImage,
+                    fill: SaveAtlasPalette.coral,
+                    foreground: .white,
+                    disabled: isWorking,
+                    action: onSave
+                )
+                .accessibilityIdentifier("drawer.unsaved.primaryAction")
+
+                if let sourceURL = candidate.sourceURL, let url = URL(string: sourceURL) {
+                    Link(destination: url) {
+                        CandidateActionLabel(
+                            title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
+                            systemImage: "map",
+                            fill: SaveAtlasPalette.paper
+                        )
+                    }
+                }
+            }
         }
-        .padding(.horizontal, 2)
         .opacity(isWorking ? 0.65 : 1)
         .task(id: candidate.id) {
             await enrichCandidatePhotos()
@@ -5649,43 +5768,6 @@ private struct UnsavedMapCandidateCard: View {
 
     private var unsavedStateText: String {
         languageSettings.localized(english: "Public discovery · Not saved yet", traditionalChinese: "公開探索 · 尚未保存")
-    }
-}
-
-private struct UnsavedCandidateGlassSection<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    var title: String
-    var systemImage: String
-    @ViewBuilder var content: () -> Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Image(systemName: systemImage)
-                    .font(.caption.weight(.bold))
-                Text(title)
-                    .font(.caption.weight(.bold))
-                Spacer(minLength: 0)
-            }
-            .foregroundColor(.saveCocoa.opacity(0.86))
-
-            content()
-        }
-        .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(sectionTint)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.22), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var sectionTint: Color {
-        colorScheme == .dark ? Color.white.opacity(0.035) : Color.white.opacity(0.18)
     }
 }
 

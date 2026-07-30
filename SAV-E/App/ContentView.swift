@@ -278,6 +278,7 @@ struct ContentView: View {
             if storageScope == .reviewerDemo {
                 await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
             }
+            openPostcardDrawerUITestFixtureIfNeeded()
         }
     }
 
@@ -523,6 +524,65 @@ struct ContentView: View {
     private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
         pendingCaptureTripID = tripID
         openMapDetail(.reviewCandidate(candidate))
+    }
+
+    private func openPostcardDrawerUITestFixtureIfNeeded() {
+#if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+
+        if arguments.contains("--uitest-postcard-unsaved") {
+            openMapDetail(.unsavedCandidate(SaveMapCandidate(
+                id: "postcard-unsaved-fixture",
+                title: "Tsukiji Outer Market",
+                subtitle: "4 Chome-16-2 Tsukiji, Chuo City, Tokyo",
+                latitude: 35.6655,
+                longitude: 139.7707,
+                category: .food,
+                rating: 4.5,
+                reviewCount: 18_420,
+                sourceURL: "https://maps.apple.com/?q=Tsukiji+Outer+Market",
+                sourcePlatform: .appleMaps,
+                distanceMeters: 820,
+                evidence: [
+                    "Apple Maps POI",
+                    "Search: Tokyo seafood market",
+                    "Hours: 5:00 AM–2:00 PM",
+                ]
+            )))
+            return
+        }
+
+        if arguments.contains("--uitest-postcard-social") {
+            openMapDetail(.socialPlace(Place(
+                id: UUID(uuidString: "7C4BFB3D-BA7C-4D62-B502-78222AD12E14")!,
+                name: "Stereoscope Coffee",
+                address: "4542 Beach Blvd, Buena Park, CA",
+                latitude: 33.8937,
+                longitude: -117.9992,
+                category: .cafe,
+                status: .wantToGo,
+                rating: 4.7,
+                note: "A calm coffee stop saved by people you follow.",
+                sourcePlatform: .other,
+                recommender: "Jerry's coffee list",
+                googleRating: 4.6,
+                createdAt: Date(timeIntervalSince1970: 1_721_865_600),
+                visibility: .publicGuide,
+                socialSignal: PlaceSocialSignal(
+                    kind: .friendSaved,
+                    lens: .friends,
+                    friendNames: ["Jerry", "Mina"],
+                    friendCount: 2,
+                    saveCount: 42,
+                    trendingRank: nil,
+                    categoryRank: 3,
+                    sourceLabel: "Jerry's team",
+                    referrerId: "postcard-social-fixture",
+                    referralCode: nil
+                )
+            )))
+        }
+#endif
     }
 
     private func handleRootSheetDismiss() {
