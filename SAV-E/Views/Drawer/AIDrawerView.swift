@@ -2347,7 +2347,7 @@ private struct MapDetailDrawerView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
                 VStack(spacing: 0) {
-                    compactHeader
+                    expandedHeader
                     Divider()
                         .overlay(SaveAtlasPalette.line.opacity(0.28))
                         .padding(.horizontal, 18)
@@ -2364,6 +2364,109 @@ private struct MapDetailDrawerView: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+
+    @ViewBuilder
+    private var expandedHeader: some View {
+        switch item {
+        case .savedPlace(let place):
+            liftedPostcardHeader(place)
+        case .reviewCandidate, .unsavedCandidate, .socialPlace:
+            compactHeader
+        }
+    }
+
+    private func liftedPostcardHeader(_ place: Place) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            HStack(spacing: 10) {
+                SavePostcardPerforatedMedallion(
+                    systemName: "star.fill",
+                    tint: SaveAtlasPalette.mint,
+                    edge: SaveAtlasPalette.forest
+                )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(languageSettings.localized(
+                        english: "Map Stamp · Confirmed",
+                        traditionalChinese: "地圖章 · 已確認"
+                    ))
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.65)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+
+                    Text(place.name)
+                        .font(SaveAtlasType.strong(19, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+
+                    Text(savedPlaceLocation(place))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("place.detail.postcardChrome")
+                }
+
+                Spacer(minLength: 4)
+
+                shareAction
+                    .frame(width: 38, height: 38)
+
+                Button(action: onOpenInbox) {
+                    SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Open Review",
+                    traditionalChinese: "打開待確認"
+                ))
+                .accessibilityIdentifier("drawer.openReview")
+                .frame(width: 38, height: 38)
+
+                Button(action: onClose) {
+                    SelectedPlaceCapsuleIcon(systemImage: "xmark")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Close place detail",
+                    traditionalChinese: "關閉地點詳情"
+                ))
+                .accessibilityIdentifier("drawer.place.close")
+                .frame(width: 38, height: 38)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 82)
+            .background(SaveAtlasPalette.paper.opacity(0.98))
+            .padding(5)
+            .background {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.mint.opacity(0.56))
+            }
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(
+                        SaveAtlasPalette.forest.opacity(0.66),
+                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                    )
+            }
+
+            SavePostcardMemoPeek(width: 72)
+                .offset(x: -20, y: 31)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 9)
+        .padding(.bottom, 27)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.saved.liftedPostcard")
+    }
+
+    private func savedPlaceLocation(_ place: Place) -> String {
+        let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !area.isEmpty { return area }
+        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty
+            ? languageSettings.localized(english: "Saved in your SAV-E", traditionalChinese: "已收藏到 SAV-E")
+            : address
+    }
 
     private var compactHeader: some View {
         HStack(spacing: 9) {
@@ -3024,12 +3127,7 @@ private struct SavedMapDetailDrawerContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !detailPlace.businessPhotoURLStrings.isEmpty {
-                PlaceBusinessPhotoCarousel(
-                    imageURLs: detailPlace.businessPhotoURLStrings,
-                    isSearching: isEnrichingBusinessDetails
-                )
-            }
+            postcardIdentity
 
             FlowLayout(spacing: 8) {
                 CategoryPill(category: detailPlace.category, isSelected: true)
@@ -3050,41 +3148,80 @@ private struct SavedMapDetailDrawerContent: View {
                     systemImage: "suitcase.rolling.fill"
                 )
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.saveCoral.opacity(0.72))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(SaveAtlasPalette.coral)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
                 )
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("drawer.saved.addToTrip")
 
-            PlaceBasicInfoPanel(place: detailPlace)
-            PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(detailPlace.sourceConfirmationLabel(language: languageSettings.language))
+                Spacer(minLength: 8)
+                Text(savedDateLabel)
+            }
+            .font(SaveAtlasType.body(11))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .padding(.vertical, 8)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(SaveAtlasPalette.line.opacity(0.28))
+                    .frame(height: 1)
+            }
 
             HStack(spacing: 8) {
-                Button(action: onPlanAroundPlace) {
-                    PlaceDetailActionLabel(title: languageSettings.localized(english: "AI plan", traditionalChinese: "AI 規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up", fill: Color.saveHoney.opacity(0.56))
+                SavePlaceShareButton(content: .place(detailPlace)) {
+                    PlaceDetailActionLabel(
+                        title: languageSettings.localized(english: "Share", traditionalChinese: "分享"),
+                        systemImage: "square.and.arrow.up",
+                        fill: SaveAtlasPalette.paper
+                    )
                 }
 
                 Button {
                     NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name)
                 } label: {
-                    PlaceDetailActionLabel(title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"), systemImage: "map.fill", fill: Color.saveNotebookPage)
+                    PlaceDetailActionLabel(
+                        title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
+                        systemImage: "map.fill",
+                        fill: SaveAtlasPalette.paper
+                    )
                 }
 
                 if let sourceURL = detailPlace.primarySourceURL {
                     Button {
                         openURL(sourceURL)
                     } label: {
-                        PlaceDetailActionLabel(title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), systemImage: "link", fill: Color.saveNotebookPage)
+                        PlaceDetailActionLabel(
+                            title: languageSettings.localized(english: "Source", traditionalChinese: "來源"),
+                            systemImage: "link",
+                            fill: SaveAtlasPalette.paper
+                        )
                     }
                 }
             }
+
+            Button(action: onPlanAroundPlace) {
+                PlaceDetailActionLabel(
+                    title: languageSettings.localized(
+                        english: "Plan around this Map Stamp",
+                        traditionalChinese: "以這個地圖章規劃"
+                    ),
+                    systemImage: "point.topleft.down.curvedto.point.bottomright.up",
+                    fill: SaveAtlasPalette.honey.opacity(0.62)
+                )
+            }
+
+            PlaceBasicInfoPanel(place: detailPlace)
+            PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
 
             if isEditingPlace {
                 placeEditor
@@ -3149,6 +3286,21 @@ private struct SavedMapDetailDrawerContent: View {
                     .foregroundColor(.saveError)
             }
         }
+        .padding(14)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .stroke(
+                    SaveAtlasPalette.line.opacity(0.46),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.saved.postcardBody")
         .confirmationDialog(
             languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
             isPresented: $showDeleteConfirmation,
@@ -3164,6 +3316,110 @@ private struct SavedMapDetailDrawerContent: View {
         .task(id: place.id) {
             await enrichBusinessDetails()
         }
+    }
+
+    private var postcardIdentity: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                SavedPostcardPhoto(
+                    imageURLs: detailPlace.businessPhotoURLStrings,
+                    isSearching: isEnrichingBusinessDetails
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(languageSettings.localized(
+                        english: "TO YOUR SAV-E",
+                        traditionalChinese: "寄給你的 SAV-E"
+                    ))
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.75)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+
+                    Text(detailPlace.name)
+                        .font(SaveAtlasType.strong(20, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(2)
+
+                    Text(postcardLocation)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .lineLimit(2)
+
+                    Text(detailPlace.category.displayName(language: languageSettings.language))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+
+                    Label(
+                        languageSettings.localized(
+                            english: "Confirmed Map Stamp",
+                            traditionalChinese: "已確認地圖章"
+                        ),
+                        systemImage: "checkmark.seal.fill"
+                    )
+                    .font(SaveAtlasType.display(11))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(.horizontal, 8)
+                    .frame(minHeight: 24)
+                    .background(SaveAtlasPalette.mint, in: Capsule())
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 11) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        Rectangle()
+                            .fill(SaveAtlasPalette.line.opacity(0.36))
+                            .frame(width: 36, height: 1)
+                    }
+                }
+                .padding(.top, 5)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(languageSettings.localized(
+                    english: "Your saved memory",
+                    traditionalChinese: "你的收藏記憶"
+                ))
+                .font(SaveAtlasType.strong(12))
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+                Text(memorySummary)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                VStack(spacing: 18) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Rectangle()
+                            .fill(SaveAtlasPalette.line.opacity(0.18))
+                            .frame(height: 1)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.saved.postalIdentity")
+    }
+
+    private var postcardLocation: String {
+        let area = detailPlace.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !area.isEmpty { return area }
+        let address = detailPlace.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty
+            ? languageSettings.localized(english: "Saved place", traditionalChinese: "已收藏地點")
+            : address
+    }
+
+    private var savedDateLabel: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: languageSettings.language == .traditionalChinese
+            ? "zh_Hant_TW"
+            : "en_US_POSIX")
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter.string(from: detailPlace.createdAt)
     }
 
     private var memorySummary: String {
@@ -3292,6 +3548,58 @@ private struct SavedMapDetailDrawerContent: View {
         } catch {
             deleteError = error.localizedDescription
         }
+    }
+}
+
+private struct SavedPostcardPhoto: View {
+    let imageURLs: [String]
+    let isSearching: Bool
+
+    var body: some View {
+        Group {
+            if let urlString = imageURLs.first,
+               let url = URL(string: urlString) {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .empty:
+                        ProgressView()
+                            .tint(SaveAtlasPalette.forest)
+                    case .failure:
+                        fallback
+                    @unknown default:
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 104, height: 104)
+        .background(SaveAtlasPalette.mint.opacity(0.46))
+        .clipped()
+        .padding(4)
+        .background(SaveAtlasPalette.paper)
+        .overlay {
+            Rectangle()
+                .stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1)
+        }
+        .rotationEffect(.degrees(-1.2))
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 3, y: 2)
+        .accessibilityLabel(isSearching ? "Finding business photo" : "Saved place photo")
+    }
+
+    private var fallback: some View {
+        Rectangle()
+            .fill(SaveAtlasPalette.mint.opacity(0.48))
+            .overlay {
+                Image(systemName: isSearching ? "hourglass" : "photo.on.rectangle.angled")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(SaveAtlasPalette.forest.opacity(0.72))
+            }
     }
 }
 

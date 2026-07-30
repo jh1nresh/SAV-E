@@ -18,9 +18,11 @@ Two page archetypes share one shell:
 
 - **Little Atlas:** Home, Trips, Trip Plan, and Map. The map or route is the page
   skeleton. Cards float on top of geography instead of replacing it.
-- **Postcard Pocket:** Saves. Unresolved clues are physical ticket/postcard
-  objects inserted into one kraft envelope. Confirmed Map Stamps are counted,
-  but they are not styled as unresolved mail.
+- **Postcard Pocket:** Saves. Review clues and confirmed Map Stamps share one
+  physical ticket-and-envelope construction. State comes from the postal
+  treatment: Review is sky/coral and unresolved; Map Stamps are mint/forest and
+  confirmed. Selecting a Map Stamp lifts that saved postcard out of the pocket
+  without introducing a second detail renderer.
 
 ## Design-taste brief
 
@@ -62,9 +64,18 @@ Root Map  = Little Atlas
 ### Saves
 
 - Memo + SAV-E lockup and one capture button.
-- Compact title, subtitle, and three counts.
-- Two blue Review Candidate tickets and one coral Source Clue ticket.
-- Tickets visibly enter one kraft envelope with a review-count seal.
+- Compact title, subtitle, and Review / Map Stamps counts.
+- Review Candidate tickets are sky; Source Clue tickets are coral.
+- Confirmed Map Stamp tickets reuse the exact ticket silhouette, medallion,
+  title baseline, action placement, and overlapping rhythm in mint/forest.
+- Every live item remains reachable by scrolling; the illustrated viewport may
+  show three examples, but production must never truncate the collection.
+- Tickets visibly enter one owned kraft envelope. The envelope retains its
+  stitched mouth, postmark, count seal, editorial label, and contextual Memo.
+- Selecting a Map Stamp presents a Lifted Saved Postcard: the selected ticket
+  remains visible above cream postal paper with its photo, postmark lines,
+  source receipt, memory, Add to Trip action, sharing, related sources, and
+  overflow actions.
 - Root tabs remain visible; no generic card list replaces the pocket.
 
 ### Trips
@@ -112,6 +123,10 @@ Root Map  = Little Atlas
   chrome.
 - The chrome is cream paper with a subtle perforated top rule, forest title,
   muted trust/source line, semantic seal, and outlined stamp controls.
+- A saved Map Stamp uses the Lifted Saved Postcard state of that same renderer:
+  a mint scalloped ticket header, Memo peeking from the pocket edge, postal
+  metadata, source receipt, lined memory section, and coral Add to Trip action.
+  Generic rounded dashboard cards are not an acceptable substitute.
 - Collapsed, medium, and large detents keep the same paper identity.
 - Existing data and actions remain live SwiftUI. The visual unification never
   creates a second place-detail renderer or changes confirmation semantics.
@@ -143,6 +158,8 @@ geography, never competing primary actions.
 - Screen title 28 pt maximum; place title 16–18 pt.
 - Tickets have a dashed/perforated edge; ordinary rows do not.
 - Envelope uses a different silhouette from cards.
+- Ticket overlap is deliberate: adjacent tickets overlap by 4–8 pt and the
+  envelope mouth overlaps the final ticket. Flat separated rows fail fidelity.
 - Tab active state is one pale mint lozenge.
 - Shadows stay under 8% opacity.
 
@@ -170,6 +187,9 @@ Reject the prototype if three or more are true:
   forbidden.
 - Live SwiftUI remains responsible for titles, counts, ticket actions, stop
   rows, place details, and both tab shells.
+- Saves fidelity is structural, not a palette check. If the owned envelope,
+  scalloped ticket silhouette, overlap, contextual Memo, and postal detail
+  disappear, the implementation has left Postcard Pocket.
 - Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
   `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
   combines tolerant edge overlap (35%) with per-pixel appearance similarity
