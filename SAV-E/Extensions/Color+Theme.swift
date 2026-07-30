@@ -388,3 +388,316 @@ struct SaveDottedBackground: View {
             }
     }
 }
+
+// MARK: - Illustrated Postcard Pocket
+
+enum SavePostcardTicketStyle {
+    case review
+    case sourceClue
+    case confirmed
+
+    var fill: Color {
+        switch self {
+        case .review:
+            return SaveAtlasPalette.sky.opacity(0.46)
+        case .sourceClue:
+            return SaveAtlasPalette.coral.opacity(0.23)
+        case .confirmed:
+            return SaveAtlasPalette.mint.opacity(0.52)
+        }
+    }
+
+    var edge: Color {
+        switch self {
+        case .review:
+            return Color.saveBlueInk.opacity(0.72)
+        case .sourceClue:
+            return SaveAtlasPalette.coral.opacity(0.82)
+        case .confirmed:
+            return SaveAtlasPalette.forest.opacity(0.72)
+        }
+    }
+
+    var medallion: Color {
+        switch self {
+        case .review:
+            return SaveAtlasPalette.sky
+        case .sourceClue:
+            return SaveAtlasPalette.coral.opacity(0.42)
+        case .confirmed:
+            return SaveAtlasPalette.mint
+        }
+    }
+
+    var eyebrow: Color {
+        switch self {
+        case .review:
+            return .saveBlueInk
+        case .sourceClue:
+            return SaveAtlasPalette.coral
+        case .confirmed:
+            return SaveAtlasPalette.forest
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .review:
+            return "camera"
+        case .sourceClue:
+            return "questionmark"
+        case .confirmed:
+            return "star.fill"
+        }
+    }
+}
+
+struct SavePostcardTicket: View {
+    let eyebrow: String
+    let title: String
+    let detail: String
+    let actionTitle: String
+    let style: SavePostcardTicketStyle
+
+    var body: some View {
+        HStack(spacing: 11) {
+            SavePostcardPerforatedMedallion(
+                systemName: style.systemImage,
+                tint: style.medallion,
+                edge: style.edge
+            )
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(eyebrow.uppercased())
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.65)
+                    .foregroundStyle(style.eyebrow)
+
+                Text(title)
+                    .font(SaveAtlasType.strong(18, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
+
+                Text(detail)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 4)
+
+            Text(actionTitle)
+                .font(SaveAtlasType.display(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .frame(minHeight: 38)
+                .background(style.medallion.opacity(0.86), in: RoundedRectangle(cornerRadius: 9))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(style.edge.opacity(0.54), lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(style.fill)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    style.edge,
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 4, y: 2)
+        .contentShape(Rectangle())
+    }
+}
+
+struct SavePostcardPocketFooter: View {
+    let title: String
+    let subtitle: String
+    let count: Int
+    let countLabel: String
+    let tint: Color
+
+    var body: some View {
+        Image("SavesEnvelope")
+            .resizable()
+            .scaledToFit()
+            .overlay(alignment: .center) {
+                HStack(spacing: 12) {
+                    SavePostcardPostmark()
+
+                    VStack(spacing: 4) {
+                        Text(title)
+                            .font(SaveAtlasType.editorial(19))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.76)
+                        Text(subtitle)
+                            .font(SaveAtlasType.regular(11))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    VStack(spacing: -2) {
+                        Text("\(count)")
+                            .font(SaveAtlasType.editorial(27))
+                            .monospacedDigit()
+                        Text(countLabel)
+                            .font(SaveAtlasType.regular(9))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                    .foregroundStyle(tint)
+                    .frame(width: 64, height: 64)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 28)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(title), \(count) \(countLabel)")
+    }
+}
+
+struct SavePostcardMemoPeek: View {
+    var width: CGFloat = 88
+
+    var body: some View {
+        Image("SavesMemoSorting")
+            .resizable()
+            .scaledToFit()
+            .frame(width: width)
+            .accessibilityHidden(true)
+    }
+}
+
+struct SavePostcardPerforatedMedallion: View {
+    let systemName: String
+    let tint: Color
+    let edge: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 19, weight: .semibold))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .frame(width: 49, height: 49)
+            .background(tint, in: SavePostcardSealShape())
+            .overlay {
+                SavePostcardSealShape()
+                    .stroke(
+                        edge.opacity(0.74),
+                        style: StrokeStyle(lineWidth: 1, dash: [2, 2])
+                    )
+            }
+    }
+}
+
+struct SavePostcardPostmark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(SaveAtlasPalette.line.opacity(0.70), lineWidth: 1)
+                .frame(width: 46, height: 46)
+            Image(systemName: "airplane")
+                .font(.system(size: 19, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.line)
+        }
+        .overlay(alignment: .trailing) {
+            VStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.58))
+                        .frame(width: 24, height: 1)
+                }
+            }
+            .offset(x: 20)
+        }
+        .frame(width: 64)
+        .accessibilityHidden(true)
+    }
+}
+
+struct SavePostcardScallopedRectangle: Shape {
+    var depth: CGFloat = 4
+    var pitch: CGFloat = 11
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = pitch / 2
+        path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY + depth))
+
+        var x = rect.minX + radius
+        while x < rect.maxX - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x + pitch, y: rect.minY + depth),
+                control: CGPoint(x: x + radius, y: rect.minY - depth)
+            )
+            x += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - depth, y: rect.minY + radius))
+        var y = rect.minY + radius
+        while y < rect.maxY - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX - depth, y: y + pitch),
+                control: CGPoint(x: rect.maxX + depth, y: y + radius)
+            )
+            y += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY - depth))
+        x = rect.maxX - radius
+        while x > rect.minX + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x - pitch, y: rect.maxY - depth),
+                control: CGPoint(x: x - radius, y: rect.maxY + depth)
+            )
+            x -= pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.minX + depth, y: rect.maxY - radius))
+        y = rect.maxY - radius
+        while y > rect.minY + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + depth, y: y - pitch),
+                control: CGPoint(x: rect.minX - depth, y: y - radius)
+            )
+            y -= pitch
+        }
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct SavePostcardSealShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let baseRadius = min(rect.width, rect.height) / 2 - 2
+        let steps = 96
+        var path = Path()
+
+        for step in 0...steps {
+            let angle = CGFloat(step) / CGFloat(steps) * .pi * 2 - .pi / 2
+            let radius = baseRadius + cos(angle * 16) * 2
+            let point = CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            if step == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
+    }
+}

@@ -575,19 +575,20 @@ struct SaveLibraryView: View {
             SaveAtlasBrandHeader {
                 Button(action: onOpenCapture) {
                     Image(systemName: "link")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(SaveAtlasPalette.ink)
-                        .frame(width: 42, height: 42)
+                        .frame(width: 38, height: 38)
                         .background(
                             SaveAtlasPalette.honey.opacity(0.82),
-                            in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                         )
                         .overlay {
-                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
                         }
                 }
                 .buttonStyle(.plain)
+                .frame(width: 44, height: 44)
                 .accessibilityLabel(localized("Paste or share link", "貼上／分享連結"))
                 .accessibilityIdentifier("root.capture")
             }
@@ -638,7 +639,7 @@ struct SaveLibraryView: View {
             }
 
             Spacer(minLength: 0)
-            MemoMascotMark(size: 82, framed: false)
+            SavePostcardMemoPeek(width: 82)
                 .accessibilityHidden(true)
         }
         .frame(minHeight: 100)
@@ -675,7 +676,7 @@ struct SaveLibraryView: View {
 
     @ViewBuilder
     private var reviewContent: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             if sortedCandidates.isEmpty {
                 VStack(spacing: 8) {
                     MemoMascotMark(size: 72, framed: false)
@@ -712,48 +713,47 @@ struct SaveLibraryView: View {
                 .saveAtlasPaper(radius: 18)
                 .accessibilityIdentifier("saves.review.empty")
             } else {
-                ForEach(sortedCandidates) { candidate in
-                    Button {
-                        onOpenReviewCandidate(candidate)
-                    } label: {
-                        SaveAtlasReviewTicket(
-                            candidate: candidate,
-                            detail: candidateDetail(candidate),
-                            kind: candidateKind(candidate),
-                            actionTitle: candidateActionTitle(candidate)
+                VStack(spacing: -6) {
+                    ForEach(sortedCandidates) { candidate in
+                        Button {
+                            onOpenReviewCandidate(candidate)
+                        } label: {
+                            SaveAtlasReviewTicket(
+                                candidate: candidate,
+                                detail: candidateDetail(candidate),
+                                kind: candidateKind(candidate),
+                                actionTitle: candidateActionTitle(candidate)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            "\(candidateKindTitle(candidate)), \(candidate.name), \(candidateDetail(candidate))"
                         )
+                        .accessibilityHint(localized(
+                            "Open this clue in Review",
+                            "在待確認中打開這個線索"
+                        ))
+                        .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        "\(candidateKindTitle(candidate)), \(candidate.name), \(candidateDetail(candidate))"
-                    )
-                    .accessibilityHint(localized(
-                        "Open this clue in Review",
-                        "在待確認中打開這個線索"
-                    ))
-                    .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
                 }
+
+                SavePostcardPocketFooter(
+                    title: localized("Full review queue", "完整待確認佇列"),
+                    subtitle: localized("Decide what is worth saving", "決定哪些值得保存"),
+                    count: sortedCandidates.count,
+                    countLabel: localized("need your review", "等待確認"),
+                    tint: SaveAtlasPalette.coral
+                )
+                .padding(.top, -18)
+                .zIndex(4)
+                .accessibilityIdentifier("saves.pocket.reviewFooter")
             }
         }
     }
 
     @ViewBuilder
     private var savedPlacesContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(localized("MAP STAMPS", "地圖章"))
-                    .font(SaveAtlasType.strong(11))
-                    .tracking(1.1)
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Spacer()
-                Label(
-                    localized("\(places.count) confirmed", "\(places.count) 個已確認"),
-                    systemImage: "checkmark.seal.fill"
-                )
-                .font(SaveAtlasType.display(12))
-                .foregroundStyle(SaveAtlasPalette.forest)
-            }
-
+        VStack(alignment: .leading, spacing: 0) {
             if sortedPlaces.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Label(
@@ -787,22 +787,28 @@ struct SaveLibraryView: View {
                 .padding(18)
                 .saveAtlasPaper(radius: 20)
             } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(sortedPlaces.enumerated()), id: \.element.id) { index, place in
-                        SaveRootPlaceRow(place: place) {
+                LazyVStack(spacing: -6) {
+                    ForEach(sortedPlaces) { place in
+                        Button {
                             onOpenSavedPlace(place)
+                        } label: {
+                            SaveAtlasMapStampTicket(place: place)
                         }
+                        .buttonStyle(.plain)
                         .accessibilityIdentifier("saves.place.\(place.id.uuidString)")
-
-                        if index < sortedPlaces.count - 1 {
-                            Divider()
-                                .overlay(SaveAtlasPalette.line.opacity(0.22))
-                                .padding(.leading, 60)
-                        }
                     }
                 }
-                .padding(.vertical, 4)
-                .saveAtlasPaper(radius: 20)
+
+                SavePostcardPocketFooter(
+                    title: localized("Your saved postcards", "你的收藏明信片"),
+                    subtitle: localized("Confirmed Map Stamps", "已確認地圖章"),
+                    count: sortedPlaces.count,
+                    countLabel: localized("saved postcards", "收藏明信片"),
+                    tint: SaveAtlasPalette.forest
+                )
+                .padding(.top, -18)
+                .zIndex(4)
+                .accessibilityIdentifier("saves.pocket.mapStampFooter")
             }
         }
     }
@@ -944,10 +950,10 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            MemoMascotMark(size: 38, framed: false)
+            MemoMascotMark(size: 32, framed: false)
 
             Text("SAV-E")
-                .font(SaveAtlasType.strong(24, relativeTo: .title3))
+                .font(SaveAtlasType.strong(22, relativeTo: .title3))
                 .tracking(1.1)
                 .foregroundStyle(SaveAtlasPalette.forest)
 
@@ -1197,73 +1203,62 @@ private struct SaveAtlasReviewTicket: View {
     let actionTitle: String
     @Environment(\.appLanguageSettings) private var languageSettings
 
-    private var tint: Color {
-        kind == .sourceClue
-            ? SaveAtlasPalette.coral.opacity(0.42)
-            : SaveAtlasPalette.sky
-    }
-
     var body: some View {
-        HStack(spacing: 11) {
-            SaveAtlasPerforatedMedallion(
-                systemName: kind == .sourceClue ? "magnifyingglass" : "camera",
-                tint: tint
-            )
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(kindTitle.uppercased())
-                    .font(SaveAtlasType.strong(10))
-                    .tracking(0.6)
-                    .foregroundStyle(
-                        kind == .sourceClue
-                            ? SaveAtlasPalette.coral
-                            : Color.saveBlueInk
-                    )
-
-                Text(candidate.name.isEmpty
-                    ? localized("Untitled clue", "未命名線索")
-                    : candidate.name
-                )
-                    .font(SaveAtlasType.strong(18, relativeTo: .headline))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .lineLimit(1)
-
-                Text(detail)
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 4)
-
-            Text(actionTitle)
-                .font(SaveAtlasType.display(13))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .lineLimit(1)
-                .padding(.horizontal, 11)
-                .frame(minHeight: 38)
-                .background(tint.opacity(0.84), in: RoundedRectangle(cornerRadius: 10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(SaveAtlasPalette.ink.opacity(0.22), lineWidth: 1)
-                }
-        }
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-        .background(SaveAtlasPalette.paper)
-        .padding(5)
-        .background(
-            SaveAtlasScallopedRectangle(depth: 3, pitch: 10)
-                .fill(tint.opacity(0.94))
+        SavePostcardTicket(
+            eyebrow: kindTitle,
+            title: candidate.name.isEmpty
+                ? localized("Untitled clue", "未命名線索")
+                : candidate.name,
+            detail: detail,
+            actionTitle: actionTitle,
+            style: kind == .sourceClue ? .sourceClue : .review
         )
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 4, y: 2)
-        .contentShape(Rectangle())
     }
 
     private var kindTitle: String {
         kind == .sourceClue
             ? localized("Source Clue", "來源線索")
             : localized("Review Candidate", "待確認地點")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct SaveAtlasMapStampTicket: View {
+    let place: Place
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        SavePostcardTicket(
+            eyebrow: localized("Confirmed Map Stamp", "已確認地圖章"),
+            title: place.name,
+            detail: detail,
+            actionTitle: localized("Open", "打開"),
+            style: .confirmed
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(place.name), \(detail)")
+        .accessibilityHint(localized(
+            "Open the lifted saved postcard",
+            "打開收藏明信片詳情"
+        ))
+        .accessibilityIdentifier("saves.mapStamp.postcard")
+    }
+
+    private var detail: String {
+        let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let location = area.isEmpty
+            ? place.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            : area
+        let source = place.sourcePlatform == .other
+            ? localized("Saved memory", "已保存記憶")
+            : localized(
+                "From \(place.sourcePlatform.displayName)",
+                "來自 \(place.sourcePlatform.displayName)"
+            )
+        return location.isEmpty ? source : "\(location) · \(source)"
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
