@@ -904,6 +904,52 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testPassportAndPostalImportSurfacesAreReachable() throws {
+        let storageID = UUID().uuidString.lowercased()
+        let app = XCUIApplication()
+        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage",
+            "-save.appLanguage", "en",
+        ]
+
+        addUIInterruptionMonitor(withDescription: "Location permission") { alert in
+            for label in ["Allow While Using App", "Allow Once", "Don't Allow"] {
+                let button = alert.buttons[label]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+
+        app.launch()
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+
+        let capture = app.buttons["home.capture"]
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+
+        let profileButton = app.buttons["drawer.profile"]
+        XCTAssertTrue(profileButton.waitForExistence(timeout: stepTimeout))
+        profileButton.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.importGoogleTakeout"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-passport")
+
+        app.buttons["profile.importGoogleTakeout"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["takeout.import.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["takeout.import.chooseFile"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-postal-import-empty")
+    }
+
+    @MainActor
     func testFriendsSurfaceIsReachableAndKeepsFollowEntryVisible() throws {
         let app = XCUIApplication()
         app.launchArguments += [

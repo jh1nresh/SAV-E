@@ -8,12 +8,16 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
+    @State private var showGoogleTakeoutImport = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
     @State private var localSavedPlaces: [Place] = []
     var savedPlaces: [Place] = []
     var waitingClues: Int = 0
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
+    var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
+        GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
+    }
 
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -108,6 +112,23 @@ struct ProfileView: View {
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.memoryPreferences")
 
+                        SettingsRow(
+                            icon: "shippingbox.and.arrow.backward.fill",
+                            title: languageSettings.localized(
+                                english: "Import Google Takeout",
+                                traditionalChinese: "匯入 Google Takeout"
+                            ),
+                            detail: languageSettings.localized(
+                                english: "Deliver historical place exports to SAV-E",
+                                traditionalChinese: "把歷史地點匯出檔送進 SAV-E"
+                            ),
+                            color: SaveAtlasPalette.kraft
+                        ) {
+                            SaveHaptics.tap()
+                            showGoogleTakeoutImport = true
+                        }
+                        .accessibilityIdentifier("profile.importGoogleTakeout")
+
                         SettingsRow(icon: "arrow.right.square", title: languageSettings.text(.signOut), color: .saveError) {
                             SaveHaptics.tap()
                             Task { await viewModel.signOut() }
@@ -123,6 +144,7 @@ struct ProfileView: View {
             }
             .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .accessibilityIdentifier("profile.root")
         }
         .task {
             localSavedPlaces = savedPlaces
@@ -147,6 +169,12 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
+        }
+        .sheet(isPresented: $showGoogleTakeoutImport) {
+            GoogleTakeoutImportView(
+                existingPlaces: passportPlaces,
+                onSave: onSaveGoogleTakeoutImport
+            )
         }
     }
 
@@ -349,11 +377,11 @@ private struct PassportTopBar: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(languageSettings.text(.profileTitle))
-                    .font(SaveTheme.Typography.cardTitle)
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(24, relativeTo: .title2))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                 Text(languageSettings.memoWaitingText(waitingClues))
-                    .font(SaveTheme.Typography.supporting)
-                    .foregroundColor(.saveMutedText)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
 
             Spacer()
@@ -364,19 +392,28 @@ private struct PassportTopBar: View {
                         Image(systemName: "pencil")
                             .font(.caption.weight(.bold))
                         Text(languageSettings.text(.edit))
-                            .font(.caption.weight(.bold))
+                            .font(SaveAtlasType.strong(13))
                     }
-                        .foregroundColor(.saveInk)
+                        .foregroundStyle(SaveAtlasPalette.ink)
                         .padding(.horizontal, SaveTheme.Spacing.md)
                         .frame(height: 38)
-                        .saveNotebookSurface(cornerRadius: 14, fill: .saveHoney, opacity: 0.42, lineWidth: 1.4)
+                        .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
+                        }
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("profile.edit")
             }
         }
         .padding(SaveTheme.Spacing.sm)
-        .saveNotebookSurface(cornerRadius: 22)
+        .background(SaveAtlasPalette.paper.opacity(0.96))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
+        }
     }
 }
 
@@ -425,16 +462,16 @@ private struct PassportHero: View {
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                         Text(languageSettings.text(.profileTitle))
-                            .font(SaveTheme.Typography.eyebrow)
-                            .foregroundColor(.saveCocoa)
+                            .font(SaveAtlasType.strong(11))
+                            .tracking(0.75)
+                            .foregroundStyle(SaveAtlasPalette.coral)
                         Text(profile.displayName)
-                            // Intentional large display name; .title2 is the hero size, no token.
-                            .font(.title2.weight(.bold))
-                            .foregroundColor(.saveInk)
+                            .font(SaveAtlasType.strong(28, relativeTo: .title2))
+                            .foregroundStyle(SaveAtlasPalette.forest)
                             .lineLimit(2)
                         Text(profile.email ?? languageSettings.text(.localMemoHelper))
-                            .font(SaveTheme.Typography.supporting)
-                            .foregroundColor(.saveMutedText)
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
                             .lineLimit(1)
                     }
 
@@ -950,13 +987,13 @@ struct SettingsRow: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(SaveTheme.Typography.rowTitle)
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(15))
+                        .foregroundStyle(SaveAtlasPalette.forest)
 
                     if let detail {
                         Text(detail)
-                            .font(SaveTheme.Typography.supporting)
-                            .foregroundColor(.saveMutedText)
+                            .font(SaveAtlasType.body(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
                     }
                 }
 
@@ -968,7 +1005,12 @@ struct SettingsRow: View {
             }
             .padding(.vertical, SaveTheme.Spacing.md)
             .padding(.horizontal, SaveTheme.Spacing.sm)
-            .saveNotebookSurface(cornerRadius: 14, fill: color, opacity: 0.10)
+            .background(SaveAtlasPalette.paper.opacity(0.92))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(color.opacity(0.24), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
     }
