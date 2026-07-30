@@ -11,7 +11,6 @@
 		08517724B9C3842471E1208C /* DeterministicTripPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */; };
 		0DC49802ED00F7D312CC0073 /* SavePetStageVisualTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BD1EB25DF15172B95286CE /* SavePetStageVisualTests.swift */; };
 		11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6C366D3712F5DE04F5EEC40 /* SavePlanAroundController.swift */; };
-		1A6CFA49853A5DA9FAAFDAE8 /* PlaceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14C815DA9D24219C76EF772 /* PlaceDetailView.swift */; };
 		1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */; };
 		1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */; };
 		1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */; };
@@ -310,7 +309,6 @@
 		ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacePickerView.swift; sourceTree = "<group>"; };
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
-		B14C815DA9D24219C76EF772 /* PlaceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceDetailView.swift; sourceTree = "<group>"; };
 		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
 		B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
 		BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPackStoreTests.swift; sourceTree = "<group>"; };
@@ -438,14 +436,6 @@
 				CC74577E9D14A1648B111939 /* GoogleTakeoutImportView.swift */,
 			);
 			path = Import;
-			sourceTree = "<group>";
-		};
-		108381E71DA7F2288153579B /* Detail */ = {
-			isa = PBXGroup;
-			children = (
-				B14C815DA9D24219C76EF772 /* PlaceDetailView.swift */,
-			);
-			path = Detail;
 			sourceTree = "<group>";
 		};
 		11C717FAE02813E9F58CF778 /* Products */ = {
@@ -585,7 +575,6 @@
 			children = (
 				68F2C25133736DAABDAA1B57 /* Atlas */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
-				108381E71DA7F2288153579B /* Detail */,
 				9139D454B1CF7369056FEAD9 /* Drawer */,
 				1C3D7D3EC0790BB3B200433A /* Home */,
 				0DEF737A97EB8D779D03246B /* Import */,
@@ -1152,7 +1141,6 @@
 				07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */,
 				A6270F856D0B837CAD4276E9 /* PlaceBottomSheet.swift in Sources */,
 				887601CFE6BC639CDD2B859A /* PlaceBusinessEnricher.swift in Sources */,
-				1A6CFA49853A5DA9FAAFDAE8 /* PlaceDetailView.swift in Sources */,
 				67B0D4C02A1500F6B8D902CF /* PlaceListComponent.swift in Sources */,
 				39FF5DB199938DCC8C8CD544 /* PlatformIcon.swift in Sources */,
 				3886D3525DDF070971BCFFC4 /* Presentation.swift in Sources */,

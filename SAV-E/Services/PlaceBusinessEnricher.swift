@@ -13,8 +13,7 @@ enum PlaceBusinessEnricher {
         let openingHours: String?
     }
 
-    /// Whether the place is still missing details worth fetching. Mirrors the
-    /// guard used historically in `PlaceDetailView.enrichBusinessDetails`.
+    /// Whether the place is still missing details worth fetching.
     static func needsEnrichment(_ place: Place) -> Bool {
         place.businessPhotoURLStrings.count < 2 ||
             place.googleRating == nil ||
