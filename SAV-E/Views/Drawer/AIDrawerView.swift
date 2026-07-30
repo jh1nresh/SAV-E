@@ -150,7 +150,6 @@ struct AIDrawerView: View {
     @ScaledMetric(relativeTo: .body) private var commandBarMinHeight: CGFloat = 52
     @ScaledMetric(relativeTo: .body) private var commandFieldMinHeight: CGFloat = 28
     @StateObject private var voiceQuery = VoiceQueryController()
-    @State private var showGoogleTakeoutImport = false
     @State private var addSpotStatus: String?
     @State private var candidateActionInFlight: UUID?
     @State private var mapCandidateActionInFlight: String?
@@ -192,19 +191,14 @@ struct AIDrawerView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.root")
-        .sheet(isPresented: $showGoogleTakeoutImport) {
-            GoogleTakeoutImportView(
-                existingPlaces: existingPlacesForImport,
-                onSave: onSaveGoogleTakeoutImport
-            )
-        }
         .sheet(isPresented: $showProfile) {
             ProfileView(
                 savedPlaces: viewModel.places,
                 waitingClues: reviewCandidates.count,
                 onUpdatePlaceVisibility: { place, visibility in
                     try await onUpdatePlaceVisibility(place, visibility)
-                }
+                },
+                onSaveGoogleTakeoutImport: onSaveGoogleTakeoutImport
             )
         }
         .onChange(of: viewModel.drawerState) { _, state in
@@ -5926,6 +5920,7 @@ private struct PassportDrawerButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(languageSettings.localized(english: "Open SAV-E Passport", traditionalChinese: "打開 SAV-E 護照"))
+        .accessibilityIdentifier("drawer.profile")
     }
 }
 
