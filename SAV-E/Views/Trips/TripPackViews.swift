@@ -1035,56 +1035,134 @@ private struct TripInboxView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        List {
-            Section {
-                Text(localized(
-                    "This is your SAV-E-wide Review queue. Confirm an exact place, then choose whether to add it to \(tripName).",
-                    "這是 SAV-E 的全域待確認清單。確認精確地點後，再選擇是否加入「\(tripName)」。"
-                ))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
-            .saveNotebookListRow()
+        ZStack {
+            SaveDottedBackground()
+                .ignoresSafeArea()
 
-            Section {
-                Button(action: onOpenCapture) {
-                    Label(localized("Add a link", "加入連結"), systemImage: "link.badge.plus")
-                }
-                .accessibilityIdentifier("trip.inbox.addLink")
-            }
-            .saveNotebookListRow()
-
-            Section(localized("SAV-E Needs Review", "SAV-E 待確認")) {
-                if candidates.isEmpty {
-                    ContentUnavailableView(
-                        localized("Inbox is clear", "收件匣已清空"),
-                        systemImage: "tray",
-                        description: Text(localized("Share a link to start an investigation.", "分享連結即可開始分析。"))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    TripPostalWorkspaceHeader(
+                        eyebrow: localized("Trip workspace", "行程工作區"),
+                        title: localized("Inbox", "收件匣"),
+                        subtitle: localized(
+                            "Review clues before they become stops.",
+                            "先確認線索，再加入行程。"
+                        )
                     )
-                } else {
-                    ForEach(candidates) { candidate in
-                        Button {
-                            onSelect(candidate)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(candidate.name).font(.body.weight(.semibold))
-                                    Text(candidate.address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+
+                    TripContextRibbon(
+                        tripName: tripName,
+                        candidateCount: sortedCandidates.count
+                    )
+                    .accessibilityIdentifier("trip.inbox.contextRibbon")
+
+                    Button(action: onOpenCapture) {
+                        Label(
+                            localized("Add a link", "加入連結"),
+                            systemImage: "link.badge.plus"
+                        )
+                        .font(SaveAtlasType.strong(15))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 48)
+                        .background(
+                            SaveAtlasPalette.coral,
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("trip.inbox.addLink")
+
+                    if sortedCandidates.isEmpty {
+                        TripInboxEmptyPostcard(onAddLink: onOpenCapture)
+                    } else {
+                        LazyVStack(spacing: -6) {
+                            ForEach(sortedCandidates) { candidate in
+                                Button {
+                                    onSelect(candidate)
+                                } label: {
+                                    SavePostcardTicket(
+                                        eyebrow: candidateKindTitle(candidate),
+                                        title: candidate.name.isEmpty
+                                            ? localized("Untitled clue", "未命名線索")
+                                            : candidate.name,
+                                        detail: candidateDetail(candidate),
+                                        actionTitle: candidateActionTitle(candidate),
+                                        style: isSourceClue(candidate) ? .sourceClue : .review
+                                    )
                                 }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("trip.inbox.candidate.\(candidate.id.uuidString)")
                             }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("trip.inbox.candidate.\(candidate.id.uuidString)")
+                        .accessibilityIdentifier("trip.inbox.ticketStack")
+
+                        SavePostcardPocketFooter(
+                            title: localized("Trip review pocket", "行程待確認口袋"),
+                            subtitle: localized("Confirm before adding a stop", "確認後再加入停靠點"),
+                            count: sortedCandidates.count,
+                            countLabel: localized("need your review", "等待確認"),
+                            tint: SaveAtlasPalette.coral
+                        )
+                        .padding(.top, -18)
                     }
                 }
+                .padding(.horizontal, 18)
+                .padding(.top, 64)
+                .padding(.bottom, 28)
             }
-            .saveNotebookListRow()
+            .scrollIndicators(.hidden)
         }
-        .listStyle(.insetGrouped)
-        .saveNotebookListCanvas()
         .accessibilityIdentifier("trip.inbox")
+    }
+
+    private var sortedCandidates: [PlaceReviewCandidate] {
+        candidates.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private func isSourceClue(_ candidate: PlaceReviewCandidate) -> Bool {
+        candidate.status == "source_only" || !candidate.hasReliableCoordinates
+    }
+
+    private func candidateKindTitle(_ candidate: PlaceReviewCandidate) -> String {
+        isSourceClue(candidate)
+            ? localized("Source Clue", "來源線索")
+            : localized("Review Candidate", "待確認地點")
+    }
+
+    private func candidateActionTitle(_ candidate: PlaceReviewCandidate) -> String {
+        isSourceClue(candidate)
+            ? localized("Find exact", "找出地點")
+            : localized("Review", "確認")
+    }
+
+    private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
+        if isSourceClue(candidate) {
+            return localized("Missing exact place", "缺少精確地點")
+        }
+
+        let source = ReviewSourceReceiptPresentation(candidate: candidate)
+        if let handle = candidate.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !handle.isEmpty {
+            return localized("From \(handle)", "來自 \(handle)")
+        }
+        if let handle = source.handle {
+            return localized("From \(handle)", "來自 \(handle)")
+        }
+        if source.sourcePlatform != .other {
+            return localized(
+                "From \(source.sourcePlatform.displayName)",
+                "來自 \(source.sourcePlatform.displayName)"
+            )
+        }
+        if let city = candidate.city?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !city.isEmpty {
+            return city
+        }
+        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty
+            ? localized("Shared link", "分享連結")
+            : address
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -1102,47 +1180,98 @@ private struct TripPackShareView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        List {
-            Section {
-                if let shareURL {
-                    ShareLink(item: shareURL) {
-                        Label(localized("Share SAV-E Link", "分享 SAV-E 連結"), systemImage: "link")
-                    }
-                    .accessibilityIdentifier("trip.share.link")
-                } else {
-                    Label(
-                        localized("Add at least one confirmed Map Stamp before sharing.", "至少加入一個已確認地圖章後才能分享。"),
-                        systemImage: "info.circle"
-                    )
-                    .foregroundStyle(.secondary)
-                }
+        ZStack {
+            SaveDottedBackground()
+                .ignoresSafeArea()
 
-                Button {
-                    Task { await exportKML() }
-                } label: {
-                    if isExportingKML {
-                        HStack {
-                            ProgressView()
-                            Text(localized("Preparing KML…", "正在準備 KML…"))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    TripPostalWorkspaceHeader(
+                        eyebrow: localized("Trip workspace", "行程工作區"),
+                        title: localized("Share", "分享"),
+                        subtitle: localized(
+                            "Send the confirmed plan, not private notes.",
+                            "只分享已確認規劃，不分享私人筆記。"
+                        )
+                    )
+
+                    TripAddressedPostcard(
+                        trip: trip,
+                        confirmedStopCount: orderedConfirmedPlaceIDs.count
+                    )
+                    .accessibilityIdentifier("trip.share.postcard")
+
+                    HStack(spacing: 10) {
+                        if let shareURL {
+                            ShareLink(item: shareURL) {
+                                TripPostalExportStamp(
+                                    title: localized("SAV-E Link", "SAV-E 連結"),
+                                    subtitle: localized("Open in SAV-E", "在 SAV-E 開啟"),
+                                    systemImage: "link",
+                                    tint: SaveAtlasPalette.sky
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("trip.share.link")
+                        } else {
+                            TripPostalExportStamp(
+                                title: localized("SAV-E Link", "SAV-E 連結"),
+                                subtitle: localized("Add a Map Stamp", "先加入地圖章"),
+                                systemImage: "link",
+                                tint: SaveAtlasPalette.line,
+                                isDisabled: true
+                            )
+                            .accessibilityIdentifier("trip.share.link.disabled")
                         }
-                    } else {
-                        Label(localized("Export KML", "匯出 KML"), systemImage: "doc.badge.arrow.up")
+
+                        Button {
+                            Task { await exportKML() }
+                        } label: {
+                            TripPostalExportStamp(
+                                title: localized("KML", "KML"),
+                                subtitle: isExportingKML
+                                    ? localized("Preparing…", "準備中…")
+                                    : localized("Export map file", "匯出地圖檔"),
+                                systemImage: "doc.badge.arrow.up",
+                                tint: SaveAtlasPalette.mint,
+                                isLoading: isExportingKML,
+                                isDisabled: orderedConfirmedPlaceIDs.isEmpty
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isExportingKML || orderedConfirmedPlaceIDs.isEmpty)
+                        .accessibilityIdentifier("trip.share.kml")
+                    }
+
+                    TripPrivacyReceipt(
+                        title: localized("Privacy receipt", "隱私收據"),
+                        text: localized(
+                            "SAV-E links and KML include confirmed place details only. Private notes are excluded.",
+                            "SAV-E 連結與 KML 只包含已確認地點；私人備註不會輸出。"
+                        )
+                    )
+                    .accessibilityIdentifier("trip.share.privacyReceipt")
+
+                    if shareURL == nil {
+                        Label(
+                            localized(
+                                "Add at least one confirmed Map Stamp before sharing.",
+                                "至少加入一個已確認地圖章後才能分享。"
+                            ),
+                            systemImage: "info.circle"
+                        )
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .disabled(isExportingKML || orderedConfirmedPlaceIDs.isEmpty)
-                .accessibilityIdentifier("trip.share.kml")
-            } header: {
-                Text(localized("Trip Pack", "Trip Pack"))
-            } footer: {
-                Text(localized(
-                    "SAV-E links and KML include confirmed place details only. Private notes are excluded.",
-                    "SAV-E 連結與 KML 只包含已確認地點；私人備註不會輸出。"
-                ))
+                .padding(.horizontal, 18)
+                .padding(.top, 64)
+                .padding(.bottom, 28)
             }
-            .saveNotebookListRow()
+            .scrollIndicators(.hidden)
         }
-        .listStyle(.insetGrouped)
-        .saveNotebookListCanvas()
+        .accessibilityIdentifier("trip.share")
         .sheet(item: $kmlShareItem, onDismiss: cleanupKMLFile) { item in
             ShareSheet(items: [item.url])
                 .accessibilityIdentifier("trip.share.kml.sheet")
@@ -1213,6 +1342,291 @@ private struct TripPackShareView: View {
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct TripPostalWorkspaceHeader: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(eyebrow.uppercased())
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.7)
+                .foregroundStyle(SaveAtlasPalette.muted)
+            Text(title)
+                .font(SaveAtlasType.strong(30, relativeTo: .largeTitle))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            Text(subtitle)
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct TripContextRibbon: View {
+    let tripName: String
+    let candidateCount: Int
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "suitcase.rolling.fill")
+                .font(SaveAtlasType.strong(14))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 34, height: 34)
+                .background(SaveAtlasPalette.mint, in: Circle())
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(localized("FOR \(tripName)", "加入「\(tripName)」前"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.45)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .lineLimit(1)
+                Text(localized(
+                    "Confirm an exact place before adding it as a stop.",
+                    "先確認精確地點，再加入停靠點。"
+                ))
+                .font(SaveAtlasType.body(11))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .lineLimit(2)
+            }
+
+            Spacer(minLength: 4)
+
+            Text("\(candidateCount)")
+                .font(SaveAtlasType.editorial(22))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .monospacedDigit()
+                .frame(minWidth: 34, minHeight: 34)
+                .background(SaveAtlasPalette.honey, in: Circle())
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(SaveAtlasPalette.paper)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.36),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct TripInboxEmptyPostcard: View {
+    let onAddLink: () -> Void
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        VStack(spacing: 10) {
+            MemoMascotMark(size: 70, framed: false)
+            Text(localized("Inbox is clear", "收件匣已清空"))
+                .font(SaveAtlasType.strong(21))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            Text(localized(
+                "Share a link when you find a place worth checking for this trip.",
+                "看到值得加入行程的地點時，分享連結給 SAV-E。"
+            ))
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .multilineTextAlignment(.center)
+
+            Button(action: onAddLink) {
+                Text(localized("Paste a link", "貼上連結"))
+                    .font(SaveAtlasType.strong(14))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 42)
+                    .background(SaveAtlasPalette.honey, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(18)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .stroke(
+                    SaveAtlasPalette.sky,
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        }
+        .accessibilityIdentifier("trip.inbox.empty")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct TripAddressedPostcard: View {
+    let trip: Trip
+    let confirmedStopCount: Int
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("TRIP POSTCARD", "行程明信片"))
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.75)
+                        .foregroundStyle(SaveAtlasPalette.coral)
+                    Text(trip.name)
+                        .font(SaveAtlasType.strong(24, relativeTo: .title2))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+                SavePostcardPostmark()
+            }
+
+            HStack(spacing: 12) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(SaveAtlasType.strong(20))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 48, height: 48)
+                    .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 10))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("TO YOUR TRAVEL CREW", "寄給同行旅伴"))
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.55)
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                    Text(trip.city.isEmpty ? localized("Destination pending", "目的地待定") : trip.city)
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                    Text("\(trip.dateRangeText) · \(stopSummary)")
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            VStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.34))
+                        .frame(height: 1)
+                }
+            }
+        }
+        .padding(16)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .stroke(
+                    SaveAtlasPalette.coral.opacity(0.72),
+                    style: StrokeStyle(lineWidth: 1.1, dash: [3, 3])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 7, y: 3)
+    }
+
+    private var stopSummary: String {
+        localized(
+            confirmedStopCount == 1 ? "1 confirmed stop" : "\(confirmedStopCount) confirmed stops",
+            "\(confirmedStopCount) 個已確認停靠點"
+        )
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct TripPostalExportStamp: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    var isLoading = false
+    var isDisabled = false
+
+    var body: some View {
+        VStack(spacing: 7) {
+            if isLoading {
+                ProgressView()
+                    .tint(SaveAtlasPalette.forest)
+            } else {
+                Image(systemName: systemImage)
+                    .font(SaveAtlasType.strong(19))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+            }
+            Text(title)
+                .font(SaveAtlasType.strong(14))
+                .foregroundStyle(SaveAtlasPalette.ink)
+            Text(subtitle)
+                .font(SaveAtlasType.body(10))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 104)
+        .background(SaveAtlasPalette.paper.opacity(isDisabled ? 0.68 : 1))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 9)
+                .fill(tint.opacity(isDisabled ? 0.28 : 0.66))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 9)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(isDisabled ? 0.20 : 0.48),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
+        .opacity(isDisabled ? 0.62 : 1)
+    }
+}
+
+private struct TripPrivacyReceipt: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "lock.shield.fill")
+                .font(SaveAtlasType.strong(14))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 32, height: 32)
+                .background(SaveAtlasPalette.mint, in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title.uppercased())
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.65)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(text)
+                    .font(SaveAtlasType.body(11))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SaveAtlasPalette.paper)
+        .overlay {
+            Rectangle()
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.35),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                )
+        }
     }
 }
 
