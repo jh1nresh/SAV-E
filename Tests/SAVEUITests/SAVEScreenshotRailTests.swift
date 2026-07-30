@@ -952,19 +952,27 @@ final class SAVEScreenshotRailTests: XCTestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
 
-        let capture = app.buttons["home.capture"]
-        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
-        capture.tap()
-
-        let profileButton = app.buttons["drawer.profile"]
-        XCTAssertTrue(profileButton.waitForExistence(timeout: stepTimeout))
-        profileButton.tap()
+        for tab in ["Home", "Saves", "Trips", "Map"] {
+            openRootTab(tab, app: app)
+            XCTAssertTrue(
+                app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
+                "\(tab) should keep the fixed Passport entry in its SAV-E lockup."
+            )
+        }
+        openRootTab("Home", app: app)
+        app.buttons["root.passport"].tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["profile.importGoogleTakeout"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.cover"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampLedger"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-passport")
 
-        app.buttons["profile.importGoogleTakeout"].tap()
+        let importButton = app.buttons["profile.importGoogleTakeout"]
+        XCTAssertTrue(
+            scrollUntilHittable(importButton, in: app.scrollViews.firstMatch, maxSwipes: 12),
+            "Passport controls should expose Postal Import."
+        )
+        importButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["takeout.import.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["takeout.import.chooseFile"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-postal-import-empty")
@@ -1264,8 +1272,12 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    private func scrollUntilHittable(_ element: XCUIElement, in scrollView: XCUIElement) -> Bool {
-        for _ in 0..<5 {
+    private func scrollUntilHittable(
+        _ element: XCUIElement,
+        in scrollView: XCUIElement,
+        maxSwipes: Int = 5
+    ) -> Bool {
+        for _ in 0..<maxSwipes {
             if element.exists, element.isHittable { return true }
             scrollView.swipeUp()
         }

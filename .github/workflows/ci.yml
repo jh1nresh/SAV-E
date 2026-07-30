@@ -87,6 +87,7 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripInboxAndShareUsePostcardPocket \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 

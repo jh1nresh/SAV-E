@@ -97,7 +97,6 @@ struct AIDrawerView: View {
     @Binding var mapDetailDrawerItem: MapDetailDrawerItem?
     var launchRequest: DrawerLaunchRequest = DrawerLaunchRequest(target: .review)
     var captureTripName: String?
-    var existingPlacesForImport: [Place] = []
     var reviewCandidates: [PlaceReviewCandidate] = []
     var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
         GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
@@ -158,7 +157,6 @@ struct AIDrawerView: View {
     @State private var isImportingURL = false
     @State private var linkAnalysisState: LinkAnalysisState = .idle
     @State private var showsSlowLoadingHint = false
-    @State private var showProfile = false
     @State private var showLists = false
     @State private var selectedListID: UUID?
     @State private var newListTitle = ""
@@ -191,16 +189,6 @@ struct AIDrawerView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.root")
-        .sheet(isPresented: $showProfile) {
-            ProfileView(
-                savedPlaces: viewModel.places,
-                waitingClues: reviewCandidates.count,
-                onUpdatePlaceVisibility: { place, visibility in
-                    try await onUpdatePlaceVisibility(place, visibility)
-                },
-                onSaveGoogleTakeoutImport: onSaveGoogleTakeoutImport
-            )
-        }
         .onChange(of: viewModel.drawerState) { _, state in
             guard mapDetailDrawerItem == nil else { return }
             if case .error = state { SaveHaptics.warning() }
@@ -2033,7 +2021,6 @@ struct AIDrawerView: View {
     private func openProfile() {
         voiceQuery.stop()
         searchFocused = false
-        showProfile = true
         onOpenPassport()
     }
 

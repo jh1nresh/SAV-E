@@ -16,7 +16,8 @@ enum SaveAtlasPresentationFactory {
         onOpenTrip: @escaping (UUID) -> Void,
         onOpenSaves: @escaping () -> Void,
         onOpenPlace: @escaping (Place) -> Void,
-        onOpenReview: @escaping (PlaceReviewCandidate) -> Void
+        onOpenReview: @escaping (PlaceReviewCandidate) -> Void,
+        onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
         let suggestedTrip = store.suggestedTrip
         var presentation = SaveAtlasRuntime.usesParityFixture
@@ -49,6 +50,7 @@ enum SaveAtlasPresentationFactory {
             }
             onOpenReview(candidate)
         }
+        presentation.onOpenPassport = onOpenPassport
         return presentation
     }
 
@@ -60,7 +62,8 @@ enum SaveAtlasPresentationFactory {
         onOpenPlace: @escaping (Place) -> Void,
         onOpenReview: @escaping (PlaceReviewCandidate) -> Void,
         onSelectReview: @escaping () -> Void,
-        onSelectMapStamps: @escaping () -> Void
+        onSelectMapStamps: @escaping () -> Void,
+        onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
         var presentation = SaveAtlasRuntime.usesParityFixture
             ? AtlasPresentation.reference
@@ -84,13 +87,15 @@ enum SaveAtlasPresentationFactory {
         }
         presentation.onSelectReview = onSelectReview
         presentation.onSelectMapStamps = onSelectMapStamps
+        presentation.onOpenPassport = onOpenPassport
         return presentation
     }
 
     static func map(
         mapViewModel: MapViewModel,
         onOpenAssistant: @escaping () -> Void,
-        onOpenPlace: @escaping (Place) -> Void
+        onOpenPlace: @escaping (Place) -> Void,
+        onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
         var presentation = SaveAtlasRuntime.usesParityFixture
             ? AtlasPresentation.reference
@@ -107,6 +112,7 @@ enum SaveAtlasPresentationFactory {
             onOpenPlace(place)
         }
         presentation.onOpenAssistant = onOpenAssistant
+        presentation.onOpenPassport = onOpenPassport
         return presentation
     }
 
@@ -115,7 +121,8 @@ enum SaveAtlasPresentationFactory {
         onCapture: @escaping () -> Void,
         onOpenAssistant: @escaping () -> Void,
         onCreateTrip: @escaping () -> Void,
-        onOpenTrip: @escaping (UUID) -> Void
+        onOpenTrip: @escaping (UUID) -> Void,
+        onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
         var presentation = AtlasPresentation.reference
 
@@ -138,6 +145,7 @@ enum SaveAtlasPresentationFactory {
             guard let selectedTrip else { return }
             onOpenTrip(selectedTrip.id)
         }
+        presentation.onOpenPassport = onOpenPassport
         return presentation
     }
 

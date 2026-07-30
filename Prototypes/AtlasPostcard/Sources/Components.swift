@@ -14,16 +14,37 @@ struct MemoMark: View {
 }
 
 struct BrandHeader<Trailing: View>: View {
+    @Environment(\.atlasPresentation) private var presentation
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
         HStack(spacing: 9) {
-            MemoMark(size: 40)
+            Button(action: presentation.onOpenPassport) {
+                HStack(spacing: 9) {
+                    MemoMark(size: 40)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "book.closed.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(AtlasPalette.forest)
+                                .frame(width: 16, height: 16)
+                                .background(AtlasPalette.mint, in: Circle())
+                                .overlay {
+                                    Circle()
+                                        .stroke(AtlasPalette.paper, lineWidth: 1.5)
+                                }
+                                .offset(x: 3, y: 2)
+                        }
 
-            Text("SAV-E")
-                .font(AtlasType.strong(24))
-                .tracking(1.1)
-                .foregroundStyle(AtlasPalette.forest)
+                    Text("SAV-E")
+                        .font(AtlasType.strong(24))
+                        .tracking(1.1)
+                        .foregroundStyle(AtlasPalette.forest)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open SAV-E Passport")
+            .accessibilityIdentifier("root.passport")
 
             Spacer()
             trailing()

@@ -90,6 +90,7 @@ struct ContentView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
+    @State private var isPassportPresented = false
     @State private var drawerDetent: PresentationDetent
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
@@ -137,6 +138,19 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
             rootSheetContent
+        }
+        .sheet(isPresented: $isPassportPresented) {
+            ProfileView(
+                savedPlaces: mapVM.places,
+                waitingClues: mapVM.reviewCandidates.count,
+                onUpdatePlaceVisibility: { place, visibility in
+                    try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+                },
+                onSaveGoogleTakeoutImport: { drafts in
+                    try await mapVM.saveImportedPlaces(drafts)
+                }
+            )
+            .environment(\.appLanguageSettings, languageSettings)
         }
         .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: finishTripAssignment) {
             NewTripPackView { name, city, startDate, endDate in
@@ -296,7 +310,8 @@ struct ContentView: View {
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenSaves: { selectedRootTab = .saves },
                                 onOpenTrips: { selectedRootTab = .trips },
-                                onOpenTrip: { rootPath.append(.trip($0)) }
+                                onOpenTrip: { rootPath.append(.trip($0)) },
+                                onOpenPassport: openPassport
                             )
                         case .saves:
                             SaveLibraryView(
@@ -307,13 +322,15 @@ struct ContentView: View {
                                 onOpenReviewCandidate: {
                                     openReviewCandidate($0, tripID: nil)
                                 },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
+                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenPassport: openPassport
                             )
                         case .trips:
                             TripsHomeView(
                                 store: tripStore,
                                 onOpenDrawer: openDrawer,
-                                onOpenTrip: { rootPath.append(.trip($0)) }
+                                onOpenTrip: { rootPath.append(.trip($0)) },
+                                onOpenPassport: openPassport
                             )
                             .frame(width: 402, height: 786)
                             .clipped()
@@ -322,7 +339,8 @@ struct ContentView: View {
                                 mapViewModel: mapVM,
                                 shouldFocusOnUserLocation: true,
                                 onOpenSearch: { openDrawer(.ask, tripID: nil) },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) }
+                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenPassport: openPassport
                             )
                         }
                     }
@@ -387,7 +405,6 @@ struct ContentView: View {
             mapDetailDrawerItem: $mapDetailDrawerItem,
             launchRequest: drawerLaunchRequest,
             captureTripName: captureTripName,
-            existingPlacesForImport: mapVM.places,
             reviewCandidates: mapVM.reviewCandidates,
             onSaveGoogleTakeoutImport: { drafts in
                 try await mapVM.saveImportedPlaces(drafts)
@@ -481,6 +498,7 @@ struct ContentView: View {
             onToggleCategory: { category in
                 mapVM.toggleCategory(category)
             },
+            onOpenPassport: openPassport,
             onDismissMapDetailSheet: {
                 isRootSheetPresented = false
             },
@@ -519,6 +537,21 @@ struct ContentView: View {
         drawerLaunchRequest = DrawerLaunchRequest(target: target)
         drawerDetent = target == .review ? .large : .medium
         isRootSheetPresented = true
+    }
+
+    private func openPassport() {
+        guard !isPassportPresented else { return }
+        SaveHaptics.tap()
+
+        if isRootSheetPresented {
+            isRootSheetPresented = false
+            Task { @MainActor in
+                await Task.yield()
+                isPassportPresented = true
+            }
+        } else {
+            isPassportPresented = true
+        }
     }
 
     private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
