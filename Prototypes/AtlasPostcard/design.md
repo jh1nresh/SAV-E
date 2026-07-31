@@ -25,6 +25,12 @@ Two page archetypes share one shell:
   confirmed. Selecting a Map Stamp lifts that saved postcard out of the pocket
   without introducing a second detail renderer.
 
+First-run surfaces introduce those same archetypes instead of inventing a
+third visual language. Onboarding is a short Postcard Pocket proof of
+`Clue -> Review -> Map Stamp`; the opening/loading screen is Memo sorting those
+same tickets into the envelope. Both use the production brand lockup, atlas
+type, cream paper, coral action, mint confirmation, and owned Memo artwork.
+
 ## Design-taste brief
 
 - **Direction:** playful illustrated field atlas + collectible postcard pocket
@@ -45,6 +51,8 @@ Saves     = Postcard Pocket
 Trips     = Little Atlas
 Trip Plan = Little Atlas
 Root Map  = Little Atlas
+Onboarding = Postcard Pocket proof
+Opening    = Postcard Pocket transition
 ```
 
 ### Home
@@ -100,7 +108,28 @@ Root Map  = Little Atlas
 - Day selector.
 - Route ribbon, numbered nodes, four compact stops with distinct imagery.
 - One Add stop action.
+- Plan only contains user-confirmed Map Stamps. It does not silently inject AI
+  or public recommendations into the durable itinerary.
+- AI discovery stays in the Map `Ask SAV-E` surface. A public suggestion must
+  remain visibly unconfirmed and receive explicit approval before it can be
+  added to the plan.
 - Trip tabs remain visible.
+
+### Onboarding and Opening
+
+- Keep the existing four-step first-run proof and accessibility identifiers;
+  visual unification must not change onboarding completion or clue capture.
+- The header uses one Memo + SAV-E lockup, a compact step seal, and a postal
+  progress rail. The page uses atlas typography rather than rounded-system
+  display type.
+- Language choices, clue input, Review proof, and Map Stamp proof use scalloped
+  ticket construction. The selected/confirmed state is mint; coral remains the
+  only primary action.
+- Opening/loading is one fixed composition: brand lockup, Memo rising from the
+  kraft envelope, overlapping Clue / Review / Map Stamp tickets, and one quiet
+  status line. Do not restore floating scrapbook cards or a generic spinner.
+- Reduced Motion keeps the final composition and removes breathing/cycling
+  movement; it must not remove content or progress meaning.
 
 ### Root Map
 

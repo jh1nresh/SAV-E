@@ -24,10 +24,14 @@ struct OnboardingView: View {
     var body: some View {
         GeometryReader { proxy in
             let isCompactHeight = proxy.size.height < 760
+            let stepBodyUsesCompactLayout = isCompactHeight || (
+                step == .language && proxy.size.height < 900
+            )
             let horizontalPadding: CGFloat = proxy.size.width < 380 ? 16 : 24
+            let bottomActionLift = proxy.safeAreaInsets.bottom + 16
 
-            ZStack {
-                SaveDottedBackground()
+            ZStack(alignment: .bottom) {
+                AtlasCanvas()
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -39,13 +43,16 @@ struct OnboardingView: View {
                     .padding(.horizontal, horizontalPadding)
                     .padding(.top, isCompactHeight ? 6 : 14)
 
-                    stepBody(isCompactHeight: isCompactHeight)
+                    stepBody(isCompactHeight: stepBodyUsesCompactLayout)
                         .padding(.horizontal, horizontalPadding)
+                        .padding(.bottom, (step.isSkippable ? 102 : 82) + bottomActionLift)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    bottomActions(isCompactHeight: isCompactHeight)
-                        .padding(.horizontal, horizontalPadding)
                 }
+
+                bottomActions(isCompactHeight: isCompactHeight)
+                    .padding(.horizontal, horizontalPadding)
+                    .background(SaveAtlasPalette.canvas.opacity(0.96))
+                    .offset(y: -bottomActionLift)
             }
         }
         .onAppear {
@@ -90,7 +97,6 @@ struct OnboardingView: View {
                 eyebrow: step.eyebrow(language: language),
                 title: step.title(language: language),
                 subtitle: step.subtitle(language: language),
-                tint: step.tint,
                 isCompactHeight: isCompactHeight
             )
             .id(step)
@@ -117,16 +123,20 @@ struct OnboardingView: View {
                     Image(systemName: step == .mapStamp ? "arrow.right" : "chevron.right")
                         .font(.subheadline.weight(.bold))
                 }
-                .font(isCompactHeight ? .subheadline.weight(.bold) : .headline.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(isCompactHeight ? 16 : 18))
+                .foregroundStyle(SaveAtlasPalette.paper)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, isCompactHeight ? 13 : 16)
-                .background(primaryDisabled ? Color.saveDisabled.opacity(0.6) : step.tint)
+                .background(
+                    primaryDisabled
+                        ? SaveAtlasPalette.muted.opacity(0.36)
+                        : SaveAtlasPalette.coral
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                        .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -138,8 +148,8 @@ struct OnboardingView: View {
                 Button(step.skipTitle(language: language)) {
                     skipCurrentStep()
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.saveMutedText)
+                .font(SaveAtlasType.body(14))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityIdentifier("onboarding.skip")
             }
         }
@@ -246,15 +256,6 @@ private enum OnboardingStep: Int, CaseIterable {
         self != .language
     }
 
-    var tint: Color {
-        switch self {
-        case .language: return .saveHoney
-        case .clue: return .saveHoney
-        case .candidate: return .saveSky
-        case .mapStamp: return .saveMint
-        }
-    }
-
     func railLabel(language: AppLanguage) -> String {
         switch self {
         case .language: return language.localized(english: "Language", traditionalChinese: "語言")
@@ -345,36 +346,65 @@ private enum OnboardingStep: Int, CaseIterable {
 
 // MARK: - Top Bar
 
+struct SaveFirstRunBrandLockup: View {
+    var compact = false
+
+    var body: some View {
+        HStack(spacing: compact ? 6 : 8) {
+            MemoMark(size: compact ? 28 : 34)
+
+            Text("SAV-E")
+                .font(SaveAtlasType.strong(compact ? 20 : 23))
+                .tracking(1)
+                .foregroundStyle(SaveAtlasPalette.forest)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("SAV-E")
+    }
+}
+
 private struct OnboardingTopBar: View {
     let step: OnboardingStep
     let language: AppLanguage
     let onBack: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 38, height: 38)
-                    .background(Color.saveNotebookPage.opacity(step == .language ? 0.24 : 0.78))
-                    .overlay(Circle().stroke(Color.saveNotebookLine.opacity(step == .language ? 0.14 : 0.5), lineWidth: 1.2))
-                    .clipShape(Circle())
-            }
-            .opacity(step == .language ? 0.26 : 1)
-            .disabled(step == .language)
-            .accessibilityIdentifier("onboarding.back")
-            .accessibilityLabel(language.localized(english: "Back", traditionalChinese: "上一步"))
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .frame(width: 38, height: 38)
+                        .background(SaveAtlasPalette.paper.opacity(step == .language ? 0.38 : 0.96), in: Circle())
+                        .overlay {
+                            Circle()
+                                .stroke(SaveAtlasPalette.line.opacity(step == .language ? 0.16 : 0.42), lineWidth: 1)
+                        }
+                }
+                .opacity(step == .language ? 0.30 : 1)
+                .disabled(step == .language)
+                .accessibilityIdentifier("onboarding.back")
+                .accessibilityLabel(language.localized(english: "Back", traditionalChinese: "上一步"))
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
+
+                SaveFirstRunBrandLockup()
+
+                Spacer(minLength: 8)
+
+                Text("\(step.rawValue + 1)/\(OnboardingStep.allCases.count)")
+                    .font(SaveAtlasType.strong(12))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 38, height: 38)
+                    .background(SaveAtlasPalette.mint, in: SavePostcardSealShape())
+                    .overlay {
+                        SavePostcardSealShape()
+                            .stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1)
+                    }
+            }
 
             OnboardingProgressRail(step: step, language: language)
-
-            Spacer(minLength: 8)
-
-            // Balance the back button so the rail stays centered.
-            Color.clear
-                .frame(width: 38, height: 38)
         }
     }
 }
@@ -384,34 +414,31 @@ private struct OnboardingProgressRail: View {
     let language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             ForEach(OnboardingStep.allCases, id: \.self) { item in
-                if item == step {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(Color.saveInk)
-                            .frame(width: 6, height: 6)
-                        Text(item.railLabel(language: language))
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(item.tint.opacity(0.66))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1.2))
-                    .clipShape(Capsule())
-                } else {
-                    Circle()
-                        .fill(item.rawValue < step.rawValue ? Color.saveHoney : Color.saveNotebookPage.opacity(0.84))
-                        .frame(width: 9, height: 9)
-                        .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1))
+                VStack(spacing: 4) {
+                    Capsule()
+                        .fill(progressTint(for: item))
+                        .frame(height: item == step ? 6 : 4)
+
+                    Text(item.railLabel(language: language).uppercased())
+                        .font(SaveAtlasType.strong(9))
+                        .tracking(0.45)
+                        .foregroundStyle(item == step ? SaveAtlasPalette.forest : SaveAtlasPalette.muted)
+                        .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity)
             }
         }
+        .padding(.horizontal, 5)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(railAccessibilityLabel)
+    }
+
+    private func progressTint(for item: OnboardingStep) -> Color {
+        if item.rawValue < step.rawValue { return SaveAtlasPalette.mint }
+        if item == step { return SaveAtlasPalette.coral }
+        return SaveAtlasPalette.line.opacity(0.22)
     }
 
     private var railAccessibilityLabel: String {
@@ -433,30 +460,25 @@ private struct OnboardingStepTitle: View {
     let eyebrow: String
     let title: String
     let subtitle: String
-    let tint: Color
     let isCompactHeight: Bool
 
     var body: some View {
         VStack(spacing: isCompactHeight ? 6 : 10) {
             Text(eyebrow)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background(tint.opacity(0.5))
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1))
-                .clipShape(Capsule())
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.9)
+                .foregroundStyle(SaveAtlasPalette.coral)
 
             Text(title)
-                .font(.system(size: isCompactHeight ? 24 : 29, weight: .black, design: .rounded))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(isCompactHeight ? 26 : 30, relativeTo: .title))
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
 
             Text(subtitle)
-                .font(isCompactHeight ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-                .foregroundColor(.saveMutedText)
+                .font(SaveAtlasType.body(isCompactHeight ? 13 : 15))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(2)
                 .lineLimit(3)
@@ -483,7 +505,6 @@ private struct LanguageStepView: View {
                 eyebrow: OnboardingStep.language.eyebrow(language: language),
                 title: OnboardingStep.language.title(language: language),
                 subtitle: OnboardingStep.language.subtitle(language: language),
-                tint: OnboardingStep.language.tint,
                 isCompactHeight: isCompactHeight
             )
 
@@ -512,24 +533,29 @@ private struct LanguageChoiceCard: View {
         Button(action: onChoose) {
             HStack(spacing: 12) {
                 Text(option == .english ? "EN" : "繁")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 42, height: 42)
-                    .background(isSelected ? Color.saveHoney.opacity(0.85) : Color.saveNotebookPage.opacity(0.9))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1.3)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        isSelected ? SaveAtlasPalette.mint : SaveAtlasPalette.kraft.opacity(0.48),
+                        in: SavePostcardSealShape()
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .overlay {
+                        SavePostcardSealShape()
+                            .stroke(
+                                SaveAtlasPalette.forest.opacity(isSelected ? 0.62 : 0.28),
+                                style: StrokeStyle(lineWidth: 1, dash: [2, 2])
+                            )
+                    }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.displayName)
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(18))
+                        .foregroundStyle(SaveAtlasPalette.forest)
 
                     Text(caption)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.saveMutedText)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -537,16 +563,30 @@ private struct LanguageChoiceCard: View {
                 Spacer(minLength: 0)
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(isSelected ? .saveInk : .saveMutedText.opacity(0.5))
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(
+                        isSelected
+                            ? SaveAtlasPalette.forest
+                            : SaveAtlasPalette.line.opacity(0.46)
+                    )
             }
             .padding(14)
-            .background(isSelected ? Color.saveHoney.opacity(0.34) : Color.saveNotebookPage.opacity(0.86))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 1 : 0.4), lineWidth: isSelected ? 1.4 : 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(SaveAtlasPalette.paper.opacity(0.98))
+            .padding(4)
+            .background {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(isSelected ? SaveAtlasPalette.mint.opacity(0.74) : SaveAtlasPalette.kraft.opacity(0.46))
+            }
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(
+                        isSelected
+                            ? SaveAtlasPalette.forest.opacity(0.62)
+                            : SaveAtlasPalette.line.opacity(0.46),
+                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                    )
+            }
+            .shadow(color: SaveAtlasPalette.ink.opacity(isSelected ? 0.07 : 0.035), radius: 5, y: 2)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("onboarding.language.\(option.rawValue)")
@@ -587,22 +627,24 @@ private struct ClueStepView: View {
                 eyebrow: OnboardingStep.clue.eyebrow(language: language),
                 title: OnboardingStep.clue.title(language: language),
                 subtitle: OnboardingStep.clue.subtitle(language: language),
-                tint: OnboardingStep.clue.tint,
                 isCompactHeight: isCompactHeight
             )
 
             VStack(alignment: .leading, spacing: 12) {
                 ZStack(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.saveNotebookPage.opacity(0.94))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1.5)
-                        )
+                    SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                        .fill(SaveAtlasPalette.paper)
+                        .overlay {
+                            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                                .stroke(
+                                    SaveAtlasPalette.sky,
+                                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                                )
+                        }
 
                     TextEditor(text: $clueText)
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.body(16))
+                        .foregroundStyle(SaveAtlasPalette.ink)
                         .scrollContentBackground(.hidden)
                         .padding(12)
                         .frame(minHeight: isCompactHeight ? 118 : 148)
@@ -617,8 +659,8 @@ private struct ClueStepView: View {
                             english: "Example: IG Reel caption says quiet cafe near the station, tagged @hidden.moon.cafe...",
                             traditionalChinese: "例如：IG Reels 文案寫捷運站旁安靜咖啡，標記 @hidden.moon.cafe..."
                         ))
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.saveMutedText.opacity(0.72))
+                        .font(SaveAtlasType.body(16))
+                        .foregroundStyle(SaveAtlasPalette.muted.opacity(0.72))
                         .padding(.horizontal, 17)
                         .padding(.vertical, 20)
                         .allowsHitTesting(false)
@@ -632,14 +674,14 @@ private struct ClueStepView: View {
                             language.localized(english: "Try sample clue", traditionalChinese: "試用範例線索"),
                             systemImage: "wand.and.stars"
                         )
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(14))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.82)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
-                        .background(Color.saveHoney.opacity(0.56))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.52), lineWidth: 1.2))
+                        .background(SaveAtlasPalette.kraft.opacity(0.58))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.46), lineWidth: 1))
                         .clipShape(Capsule())
                     }
                     .accessibilityIdentifier("onboarding.sampleClue")
@@ -660,13 +702,13 @@ private struct ClueStepView: View {
 
     private var sourceChipsRow: some View {
         HStack(spacing: 14) {
-            sourceChip(label: "IG", icon: "camera.fill", tint: .savePink, restingOffset: -5, order: 0)
-            sourceChip(label: "CHAT", icon: "bubble.left.and.bubble.right.fill", tint: .saveSky, restingOffset: 4, order: 1)
+            sourceChip(label: "IG", icon: "camera.fill", tint: SaveAtlasPalette.coral.opacity(0.72), restingOffset: -5, order: 0)
+            sourceChip(label: "CHAT", icon: "bubble.left.and.bubble.right.fill", tint: SaveAtlasPalette.sky, restingOffset: 4, order: 1)
             MemoMascotMark(size: 56, framed: false)
                 .opacity(chipsSettled ? 1 : 0)
                 .animation(.easeInOut(duration: 0.3), value: chipsSettled)
-            sourceChip(label: "MAP", icon: "map.fill", tint: .saveMint, restingOffset: 5, order: 2)
-            sourceChip(label: "NOTE", icon: "note.text", tint: .saveHoney, restingOffset: -4, order: 3)
+            sourceChip(label: "MAP", icon: "map.fill", tint: SaveAtlasPalette.mint, restingOffset: 5, order: 2)
+            sourceChip(label: "NOTE", icon: "note.text", tint: SaveAtlasPalette.kraft, restingOffset: -4, order: 3)
         }
         .accessibilityHidden(true)
     }
@@ -678,15 +720,15 @@ private struct ClueStepView: View {
             Text(label)
                 .font(.system(size: 9, weight: .black))
         }
-        .foregroundColor(.saveInk)
+        .foregroundStyle(SaveAtlasPalette.ink)
         .frame(width: 52, height: 50)
         .background(tint.opacity(0.74))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.4), lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(0.4), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: Color.saveInk.opacity(0.08), radius: 9, x: 0, y: 6)
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 7, x: 0, y: 4)
         .rotationEffect(.degrees(restingOffset > 0 ? 4 : -5))
         .offset(y: chipsSettled ? restingOffset : restingOffset - 18)
         .opacity(chipsSettled ? 1 : 0)
@@ -702,21 +744,21 @@ private struct ClueStepView: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundStyle(SaveAtlasPalette.forest)
 
             Text(language.localized(
                 english: "Private food + travel memory, not public reviews.",
                 traditionalChinese: "這是私人的美食與旅行記憶，不是公開評論。"
             ))
-            .font(.footnote.weight(.bold))
-            .foregroundColor(.saveMutedText)
+            .font(SaveAtlasType.body(12))
+            .foregroundStyle(SaveAtlasPalette.muted)
             .lineLimit(2)
             .minimumScaleFactor(0.84)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.saveNotebookPage.opacity(0.74))
-        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1))
+        .background(SaveAtlasPalette.paper.opacity(0.82))
+        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.30), lineWidth: 1))
         .clipShape(Capsule())
         .accessibilityElement(children: .combine)
     }
@@ -739,21 +781,17 @@ private struct ProofDemoCanvas: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.saveNotebookPage.opacity(0.97),
-                            Color.saveNotebookPage.opacity(0.78)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
-                )
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .fill(SaveAtlasPalette.paper)
+                .overlay {
+                    SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                        .stroke(
+                            step == .mapStamp
+                                ? SaveAtlasPalette.forest.opacity(0.48)
+                                : SaveAtlasPalette.sky,
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                        )
+                }
 
             sceneContent
                 .padding(14)
@@ -761,7 +799,7 @@ private struct ProofDemoCanvas: View {
             memoGuide
         }
         .frame(height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 7, y: 3)
         .task(id: step) {
             await runPhaseScript()
         }
@@ -813,10 +851,10 @@ private struct ProofDemoCanvas: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.down")
                     .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveInk.opacity(0.5))
+                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.62))
                 Image(systemName: "sparkles")
                     .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveHoney)
+                    .foregroundStyle(SaveAtlasPalette.coral)
             }
             .opacity(phase >= 1 ? 1 : 0)
 
@@ -832,20 +870,20 @@ private struct ProofDemoCanvas: View {
         HStack(spacing: 9) {
             Image(systemName: "paperclip")
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveMutedText)
+                .foregroundStyle(SaveAtlasPalette.muted)
 
             Text(clueLine)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundStyle(SaveAtlasPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 11)
         .padding(.vertical, 8)
-        .background(Color.saveSky.opacity(0.3))
+        .background(SaveAtlasPalette.sky.opacity(0.34))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.38), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .rotationEffect(.degrees(-1.4))
@@ -857,29 +895,30 @@ private struct ProofDemoCanvas: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveMutedText)
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.7)
+                    .foregroundStyle(SaveAtlasPalette.coral)
 
                 Text("Hidden Moon Cafe?")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(18))
+                    .foregroundStyle(SaveAtlasPalette.forest)
 
                 evidenceLine(
                     icon: "checkmark.seal.fill",
                     text: language.localized(english: "Name clue found", traditionalChinese: "找到名稱線索"),
-                    tint: .saveMint,
+                    tint: SaveAtlasPalette.mint,
                     visibleAt: 1
                 )
                 evidenceLine(
                     icon: "link",
                     text: language.localized(english: "Source kept as proof", traditionalChinese: "來源已留作證據"),
-                    tint: .saveSky,
+                    tint: SaveAtlasPalette.sky,
                     visibleAt: 2
                 )
                 evidenceLine(
                     icon: "exclamationmark.triangle.fill",
                     text: language.localized(english: "Missing exact address + pin", traditionalChinese: "還缺精確地址與座標"),
-                    tint: .saveHoney,
+                    tint: SaveAtlasPalette.kraft,
                     visibleAt: 3
                 )
             }
@@ -888,26 +927,33 @@ private struct ProofDemoCanvas: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.saveNotebookPage.opacity(0.94))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1.4)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(4)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.sky.opacity(0.52))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.52),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
     }
 
     private func evidenceLine(icon: String, text: String, tint: Color, visibleAt: Int) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.caption2.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(width: 21, height: 21)
                 .background(tint.opacity(0.62))
                 .clipShape(Circle())
 
             Text(text)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundStyle(SaveAtlasPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
         }
@@ -939,12 +985,12 @@ private struct ProofDemoCanvas: View {
             language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
             systemImage: "hand.thumbsup.fill"
         )
-        .font(.caption.weight(.bold))
-        .foregroundColor(.saveInk)
+        .font(SaveAtlasType.strong(12))
+        .foregroundStyle(SaveAtlasPalette.forest)
         .padding(.horizontal, 11)
         .padding(.vertical, 7)
-        .background(Color.saveMint.opacity(0.88))
-        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1))
+        .background(SaveAtlasPalette.mint.opacity(0.92))
+        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
         .clipShape(Capsule())
     }
 
@@ -954,15 +1000,15 @@ private struct ProofDemoCanvas: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Hidden Moon Cafe")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.forest)
 
                 Text(language.localized(
                     english: "Map Stamp · source kept · private",
                     traditionalChinese: "地圖章 · 保留來源 · 私人"
                 ))
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveMutedText)
+                .font(SaveAtlasType.body(11))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             }
@@ -970,12 +1016,19 @@ private struct ProofDemoCanvas: View {
             Spacer(minLength: 0)
         }
         .padding(11)
-        .background(Color.saveNotebookPage.opacity(0.92))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1.3)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(4)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.mint.opacity(0.72))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.62),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
     }
 
     // MARK: Memo guide
@@ -989,11 +1042,11 @@ private struct ProofDemoCanvas: View {
                 if step != .mapStamp {
                     Text(memoLine)
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .foregroundStyle(SaveAtlasPalette.ink)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 6)
-                        .background(Color.saveBlush.opacity(0.94))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
+                        .background(SaveAtlasPalette.kraft.opacity(0.76))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1))
                         .clipShape(Capsule())
                         .lineLimit(1)
                         .minimumScaleFactor(0.74)
@@ -1052,7 +1105,7 @@ private struct OnboardingMiniMap: View {
 
     var body: some View {
         ZStack {
-            Color.saveMint.opacity(0.26)
+            SaveAtlasPalette.mint.opacity(0.34)
 
             GeometryReader { proxy in
                 let w = proxy.size.width
@@ -1067,13 +1120,13 @@ private struct OnboardingMiniMap: View {
                     path.addLine(to: CGPoint(x: w * 0.96, y: h * 0.82))
                 }
                 .stroke(
-                    Color.saveNotebookLine.opacity(0.2),
+                    SaveAtlasPalette.line.opacity(0.20),
                     style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
                 )
 
-                ghostPin(icon: "fork.knife", tint: .saveSky)
+                ghostPin(icon: "fork.knife", tint: SaveAtlasPalette.sky)
                     .position(x: w * 0.78, y: h * 0.26)
-                ghostPin(icon: "camera.fill", tint: .savePink)
+                ghostPin(icon: "camera.fill", tint: SaveAtlasPalette.coral.opacity(0.72))
                     .position(x: w * 0.88, y: h * 0.66)
 
                 stampPin
@@ -1085,10 +1138,10 @@ private struct OnboardingMiniMap: View {
     private func ghostPin(icon: String, tint: Color) -> some View {
         Image(systemName: icon)
             .font(.caption.weight(.bold))
-            .foregroundColor(.saveInk)
+            .foregroundStyle(SaveAtlasPalette.ink)
             .frame(width: 30, height: 30)
             .background(tint.opacity(0.8))
-            .overlay(Circle().stroke(Color.saveNotebookBackground.opacity(0.84), lineWidth: 2))
+            .overlay(Circle().stroke(SaveAtlasPalette.paper.opacity(0.90), lineWidth: 2))
             .clipShape(Circle())
             .opacity(0.66)
     }
@@ -1096,18 +1149,18 @@ private struct OnboardingMiniMap: View {
     private var stampPin: some View {
         ZStack {
             Circle()
-                .stroke(Color.saveHoney.opacity(0.5), lineWidth: 3)
+                .stroke(SaveAtlasPalette.coral.opacity(0.36), lineWidth: 3)
                 .frame(width: 62, height: 62)
                 .opacity(stampVisible ? 1 : 0)
 
             Image(systemName: "cup.and.saucer.fill")
                 .font(.headline.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(width: 44, height: 44)
-                .background(Color.saveHoney.opacity(0.94))
-                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.8))
+                .background(SaveAtlasPalette.mint.opacity(0.96))
+                .overlay(Circle().stroke(SaveAtlasPalette.forest.opacity(0.56), lineWidth: 1.5))
                 .clipShape(Circle())
-                .shadow(color: Color.saveInk.opacity(0.15), radius: 7, x: 0, y: 4)
+                .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 6, x: 0, y: 3)
         }
         .scaleEffect(stampVisible ? 1 : (reduceMotion ? 1 : 2.1))
         .opacity(stampVisible ? 1 : 0)

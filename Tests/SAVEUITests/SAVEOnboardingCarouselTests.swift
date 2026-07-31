@@ -8,6 +8,10 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
 
         // Language step comes first.
         XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: 10))
+        XCTAssertTrue(primary.waitForExistence(timeout: 5))
+        XCTAssertTrue(primary.isHittable)
+        XCTAssertLessThanOrEqual(primary.frame.maxY, app.frame.maxY - 8)
+        attach(app, name: "first-run-01-language")
         let englishChoice = app.buttons["onboarding.language.en"]
         XCTAssertTrue(englishChoice.exists)
         englishChoice.tap()
@@ -18,17 +22,23 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         XCTAssertFalse(primary.isEnabled)
         app.buttons["onboarding.sampleClue"].tap()
         XCTAssertTrue(primary.isEnabled)
+        attach(app, name: "first-run-02-clue")
         primary.tap()
 
         // Review Candidate demo.
         XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        attach(app, name: "first-run-03-review")
         primary.tap()
 
         // Map Stamp demo is the final step; its CTA exits onboarding.
         XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        attach(app, name: "first-run-04-map-stamp")
         primary.tap()
 
         waitForDisappearance(of: primary)
+        let opening = app.descendants(matching: .any)["opening.loading"]
+        XCTAssertTrue(opening.waitForExistence(timeout: 3))
+        attach(app, name: "first-run-05-opening")
     }
 
     @MainActor
@@ -60,6 +70,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-reset-onboarding",
+            "--uitest-hold-opening",
             "-save.appLanguage", "en"
         ]
         app.launch()
@@ -70,5 +81,13 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 6) {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
         wait(for: [gone], timeout: timeout)
+    }
+
+    @MainActor
+    private func attach(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

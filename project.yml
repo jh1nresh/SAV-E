@@ -62,7 +62,8 @@ targets:
         CFBundleDisplayName: SAV-E
         UIUserInterfaceStyle: Light
         UIApplicationSupportsIndirectInputEvents: true
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchCanvas
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UISupportedInterfaceOrientations~ipad:
