@@ -311,18 +311,23 @@ struct ContentView: View {
             Task { await mapVM.handleSceneDidBecomeActive() }
         }
         .task {
-            drawerVM.places = mapVM.places
-            drawerVM.mapCandidates = mapVM.mapCandidates
-            if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
-                await drawerVM.loadMemoryPreferences()
-            }
-            await mapVM.loadPlaces()
-            await tripStore.load()
-            if storageScope == .reviewerDemo {
-                await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
-            }
-            openPostcardDrawerUITestFixtureIfNeeded()
+            await loadInitialContent()
         }
+    }
+
+    @MainActor
+    private func loadInitialContent() async {
+        drawerVM.places = mapVM.places
+        drawerVM.mapCandidates = mapVM.mapCandidates
+        if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
+            await drawerVM.loadMemoryPreferences()
+        }
+        await mapVM.loadPlaces()
+        await tripStore.load()
+        if storageScope == .reviewerDemo {
+            await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
+        }
+        openPostcardDrawerUITestFixtureIfNeeded()
     }
 
     private var rootTabs: some View {
