@@ -66,6 +66,7 @@ enum CommandDrawerTab: String, CaseIterable, Hashable {
 
 enum DrawerLaunchTarget: Equatable {
     case ask
+    case mapAsk
     case addLink
     case saved
     case review
@@ -451,6 +452,15 @@ struct AIDrawerView: View {
                 await Task.yield()
                 searchFocused = true
             }
+        case .mapAsk:
+            viewModel.activeCommandTab = .saved
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            Task { @MainActor in
+                await Task.yield()
+                searchFocused = true
+            }
         case .addLink:
             if !isImportingURL {
                 linkAnalysisState = .idle
@@ -574,7 +584,11 @@ struct AIDrawerView: View {
     private var contentBody: some View {
         switch viewModel.drawerState {
         case .idle:
-            commandHomeView
+            if launchRequest.target == .mapAsk {
+                mapAssistantHomeView
+            } else {
+                commandHomeView
+            }
 
         case .loading:
             loadingStateView
@@ -978,6 +992,101 @@ struct AIDrawerView: View {
                 friendsTabView
             }
         }
+    }
+
+    private var mapAssistantHomeView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 12) {
+                    SavePostcardMemoPeek(width: 72)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(languageSettings.localized(
+                            english: "Explore this map",
+                            traditionalChinese: "探索這張地圖"
+                        ))
+                        .font(SaveAtlasType.strong(24, relativeTo: .title2))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+
+                        Text(languageSettings.localized(
+                            english: "Search public places or ask from Map Stamps you already confirmed.",
+                            traditionalChinese: "搜尋公開地點，或詢問你已確認的地圖章。"
+                        ))
+                        .font(SaveAtlasType.body(14))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background {
+                    SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                        .fill(SaveAtlasPalette.paper.opacity(0.98))
+                }
+                .overlay {
+                    SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                        .stroke(
+                            SaveAtlasPalette.line.opacity(0.42),
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                        )
+                }
+
+                Button {
+                    viewModel.query = ""
+                    searchFocused = true
+                } label: {
+                    SavePostcardTicket(
+                        eyebrow: languageSettings.localized(
+                            english: "Map search",
+                            traditionalChinese: "地圖搜尋"
+                        ),
+                        title: languageSettings.localized(
+                            english: "Find a place",
+                            traditionalChinese: "尋找地點"
+                        ),
+                        detail: languageSettings.localized(
+                            english: "Try coffee, museum, or an exact name",
+                            traditionalChinese: "輸入咖啡、博物館或精確名稱"
+                        ),
+                        actionTitle: languageSettings.localized(
+                            english: "Search",
+                            traditionalChinese: "搜尋"
+                        ),
+                        style: .review
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.mapAssistant.search")
+
+                Button(action: askFromSavedMemory) {
+                    SavePostcardTicket(
+                        eyebrow: languageSettings.localized(
+                            english: "From your SAV-E",
+                            traditionalChinese: "來自你的 SAV-E"
+                        ),
+                        title: languageSettings.localized(
+                            english: "Ask your Map Stamps",
+                            traditionalChinese: "詢問你的地圖章"
+                        ),
+                        detail: languageSettings.localized(
+                            english: "\(viewModel.places.count) confirmed memories stay private",
+                            traditionalChinese: "\(viewModel.places.count) 個已確認記憶保持私密"
+                        ),
+                        actionTitle: languageSettings.localized(
+                            english: "Ask",
+                            traditionalChinese: "詢問"
+                        ),
+                        style: .confirmed
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.mapAssistant.askSaved")
+            }
+            .padding(.horizontal, SaveTheme.Spacing.lg)
+            .padding(.top, SaveTheme.Spacing.sm)
+            .padding(.bottom, 24)
+        }
+        .accessibilityIdentifier("drawer.mapAssistant.root")
     }
 
     private var commandTabBar: some View {

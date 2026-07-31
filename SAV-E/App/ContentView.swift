@@ -338,7 +338,7 @@ struct ContentView: View {
                             SaveMapRootView(
                                 mapViewModel: mapVM,
                                 shouldFocusOnUserLocation: true,
-                                onOpenSearch: { openDrawer(.ask, tripID: nil) },
+                                onOpenSearch: { openDrawer(.mapAsk, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenPassport: openPassport
                             )

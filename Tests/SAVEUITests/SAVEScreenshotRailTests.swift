@@ -579,6 +579,41 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testRootMapSearchOpensDedicatedAssistantDrawer() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+        openRootTab("Map", app: app)
+
+        let mapSearch = app.buttons["map.command.search"]
+        XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
+        mapSearch.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.mapAssistant.root"]
+                .waitForExistence(timeout: stepTimeout),
+            "Root Map search should expand into its dedicated Postcard Pocket assistant."
+        )
+        XCTAssertTrue(app.textFields["drawer.commandField"].exists)
+        XCTAssertTrue(app.buttons["drawer.mapAssistant.search"].exists)
+        XCTAssertTrue(app.buttons["drawer.mapAssistant.askSaved"].exists)
+        XCTAssertFalse(
+            app.buttons["drawer.tab.saved"].exists ||
+                app.buttons["drawer.tab.review"].exists ||
+                app.buttons["drawer.tab.friends"].exists,
+            "Map assistant must not fall back to the legacy global drawer tabs."
+        )
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+    }
+
+    @MainActor
     func testTripInboxAndShareUsePostcardPocket() throws {
         let app = XCUIApplication()
         app.launchArguments += [
