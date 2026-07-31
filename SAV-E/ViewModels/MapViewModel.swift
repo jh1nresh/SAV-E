@@ -2064,6 +2064,22 @@ final class MapViewModel: ObservableObject {
         await focusOnUserLocation()
     }
 
+    func focusRegion(latitude: Double, longitude: Double) {
+        guard latitude.isFinite,
+              longitude.isFinite,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude)
+        else {
+            return
+        }
+
+        didRequestInitialLocation = true
+        cameraPosition = .region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
+        ))
+    }
+
     func focusOnUserLocation() async {
         guard !isLocatingUser else { return }
         isLocatingUser = true

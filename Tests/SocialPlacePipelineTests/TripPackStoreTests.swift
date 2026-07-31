@@ -37,6 +37,127 @@ final class TripPackStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testHomePriorityUsesTodaysFirstRemainingTimedStop() async throws {
+        let calendar = utcCalendar
+        let now = date(2026, 7, 20, hour: 12, calendar: calendar)
+        let breakfast = makePlace(name: "Breakfast")
+        let museum = makePlace(name: "Museum")
+        let trip = trip(
+            name: "Taipei Weekend",
+            start: date(2026, 7, 19, calendar: calendar),
+            end: date(2026, 7, 21, calendar: calendar),
+            places: [
+                stop(breakfast, day: 2, order: 0, startTime: "9:00 AM"),
+                stop(museum, day: 2, order: 1, startTime: "1:30 PM"),
+            ]
+        )
+        let store = TripPackStore(
+            userID: "user-1",
+            persistence: FakeTripPersistence(trips: [trip]),
+            calendar: calendar,
+            nowProvider: { now }
+        )
+
+        await store.load()
+
+        let priority = try XCTUnwrap(store.homeTripPriority)
+        XCTAssertEqual(priority.timing, .current)
+        XCTAssertEqual(priority.selectedDay, 2)
+        XCTAssertEqual(priority.nextStop?.placeName, "Museum")
+        XCTAssertTrue(priority.nextStopIsToday)
+    }
+
+    @MainActor
+    func testHomePriorityAdvancesToTheNextPlannedDayAfterTodaysStops() async throws {
+        let calendar = utcCalendar
+        let now = date(2026, 7, 20, hour: 20, calendar: calendar)
+        let breakfast = makePlace(name: "Breakfast")
+        let dayTrip = makePlace(name: "Day trip")
+        let trip = trip(
+            name: "Taipei Weekend",
+            start: date(2026, 7, 19, calendar: calendar),
+            end: date(2026, 7, 21, calendar: calendar),
+            places: [
+                stop(breakfast, day: 2, order: 0, startTime: "9:00 AM"),
+                stop(dayTrip, day: 3, order: 0, startTime: "10:00 AM"),
+            ]
+        )
+        let store = TripPackStore(
+            userID: "user-1",
+            persistence: FakeTripPersistence(trips: [trip]),
+            calendar: calendar,
+            nowProvider: { now }
+        )
+
+        await store.load()
+
+        let priority = try XCTUnwrap(store.homeTripPriority)
+        XCTAssertEqual(priority.selectedDay, 3)
+        XCTAssertEqual(priority.nextStop?.placeName, "Day trip")
+        XCTAssertFalse(priority.nextStopIsToday)
+    }
+
+    @MainActor
+    func testHomePriorityExcludesUndatedPastOpenEndedAndFarFutureTrips() async {
+        let calendar = utcCalendar
+        let now = date(2026, 7, 20, hour: 12, calendar: calendar)
+        let trips = [
+            trip(name: "Undated"),
+            trip(
+                name: "Past",
+                start: date(2026, 7, 10, calendar: calendar),
+                end: date(2026, 7, 12, calendar: calendar)
+            ),
+            trip(
+                name: "Open ended",
+                start: date(2026, 7, 1, calendar: calendar),
+                end: nil
+            ),
+            trip(
+                name: "Far future",
+                start: date(2026, 8, 10, calendar: calendar),
+                end: date(2026, 8, 12, calendar: calendar)
+            ),
+        ]
+        let store = TripPackStore(
+            userID: "user-1",
+            persistence: FakeTripPersistence(trips: trips),
+            calendar: calendar,
+            nowProvider: { now }
+        )
+
+        await store.load()
+
+        XCTAssertNil(store.homeTripPriority)
+    }
+
+    @MainActor
+    func testHomePriorityIncludesUpcomingTripWithinFourteenDays() async throws {
+        let calendar = utcCalendar
+        let now = date(2026, 7, 20, hour: 12, calendar: calendar)
+        let place = makePlace(name: "First stop")
+        let trip = trip(
+            name: "Seoul",
+            start: date(2026, 7, 30, calendar: calendar),
+            end: date(2026, 8, 1, calendar: calendar),
+            places: [stop(place, day: 1, order: 0, startTime: "10:00")]
+        )
+        let store = TripPackStore(
+            userID: "user-1",
+            persistence: FakeTripPersistence(trips: [trip]),
+            calendar: calendar,
+            nowProvider: { now }
+        )
+
+        await store.load()
+
+        let priority = try XCTUnwrap(store.homeTripPriority)
+        XCTAssertEqual(priority.timing, .upcoming)
+        XCTAssertEqual(priority.daysUntilStart, 10)
+        XCTAssertEqual(priority.nextStop?.placeName, "First stop")
+    }
+
+    @MainActor
     func testAddsConfirmedPlaceOnceAndPersistsAcceptedMutation() async throws {
         let initial = trip(name: "Taipei", places: [])
         let persistence = FakeTripPersistence(trips: [initial])
@@ -551,14 +672,19 @@ final class TripPackStoreTests: XCTestCase {
     }
 
     @MainActor
-    private func stop(_ place: Place, day: Int = 1, order: Int) -> TripStop {
+    private func stop(
+        _ place: Place,
+        day: Int = 1,
+        order: Int,
+        startTime: String? = nil
+    ) -> TripStop {
         TripStop(
             id: UUID(),
             placeId: place.id,
             placeName: place.name,
             day: day,
             orderIndex: order,
-            startTime: nil,
+            startTime: startTime,
             duration: nil,
             note: nil
         )

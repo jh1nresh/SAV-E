@@ -8,6 +8,7 @@ struct SaveHomeView: View {
     let onOpenSavedPlace: (Place) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
+    let onOpenMap: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -32,15 +33,27 @@ struct SaveHomeView: View {
             onCapture: { onOpenDrawer(.addLink, nil) },
             onReviewAll: onOpenSaves,
             onOpenTrip: onOpenTrip,
+            onOpenTrips: onOpenTrips,
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
             onOpenReview: { _ in onOpenSaves() },
             onOpenPassport: onOpenPassport
         )
-        if !SaveAtlasRuntime.usesParityFixture {
-            presentation.homeHero = resolvedHomeHero ?? savedPlaceHero ?? .neutral
+        let hero = SaveAtlasRuntime.usesParityFixture
+            ? presentation.homeHero
+            : resolvedHomeHero ?? savedPlaceHero ?? .neutral
+        presentation.homeHero = hero
+        presentation.onOpenHomeHero = {
+            openMap(for: hero)
         }
         return presentation
+    }
+
+    private func openMap(for hero: AtlasHomeHeroPresentation) {
+        if let latitude = hero.latitude, let longitude = hero.longitude {
+            mapViewModel.focusRegion(latitude: latitude, longitude: longitude)
+        }
+        onOpenMap()
     }
 
     private var savedPlaceHero: AtlasHomeHeroPresentation? {

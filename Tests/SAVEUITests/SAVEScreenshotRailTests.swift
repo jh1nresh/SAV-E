@@ -44,6 +44,12 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
 
         attach(app, name: "atlas-home-regional-taipei")
+
+        let cityAtlas = app.buttons["home.hero.openMap"]
+        XCTAssertTrue(cityAtlas.waitForExistence(timeout: stepTimeout))
+        cityAtlas.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
     }
 
     @MainActor

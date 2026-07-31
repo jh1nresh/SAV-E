@@ -310,6 +310,7 @@ struct ContentView: View {
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenSaves: { selectedRootTab = .saves },
                                 onOpenTrips: { selectedRootTab = .trips },
+                                onOpenMap: { selectedRootTab = .map },
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )

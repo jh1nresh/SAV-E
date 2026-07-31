@@ -14,26 +14,49 @@ enum SaveAtlasPresentationFactory {
         onCapture: @escaping () -> Void,
         onReviewAll: @escaping () -> Void,
         onOpenTrip: @escaping (UUID) -> Void,
+        onOpenTrips: @escaping () -> Void,
         onOpenSaves: @escaping () -> Void,
         onOpenPlace: @escaping (Place) -> Void,
         onOpenReview: @escaping (PlaceReviewCandidate) -> Void,
         onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
-        let suggestedTrip = store.suggestedTrip
+        let tripPriority = store.homeTripPriority
+        let displayedTrip = tripPriority?.trip
         var presentation = SaveAtlasRuntime.usesParityFixture
             ? AtlasPresentation.reference
             : liveRootPresentation(
-                trip: suggestedTrip,
+                trip: displayedTrip,
+                selectedTripDay: tripPriority?.selectedDay,
                 places: mapViewModel.places,
                 candidates: mapViewModel.reviewCandidates,
                 selectedPlace: mapViewModel.selectedPlace
             )
+        if !SaveAtlasRuntime.usesParityFixture {
+            presentation.homePriority = homePriorityPresentation(
+                tripPriority: tripPriority,
+                mapStampCount: mapViewModel.places.count
+            )
+        }
 
         presentation.onCapture = onCapture
         presentation.onReviewAll = onReviewAll
         presentation.onOpenTrip = {
-            guard let tripID = suggestedTrip?.id else { return }
+            guard let tripID = displayedTrip?.id else { return }
             onOpenTrip(tripID)
+        }
+        let priorityKind = presentation.homePriority.kind
+        presentation.onOpenHomePriority = {
+            switch priorityKind {
+            case .currentTrip, .upcomingTrip:
+                let trip = displayedTrip
+                    ?? (SaveAtlasRuntime.usesParityFixture ? store.suggestedTrip : nil)
+                guard let tripID = trip?.id else { return }
+                onOpenTrip(tripID)
+            case .planFromStamps:
+                onOpenTrips()
+            case .capture:
+                onCapture()
+            }
         }
         presentation.onOpenSaves = onOpenSaves
         presentation.onOpenPlace = { id in
@@ -177,6 +200,7 @@ enum SaveAtlasPresentationFactory {
 
     private static func liveRootPresentation(
         trip: Trip?,
+        selectedTripDay: Int? = nil,
         places: [Place],
         candidates: [PlaceReviewCandidate],
         selectedPlace: Place?
@@ -199,7 +223,10 @@ enum SaveAtlasPresentationFactory {
             ?? .koffeeMameya
 
         if let trip {
-            let selectedDay = max(1, trip.places.map(\.day).min() ?? 1)
+            let selectedDay = max(
+                1,
+                selectedTripDay ?? trip.places.map(\.day).min() ?? 1
+            )
             presentation.tripName = trip.name
             presentation.tripCity = trip.city.isEmpty ? "Trip" : trip.city
             presentation.tripDayCount = dayCount(for: trip)
@@ -219,6 +246,71 @@ enum SaveAtlasPresentationFactory {
             presentation.tripStops = []
         }
         return presentation
+    }
+
+    private static func homePriorityPresentation(
+        tripPriority: HomeTripPriority?,
+        mapStampCount: Int
+    ) -> AtlasHomePriorityPresentation {
+        if let tripPriority {
+            let stopDetail: String
+            if let stop = tripPriority.nextStop {
+                let time = stop.startTime?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nonEmpty
+                    ?? "Time TBD"
+                stopDetail = "Next stop: \(stop.placeName) · \(time)"
+            } else {
+                stopDetail = "Open the plan and choose what comes next"
+            }
+
+            switch tripPriority.timing {
+            case .current:
+                return AtlasHomePriorityPresentation(
+                    kind: .currentTrip,
+                    eyebrow: tripPriority.nextStopIsToday
+                        ? "CONTINUE TODAY"
+                        : "CONTINUE TRIP",
+                    title: tripPriority.trip.name,
+                    detail: stopDetail,
+                    badge: "Day \(tripPriority.selectedDay) of \(dayCount(for: tripPriority.trip))",
+                    systemName: "point.3.connected.trianglepath.dotted"
+                )
+            case .upcoming:
+                let days = tripPriority.daysUntilStart ?? 1
+                let stopCount = tripPriority.trip.places.count
+                return AtlasHomePriorityPresentation(
+                    kind: .upcomingTrip,
+                    eyebrow: "COMING UP",
+                    title: tripPriority.trip.name,
+                    detail: stopCount == 0
+                        ? "Open the Trip and add the first stop"
+                        : "\(stopCount) \(stopCount == 1 ? "stop" : "stops") ready to review",
+                    badge: "In \(days) \(days == 1 ? "day" : "days")",
+                    systemName: "calendar"
+                )
+            }
+        }
+
+        if mapStampCount > 0 {
+            return AtlasHomePriorityPresentation(
+                kind: .planFromStamps,
+                eyebrow: "READY TO PLAN",
+                title: "Build a Trip",
+                detail: "\(mapStampCount) Map Stamps are ready to organize",
+                badge: nil,
+                systemName: "point.3.connected.trianglepath.dotted"
+            )
+        }
+
+        return AtlasHomePriorityPresentation(
+            kind: .capture,
+            eyebrow: "START HERE",
+            title: "Save your first place",
+            detail: "Paste or share a link to begin",
+            badge: nil,
+            systemName: "link"
+        )
     }
 
     private static func liveTripPresentation(

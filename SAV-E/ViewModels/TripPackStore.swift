@@ -48,8 +48,24 @@ enum TripPackStoreError: LocalizedError {
     }
 }
 
+struct HomeTripPriority: Equatable {
+    enum Timing: Equatable {
+        case current
+        case upcoming
+    }
+
+    let trip: Trip
+    let timing: Timing
+    let selectedDay: Int
+    let nextStop: TripStop?
+    let nextStopIsToday: Bool
+    let daysUntilStart: Int?
+}
+
 @MainActor
 final class TripPackStore: ObservableObject {
+    private static let homeUpcomingWindowDays = 14
+
     @Published private(set) var trips: [Trip] = []
     @Published var selectedTripID: UUID?
     @Published private(set) var state: TripPackStoreState = .idle
@@ -91,6 +107,57 @@ final class TripPackStore: ObservableObject {
 
     var suggestedTrip: Trip? {
         currentTrips.first ?? upcomingTrips.first ?? planningTrips.first
+    }
+
+    var homeTripPriority: HomeTripPriority? {
+        let now = nowProvider()
+        let today = calendar.startOfDay(for: now)
+
+        if let trip = currentTrips.first(where: {
+            isActiveHomeTrip($0, today: today)
+        }) {
+            let currentDay = homeDay(for: trip, today: today)
+            let nextStop = nextRemainingStop(
+                in: trip,
+                from: currentDay,
+                now: now
+            )
+            return HomeTripPriority(
+                trip: trip,
+                timing: .current,
+                selectedDay: nextStop?.day ?? currentDay,
+                nextStop: nextStop,
+                nextStopIsToday: nextStop?.day == currentDay,
+                daysUntilStart: nil
+            )
+        }
+
+        guard let trip = upcomingTrips.first,
+              let startDate = trip.startDate
+        else {
+            return nil
+        }
+
+        let daysUntilStart = calendar.dateComponents(
+            [.day],
+            from: today,
+            to: calendar.startOfDay(for: startDate)
+        ).day ?? Int.max
+        guard (1...Self.homeUpcomingWindowDays).contains(daysUntilStart) else {
+            return nil
+        }
+
+        let firstStop = trip.places.sorted {
+            ($0.day, $0.orderIndex) < ($1.day, $1.orderIndex)
+        }.first
+        return HomeTripPriority(
+            trip: trip,
+            timing: .upcoming,
+            selectedDay: max(1, firstStop?.day ?? 1),
+            nextStop: firstStop,
+            nextStopIsToday: false,
+            daysUntilStart: daysUntilStart
+        )
     }
 
     var currentTrips: [Trip] {
@@ -490,6 +557,79 @@ final class TripPackStore: ObservableObject {
             }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
+    }
+
+    private func isActiveHomeTrip(_ trip: Trip, today: Date) -> Bool {
+        guard let startDate = trip.startDate else { return false }
+        let start = calendar.startOfDay(for: startDate)
+        let inferredEnd = calendar.date(
+            byAdding: .day,
+            value: max(0, (trip.places.map(\.day).max() ?? 1) - 1),
+            to: start
+        ) ?? start
+        let end = calendar.startOfDay(for: trip.endDate ?? inferredEnd)
+        return start <= today && today <= end
+    }
+
+    private func homeDay(for trip: Trip, today: Date) -> Int {
+        guard let startDate = trip.startDate else { return 1 }
+        let start = calendar.startOfDay(for: startDate)
+        let elapsedDays = calendar.dateComponents([.day], from: start, to: today).day ?? 0
+        return max(1, elapsedDays + 1)
+    }
+
+    private func nextRemainingStop(
+        in trip: Trip,
+        from selectedDay: Int,
+        now: Date
+    ) -> TripStop? {
+        let lastStopDay = trip.places.map(\.day).max() ?? selectedDay
+        guard selectedDay <= lastStopDay else { return nil }
+        let nowComponents = calendar.dateComponents([.hour, .minute], from: now)
+        let currentMinute = (nowComponents.hour ?? 0) * 60 + (nowComponents.minute ?? 0)
+
+        for day in selectedDay...lastStopDay {
+            let stops = trip.places
+                .filter { $0.day == day }
+                .sorted { $0.orderIndex < $1.orderIndex }
+            guard day == selectedDay else {
+                if let first = stops.first { return first }
+                continue
+            }
+
+            if let remaining = stops.first(where: { stop in
+                guard let minute = Self.minuteOfDay(from: stop.startTime) else {
+                    return true
+                }
+                return minute >= currentMinute
+            }) {
+                return remaining
+            }
+        }
+        return nil
+    }
+
+    private static func minuteOfDay(from value: String?) -> Int? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty
+        else {
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        for format in ["h:mm a", "h:mma", "h a", "ha", "HH:mm", "H:mm"] {
+            formatter.dateFormat = format
+            guard let date = formatter.date(from: value) else { continue }
+            let components = Calendar(identifier: .gregorian)
+                .dateComponents(in: formatter.timeZone, from: date)
+            guard let hour = components.hour, let minute = components.minute else {
+                continue
+            }
+            return hour * 60 + minute
+        }
+        return nil
     }
 
     private func fail(_ error: Error) {
