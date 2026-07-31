@@ -119,6 +119,7 @@ struct ContentView: View {
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
     @State private var pendingTripAssignmentPlace: Place?
     @State private var isTripAssignmentDialogPresented = false
+    @State private var isFullScreenTripAssignmentDialogPresented = false
     @State private var isTransitioningToTripCreation = false
     @State private var isCreatingTripForAssignment = false
     @State private var pendingCaptureTripID: UUID?
@@ -239,51 +240,9 @@ struct ContentView: View {
             isPresented: $isTripAssignmentDialogPresented,
             titleVisibility: .visible
         ) {
-            ForEach(tripAssignmentChoices) { trip in
-                Button(languageSettings.localized(
-                    english: "Add to \(trip.name)",
-                    traditionalChinese: "加入「\(trip.name)」"
-                )) {
-                    guard let place = pendingTripAssignmentPlace else { return }
-                    finishTripAssignment()
-                    Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
-                }
-            }
-            Button(languageSettings.localized(
-                english: "Create new Trip and add",
-                traditionalChinese: "新增行程並加入"
-            )) {
-                isTransitioningToTripCreation = true
-                isTripAssignmentDialogPresented = false
-                Task { @MainActor in
-                    await Task.yield()
-                    guard pendingTripAssignmentPlace != nil else {
-                        isTransitioningToTripCreation = false
-                        return
-                    }
-                    isCreatingTripForAssignment = true
-                    isTransitioningToTripCreation = false
-                }
-            }
-            .accessibilityIdentifier("saved.addToTrip.create")
-            Button(
-                languageSettings.localized(
-                    english: "Keep in SAV-E only",
-                    traditionalChinese: "只存到 SAV-E"
-                ),
-                role: .cancel
-            ) {
-                finishTripAssignment()
-            }
+            tripAssignmentActions(dismissFullScreen: false)
         } message: {
-            Text(languageSettings.localized(
-                english: tripAssignmentChoices.isEmpty
-                    ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
-                    : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
-                traditionalChinese: tripAssignmentChoices.isEmpty
-                    ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
-                    : "請選擇現有行程、建立新行程，或只保留在收藏。"
-            ))
+            tripAssignmentMessage
         }
         .onChange(of: isTripAssignmentDialogPresented) { _, isPresented in
             guard !isPresented,
@@ -292,6 +251,15 @@ struct ContentView: View {
                   pendingTripAssignmentPlace != nil
             else { return }
             finishTripAssignment()
+        }
+        .onChange(of: isFullScreenTripAssignmentDialogPresented) { _, isPresented in
+            guard !isPresented,
+                  !isCreatingTripForAssignment,
+                  !isTransitioningToTripCreation,
+                  pendingTripAssignmentPlace != nil
+            else { return }
+            finishTripAssignment()
+            fullScreenRoute = nil
         }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
@@ -509,7 +477,7 @@ struct ContentView: View {
                 onFindRelatedSources: { place in
                     try await mapVM.discoverRelatedSources(for: place)
                 },
-                onAddPlaceToTrip: requestTripAssignment,
+                onAddPlaceToTrip: requestFullScreenTripAssignment,
                 onCreateList: {
                     mapVM.createCollaborativeList(
                         title: languageSettings.localized(english: "New list", traditionalChinese: "新清單"),
@@ -532,6 +500,18 @@ struct ContentView: View {
                 Button(languageSettings.text(.ok)) { fullScreenActionError = nil }
             } message: {
                 Text(fullScreenActionError ?? "")
+            }
+            .confirmationDialog(
+                languageSettings.localized(
+                    english: "Saved. Add it to a Trip?",
+                    traditionalChinese: "已收藏。要加入行程嗎？"
+                ),
+                isPresented: $isFullScreenTripAssignmentDialogPresented,
+                titleVisibility: .visible
+            ) {
+                tripAssignmentActions(dismissFullScreen: true)
+            } message: {
+                tripAssignmentMessage
             }
         }
     }
@@ -735,7 +715,7 @@ struct ContentView: View {
             defer { fullScreenCandidateActionID = nil }
             do {
                 let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                requestTripAssignment(for: place)
+                requestFullScreenTripAssignment(for: place)
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
@@ -955,6 +935,18 @@ struct ContentView: View {
     }
 
     private func handleFullScreenDismiss() {
+        if isTransitioningToTripCreation {
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingTripAssignmentPlace != nil else {
+                    isTransitioningToTripCreation = false
+                    return
+                }
+                isCreatingTripForAssignment = true
+                isTransitioningToTripCreation = false
+            }
+            return
+        }
         if pendingTripAssignmentPlace != nil {
             presentTripAssignmentDialog()
         }
@@ -982,6 +974,73 @@ struct ContentView: View {
         return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
     }
 
+    @ViewBuilder
+    private func tripAssignmentActions(dismissFullScreen: Bool) -> some View {
+        ForEach(tripAssignmentChoices) { trip in
+            Button(languageSettings.localized(
+                english: "Add to \(trip.name)",
+                traditionalChinese: "加入「\(trip.name)」"
+            )) {
+                guard let place = pendingTripAssignmentPlace else { return }
+                finishTripAssignment()
+                if dismissFullScreen {
+                    fullScreenRoute = nil
+                }
+                Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
+            }
+        }
+        Button(languageSettings.localized(
+            english: "Create new Trip and add",
+            traditionalChinese: "新增行程並加入"
+        )) {
+            isTransitioningToTripCreation = true
+            if dismissFullScreen {
+                isFullScreenTripAssignmentDialogPresented = false
+                fullScreenRoute = nil
+            } else {
+                isTripAssignmentDialogPresented = false
+                Task { @MainActor in
+                    await Task.yield()
+                    guard pendingTripAssignmentPlace != nil else {
+                        isTransitioningToTripCreation = false
+                        return
+                    }
+                    isCreatingTripForAssignment = true
+                    isTransitioningToTripCreation = false
+                }
+            }
+        }
+        .accessibilityIdentifier("saved.addToTrip.create")
+        Button(
+            languageSettings.localized(
+                english: "Keep in SAV-E only",
+                traditionalChinese: "只存到 SAV-E"
+            ),
+            role: .cancel
+        ) {
+            finishTripAssignment()
+            if dismissFullScreen {
+                fullScreenRoute = nil
+            }
+        }
+    }
+
+    private var tripAssignmentMessage: Text {
+        Text(languageSettings.localized(
+            english: tripAssignmentChoices.isEmpty
+                ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
+                : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
+            traditionalChinese: tripAssignmentChoices.isEmpty
+                ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
+                : "請選擇現有行程、建立新行程，或只保留在收藏。"
+        ))
+    }
+
+    private func requestFullScreenTripAssignment(for place: Place) {
+        pendingTripAssignmentPlace = place
+        isFullScreenTripAssignmentDialogPresented = true
+    }
+
     private func requestTripAssignment(for place: Place) {
         pendingTripAssignmentPlace = place
         if fullScreenRoute != nil {
@@ -995,6 +1054,7 @@ struct ContentView: View {
 
     private func finishTripAssignment() {
         isTripAssignmentDialogPresented = false
+        isFullScreenTripAssignmentDialogPresented = false
         isTransitioningToTripCreation = false
         pendingTripAssignmentPlace = nil
         pendingCaptureTripID = nil

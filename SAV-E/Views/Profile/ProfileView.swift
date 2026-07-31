@@ -1630,43 +1630,52 @@ struct SettingsRow: View {
     var accessibilityIdentifier: String? = nil
     var action: (() -> Void)?
 
+    @ViewBuilder
     var body: some View {
-        Button(action: { action?() }) {
-            HStack(spacing: SaveTheme.Spacing.md) {
-                SavePostcardPerforatedMedallion(
-                    systemName: icon,
-                    tint: color.opacity(0.30),
-                    edge: color
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(SaveAtlasType.strong(15))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-
-                    if let detail {
-                        Text(detail)
-                            .font(SaveAtlasType.body(12))
-                            .foregroundStyle(SaveAtlasPalette.muted)
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundColor(.saveMutedText)
+        if let action {
+            Button(action: action) {
+                rowContent
             }
-            .padding(.vertical, SaveTheme.Spacing.sm)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(SaveAtlasPalette.kraft.opacity(0.32))
-                    .frame(height: 1)
-                    .padding(.leading, 62)
-            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(accessibilityIdentifier ?? "")
+        } else {
+            rowContent
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(accessibilityIdentifier ?? "")
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            SavePostcardPerforatedMedallion(
+                systemName: icon,
+                tint: color.opacity(0.30),
+                edge: color
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+
+                if let detail {
+                    Text(detail)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundColor(.saveMutedText)
+        }
+        .padding(.vertical, SaveTheme.Spacing.sm)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SaveAtlasPalette.kraft.opacity(0.32))
+                .frame(height: 1)
+                .padding(.leading, 62)
+        }
     }
 }
 
