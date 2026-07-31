@@ -2,8 +2,8 @@ import XCTest
 
 /// App Store screenshot rail for the SAV-E root shell and Trip workspace.
 ///
-/// The review-demo session is local and deterministic. The five screenshots
-/// cover Home plus the exact Plan / Map / Inbox / Share Trip workspace.
+/// The review-demo session is local and deterministic. The screenshots cover
+/// Home plus the focused Plan / Map Trip workspace and top-level Share action.
 ///
 /// Extract the PNGs with `specs/capture-app-screenshots.sh`. The test skips
 /// (never hard-fails) when a step of the demo flow can't be reached, so a
@@ -272,17 +272,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         sleep(2)
         attach(app, name: "screenshot-03-trip-map")
 
-        tripTabButton("Inbox", app: app).tap()
-        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(
-            app.descendants(matching: .any)["trip.inbox.contextRibbon"]
-                .waitForExistence(timeout: stepTimeout)
-        )
-        assertTripInboxContent(in: app)
-        sleep(1)
-        attach(app, name: "screenshot-04-trip-inbox")
-
-        tripTabButton("Share", app: app).tap()
+        let shareAction = app.buttons["trip.share.action"]
+        XCTAssertTrue(shareAction.waitForExistence(timeout: stepTimeout))
+        shareAction.tap()
         XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["trip.share.kml"].exists)
         XCTAssertTrue(
@@ -294,7 +286,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
                 .waitForExistence(timeout: stepTimeout)
         )
         sleep(1)
-        attach(app, name: "screenshot-05-trip-share")
+        attach(app, name: "screenshot-04-trip-share")
     }
 
     @MainActor
@@ -319,21 +311,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
-        XCTAssertTrue(
-            app.descendants(matching: .any)["drawer.postcardChrome"].waitForExistence(timeout: stepTimeout),
-            "Capture and assistant entry points should use the Postcard Drawer chrome."
-        )
-        attach(app, name: "atlas-postcard-command-drawer")
-        let commandField = app.textFields["drawer.commandField"]
-        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
-        commandField.tap()
-        commandField.typeText(mapURL)
-        let submitCommand = app.buttons["drawer.submitCommand"]
-        XCTAssertTrue(submitCommand.waitForExistence(timeout: stepTimeout))
-        submitCommand.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-postcard-capture")
+        let captureInput = app.textViews["capture.input"]
+        XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
+        captureInput.tap()
+        captureInput.typeText(mapURL)
+        let analyze = app.buttons["capture.analyze"]
+        XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
+        analyze.tap()
 
-        let analyzedCandidate = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'drawer.review.candidate.place.'")
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 20))
+        let analyzedCandidate = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
         ).firstMatch
         XCTAssertTrue(
             analyzedCandidate.waitForExistence(timeout: 20),
@@ -361,12 +351,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
         attach(app, name: "atlas-production-saves")
 
         savedCandidate.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
             1,
-            "A Saves Review Candidate should open in the one global drawer."
+            "A Saves Review Candidate should open in one focused detail."
         )
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         XCTAssertTrue(
             app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout),
             "A Saves Review Candidate should render its canonical review detail."
@@ -432,9 +423,12 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
         firstTrip.tap()
 
-        for tab in ["Plan", "Map", "Inbox", "Share"] {
+        for tab in ["Plan", "Map"] {
             XCTAssertTrue(tripTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) tab")
         }
+        XCTAssertFalse(tripTabButton("Inbox", app: app).exists)
+        XCTAssertFalse(tripTabButton("Share", app: app).exists)
+        XCTAssertTrue(app.buttons["trip.share.action"].exists)
 
         for rootTab in ["Home", "Saves", "Trips"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists, "Root tab \(rootTab) should be hidden inside a Trip")
@@ -443,10 +437,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
         tripTabButton("Map", app: app).tap()
         dismissLocationAlertIfPresent()
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
-
-        tripTabButton("Inbox", app: app).tap()
-        let addLink = addLinkButton(in: app)
-        XCTAssertTrue(addLink.waitForExistence(timeout: stepTimeout))
 
         let backButton = app.buttons["trip.back"]
         XCTAssertTrue(backButton.waitForExistence(timeout: stepTimeout))
@@ -522,11 +512,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
         closeDetail.tap()
         XCTAssertTrue(drawer.waitForNonExistence(timeout: stepTimeout))
 
-        for tab in ["Plan", "Map", "Inbox", "Share"] {
+        for tab in ["Plan", "Map"] {
             let tabButton = tripTabButton(tab, app: app)
             XCTAssertTrue(tabButton.waitForExistence(timeout: stepTimeout), "Missing \(tab) after closing a Trip Map detail.")
             XCTAssertTrue(tabButton.isHittable, "\(tab) is still covered after closing a Trip Map detail.")
         }
+        XCTAssertFalse(tripTabButton("Inbox", app: app).exists)
+        XCTAssertFalse(tripTabButton("Share", app: app).exists)
         XCTAssertTrue(tripTabButton("Map", app: app).isSelected)
         for rootTab in ["Home", "Saves", "Trips"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists)
@@ -582,10 +574,17 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertFalse(app.buttons["map.place.openDetails"].exists)
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
         attach(app, name: "atlas-root-map-live")
+
+        app.buttons["map.command.search"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        for legacyTab in ["saved", "review", "friends", "lists"] {
+            XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
+        }
     }
 
     @MainActor
-    func testTripInboxAndShareUsePostcardPocket() throws {
+    func testTripUsesPlanMapAndTopSharePostcardPocket() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -605,16 +604,14 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstTrip.waitForExistence(timeout: stepTimeout))
         firstTrip.tap()
 
-        tripTabButton("Inbox", app: app).tap()
-        XCTAssertTrue(addLinkButton(in: app).waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(
-            app.descendants(matching: .any)["trip.inbox.contextRibbon"]
-                .waitForExistence(timeout: stepTimeout)
-        )
-        assertTripInboxContent(in: app)
-        attach(app, name: "atlas-trip-inbox-live")
+        XCTAssertTrue(tripTabButton("Plan", app: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(tripTabButton("Map", app: app).exists)
+        XCTAssertFalse(tripTabButton("Inbox", app: app).exists)
+        XCTAssertFalse(tripTabButton("Share", app: app).exists)
 
-        tripTabButton("Share", app: app).tap()
+        let shareAction = app.buttons["trip.share.action"]
+        XCTAssertTrue(shareAction.waitForExistence(timeout: stepTimeout))
+        shareAction.tap()
         XCTAssertTrue(app.buttons["trip.share.link"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["trip.share.kml"].exists)
         XCTAssertTrue(
@@ -660,7 +657,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testGlobalShellDefaultsToHomeAndOpensSingleDrawer() throws {
+    func testGlobalShellSeparatesCaptureFromMapDrawer() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -680,16 +677,25 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(captureButtons.firstMatch.isHittable)
         captureButtons.firstMatch.tap()
 
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        app.buttons["Close capture"].tap()
+
+        openRootTab("Map", app: app)
+        let mapSearch = app.buttons["map.command.search"]
+        XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
+        mapSearch.tap()
+
         XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
             app.descendants(matching: .any).matching(identifier: "drawer.root").count,
             1,
             "Only one command drawer should be presented."
         )
-        XCTAssertTrue(app.textFields["drawer.commandField"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["drawer.tab.saved"].exists)
-        XCTAssertTrue(app.buttons["drawer.tab.review"].exists)
-        XCTAssertTrue(app.buttons["drawer.tab.friends"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        for legacyTab in ["saved", "review", "friends", "lists"] {
+            XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
+        }
     }
 
     @MainActor
@@ -720,12 +726,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
         firstMapStamp.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
             1,
-            "A Map Stamp should stay inside the one global drawer."
+            "A Map Stamp should use one focused detail renderer."
         )
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
             app.descendants(matching: .any).matching(identifier: "place.detail.scroll").count,
@@ -742,10 +749,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let closeDetail = app.buttons["drawer.place.close"]
         XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
         closeDetail.tap()
-        XCTAssertFalse(
-            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: 2),
-            "Closing a Map Stamp must dismiss the drawer."
-        )
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(mapStampsSegment.isSelected)
@@ -796,7 +800,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testUnsavedAndSocialDetailsUsePostcardDrawerFamily() throws {
+    func testUnsavedAndSocialDetailsUsePostcardDetailFamily() throws {
         let fixtures = [
             (
                 launchArgument: "--uitest-postcard-unsaved",
@@ -825,12 +829,13 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
             try signInViaReviewDemo(app: app)
 
-            XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: 45))
             XCTAssertEqual(
-                app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+                app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
                 1,
-                "Discovery detail should stay inside the one global drawer."
+                "Discovery detail should stay inside one focused detail surface."
             )
+            XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
             XCTAssertTrue(
                 app.descendants(matching: .any)["drawer.postcard.ticketHeader"]
                     .waitForExistence(timeout: stepTimeout),
@@ -973,6 +978,21 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampLedger"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-passport")
 
+        let connections = app.buttons["profile.connections"]
+        XCTAssertTrue(
+            scrollUntilHittable(connections, in: app.scrollViews.firstMatch, maxSwipes: 12),
+            "Passport controls should expose Friends & Lists."
+        )
+        connections.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.connections.root"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(app.buttons["profile.connections.friends"].exists)
+        XCTAssertTrue(app.buttons["profile.connections.lists"].exists)
+        app.buttons["profile.connections.back"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+
         let importButton = app.buttons["profile.importGoogleTakeout"]
         XCTAssertTrue(
             scrollUntilHittable(importButton, in: app.scrollViews.firstMatch, maxSwipes: 12),
@@ -985,7 +1005,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
-    func testFriendsSurfaceIsReachableAndKeepsFollowEntryVisible() throws {
+    func testPassportConnectionsKeepsFriendsAndListsReachable() throws {
         let app = XCUIApplication()
         app.launchArguments += [
             "--uitest-complete-onboarding",
@@ -997,20 +1017,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         try signInViaReviewDemo(app: app)
 
-        let capture = app.buttons["home.capture"]
-        XCTAssertTrue(capture.waitForExistence(timeout: 45))
-        capture.tap()
+        XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: 45))
+        app.buttons["root.passport"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
 
-        let friendsTab = app.buttons["drawer.tab.friends"]
-        XCTAssertTrue(friendsTab.waitForExistence(timeout: stepTimeout))
-        friendsTab.tap()
+        let connections = app.buttons["profile.connections"]
+        XCTAssertTrue(scrollUntilHittable(connections, in: app.scrollViews.firstMatch, maxSwipes: 12))
+        connections.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.following"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.friends.sharedPlaces"].exists)
-        XCTAssertTrue(app.textFields["drawer.friends.search"].exists)
-        XCTAssertTrue(app.textFields["drawer.friends.referral"].exists)
-        XCTAssertTrue(app.buttons["drawer.friends.follow"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.connections.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.connections.friends"].exists)
+        XCTAssertTrue(app.buttons["profile.connections.lists"].exists)
+        XCTAssertTrue(app.textFields["profile.connections.referral"].exists)
+        XCTAssertTrue(app.buttons["profile.connections.follow"].exists)
     }
 
     @MainActor
@@ -1035,9 +1054,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
         firstTrip.tap()
 
-        let shareTab = tripTabButton("Share", app: app)
-        XCTAssertTrue(shareTab.waitForExistence(timeout: stepTimeout))
-        shareTab.tap()
+        let shareAction = app.buttons["trip.share.action"]
+        XCTAssertTrue(shareAction.waitForExistence(timeout: stepTimeout))
+        shareAction.tap()
 
         let shareSaveLink = app.buttons["trip.share.link"]
         XCTAssertTrue(shareSaveLink.waitForExistence(timeout: stepTimeout))
@@ -1077,20 +1096,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
-        let commandField = app.textFields["drawer.commandField"]
-        XCTAssertTrue(commandField.waitForExistence(timeout: stepTimeout))
-        commandField.tap()
-        commandField.typeText(mapURL)
-        let submitCommand = app.buttons["drawer.submitCommand"]
-        XCTAssertTrue(submitCommand.waitForExistence(timeout: stepTimeout))
-        submitCommand.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        let captureInput = app.textViews["capture.input"]
+        XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
+        captureInput.tap()
+        captureInput.typeText(mapURL)
+        let analyze = app.buttons["capture.analyze"]
+        XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
+        analyze.tap()
 
-        XCTAssertTrue(
-            app.descendants(matching: .any)["drawer.review.root"]
-                .waitForExistence(timeout: stepTimeout)
-        )
-        let candidate = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'drawer.review.candidate.place.'")
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 20))
+        let candidate = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
         ).firstMatch
         XCTAssertTrue(
             candidate.waitForExistence(timeout: 20),
@@ -1228,11 +1245,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    @MainActor
-    private func addLinkButton(in app: XCUIApplication) -> XCUIElement {
-        app.buttons["trip.inbox.addLink"]
-    }
 
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
@@ -1382,17 +1394,6 @@ final class SAVEScreenshotRailTests: XCTestCase {
             }
         }
         return false
-    }
-
-    @MainActor
-    private func assertTripInboxContent(in app: XCUIApplication) {
-        let ticketStack = app.descendants(matching: .any)["trip.inbox.ticketStack"]
-        let emptyPostcard = app.descendants(matching: .any)["trip.inbox.empty"]
-        XCTAssertTrue(
-            ticketStack.waitForExistence(timeout: 2) ||
-                emptyPostcard.waitForExistence(timeout: stepTimeout),
-            "Trip Inbox should show review tickets or its Postcard Pocket empty state."
-        )
     }
 
     @MainActor

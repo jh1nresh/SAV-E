@@ -114,6 +114,7 @@ struct AIDrawerView: View {
         throw SupabaseError.notConfigured
     }
     var onImportSharedTextAsReviewCandidates: (String) async throws -> [UUID] = { _ in [] }
+    var onOpenReview: () -> Void = {}
     var onAddPlaceToTrip: (Place) -> Void = { _ in }
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var onClearMapSearchResults: () -> Void = {}
@@ -246,7 +247,6 @@ struct AIDrawerView: View {
                 closeMapDetail()
                 onDismissMapDetailSheet()
             },
-            onOpenInbox: openReviewInbox,
             onDeletePlace: { place in
                 try await onDeletePlace(place)
                 viewModel.removePlace(place)
@@ -478,20 +478,6 @@ struct AIDrawerView: View {
 
     @ViewBuilder
     private var commandBarTrailingActions: some View {
-        Button(action: openReviewInbox) {
-            Image(systemName: "tray.full.fill")
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(commandBarTextColor)
-                .frame(width: 30, height: 30)
-                .background(commandIconFill)
-                .overlay(Circle().stroke(commandBarStroke, lineWidth: 1))
-                .clipShape(Circle())
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
-        .accessibilityIdentifier("drawer.openReview")
-
         if hasActiveDrawerContent {
             Button(action: closeDrawerContent) {
                 Image(systemName: "xmark.circle.fill")
@@ -951,33 +937,17 @@ struct AIDrawerView: View {
     }
 
     private var collapsedDrawerHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 160 : 88
+        dynamicTypeSize.isAccessibilitySize ? 160 : 132
     }
 
     private var collapsedDrawerDetent: PresentationDetent {
-        .height(collapsedDrawerHeight)
+        dynamicTypeSize.isAccessibilitySize ? .medium : .height(132)
     }
 
     // MARK: - Idle suggestions
 
     private var commandHomeView: some View {
-        VStack(spacing: 0) {
-            commandTabBar
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-                .padding(.top, SaveTheme.Spacing.sm)
-                .padding(.bottom, SaveTheme.Spacing.sm)
-
-            switch viewModel.activeCommandTab {
-            case .saved:
-                savedPlacesView
-            case .review:
-                reviewInboxView
-            case .lists:
-                collaborativeListsView
-            case .friends:
-                friendsTabView
-            }
-        }
+        suggestionsView
     }
 
     private var commandTabBar: some View {
@@ -1092,13 +1062,32 @@ struct AIDrawerView: View {
     private var suggestionsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                MemoryFlowCTA(
-                    reviewCount: reviewCandidates.count,
-                    stampCount: viewModel.places.count,
-                    onReview: openReviewInbox,
-                    onAsk: askFromSavedMemory
-                )
+                HStack(spacing: 12) {
+                    MemoMascotMark(size: 52, framed: false)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(languageSettings.localized(
+                            english: "Search places or ask SAV-E",
+                            traditionalChinese: "搜尋地點或詢問 SAV-E"
+                        ))
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+
+                        Text(languageSettings.localized(
+                            english: "This drawer stays with Map. Review and saved memory live in Saves.",
+                            traditionalChinese: "這個抽屜只服務地圖；待確認與收藏都在 Saves。"
+                        ))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(14)
+                .saveAtlasPaper(radius: 16)
                 .padding(.horizontal, SaveTheme.Spacing.lg)
+                .accessibilityIdentifier("drawer.mapAssistant.intro")
+
+                linkAnalysisStatusCard
 
                 categoryFilterStrip
 
@@ -1833,7 +1822,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .savedPlace(place)
         withAnimation(SaveTheme.Motion.standardSpring) {
-            drawerDetent = .fraction(0.34)
+            drawerDetent = .medium
         }
     }
 
@@ -1842,7 +1831,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .reviewCandidate(candidate)
         withAnimation(SaveTheme.Motion.standardSpring) {
-            drawerDetent = .fraction(0.34)
+            drawerDetent = .medium
         }
     }
 
@@ -1851,7 +1840,7 @@ struct AIDrawerView: View {
         viewModel.returnToCommands()
         mapDetailDrawerItem = .unsavedCandidate(candidate)
         withAnimation(SaveTheme.Motion.standardSpring) {
-            drawerDetent = .fraction(0.34)
+            drawerDetent = .medium
         }
     }
 
@@ -2075,7 +2064,7 @@ struct AIDrawerView: View {
             do {
                 let candidateIDs = try await onImportSharedTextAsReviewCandidates(sharedText)
                 linkAnalysisState = .ready(Set(candidateIDs))
-                openReviewInbox()
+                onOpenReview()
             } catch {
                 linkAnalysisState = .failed(error.localizedDescription)
                 viewModel.returnToCommands()
@@ -2285,7 +2274,7 @@ private struct CaptureTripContextCard: View {
     }
 }
 
-private struct MapDetailDrawerView: View {
+struct MapDetailDrawerView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     @Binding var detent: PresentationDetent
@@ -2294,7 +2283,7 @@ private struct MapDetailDrawerView: View {
     let isWorkingReviewCandidateID: UUID?
     let isWorkingMapCandidateID: String?
     let onClose: () -> Void
-    let onOpenInbox: () -> Void
+    let onOpenInbox: (() -> Void)? = nil
     let onDeletePlace: (Place) async throws -> Void
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
@@ -2320,7 +2309,6 @@ private struct MapDetailDrawerView: View {
                 SelectedPlaceCapsule(
                     item: item,
                     onExpand: expandDetail,
-                    onOpenInbox: onOpenInbox,
                     onClose: onClose
                 )
                 .padding(.horizontal, 18)
@@ -2391,17 +2379,6 @@ private struct MapDetailDrawerView: View {
 
                 shareAction
                     .frame(width: 38, height: 38)
-
-                Button(action: onOpenInbox) {
-                    SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(languageSettings.localized(
-                    english: "Open Review",
-                    traditionalChinese: "打開待確認"
-                ))
-                .accessibilityIdentifier("drawer.openReview")
-                .frame(width: 38, height: 38)
 
                 Button(action: onClose) {
                     SelectedPlaceCapsuleIcon(systemImage: "xmark")
@@ -2476,13 +2453,15 @@ private struct MapDetailDrawerView: View {
             shareAction
                 .frame(width: 38, height: 38)
 
-            Button(action: onOpenInbox) {
-                SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+            if let onOpenInbox {
+                Button(action: onOpenInbox) {
+                    SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+                .accessibilityIdentifier("drawer.openReview")
+                .frame(width: 38, height: 38)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
-            .accessibilityIdentifier("drawer.openReview")
-            .frame(width: 38, height: 38)
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")
@@ -2523,7 +2502,7 @@ private struct MapDetailDrawerView: View {
 
     private func expandDetail() {
         withAnimation(SaveTheme.Motion.standardSpring) {
-            detent = .fraction(0.38)
+            detent = .medium
         }
     }
 
@@ -2618,7 +2597,7 @@ private struct SelectedPlaceCapsule: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let item: MapDetailDrawerItem
     let onExpand: () -> Void
-    let onOpenInbox: () -> Void
+    let onOpenInbox: (() -> Void)? = nil
     let onClose: () -> Void
 
     var body: some View {
@@ -2657,13 +2636,15 @@ private struct SelectedPlaceCapsule: View {
             .accessibilityLabel(languageSettings.localized(english: "Open \(item.presentation.title) details", traditionalChinese: "打開 \(item.presentation.title) 詳情"))
             .accessibilityHint(languageSettings.localized(english: "Expands the selected place drawer", traditionalChinese: "展開選取的地點抽屜"))
 
-            Button(action: onOpenInbox) {
-                SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+            if let onOpenInbox {
+                Button(action: onOpenInbox) {
+                    SelectedPlaceCapsuleIcon(systemImage: "tray.full.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
+                .accessibilityIdentifier("drawer.openReview")
+                .frame(width: 44, height: 44)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"))
-            .accessibilityIdentifier("drawer.openReview")
-            .frame(width: 44, height: 44)
 
             Button(action: onClose) {
                 SelectedPlaceCapsuleIcon(systemImage: "xmark")

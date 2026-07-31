@@ -82,11 +82,11 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDrawerFamily \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripInboxAndShareUsePostcardPocket \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test

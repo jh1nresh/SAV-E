@@ -14,10 +14,22 @@ struct ProfileView: View {
     @State private var localSavedPlaces: [Place] = []
     var savedPlaces: [Place] = []
     var waitingClues: Int = 0
+    var collaborativeLists: [SaveCollaborativeList] = []
+    var followedFriends: [SaveFollowedFriend] = []
+    var isLoadingFollowedFriends = false
+    var hasMoreFollowedFriends = false
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
         GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
     }
+    var onCreateList: (String, String?) -> Void = { _, _ in }
+    var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
+    var onOpenListOnMap: (SaveCollaborativeList) -> Void = { _ in }
+    var onFollowReferral: (String) async throws -> Void = { _ in }
+    var onRefreshFollowedFriends: () async -> Void = {}
+    var onSearchFollowedFriends: (String) async -> Void = { _ in }
+    var onLoadMoreFollowedFriends: () async -> Void = {}
+    var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
 
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -103,6 +115,36 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.memoryPreferences")
+
+                        NavigationLink {
+                            PassportConnectionsView(
+                                collaborativeLists: collaborativeLists,
+                                followedFriends: followedFriends,
+                                isLoadingFollowedFriends: isLoadingFollowedFriends,
+                                hasMoreFollowedFriends: hasMoreFollowedFriends,
+                                onCreateList: onCreateList,
+                                onShareListURL: onShareListURL,
+                                onOpenListOnMap: onOpenListOnMap,
+                                onFollowReferral: onFollowReferral,
+                                onRefreshFollowedFriends: onRefreshFollowedFriends,
+                                onSearchFollowedFriends: onSearchFollowedFriends,
+                                onLoadMoreFollowedFriends: onLoadMoreFollowedFriends,
+                                onUnfollowFriend: onUnfollowFriend
+                            )
+                        } label: {
+                            SettingsRow(
+                                icon: "person.2.fill",
+                                title: languageSettings.localized(english: "Friends & Lists", traditionalChinese: "朋友與清單"),
+                                detail: languageSettings.localized(
+                                    english: "Manage people and shared place collections",
+                                    traditionalChinese: "管理朋友與共享地點清單"
+                                ),
+                                color: SaveAtlasPalette.mint
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
+                        .accessibilityIdentifier("profile.connections")
 
                         SettingsRow(
                             icon: "shippingbox.and.arrow.backward.fill",
@@ -216,6 +258,499 @@ struct ProfileView: View {
         try await onUpdatePlaceVisibility(place, visibility)
         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
             localSavedPlaces[index].visibility = visibility
+        }
+    }
+}
+
+// MARK: - Passport Connections
+
+private struct PassportConnectionsView: View {
+    private enum Section: String, CaseIterable {
+        case friends
+        case lists
+    }
+
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dismiss) private var dismiss
+
+    let collaborativeLists: [SaveCollaborativeList]
+    let followedFriends: [SaveFollowedFriend]
+    let isLoadingFollowedFriends: Bool
+    let hasMoreFollowedFriends: Bool
+    let onCreateList: (String, String?) -> Void
+    let onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL?
+    let onOpenListOnMap: (SaveCollaborativeList) -> Void
+    let onFollowReferral: (String) async throws -> Void
+    let onRefreshFollowedFriends: () async -> Void
+    let onSearchFollowedFriends: (String) async -> Void
+    let onLoadMoreFollowedFriends: () async -> Void
+    let onUnfollowFriend: (SaveFollowedFriend) async throws -> Void
+
+    @State private var selectedSection: Section = .friends
+    @State private var referralValue = ""
+    @State private var friendQuery = ""
+    @State private var listTitle = ""
+    @State private var listNote = ""
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: SaveTheme.Spacing.lg) {
+                topBar
+                sectionPicker
+
+                if selectedSection == .friends {
+                    friendsSection
+                } else {
+                    listsSection
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, SaveTheme.Spacing.xl)
+        }
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            guard followedFriends.isEmpty else { return }
+            await onRefreshFollowedFriends()
+        }
+        .accessibilityIdentifier("profile.connections.root")
+    }
+
+    private var topBar: some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            PassportIconButton(systemName: "chevron.left") {
+                SaveHaptics.tap()
+                dismiss()
+            }
+            .accessibilityLabel(languageSettings.localized(english: "Back to Passport", traditionalChinese: "返回護照"))
+            .accessibilityIdentifier("profile.connections.back")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(languageSettings.localized(english: "PASSPORT CONNECTIONS", traditionalChinese: "護照連線"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(languageSettings.localized(
+                    english: "People and shared place collections",
+                    traditionalChinese: "朋友與共享地點清單"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+            }
+
+            Spacer()
+
+            SavePostcardPostmark()
+                .scaleEffect(0.68)
+                .frame(width: 48, height: 34)
+                .opacity(0.66)
+        }
+        .padding(.top, SaveTheme.Spacing.lg)
+    }
+
+    private var sectionPicker: some View {
+        HStack(spacing: SaveTheme.Spacing.xs) {
+            sectionButton(
+                .friends,
+                title: languageSettings.localized(english: "Friends", traditionalChinese: "朋友"),
+                count: followedFriends.count
+            )
+            sectionButton(
+                .lists,
+                title: languageSettings.localized(english: "Lists", traditionalChinese: "清單"),
+                count: collaborativeLists.count
+            )
+        }
+        .padding(5)
+        .background(SaveAtlasPalette.paper.opacity(0.92), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
+        }
+    }
+
+    private func sectionButton(_ section: Section, title: String, count: Int) -> some View {
+        Button {
+            SaveHaptics.tap()
+            selectedSection = section
+            errorMessage = nil
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                Text("\(count)")
+                    .font(SaveAtlasType.strong(11))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(SaveAtlasPalette.paper.opacity(0.72), in: Capsule())
+            }
+            .font(SaveAtlasType.strong(13))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .frame(maxWidth: .infinity)
+            .frame(height: 42)
+            .background(
+                selectedSection == section ? SaveAtlasPalette.mint.opacity(0.72) : .clear,
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("profile.connections.\(section.rawValue)")
+    }
+
+    private var friendsSection: some View {
+        VStack(spacing: SaveTheme.Spacing.md) {
+            postcardPocket(
+                eyebrow: languageSettings.localized(english: "FOLLOW A FRIEND", traditionalChinese: "追蹤朋友"),
+                title: languageSettings.localized(english: "Paste their SAV-E link", traditionalChinese: "貼上對方的 SAV-E 連結")
+            ) {
+                TextField(
+                    languageSettings.localized(english: "Referral link or code", traditionalChinese: "邀請連結或代碼"),
+                    text: $referralValue
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(SaveTheme.Spacing.md)
+                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(SaveAtlasPalette.line.opacity(0.50), lineWidth: 1)
+                }
+                .accessibilityIdentifier("profile.connections.referral")
+
+                Button {
+                    followFriend()
+                } label: {
+                    Label(
+                        languageSettings.localized(english: "Follow", traditionalChinese: "追蹤"),
+                        systemImage: "person.badge.plus"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isWorking || referralValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("profile.connections.follow")
+            }
+
+            VStack(spacing: SaveTheme.Spacing.sm) {
+                HStack(spacing: SaveTheme.Spacing.sm) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                    TextField(
+                        languageSettings.localized(english: "Search friends", traditionalChinese: "搜尋朋友"),
+                        text: $friendQuery
+                    )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                    Button {
+                        Task { await onSearchFollowedFriends(friendQuery) }
+                    } label: {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                    }
+                    .accessibilityLabel(languageSettings.localized(english: "Search", traditionalChinese: "搜尋"))
+                }
+                .padding(SaveTheme.Spacing.md)
+                .background(SaveAtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
+                }
+
+                if isLoadingFollowedFriends && followedFriends.isEmpty {
+                    ProgressView()
+                        .tint(SaveAtlasPalette.forest)
+                        .padding(.vertical, SaveTheme.Spacing.xl)
+                } else if followedFriends.isEmpty {
+                    emptyTicket(
+                        title: languageSettings.localized(english: "No friends here yet", traditionalChinese: "還沒有朋友"),
+                        detail: languageSettings.localized(
+                            english: "A friend link keeps this list intentional — it never changes your map automatically.",
+                            traditionalChinese: "貼上朋友連結即可追蹤；朋友內容不會自動改動你的地圖。"
+                        )
+                    )
+                } else {
+                    ForEach(followedFriends) { friend in
+                        friendTicket(friend)
+                    }
+                }
+
+                if hasMoreFollowedFriends {
+                    Button {
+                        Task { await onLoadMoreFollowedFriends() }
+                    } label: {
+                        Text(languageSettings.localized(english: "Load more", traditionalChinese: "載入更多"))
+                            .font(SaveAtlasType.strong(13))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 42)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoadingFollowedFriends)
+                }
+            }
+
+            inlineError
+        }
+    }
+
+    private var listsSection: some View {
+        VStack(spacing: SaveTheme.Spacing.md) {
+            postcardPocket(
+                eyebrow: languageSettings.localized(english: "NEW SHARED LIST", traditionalChinese: "新增共享清單"),
+                title: languageSettings.localized(english: "Collect places with people", traditionalChinese: "和朋友一起整理地點")
+            ) {
+                TextField(
+                    languageSettings.localized(english: "List name", traditionalChinese: "清單名稱"),
+                    text: $listTitle
+                )
+                .padding(SaveTheme.Spacing.md)
+                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                TextField(
+                    languageSettings.localized(english: "Optional note", traditionalChinese: "備註（可選）"),
+                    text: $listNote,
+                    axis: .vertical
+                )
+                .lineLimit(2...4)
+                .padding(SaveTheme.Spacing.md)
+                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                Button {
+                    let title = listTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !title.isEmpty else { return }
+                    onCreateList(title, listNote)
+                    listTitle = ""
+                    listNote = ""
+                    SaveHaptics.stamp()
+                } label: {
+                    Label(
+                        languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"),
+                        systemImage: "plus"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(SaveAtlasPalette.honey, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(listTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("profile.connections.createList")
+            }
+
+            if collaborativeLists.isEmpty {
+                emptyTicket(
+                    title: languageSettings.localized(english: "No shared lists yet", traditionalChinese: "還沒有共享清單"),
+                    detail: languageSettings.localized(
+                        english: "Create one here, then add confirmed Map Stamps from their postcard.",
+                        traditionalChinese: "在這裡建立，再從地圖章明信片加入已確認地點。"
+                    )
+                )
+            } else {
+                ForEach(collaborativeLists) { list in
+                    listTicket(list)
+                }
+            }
+
+            inlineError
+        }
+    }
+
+    private func postcardPocket<Content: View>(
+        eyebrow: String,
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+            Text(eyebrow)
+                .font(SaveAtlasType.strong(10))
+                .tracking(1.05)
+                .foregroundStyle(SaveAtlasPalette.coral)
+            Text(title)
+                .font(SaveAtlasType.display(22))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            content()
+        }
+        .padding(SaveTheme.Spacing.lg)
+        .background {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .fill(SaveAtlasPalette.kraft.opacity(0.28))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .stroke(SaveAtlasPalette.kraft.opacity(0.70), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        }
+    }
+
+    private func friendTicket(_ friend: SaveFollowedFriend) -> some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 48, height: 48)
+                .background(SaveAtlasPalette.mint.opacity(0.62), in: SavePostcardSealShape())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(friend.displayName)
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                if let handle = friend.handleLabel {
+                    Text(handle)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                Task { await unfollow(friend) }
+            } label: {
+                Image(systemName: "person.crop.circle.badge.minus")
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(languageSettings.localized(english: "Unfollow", traditionalChinese: "取消追蹤"))
+        }
+        .padding(SaveTheme.Spacing.md)
+        .background(SaveAtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.mint.opacity(0.72), lineWidth: 1)
+        }
+    }
+
+    private func listTicket(_ list: SaveCollaborativeList) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(list.title)
+                        .font(SaveAtlasType.strong(16))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text("\(list.placeCountLabel) · \(list.ownerDisplayName)")
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+                Spacer()
+                Text(list.viewerRole.displayName.uppercased())
+                    .font(SaveAtlasType.strong(9))
+                    .tracking(0.7)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(SaveAtlasPalette.mint.opacity(0.62), in: Capsule())
+            }
+
+            if let note = list.note, !note.isEmpty {
+                Text(note)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(3)
+            }
+
+            HStack(spacing: SaveTheme.Spacing.sm) {
+                Button {
+                    onOpenListOnMap(list)
+                } label: {
+                    Label(
+                        languageSettings.localized(english: "Show on Map", traditionalChinese: "在地圖顯示"),
+                        systemImage: "map"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .accessibilityIdentifier("profile.connections.openList")
+
+                if let viewerURL = onShareListURL(list, .viewer) {
+                    ShareLink(item: viewerURL) {
+                        Label(
+                            languageSettings.localized(english: "Share", traditionalChinese: "分享"),
+                            systemImage: "square.and.arrow.up"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .font(SaveAtlasType.strong(12))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .buttonStyle(.bordered)
+            .tint(SaveAtlasPalette.kraft)
+        }
+        .padding(SaveTheme.Spacing.md)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .fill(SaveAtlasPalette.mint.opacity(0.18))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
+                .stroke(SaveAtlasPalette.mint.opacity(0.76), lineWidth: 1)
+        }
+    }
+
+    private func emptyTicket(title: String, detail: String) -> some View {
+        VStack(spacing: SaveTheme.Spacing.sm) {
+            Image(systemName: "envelope.open")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.kraft)
+            Text(title)
+                .font(SaveAtlasType.strong(15))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            Text(detail)
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(SaveTheme.Spacing.lg)
+        .background(SaveAtlasPalette.paper.opacity(0.86), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        }
+    }
+
+    @ViewBuilder
+    private var inlineError: some View {
+        if let errorMessage {
+            Text(errorMessage)
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(Color.saveError)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SaveTheme.Spacing.md)
+                .background(Color.saveError.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func followFriend() {
+        let value = referralValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        isWorking = true
+        errorMessage = nil
+        Task {
+            do {
+                try await onFollowReferral(value)
+                referralValue = ""
+                SaveHaptics.stamp()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isWorking = false
+        }
+    }
+
+    private func unfollow(_ friend: SaveFollowedFriend) async {
+        errorMessage = nil
+        do {
+            try await onUnfollowFriend(friend)
+            SaveHaptics.tap()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

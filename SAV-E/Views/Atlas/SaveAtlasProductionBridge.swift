@@ -755,12 +755,13 @@ struct SaveAtlasInteractiveTripMap: View {
     let trip: Trip
     let presentation: AtlasPresentation
     let onBack: () -> Void
+    let onShare: () -> Void
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            TripHeader(onBack: onBack)
+            TripHeader(onBack: onBack, onShare: onShare)
                 .placed(x: 0, y: 48, width: 402, height: 54)
 
             MapView(
