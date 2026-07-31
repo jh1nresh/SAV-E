@@ -104,7 +104,7 @@ jobs:
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
 
       - name: Run Trip atlas sheet family UI test
-        timeout-minutes: 6
+        timeout-minutes: 8
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \

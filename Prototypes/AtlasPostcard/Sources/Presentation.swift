@@ -327,6 +327,22 @@ struct AtlasStopPresentation: Identifiable, Equatable {
     let imageHeight: CGFloat
 }
 
+struct AtlasHomePriorityPresentation: Equatable {
+    enum Kind: Equatable {
+        case currentTrip
+        case upcomingTrip
+        case planFromStamps
+        case capture
+    }
+
+    let kind: Kind
+    let eyebrow: String
+    let title: String
+    let detail: String
+    let badge: String?
+    let systemName: String
+}
+
 struct AtlasTripSummaryPresentation: Identifiable, Equatable {
     let id: String
     let name: String
@@ -347,12 +363,15 @@ struct AtlasPresentation: @unchecked Sendable {
     var tripCity: String
     var tripDateLabel: String
     var tripStops: [AtlasStopPresentation]
+    var homePriority: AtlasHomePriorityPresentation
     var recentPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
     var tripSummaries: [AtlasTripSummaryPresentation]
     var onCapture: () -> Void
     var onReviewAll: () -> Void
+    var onOpenHomeHero: () -> Void
+    var onOpenHomePriority: () -> Void
     var onOpenTrip: () -> Void
     var onOpenSaves: () -> Void
     var onOpenPlace: (String) -> Void
@@ -411,6 +430,14 @@ struct AtlasPresentation: @unchecked Sendable {
                 imageHeight: 84
             ),
         ],
+        homePriority: AtlasHomePriorityPresentation(
+            kind: .currentTrip,
+            eyebrow: "CONTINUE TODAY",
+            title: "Tokyo Weekend",
+            detail: "Next stop: Tsukiji Outer Market · 9:00 AM",
+            badge: "Day 2 of 3",
+            systemName: "point.3.connected.trianglepath.dotted"
+        ),
         recentPlaces: [.shibuyaBackstreets, .koffeeMameya],
         reviewItems: [
             AtlasReviewPresentation(
@@ -461,6 +488,8 @@ struct AtlasPresentation: @unchecked Sendable {
         ],
         onCapture: {},
         onReviewAll: {},
+        onOpenHomeHero: {},
+        onOpenHomePriority: {},
         onOpenTrip: {},
         onOpenSaves: {},
         onOpenPlace: { _ in },

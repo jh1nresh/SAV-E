@@ -159,12 +159,17 @@ struct HomeAtlasScreen: View {
                     AtlasRegionalHomeHero(hero: presentation.homeHero)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: presentation.onOpenHomeHero)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens this region in Map")
+            .accessibilityIdentifier("home.hero.openMap")
             .placed(x: 0, y: 99, width: 402, height: 274)
 
             HomeReviewCard()
                 .placed(x: 5, y: 354, width: 392, height: 182)
 
-            HomeNextTrip()
+            HomePriorityCard()
                 .placed(x: 10, y: 542, width: 382, height: 105)
 
             HomeRecentStamps()
@@ -513,63 +518,87 @@ private struct HomeMetric: View {
     }
 }
 
-private struct HomeNextTrip: View {
+private struct HomePriorityCard: View {
     @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Text("NEXT UP")
+        let priority = presentation.homePriority
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text(priority.eyebrow)
                 .font(AtlasType.strong(11))
                 .tracking(1.2)
                 .foregroundStyle(AtlasPalette.muted)
-                .position(x: 30, y: 12)
 
-            Text(presentation.tripName)
-                .font(AtlasType.strong(21))
-                .foregroundStyle(AtlasPalette.forest)
-                .position(x: 75, y: 37)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(priority.title)
+                    .font(AtlasType.strong(21))
+                    .foregroundStyle(AtlasPalette.forest)
+                    .lineLimit(1)
 
-            Text("Day \(presentation.selectedDay) of \(presentation.tripDayCount)")
-                .font(AtlasType.display(12))
-                .foregroundStyle(AtlasPalette.ink)
-                .frame(width: 83, height: 28)
-                .background(AtlasPalette.lavender, in: Capsule())
-                .position(x: 340, y: 36)
+                Spacer(minLength: 6)
 
-            Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(AtlasPalette.forest)
-                .position(x: 17, y: 70)
+                if let badge = priority.badge {
+                    Text(badge)
+                        .font(AtlasType.display(12))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .padding(.horizontal, 12)
+                        .frame(height: 28)
+                        .background(priorityBadgeColor, in: Capsule())
+                }
+            }
 
-            Text("\(presentation.tripStops.count) stops planned")
-                .font(AtlasType.body(12))
-                .foregroundStyle(AtlasPalette.muted)
-                .position(x: 92, y: 68)
+            HStack(spacing: 9) {
+                Image(systemName: priority.systemName)
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(AtlasPalette.forest)
 
-            Text(nextStopText)
-                .font(AtlasType.regular(12))
-                .foregroundStyle(AtlasPalette.muted)
-                .position(x: 179, y: 91)
+                Text(priority.detail)
+                    .font(AtlasType.regular(12))
+                    .foregroundStyle(AtlasPalette.muted)
+                    .lineLimit(1)
 
-            Image(systemName: "arrow.right")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(AtlasPalette.muted)
-                .position(x: 368, y: 77)
+                Spacer(minLength: 6)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(AtlasPalette.muted)
+            }
 
             Rectangle()
                 .fill(AtlasPalette.line.opacity(0.30))
-                .frame(width: 382, height: 1)
-                .position(x: 191, y: 104)
+                .frame(height: 1)
         }
+        .padding(.horizontal, 4)
         .contentShape(Rectangle())
-        .onTapGesture(perform: presentation.onOpenTrip)
+        .onTapGesture(perform: presentation.onOpenHomePriority)
         .accessibilityAddTraits(.isButton)
-        .accessibilityIdentifier("home.trip.current")
+        .accessibilityLabel("\(priority.eyebrow), \(priority.title), \(priority.detail)")
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
-    private var nextStopText: String {
-        guard let stop = presentation.tripStops.first else { return "No stops planned yet" }
-        return "Next stop: \(stop.name) · \(stop.time)"
+    private var priorityBadgeColor: Color {
+        switch presentation.homePriority.kind {
+        case .currentTrip:
+            AtlasPalette.lavender
+        case .upcomingTrip:
+            AtlasPalette.honey.opacity(0.72)
+        case .planFromStamps, .capture:
+            AtlasPalette.mint
+        }
+    }
+
+    private var accessibilityIdentifier: String {
+        switch presentation.homePriority.kind {
+        case .currentTrip:
+            "home.trip.current"
+        case .upcomingTrip:
+            "home.trip.upcoming"
+        case .planFromStamps:
+            "home.priority.plan"
+        case .capture:
+            "home.priority.capture"
+        }
     }
 }
 
