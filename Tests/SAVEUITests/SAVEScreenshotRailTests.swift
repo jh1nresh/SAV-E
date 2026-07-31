@@ -1181,7 +1181,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         dismissKeyboard(app: app) // sign-in layout ignores the keyboard safe area
 
         let sendCode = app.buttons["signin.sendCode"]
-        guard sendCode.waitForExistence(timeout: stepTimeout), sendCode.isHittable else {
+        guard waitUntilHittable(sendCode, timeout: stepTimeout) else {
             throw XCTSkip("Send-code button not tappable — cannot start the demo flow.")
         }
         sendCode.tap()
@@ -1195,7 +1195,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         dismissKeyboard(app: app) // number pad has no return key
 
         let verify = app.buttons["signin.verify"]
-        guard verify.waitForExistence(timeout: stepTimeout), verify.isHittable else {
+        guard waitUntilHittable(verify, timeout: stepTimeout) else {
             throw XCTSkip("Verify button not tappable — cannot enter the demo session.")
         }
         verify.tap()
@@ -1217,8 +1217,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
         dismissKeyboard(app: app)
 
         let sendCode = app.buttons["signin.sendCode"]
-        XCTAssertTrue(sendCode.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(sendCode.isHittable)
+        XCTAssertTrue(
+            waitUntilHittable(sendCode, timeout: stepTimeout),
+            "Send-code button never became tappable."
+        )
         sendCode.tap()
 
         let codeField = app.textFields["signin.codeField"]
@@ -1228,8 +1230,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
         dismissKeyboard(app: app)
 
         let verify = app.buttons["signin.verify"]
-        XCTAssertTrue(verify.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(verify.isHittable)
+        XCTAssertTrue(
+            waitUntilHittable(verify, timeout: stepTimeout),
+            "Verify button never became tappable after dismissing the keyboard."
+        )
         verify.tap()
     }
 
@@ -1242,6 +1246,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
         if done.waitForExistence(timeout: 3), done.isHittable {
             done.tap()
         }
+    }
+
+    @MainActor
+    private func waitUntilHittable(
+        _ element: XCUIElement,
+        timeout: TimeInterval
+    ) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND hittable == true"),
+            object: element
+        )
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     // MARK: - Helpers
