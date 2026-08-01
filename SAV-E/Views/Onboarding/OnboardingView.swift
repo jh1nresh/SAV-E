@@ -90,14 +90,13 @@ struct OnboardingView: View {
     }
 
     private func proofSection(isCompactHeight: Bool) -> some View {
-        VStack(spacing: isCompactHeight ? 12 : 18) {
-            Spacer(minLength: 0)
-
+        VStack(spacing: isCompactHeight ? 8 : 12) {
             OnboardingStepTitle(
                 eyebrow: step.eyebrow(language: language),
                 title: step.title(language: language),
                 subtitle: step.subtitle(language: language),
-                isCompactHeight: isCompactHeight
+                isCompactHeight: isCompactHeight,
+                showsEyebrow: false
             )
             .id(step)
             .transition(.opacity)
@@ -106,11 +105,14 @@ struct OnboardingView: View {
                 step: step,
                 clueText: trimmedClue,
                 language: language,
-                height: isCompactHeight ? 218 : 268
+                isCompactHeight: isCompactHeight,
+                height: isCompactHeight ? 290 : 380
             )
 
             Spacer(minLength: 0)
         }
+        .padding(.top, isCompactHeight ? 10 : 24)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - Bottom Actions
@@ -296,8 +298,8 @@ private enum OnboardingStep: Int, CaseIterable {
             )
         case .clue:
             return language.localized(
-                english: "A Reel caption, a map link, a friend's message. Memo keeps the source as proof.",
-                traditionalChinese: "短影音文案、地圖連結、朋友訊息都行。Memo 會把來源留作證據。"
+                english: "A link, caption, or note is enough.",
+                traditionalChinese: "連結、文案或筆記都可以。"
             )
         case .candidate:
             return language.localized(
@@ -306,8 +308,8 @@ private enum OnboardingStep: Int, CaseIterable {
             )
         case .mapStamp:
             return language.localized(
-                english: "Only places you confirm become private Map Stamps — then just ask Memo anytime.",
-                traditionalChinese: "只有你確認的地點會變成私人地圖章——之後隨時問 Memo 就好。"
+                english: "Only places you confirm become private Map Stamps.",
+                traditionalChinese: "只有你確認的地點會變成私人地圖章。"
             )
         }
     }
@@ -319,7 +321,7 @@ private enum OnboardingStep: Int, CaseIterable {
         case .clue:
             return language.localized(english: "Find this place", traditionalChinese: "找出這個地點")
         case .candidate:
-            return language.localized(english: "Stamp it on my map", traditionalChinese: "蓋上我的地圖")
+            return language.localized(english: "Confirm this place", traditionalChinese: "確認這個地點")
         case .mapStamp:
             return language.localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
         }
@@ -461,16 +463,19 @@ private struct OnboardingStepTitle: View {
     let title: String
     let subtitle: String
     let isCompactHeight: Bool
+    var showsEyebrow = true
 
     var body: some View {
         VStack(spacing: isCompactHeight ? 6 : 10) {
-            Text(eyebrow)
-                .font(SaveAtlasType.strong(10))
-                .tracking(0.9)
-                .foregroundStyle(SaveAtlasPalette.coral)
+            if showsEyebrow {
+                Text(eyebrow)
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.9)
+                    .foregroundStyle(SaveAtlasPalette.coral)
+            }
 
             Text(title)
-                .font(SaveAtlasType.strong(isCompactHeight ? 26 : 30, relativeTo: .title))
+                .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -613,165 +618,198 @@ private struct ClueStepView: View {
     let reduceMotion: Bool
     let onUseSample: () -> Void
 
-    @State private var chipsSettled = false
-
     var body: some View {
-        VStack(spacing: isCompactHeight ? 12 : 18) {
-            Spacer(minLength: 0)
-
-            if !isCompactHeight {
-                sourceChipsRow
-            }
-
+        VStack(spacing: isCompactHeight ? 8 : 12) {
             OnboardingStepTitle(
                 eyebrow: OnboardingStep.clue.eyebrow(language: language),
                 title: OnboardingStep.clue.title(language: language),
                 subtitle: OnboardingStep.clue.subtitle(language: language),
-                isCompactHeight: isCompactHeight
+                isCompactHeight: isCompactHeight,
+                showsEyebrow: false
             )
 
-            VStack(alignment: .leading, spacing: 12) {
-                ZStack(alignment: .topLeading) {
-                    SavePostcardScallopedRectangle(depth: 3, pitch: 11)
-                        .fill(SaveAtlasPalette.paper)
-                        .overlay {
-                            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
-                                .stroke(
-                                    SaveAtlasPalette.sky,
-                                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
-                                )
-                        }
+            CluePocketStage(
+                clueText: $clueText,
+                language: language,
+                isCompactHeight: isCompactHeight
+            )
+            .frame(height: isCompactHeight ? 250 : 360)
 
-                    TextEditor(text: $clueText)
-                        .font(SaveAtlasType.body(16))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .scrollContentBackground(.hidden)
-                        .padding(12)
-                        .frame(minHeight: isCompactHeight ? 118 : 148)
-                        .accessibilityIdentifier("onboarding.clueEditor")
-                        .accessibilityLabel(language.localized(
-                            english: "Place clue text",
-                            traditionalChinese: "地點線索文字"
-                        ))
-
-                    if clueText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(language.localized(
-                            english: "Example: IG Reel caption says quiet cafe near the station, tagged @hidden.moon.cafe...",
-                            traditionalChinese: "例如：IG Reels 文案寫捷運站旁安靜咖啡，標記 @hidden.moon.cafe..."
-                        ))
-                        .font(SaveAtlasType.body(16))
-                        .foregroundStyle(SaveAtlasPalette.muted.opacity(0.72))
-                        .padding(.horizontal, 17)
-                        .padding(.vertical, 20)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
+            HStack(spacing: 10) {
+                Button(action: onUseSample) {
+                    Label(
+                        language.localized(english: "Try sample", traditionalChinese: "試用範例"),
+                        systemImage: "wand.and.stars"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .lineLimit(1)
+                    .padding(.horizontal, 13)
+                    .frame(minHeight: 44)
+                    .background(SaveAtlasPalette.paper.opacity(0.96))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                SaveAtlasPalette.forest.opacity(0.56),
+                                style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                            )
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+                .accessibilityIdentifier("onboarding.sampleClue")
 
-                HStack {
-                    Button(action: onUseSample) {
-                        Label(
-                            language.localized(english: "Try sample clue", traditionalChinese: "試用範例線索"),
-                            systemImage: "wand.and.stars"
-                        )
-                        .font(SaveAtlasType.strong(14))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(SaveAtlasPalette.kraft.opacity(0.58))
-                        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.46), lineWidth: 1))
-                        .clipShape(Capsule())
-                    }
-                    .accessibilityIdentifier("onboarding.sampleClue")
+                Spacer(minLength: 0)
 
-                    Spacer(minLength: 0)
-                }
+                Label(
+                    language.localized(english: "Private", traditionalChinese: "私人"),
+                    systemImage: "lock.fill"
+                )
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
             }
-
-            trustNote
 
             Spacer(minLength: 0)
         }
-        .frame(maxHeight: .infinity)
-        .onAppear {
-            chipsSettled = true
-        }
-    }
-
-    private var sourceChipsRow: some View {
-        HStack(spacing: 14) {
-            sourceChip(label: "IG", icon: "camera.fill", tint: SaveAtlasPalette.coral.opacity(0.72), restingOffset: -5, order: 0)
-            sourceChip(label: "CHAT", icon: "bubble.left.and.bubble.right.fill", tint: SaveAtlasPalette.sky, restingOffset: 4, order: 1)
-            MemoMascotMark(size: 56, framed: false)
-                .opacity(chipsSettled ? 1 : 0)
-                .animation(.easeInOut(duration: 0.3), value: chipsSettled)
-            sourceChip(label: "MAP", icon: "map.fill", tint: SaveAtlasPalette.mint, restingOffset: 5, order: 2)
-            sourceChip(label: "NOTE", icon: "note.text", tint: SaveAtlasPalette.kraft, restingOffset: -4, order: 3)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func sourceChip(label: String, icon: String, tint: Color, restingOffset: CGFloat, order: Int) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.subheadline.weight(.bold))
-            Text(label)
-                .font(.system(size: 9, weight: .black))
-        }
-        .foregroundStyle(SaveAtlasPalette.ink)
-        .frame(width: 52, height: 50)
-        .background(tint.opacity(0.74))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.4), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 7, x: 0, y: 4)
-        .rotationEffect(.degrees(restingOffset > 0 ? 4 : -5))
-        .offset(y: chipsSettled ? restingOffset : restingOffset - 18)
-        .opacity(chipsSettled ? 1 : 0)
-        .animation(
-            reduceMotion
-                ? .easeInOut(duration: 0.18)
-                : .spring(response: 0.55, dampingFraction: 0.66).delay(Double(order) * 0.07),
-            value: chipsSettled
-        )
-    }
-
-    private var trustNote: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock.fill")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SaveAtlasPalette.forest)
-
-            Text(language.localized(
-                english: "Private food + travel memory, not public reviews.",
-                traditionalChinese: "這是私人的美食與旅行記憶，不是公開評論。"
-            ))
-            .font(SaveAtlasType.body(12))
-            .foregroundStyle(SaveAtlasPalette.muted)
-            .lineLimit(2)
-            .minimumScaleFactor(0.84)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(SaveAtlasPalette.paper.opacity(0.82))
-        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.30), lineWidth: 1))
-        .clipShape(Capsule())
-        .accessibilityElement(children: .combine)
+        .padding(.top, isCompactHeight ? 8 : 20)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
-// MARK: - Proof Demo Canvas
+private struct CluePocketStage: View {
+    @Binding var clueText: String
+    let language: AppLanguage
+    let isCompactHeight: Bool
 
-/// Animated scripted demo: one clue card becomes a Review Candidate, then a
-/// stamped place on a mini map. No network.
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            OnboardingSourceTicket(
+                clueText: $clueText,
+                language: language,
+                isCompactHeight: isCompactHeight
+            )
+            .padding(.horizontal, 9)
+            .offset(y: isCompactHeight ? -82 : -128)
+            .zIndex(1)
+
+            OnboardingPocketEnvelope(
+                caption: language.localized(
+                    english: "Memo keeps the source as proof.",
+                    traditionalChinese: "Memo 會把來源留作證據。"
+                ),
+                isCompactHeight: isCompactHeight
+            )
+            .zIndex(2)
+
+            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
+                .offset(x: isCompactHeight ? 100 : 116, y: isCompactHeight ? -48 : -64)
+                .zIndex(3)
+        }
+        .accessibilityIdentifier("onboarding.pocketStage.clue")
+    }
+}
+
+private struct OnboardingSourceTicket: View {
+    @Binding var clueText: String
+    let language: AppLanguage
+    let isCompactHeight: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 5 : 8) {
+            Text(language.localized(english: "Source Clue", traditionalChinese: "來源線索").uppercased())
+                .font(SaveAtlasType.strong(10))
+                .tracking(1)
+                .foregroundStyle(SaveAtlasPalette.coral)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            ZStack(alignment: .topLeading) {
+                linedNoteBackground
+
+                TextEditor(text: $clueText)
+                    .font(SaveAtlasType.editorial(isCompactHeight ? 14 : 16))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .frame(height: isCompactHeight ? 70 : 104)
+                    .accessibilityIdentifier("onboarding.clueEditor")
+                    .accessibilityLabel(language.localized(
+                        english: "Place clue text",
+                        traditionalChinese: "地點線索文字"
+                    ))
+
+                if clueText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(language.localized(
+                        english: "IG Reel: quiet cafe near the station, tagged @hidden.moon.cafe...",
+                        traditionalChinese: "IG Reels：捷運站旁的安靜咖啡，標記 @hidden.moon.cafe..."
+                    ))
+                    .font(SaveAtlasType.body(isCompactHeight ? 14 : 16))
+                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.70))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
+
+            HStack(spacing: 7) {
+                Image(systemName: "camera.fill")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(language.localized(english: "From IG Reel", traditionalChinese: "來自 IG Reels"))
+                    Text("instagram.com/reel/C8xK...7bQ")
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(language.localized(english: "Saved", traditionalChinese: "保存"))
+                    Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
+                }
+            }
+            .font(SaveAtlasType.body(10))
+            .foregroundStyle(SaveAtlasPalette.muted)
+        }
+        .padding(isCompactHeight ? 10 : 13)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.coral.opacity(0.24))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.coral.opacity(0.86),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("onboarding.sourceTicket")
+    }
+
+    private var linedNoteBackground: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = isCompactHeight ? 18 : 22
+            for y in stride(from: spacing, through: size.height, by: spacing) {
+                var path = Path()
+                path.move(to: CGPoint(x: 0, y: y))
+                path.addLine(to: CGPoint(x: size.width, y: y))
+                context.stroke(path, with: .color(SaveAtlasPalette.line.opacity(0.22)), lineWidth: 1)
+            }
+        }
+        .frame(height: isCompactHeight ? 70 : 104)
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Proof Pocket
+
+/// Animated local proof: one retained source ticket advances from Review
+/// Candidate to a user-confirmed saved postcard. No network.
 private struct ProofDemoCanvas: View {
     let step: OnboardingStep
     let clueText: String
     let language: AppLanguage
+    let isCompactHeight: Bool
     let height: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -780,31 +818,15 @@ private struct ProofDemoCanvas: View {
     private static let finalPhase = 3
 
     var body: some View {
-        ZStack {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .fill(SaveAtlasPalette.paper)
-                .overlay {
-                    SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                        .stroke(
-                            step == .mapStamp
-                                ? SaveAtlasPalette.forest.opacity(0.48)
-                                : SaveAtlasPalette.sky,
-                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                        )
-                }
-
-            sceneContent
-                .padding(14)
-
-            memoGuide
-        }
+        sceneContent
         .frame(height: height)
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 7, y: 3)
         .task(id: step) {
             await runPhaseScript()
         }
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier(stageAccessibilityIdentifier)
         .accessibilityLabel(sceneAccessibilityLabel)
+        .accessibilityValue(phase == Self.finalPhase ? "ready" : "preparing")
     }
 
     @MainActor
@@ -827,11 +849,21 @@ private struct ProofDemoCanvas: View {
     private var sceneContent: some View {
         switch step {
         case .candidate:
-            candidateScene
-                .transition(sceneTransition)
+            ReviewPocketStage(
+                clueLine: clueLine,
+                language: language,
+                isCompactHeight: isCompactHeight,
+                phase: phase
+            )
+            .offset(y: isCompactHeight ? 8 : 18)
+            .transition(sceneTransition)
         case .mapStamp:
-            mapStampScene
-                .transition(sceneTransition)
+            MapStampPocketStage(
+                language: language,
+                isCompactHeight: isCompactHeight,
+                phase: phase
+            )
+            .transition(sceneTransition)
         default:
             EmptyView()
         }
@@ -839,234 +871,6 @@ private struct ProofDemoCanvas: View {
 
     private var sceneTransition: AnyTransition {
         reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.97))
-    }
-
-    // MARK: Candidate scene
-
-    private var candidateScene: some View {
-        VStack(spacing: 10) {
-            clueNote
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.down")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.62))
-                Image(systemName: "sparkles")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(SaveAtlasPalette.coral)
-            }
-            .opacity(phase >= 1 ? 1 : 0)
-
-            candidateCard
-                .opacity(phase >= 1 ? 1 : 0)
-                .offset(y: phase >= 1 || reduceMotion ? 0 : 12)
-
-            Spacer(minLength: 36)
-        }
-    }
-
-    private var clueNote: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "paperclip")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SaveAtlasPalette.muted)
-
-            Text(clueLine)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 8)
-        .background(SaveAtlasPalette.sky.opacity(0.34))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .rotationEffect(.degrees(-1.4))
-    }
-
-    private var candidateCard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            SaveMemoryBadge(state: .ready, size: 44)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點"))
-                    .font(SaveAtlasType.strong(10))
-                    .tracking(0.7)
-                    .foregroundStyle(SaveAtlasPalette.coral)
-
-                Text("Hidden Moon Cafe?")
-                    .font(SaveAtlasType.strong(18))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-
-                evidenceLine(
-                    icon: "checkmark.seal.fill",
-                    text: language.localized(english: "Name clue found", traditionalChinese: "找到名稱線索"),
-                    tint: SaveAtlasPalette.mint,
-                    visibleAt: 1
-                )
-                evidenceLine(
-                    icon: "link",
-                    text: language.localized(english: "Source kept as proof", traditionalChinese: "來源已留作證據"),
-                    tint: SaveAtlasPalette.sky,
-                    visibleAt: 2
-                )
-                evidenceLine(
-                    icon: "exclamationmark.triangle.fill",
-                    text: language.localized(english: "Missing exact address + pin", traditionalChinese: "還缺精確地址與座標"),
-                    tint: SaveAtlasPalette.kraft,
-                    visibleAt: 3
-                )
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.paper.opacity(0.98))
-        .padding(4)
-        .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.sky.opacity(0.52))
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    SaveAtlasPalette.forest.opacity(0.52),
-                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
-                )
-        }
-    }
-
-    private func evidenceLine(icon: String, text: String, tint: Color, visibleAt: Int) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(SaveAtlasPalette.forest)
-                .frame(width: 21, height: 21)
-                .background(tint.opacity(0.62))
-                .clipShape(Circle())
-
-            Text(text)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-        }
-        .opacity(phase >= visibleAt ? 1 : 0)
-        .offset(x: phase >= visibleAt || reduceMotion ? 0 : -8)
-    }
-
-    // MARK: Map Stamp scene
-
-    private var mapStampScene: some View {
-        ZStack(alignment: .bottom) {
-            OnboardingMiniMap(stampVisible: phase >= 1, reduceMotion: reduceMotion)
-
-            VStack(spacing: 8) {
-                if phase >= 2 {
-                    confirmedCapsule
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                stampedPlaceCard
-            }
-            .padding(10)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    }
-
-    private var confirmedCapsule: some View {
-        Label(
-            language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
-            systemImage: "hand.thumbsup.fill"
-        )
-        .font(SaveAtlasType.strong(12))
-        .foregroundStyle(SaveAtlasPalette.forest)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 7)
-        .background(SaveAtlasPalette.mint.opacity(0.92))
-        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
-        .clipShape(Capsule())
-    }
-
-    private var stampedPlaceCard: some View {
-        HStack(spacing: 11) {
-            SaveMemoryBadge(state: .saved(.cafe), size: 40)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Hidden Moon Cafe")
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-
-                Text(language.localized(
-                    english: "Map Stamp · source kept · private",
-                    traditionalChinese: "地圖章 · 保留來源 · 私人"
-                ))
-                .font(SaveAtlasType.body(11))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(11)
-        .background(SaveAtlasPalette.paper.opacity(0.98))
-        .padding(4)
-        .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.mint.opacity(0.72))
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    SaveAtlasPalette.forest.opacity(0.62),
-                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
-                )
-        }
-    }
-
-    // MARK: Memo guide
-
-    private var memoGuide: some View {
-        VStack {
-            Spacer()
-            HStack(alignment: .bottom, spacing: 6) {
-                Spacer()
-
-                if step != .mapStamp {
-                    Text(memoLine)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .background(SaveAtlasPalette.kraft.opacity(0.76))
-                        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1))
-                        .clipShape(Capsule())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.74)
-
-                    MemoMascotMark(size: 38, framed: false)
-                }
-            }
-            .padding(10)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private var memoLine: String {
-        switch step {
-        case .candidate:
-            return language.localized(english: "I found this — your call.", traditionalChinese: "我找到這個——由你決定。")
-        default:
-            return ""
-        }
     }
 
     // MARK: Helpers
@@ -1095,79 +899,382 @@ private struct ProofDemoCanvas: View {
             return ""
         }
     }
+
+    private var stageAccessibilityIdentifier: String {
+        switch step {
+        case .candidate:
+            return "onboarding.pocketStage.review"
+        case .mapStamp:
+            return "onboarding.pocketStage.mapStamp"
+        default:
+            return "onboarding.pocketStage"
+        }
+    }
 }
 
-// MARK: - Mini Map
-
-private struct OnboardingMiniMap: View {
-    let stampVisible: Bool
-    let reduceMotion: Bool
+private struct ReviewPocketStage: View {
+    let clueLine: String
+    let language: AppLanguage
+    let isCompactHeight: Bool
+    let phase: Int
 
     var body: some View {
-        ZStack {
-            SaveAtlasPalette.mint.opacity(0.34)
+        ZStack(alignment: .bottom) {
+            OnboardingCompactSourceReceipt(clueLine: clueLine, language: language)
+                .padding(.horizontal, 18)
+                .rotationEffect(.degrees(-1.2))
+                .offset(y: isCompactHeight ? -230 : -300)
+                .zIndex(0)
 
-            GeometryReader { proxy in
-                let w = proxy.size.width
-                let h = proxy.size.height
+            if phase >= 1 {
+                OnboardingReviewTicket(
+                    language: language,
+                    isCompactHeight: isCompactHeight,
+                    phase: phase
+                )
+                    .padding(.horizontal, 9)
+                    .offset(y: isCompactHeight ? -95 : -155)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .zIndex(1)
+            }
 
-                Path { path in
-                    path.move(to: CGPoint(x: w * 0.04, y: h * 0.24))
-                    path.addLine(to: CGPoint(x: w * 0.4, y: h * 0.5))
-                    path.addLine(to: CGPoint(x: w * 0.82, y: h * 0.3))
-                    path.move(to: CGPoint(x: w * 0.12, y: h * 0.86))
-                    path.addLine(to: CGPoint(x: w * 0.5, y: h * 0.48))
-                    path.addLine(to: CGPoint(x: w * 0.96, y: h * 0.82))
-                }
+            OnboardingPocketEnvelope(
+                caption: language.localized(
+                    english: "Your source stays attached.",
+                    traditionalChinese: "原始來源會一直保留。"
+                ),
+                isCompactHeight: isCompactHeight
+            )
+            .zIndex(2)
+
+            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
+                .offset(
+                    x: isCompactHeight ? 100 : 116,
+                    y: isCompactHeight ? -48 : -64
+                )
+                .zIndex(3)
+        }
+    }
+}
+
+private struct OnboardingCompactSourceReceipt: View {
+    let clueLine: String
+    let language: AppLanguage
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "paperclip")
+                .font(.caption.weight(.bold))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(language.localized(english: "Source Clue", traditionalChinese: "來源線索").uppercased())
+                    .font(SaveAtlasType.strong(9))
+                    .tracking(0.8)
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                Text(clueLine)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 68)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(4)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.coral.opacity(0.24))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
                 .stroke(
-                    SaveAtlasPalette.line.opacity(0.20),
-                    style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round)
+                    SaveAtlasPalette.coral.opacity(0.82),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                )
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OnboardingReviewTicket: View {
+    let language: AppLanguage
+    let isCompactHeight: Bool
+    let phase: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 10) {
+            HStack(alignment: .top, spacing: 10) {
+                SavePostcardPerforatedMedallion(
+                    systemName: "magnifyingglass",
+                    tint: SaveAtlasPalette.sky,
+                    edge: Color.saveBlueInk.opacity(0.72)
                 )
 
-                ghostPin(icon: "fork.knife", tint: SaveAtlasPalette.sky)
-                    .position(x: w * 0.78, y: h * 0.26)
-                ghostPin(icon: "camera.fill", tint: SaveAtlasPalette.coral.opacity(0.72))
-                    .position(x: w * 0.88, y: h * 0.66)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
+                        .font(SaveAtlasType.strong(9))
+                        .tracking(0.8)
+                        .foregroundStyle(Color.saveBlueInk)
+                    Text("Hidden Moon Cafe?")
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 20, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
 
-                stampPin
-                    .position(x: w * 0.38, y: h * 0.42)
+                Spacer(minLength: 0)
             }
+
+            HStack(alignment: .top, spacing: 6) {
+                evidenceMark(
+                    icon: "checkmark.seal.fill",
+                    title: language.localized(english: "Name\nfound", traditionalChinese: "找到\n名稱"),
+                    tint: SaveAtlasPalette.mint,
+                    visibleAt: 1
+                )
+                evidenceMark(
+                    icon: "link",
+                    title: language.localized(english: "Source\nkept", traditionalChinese: "保留\n來源"),
+                    tint: SaveAtlasPalette.sky,
+                    visibleAt: 2
+                )
+                evidenceMark(
+                    icon: "questionmark",
+                    title: language.localized(english: "Exact pin\nmissing", traditionalChinese: "還缺\n座標"),
+                    tint: SaveAtlasPalette.kraft,
+                    visibleAt: 3
+                )
+            }
+
+            Divider()
+                .overlay(Color.saveBlueInk.opacity(0.24))
+
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "paperclip")
+                    .font(.caption.weight(.bold))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(language.localized(english: "From IG Reel", traditionalChinese: "來自 IG Reels"))
+                    Text("instagram.com/reel/C8xK...7bQ")
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(language.localized(english: "Saved", traditionalChinese: "保存"))
+                    Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
+                }
+            }
+            .font(SaveAtlasType.body(isCompactHeight ? 9 : 10))
+            .foregroundStyle(SaveAtlasPalette.muted)
+        }
+        .padding(isCompactHeight ? 10 : 13)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.sky.opacity(0.54))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    Color.saveBlueInk.opacity(0.72),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
+        .accessibilityIdentifier("onboarding.reviewTicket")
+    }
+
+    @ViewBuilder
+    private func evidenceMark(icon: String, title: String, tint: Color, visibleAt: Int) -> some View {
+        if phase >= visibleAt {
+            VStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 30, height: 30)
+                    .background(tint, in: SavePostcardSealShape())
+
+                Text(title)
+                    .font(SaveAtlasType.strong(10))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity)
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .accessibilityIdentifier("onboarding.reviewEvidence.\(visibleAt)")
+        } else {
+            Color.clear
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .accessibilityHidden(true)
         }
     }
+}
 
-    private func ghostPin(icon: String, tint: Color) -> some View {
-        Image(systemName: icon)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(SaveAtlasPalette.ink)
-            .frame(width: 30, height: 30)
-            .background(tint.opacity(0.8))
-            .overlay(Circle().stroke(SaveAtlasPalette.paper.opacity(0.90), lineWidth: 2))
-            .clipShape(Circle())
-            .opacity(0.66)
+private struct MapStampPocketStage: View {
+    let language: AppLanguage
+    let isCompactHeight: Bool
+    let phase: Int
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            if phase >= 1 {
+                OnboardingSavedPostcard(language: language)
+                    .padding(.horizontal, 9)
+                    .offset(y: isCompactHeight ? -52 : -118)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .zIndex(1)
+            }
+
+            OnboardingPocketEnvelope(
+                caption: language.localized(
+                    english: "Saved to your private pocket.",
+                    traditionalChinese: "已放進你的私人收藏袋。"
+                ),
+                isCompactHeight: isCompactHeight
+            )
+            .zIndex(2)
+
+            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
+                .offset(
+                    x: isCompactHeight ? 100 : 116,
+                    y: isCompactHeight ? -48 : -64
+                )
+                .zIndex(3)
+        }
     }
+}
 
-    private var stampPin: some View {
-        ZStack {
-            Circle()
-                .stroke(SaveAtlasPalette.coral.opacity(0.36), lineWidth: 3)
-                .frame(width: 62, height: 62)
-                .opacity(stampVisible ? 1 : 0)
+private struct OnboardingSavedPostcard: View {
+    let language: AppLanguage
 
-            Image(systemName: "cup.and.saucer.fill")
-                .font(.headline.weight(.bold))
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(language.localized(english: "Map Stamp · Confirmed", traditionalChinese: "地圖章 · 已確認").uppercased())
+                .font(SaveAtlasType.strong(9))
+                .tracking(0.8)
                 .foregroundStyle(SaveAtlasPalette.forest)
-                .frame(width: 44, height: 44)
-                .background(SaveAtlasPalette.mint.opacity(0.96))
-                .overlay(Circle().stroke(SaveAtlasPalette.forest.opacity(0.56), lineWidth: 1.5))
-                .clipShape(Circle())
-                .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 6, x: 0, y: 3)
+
+            HStack(alignment: .top, spacing: 10) {
+                Image("KoffeeMameyaThumbnail")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
+                    }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Hidden Moon Cafe")
+                        .font(SaveAtlasType.strong(19, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Label(
+                        language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
+                        systemImage: "hand.thumbsup.fill"
+                    )
+                    .font(SaveAtlasType.strong(11))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(SaveAtlasPalette.mint.opacity(0.96), in: Capsule())
+
+                    Text(language.localized(
+                        english: "Source retained · Private",
+                        traditionalChinese: "保留來源 · 私人"
+                    ))
+                    .font(SaveAtlasType.body(11))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                }
+
+                Spacer(minLength: 0)
+
+                SavePostcardPostmark()
+                    .scaleEffect(0.72)
+                    .frame(width: 42, height: 42)
+            }
+
+            ZStack(alignment: .bottomTrailing) {
+                Image("MapAtlasScene")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 50)
+                    .clipped()
+                    .opacity(0.58)
+
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .padding(6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
+            }
+
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "link")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(language.localized(english: "From IG Reel", traditionalChinese: "來自 IG Reels"))
+                    Text("instagram.com/reel/C8xK...7bQ")
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(language.localized(english: "Saved", traditionalChinese: "保存"))
+                    Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
+                }
+            }
+            .font(SaveAtlasType.body(10))
+            .foregroundStyle(SaveAtlasPalette.muted)
         }
-        .scaleEffect(stampVisible ? 1 : (reduceMotion ? 1 : 2.1))
-        .opacity(stampVisible ? 1 : 0)
-        .animation(
-            reduceMotion ? .easeInOut(duration: 0.18) : .spring(response: 0.38, dampingFraction: 0.6),
-            value: stampVisible
-        )
+        .padding(13)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(5)
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .fill(SaveAtlasPalette.mint.opacity(0.62))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                .stroke(
+                    SaveAtlasPalette.forest.opacity(0.72),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
+        .accessibilityIdentifier("onboarding.savedPostcard")
+    }
+}
+
+private struct OnboardingPocketEnvelope: View {
+    let caption: String
+    let isCompactHeight: Bool
+
+    var body: some View {
+        Image("SavesEnvelope")
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity)
+            .frame(height: isCompactHeight ? 126 : 176, alignment: .bottom)
+            .overlay(alignment: .bottom) {
+                Text(caption)
+                    .font(SaveAtlasType.editorial(isCompactHeight ? 12 : 14))
+                    .foregroundStyle(SaveAtlasPalette.ink.opacity(0.78))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 90)
+                    .padding(.bottom, isCompactHeight ? 20 : 28)
+            }
+            .accessibilityHidden(true)
     }
 }
 
