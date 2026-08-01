@@ -303,8 +303,8 @@ private enum OnboardingStep: Int, CaseIterable {
             )
         case .candidate:
             return language.localized(
-                english: "It stays in review until you confirm — no fake pins.",
-                traditionalChinese: "在你確認之前都先待確認，不會出現假地點。"
+                english: "It stays in review until you confirm.",
+                traditionalChinese: "在你確認之前都會留在待確認。"
             )
         case .mapStamp:
             return language.localized(
@@ -639,7 +639,7 @@ private struct ClueStepView: View {
                 Button(action: onUseSample) {
                     Label(
                         language.localized(english: "Try sample", traditionalChinese: "試用範例"),
-                        systemImage: "wand.and.stars"
+                        systemImage: "airplane"
                     )
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
@@ -657,16 +657,8 @@ private struct ClueStepView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .accessibilityIdentifier("onboarding.sampleClue")
-
-                Spacer(minLength: 0)
-
-                Label(
-                    language.localized(english: "Private", traditionalChinese: "私人"),
-                    systemImage: "lock.fill"
-                )
-                .font(SaveAtlasType.body(12))
-                .foregroundStyle(SaveAtlasPalette.muted)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 0)
         }
@@ -957,8 +949,8 @@ private struct ReviewPocketStage: View {
 
             OnboardingPocketEnvelope(
                 caption: language.localized(
-                    english: "Your source stays attached.",
-                    traditionalChinese: "原始來源會一直保留。"
+                    english: "Memo keeps the source as proof.",
+                    traditionalChinese: "Memo 會把來源留作證據。"
                 ),
                 isCompactHeight: isCompactHeight
             )
@@ -1036,11 +1028,10 @@ private struct OnboardingReviewTicket: View {
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "cup.and.saucer.fill")
-                    .font(.system(size: isCompactHeight ? 18 : 21, weight: .semibold))
-                    .foregroundStyle(Color.saveBlueInk)
-                    .frame(width: isCompactHeight ? 38 : 42, height: isCompactHeight ? 38 : 42)
-                    .background(SaveAtlasPalette.sky.opacity(0.72), in: SavePostcardSealShape())
+                Image("OnboardingMoonMug")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: isCompactHeight ? 42 : 48, height: isCompactHeight ? 42 : 48)
                     .accessibilityHidden(true)
             }
 
@@ -1162,8 +1153,8 @@ private struct MapStampPocketStage: View {
 
             OnboardingPocketEnvelope(
                 caption: language.localized(
-                    english: "Saved to your private pocket.",
-                    traditionalChinese: "已放進你的私人收藏袋。"
+                    english: "Memo keeps the source as proof.",
+                    traditionalChinese: "Memo 會把來源留作證據。"
                 ),
                 isCompactHeight: isCompactHeight
             )
@@ -1185,7 +1176,10 @@ private struct OnboardingSavedPostcard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(language.localized(english: "Lifted Saved Postcard", traditionalChinese: "已提起的收藏明信片").uppercased())
+            Text(language.localized(
+                english: "★ Lifted Saved Postcard ★",
+                traditionalChinese: "★ 已提起的收藏明信片 ★"
+            ).uppercased())
                 .font(SaveAtlasType.strong(9))
                 .tracking(0.8)
                 .foregroundStyle(SaveAtlasPalette.forest)
@@ -1209,12 +1203,6 @@ private struct OnboardingSavedPostcard: View {
                     .padding(.vertical, 5)
                     .background(SaveAtlasPalette.mint.opacity(0.96), in: Capsule())
 
-                    Text(language.localized(
-                        english: "Source retained · Private",
-                        traditionalChinese: "保留來源 · 私人"
-                    ))
-                    .font(SaveAtlasType.body(11))
-                    .foregroundStyle(SaveAtlasPalette.muted)
                 }
 
                 Spacer(minLength: 0)
@@ -1229,6 +1217,13 @@ private struct OnboardingSavedPostcard: View {
                             .stroke(SaveAtlasPalette.line.opacity(0.48), lineWidth: 1)
                     }
                     .rotationEffect(.degrees(2))
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .rotationEffect(.degrees(14))
+                            .offset(x: 6, y: -7)
+                    }
             }
 
             HStack(alignment: .top, spacing: 6) {
@@ -1268,7 +1263,7 @@ private struct OnboardingSavedPostcard: View {
             .overlay(alignment: .topTrailing) {
                 SavePostcardPostmark()
                     .scaleEffect(0.64)
-                    .offset(x: -4, y: -28)
+                    .offset(x: -58, y: -74)
             }
         }
         .padding(11)

@@ -415,6 +415,21 @@
       "status": "complete"
     },
     {
+      "name": "OnboardingMoonMug",
+      "role": "owned moon-and-stars mug illustration on the Review Candidate ticket",
+      "source": "independent SVG reconstruction from the founder-approved onboarding direction",
+      "transform": "section-level vector asset; decorative only",
+      "output": {
+        "imageset": "OnboardingMoonMug.imageset",
+        "filename": "onboarding-moon-mug.svg",
+        "width": 96,
+        "height": 96,
+        "scale": "vector",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "PlanRouteRibbon",
       "role": "multicolor route ribbon and numbered route nodes",
       "source": "Reference/Targets/plan.png",

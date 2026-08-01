@@ -47,8 +47,9 @@ and confirmed states respectively.
   the envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
-- `OnboardingReviewTicket`: sky scalloped ticket, candidate name, three postal
-  evidence marks, retained coral source receipt.
+- `OnboardingReviewTicket`: sky scalloped ticket, candidate name, owned
+  `OnboardingMoonMug`, three postal evidence marks, retained coral source
+  receipt.
 - `OnboardingSavedPostcard`: mint scalloped lifted header, photo, confirmation
   seal, source receipt, cancellation lines, and small decorative atlas fragment.
 - Existing `SavePostcardScallopedRectangle`, `SavePostcardSealShape`,
@@ -119,6 +120,7 @@ and confirmed states respectively.
   lookup is implied.
 - The final place image uses the owned Koffee Mameya fixture only as a visual
   example; it is not persisted as user data.
+- The Review mug is an owned local vector illustration and is decorative only.
 
 ## Implementation Order
 

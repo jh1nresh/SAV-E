@@ -33,7 +33,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
 
         // Review Candidate demo.
         assertFullyVisible(app.staticTexts["Memo found a likely place"], in: app)
-        assertFullyVisible(app.staticTexts["It stays in review until you confirm — no fake pins."], in: app)
+        assertFullyVisible(app.staticTexts["It stays in review until you confirm."], in: app)
         let reviewStage = app.descendants(matching: .any)["onboarding.pocketStage.review"]
         XCTAssertTrue(waitForReady(reviewStage))
         attach(app, name: "first-run-03-review")

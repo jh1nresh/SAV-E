@@ -53,6 +53,12 @@ The corrected implementation:
   order; and
 - moves Memo from the printed seal center to a peek over the pocket mouth.
 
+The final fidelity pass also removes the extra Clue privacy label, restores the
+approved airplane sample action and exact Review subtitle, uses one owned moon
+mug illustration instead of a generic SF Symbol, repeats the approved source
+proof caption on all three pockets, and places the Map Stamp paperclip and
+postal cancellation over the photo area.
+
 Generic iOS Simulator build passed with `BUILD_EXIT=0`. Fresh same-commit Clue,
 Review, and Map Stamp runtime screenshots remain the ship gate for this
 correction.
