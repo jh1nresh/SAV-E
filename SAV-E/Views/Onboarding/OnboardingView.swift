@@ -682,7 +682,7 @@ private struct CluePocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+            OnboardingAirmailRails(isCompactHeight: isCompactHeight)
                 .offset(y: isCompactHeight ? -55 : -85)
 
             OnboardingSourceTicket(
@@ -924,7 +924,7 @@ private struct ReviewPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+            OnboardingAirmailRails(isCompactHeight: isCompactHeight)
                 .offset(y: isCompactHeight ? -55 : -85)
                 .zIndex(-1)
 
@@ -1130,7 +1130,7 @@ private struct MapStampPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+            OnboardingAirmailRails(isCompactHeight: isCompactHeight)
                 .offset(y: isCompactHeight ? -55 : -85)
 
             if phase >= 1 {
@@ -1268,18 +1268,11 @@ private struct OnboardingSavedPostcard: View {
     }
 }
 
-private struct OnboardingAirmailEnvelopeBack: View {
+private struct OnboardingAirmailRails: View {
     let isCompactHeight: Bool
 
     var body: some View {
         Canvas { context, size in
-            let bounds = CGRect(origin: .zero, size: size)
-            let envelope = RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .path(in: bounds)
-
-            context.clip(to: envelope)
-            context.fill(envelope, with: .color(SaveAtlasPalette.paper))
-
             let railWidth: CGFloat = isCompactHeight ? 15 : 18
             let segmentHeight: CGFloat = isCompactHeight ? 22 : 26
             let paintedHeight = segmentHeight * 0.72
@@ -1311,12 +1304,6 @@ private struct OnboardingAirmailEnvelopeBack: View {
         .frame(maxWidth: .infinity)
         .frame(height: isCompactHeight ? 160 : 230)
         .padding(.horizontal, 2)
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
-                .padding(.horizontal, 2)
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 7, y: 3)
         .accessibilityHidden(true)
     }
 }
