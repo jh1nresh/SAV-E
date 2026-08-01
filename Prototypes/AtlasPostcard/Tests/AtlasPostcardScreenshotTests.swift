@@ -41,10 +41,6 @@ final class AtlasPostcardScreenshotTests: XCTestCase {
 
         app.buttons["Map"].tap()
         waitForScreen("prototype.trip.map", in: app)
-        app.buttons["Inbox"].tap()
-        waitForScreen("prototype.trip.inbox", in: app)
-        app.buttons["Share"].tap()
-        waitForScreen("prototype.trip.share", in: app)
         app.buttons["Plan"].tap()
         waitForScreen("prototype.plan", in: app)
 

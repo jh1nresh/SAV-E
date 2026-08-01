@@ -34,8 +34,16 @@ struct SaveApp: App {
 
     private let supabaseService = SupabaseService.shared
     private let pendingImportService = PendingPlaceImportService.shared
-    private let minimumOpeningAnimationDuration: UInt64 = 1_800_000_000
     private let accountScopedURLMaxBytes = 8 * 1024
+
+    private var minimumOpeningAnimationDuration: UInt64 {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-hold-opening") {
+            return 8_000_000_000
+        }
+#endif
+        return 1_800_000_000
+    }
 
     init() {
         // Generous shared image/network cache so place photos load once then
@@ -826,23 +834,40 @@ struct AuthLoadingView: View {
 
     var body: some View {
         ZStack {
-            SaveDottedBackground()
+            AtlasCanvas()
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 20) {
+                SaveFirstRunBrandLockup()
+
+                Spacer(minLength: 12)
+
                 SaveOpeningLogoMark(isBreathing: isBreathing, reduceMotion: reduceMotion)
 
-                VStack(spacing: 12) {
-                    Text(languageSettings.text(.opening))
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(.saveInk)
+                VStack(spacing: 6) {
+                    Text(languageSettings.localized(
+                        english: "YOUR PLACE MEMORY",
+                        traditionalChinese: "你的地點記憶"
+                    ))
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(1)
+                    .foregroundStyle(SaveAtlasPalette.coral)
 
-                    SaveOpeningStepRail(steps: loadingSteps, activeStep: activeStep)
+                    Text(languageSettings.text(.opening))
+                        .font(SaveAtlasType.strong(27, relativeTo: .title2))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("opening.loading")
                 }
 
+                SaveOpeningStepRail(steps: loadingSteps, activeStep: activeStep)
+
                 SaveOpeningHintPill(text: languageSettings.text(.openingHint))
+
+                Spacer(minLength: 12)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 22)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
@@ -891,61 +916,59 @@ private struct SaveOpeningLogoMark: View {
 
     var body: some View {
         ZStack {
-            SaveOpeningScrapbookCard(fill: .saveCream, rotation: -10, offset: CGSize(width: -42, height: 28))
-            SaveOpeningScrapbookCard(fill: .saveHoney, rotation: 9, offset: CGSize(width: 38, height: 18))
-            SaveOpeningScrapbookCard(fill: .saveNotebookPage, rotation: 3, offset: CGSize(width: 8, height: 42))
+            SaveOpeningBackTicket(fill: SaveAtlasPalette.sky, rotation: -7, offset: CGSize(width: -33, height: 19))
+            SaveOpeningBackTicket(fill: SaveAtlasPalette.mint, rotation: 6, offset: CGSize(width: 31, height: 25))
 
-            Circle()
-                .stroke(Color.saveHoney.opacity(0.42), lineWidth: 9)
-                .frame(width: 156, height: 156)
-                .scaleEffect(isBreathing && !reduceMotion ? 1.08 : 0.96)
-                .opacity(isBreathing && !reduceMotion ? 0.18 : 0.42)
+            Image("SavesEnvelope")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 246)
+                .offset(y: 50)
 
             MemoMascotMark(size: 126, framed: false)
                 .scaleEffect(isBreathing && !reduceMotion ? 1.035 : 0.985)
-                .offset(y: isBreathing && !reduceMotion ? -5 : 2)
-                .shadow(color: Color.saveInk.opacity(0.16), radius: 0, x: 0, y: 7)
+                .offset(y: isBreathing && !reduceMotion ? -23 : -16)
+                .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 6, y: 4)
 
-            SaveOpeningSpark(systemImage: "sparkles", fill: .saveHoney, offset: CGSize(width: 72, height: -54))
-            SaveOpeningSpark(systemImage: "link", fill: .saveCream, offset: CGSize(width: -76, height: -34))
-            SaveOpeningSpark(systemImage: "heart.fill", fill: .saveCream, offset: CGSize(width: 76, height: 50))
+            SavePostcardPostmark()
+                .scaleEffect(0.78)
+                .rotationEffect(.degrees(-8))
+                .offset(x: -82, y: 60)
+
+            Text("CLUE → STAMP")
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.8)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
+                .background(SaveAtlasPalette.paper.opacity(0.94), in: Capsule())
+                .overlay {
+                    Capsule().stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                }
+                .offset(x: 64, y: 60)
         }
-        .frame(width: 210, height: 190)
+        .frame(width: 280, height: 220)
         .accessibilityHidden(true)
     }
 }
 
-private struct SaveOpeningScrapbookCard: View {
+private struct SaveOpeningBackTicket: View {
     var fill: Color
     var rotation: Double
     var offset: CGSize
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(fill.opacity(0.92))
-            .frame(width: 76, height: 54)
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.6)
-            )
+        SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+            .fill(fill.opacity(0.82))
+            .frame(width: 184, height: 108)
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(
+                        SaveAtlasPalette.line.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                    )
+            }
             .rotationEffect(.degrees(rotation))
-            .offset(offset)
-    }
-}
-
-private struct SaveOpeningSpark: View {
-    var systemImage: String
-    var fill: Color
-    var offset: CGSize
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .font(.caption.weight(.bold))
-            .foregroundColor(.saveInk)
-            .frame(width: 34, height: 34)
-            .background(fill)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.3))
             .offset(offset)
     }
 }
@@ -955,15 +978,13 @@ private struct SaveOpeningStepRail: View {
     var activeStep: Int
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: -4) {
             ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                 SaveOpeningStepChip(step: step, isActive: index == activeStep)
+                    .zIndex(Double(steps.count - index))
             }
         }
-        .padding(8)
-        .background(Color.saveNotebookPage.opacity(0.88))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.4))
+        .frame(maxWidth: 320)
     }
 }
 
@@ -974,17 +995,36 @@ private struct SaveOpeningStepChip: View {
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: step.icon)
-                .font(.caption.weight(.bold))
+                .font(.system(size: 12, weight: .bold))
             Text(step.label)
-                .font(.caption.weight(.bold))
+                .font(SaveAtlasType.strong(13))
+
+            Spacer(minLength: 8)
+
+            Image(systemName: isActive ? "arrow.right" : "circle.fill")
+                .font(.system(size: isActive ? 11 : 5, weight: .bold))
+                .opacity(isActive ? 1 : 0.28)
         }
-        .foregroundColor(.saveInk)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(isActive ? step.tint : Color.saveCream.opacity(0.55))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(isActive ? 1 : 0.35), lineWidth: 1))
-        .scaleEffect(isActive ? 1.03 : 0.96)
+        .foregroundStyle(SaveAtlasPalette.ink)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 45)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(4)
+        .background {
+            SavePostcardScallopedRectangle(depth: 2.5, pitch: 10)
+                .fill(isActive ? step.tint.opacity(0.82) : SaveAtlasPalette.kraft.opacity(0.34))
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 2.5, pitch: 10)
+                .stroke(
+                    isActive
+                        ? SaveAtlasPalette.forest.opacity(0.46)
+                        : SaveAtlasPalette.line.opacity(0.30),
+                    style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                )
+        }
+        .scaleEffect(isActive ? 1 : 0.97)
+        .shadow(color: SaveAtlasPalette.ink.opacity(isActive ? 0.055 : 0.02), radius: 4, y: 2)
     }
 }
 
@@ -994,19 +1034,22 @@ private struct SaveOpeningHintPill: View {
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color.saveHoney)
+                .fill(SaveAtlasPalette.coral)
                 .frame(width: 7, height: 7)
                 .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 0.8))
 
             Text(text)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveMutedText)
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 9)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper.opacity(0.82))
+        .overlay {
+            Capsule().stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+        }
         .clipShape(Capsule())
     }
 }

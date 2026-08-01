@@ -4,7 +4,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
-    let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
+    let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
@@ -30,7 +30,7 @@ struct SaveHomeView: View {
         var presentation = SaveAtlasPresentationFactory.root(
             store: store,
             mapViewModel: mapViewModel,
-            onCapture: { onOpenDrawer(.addLink, nil) },
+            onCapture: onCapture,
             onReviewAll: onOpenSaves,
             onOpenTrip: onOpenTrip,
             onOpenTrips: onOpenTrips,
@@ -273,7 +273,7 @@ struct SaveHomeView: View {
         VStack(spacing: 0) {
             SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
                 Button {
-                    onOpenDrawer(.addLink, nil)
+                    onCapture()
                 } label: {
                     HStack(spacing: 7) {
                         Image(systemName: "link")
@@ -335,7 +335,7 @@ struct SaveHomeView: View {
             }
 
             Button {
-                onOpenDrawer(.review, nil)
+                onOpenSaves()
             } label: {
                 HStack {
                     Spacer()
@@ -547,7 +547,6 @@ struct SaveLibraryView: View {
     let places: [Place]
     let reviewCandidates: [PlaceReviewCandidate]
     let onOpenCapture: () -> Void
-    let onOpenReview: () -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
@@ -574,7 +573,9 @@ struct SaveLibraryView: View {
             places: places,
             candidates: reviewCandidates,
             onCapture: onOpenCapture,
-            onReviewAll: onOpenReview,
+            onReviewAll: {
+                selectedMode = .review
+            },
             onOpenPlace: onOpenSavedPlace,
             onOpenReview: onOpenReviewCandidate,
             onSelectReview: {

@@ -40,8 +40,6 @@ private enum RootDestination: String, CaseIterable, Identifiable {
 private enum TripDestination: String, CaseIterable, Identifiable {
     case plan
     case map
-    case inbox
-    case share
 
     var id: String { rawValue }
 
@@ -49,8 +47,6 @@ private enum TripDestination: String, CaseIterable, Identifiable {
         switch self {
         case .plan: "Plan"
         case .map: "Map"
-        case .inbox: "Inbox"
-        case .share: "Share"
         }
     }
 
@@ -58,8 +54,6 @@ private enum TripDestination: String, CaseIterable, Identifiable {
         switch self {
         case .plan: "map"
         case .map: "globe.asia.australia"
-        case .inbox: "envelope"
-        case .share: "point.3.connected.trianglepath.dotted"
         }
     }
 }
@@ -67,6 +61,7 @@ private enum TripDestination: String, CaseIterable, Identifiable {
 private struct PrototypeShell: View {
     @State private var root: RootDestination = .home
     @State private var trip: TripDestination = .plan
+    @State private var showsTripShare = false
 
     var body: some View {
         ReferenceViewport {
@@ -80,13 +75,15 @@ private struct PrototypeShell: View {
                     case .trips:
                         switch trip {
                         case .plan:
-                            TripPlanScreen(onBack: { root = .home })
+                            TripPlanScreen(
+                                onBack: { root = .home },
+                                onShare: { showsTripShare = true }
+                            )
                         case .map:
-                            TripAtlasMapScreen(onBack: { root = .home })
-                        case .inbox:
-                            TripInboxPlaceholderScreen(onBack: { root = .home })
-                        case .share:
-                            TripSharePlaceholderScreen(onBack: { root = .home })
+                            TripAtlasMapScreen(
+                                onBack: { root = .home },
+                                onShare: { showsTripShare = true }
+                            )
                         }
                     case .map:
                         RootAtlasMapScreen()
@@ -124,5 +121,8 @@ private struct PrototypeShell: View {
             }
         }
         .tint(AtlasPalette.forest)
+        .sheet(isPresented: $showsTripShare) {
+            TripSharePlaceholderScreen(onBack: { showsTripShare = false })
+        }
     }
 }

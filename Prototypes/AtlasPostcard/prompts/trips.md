@@ -12,4 +12,5 @@ Map tab bar.
 
 Do not use a navigation title, ScrollView, generic dashboard intro card,
 separate sections for every lifecycle state, or a second bottom navigation.
-Opening a Trip must switch to the scoped Plan / Map / Inbox / Share shell.
+Opening a Trip must switch to the scoped Plan / Map shell. Share is a header
+action, and all unconfirmed clues remain in the global Saves Review queue.

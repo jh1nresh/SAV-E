@@ -6,8 +6,9 @@ Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png
 This file is the canonical SAV-E visual specification for Home, Saves, Trips,
 Trip Plan, and Root Map. Where an older production spec conflicts with the fixed
 composition, assets, type scale, or one-viewport rule below, this file wins.
-Product behavior, persistence, authentication, confirmation, and the single
-canonical place-detail drawer remain governed by their existing contracts.
+Product behavior, persistence, authentication, and confirmation remain
+governed by their existing contracts. Place detail uses one canonical
+Postcard renderer: focused full-screen detail outside Map and a drawer on Map.
 
 ## Direction
 
@@ -23,6 +24,12 @@ Two page archetypes share one shell:
   treatment: Review is sky/coral and unresolved; Map Stamps are mint/forest and
   confirmed. Selecting a Map Stamp lifts that saved postcard out of the pocket
   without introducing a second detail renderer.
+
+First-run surfaces introduce those same archetypes instead of inventing a
+third visual language. Onboarding is a short Postcard Pocket proof of
+`Clue -> Review -> Map Stamp`; the opening/loading screen is Memo sorting those
+same tickets into the envelope. Both use the production brand lockup, atlas
+type, cream paper, coral action, mint confirmation, and owned Memo artwork.
 
 ## Design-taste brief
 
@@ -44,6 +51,8 @@ Saves     = Postcard Pocket
 Trips     = Little Atlas
 Trip Plan = Little Atlas
 Root Map  = Little Atlas
+Onboarding = Postcard Pocket proof
+Opening    = Postcard Pocket transition
 ```
 
 ### Home
@@ -56,8 +65,8 @@ Root Map  = Little Atlas
   supported city's landmarks just because the country matches.
 - Memo peeks from behind one review sheet.
 - The review sheet and `Review clues` action navigate directly to Saves. Home
-  never opens the review drawer; a Postcard Drawer appears only after the user
-  selects one Review Candidate in Saves.
+  never opens a review drawer; selecting a Review Candidate in Saves opens the
+  focused Postcard detail and returns to the same Review queue when closed.
 - Below: one Trip preview and exactly two recent Map Stamps.
 - Root tabs remain visible.
 
@@ -89,16 +98,38 @@ Root Map  = Little Atlas
   Chat is an input surface only; Trip cards and Day Plan remain the durable
   output.
 - One adjacent coral New Trip action remains directly reachable. Opening a Trip
-  changes the navigation shell to Plan / Map / Inbox / Share.
+  changes the navigation shell to Plan / Map. Review remains owned by Saves;
+  Share is the Trip header action instead of a navigation destination.
 - Root tabs remain visible and the page does not scroll.
 
 ### Trip Plan
 
-- Back, centered Trip name, Memo.
+- Back, centered Trip name, Share action.
 - Day selector.
 - Route ribbon, numbered nodes, four compact stops with distinct imagery.
 - One Add stop action.
+- Plan only contains user-confirmed Map Stamps. It does not silently inject AI
+  or public recommendations into the durable itinerary.
+- AI discovery stays in the Map `Ask SAV-E` surface. A public suggestion must
+  remain visibly unconfirmed and receive explicit approval before it can be
+  added to the plan.
 - Trip tabs remain visible.
+
+### Onboarding and Opening
+
+- Keep the existing four-step first-run proof and accessibility identifiers;
+  visual unification must not change onboarding completion or clue capture.
+- The header uses one Memo + SAV-E lockup, a compact step seal, and a postal
+  progress rail. The page uses atlas typography rather than rounded-system
+  display type.
+- Language choices, clue input, Review proof, and Map Stamp proof use scalloped
+  ticket construction. The selected/confirmed state is mint; coral remains the
+  only primary action.
+- Opening/loading is one fixed composition: brand lockup, Memo rising from the
+  kraft envelope, overlapping Clue / Review / Map Stamp tickets, and one quiet
+  status line. Do not restore floating scrapbook cards or a generic spinner.
+- Reduced Motion keeps the final composition and removes breathing/cycling
+  movement; it must not remove content or progress meaning.
 
 ### Root Map
 
@@ -116,11 +147,14 @@ Root Map  = Little Atlas
 - Never show a top search bar and bottom search drawer together, a default
   arbitrary first-place card, or two place renderers at the same time.
 
-### Canonical Postcard Drawer
+### Canonical Postcard Detail
 
-- Home capture, Home review, Saves review, Saves Map Stamp, Root Map place,
-  Trip Map stop, public discovery, and social discovery share one drawer
-  chrome.
+- Saves Review, Saves Map Stamp, Root Map place, Trip Map stop, public
+  discovery, and social discovery share one Postcard renderer and chrome.
+- Outside Map, it opens as a focused full-screen surface. On Root Map and Trip
+  Map, it opens in the same Map drawer so closing it reveals the correct tabs.
+- Global capture is a focused flow that always finishes in Saves Review. It
+  never creates a Map Stamp before confirmation.
 - The chrome is cream paper with a subtle perforated top rule, forest title,
   muted trust/source line, semantic seal, and outlined stamp controls.
 - A saved Map Stamp uses the Lifted Saved Postcard state of that same renderer:

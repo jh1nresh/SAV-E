@@ -53,6 +53,29 @@ enum SaveRootRoute: Hashable {
     case trip(UUID)
 }
 
+private enum SaveFullScreenRoute: Identifiable {
+    case capture
+    case placeDetail(MapDetailDrawerItem)
+
+    var id: String {
+        switch self {
+        case .capture:
+            return "capture"
+        case .placeDetail(let item):
+            switch item {
+            case .savedPlace(let place):
+                return "saved-\(place.id.uuidString)"
+            case .reviewCandidate(let candidate):
+                return "review-\(candidate.id.uuidString)"
+            case .unsavedCandidate(let candidate):
+                return "map-\(candidate.id)"
+            case .socialPlace(let place):
+                return "social-\(place.id.uuidString)"
+            }
+        }
+    }
+}
+
 enum ContentStorageScope: Equatable {
     case production
     case reviewerDemo
@@ -96,6 +119,7 @@ struct ContentView: View {
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
     @State private var pendingTripAssignmentPlace: Place?
     @State private var isTripAssignmentDialogPresented = false
+    @State private var isFullScreenTripAssignmentDialogPresented = false
     @State private var isTransitioningToTripCreation = false
     @State private var isCreatingTripForAssignment = false
     @State private var pendingCaptureTripID: UUID?
@@ -103,6 +127,10 @@ struct ContentView: View {
     @State private var drawerLaunchRequest: DrawerLaunchRequest
     @State private var selectedRootTab: SaveRootTab
     @State private var rootPath: [SaveRootRoute]
+    @State private var fullScreenRoute: SaveFullScreenRoute?
+    @State private var fullScreenCandidateActionID: UUID?
+    @State private var fullScreenMapCandidateActionID: String?
+    @State private var fullScreenActionError: String?
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -117,6 +145,10 @@ struct ContentView: View {
         _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
         _selectedRootTab = State(initialValue: .home)
         _rootPath = State(initialValue: [])
+        _fullScreenRoute = State(initialValue: nil)
+        _fullScreenCandidateActionID = State(initialValue: nil)
+        _fullScreenMapCandidateActionID = State(initialValue: nil)
+        _fullScreenActionError = State(initialValue: nil)
     }
 
     var body: some View {
@@ -139,15 +171,44 @@ struct ContentView: View {
         .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
             rootSheetContent
         }
+        .fullScreenCover(item: $fullScreenRoute, onDismiss: handleFullScreenDismiss) { route in
+            fullScreenContent(for: route)
+        }
         .sheet(isPresented: $isPassportPresented) {
             ProfileView(
                 savedPlaces: mapVM.places,
                 waitingClues: mapVM.reviewCandidates.count,
+                collaborativeLists: mapVM.collaborativeLists,
+                followedFriends: mapVM.followedFriends,
+                isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
+                hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
                 onUpdatePlaceVisibility: { place, visibility in
                     try await mapVM.updatePlaceVisibility(place, visibility: visibility)
                 },
                 onSaveGoogleTakeoutImport: { drafts in
                     try await mapVM.saveImportedPlaces(drafts)
+                },
+                onCreateList: { title, note in
+                    _ = mapVM.createCollaborativeList(title: title, note: note)
+                },
+                onShareListURL: { list, role in
+                    mapVM.shareURL(for: list, role: role)
+                },
+                onOpenListOnMap: openCollaborativeListOnMap,
+                onFollowReferral: { value in
+                    try await mapVM.followReferral(value)
+                },
+                onRefreshFollowedFriends: {
+                    await mapVM.refreshFollowedFriends(force: true)
+                },
+                onSearchFollowedFriends: { query in
+                    await mapVM.refreshFollowedFriends(query: query, force: true)
+                },
+                onLoadMoreFollowedFriends: {
+                    await mapVM.loadMoreFollowedFriends()
+                },
+                onUnfollowFriend: { friend in
+                    try await mapVM.unfollowFriend(friend)
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
@@ -179,51 +240,9 @@ struct ContentView: View {
             isPresented: $isTripAssignmentDialogPresented,
             titleVisibility: .visible
         ) {
-            ForEach(tripAssignmentChoices) { trip in
-                Button(languageSettings.localized(
-                    english: "Add to \(trip.name)",
-                    traditionalChinese: "加入「\(trip.name)」"
-                )) {
-                    guard let place = pendingTripAssignmentPlace else { return }
-                    finishTripAssignment()
-                    Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
-                }
-            }
-            Button(languageSettings.localized(
-                english: "Create new Trip and add",
-                traditionalChinese: "新增行程並加入"
-            )) {
-                isTransitioningToTripCreation = true
-                isTripAssignmentDialogPresented = false
-                Task { @MainActor in
-                    await Task.yield()
-                    guard pendingTripAssignmentPlace != nil else {
-                        isTransitioningToTripCreation = false
-                        return
-                    }
-                    isCreatingTripForAssignment = true
-                    isTransitioningToTripCreation = false
-                }
-            }
-            .accessibilityIdentifier("saved.addToTrip.create")
-            Button(
-                languageSettings.localized(
-                    english: "Keep in SAV-E only",
-                    traditionalChinese: "只存到 SAV-E"
-                ),
-                role: .cancel
-            ) {
-                finishTripAssignment()
-            }
+            tripAssignmentActions(dismissFullScreen: false)
         } message: {
-            Text(languageSettings.localized(
-                english: tripAssignmentChoices.isEmpty
-                    ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
-                    : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
-                traditionalChinese: tripAssignmentChoices.isEmpty
-                    ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
-                    : "請選擇現有行程、建立新行程，或只保留在收藏。"
-            ))
+            tripAssignmentMessage
         }
         .onChange(of: isTripAssignmentDialogPresented) { _, isPresented in
             guard !isPresented,
@@ -233,11 +252,21 @@ struct ContentView: View {
             else { return }
             finishTripAssignment()
         }
+        .onChange(of: isFullScreenTripAssignmentDialogPresented) { _, isPresented in
+            guard !isPresented,
+                  !isCreatingTripForAssignment,
+                  !isTransitioningToTripCreation,
+                  pendingTripAssignmentPlace != nil
+            else { return }
+            finishTripAssignment()
+            fullScreenRoute = nil
+        }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
+            fullScreenRoute = nil
             pendingReceiptMapDetail = nil
             mapDetailDrawerItem = nil
             mapVM.clearSelectedMapObject()
@@ -282,18 +311,23 @@ struct ContentView: View {
             Task { await mapVM.handleSceneDidBecomeActive() }
         }
         .task {
-            drawerVM.places = mapVM.places
-            drawerVM.mapCandidates = mapVM.mapCandidates
-            if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
-                await drawerVM.loadMemoryPreferences()
-            }
-            await mapVM.loadPlaces()
-            await tripStore.load()
-            if storageScope == .reviewerDemo {
-                await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
-            }
-            openPostcardDrawerUITestFixtureIfNeeded()
+            await loadInitialContent()
         }
+    }
+
+    @MainActor
+    private func loadInitialContent() async {
+        drawerVM.places = mapVM.places
+        drawerVM.mapCandidates = mapVM.mapCandidates
+        if storageScope == .production || !ReviewDemo.isOfflineUITestMode {
+            await drawerVM.loadMemoryPreferences()
+        }
+        await mapVM.loadPlaces()
+        await tripStore.load()
+        if storageScope == .reviewerDemo {
+            await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
+        }
+        openPostcardDrawerUITestFixtureIfNeeded()
     }
 
     private var rootTabs: some View {
@@ -306,7 +340,7 @@ struct ContentView: View {
                             SaveHomeView(
                                 store: tripStore,
                                 mapViewModel: mapVM,
-                                onOpenDrawer: openDrawer,
+                                onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenSaves: { selectedRootTab = .saves },
                                 onOpenTrips: { selectedRootTab = .trips },
@@ -319,7 +353,6 @@ struct ContentView: View {
                                 places: mapVM.places,
                                 reviewCandidates: mapVM.reviewCandidates,
                                 onOpenCapture: { openDrawer(.addLink, tripID: nil) },
-                                onOpenReview: { openDrawer(.review, tripID: nil) },
                                 onOpenReviewCandidate: {
                                     openReviewCandidate($0, tripID: nil)
                                 },
@@ -329,7 +362,8 @@ struct ContentView: View {
                         case .trips:
                             TripsHomeView(
                                 store: tripStore,
-                                onOpenDrawer: openDrawer,
+                                onCapture: { openDrawer(.addLink, tripID: nil) },
+                                onOpenAssistant: { openDrawer(.ask, tripID: nil) },
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )
@@ -372,8 +406,6 @@ struct ContentView: View {
                         store: tripStore,
                         mapViewModel: mapVM,
                         storageScope: storageScope,
-                        onOpenDrawer: openDrawer,
-                        onOpenReviewCandidate: openReviewCandidate,
                         onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                         onActiveTripChange: { activeTripID = $0 }
                     )
@@ -396,6 +428,96 @@ struct ContentView: View {
             .presentationDragIndicator(.visible)
         } else {
             drawerView
+        }
+    }
+
+    @ViewBuilder
+    private func fullScreenContent(for route: SaveFullScreenRoute) -> some View {
+        switch route {
+        case .capture:
+            SaveCaptureFlowView(
+                tripName: captureTripName,
+                onImport: { sharedText in
+                    try await mapVM.importSharedTextAsReviewCandidates(sharedText)
+                },
+                onComplete: {
+                    fullScreenRoute = nil
+                    selectedRootTab = .saves
+                },
+                onCancel: {
+                    fullScreenRoute = nil
+                }
+            )
+            .environment(\.appLanguageSettings, languageSettings)
+
+        case .placeDetail(let item):
+            MapDetailDrawerView(
+                item: item,
+                detent: .constant(.large),
+                captureTripName: captureTripName,
+                editableLists: mapVM.collaborativeLists.filter(\.canEdit),
+                isWorkingReviewCandidateID: fullScreenCandidateActionID,
+                isWorkingMapCandidateID: fullScreenMapCandidateActionID,
+                onClose: { fullScreenRoute = nil },
+                onDeletePlace: { place in
+                    try await mapVM.deletePlace(place)
+                    fullScreenRoute = nil
+                },
+                onRecommendOrder: openFoodAnalysis,
+                onPlanAroundPlace: openPlanAround,
+                onFindExactPlaceCandidate: openExactSearch,
+                onSaveCandidate: saveFullScreenCandidate,
+                onRejectCandidate: rejectFullScreenCandidate,
+                onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
+                onMarkCandidateWrongBranch: markFullScreenCandidateWrongBranch,
+                onInvestigateCandidateMore: investigateFullScreenCandidate,
+                onSaveMapCandidate: saveFullScreenMapCandidate,
+                onSaveSocialPlace: saveFullScreenSocialPlace,
+                onUpdatePlaceVisibility: { place, visibility in
+                    try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+                },
+                onUpdatePlace: { place in
+                    try await mapVM.updatePlace(place)
+                },
+                onFindRelatedSources: { place in
+                    try await mapVM.discoverRelatedSources(for: place)
+                },
+                onAddPlaceToTrip: requestFullScreenTripAssignment,
+                onCreateList: {
+                    mapVM.createCollaborativeList(
+                        title: languageSettings.localized(english: "New list", traditionalChinese: "新清單"),
+                        note: nil
+                    )
+                },
+                onAddPlaceToList: { place, listID in
+                    try mapVM.addPlace(place, toListID: listID)
+                }
+            )
+            .environment(\.appLanguageSettings, languageSettings)
+            .background(SaveDottedBackground().ignoresSafeArea())
+            .alert(
+                languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                isPresented: Binding(
+                    get: { fullScreenActionError != nil },
+                    set: { if !$0 { fullScreenActionError = nil } }
+                )
+            ) {
+                Button(languageSettings.text(.ok)) { fullScreenActionError = nil }
+            } message: {
+                Text(fullScreenActionError ?? "")
+            }
+            .confirmationDialog(
+                languageSettings.localized(
+                    english: "Saved. Add it to a Trip?",
+                    traditionalChinese: "已收藏。要加入行程嗎？"
+                ),
+                isPresented: $isFullScreenTripAssignmentDialogPresented,
+                titleVisibility: .visible
+            ) {
+                tripAssignmentActions(dismissFullScreen: true)
+            } message: {
+                tripAssignmentMessage
+            }
         }
     }
 
@@ -443,6 +565,10 @@ struct ContentView: View {
             },
             onImportSharedTextAsReviewCandidates: { sharedText in
                 try await mapVM.importSharedTextAsReviewCandidates(sharedText)
+            },
+            onOpenReview: {
+                isRootSheetPresented = false
+                selectedRootTab = .saves
             },
             onAddPlaceToTrip: requestTripAssignment,
             onPrepareMapSearch: { query in
@@ -508,7 +634,7 @@ struct ContentView: View {
             }
         )
         .environment(\.appLanguageSettings, languageSettings)
-        .presentationDetents([.height(88), .height(104), .height(160), .fraction(0.34), .fraction(0.38), .medium, .large], selection: $drawerDetent)
+        .presentationDetents([.height(132), .medium, .large], selection: $drawerDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
         .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -521,10 +647,16 @@ struct ContentView: View {
         if pendingCaptureTripID == nil {
             pendingCaptureTripID = activeTripID
         }
+
+        guard selectedRootTab == .map || !rootPath.isEmpty else {
+            fullScreenRoute = .placeDetail(item)
+            return
+        }
+
         drawerVM.returnToCommands()
         mapDetailDrawerItem = item
         withAnimation(SaveTheme.Motion.standardSpring) {
-            drawerDetent = .fraction(0.38)
+            drawerDetent = .medium
         }
         isRootSheetPresented = true
     }
@@ -535,8 +667,21 @@ struct ContentView: View {
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
+
+        switch target {
+        case .addLink:
+            fullScreenRoute = .capture
+            return
+        case .review, .saved:
+            selectedRootTab = .saves
+            return
+        case .ask:
+            rootPath.removeAll()
+            selectedRootTab = .map
+        }
+
         drawerLaunchRequest = DrawerLaunchRequest(target: target)
-        drawerDetent = target == .review ? .large : .medium
+        drawerDetent = .medium
         isRootSheetPresented = true
     }
 
@@ -555,9 +700,154 @@ struct ContentView: View {
         }
     }
 
+    private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
+        isPassportPresented = false
+        selectedRootTab = .map
+        rootPath.removeAll()
+        Task {
+            await mapVM.planCollaborativeList(list)
+        }
+    }
+
     private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
         pendingCaptureTripID = tripID
-        openMapDetail(.reviewCandidate(candidate))
+        fullScreenRoute = .placeDetail(.reviewCandidate(candidate))
+    }
+
+    private func saveFullScreenCandidate(_ candidate: PlaceReviewCandidate, nameOverride: String?) {
+        fullScreenCandidateActionID = candidate.id
+        Task {
+            defer { fullScreenCandidateActionID = nil }
+            do {
+                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                requestFullScreenTripAssignment(for: place)
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func rejectFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.rejectReviewCandidate(candidate)
+            fullScreenRoute = nil
+        }
+    }
+
+    private func keepFullScreenCandidateSourceOnly(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
+            fullScreenRoute = nil
+        }
+    }
+
+    private func markFullScreenCandidateWrongBranch(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.markReviewCandidateWrongBranch(candidate)
+            openExactSearch(candidate)
+        }
+    }
+
+    private func investigateFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
+        performFullScreenCandidateAction(candidate) {
+            try await mapVM.investigateReviewCandidateMore(candidate)
+            openExactSearch(candidate)
+        }
+    }
+
+    private func performFullScreenCandidateAction(
+        _ candidate: PlaceReviewCandidate,
+        action: @escaping () async throws -> Void
+    ) {
+        fullScreenCandidateActionID = candidate.id
+        Task {
+            defer { fullScreenCandidateActionID = nil }
+            do {
+                try await action()
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func saveFullScreenMapCandidate(_ candidate: SaveMapCandidate) {
+        fullScreenMapCandidateActionID = candidate.id
+        Task {
+            defer { fullScreenMapCandidateActionID = nil }
+            do {
+                try await mapVM.saveMapCandidateAsPlace(candidate)
+                fullScreenRoute = nil
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func saveFullScreenSocialPlace(_ place: Place) {
+        Task {
+            do {
+                _ = try await mapVM.saveSocialPlaceToMySave(place)
+                fullScreenRoute = nil
+            } catch {
+                fullScreenActionError = error.localizedDescription
+            }
+        }
+    }
+
+    private func openExactSearch(_ candidate: PlaceReviewCandidate) {
+        let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            fullScreenActionError = languageSettings.localized(
+                english: "Add a city, address, or map link before searching for the exact place.",
+                traditionalChinese: "請先補上城市、地址或地圖連結，再搜尋精確地點。"
+            )
+            return
+        }
+        transitionFromFullScreenToMapDrawer {
+            drawerVM.query = query
+            let candidates = await mapVM.prepareMapCandidatesForDrawerQuery(query)
+            drawerVM.mapCandidates = candidates
+            await drawerVM.submit(
+                reviewCandidates: mapVM.reviewCandidates,
+                outputLanguage: languageSettings.language
+            )
+            drawerDetent = .medium
+        }
+    }
+
+    private func openFoodAnalysis(_ place: Place) {
+        transitionFromFullScreenToMapDrawer {
+            drawerVM.showFoodPlaceAnalysis(
+                for: place,
+                outputLanguage: languageSettings.language
+            )
+            drawerDetent = .large
+        }
+    }
+
+    private func openPlanAround(_ place: Place) {
+        transitionFromFullScreenToMapDrawer {
+            await drawerVM.showPlanAround(
+                anchor: place,
+                reviewCandidates: mapVM.reviewCandidates,
+                outputLanguage: languageSettings.language
+            )
+            drawerDetent = .large
+        }
+    }
+
+    private func transitionFromFullScreenToMapDrawer(
+        action: @escaping () async -> Void
+    ) {
+        fullScreenRoute = nil
+        rootPath.removeAll()
+        selectedRootTab = .map
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            openDrawer(.ask, tripID: nil)
+            await Task.yield()
+            await action()
+        }
     }
 
     private func openPostcardDrawerUITestFixtureIfNeeded() {
@@ -627,22 +917,50 @@ struct ContentView: View {
             pendingCaptureTripID = nil
         }
         drawerVM.returnToCommands()
-        mapDetailDrawerItem = pendingDetail
         if pendingTripAssignmentPlace != nil {
-            Task { @MainActor in
-                await Task.yield()
-                isTripAssignmentDialogPresented = true
-            }
+            presentTripAssignmentDialog()
         }
-        if pendingDetail == nil {
+        guard let pendingDetail else {
             mapVM.clearSelectedMapObject()
             return
         }
 
+        guard selectedRootTab == .map, rootPath.isEmpty else {
+            fullScreenRoute = .placeDetail(pendingDetail)
+            return
+        }
+
+        mapDetailDrawerItem = pendingDetail
+
         Task { @MainActor in
             await Task.yield()
-            drawerDetent = .fraction(0.38)
+            drawerDetent = .medium
             isRootSheetPresented = true
+        }
+    }
+
+    private func handleFullScreenDismiss() {
+        if isTransitioningToTripCreation {
+            Task { @MainActor in
+                await Task.yield()
+                guard pendingTripAssignmentPlace != nil else {
+                    isTransitioningToTripCreation = false
+                    return
+                }
+                isCreatingTripForAssignment = true
+                isTransitioningToTripCreation = false
+            }
+            return
+        }
+        if pendingTripAssignmentPlace != nil {
+            presentTripAssignmentDialog()
+        }
+    }
+
+    private func presentTripAssignmentDialog() {
+        Task { @MainActor in
+            await Task.yield()
+            isTripAssignmentDialogPresented = true
         }
     }
 
@@ -661,13 +979,87 @@ struct ContentView: View {
         return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
     }
 
+    @ViewBuilder
+    private func tripAssignmentActions(dismissFullScreen: Bool) -> some View {
+        ForEach(tripAssignmentChoices) { trip in
+            Button(languageSettings.localized(
+                english: "Add to \(trip.name)",
+                traditionalChinese: "加入「\(trip.name)」"
+            )) {
+                guard let place = pendingTripAssignmentPlace else { return }
+                finishTripAssignment()
+                if dismissFullScreen {
+                    fullScreenRoute = nil
+                }
+                Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
+            }
+        }
+        Button(languageSettings.localized(
+            english: "Create new Trip and add",
+            traditionalChinese: "新增行程並加入"
+        )) {
+            isTransitioningToTripCreation = true
+            if dismissFullScreen {
+                isFullScreenTripAssignmentDialogPresented = false
+                fullScreenRoute = nil
+            } else {
+                isTripAssignmentDialogPresented = false
+                Task { @MainActor in
+                    await Task.yield()
+                    guard pendingTripAssignmentPlace != nil else {
+                        isTransitioningToTripCreation = false
+                        return
+                    }
+                    isCreatingTripForAssignment = true
+                    isTransitioningToTripCreation = false
+                }
+            }
+        }
+        .accessibilityIdentifier("saved.addToTrip.create")
+        Button(
+            languageSettings.localized(
+                english: "Keep in SAV-E only",
+                traditionalChinese: "只存到 SAV-E"
+            ),
+            role: .cancel
+        ) {
+            finishTripAssignment()
+            if dismissFullScreen {
+                fullScreenRoute = nil
+            }
+        }
+    }
+
+    private var tripAssignmentMessage: Text {
+        Text(languageSettings.localized(
+            english: tripAssignmentChoices.isEmpty
+                ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
+                : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
+            traditionalChinese: tripAssignmentChoices.isEmpty
+                ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
+                : "請選擇現有行程、建立新行程，或只保留在收藏。"
+        ))
+    }
+
+    private func requestFullScreenTripAssignment(for place: Place) {
+        pendingTripAssignmentPlace = place
+        isFullScreenTripAssignmentDialogPresented = true
+    }
+
     private func requestTripAssignment(for place: Place) {
         pendingTripAssignmentPlace = place
-        isRootSheetPresented = false
+        if fullScreenRoute != nil {
+            fullScreenRoute = nil
+        } else if isRootSheetPresented {
+            isRootSheetPresented = false
+        } else {
+            presentTripAssignmentDialog()
+        }
     }
 
     private func finishTripAssignment() {
         isTripAssignmentDialogPresented = false
+        isFullScreenTripAssignmentDialogPresented = false
         isTransitioningToTripCreation = false
         pendingTripAssignmentPlace = nil
         pendingCaptureTripID = nil
@@ -678,12 +1070,195 @@ struct ContentView: View {
     }
 
     private func refreshSelectedMapDetailPlace(from places: [Place]) {
-        guard case .savedPlace(let selectedPlace) = mapDetailDrawerItem,
-              let updatedPlace = places.first(where: { $0.id == selectedPlace.id }),
-              updatedPlace != selectedPlace
-        else { return }
+        if case .savedPlace(let selectedPlace) = mapDetailDrawerItem,
+           let updatedPlace = places.first(where: { $0.id == selectedPlace.id }),
+           updatedPlace != selectedPlace {
+            mapDetailDrawerItem = .savedPlace(updatedPlace)
+        }
 
-        mapDetailDrawerItem = .savedPlace(updatedPlace)
+        if case .placeDetail(.savedPlace(let fullScreenPlace)) = fullScreenRoute,
+           let updatedFullScreenPlace = places.first(where: { $0.id == fullScreenPlace.id }),
+           updatedFullScreenPlace != fullScreenPlace {
+            fullScreenRoute = .placeDetail(.savedPlace(updatedFullScreenPlace))
+        }
+    }
+}
+
+private struct SaveCaptureFlowView: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let tripName: String?
+    let onImport: (String) async throws -> [UUID]
+    let onComplete: () -> Void
+    let onCancel: () -> Void
+    @State private var sharedText = ""
+    @State private var isAnalyzing = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                SaveDottedBackground().ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(localized("CAPTURE A CLUE", "收下一個線索"))
+                                    .font(SaveAtlasType.strong(11))
+                                    .tracking(1.0)
+                                    .foregroundStyle(SaveAtlasPalette.muted)
+                                Text(localized("Paste or share a link", "貼上或分享連結"))
+                                    .font(SaveAtlasType.strong(29, relativeTo: .title))
+                                    .foregroundStyle(SaveAtlasPalette.forest)
+                                Text(localized(
+                                    "SAV-E will analyze it, then place every uncertain result in Review.",
+                                    "SAV-E 會先分析；任何不確定結果都只會進入待確認。"
+                                ))
+                                .font(SaveAtlasType.body(14))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+                            MemoMascotMark(size: 72, framed: false)
+                                .accessibilityHidden(true)
+                        }
+
+                        if let tripName {
+                            Label(
+                                localized("For \(tripName)", "準備加入「\(tripName)」"),
+                                systemImage: "suitcase.rolling.fill"
+                            )
+                            .font(SaveAtlasType.strong(13))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 36)
+                            .background(SaveAtlasPalette.mint, in: Capsule())
+                        }
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(localized("LINK, CAPTION, OR MESSAGE", "連結、貼文文字或訊息"))
+                                .font(SaveAtlasType.strong(10))
+                                .tracking(0.9)
+                                .foregroundStyle(SaveAtlasPalette.muted)
+
+                            TextEditor(text: $sharedText)
+                                .font(SaveAtlasType.body(16))
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 190)
+                                .padding(10)
+                                .background(SaveAtlasPalette.paper)
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(
+                                            SaveAtlasPalette.sky.opacity(0.82),
+                                            style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                                        )
+                                }
+                                .accessibilityIdentifier("capture.input")
+
+                            HStack(spacing: 10) {
+                                PasteButton(payloadType: String.self) { values in
+                                    if let value = values.first {
+                                        sharedText = value
+                                    }
+                                }
+                                .labelStyle(.titleAndIcon)
+                                .font(SaveAtlasType.strong(14))
+                                .tint(SaveAtlasPalette.forest)
+                                .accessibilityIdentifier("capture.paste")
+
+                                Spacer(minLength: 0)
+
+                                Text(localized(
+                                    "Nothing is saved before Review.",
+                                    "確認前不會建立地圖章。"
+                                ))
+                                .font(SaveAtlasType.body(11))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                            }
+                        }
+                        .padding(16)
+                        .saveAtlasPaper(radius: 20, shadow: true)
+
+                        if let errorMessage {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .font(SaveAtlasType.body(13))
+                                .foregroundStyle(SaveAtlasPalette.coral)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("capture.error")
+                        }
+
+                        Button(action: analyze) {
+                            HStack(spacing: 9) {
+                                if isAnalyzing {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                }
+                                Text(isAnalyzing
+                                    ? localized("Analyzing…", "分析中…")
+                                    : localized("Analyze into Review", "分析後送進待確認"))
+                            }
+                            .font(SaveAtlasType.strong(17))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(trimmedText.isEmpty || isAnalyzing)
+                        .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
+                        .accessibilityIdentifier("capture.analyze")
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 22)
+                    .padding(.bottom, 30)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .accessibilityLabel(localized("Close capture", "關閉新增線索"))
+                }
+            }
+            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
+        }
+        .accessibilityIdentifier("capture.flow")
+    }
+
+    private var trimmedText: String {
+        sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func analyze() {
+        guard !trimmedText.isEmpty, !isAnalyzing else { return }
+        isAnalyzing = true
+        errorMessage = nil
+        Task {
+            defer { isAnalyzing = false }
+            do {
+                let candidateIDs = try await onImport(trimmedText)
+                guard !candidateIDs.isEmpty else {
+                    errorMessage = localized(
+                        "No place clue was found. Add the post caption, city, or a map link and try again.",
+                        "沒有找到地點線索。請補上貼文文字、城市或地圖連結後再試。"
+                    )
+                    return
+                }
+                onComplete()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

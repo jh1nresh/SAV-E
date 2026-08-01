@@ -3,7 +3,8 @@ import UIKit
 
 struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
-    let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
+    let onCapture: () -> Void
+    let onOpenAssistant: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -55,8 +56,8 @@ struct TripsHomeView: View {
     private var atlasPresentation: AtlasPresentation {
         SaveAtlasPresentationFactory.trips(
             store: store,
-            onCapture: { onOpenDrawer(.addLink, nil) },
-            onOpenAssistant: { onOpenDrawer(.ask, nil) },
+            onCapture: onCapture,
+            onOpenAssistant: onOpenAssistant,
             onCreateTrip: { showsCreateTrip = true },
             onOpenTrip: { tripID in
                 store.selectTrip(tripID)
@@ -201,8 +202,6 @@ struct NewTripPackView: View {
 private enum TripWorkspaceTab: Hashable, CaseIterable, Identifiable {
     case plan
     case map
-    case inbox
-    case share
 
     var id: Self { self }
 
@@ -210,8 +209,6 @@ private enum TripWorkspaceTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .plan: "Plan"
         case .map: "Map"
-        case .inbox: "Inbox"
-        case .share: "Share"
         }
     }
 
@@ -219,16 +216,7 @@ private enum TripWorkspaceTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .plan: "map"
         case .map: "globe.asia.australia"
-        case .inbox: "envelope"
-        case .share: "point.3.connected.trianglepath.dotted"
         }
-    }
-}
-
-enum TripWorkspaceBadge {
-    nonisolated static func label(for candidateCount: Int) -> String? {
-        guard candidateCount > 0 else { return nil }
-        return candidateCount > 99 ? "99+" : String(candidateCount)
     }
 }
 
@@ -237,13 +225,12 @@ struct TripWorkspaceView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
     let storageScope: ContentStorageScope
-    let onOpenDrawer: (DrawerLaunchTarget, UUID?) -> Void
-    let onOpenReviewCandidate: (PlaceReviewCandidate, UUID?) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onActiveTripChange: (UUID?) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var selectedTab: TripWorkspaceTab = .plan
+    @State private var showsShare = false
 
     var body: some View {
         Group {
@@ -257,32 +244,17 @@ struct TripWorkspaceView: View {
                                     trip: trip,
                                     store: store,
                                     savedPlaces: mapViewModel.places,
-                                    onBack: { dismiss() }
+                                    onBack: { dismiss() },
+                                    onShare: { showsShare = true }
                                 )
                             case .map:
                                 TripMapView(
                                     trip: trip,
                                     mapViewModel: mapViewModel,
                                     onBack: { dismiss() },
+                                    onShare: { showsShare = true },
                                     onOpenPlace: onOpenSavedPlace
                                 )
-                            case .inbox:
-                                TripInboxView(
-                                    tripName: trip.name,
-                                    candidates: mapViewModel.reviewCandidates,
-                                    onSelect: { onOpenReviewCandidate($0, trip.id) },
-                                    onOpenCapture: { onOpenDrawer(.addLink, trip.id) }
-                                )
-                                .frame(width: 402, height: 786)
-                                .clipped()
-                            case .share:
-                                TripPackShareView(
-                                    trip: trip,
-                                    places: mapViewModel.places,
-                                    storageScope: storageScope
-                                )
-                                .frame(width: 402, height: 786)
-                                .clipped()
                             }
                         }
 
@@ -308,6 +280,18 @@ struct TripWorkspaceView: View {
             }
         }
         .tint(SaveAtlasPalette.forest)
+        .sheet(isPresented: $showsShare) {
+            if let trip = store.trips.first(where: { $0.id == tripID }) {
+                TripPackShareView(
+                    trip: trip,
+                    places: mapViewModel.places,
+                    storageScope: storageScope
+                )
+                .environment(\.appLanguageSettings, languageSettings)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
         .onAppear {
             store.selectTrip(tripID)
             onActiveTripChange(tripID)
@@ -327,13 +311,14 @@ private struct TripPlanView: View {
     @ObservedObject var store: TripPackStore
     let savedPlaces: [Place]
     let onBack: () -> Void
+    let onShare: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var showsPlacePicker = false
     @State private var selectedStop: TripStop?
     @State private var selectedDay = 1
 
     var body: some View {
-        TripPlanScreen(onBack: onBack)
+        TripPlanScreen(onBack: onBack, onShare: onShare)
         .environment(\.atlasPresentation, atlasPresentation)
         .overlay(alignment: .top) {
             if store.isSaving {
@@ -1279,20 +1264,22 @@ private struct TripMapView: View {
     let trip: Trip
     @ObservedObject var mapViewModel: MapViewModel
     let onBack: () -> Void
+    let onShare: () -> Void
     let onOpenPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         Group {
             if SaveAtlasRuntime.usesParityFixture {
-                TripAtlasMapScreen(onBack: onBack)
+                TripAtlasMapScreen(onBack: onBack, onShare: onShare)
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
                 SaveAtlasInteractiveTripMap(
                     mapViewModel: mapViewModel,
                     trip: trip,
                     presentation: atlasPresentation,
-                    onBack: onBack
+                    onBack: onBack,
+                    onShare: onShare
                 )
             }
         }
@@ -1356,149 +1343,6 @@ private struct TripMapView: View {
         let id: UUID
         let latitude: Double
         let longitude: Double
-    }
-}
-
-private struct TripInboxView: View {
-    let tripName: String
-    let candidates: [PlaceReviewCandidate]
-    let onSelect: (PlaceReviewCandidate) -> Void
-    let onOpenCapture: () -> Void
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        ZStack {
-            SaveDottedBackground()
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    TripPostalWorkspaceHeader(
-                        eyebrow: localized("Trip workspace", "行程工作區"),
-                        title: localized("Inbox", "收件匣"),
-                        subtitle: localized(
-                            "Review clues before they become stops.",
-                            "先確認線索，再加入行程。"
-                        )
-                    )
-
-                    TripContextRibbon(
-                        tripName: tripName,
-                        candidateCount: sortedCandidates.count
-                    )
-                    .accessibilityIdentifier("trip.inbox.contextRibbon")
-
-                    Button(action: onOpenCapture) {
-                        Label(
-                            localized("Add a link", "加入連結"),
-                            systemImage: "link.badge.plus"
-                        )
-                        .font(SaveAtlasType.strong(15))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 48)
-                        .background(
-                            SaveAtlasPalette.coral,
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("trip.inbox.addLink")
-
-                    if sortedCandidates.isEmpty {
-                        TripInboxEmptyPostcard(onAddLink: onOpenCapture)
-                    } else {
-                        LazyVStack(spacing: -6) {
-                            ForEach(sortedCandidates) { candidate in
-                                Button {
-                                    onSelect(candidate)
-                                } label: {
-                                    SavePostcardTicket(
-                                        eyebrow: candidateKindTitle(candidate),
-                                        title: candidate.name.isEmpty
-                                            ? localized("Untitled clue", "未命名線索")
-                                            : candidate.name,
-                                        detail: candidateDetail(candidate),
-                                        actionTitle: candidateActionTitle(candidate),
-                                        style: isSourceClue(candidate) ? .sourceClue : .review
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("trip.inbox.candidate.\(candidate.id.uuidString)")
-                            }
-                        }
-                        .accessibilityIdentifier("trip.inbox.ticketStack")
-
-                        SavePostcardPocketFooter(
-                            title: localized("Trip review pocket", "行程待確認口袋"),
-                            subtitle: localized("Confirm before adding a stop", "確認後再加入停靠點"),
-                            count: sortedCandidates.count,
-                            countLabel: localized("need your review", "等待確認"),
-                            tint: SaveAtlasPalette.coral
-                        )
-                        .padding(.top, -18)
-                    }
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 64)
-                .padding(.bottom, 28)
-            }
-            .scrollIndicators(.hidden)
-        }
-        .accessibilityIdentifier("trip.inbox")
-    }
-
-    private var sortedCandidates: [PlaceReviewCandidate] {
-        candidates.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private func isSourceClue(_ candidate: PlaceReviewCandidate) -> Bool {
-        candidate.status == "source_only" || !candidate.hasReliableCoordinates
-    }
-
-    private func candidateKindTitle(_ candidate: PlaceReviewCandidate) -> String {
-        isSourceClue(candidate)
-            ? localized("Source Clue", "來源線索")
-            : localized("Review Candidate", "待確認地點")
-    }
-
-    private func candidateActionTitle(_ candidate: PlaceReviewCandidate) -> String {
-        isSourceClue(candidate)
-            ? localized("Find exact", "找出地點")
-            : localized("Review", "確認")
-    }
-
-    private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
-        if isSourceClue(candidate) {
-            return localized("Missing exact place", "缺少精確地點")
-        }
-
-        let source = ReviewSourceReceiptPresentation(candidate: candidate)
-        if let handle = candidate.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !handle.isEmpty {
-            return localized("From \(handle)", "來自 \(handle)")
-        }
-        if let handle = source.handle {
-            return localized("From \(handle)", "來自 \(handle)")
-        }
-        if source.sourcePlatform != .other {
-            return localized(
-                "From \(source.sourcePlatform.displayName)",
-                "來自 \(source.sourcePlatform.displayName)"
-            )
-        }
-        if let city = candidate.city?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !city.isEmpty {
-            return city
-        }
-        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        return address.isEmpty
-            ? localized("Shared link", "分享連結")
-            : address
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 
@@ -1696,109 +1540,6 @@ private struct TripPostalWorkspaceHeader: View {
                 .foregroundStyle(SaveAtlasPalette.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct TripContextRibbon: View {
-    let tripName: String
-    let candidateCount: Int
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "suitcase.rolling.fill")
-                .font(SaveAtlasType.strong(14))
-                .foregroundStyle(SaveAtlasPalette.forest)
-                .frame(width: 34, height: 34)
-                .background(SaveAtlasPalette.mint, in: Circle())
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(localized("FOR \(tripName)", "加入「\(tripName)」前"))
-                    .font(SaveAtlasType.strong(11))
-                    .tracking(0.45)
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .lineLimit(1)
-                Text(localized(
-                    "Confirm an exact place before adding it as a stop.",
-                    "先確認精確地點，再加入停靠點。"
-                ))
-                .font(SaveAtlasType.body(11))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .lineLimit(2)
-            }
-
-            Spacer(minLength: 4)
-
-            Text("\(candidateCount)")
-                .font(SaveAtlasType.editorial(22))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .monospacedDigit()
-                .frame(minWidth: 34, minHeight: 34)
-                .background(SaveAtlasPalette.honey, in: Circle())
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(SaveAtlasPalette.paper)
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    SaveAtlasPalette.forest.opacity(0.36),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
-        }
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
-    }
-}
-
-private struct TripInboxEmptyPostcard: View {
-    let onAddLink: () -> Void
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        VStack(spacing: 10) {
-            MemoMascotMark(size: 70, framed: false)
-            Text(localized("Inbox is clear", "收件匣已清空"))
-                .font(SaveAtlasType.strong(21))
-                .foregroundStyle(SaveAtlasPalette.forest)
-            Text(localized(
-                "Share a link when you find a place worth checking for this trip.",
-                "看到值得加入行程的地點時，分享連結給 SAV-E。"
-            ))
-            .font(SaveAtlasType.body(13))
-            .foregroundStyle(SaveAtlasPalette.muted)
-            .multilineTextAlignment(.center)
-
-            Button(action: onAddLink) {
-                Text(localized("Paste a link", "貼上連結"))
-                    .font(SaveAtlasType.strong(14))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 42)
-                    .background(SaveAtlasPalette.honey, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(18)
-        .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
-                .fill(SaveAtlasPalette.paper)
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 11)
-                .stroke(
-                    SaveAtlasPalette.sky,
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-        }
-        .accessibilityIdentifier("trip.inbox.empty")
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

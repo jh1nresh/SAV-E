@@ -82,12 +82,13 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDrawerFamily \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripInboxAndShareUsePostcardPocket \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
+            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests/testProofFirstFlowReachesOpenAppCTA \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
@@ -97,6 +98,12 @@ jobs:
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
             --threshold 0.90
+
+      - name: Export first-run visual evidence
+        run: |
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
+            --output-path "$RUNNER_TEMP/SAVE-First-Run"
 
       - name: Reset focused simulator before Trip sheet UI test
         run: |
@@ -147,6 +154,7 @@ jobs:
           name: save-atlas-parity-${{ github.sha }}
           path: |
             ${{ runner.temp }}/SAVE-Atlas-Parity
+            ${{ runner.temp }}/SAVE-First-Run
             ${{ runner.temp }}/SAVE-Trip-Sheets
           if-no-files-found: warn
           retention-days: 14

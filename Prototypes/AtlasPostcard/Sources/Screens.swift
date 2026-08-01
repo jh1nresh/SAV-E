@@ -984,12 +984,6 @@ struct SavesPocketScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("saves.segment.mapStamps")
-
-                PocketCount(
-                    label: "Failed",
-                    value: "\(presentation.failedCount)",
-                    tint: AtlasPalette.coral.opacity(0.35)
-                )
             }
             .placed(x: 10, y: 216, width: 382, height: 43)
             .accessibilityIdentifier("prototype.saves.counts")
@@ -1182,13 +1176,19 @@ private struct ReviewTicket: View {
 
 struct TripPlanScreen: View {
     let onBack: () -> Void
+    let onShare: (() -> Void)?
     @Environment(\.atlasPresentation) private var presentation
+
+    init(onBack: @escaping () -> Void, onShare: (() -> Void)? = nil) {
+        self.onBack = onBack
+        self.onShare = onShare
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            TripHeader(onBack: onBack)
+            TripHeader(onBack: onBack, onShare: onShare)
                 .placed(x: 0, y: 48, width: 402, height: 54)
 
             DayTabs()
@@ -1235,7 +1235,13 @@ struct TripPlanScreen: View {
 
 struct TripHeader: View {
     let onBack: () -> Void
+    let onShare: (() -> Void)?
     @Environment(\.atlasPresentation) private var presentation
+
+    init(onBack: @escaping () -> Void, onShare: (() -> Void)? = nil) {
+        self.onBack = onBack
+        self.onShare = onShare
+    }
 
     var body: some View {
         ZStack {
@@ -1259,8 +1265,26 @@ struct TripHeader: View {
                 .font(AtlasType.strong(23))
                 .foregroundStyle(AtlasPalette.forest)
 
-            MemoMark(size: 48)
-                .position(x: 375, y: 26)
+            if let onShare {
+                Button(action: onShare) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .frame(width: 40, height: 40)
+                        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 11))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 11)
+                                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .position(x: 375, y: 27)
+                .accessibilityLabel("Share Trip")
+                .accessibilityIdentifier("trip.share.action")
+            } else {
+                MemoMark(size: 48)
+                    .position(x: 375, y: 26)
+            }
         }
     }
 }
@@ -1441,13 +1465,19 @@ private struct AtlasItineraryStop: View {
 
 struct TripAtlasMapScreen: View {
     let onBack: () -> Void
+    let onShare: (() -> Void)?
     @Environment(\.atlasPresentation) private var presentation
+
+    init(onBack: @escaping () -> Void, onShare: (() -> Void)? = nil) {
+        self.onBack = onBack
+        self.onShare = onShare
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            TripHeader(onBack: onBack)
+            TripHeader(onBack: onBack, onShare: onShare)
                 .placed(x: 0, y: 48, width: 402, height: 54)
                 .accessibilityIdentifier("prototype.trip.map.header")
 
@@ -1585,23 +1615,6 @@ struct TripMapPlaceCard: View {
         }
         let next = presentation.tripStops[nextIndex]
         return "Next stop · \(next.name) at \(next.time)"
-    }
-}
-
-struct TripInboxPlaceholderScreen: View {
-    let onBack: () -> Void
-
-    var body: some View {
-        TripPrototypePlaceholder(
-            onBack: onBack,
-            icon: "tray.full",
-            eyebrow: "TRIP INBOX",
-            title: "Trip Inbox",
-            message: "Trip-only links and review candidates will appear here.",
-            note: "Not wired in this visual prototype",
-            tint: AtlasPalette.sky,
-            identifier: "prototype.trip.inbox"
-        )
     }
 }
 

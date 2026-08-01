@@ -3,8 +3,8 @@
 Read `../design.md`. The physical pocket silhouette is mandatory.
 
 Build a 402 × 874 pt iOS Saves screen. Use the Memo + SAV-E header, compact
-`YOUR PLACE MEMORY` eyebrow, `Saves` title, one sentence, and Review / Map
-Stamps / Failed counts. Place exactly three overlapping paper tickets into one
+`YOUR PLACE MEMORY` eyebrow, `Saves` title, one sentence, and only Review / Map
+Stamps counts. Place exactly three overlapping paper tickets into one
 kraft envelope: two sky Review Candidate tickets and one coral Source Clue
 ticket. Each ticket has a perforated edge, place name, source or missing-place
 copy, and one compact action. The envelope contains `Full review queue`, a
