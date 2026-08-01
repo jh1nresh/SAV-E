@@ -704,7 +704,7 @@ private struct CluePocketStage: View {
             .zIndex(2)
 
             SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
-                .offset(x: isCompactHeight ? 96 : 112, y: isCompactHeight ? -82 : -112)
+                .offset(x: isCompactHeight ? 118 : 136, y: isCompactHeight ? -82 : -112)
                 .zIndex(3)
         }
         .padding(.top, isCompactHeight ? 82 : 144)
@@ -772,11 +772,20 @@ private struct OnboardingSourceTicket: View {
             .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(isCompactHeight ? 9 : 11)
-        .background(SaveAtlasPalette.coral.opacity(0.07))
+        .background {
+            ZStack {
+                SaveAtlasPalette.paper
+                SaveAtlasPalette.coral.opacity(0.08)
+            }
+        }
         .padding(4)
         .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.coral.opacity(0.32))
+            ZStack {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.paper)
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.coral.opacity(0.18))
+            }
         }
         .overlay {
             SavePostcardScallopedRectangle(depth: 3, pitch: 10)
@@ -957,7 +966,7 @@ private struct ReviewPocketStage: View {
 
             SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
                 .offset(
-                    x: isCompactHeight ? 96 : 112,
+                    x: isCompactHeight ? 118 : 136,
                     y: isCompactHeight ? -82 : -112
                 )
                 .zIndex(3)
@@ -1080,11 +1089,20 @@ private struct OnboardingReviewTicket: View {
             .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(isCompactHeight ? 9 : 11)
-        .background(SaveAtlasPalette.sky.opacity(0.10))
+        .background {
+            ZStack {
+                SaveAtlasPalette.paper
+                SaveAtlasPalette.sky.opacity(0.18)
+            }
+        }
         .padding(4)
         .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.sky.opacity(0.72))
+            ZStack {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.paper)
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.sky.opacity(0.30))
+            }
         }
         .overlay {
             SavePostcardScallopedRectangle(depth: 3, pitch: 10)
@@ -1153,7 +1171,7 @@ private struct MapStampPocketStage: View {
 
             SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
                 .offset(
-                    x: isCompactHeight ? 96 : 112,
+                    x: isCompactHeight ? 118 : 136,
                     y: isCompactHeight ? -82 : -112
                 )
                 .zIndex(3)
@@ -1254,11 +1272,20 @@ private struct OnboardingSavedPostcard: View {
             }
         }
         .padding(11)
-        .background(SaveAtlasPalette.mint.opacity(0.10))
+        .background {
+            ZStack {
+                SaveAtlasPalette.paper
+                SaveAtlasPalette.mint.opacity(0.22)
+            }
+        }
         .padding(4)
         .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.mint.opacity(0.78))
+            ZStack {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.paper)
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(SaveAtlasPalette.mint.opacity(0.42))
+            }
         }
         .overlay {
             SavePostcardScallopedRectangle(depth: 3, pitch: 10)
@@ -1293,6 +1320,7 @@ private struct OnboardingAirmailEnvelopeShell: View {
             shell.addLine(to: CGPoint(x: 0, y: size.height))
             shell.closeSubpath()
             context.fill(shell, with: .color(SaveAtlasPalette.paper.opacity(0.98)))
+            context.fill(shell, with: .color(SaveAtlasPalette.kraft.opacity(0.24)))
 
             var shoulderRule = Path()
             shoulderRule.move(to: CGPoint(x: 0, y: shoulderHeight))
@@ -1301,7 +1329,7 @@ private struct OnboardingAirmailEnvelopeShell: View {
             shoulderRule.addLine(to: CGPoint(x: size.width, y: shoulderHeight))
             context.stroke(
                 shoulderRule,
-                with: .color(SaveAtlasPalette.line.opacity(0.34)),
+                with: .color(SaveAtlasPalette.line.opacity(0.62)),
                 style: StrokeStyle(lineWidth: 1, dash: [4, 3])
             )
 
