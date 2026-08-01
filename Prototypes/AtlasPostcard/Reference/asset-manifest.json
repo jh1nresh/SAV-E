@@ -400,6 +400,21 @@
       "status": "complete"
     },
     {
+      "name": "OnboardingAirmailEnvelopeBack",
+      "role": "rear airmail envelope with one connected striped border, cream shoulder, top flap, and fold lines behind the onboarding state card",
+      "source": "independent SVG reconstruction from the founder-approved onboarding direction",
+      "transform": "section-level vector asset; never used as a whole-screen background",
+      "output": {
+        "imageset": "OnboardingAirmailEnvelopeBack.imageset",
+        "filename": "onboarding-airmail-envelope-back.svg",
+        "width": 360,
+        "height": 250,
+        "scale": "vector",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "PlanRouteRibbon",
       "role": "multicolor route ribbon and numbered route nodes",
       "source": "Reference/Targets/plan.png",

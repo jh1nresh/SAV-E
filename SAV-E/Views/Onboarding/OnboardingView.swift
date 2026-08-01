@@ -682,8 +682,8 @@ private struct CluePocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeShell(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -44 : -76)
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -42 : -70)
 
             OnboardingSourceTicket(
                 clueText: $clueText,
@@ -703,8 +703,8 @@ private struct CluePocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
-                .offset(x: isCompactHeight ? 118 : 136, y: isCompactHeight ? -82 : -112)
+            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
+                .offset(x: isCompactHeight ? 118 : 138, y: isCompactHeight ? -88 : -118)
                 .zIndex(3)
         }
         .padding(.top, isCompactHeight ? 82 : 144)
@@ -933,8 +933,8 @@ private struct ReviewPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeShell(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -44 : -76)
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -42 : -70)
                 .zIndex(-1)
 
             OnboardingCompactSourceReceipt(clueLine: clueLine, language: language)
@@ -964,10 +964,10 @@ private struct ReviewPocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
+            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
                 .offset(
-                    x: isCompactHeight ? 118 : 136,
-                    y: isCompactHeight ? -82 : -112
+                    x: isCompactHeight ? 118 : 138,
+                    y: isCompactHeight ? -88 : -118
                 )
                 .zIndex(3)
         }
@@ -1149,8 +1149,8 @@ private struct MapStampPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeShell(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -44 : -76)
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -42 : -70)
 
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
@@ -1169,10 +1169,10 @@ private struct MapStampPocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 56 : 66)
+            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
                 .offset(
-                    x: isCompactHeight ? 118 : 136,
-                    y: isCompactHeight ? -82 : -112
+                    x: isCompactHeight ? 118 : 138,
+                    y: isCompactHeight ? -88 : -118
                 )
                 .zIndex(3)
         }
@@ -1299,67 +1299,16 @@ private struct OnboardingSavedPostcard: View {
     }
 }
 
-private struct OnboardingAirmailEnvelopeShell: View {
+private struct OnboardingAirmailEnvelopeBack: View {
     let isCompactHeight: Bool
 
     var body: some View {
-        Canvas { context, size in
-            let railWidth: CGFloat = isCompactHeight ? 15 : 18
-            let segmentHeight: CGFloat = isCompactHeight ? 22 : 26
-            let paintedHeight = segmentHeight * 0.72
-            let shoulderHeight: CGFloat = isCompactHeight ? 18 : 24
-            let shoulderInset: CGFloat = isCompactHeight ? 26 : 34
-            let lastSegment = Int(ceil(size.height / segmentHeight)) + 1
-
-            var shell = Path()
-            shell.move(to: CGPoint(x: 0, y: shoulderHeight))
-            shell.addLine(to: CGPoint(x: shoulderInset, y: 0))
-            shell.addLine(to: CGPoint(x: size.width - shoulderInset, y: 0))
-            shell.addLine(to: CGPoint(x: size.width, y: shoulderHeight))
-            shell.addLine(to: CGPoint(x: size.width, y: size.height))
-            shell.addLine(to: CGPoint(x: 0, y: size.height))
-            shell.closeSubpath()
-            context.fill(shell, with: .color(SaveAtlasPalette.paper.opacity(0.98)))
-            context.fill(shell, with: .color(SaveAtlasPalette.kraft.opacity(0.24)))
-
-            var shoulderRule = Path()
-            shoulderRule.move(to: CGPoint(x: 0, y: shoulderHeight))
-            shoulderRule.addLine(to: CGPoint(x: shoulderInset, y: 0))
-            shoulderRule.addLine(to: CGPoint(x: size.width - shoulderInset, y: 0))
-            shoulderRule.addLine(to: CGPoint(x: size.width, y: shoulderHeight))
-            context.stroke(
-                shoulderRule,
-                with: .color(SaveAtlasPalette.line.opacity(0.62)),
-                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-            )
-
-            for index in -1...lastSegment {
-                let y = CGFloat(index) * segmentHeight
-                let color = index.isMultiple(of: 2)
-                    ? SaveAtlasPalette.coral.opacity(0.82)
-                    : SaveAtlasPalette.sky.opacity(0.94)
-
-                var leftRail = Path()
-                leftRail.move(to: CGPoint(x: 0, y: y + 6))
-                leftRail.addLine(to: CGPoint(x: railWidth, y: y))
-                leftRail.addLine(to: CGPoint(x: railWidth, y: y + paintedHeight))
-                leftRail.addLine(to: CGPoint(x: 0, y: y + paintedHeight + 6))
-                leftRail.closeSubpath()
-                context.fill(leftRail, with: .color(color))
-
-                var rightRail = Path()
-                rightRail.move(to: CGPoint(x: size.width - railWidth, y: y))
-                rightRail.addLine(to: CGPoint(x: size.width, y: y + 6))
-                rightRail.addLine(to: CGPoint(x: size.width, y: y + paintedHeight + 6))
-                rightRail.addLine(to: CGPoint(x: size.width - railWidth, y: y + paintedHeight))
-                rightRail.closeSubpath()
-                context.fill(rightRail, with: .color(color))
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: isCompactHeight ? 128 : 176)
-        .padding(.horizontal, 2)
-        .accessibilityHidden(true)
+        Image("OnboardingAirmailEnvelopeBack")
+            .resizable()
+            .frame(maxWidth: .infinity)
+            .frame(height: isCompactHeight ? 170 : 246)
+            .padding(.horizontal, 2)
+            .accessibilityHidden(true)
     }
 }
 

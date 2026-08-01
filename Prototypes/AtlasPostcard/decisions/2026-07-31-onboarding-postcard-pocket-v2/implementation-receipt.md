@@ -43,7 +43,9 @@ narrow and is superseded.
 
 The corrected implementation:
 
-- restores one partial cream shoulder/top edge connected to the side rails;
+- replaces the Canvas approximation with one owned section-level
+  `OnboardingAirmailEnvelopeBack` vector asset containing the connected striped
+  border, cream shoulder, top flap, and fold lines;
 - keeps the lower shell behind the owned kraft pocket, so it cannot read as a
   third full backing card;
 - narrows and state-tints the Clue, Review, and Map Stamp cards;

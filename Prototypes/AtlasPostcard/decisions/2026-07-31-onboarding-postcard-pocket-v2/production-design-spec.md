@@ -40,11 +40,11 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
-- `OnboardingAirmailEnvelopeShell`: partial rear envelope made from one cream
-  shoulder/top edge plus connected coral/sky side rails. It begins behind the
-  middle of the state ticket and is hidden by the kraft pocket below. It must
-  never become a full-height rounded backing card, but isolated floating rails
-  without the shoulder/top edge also fail the envelope silhouette.
+- `OnboardingAirmailEnvelopeBack`: owned section-level vector asset with one
+  connected striped border, cream shoulder, top flap, and fold lines. It begins
+  behind the state ticket and is hidden by the kraft pocket below. Canvas-drawn
+  side rails, a full-height rounded backing card, or disconnected stripes fail
+  the envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
 - `OnboardingReviewTicket`: sky scalloped ticket, candidate name, three postal
@@ -82,7 +82,8 @@ and confirmed states respectively.
 
 ## Assets and Ownership
 
-- Allowed: `SavesEnvelope`, `SavesMemoSorting`, `MemoMascot`,
+- Allowed: `OnboardingAirmailEnvelopeBack`, `SavesEnvelope`,
+  `SavesMemoSorting`, `MemoMascot`,
   `KoffeeMameyaThumbnail`, `PaperTexture`, and code-native Atlas shapes.
 - Generated cafe photo, generated map, and generated Memo pose are rejected as
   production assets.

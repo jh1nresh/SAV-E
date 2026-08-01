@@ -1,0 +1,43 @@
+{
+  "viewport": {
+    "width": 402,
+    "height": 874
+  },
+  "pocketStage": {
+    "width": 354,
+    "height": 416,
+    "rearEnvelope": {
+      "asset": "OnboardingAirmailEnvelopeBack",
+      "width": 354,
+      "height": 246,
+      "bottomOffset": 70
+    },
+    "frontPocket": {
+      "asset": "SavesEnvelope",
+      "width": 354,
+      "height": 176,
+      "bottomOffset": 0
+    },
+    "memo": {
+      "asset": "SavesMemoSorting",
+      "width": 78,
+      "horizontalOffset": 138,
+      "bottomOffset": 118
+    },
+    "cards": {
+      "clue": {
+        "width": 294,
+        "bottomOffset": 133
+      },
+      "review": {
+        "width": 306,
+        "bottomOffset": 136
+      },
+      "mapStamp": {
+        "width": 318,
+        "bottomOffset": 128
+      }
+    }
+  },
+  "rule": "The rear envelope, state card, front pocket, and Memo are four separate live layers. No layer may be replaced by a whole-screen screenshot."
+}
