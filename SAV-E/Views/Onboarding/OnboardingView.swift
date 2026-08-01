@@ -682,6 +682,9 @@ private struct CluePocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -55 : -85)
+
             OnboardingSourceTicket(
                 clueText: $clueText,
                 language: language,
@@ -921,6 +924,10 @@ private struct ReviewPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -55 : -85)
+                .zIndex(-1)
+
             OnboardingCompactSourceReceipt(clueLine: clueLine, language: language)
                 .padding(.horizontal, 18)
                 .rotationEffect(.degrees(-1.2))
@@ -1123,6 +1130,9 @@ private struct MapStampPocketStage: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
+            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
+                .offset(y: isCompactHeight ? -55 : -85)
+
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
                     .padding(.horizontal, 9)
@@ -1255,6 +1265,59 @@ private struct OnboardingSavedPostcard: View {
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
         .accessibilityIdentifier("onboarding.savedPostcard")
+    }
+}
+
+private struct OnboardingAirmailEnvelopeBack: View {
+    let isCompactHeight: Bool
+
+    var body: some View {
+        Canvas { context, size in
+            let bounds = CGRect(origin: .zero, size: size)
+            let envelope = RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .path(in: bounds)
+
+            context.clip(to: envelope)
+            context.fill(envelope, with: .color(SaveAtlasPalette.paper))
+
+            let railWidth: CGFloat = isCompactHeight ? 15 : 18
+            let segmentHeight: CGFloat = isCompactHeight ? 22 : 26
+            let paintedHeight = segmentHeight * 0.72
+            let lastSegment = Int(ceil(size.height / segmentHeight)) + 1
+
+            for index in -1...lastSegment {
+                let y = CGFloat(index) * segmentHeight
+                let color = index.isMultiple(of: 2)
+                    ? SaveAtlasPalette.coral.opacity(0.82)
+                    : SaveAtlasPalette.sky.opacity(0.94)
+
+                var leftRail = Path()
+                leftRail.move(to: CGPoint(x: 0, y: y + 6))
+                leftRail.addLine(to: CGPoint(x: railWidth, y: y))
+                leftRail.addLine(to: CGPoint(x: railWidth, y: y + paintedHeight))
+                leftRail.addLine(to: CGPoint(x: 0, y: y + paintedHeight + 6))
+                leftRail.closeSubpath()
+                context.fill(leftRail, with: .color(color))
+
+                var rightRail = Path()
+                rightRail.move(to: CGPoint(x: size.width - railWidth, y: y))
+                rightRail.addLine(to: CGPoint(x: size.width, y: y + 6))
+                rightRail.addLine(to: CGPoint(x: size.width, y: y + paintedHeight + 6))
+                rightRail.addLine(to: CGPoint(x: size.width - railWidth, y: y + paintedHeight))
+                rightRail.closeSubpath()
+                context.fill(rightRail, with: .color(color))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: isCompactHeight ? 160 : 230)
+        .padding(.horizontal, 2)
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+                .padding(.horizontal, 2)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 7, y: 3)
+        .accessibilityHidden(true)
     }
 }
 
