@@ -954,6 +954,7 @@ private struct ReviewPocketStage: View {
                 )
                 .zIndex(3)
         }
+        .padding(.top, isCompactHeight ? 98 : 155)
     }
 }
 
@@ -1145,6 +1146,7 @@ private struct MapStampPocketStage: View {
                 )
                 .zIndex(3)
         }
+        .padding(.top, isCompactHeight ? 52 : 134)
     }
 }
 
