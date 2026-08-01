@@ -19,12 +19,15 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
 
         // Clue step: cannot continue without a clue, sample fills it.
         assertFullyVisible(app.staticTexts["Drop one messy clue"], in: app)
-        assertFullyVisible(app.staticTexts["A link, caption, or note is enough."], in: app)
+        let clueSubtitle = app.staticTexts["A link, caption, or note is enough."]
+        assertFullyVisible(clueSubtitle, in: app)
         XCTAssertFalse(primary.isEnabled)
         app.buttons["onboarding.sampleClue"].tap()
         XCTAssertTrue(primary.isEnabled)
         XCTAssertTrue(app.descendants(matching: .any)["onboarding.pocketStage.clue"].exists)
-        XCTAssertTrue(app.textViews["onboarding.clueEditor"].exists)
+        let clueEditor = app.textViews["onboarding.clueEditor"]
+        XCTAssertTrue(clueEditor.exists)
+        XCTAssertLessThanOrEqual(clueSubtitle.frame.maxY + 12, clueEditor.frame.minY)
         attach(app, name: "first-run-02-clue")
         primary.tap()
 

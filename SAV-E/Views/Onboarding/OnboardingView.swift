@@ -704,6 +704,7 @@ private struct CluePocketStage: View {
                 .offset(x: isCompactHeight ? 100 : 116, y: isCompactHeight ? -48 : -64)
                 .zIndex(3)
         }
+        .padding(.top, isCompactHeight ? 82 : 144)
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
 }
