@@ -90,7 +90,7 @@ struct OnboardingView: View {
     }
 
     private func proofSection(isCompactHeight: Bool) -> some View {
-        VStack(spacing: isCompactHeight ? 8 : 12) {
+        VStack(spacing: isCompactHeight ? 8 : 20) {
             OnboardingStepTitle(
                 eyebrow: step.eyebrow(language: language),
                 title: step.title(language: language),
@@ -106,7 +106,7 @@ struct OnboardingView: View {
                 clueText: trimmedClue,
                 language: language,
                 isCompactHeight: isCompactHeight,
-                height: isCompactHeight ? 290 : 380
+                height: isCompactHeight ? 290 : 430
             )
 
             Spacer(minLength: 0)
@@ -619,7 +619,7 @@ private struct ClueStepView: View {
     let onUseSample: () -> Void
 
     var body: some View {
-        VStack(spacing: isCompactHeight ? 8 : 12) {
+        VStack(spacing: isCompactHeight ? 8 : 20) {
             OnboardingStepTitle(
                 eyebrow: OnboardingStep.clue.eyebrow(language: language),
                 title: OnboardingStep.clue.title(language: language),
@@ -633,7 +633,7 @@ private struct ClueStepView: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(height: isCompactHeight ? 250 : 360)
+            .frame(height: isCompactHeight ? 250 : 416)
 
             HStack(spacing: 10) {
                 Button(action: onUseSample) {
@@ -688,7 +688,7 @@ private struct CluePocketStage: View {
                 isCompactHeight: isCompactHeight
             )
             .padding(.horizontal, 9)
-            .offset(y: isCompactHeight ? -82 : -128)
+            .offset(y: isCompactHeight ? -82 : -144)
             .zIndex(1)
 
             OnboardingPocketEnvelope(
@@ -855,7 +855,7 @@ private struct ProofDemoCanvas: View {
                 isCompactHeight: isCompactHeight,
                 phase: phase
             )
-            .offset(y: isCompactHeight ? 8 : 18)
+            .offset(y: isCompactHeight ? 8 : 8)
             .transition(sceneTransition)
         case .mapStamp:
             MapStampPocketStage(
@@ -1124,7 +1124,7 @@ private struct MapStampPocketStage: View {
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
                     .padding(.horizontal, 9)
-                    .offset(y: isCompactHeight ? -52 : -118)
+                    .offset(y: isCompactHeight ? -52 : -134)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .zIndex(1)
             }
