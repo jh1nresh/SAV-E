@@ -22,16 +22,22 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         XCTAssertFalse(primary.isEnabled)
         app.buttons["onboarding.sampleClue"].tap()
         XCTAssertTrue(primary.isEnabled)
+        XCTAssertTrue(app.descendants(matching: .any)["onboarding.pocketStage.clue"].exists)
+        XCTAssertTrue(app.textViews["onboarding.clueEditor"].exists)
         attach(app, name: "first-run-02-clue")
         primary.tap()
 
         // Review Candidate demo.
         XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        let reviewStage = app.descendants(matching: .any)["onboarding.pocketStage.review"]
+        XCTAssertTrue(waitForReady(reviewStage))
         attach(app, name: "first-run-03-review")
         primary.tap()
 
         // Map Stamp demo is the final step; its CTA exits onboarding.
         XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        let mapStampStage = app.descendants(matching: .any)["onboarding.pocketStage.mapStamp"]
+        XCTAssertTrue(waitForReady(mapStampStage))
         attach(app, name: "first-run-04-map-stamp")
         primary.tap()
 
@@ -81,6 +87,16 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 6) {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
         wait(for: [gone], timeout: timeout)
+    }
+
+    @MainActor
+    private func waitForReady(_ element: XCUIElement, timeout: TimeInterval = 4) -> Bool {
+        guard element.waitForExistence(timeout: timeout) else { return false }
+        let ready = expectation(
+            for: NSPredicate(format: "value == 'ready'"),
+            evaluatedWith: element
+        )
+        return XCTWaiter.wait(for: [ready], timeout: timeout) == .completed
     }
 
     @MainActor
