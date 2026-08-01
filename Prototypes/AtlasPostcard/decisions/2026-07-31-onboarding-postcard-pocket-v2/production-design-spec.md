@@ -40,6 +40,11 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
+- `OnboardingAirmailEnvelopeShell`: partial rear envelope made from one cream
+  shoulder/top edge plus connected coral/sky side rails. It begins behind the
+  middle of the state ticket and is hidden by the kraft pocket below. It must
+  never become a full-height rounded backing card, but isolated floating rails
+  without the shoulder/top edge also fail the envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
 - `OnboardingReviewTicket`: sky scalloped ticket, candidate name, three postal
@@ -60,6 +65,9 @@ and confirmed states respectively.
 ## Expressive Mechanisms
 
 - The envelope remains spatially stable while the ticket advances forward.
+- The rear airmail shell, state ticket, and front kraft pocket read as three
+  interlocking physical layers. The state ticket is narrower than the kraft
+  pocket; the pocket mouth covers its lower edge.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.
@@ -127,6 +135,13 @@ and confirmed states respectively.
   than pixel-matching generated imagery.
 - Required: same pocket silhouette and stage anchor, source continuity, state
   color semantics, one Memo moment, one coral CTA, no clipping/scrolling.
+- Card fidelity is structural: Clue is a narrow coral lined ticket; Review is
+  a compact sky ticket over a visible coral source receipt; Map Stamp is a
+  mint saved postcard with the photo at upper-right, source receipt above the
+  atlas strip, and postal cancellation detail. A shared oversized white panel
+  with state-colored borders does not pass.
+- Memo must peek over the pocket mouth. Placing the mascot in the center of the
+  printed wax seal does not pass.
 
 ## Residual Risks
 

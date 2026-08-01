@@ -30,9 +30,30 @@ Atlas shell.
 
 - The generated concept's cafe illustration and decorative map are replaced by
   owned `KoffeeMameyaThumbnail` and `MapAtlasScene` fixtures.
-- Review communicates retained provenance through the ticket footer and pocket
-  caption instead of exposing a large second coral card that would collide with
+- Review uses a compact retained coral receipt behind the sky candidate ticket
+  instead of the generated full-size source card, preserving provenance and
   the fixed subtitle at the approved viewport.
+
+## Founder Fidelity Correction — 2026-08-01
+
+The earlier rail-only correction removed the unintended full cream backing
+body but also removed the rear envelope shoulder/top edge. It left detached
+coral/sky tabs and retained three oversized white cards. That ruling was too
+narrow and is superseded.
+
+The corrected implementation:
+
+- restores one partial cream shoulder/top edge connected to the side rails;
+- keeps the lower shell behind the owned kraft pocket, so it cannot read as a
+  third full backing card;
+- narrows and state-tints the Clue, Review, and Map Stamp cards;
+- restores the Review source receipt and the approved Map Stamp information
+  order; and
+- moves Memo from the printed seal center to a peek over the pocket mouth.
+
+Generic iOS Simulator build passed with `BUILD_EXIT=0`. Fresh same-commit Clue,
+Review, and Map Stamp runtime screenshots remain the ship gate for this
+correction.
 
 ## Build and Test Result
 
