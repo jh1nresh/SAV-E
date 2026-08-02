@@ -408,9 +408,54 @@
         "imageset": "OnboardingAirmailEnvelopeBack.imageset",
         "filename": "onboarding-airmail-envelope-back.svg",
         "width": 360,
-        "height": 250,
+        "height": 220,
         "scale": "vector",
         "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoClue",
+      "role": "owned Memo leaning over the Clue envelope mouth",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#clue",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoClue.imageset",
+        "filename": "onboardingmemoclue.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoReview",
+      "role": "owned Memo pointer pose guiding the Review evidence marks",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#review",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoReview.imageset",
+        "filename": "onboardingmemoreview.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoStamp",
+      "role": "owned relaxed Memo pose resting on the confirmed Map Stamp pocket",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#stamp",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoStamp.imageset",
+        "filename": "onboardingmemostamp.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
       },
       "status": "complete"
     },

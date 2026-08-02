@@ -234,8 +234,8 @@ struct OnboardingView: View {
 
     private func useSampleClue() {
         clueText = language.localized(
-            english: "Sample IG Reel: quiet cafe with a tiny patio near the station, tagged @hidden.moon.cafe",
-            traditionalChinese: "範例 IG Reels：捷運站旁有小庭院的安靜咖啡店，標記 @hidden.moon.cafe"
+            english: "IG Reel: quiet cafe with a tiny patio near the station, tagged @hidden.moon.cafe",
+            traditionalChinese: "IG Reels：捷運站旁有小庭院的安靜咖啡店，標記 @hidden.moon.cafe"
         )
     }
 
@@ -673,34 +673,23 @@ private struct CluePocketStage: View {
     let isCompactHeight: Bool
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -58)
-
+        OnboardingOpenEnvelopeShell(
+            caption: language.localized(
+                english: "Memo keeps the source as proof.",
+                traditionalChinese: "Memo 會把來源留作證據。"
+            ),
+            isCompactHeight: isCompactHeight,
+            memoPose: .clue
+        ) { scale, shellWidth in
             OnboardingSourceTicket(
                 clueText: $clueText,
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .padding(.horizontal, isCompactHeight ? 24 : 30)
+            .frame(width: shellWidth - (48 * scale))
             .rotationEffect(.degrees(-1.2))
-            .offset(y: isCompactHeight ? -76 : -132)
-            .zIndex(1)
-
-            OnboardingPocketEnvelope(
-                caption: language.localized(
-                    english: "Memo keeps the source as proof.",
-                    traditionalChinese: "Memo 會把來源留作證據。"
-                ),
-                isCompactHeight: isCompactHeight
-            )
-            .zIndex(2)
-
-            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
-                .offset(x: isCompactHeight ? 112 : 126, y: isCompactHeight ? -88 : -116)
-                .zIndex(3)
+            .offset(y: -154 * scale)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
 }
@@ -722,7 +711,7 @@ private struct OnboardingSourceTicket: View {
                 linedNoteBackground
 
                 TextEditor(text: $clueText)
-                    .font(SaveAtlasType.editorial(isCompactHeight ? 13 : 14))
+                    .font(SaveAtlasType.editorial(isCompactHeight ? 12 : 13))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 7)
@@ -739,7 +728,7 @@ private struct OnboardingSourceTicket: View {
                         english: "IG Reel: quiet cafe near the station, tagged @hidden.moon.cafe...",
                         traditionalChinese: "IG Reels：捷運站旁的安靜咖啡，標記 @hidden.moon.cafe..."
                     ))
-                    .font(SaveAtlasType.body(isCompactHeight ? 13 : 14))
+                    .font(SaveAtlasType.body(isCompactHeight ? 12 : 13))
                     .foregroundStyle(SaveAtlasPalette.muted.opacity(0.70))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -884,8 +873,8 @@ private struct ProofDemoCanvas: View {
     private var clueLine: String {
         if clueText.isEmpty {
             return language.localized(
-                english: "Sample Reel: quiet cafe near the station",
-                traditionalChinese: "範例 Reels：捷運站旁安靜咖啡"
+                english: "IG Reel: quiet cafe near the station",
+                traditionalChinese: "IG Reels：捷運站旁安靜咖啡"
             )
         }
         return String(clueText.prefix(58))
@@ -925,46 +914,33 @@ private struct ReviewPocketStage: View {
     let phase: Int
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -58)
-                .zIndex(-1)
+        OnboardingOpenEnvelopeShell(
+            caption: language.localized(
+                english: "Memo keeps the source as proof.",
+                traditionalChinese: "Memo 會把來源留作證據。"
+            ),
+            isCompactHeight: isCompactHeight,
+            memoPose: .review
+        ) { scale, shellWidth in
+            ZStack(alignment: .bottom) {
+                OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
+                    .frame(width: shellWidth - (68 * scale))
+                    .rotationEffect(.degrees(-1.2))
+                    .offset(y: -320 * scale)
 
-            OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
-                .padding(.horizontal, isCompactHeight ? 26 : 34)
-                .rotationEffect(.degrees(-1.2))
-                .offset(y: isCompactHeight ? -222 : -304)
-                .zIndex(0)
-
-            if phase >= 1 {
-                OnboardingReviewTicket(
-                    language: language,
-                    isCompactHeight: isCompactHeight,
-                    phase: phase
-                )
-                    .padding(.horizontal, isCompactHeight ? 19 : 24)
-                    .offset(y: isCompactHeight ? -88 : -138)
+                if phase >= 1 {
+                    OnboardingReviewTicket(
+                        language: language,
+                        isCompactHeight: isCompactHeight,
+                        phase: phase
+                    )
+                    .frame(width: shellWidth - (36 * scale))
+                    .offset(y: -180 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    .zIndex(1)
+                }
             }
-
-            OnboardingPocketEnvelope(
-                caption: language.localized(
-                    english: "Memo keeps the source as proof.",
-                    traditionalChinese: "Memo 會把來源留作證據。"
-                ),
-                isCompactHeight: isCompactHeight
-            )
-            .zIndex(2)
-
-            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
-                .offset(
-                    x: isCompactHeight ? 112 : 126,
-                    y: isCompactHeight ? -88 : -116
-                )
-                .zIndex(3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 
@@ -1152,35 +1128,21 @@ private struct MapStampPocketStage: View {
     let phase: Int
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -58)
-
+        OnboardingOpenEnvelopeShell(
+            caption: language.localized(
+                english: "Memo keeps the source as proof.",
+                traditionalChinese: "Memo 會把來源留作證據。"
+            ),
+            isCompactHeight: isCompactHeight,
+            memoPose: .stamp
+        ) { scale, shellWidth in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .padding(.horizontal, isCompactHeight ? 14 : 18)
-                    .offset(y: isCompactHeight ? -72 : -128)
+                    .frame(width: shellWidth - (24 * scale))
+                    .offset(y: -150 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    .zIndex(1)
             }
-
-            OnboardingPocketEnvelope(
-                caption: language.localized(
-                    english: "Memo keeps the source as proof.",
-                    traditionalChinese: "Memo 會把來源留作證據。"
-                ),
-                isCompactHeight: isCompactHeight
-            )
-            .zIndex(2)
-
-            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
-                .offset(
-                    x: isCompactHeight ? 112 : 126,
-                    y: isCompactHeight ? -88 : -116
-                )
-                .zIndex(3)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 
@@ -1338,37 +1300,166 @@ private struct OnboardingPostalCancellation: View {
     }
 }
 
-private struct OnboardingAirmailEnvelopeBack: View {
+private enum OnboardingMemoPose {
+    case clue
+    case review
+    case stamp
+
+    var assetName: String {
+        switch self {
+        case .clue: return "OnboardingMemoClue"
+        case .review: return "OnboardingMemoReview"
+        case .stamp: return "OnboardingMemoStamp"
+        }
+    }
+
+    var width: CGFloat {
+        switch self {
+        case .clue: return 100
+        case .review: return 112
+        case .stamp: return 110
+        }
+    }
+
+    var horizontalOffset: CGFloat {
+        switch self {
+        case .clue: return 112
+        case .review: return 105
+        case .stamp: return 108
+        }
+    }
+
+    var bottomOffset: CGFloat {
+        switch self {
+        case .clue: return 112
+        case .review: return 108
+        case .stamp: return 108
+        }
+    }
+}
+
+private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
+    let caption: String
     let isCompactHeight: Bool
+    let memoPose: OnboardingMemoPose
+    private let cards: (CGFloat, CGFloat) -> Cards
+
+    init(
+        caption: String,
+        isCompactHeight: Bool,
+        memoPose: OnboardingMemoPose,
+        @ViewBuilder cards: @escaping (CGFloat, CGFloat) -> Cards
+    ) {
+        self.caption = caption
+        self.isCompactHeight = isCompactHeight
+        self.memoPose = memoPose
+        self.cards = cards
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let fullWidth = min(max(proxy.size.width - 12, 0), 360)
+            let shellWidth = isCompactHeight ? min(fullWidth, 270) : fullWidth
+            let scale = shellWidth / 342
+
+            ZStack(alignment: .bottom) {
+                OnboardingAirmailEnvelopeBack(
+                    width: shellWidth,
+                    height: 210 * scale
+                )
+                .offset(y: -112 * scale)
+
+                cards(scale, shellWidth)
+                    .zIndex(1)
+
+                OnboardingEnvelopeMouthLip()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                SaveAtlasPalette.kraft.opacity(0.94),
+                                SaveAtlasPalette.paper.opacity(0.96),
+                                SaveAtlasPalette.kraft.opacity(0.98)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .overlay {
+                        OnboardingEnvelopeMouthLip()
+                            .stroke(
+                                SaveAtlasPalette.line.opacity(0.56),
+                                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                            )
+                    }
+                    .frame(width: shellWidth - (18 * scale), height: 26 * scale)
+                    .offset(y: -149 * scale)
+                    .zIndex(1.5)
+
+                OnboardingPocketEnvelope(
+                    caption: caption,
+                    width: shellWidth,
+                    height: 176 * scale,
+                    captionBottomPadding: 28 * scale
+                )
+                .zIndex(2)
+
+                Image(memoPose.assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: memoPose.width * scale)
+                    .offset(
+                        x: memoPose.horizontalOffset * scale,
+                        y: -memoPose.bottomOffset * scale
+                    )
+                    .accessibilityHidden(true)
+                    .zIndex(3)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+    }
+}
+
+private struct OnboardingEnvelopeMouthLip: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct OnboardingAirmailEnvelopeBack: View {
+    let width: CGFloat
+    let height: CGFloat
 
     var body: some View {
         Image("OnboardingAirmailEnvelopeBack")
             .resizable()
-            .frame(maxWidth: .infinity)
-            .frame(height: isCompactHeight ? 150 : 210)
-            .padding(.horizontal, 6)
+            .frame(width: width, height: height)
             .accessibilityHidden(true)
     }
 }
 
 private struct OnboardingPocketEnvelope: View {
     let caption: String
-    let isCompactHeight: Bool
+    let width: CGFloat
+    let height: CGFloat
+    let captionBottomPadding: CGFloat
 
     var body: some View {
         Image("SavesEnvelope")
             .resizable()
-            .scaledToFit()
-            .frame(maxWidth: .infinity)
-            .frame(height: isCompactHeight ? 126 : 176, alignment: .bottom)
+            .frame(width: width, height: height)
             .overlay(alignment: .bottom) {
                 Text(caption)
-                    .font(SaveAtlasType.editorial(isCompactHeight ? 12 : 14))
+                    .font(SaveAtlasType.editorial(14 * (width / 342)))
                     .foregroundStyle(SaveAtlasPalette.ink.opacity(0.78))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 90)
-                    .padding(.bottom, isCompactHeight ? 20 : 28)
+                    .padding(.horizontal, 90 * (width / 342))
+                    .padding(.bottom, captionBottomPadding)
             }
             .accessibilityHidden(true)
     }
