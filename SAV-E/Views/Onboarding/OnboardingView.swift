@@ -711,12 +711,13 @@ private struct OnboardingSourceTicket: View {
                 linedNoteBackground
 
                 TextEditor(text: $clueText)
-                    .font(SaveAtlasType.editorial(isCompactHeight ? 12 : 13))
+                    .font(SaveAtlasType.editorial(isCompactHeight ? 13 : 15))
                     .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineSpacing(2)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .frame(height: isCompactHeight ? 80 : 126)
+                    .frame(height: isCompactHeight ? 76 : 108)
                     .accessibilityIdentifier("onboarding.clueEditor")
                     .accessibilityLabel(language.localized(
                         english: "Place clue text",
@@ -737,8 +738,10 @@ private struct OnboardingSourceTicket: View {
                 }
             }
 
-            HStack(spacing: 7) {
-                Image(systemName: "camera.fill")
+            OnboardingDashedRule(color: SaveAtlasPalette.coral.opacity(0.56))
+
+            HStack(spacing: 9) {
+                OnboardingInstagramMark()
                 VStack(alignment: .leading, spacing: 1) {
                     Text(language.localized(english: "From IG Reel", traditionalChinese: "來自 IG Reels"))
                     Text("instagram.com/reel/C8xK...7bQ")
@@ -783,7 +786,7 @@ private struct OnboardingSourceTicket: View {
 
     private var linedNoteBackground: some View {
         Canvas { context, size in
-            let spacing: CGFloat = isCompactHeight ? 18 : 24
+            let spacing: CGFloat = isCompactHeight ? 18 : 22
             for y in stride(from: spacing, through: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
@@ -791,8 +794,46 @@ private struct OnboardingSourceTicket: View {
                 context.stroke(path, with: .color(SaveAtlasPalette.line.opacity(0.22)), lineWidth: 1)
             }
         }
-        .frame(height: isCompactHeight ? 80 : 126)
+        .frame(height: isCompactHeight ? 76 : 108)
         .allowsHitTesting(false)
+    }
+}
+
+private struct OnboardingInstagramMark: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(lineWidth: 2)
+            Circle()
+                .stroke(lineWidth: 2)
+                .frame(width: 9, height: 9)
+            Circle()
+                .fill()
+                .frame(width: 3, height: 3)
+                .offset(x: 7, y: -7)
+        }
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .frame(width: 25, height: 25)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OnboardingDashedRule: View {
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            context.stroke(
+                path,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+            )
+        }
+        .frame(height: 1)
+        .accessibilityHidden(true)
     }
 }
 
@@ -850,7 +891,6 @@ private struct ProofDemoCanvas: View {
                 isCompactHeight: isCompactHeight,
                 phase: phase
             )
-            .offset(y: isCompactHeight ? 8 : 8)
             .transition(sceneTransition)
         case .mapStamp:
             MapStampPocketStage(
@@ -1019,6 +1059,8 @@ private struct OnboardingReviewTicket: View {
                     .accessibilityHidden(true)
             }
 
+            OnboardingDashedRule(color: Color.saveBlueInk.opacity(0.42))
+
             HStack(alignment: .top, spacing: 6) {
                 evidenceMark(
                     icon: "checkmark.seal.fill",
@@ -1026,12 +1068,22 @@ private struct OnboardingReviewTicket: View {
                     tint: SaveAtlasPalette.mint,
                     visibleAt: 1
                 )
+
+                Divider()
+                    .overlay(Color.saveBlueInk.opacity(0.18))
+                    .frame(height: isCompactHeight ? 48 : 58)
+
                 evidenceMark(
                     icon: "link",
                     title: language.localized(english: "Source\nkept", traditionalChinese: "保留\n來源"),
                     tint: SaveAtlasPalette.sky,
                     visibleAt: 2
                 )
+
+                Divider()
+                    .overlay(Color.saveBlueInk.opacity(0.18))
+                    .frame(height: isCompactHeight ? 48 : 58)
+
                 evidenceMark(
                     icon: "questionmark",
                     title: language.localized(english: "Exact pin\nmissing", traditionalChinese: "還缺\n座標"),
@@ -1275,23 +1327,23 @@ private struct OnboardingPostalCancellation: View {
             VStack(spacing: 5) {
                 ForEach(0..<3, id: \.self) { _ in
                     Capsule()
-                        .fill(SaveAtlasPalette.line.opacity(0.62))
+                        .fill(SaveAtlasPalette.muted.opacity(0.58))
                         .frame(width: 54, height: 1)
                 }
             }
 
             ZStack {
                 Circle()
-                    .stroke(SaveAtlasPalette.line.opacity(0.72), lineWidth: 1.2)
+                    .stroke(SaveAtlasPalette.muted.opacity(0.64), lineWidth: 1.2)
                 Circle()
                     .stroke(
-                        SaveAtlasPalette.line.opacity(0.46),
+                        SaveAtlasPalette.muted.opacity(0.42),
                         style: StrokeStyle(lineWidth: 1, dash: [2, 2])
                     )
                     .padding(5)
                 Image(systemName: "building.columns.fill")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(SaveAtlasPalette.line.opacity(0.72))
+                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.64))
             }
             .frame(width: 43, height: 43)
         }
@@ -1331,7 +1383,7 @@ private enum OnboardingMemoPose {
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 112
+        case .clue: return 80
         case .review: return 108
         case .stamp: return 108
         }

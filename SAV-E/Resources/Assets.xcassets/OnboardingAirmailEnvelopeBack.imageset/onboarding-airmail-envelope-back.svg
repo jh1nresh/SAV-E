@@ -24,8 +24,8 @@
          pocket. The pocket's transparent V exposes this same sheet as the
          central fold; the carrier remains visible only at the airmail edge. -->
     <path d="M14 61H346V232Q346 241 337 241H23Q14 241 14 232V61Z" fill="url(#kraftShoulder)"/>
-    <path d="M21 65L180 198" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
-    <path d="M339 65L180 198" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M21 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M339 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
     <path d="M15 229H345" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->
