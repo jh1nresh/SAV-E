@@ -22,8 +22,8 @@
     <path d="M3 112Q3 104 11 99L180 210L349 99Q357 104 357 112V238Q357 247 348 247H12Q3 247 3 238V112Z" fill="url(#airmail)"/>
     <!-- One continuous open liner: warm shoulders descend into the same
          central point while the centre above that point stays transparent. -->
-    <path d="M9 30C45 42 82 105 180 202C278 105 315 42 351 30V232Q351 241 342 241H18Q9 241 9 232V30Z" fill="url(#kraftBacking)"/>
-    <path d="M15 35C49 49 86 109 180 202C274 109 311 49 345 35" stroke="#B77E45" stroke-opacity="0.52" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M19 30C53 42 88 105 180 202C272 105 307 42 341 30V232Q341 241 332 241H28Q19 241 19 232V30Z" fill="url(#kraftBacking)"/>
+    <path d="M25 35C57 49 92 109 180 202C268 109 303 49 335 35" stroke="#B77E45" stroke-opacity="0.52" stroke-width="1" stroke-dasharray="5 4"/>
     <path d="M10 229H350" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->

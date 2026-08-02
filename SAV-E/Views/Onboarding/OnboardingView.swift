@@ -704,7 +704,7 @@ private struct CluePocketStage: View {
             .scaleEffect(scale, anchor: .bottom)
             .frame(width: 300 * scale, height: 294 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -5 * scale, y: -141 * scale)
+            .offset(x: -5 * scale, y: -132 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -1073,11 +1073,11 @@ private struct OnboardingReviewTicket: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
-                        .font(SaveAtlasType.strong(11))
+                        .font(SaveAtlasType.strong(14))
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 28, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 40, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1091,6 +1091,7 @@ private struct OnboardingReviewTicket: View {
                     .frame(width: isCompactHeight ? 42 : 62, height: isCompactHeight ? 42 : 62)
                     .accessibilityHidden(true)
             }
+            .padding(.horizontal, isCompactHeight ? 0 : 12)
 
             OnboardingDashedRule(color: Color.saveBlueInk.opacity(0.42))
 
@@ -1125,6 +1126,7 @@ private struct OnboardingReviewTicket: View {
                 )
             }
             .padding(.vertical, isCompactHeight ? 1 : 4)
+            .offset(x: isCompactHeight ? 0 : -14)
 
             Divider()
                 .overlay(Color.saveBlueInk.opacity(0.24))
@@ -1148,6 +1150,7 @@ private struct OnboardingReviewTicket: View {
             }
             .font(SaveAtlasType.body(isCompactHeight ? 9 : 10))
             .foregroundStyle(SaveAtlasPalette.muted)
+            .padding(.leading, isCompactHeight ? 0 : 5)
         }
         .padding(
             EdgeInsets(
@@ -1256,9 +1259,9 @@ private struct OnboardingSavedPostcard: View {
                 .frame(maxWidth: .infinity, alignment: .center)
 
             HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text("Hidden Moon Cafe")
-                        .font(SaveAtlasType.strong(22, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(28, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1296,7 +1299,7 @@ private struct OnboardingSavedPostcard: View {
                     }
                     .overlay(alignment: .bottomLeading) {
                         OnboardingPostalCancellation()
-                            .offset(x: -72, y: 16)
+                            .offset(x: -72, y: 8)
                     }
                     .padding(.trailing, 6)
             }
@@ -1318,6 +1321,7 @@ private struct OnboardingSavedPostcard: View {
             .font(SaveAtlasType.body(11))
             .foregroundStyle(SaveAtlasPalette.muted)
             .padding(.leading, 6)
+            .padding(.top, -10)
 
             ZStack(alignment: .bottomTrailing) {
                 Image("MapAtlasScene")
@@ -1435,7 +1439,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 90
         case .review: return 42
-        case .stamp: return 55
+        case .stamp: return 47
         }
     }
 
@@ -1454,8 +1458,8 @@ private enum OnboardingMemoPose {
     var rearBottomOffset: CGFloat {
         switch self {
         case .clue: return 124
-        case .review: return 146
-        case .stamp: return 154
+        case .review: return 112
+        case .stamp: return 106
         }
     }
 
