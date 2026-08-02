@@ -13,15 +13,13 @@
     "rearEnvelope": {
       "asset": "OnboardingAirmailEnvelopeBack",
       "width": 370,
-      "height": 226,
+      "height": 190,
       "bottomOffset": {
-        "clue": 124,
-        "review": 146,
-        "mapStamp": 177
+        "clue": 103,
+        "review": 139,
+        "mapStamp": 144
       },
-      "innerApex": { "x": 180, "y": 202 },
-      "outerApex": { "x": 180, "y": 210 },
-      "topology": "single illustrated V-folded airmail back with broad connected kraft shoulders, narrow striped rails, and central point; no detached lip, horizontal top band, or duplicate fold seam"
+      "topology": "two broad illustrated kraft side wings with narrow outer airmail rails; the center above the pocket is transparent and the live letter remains unobstructed; no opaque central V, horizontal top band, or detached rails"
     },
     "frontPocket": {
       "asset": "OnboardingEnvelopeFront",

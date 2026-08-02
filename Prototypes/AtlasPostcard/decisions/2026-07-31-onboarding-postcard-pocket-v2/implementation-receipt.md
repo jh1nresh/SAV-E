@@ -115,6 +115,27 @@ The Clue receipt date is rendered once. The Map Stamp uses a larger clipped
 photo, postal cancellation, source receipt, and atlas strip before entering the
 same pocket.
 
+## Foreground Construction Correction — 2026-08-02
+
+The previous generated shell still failed the approved construction: its rear
+asset was a large opaque central V, its front mouth was a smooth generic notch,
+and the ticket modifier added a second padded border. Whole-screen similarity
+scores were rejected because the shared cream background dominated them.
+
+This pass uses the approved board as the component authority:
+
+- the rear asset contains only two broad kraft diagonal side wings with narrow
+  coral/cream/sky rails; its centre is transparent;
+- the front asset owns the raised shoulders, shallow centre point, stitched
+  perimeter, paper grain, and lower-left airplane cancellation;
+- all three state tickets use one solid postage-scallop edge without an added
+  five-point outer padding layer; and
+- each state has measured rear offsets so the side wings remain visible beside
+  the letter and terminate behind the same front pocket.
+
+Acceptance is based on foreground crops of the envelope construction, not the
+full-screen background. Same-commit CI screenshots remain required.
+
 ## Build and Test Result
 
 - `swiftc -frontend -parse`: passed.

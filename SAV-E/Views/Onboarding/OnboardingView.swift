@@ -1411,9 +1411,9 @@ private enum OnboardingMemoPose {
 
     var rearBottomOffset: CGFloat {
         switch self {
-        case .clue: return 124
-        case .review: return 146
-        case .stamp: return 177
+        case .clue: return 103
+        case .review: return 139
+        case .stamp: return 144
         }
     }
 
@@ -1463,7 +1463,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
             ZStack(alignment: .bottom) {
                 OnboardingAirmailEnvelopeBack(
                     width: shellWidth,
-                    height: 226 * scale
+                    height: 190 * scale
                 )
                 .offset(y: -memoPose.rearBottomOffset * scale)
 
@@ -1505,7 +1505,6 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .padding(5)
             .background {
                 ZStack {
                     SavePostcardScallopedRectangle(depth: 4, pitch: 11)
