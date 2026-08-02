@@ -1283,7 +1283,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("OnboardingNightCafe")
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 98, height: 145)
+                    .frame(width: 104, height: 133)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -1301,8 +1301,9 @@ private struct OnboardingSavedPostcard: View {
                         OnboardingPostalCancellation()
                             .offset(x: -72, y: 8)
                     }
-                    .padding(.trailing, 6)
+                    .padding(.trailing, 12)
             }
+            .frame(height: 145, alignment: .top)
             .padding(.leading, 8)
 
             HStack(alignment: .top, spacing: 6) {
@@ -1423,7 +1424,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 118
         case .review: return 132
-        case .stamp: return 128
+        case .stamp: return 120
         }
     }
 
@@ -1431,7 +1432,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 117
         case .review: return 88
-        case .stamp: return 96
+        case .stamp: return 105
         }
     }
 
@@ -1459,7 +1460,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 124
         case .review: return 146
-        case .stamp: return 154
+        case .stamp: return 177
         }
     }
 
@@ -1467,7 +1468,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 191
         case .review: return 156
-        case .stamp: return 138
+        case .stamp: return 156
         }
     }
 

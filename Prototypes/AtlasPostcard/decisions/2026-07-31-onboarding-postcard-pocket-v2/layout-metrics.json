@@ -17,7 +17,7 @@
       "bottomOffset": {
         "clue": 124,
         "review": 146,
-        "mapStamp": 154
+        "mapStamp": 177
       },
       "innerApex": { "x": 180, "y": 202 },
       "outerApex": { "x": 180, "y": 210 },
@@ -29,7 +29,7 @@
       "height": {
         "clue": 191,
         "review": 156,
-        "mapStamp": 138
+        "mapStamp": 156
       },
       "bottomOffset": 0
     },
@@ -42,7 +42,7 @@
       "width": {
         "clue": 118,
         "review": 132,
-        "mapStamp": 128
+        "mapStamp": 120
       },
       "bottomOffset": {
         "clue": 70,
