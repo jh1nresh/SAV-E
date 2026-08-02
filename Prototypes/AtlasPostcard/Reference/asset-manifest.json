@@ -401,7 +401,7 @@
     },
     {
       "name": "OnboardingAirmailEnvelopeBack",
-      "role": "rear airmail envelope with one connected striped border, cream shoulder, top flap, and fold lines behind the onboarding state card",
+      "role": "rear open-envelope fold with narrow striped rails, diagonal kraft shoulders, a central V tip, and fold seams behind the onboarding state card; never a full rectangular border",
       "source": "independent SVG reconstruction from the founder-approved onboarding direction",
       "transform": "section-level vector asset; never used as a whole-screen background",
       "output": {

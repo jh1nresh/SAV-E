@@ -90,6 +90,29 @@ rails, and a subtle curved inner-mouth seam. Its regular-height offset is 92 pt
 state ticket is the only object emerging from the shared mouth; there is no
 second flap or separate cream envelope body.
 
+## Envelope Topology and Card-Proportion Correction — 2026-08-01
+
+The open-liner correction above still encoded the rear layer as a complete
+striped rectangle with a cream inset. In runtime that exposed a horizontal
+airmail bar above every ticket and made the old kraft pocket read as a second,
+detached rectangle. Matching colors and z-order was not enough; the reference
+requires a different physical topology.
+
+This pass replaces the rear rectangle with one V-folded open-envelope back:
+
+- the outer airmail material is visible only as narrow side rails;
+- diagonal kraft shoulders sit between those rails and the ticket;
+- both folds meet at a central tip beneath the letter;
+- the front `SavesEnvelope` mouth overlaps that tip and the lower ticket edge;
+- the Clue, Review, and Map Stamp cards regain the taller proportions and
+  evidence order visible in the approved direction; and
+- the Review backing card becomes a deliberate coral source crown rather than
+  an almost-empty generic receipt.
+
+The Clue receipt date is rendered once. The Map Stamp uses a larger clipped
+photo, postal cancellation, source receipt, and atlas strip before entering the
+same pocket.
+
 ## Build and Test Result
 
 - `swiftc -frontend -parse`: passed.

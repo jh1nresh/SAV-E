@@ -106,7 +106,7 @@ struct OnboardingView: View {
                 clueText: trimmedClue,
                 language: language,
                 isCompactHeight: isCompactHeight,
-                height: isCompactHeight ? 290 : 430
+                height: isCompactHeight ? 300 : 448
             )
 
             Spacer(minLength: 0)
@@ -675,7 +675,7 @@ private struct CluePocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -58 : -92)
+                .offset(y: isCompactHeight ? -42 : -58)
 
             OnboardingSourceTicket(
                 clueText: $clueText,
@@ -683,7 +683,8 @@ private struct CluePocketStage: View {
                 isCompactHeight: isCompactHeight
             )
             .padding(.horizontal, isCompactHeight ? 24 : 30)
-            .offset(y: isCompactHeight ? -70 : -133)
+            .rotationEffect(.degrees(-1.2))
+            .offset(y: isCompactHeight ? -76 : -132)
             .zIndex(1)
 
             OnboardingPocketEnvelope(
@@ -695,11 +696,11 @@ private struct CluePocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
-                .offset(x: isCompactHeight ? 118 : 138, y: isCompactHeight ? -88 : -118)
+            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
+                .offset(x: isCompactHeight ? 112 : 126, y: isCompactHeight ? -88 : -116)
                 .zIndex(3)
         }
-        .padding(.top, isCompactHeight ? 82 : 144)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
 }
@@ -710,7 +711,7 @@ private struct OnboardingSourceTicket: View {
     let isCompactHeight: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 5 : 6) {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 10) {
             Text(language.localized(english: "Source Clue", traditionalChinese: "來源線索").uppercased())
                 .font(SaveAtlasType.strong(10))
                 .tracking(1)
@@ -726,7 +727,7 @@ private struct OnboardingSourceTicket: View {
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .frame(height: isCompactHeight ? 68 : 92)
+                    .frame(height: isCompactHeight ? 80 : 126)
                     .accessibilityIdentifier("onboarding.clueEditor")
                     .accessibilityLabel(language.localized(
                         english: "Place clue text",
@@ -763,7 +764,7 @@ private struct OnboardingSourceTicket: View {
             .font(SaveAtlasType.body(10))
             .foregroundStyle(SaveAtlasPalette.muted)
         }
-        .padding(isCompactHeight ? 9 : 11)
+        .padding(isCompactHeight ? 10 : 12)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -793,7 +794,7 @@ private struct OnboardingSourceTicket: View {
 
     private var linedNoteBackground: some View {
         Canvas { context, size in
-            let spacing: CGFloat = isCompactHeight ? 18 : 22
+            let spacing: CGFloat = isCompactHeight ? 18 : 24
             for y in stride(from: spacing, through: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
@@ -801,7 +802,7 @@ private struct OnboardingSourceTicket: View {
                 context.stroke(path, with: .color(SaveAtlasPalette.line.opacity(0.22)), lineWidth: 1)
             }
         }
-        .frame(height: isCompactHeight ? 68 : 92)
+        .frame(height: isCompactHeight ? 80 : 126)
         .allowsHitTesting(false)
     }
 }
@@ -926,13 +927,13 @@ private struct ReviewPocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -58 : -92)
+                .offset(y: isCompactHeight ? -42 : -58)
                 .zIndex(-1)
 
-            OnboardingCompactSourceReceipt(clueLine: clueLine, language: language)
+            OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
                 .padding(.horizontal, isCompactHeight ? 26 : 34)
                 .rotationEffect(.degrees(-1.2))
-                .offset(y: isCompactHeight ? -218 : -283)
+                .offset(y: isCompactHeight ? -222 : -304)
                 .zIndex(0)
 
             if phase >= 1 {
@@ -942,7 +943,7 @@ private struct ReviewPocketStage: View {
                     phase: phase
                 )
                     .padding(.horizontal, isCompactHeight ? 19 : 24)
-                    .offset(y: isCompactHeight ? -84 : -136)
+                    .offset(y: isCompactHeight ? -88 : -138)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .zIndex(1)
             }
@@ -956,40 +957,47 @@ private struct ReviewPocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
+            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
                 .offset(
-                    x: isCompactHeight ? 118 : 138,
-                    y: isCompactHeight ? -88 : -118
+                    x: isCompactHeight ? 112 : 126,
+                    y: isCompactHeight ? -88 : -116
                 )
                 .zIndex(3)
         }
-        .padding(.top, isCompactHeight ? 98 : 155)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 
-private struct OnboardingCompactSourceReceipt: View {
+private struct OnboardingSourceBackingTicket: View {
     let clueLine: String
     let language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "paperclip")
-                .font(.caption.weight(.bold))
-            VStack(alignment: .leading, spacing: 1) {
-                Text(language.localized(english: "Source Clue", traditionalChinese: "來源線索").uppercased())
-                    .font(SaveAtlasType.strong(9))
-                    .tracking(0.8)
-                    .foregroundStyle(SaveAtlasPalette.coral)
-                Text(clueLine)
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
+        VStack(spacing: 8) {
+            Text(language.localized(english: "Source Clue", traditionalChinese: "來源線索").uppercased())
+                .font(SaveAtlasType.strong(10))
+                .tracking(1)
+                .foregroundStyle(SaveAtlasPalette.coral)
+
+            Rectangle()
+                .fill(SaveAtlasPalette.line.opacity(0.20))
+                .frame(height: 1)
+
+            Text(clueLine)
+                .font(SaveAtlasType.editorial(12))
+                .foregroundStyle(SaveAtlasPalette.ink.opacity(0.72))
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 68)
-        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .padding(.horizontal, 16)
+        .padding(.top, 15)
+        .frame(height: 108, alignment: .top)
+        .background {
+            ZStack {
+                SaveAtlasPalette.paper
+                SaveAtlasPalette.coral.opacity(0.10)
+            }
+        }
         .padding(4)
         .background {
             SavePostcardScallopedRectangle(depth: 3, pitch: 10)
@@ -1012,7 +1020,7 @@ private struct OnboardingReviewTicket: View {
     let phase: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 6 : 8) {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 10) {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
@@ -1055,6 +1063,7 @@ private struct OnboardingReviewTicket: View {
                     visibleAt: 3
                 )
             }
+            .padding(.vertical, isCompactHeight ? 1 : 4)
 
             Divider()
                 .overlay(Color.saveBlueInk.opacity(0.24))
@@ -1079,7 +1088,8 @@ private struct OnboardingReviewTicket: View {
             .font(SaveAtlasType.body(isCompactHeight ? 9 : 10))
             .foregroundStyle(SaveAtlasPalette.muted)
         }
-        .padding(isCompactHeight ? 9 : 11)
+        .padding(isCompactHeight ? 10 : 13)
+        .frame(minHeight: isCompactHeight ? 154 : 218, alignment: .top)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1109,15 +1119,18 @@ private struct OnboardingReviewTicket: View {
     @ViewBuilder
     private func evidenceMark(icon: String, title: String, tint: Color, visibleAt: Int) -> some View {
         if phase >= visibleAt {
-            VStack(spacing: 5) {
+            VStack(spacing: isCompactHeight ? 5 : 7) {
                 Image(systemName: icon)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(SaveAtlasPalette.forest)
-                    .frame(width: 30, height: 30)
+                    .frame(
+                        width: isCompactHeight ? 30 : 36,
+                        height: isCompactHeight ? 30 : 36
+                    )
                     .background(tint, in: SavePostcardSealShape())
 
                 Text(title)
-                    .font(SaveAtlasType.strong(10))
+                    .font(SaveAtlasType.strong(isCompactHeight ? 10 : 11))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -1141,12 +1154,12 @@ private struct MapStampPocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -58 : -92)
+                .offset(y: isCompactHeight ? -42 : -58)
 
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
                     .padding(.horizontal, isCompactHeight ? 14 : 18)
-                    .offset(y: isCompactHeight ? -58 : -128)
+                    .offset(y: isCompactHeight ? -72 : -128)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .zIndex(1)
             }
@@ -1160,14 +1173,14 @@ private struct MapStampPocketStage: View {
             )
             .zIndex(2)
 
-            SavePostcardMemoPeek(width: isCompactHeight ? 62 : 78)
+            SavePostcardMemoPeek(width: isCompactHeight ? 64 : 82)
                 .offset(
-                    x: isCompactHeight ? 118 : 138,
-                    y: isCompactHeight ? -88 : -118
+                    x: isCompactHeight ? 112 : 126,
+                    y: isCompactHeight ? -88 : -116
                 )
                 .zIndex(3)
         }
-        .padding(.top, isCompactHeight ? 52 : 134)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 
@@ -1175,7 +1188,7 @@ private struct OnboardingSavedPostcard: View {
     let language: AppLanguage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(language.localized(
                 english: "★ Lifted Saved Postcard ★",
                 traditionalChinese: "★ 已提起的收藏明信片 ★"
@@ -1185,7 +1198,7 @@ private struct OnboardingSavedPostcard: View {
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(maxWidth: .infinity, alignment: .center)
 
-            HStack(alignment: .top, spacing: 9) {
+            HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Hidden Moon Cafe")
                         .font(SaveAtlasType.strong(18, relativeTo: .headline))
@@ -1210,7 +1223,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("KoffeeMameyaThumbnail")
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 70, height: 70)
+                    .frame(width: 88, height: 102)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -1223,6 +1236,10 @@ private struct OnboardingSavedPostcard: View {
                             .foregroundStyle(SaveAtlasPalette.muted)
                             .rotationEffect(.degrees(14))
                             .offset(x: 6, y: -7)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        OnboardingPostalCancellation()
+                            .offset(x: -72, y: 16)
                     }
             }
 
@@ -1246,7 +1263,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("MapAtlasScene")
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 48)
+                    .frame(height: 66)
                     .clipped()
                     .opacity(0.58)
 
@@ -1260,13 +1277,9 @@ private struct OnboardingSavedPostcard: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
             }
-            .overlay(alignment: .topTrailing) {
-                SavePostcardPostmark()
-                    .scaleEffect(0.64)
-                    .offset(x: -58, y: -74)
-            }
         }
-        .padding(11)
+        .padding(12)
+        .frame(minHeight: 272, alignment: .top)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1294,6 +1307,37 @@ private struct OnboardingSavedPostcard: View {
     }
 }
 
+private struct OnboardingPostalCancellation: View {
+    var body: some View {
+        HStack(spacing: -8) {
+            VStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Capsule()
+                        .fill(SaveAtlasPalette.line.opacity(0.62))
+                        .frame(width: 54, height: 1)
+                }
+            }
+
+            ZStack {
+                Circle()
+                    .stroke(SaveAtlasPalette.line.opacity(0.72), lineWidth: 1.2)
+                Circle()
+                    .stroke(
+                        SaveAtlasPalette.line.opacity(0.46),
+                        style: StrokeStyle(lineWidth: 1, dash: [2, 2])
+                    )
+                    .padding(5)
+                Image(systemName: "building.columns.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SaveAtlasPalette.line.opacity(0.72))
+            }
+            .frame(width: 43, height: 43)
+        }
+        .rotationEffect(.degrees(-5))
+        .accessibilityHidden(true)
+    }
+}
+
 private struct OnboardingAirmailEnvelopeBack: View {
     let isCompactHeight: Bool
 
@@ -1301,7 +1345,7 @@ private struct OnboardingAirmailEnvelopeBack: View {
         Image("OnboardingAirmailEnvelopeBack")
             .resizable()
             .frame(maxWidth: .infinity)
-            .frame(height: isCompactHeight ? 170 : 246)
+            .frame(height: isCompactHeight ? 150 : 210)
             .padding(.horizontal, 6)
             .accessibilityHidden(true)
     }

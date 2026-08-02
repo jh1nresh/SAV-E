@@ -1,19 +1,34 @@
 <svg width="360" height="250" viewBox="0 0 360 250" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <pattern id="airmail" width="42" height="42" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-      <rect width="42" height="42" fill="#FFFDF7"/>
+      <rect width="42" height="42" fill="#FFF9EF"/>
       <rect width="13" height="42" fill="#F27D5C"/>
       <rect x="21" width="13" height="42" fill="#A9DDEA"/>
     </pattern>
+    <linearGradient id="kraftShoulder" x1="180" y1="54" x2="180" y2="224" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6DFC0"/>
+      <stop offset="0.62" stop-color="#EED0A3"/>
+      <stop offset="1" stop-color="#E5C18E"/>
+    </linearGradient>
     <filter id="paperShadow" x="-8%" y="-8%" width="116%" height="122%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#3F281A" flood-opacity="0.08"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#3F281A" flood-opacity="0.12"/>
     </filter>
   </defs>
 
-  <rect x="1" y="1" width="358" height="248" rx="17" fill="url(#airmail)" filter="url(#paperShadow)"/>
-  <!-- Open envelope liner: the letter covers the centre while the striped
-       shoulder and side rails stay connected to the front pocket. -->
-  <path d="M14 20H346V236H14V20Z" fill="#FFF8EE"/>
-  <path d="M14 24Q180 66 346 24" stroke="#CBAE87" stroke-opacity="0.72" stroke-width="1.2" stroke-dasharray="5 4"/>
-  <path d="M18 30Q180 72 342 30" stroke="#D8BE9A" stroke-opacity="0.42" stroke-width="1"/>
+  <!-- One open envelope back. Its V-shaped upper edge creates the folded
+       point beneath the letter; the state card hides the centre and leaves
+       only the connected striped rails and kraft shoulders visible. -->
+  <g filter="url(#paperShadow)">
+    <path d="M3 54Q3 46 11 41L180 181L349 41Q357 46 357 54V238Q357 247 348 247H12Q3 247 3 238V54Z" fill="url(#airmail)"/>
+    <path d="M16 65L180 172L344 65V232Q344 237 339 237H21Q16 237 16 232V65Z" fill="url(#kraftShoulder)"/>
+
+    <!-- Fold construction: two diagonal wings meeting at the central tip. -->
+    <path d="M17 66L180 172L343 66" stroke="#C39562" stroke-opacity="0.72" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <path d="M18 73L180 181L342 73" stroke="#FFF4E4" stroke-opacity="0.62" stroke-width="1"/>
+    <path d="M16 229H344" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+
+    <!-- Subtle paper fibres; visible only in the narrow shoulders. -->
+    <path d="M22 92L87 135" stroke="#FFF4E4" stroke-opacity="0.42" stroke-width="1"/>
+    <path d="M338 92L273 135" stroke="#FFF4E4" stroke-opacity="0.42" stroke-width="1"/>
+  </g>
 </svg>

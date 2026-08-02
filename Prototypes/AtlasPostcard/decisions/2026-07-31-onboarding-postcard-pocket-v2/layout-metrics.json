@@ -5,12 +5,17 @@
   },
   "pocketStage": {
     "width": 354,
-    "height": 416,
+    "height": {
+      "clue": 416,
+      "review": 448,
+      "mapStamp": 448
+    },
     "rearEnvelope": {
       "asset": "OnboardingAirmailEnvelopeBack",
       "width": 342,
-      "height": 246,
-      "bottomOffset": 92
+      "height": 210,
+      "bottomOffset": 58,
+      "topology": "V-folded airmail back with kraft shoulders; no horizontal top band"
     },
     "frontPocket": {
       "asset": "SavesEnvelope",
@@ -20,18 +25,18 @@
     },
     "memo": {
       "asset": "SavesMemoSorting",
-      "width": 78,
-      "horizontalOffset": 138,
-      "bottomOffset": 118
+      "width": 82,
+      "horizontalOffset": 126,
+      "bottomOffset": 116
     },
     "cards": {
       "clue": {
         "width": 294,
-        "bottomOffset": 133
+        "bottomOffset": 132
       },
       "review": {
         "width": 306,
-        "bottomOffset": 136
+        "bottomOffset": 138
       },
       "mapStamp": {
         "width": 318,
@@ -39,5 +44,5 @@
       }
     }
   },
-  "rule": "The rear layer is an open liner, not a second closed envelope. Its striped shoulder and side rails align with the front pocket so the state card reads as one letter emerging from one envelope. No layer may be replaced by a whole-screen screenshot."
+  "rule": "The rear layer is one V-folded open liner, not a striped backing rectangle. The diagonal kraft shoulders and narrow airmail rails meet at a central tip behind the state card, then align with the front pocket mouth so the card reads as one letter emerging from one envelope. No horizontal airmail band may appear above the card, and no layer may be replaced by a whole-screen screenshot."
 }
