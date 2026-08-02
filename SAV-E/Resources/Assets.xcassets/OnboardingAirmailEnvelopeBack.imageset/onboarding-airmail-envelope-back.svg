@@ -6,9 +6,9 @@
       <rect x="21" width="13" height="42" fill="#A9DDEA"/>
     </pattern>
     <linearGradient id="kraftBacking" x1="180" y1="54" x2="180" y2="224" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F0D2AA"/>
-      <stop offset="0.62" stop-color="#EBC696"/>
-      <stop offset="1" stop-color="#E6BA83"/>
+      <stop stop-color="#EBC59A"/>
+      <stop offset="0.62" stop-color="#E5BA88"/>
+      <stop offset="1" stop-color="#DFAD74"/>
     </linearGradient>
     <filter id="paperShadow" x="-8%" y="-8%" width="116%" height="122%">
       <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#3F281A" flood-opacity="0.12"/>

@@ -365,10 +365,10 @@ struct SaveFirstRunBrandLockup: View {
 
     var body: some View {
         HStack(spacing: compact ? 6 : 8) {
-            MemoMark(size: compact ? 28 : 34)
+            MemoMark(size: compact ? 28 : 36)
 
             Text("SAV-E")
-                .font(SaveAtlasType.strong(compact ? 20 : 23))
+                .font(SaveAtlasType.strong(compact ? 20 : 25))
                 .tracking(1)
                 .foregroundStyle(SaveAtlasPalette.forest)
         }
@@ -1073,11 +1073,11 @@ private struct OnboardingReviewTicket: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
-                        .font(SaveAtlasType.strong(10))
+                        .font(SaveAtlasType.strong(11))
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 24, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 28, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1088,7 +1088,7 @@ private struct OnboardingReviewTicket: View {
                 Image("OnboardingMoonMug")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: isCompactHeight ? 42 : 60, height: isCompactHeight ? 42 : 60)
+                    .frame(width: isCompactHeight ? 42 : 62, height: isCompactHeight ? 42 : 62)
                     .accessibilityHidden(true)
             }
 
@@ -1193,13 +1193,13 @@ private struct OnboardingReviewTicket: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .frame(
-                        width: isCompactHeight ? 30 : 36,
-                        height: isCompactHeight ? 30 : 36
+                        width: isCompactHeight ? 30 : 38,
+                        height: isCompactHeight ? 30 : 38
                     )
                     .background(tint, in: SavePostcardSealShape())
 
                 Text(title)
-                    .font(SaveAtlasType.strong(isCompactHeight ? 10 : 13))
+                    .font(SaveAtlasType.strong(isCompactHeight ? 10 : 14))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -1245,12 +1245,12 @@ private struct OnboardingSavedPostcard: View {
     let language: AppLanguage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             Text(language.localized(
                 english: "★ Lifted Saved Postcard ★",
                 traditionalChinese: "★ 已提起的收藏明信片 ★"
             ).uppercased())
-                .font(SaveAtlasType.strong(9))
+                .font(SaveAtlasType.strong(10))
                 .tracking(0.8)
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -1258,7 +1258,7 @@ private struct OnboardingSavedPostcard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Hidden Moon Cafe")
-                        .font(SaveAtlasType.strong(20, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(22, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1267,7 +1267,7 @@ private struct OnboardingSavedPostcard: View {
                         language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
                         systemImage: "hand.thumbsup.fill"
                     )
-                    .font(SaveAtlasType.strong(11))
+                    .font(SaveAtlasType.strong(12))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -1280,7 +1280,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("OnboardingNightCafe")
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 94, height: 128)
+                    .frame(width: 98, height: 145)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -1298,8 +1298,9 @@ private struct OnboardingSavedPostcard: View {
                         OnboardingPostalCancellation()
                             .offset(x: -72, y: 16)
                     }
-                    .padding(.trailing, 22)
+                    .padding(.trailing, 6)
             }
+            .padding(.leading, 8)
 
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "link")
@@ -1314,14 +1315,15 @@ private struct OnboardingSavedPostcard: View {
                     Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
                 }
             }
-            .font(SaveAtlasType.body(10))
+            .font(SaveAtlasType.body(11))
             .foregroundStyle(SaveAtlasPalette.muted)
+            .padding(.leading, 6)
 
             ZStack(alignment: .bottomTrailing) {
                 Image("MapAtlasScene")
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 82)
+                    .frame(height: 76)
                     .clipped()
                     .opacity(0.58)
 
@@ -1335,8 +1337,7 @@ private struct OnboardingSavedPostcard: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
             }
-            .padding(.leading, 5)
-            .padding(.trailing, 13)
+            .padding(.horizontal, 7)
         }
         .padding(.horizontal, 12)
         .padding(.top, 32)
@@ -1418,7 +1419,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 110
         case .review: return 140
-        case .stamp: return 144
+        case .stamp: return 124
         }
     }
 
@@ -1434,7 +1435,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 70
         case .review: return 42
-        case .stamp: return 56
+        case .stamp: return 70
         }
     }
 
@@ -1462,7 +1463,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 191
         case .review: return 170
-        case .stamp: return 161
+        case .stamp: return 150
         }
     }
 
