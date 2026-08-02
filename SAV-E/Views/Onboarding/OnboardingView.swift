@@ -700,11 +700,11 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(width: 300, height: 294)
+            .frame(width: 314, height: 286)
             .scaleEffect(scale, anchor: .bottom)
-            .frame(width: 300 * scale, height: 294 * scale)
+            .frame(width: 314 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -5 * scale, y: -132 * scale)
+            .offset(x: -5 * scale, y: -153 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -992,11 +992,11 @@ private struct ReviewPocketStage: View {
         ) { scale, _ in
             ZStack(alignment: .bottom) {
                 OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
-                    .frame(width: 296, height: 116)
+                    .frame(width: 300, height: 116)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 296 * scale, height: 116 * scale)
+                    .frame(width: 300 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(x: -6 * scale, y: -361 * scale)
+                    .offset(x: -6 * scale, y: -366 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -1004,10 +1004,10 @@ private struct ReviewPocketStage: View {
                         isCompactHeight: isCompactHeight,
                         phase: phase
                     )
-                    .frame(width: 340, height: 308)
+                    .frame(width: 344, height: 302)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 340 * scale, height: 308 * scale)
-                    .offset(x: -3 * scale, y: -121 * scale)
+                    .frame(width: 344 * scale, height: 302 * scale)
+                    .offset(x: -3 * scale, y: -130 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1234,10 +1234,10 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: 340, height: 359)
+                    .frame(width: 346, height: 354)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 340 * scale, height: 359 * scale)
-                    .offset(x: -4 * scale, y: -108 * scale)
+                    .frame(width: 346 * scale, height: 354 * scale)
+                    .offset(x: -4 * scale, y: -118 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1421,9 +1421,9 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 110
-        case .review: return 140
-        case .stamp: return 130
+        case .clue: return 118
+        case .review: return 132
+        case .stamp: return 128
         }
     }
 
@@ -1437,9 +1437,9 @@ private enum OnboardingMemoPose {
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 90
+        case .clue: return 70
         case .review: return 42
-        case .stamp: return 47
+        case .stamp: return 56
         }
     }
 
@@ -1458,16 +1458,16 @@ private enum OnboardingMemoPose {
     var rearBottomOffset: CGFloat {
         switch self {
         case .clue: return 124
-        case .review: return 112
-        case .stamp: return 106
+        case .review: return 146
+        case .stamp: return 154
         }
     }
 
     var frontPocketHeight: CGFloat {
         switch self {
         case .clue: return 191
-        case .review: return 170
-        case .stamp: return 150
+        case .review: return 156
+        case .stamp: return 138
         }
     }
 
@@ -1541,7 +1541,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .zIndex(memoPose.layerIndex)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .offset(x: -8 * scale, y: -5 * scale)
+            .offset(x: -8 * scale)
         }
     }
 }
