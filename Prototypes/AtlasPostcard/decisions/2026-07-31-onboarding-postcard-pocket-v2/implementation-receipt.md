@@ -77,6 +77,19 @@ The previous fidelity pass completed its generic iOS Simulator build with
 `BUILD_EXIT=0`. This visible-envelope correction remains gated by a fresh build
 and full same-commit Clue, Review, and Map Stamp runtime screenshots.
 
+## Open-Envelope Continuity Correction — 2026-08-01
+
+The 112 pt reveal exposed the complete artwork for a *closed* rear envelope,
+then placed the kraft pocket in front of it. Although no asset was missing, the
+result read as two envelopes cut apart and stacked. That geometry ruling is
+superseded.
+
+The rear artwork is now an open liner: one striped shoulder, continuous side
+rails, and a subtle curved inner-mouth seam. Its regular-height offset is 92 pt
+(58 pt compact), and its 342 pt width matches the rendered kraft pocket. The
+state ticket is the only object emerging from the shared mouth; there is no
+second flap or separate cream envelope body.
+
 ## Build and Test Result
 
 - `swiftc -frontend -parse`: passed.

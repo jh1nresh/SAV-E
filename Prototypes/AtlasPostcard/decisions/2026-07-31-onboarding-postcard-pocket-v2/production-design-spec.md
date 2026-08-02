@@ -40,12 +40,11 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
-- `OnboardingAirmailEnvelopeBack`: owned section-level vector asset with one
-  connected striped border, cream shoulder, top flap, and fold lines. It begins
-  above and behind the state ticket so its connected top shoulder remains
-  visible, then is hidden by the kraft pocket below. Canvas-drawn
-  side rails, a full-height rounded backing card, or disconnected stripes fail
-  the envelope silhouette.
+- `OnboardingAirmailEnvelopeBack`: owned open-liner vector with one connected
+  striped shoulder and side rails. It aligns to the kraft pocket below, while
+  the state ticket hides its centre and emerges from the shared pocket mouth.
+  A closed-envelope flap, a second backing card, or disconnected stripes fail
+  the open-envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
 - `OnboardingReviewTicket`: sky scalloped ticket, candidate name, owned
@@ -67,9 +66,9 @@ and confirmed states respectively.
 ## Expressive Mechanisms
 
 - The envelope remains spatially stable while the ticket advances forward.
-- The rear airmail shell, state ticket, and front kraft pocket read as three
-  interlocking physical layers. The state ticket is narrower than the kraft
-  pocket; the pocket mouth covers its lower edge.
+- The airmail liner and front kraft pocket read as one open envelope around the
+  state ticket. The ticket is narrower than the pocket, and the shared pocket
+  mouth covers its lower edge without creating a second horizontal seam.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.

@@ -11,10 +11,9 @@
   </defs>
 
   <rect x="1" y="1" width="358" height="248" rx="17" fill="url(#airmail)" filter="url(#paperShadow)"/>
-  <path d="M14 31L48 14H312L346 31V236H14V31Z" fill="#FFF8EE"/>
-  <path d="M14 31L180 137L346 31" fill="#FFFDF7"/>
-  <path d="M14 31L180 137L346 31" stroke="#CBAE87" stroke-width="1.2" stroke-dasharray="5 4"/>
-  <path d="M14 236L132 112" stroke="#D8BE9A" stroke-width="1"/>
-  <path d="M346 236L228 112" stroke="#D8BE9A" stroke-width="1"/>
-  <path d="M14 31L48 14H312L346 31" stroke="#A57D59" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="4 3"/>
+  <!-- Open envelope liner: the letter covers the centre while the striped
+       shoulder and side rails stay connected to the front pocket. -->
+  <path d="M14 20H346V236H14V20Z" fill="#FFF8EE"/>
+  <path d="M14 24Q180 66 346 24" stroke="#CBAE87" stroke-opacity="0.72" stroke-width="1.2" stroke-dasharray="5 4"/>
+  <path d="M18 30Q180 72 342 30" stroke="#D8BE9A" stroke-opacity="0.42" stroke-width="1"/>
 </svg>
