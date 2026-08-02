@@ -6,19 +6,9 @@
       <rect x="21" width="13" height="42" fill="#A9DDEA"/>
     </pattern>
     <linearGradient id="kraftBacking" x1="180" y1="54" x2="180" y2="224" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E9C697"/>
-      <stop offset="0.62" stop-color="#EED0A7"/>
+      <stop stop-color="#F4DFC2"/>
+      <stop offset="0.62" stop-color="#F2D6B1"/>
       <stop offset="1" stop-color="#F0D0A6"/>
-    </linearGradient>
-    <linearGradient id="leftShoulder" x1="14" y1="72" x2="126" y2="174" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D5A466"/>
-      <stop offset="0.5" stop-color="#E1B77E"/>
-      <stop offset="1" stop-color="#EBCB9F"/>
-    </linearGradient>
-    <linearGradient id="rightShoulder" x1="346" y1="72" x2="234" y2="174" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D5A466"/>
-      <stop offset="0.5" stop-color="#E1B77E"/>
-      <stop offset="1" stop-color="#EBCB9F"/>
     </linearGradient>
     <filter id="paperShadow" x="-8%" y="-8%" width="116%" height="122%">
       <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#3F281A" flood-opacity="0.12"/>
@@ -30,14 +20,11 @@
        only the connected striped rails and kraft shoulders visible. -->
   <g transform="scale(1 0.88)" filter="url(#paperShadow)">
     <path d="M3 54Q3 46 11 41L180 210L349 41Q357 46 357 54V238Q357 247 348 247H12Q3 247 3 238V54Z" fill="url(#airmail)"/>
-    <!-- One continuous warm envelope backing. The darker shoulder faces stay
-         visible between the letter and the airmail rails on every state; both
-         faces converge into the same central V beneath the front pocket. -->
+    <!-- One continuous light kraft backing. The state card hides its centre,
+         leaving connected warm shoulders between the ticket and airmail rails. -->
     <path d="M14 61H346V232Q346 241 337 241H23Q14 241 14 232V61Z" fill="url(#kraftBacking)"/>
-    <path d="M14 61C38 67 54 86 68 108L180 202L14 232V61Z" fill="url(#leftShoulder)"/>
-    <path d="M346 61C322 67 306 86 292 108L180 202L346 232V61Z" fill="url(#rightShoulder)"/>
-    <path d="M18 64C46 77 76 112 180 202" stroke="#B9844F" stroke-opacity="0.55" stroke-width="1.2" stroke-dasharray="5 4"/>
-    <path d="M342 64C314 77 284 112 180 202" stroke="#B9844F" stroke-opacity="0.55" stroke-width="1.2" stroke-dasharray="5 4"/>
+    <path d="M21 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M339 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
     <path d="M15 229H345" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->

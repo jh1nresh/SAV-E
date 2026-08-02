@@ -6,57 +6,65 @@
   "pocketStage": {
     "width": 354,
     "height": {
-      "clue": 416,
-      "review": 460,
-      "mapStamp": 460
+      "clue": 460,
+      "review": 496,
+      "mapStamp": 506
     },
     "rearEnvelope": {
       "asset": "OnboardingAirmailEnvelopeBack",
-      "width": 342,
-      "height": 210,
-      "bottomOffset": 112,
+      "width": 370,
+      "height": 226,
+      "bottomOffset": 124,
       "innerApex": { "x": 180, "y": 202 },
       "outerApex": { "x": 180, "y": 210 },
       "topology": "single V-folded airmail back with connected kraft shoulders and central point; no detached lip, horizontal top band, or duplicate fold seam"
     },
     "frontPocket": {
       "asset": "OnboardingEnvelopeFront",
-      "width": 342,
-      "height": 176,
+      "width": 370,
+      "height": 191,
       "bottomOffset": 0
     },
     "memo": {
       "assets": {
-        "clue": "OnboardingMemoClue",
+        "clue": "SavesMemoSorting",
         "review": "OnboardingMemoReview",
         "mapStamp": "OnboardingMemoStamp"
       },
       "width": {
-        "clue": 100,
-        "review": 112,
-        "mapStamp": 110
+        "clue": 110,
+        "review": 132,
+        "mapStamp": 128
       },
       "bottomOffset": {
-        "clue": 80,
-        "review": 108,
-        "mapStamp": 108
+        "clue": 94,
+        "review": 42,
+        "mapStamp": 56
       }
     },
     "cards": {
       "clue": {
-        "width": 294,
-        "bottomOffset": 172
+        "width": 314,
+        "height": 286,
+        "bottomOffset": 153
       },
       "review": {
-        "width": 306,
-        "bottomOffset": 172
+        "width": 344,
+        "height": 302,
+        "bottomOffset": 130,
+        "sourceBacking": {
+          "width": 300,
+          "height": 116,
+          "bottomOffset": 366
+        }
       },
       "mapStamp": {
-        "width": 306,
-        "bottomOffset": 172
+        "width": 346,
+        "height": 354,
+        "bottomOffset": 118
       }
     },
-    "scaling": "Rear, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 342 pt shell; wider phones cap at 360 pt."
+    "scaling": "Rear, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 370 pt shell with 16 pt screen margins; compact height caps the composition at 270 pt while actions retain 44 pt hit targets."
   },
   "rule": "The rear layer, its integrated visible V point, front pocket, state card, and contextual Memo are one open-envelope coordinate system. The connected point must be visible between card and pocket; both kraft shoulders must connect to narrow airmail rails; no detached triangle or horizontal airmail band may appear above the card; no layer may be replaced by a whole-screen screenshot."
 }
