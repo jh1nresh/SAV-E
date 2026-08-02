@@ -1077,7 +1077,7 @@ private struct OnboardingReviewTicket: View {
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 40, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 34, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
