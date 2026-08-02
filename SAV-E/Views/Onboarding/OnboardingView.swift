@@ -1234,9 +1234,9 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: 346, height: 354)
+                    .frame(width: 340, height: 354)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 346 * scale, height: 354 * scale)
+                    .frame(width: 340 * scale, height: 354 * scale)
                     .offset(x: -4 * scale, y: -118 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -1253,7 +1253,7 @@ private struct OnboardingSavedPostcard: View {
                 english: "★ Lifted Saved Postcard ★",
                 traditionalChinese: "★ 已提起的收藏明信片 ★"
             ).uppercased())
-                .font(SaveAtlasType.strong(10))
+                .font(SaveAtlasType.strong(12))
                 .tracking(0.8)
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -1261,7 +1261,7 @@ private struct OnboardingSavedPostcard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Hidden Moon Cafe")
-                        .font(SaveAtlasType.strong(28, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(30, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1270,7 +1270,7 @@ private struct OnboardingSavedPostcard: View {
                         language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
                         systemImage: "hand.thumbsup.fill"
                     )
-                    .font(SaveAtlasType.strong(12))
+                    .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -1301,7 +1301,7 @@ private struct OnboardingSavedPostcard: View {
                         OnboardingPostalCancellation()
                             .offset(x: -72, y: 8)
                     }
-                    .padding(.trailing, 12)
+                    .padding(.trailing, 4)
             }
             .frame(height: 145, alignment: .top)
             .padding(.leading, 8)
@@ -1319,7 +1319,7 @@ private struct OnboardingSavedPostcard: View {
                     Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
                 }
             }
-            .font(SaveAtlasType.body(11))
+            .font(SaveAtlasType.body(12))
             .foregroundStyle(SaveAtlasPalette.muted)
             .padding(.leading, 6)
             .padding(.top, -10)
