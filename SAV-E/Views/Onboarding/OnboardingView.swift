@@ -704,7 +704,7 @@ private struct CluePocketStage: View {
             .scaleEffect(scale, anchor: .bottom)
             .frame(width: 300 * scale, height: 294 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -5 * scale, y: -153 * scale)
+            .offset(x: -5 * scale, y: -141 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -1234,7 +1234,7 @@ private struct MapStampPocketStage: View {
                     .frame(width: 340, height: 359)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 340 * scale, height: 359 * scale)
-                    .offset(x: -4 * scale, y: -113 * scale)
+                    .offset(x: -4 * scale, y: -108 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1419,7 +1419,7 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 110
         case .review: return 140
-        case .stamp: return 124
+        case .stamp: return 130
         }
     }
 
@@ -1433,9 +1433,9 @@ private enum OnboardingMemoPose {
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 70
+        case .clue: return 90
         case .review: return 42
-        case .stamp: return 70
+        case .stamp: return 55
         }
     }
 
@@ -1524,6 +1524,11 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: memoPose.width * scale)
+                    .overlay(alignment: .topTrailing) {
+                        OnboardingMemoAccentRays()
+                            .scaleEffect(scale)
+                            .offset(x: 9 * scale, y: -3 * scale)
+                    }
                     .offset(
                         x: memoPose.horizontalOffset * scale,
                         y: -memoPose.bottomOffset * scale
@@ -1534,6 +1539,32 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .offset(x: -8 * scale, y: -5 * scale)
         }
+    }
+}
+
+private struct OnboardingMemoAccentRays: View {
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(SaveAtlasPalette.sky)
+                .frame(width: 4, height: 14)
+                .rotationEffect(.degrees(18))
+                .offset(x: -7, y: -3)
+
+            Capsule()
+                .fill(Color(red: 0.98, green: 0.76, blue: 0.34))
+                .frame(width: 4, height: 12)
+                .rotationEffect(.degrees(52))
+                .offset(x: 4, y: 2)
+
+            Capsule()
+                .fill(SaveAtlasPalette.coral.opacity(0.72))
+                .frame(width: 4, height: 10)
+                .rotationEffect(.degrees(78))
+                .offset(x: 7, y: 12)
+        }
+        .frame(width: 26, height: 26)
+        .accessibilityHidden(true)
     }
 }
 
