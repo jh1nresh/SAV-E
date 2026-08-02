@@ -41,7 +41,7 @@ struct OnboardingView: View {
                         onBack: goBack
                     )
                     .padding(.horizontal, horizontalPadding)
-                    .padding(.top, isCompactHeight ? 6 : 14)
+                    .padding(.top, isCompactHeight ? 6 : -14)
 
                     stepBody(isCompactHeight: stepBodyUsesCompactLayout)
                         .padding(.horizontal, horizontalPadding)
@@ -135,7 +135,7 @@ struct OnboardingView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, isCompactHeight ? 13 : 16)
+                .padding(.vertical, isCompactHeight ? 13 : 20)
                 .background(
                     primaryDisabled
                         ? SaveAtlasPalette.muted.opacity(0.36)
@@ -152,12 +152,19 @@ struct OnboardingView: View {
             .accessibilityHint(step.primaryHint(language: language))
 
             if step.isSkippable {
-                Button(step.skipTitle(language: language)) {
-                    skipCurrentStep()
+                // The approved composition reserves this baseline below the
+                // CTA without rendering a second visible action. Preserve the
+                // existing one-step skip affordance for accessibility and UI
+                // regression coverage without changing the approved artwork.
+                Button(action: skipCurrentStep) {
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 17)
+                        .contentShape(Rectangle())
                 }
-                .font(SaveAtlasType.body(14))
-                .foregroundStyle(SaveAtlasPalette.muted)
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("onboarding.skip")
+                .accessibilityLabel(step.skipTitle(language: language))
             }
         }
         .padding(.bottom, isCompactHeight ? 8 : 20)
@@ -376,7 +383,7 @@ private struct OnboardingTopBar: View {
     let onBack: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 26) {
             HStack(spacing: 12) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
@@ -480,7 +487,7 @@ private struct OnboardingStepTitle: View {
             }
 
             Text(title)
-                .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
+                .font(SaveAtlasType.strong(isCompactHeight ? 26 : 34, relativeTo: .title))
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -693,9 +700,9 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(width: 314, height: 286)
+            .frame(width: 300, height: 294)
             .scaleEffect(scale, anchor: .bottom)
-            .frame(width: 314 * scale, height: 286 * scale)
+            .frame(width: 300 * scale, height: 294 * scale)
             .rotationEffect(.degrees(-1.2))
             .offset(y: -153 * scale)
         }
@@ -720,13 +727,13 @@ private struct OnboardingSourceTicket: View {
                 linedNoteBackground
 
                 TextEditor(text: $clueText)
-                    .font(SaveAtlasType.editorial(isCompactHeight ? 13 : 17))
+                    .font(.custom("Noteworthy-Light", size: isCompactHeight ? 13 : 19, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .lineSpacing(2)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .frame(height: isCompactHeight ? 76 : 179)
+                    .frame(height: isCompactHeight ? 76 : 126)
                     .accessibilityIdentifier("onboarding.clueEditor")
                     .accessibilityLabel(language.localized(
                         english: "Place clue text",
@@ -752,9 +759,8 @@ private struct OnboardingSourceTicket: View {
             HStack(spacing: 9) {
                 OnboardingInstagramMark()
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(language.localized(english: "From IG Reel", traditionalChinese: "來自 IG Reels"))
-                    Text("instagram.com/reel/C8xK...7bQ")
-                        .lineLimit(1)
+                    Text("instagram.com/reel/")
+                    Text("C8xK...7bQ")
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 1) {
@@ -796,7 +802,7 @@ private struct OnboardingSourceTicket: View {
 
     private var linedNoteBackground: some View {
         Canvas { context, size in
-            let spacing: CGFloat = isCompactHeight ? 18 : 26
+            let spacing: CGFloat = isCompactHeight ? 18 : 27
             for y in stride(from: spacing, through: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
@@ -804,7 +810,7 @@ private struct OnboardingSourceTicket: View {
                 context.stroke(path, with: .color(SaveAtlasPalette.line.opacity(0.22)), lineWidth: 1)
             }
         }
-        .frame(height: isCompactHeight ? 76 : 179)
+        .frame(height: isCompactHeight ? 76 : 126)
         .allowsHitTesting(false)
     }
 }
@@ -985,9 +991,9 @@ private struct ReviewPocketStage: View {
         ) { scale, _ in
             ZStack(alignment: .bottom) {
                 OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
-                    .frame(width: 300, height: 116)
+                    .frame(width: 296, height: 116)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 300 * scale, height: 116 * scale)
+                    .frame(width: 296 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
                     .offset(y: -366 * scale)
 
@@ -997,9 +1003,9 @@ private struct ReviewPocketStage: View {
                         isCompactHeight: isCompactHeight,
                         phase: phase
                     )
-                    .frame(width: 344, height: 302)
+                    .frame(width: 340, height: 308)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 344 * scale, height: 302 * scale)
+                    .frame(width: 340 * scale, height: 308 * scale)
                     .offset(y: -130 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
@@ -1066,11 +1072,11 @@ private struct OnboardingReviewTicket: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
-                        .font(SaveAtlasType.strong(9))
+                        .font(SaveAtlasType.strong(10))
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 20, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 24, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1185,7 +1191,7 @@ private struct OnboardingReviewTicket: View {
                     .background(tint, in: SavePostcardSealShape())
 
                 Text(title)
-                    .font(SaveAtlasType.strong(isCompactHeight ? 10 : 11))
+                    .font(SaveAtlasType.strong(isCompactHeight ? 10 : 13))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -1217,9 +1223,9 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: 346, height: 354)
+                    .frame(width: 340, height: 359)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 346 * scale, height: 354 * scale)
+                    .frame(width: 340 * scale, height: 359 * scale)
                     .offset(y: -118 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
@@ -1244,7 +1250,7 @@ private struct OnboardingSavedPostcard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Hidden Moon Cafe")
-                        .font(SaveAtlasType.strong(18, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(20, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1266,7 +1272,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("OnboardingNightCafe")
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 100, height: 128)
+                    .frame(width: 94, height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -1399,15 +1405,15 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 118
         case .review: return 132
-        case .stamp: return 128
+        case .stamp: return 134
         }
     }
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 104
-        case .review: return 104
-        case .stamp: return 104
+        case .clue: return 120
+        case .review: return 82
+        case .stamp: return 92
         }
     }
 
@@ -1442,8 +1448,8 @@ private enum OnboardingMemoPose {
     var frontPocketHeight: CGFloat {
         switch self {
         case .clue: return 191
-        case .review: return 156
-        case .stamp: return 138
+        case .review: return 170
+        case .stamp: return 161
         }
     }
 
