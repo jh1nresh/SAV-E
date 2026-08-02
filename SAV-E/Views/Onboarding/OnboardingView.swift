@@ -23,7 +23,7 @@ struct OnboardingView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let isCompactHeight = proxy.size.height < 840
+            let isCompactHeight = proxy.size.height < 760
             let stepBodyUsesCompactLayout = isCompactHeight || (
                 step == .language && proxy.size.height < 900
             )
@@ -770,6 +770,7 @@ private struct OnboardingSourceTicket: View {
             ZStack {
                 SaveAtlasPalette.paper
                 SaveAtlasPalette.coral.opacity(0.08)
+                OnboardingTicketPaperGrain()
             }
         }
         .padding(4)
@@ -811,18 +812,18 @@ private struct OnboardingSourceTicket: View {
 private struct OnboardingInstagramMark: View {
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(lineWidth: 2)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(lineWidth: 2.2)
             Circle()
-                .stroke(lineWidth: 2)
-                .frame(width: 9, height: 9)
+                .stroke(lineWidth: 2.2)
+                .frame(width: 11, height: 11)
             Circle()
                 .fill()
-                .frame(width: 3, height: 3)
-                .offset(x: 7, y: -7)
+                .frame(width: 3.5, height: 3.5)
+                .offset(x: 9, y: -9)
         }
         .foregroundStyle(SaveAtlasPalette.muted)
-        .frame(width: 25, height: 25)
+        .frame(width: 32, height: 32)
         .accessibilityHidden(true)
     }
 }
@@ -843,6 +844,17 @@ private struct OnboardingDashedRule: View {
         }
         .frame(height: 1)
         .accessibilityHidden(true)
+    }
+}
+
+private struct OnboardingTicketPaperGrain: View {
+    var body: some View {
+        Image("PaperTexture")
+            .resizable(resizingMode: .tile)
+            .opacity(0.045)
+            .blendMode(.multiply)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -1025,6 +1037,7 @@ private struct OnboardingSourceBackingTicket: View {
             ZStack {
                 SaveAtlasPalette.paper
                 SaveAtlasPalette.coral.opacity(0.10)
+                OnboardingTicketPaperGrain()
             }
         }
         .padding(4)
@@ -1135,6 +1148,7 @@ private struct OnboardingReviewTicket: View {
             ZStack {
                 SaveAtlasPalette.paper
                 SaveAtlasPalette.sky.opacity(0.18)
+                OnboardingTicketPaperGrain()
             }
         }
         .padding(4)
@@ -1313,6 +1327,7 @@ private struct OnboardingSavedPostcard: View {
             ZStack {
                 SaveAtlasPalette.paper
                 SaveAtlasPalette.mint.opacity(0.22)
+                OnboardingTicketPaperGrain()
             }
         }
         .padding(4)
@@ -1398,7 +1413,7 @@ private enum OnboardingMemoPose {
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 94
+        case .clue: return 134
         case .review: return 42
         case .stamp: return 56
         }
@@ -1512,11 +1527,11 @@ private struct OnboardingPocketEnvelope: View {
             .frame(width: width, height: height)
             .overlay(alignment: .bottom) {
                 Text(caption)
-                    .font(SaveAtlasType.editorial(14 * (width / 342)))
+                    .font(SaveAtlasType.editorial(14 * (width / 370)))
                     .foregroundStyle(SaveAtlasPalette.ink.opacity(0.78))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 90 * (width / 342))
+                    .padding(.horizontal, 90 * (width / 370))
                     .padding(.bottom, captionBottomPadding)
             }
             .accessibilityHidden(true)
