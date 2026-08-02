@@ -700,11 +700,11 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(width: 314, height: 286)
+            .frame(width: 304, height: 286)
             .scaleEffect(scale, anchor: .bottom)
-            .frame(width: 314 * scale, height: 286 * scale)
+            .frame(width: 304 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -5 * scale, y: -153 * scale)
+            .offset(x: -2 * scale, y: -153 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -780,23 +780,10 @@ private struct OnboardingSourceTicket: View {
                 OnboardingTicketPaperGrain()
             }
         }
-        .padding(4)
-        .background {
-            ZStack {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.paper)
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.coral.opacity(0.18))
-            }
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    SaveAtlasPalette.coral.opacity(0.86),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 4, y: 2)
+        .onboardingPostageTicket(
+            tint: SaveAtlasPalette.coral,
+            edge: SaveAtlasPalette.coral
+        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("onboarding.sourceTicket")
     }
@@ -1004,10 +991,10 @@ private struct ReviewPocketStage: View {
                         isCompactHeight: isCompactHeight,
                         phase: phase
                     )
-                    .frame(width: 344, height: 302)
+                    .frame(width: 338, height: 302)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 344 * scale, height: 302 * scale)
-                    .offset(x: -3 * scale, y: -130 * scale)
+                    .frame(width: 338 * scale, height: 302 * scale)
+                    .offset(x: 0, y: -130 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1047,18 +1034,10 @@ private struct OnboardingSourceBackingTicket: View {
                 OnboardingTicketPaperGrain()
             }
         }
-        .padding(4)
-        .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.coral.opacity(0.24))
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    SaveAtlasPalette.coral.opacity(0.82),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                )
-        }
+        .onboardingPostageTicket(
+            tint: SaveAtlasPalette.coral,
+            edge: SaveAtlasPalette.coral
+        )
         .accessibilityHidden(true)
     }
 }
@@ -1168,23 +1147,10 @@ private struct OnboardingReviewTicket: View {
                 OnboardingTicketPaperGrain()
             }
         }
-        .padding(4)
-        .background {
-            ZStack {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.paper)
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.sky.opacity(0.30))
-            }
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    Color.saveBlueInk.opacity(0.72),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 4, y: 2)
+        .onboardingPostageTicket(
+            tint: SaveAtlasPalette.sky,
+            edge: Color.saveBlueInk
+        )
         .accessibilityIdentifier("onboarding.reviewTicket")
     }
 
@@ -1355,23 +1321,10 @@ private struct OnboardingSavedPostcard: View {
                 OnboardingTicketPaperGrain()
             }
         }
-        .padding(4)
-        .background {
-            ZStack {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.paper)
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .fill(SaveAtlasPalette.mint.opacity(0.42))
-            }
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    SaveAtlasPalette.forest.opacity(0.72),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 4, y: 2)
+        .onboardingPostageTicket(
+            tint: SaveAtlasPalette.mint,
+            edge: SaveAtlasPalette.forest
+        )
         .accessibilityIdentifier("onboarding.savedPostcard")
     }
 }
@@ -1439,16 +1392,16 @@ private enum OnboardingMemoPose {
     var bottomOffset: CGFloat {
         switch self {
         case .clue: return 70
-        case .review: return 42
-        case .stamp: return 56
+        case .review: return 55
+        case .stamp: return 68
         }
     }
 
     var captionBottomPadding: CGFloat {
         switch self {
-        case .clue: return 104
-        case .review: return 78
-        case .stamp: return 78
+        case .clue: return 92
+        case .review: return 72
+        case .stamp: return 66
         }
     }
 
@@ -1466,9 +1419,9 @@ private enum OnboardingMemoPose {
 
     var frontPocketHeight: CGFloat {
         switch self {
-        case .clue: return 191
-        case .review: return 156
-        case .stamp: return 156
+        case .clue: return 166
+        case .review: return 160
+        case .stamp: return 144
         }
     }
 
@@ -1542,8 +1495,36 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .zIndex(memoPose.layerIndex)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .offset(x: -8 * scale)
         }
+    }
+}
+
+private struct OnboardingPostageTicketStyle: ViewModifier {
+    let tint: Color
+    let edge: Color
+
+    func body(content: Content) -> some View {
+        content
+            .padding(5)
+            .background {
+                ZStack {
+                    SavePostcardScallopedRectangle(depth: 4, pitch: 11)
+                        .fill(SaveAtlasPalette.paper)
+                    SavePostcardScallopedRectangle(depth: 4, pitch: 11)
+                        .fill(tint.opacity(0.38))
+                }
+            }
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 4, pitch: 11)
+                    .stroke(edge.opacity(0.78), lineWidth: 1)
+            }
+            .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 4, y: 2)
+    }
+}
+
+private extension View {
+    func onboardingPostageTicket(tint: Color, edge: Color) -> some View {
+        modifier(OnboardingPostageTicketStyle(tint: tint, edge: edge))
     }
 }
 

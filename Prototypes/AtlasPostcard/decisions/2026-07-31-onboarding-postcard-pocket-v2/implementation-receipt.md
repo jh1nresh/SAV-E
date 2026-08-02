@@ -46,7 +46,7 @@ narrow and is superseded.
 The corrected implementation:
 
 - replaces the Canvas approximation with one owned section-level
-  `OnboardingAirmailEnvelopeBack` vector asset containing the connected striped
+  `OnboardingAirmailEnvelopeBack` layered raster asset containing the connected striped
   border, cream shoulder, top flap, and fold lines;
 - keeps the lower shell behind the owned kraft pocket, so it cannot read as a
   third full backing card;

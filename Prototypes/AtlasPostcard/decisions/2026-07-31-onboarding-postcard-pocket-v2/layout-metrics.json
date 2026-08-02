@@ -21,15 +21,15 @@
       },
       "innerApex": { "x": 180, "y": 202 },
       "outerApex": { "x": 180, "y": 210 },
-      "topology": "single V-folded airmail back with connected kraft shoulders and central point; no detached lip, horizontal top band, or duplicate fold seam"
+      "topology": "single illustrated V-folded airmail back with broad connected kraft shoulders, narrow striped rails, and central point; no detached lip, horizontal top band, or duplicate fold seam"
     },
     "frontPocket": {
       "asset": "OnboardingEnvelopeFront",
       "width": 370,
       "height": {
-        "clue": 191,
-        "review": 156,
-        "mapStamp": 156
+        "clue": 166,
+        "review": 160,
+        "mapStamp": 144
       },
       "bottomOffset": 0
     },
@@ -46,18 +46,18 @@
       },
       "bottomOffset": {
         "clue": 70,
-        "review": 42,
-        "mapStamp": 56
+        "review": 55,
+        "mapStamp": 68
       }
     },
     "cards": {
       "clue": {
-        "width": 314,
+        "width": 304,
         "height": 286,
         "bottomOffset": 153
       },
       "review": {
-        "width": 344,
+        "width": 338,
         "height": 302,
         "bottomOffset": 130,
         "sourceBacking": {

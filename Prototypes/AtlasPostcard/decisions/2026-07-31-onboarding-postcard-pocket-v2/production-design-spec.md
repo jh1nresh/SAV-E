@@ -40,8 +40,9 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
-- `OnboardingAirmailEnvelopeBack`: owned open-liner vector with one connected
-  striped shoulder and side rails. It aligns to the kraft pocket below, while
+- `OnboardingAirmailEnvelopeBack`: owned open-liner illustration with one
+  connected kraft V fold, broad shoulders, and narrow striped side rails. It
+  aligns to the kraft pocket below, while
   the state ticket hides its centre and emerges from the shared pocket mouth.
   A closed-envelope flap, a second backing card, or disconnected stripes fail
   the open-envelope silhouette.
