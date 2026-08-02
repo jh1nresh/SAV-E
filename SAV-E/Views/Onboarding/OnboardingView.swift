@@ -106,7 +106,7 @@ struct OnboardingView: View {
                 clueText: trimmedClue,
                 language: language,
                 isCompactHeight: isCompactHeight,
-                height: isCompactHeight ? 300 : 448
+                height: isCompactHeight ? 300 : 460
             )
 
             Spacer(minLength: 0)
@@ -688,7 +688,7 @@ private struct CluePocketStage: View {
             )
             .frame(width: shellWidth - (48 * scale))
             .rotationEffect(.degrees(-1.2))
-            .offset(y: -170 * scale)
+            .offset(y: -172 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -935,7 +935,7 @@ private struct ReviewPocketStage: View {
                         phase: phase
                     )
                     .frame(width: shellWidth - (36 * scale))
-                    .offset(y: -170 * scale)
+                    .offset(y: -172 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1139,7 +1139,7 @@ private struct MapStampPocketStage: View {
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
                     .frame(width: shellWidth - (36 * scale))
-                    .offset(y: -170 * scale)
+                    .offset(y: -172 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1372,11 +1372,6 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 cards(scale, shellWidth)
                     .zIndex(1)
 
-                OnboardingEnvelopeMouthLipSurface()
-                    .frame(width: 116 * scale, height: 30 * scale)
-                    .offset(y: -146 * scale)
-                    .zIndex(1.5)
-
                 OnboardingPocketEnvelope(
                     caption: caption,
                     width: shellWidth,
@@ -1397,48 +1392,6 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .zIndex(3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        }
-    }
-}
-
-private struct OnboardingEnvelopeMouthLip: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-private struct OnboardingEnvelopeMouthLipSurface: View {
-    var body: some View {
-        ZStack {
-            OnboardingEnvelopeMouthLip()
-                .fill(SaveAtlasPalette.kraft)
-
-            Image("PaperTexture")
-                .resizable(resizingMode: .tile)
-                .opacity(0.12)
-                .mask(OnboardingEnvelopeMouthLip())
-
-            LinearGradient(
-                colors: [
-                    SaveAtlasPalette.paper.opacity(0.22),
-                    SaveAtlasPalette.kraft.opacity(0.14)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .mask(OnboardingEnvelopeMouthLip())
-        }
-        .overlay {
-            OnboardingEnvelopeMouthLip()
-                .stroke(
-                    SaveAtlasPalette.line.opacity(0.58),
-                    style: StrokeStyle(lineWidth: 1, dash: [5, 4])
-                )
         }
     }
 }

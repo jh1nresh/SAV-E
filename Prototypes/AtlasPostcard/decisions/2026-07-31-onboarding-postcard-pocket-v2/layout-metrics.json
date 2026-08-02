@@ -7,22 +7,17 @@
     "width": 354,
     "height": {
       "clue": 416,
-      "review": 448,
-      "mapStamp": 448
+      "review": 460,
+      "mapStamp": 460
     },
     "rearEnvelope": {
       "asset": "OnboardingAirmailEnvelopeBack",
       "width": 342,
       "height": 210,
       "bottomOffset": 112,
-      "topology": "V-folded airmail back with kraft shoulders; no horizontal top band"
-    },
-    "mouthLip": {
-      "width": 116,
-      "height": 30,
-      "bottomOffset": 146,
-      "zIndex": 1.5,
-      "topology": "paper-textured central kraft V sharing its base with the rear apex and remaining visible below every state card"
+      "innerApex": { "x": 180, "y": 202 },
+      "outerApex": { "x": 180, "y": 210 },
+      "topology": "single V-folded airmail back with connected kraft shoulders and central point; no detached lip, horizontal top band, or duplicate fold seam"
     },
     "frontPocket": {
       "asset": "OnboardingEnvelopeFront",
@@ -50,18 +45,18 @@
     "cards": {
       "clue": {
         "width": 294,
-        "bottomOffset": 170
+        "bottomOffset": 172
       },
       "review": {
         "width": 306,
-        "bottomOffset": 170
+        "bottomOffset": 172
       },
       "mapStamp": {
         "width": 306,
-        "bottomOffset": 170
+        "bottomOffset": 172
       }
     },
-    "scaling": "Rear, mouth lip, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 342 pt shell; wider phones cap at 360 pt."
+    "scaling": "Rear, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 342 pt shell; wider phones cap at 360 pt."
   },
-  "rule": "The rear layer, visible V mouth lip, front pocket, state card, and contextual Memo are one open-envelope coordinate system. The tip must be visible between card and pocket; both kraft shoulders must connect to narrow airmail rails; no horizontal airmail band may appear above the card; no layer may be replaced by a whole-screen screenshot."
+  "rule": "The rear layer, its integrated visible V point, front pocket, state card, and contextual Memo are one open-envelope coordinate system. The connected point must be visible between card and pocket; both kraft shoulders must connect to narrow airmail rails; no detached triangle or horizontal airmail band may appear above the card; no layer may be replaced by a whole-screen screenshot."
 }

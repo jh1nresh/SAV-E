@@ -69,6 +69,11 @@ and confirmed states respectively.
 - The airmail liner and front kraft pocket read as one open envelope around the
   state ticket. The ticket is narrower than the pocket, and the shared pocket
   mouth covers its lower edge without creating a second horizontal seam.
+- The rear liner's central point keeps about 20 pt of visible depth below every
+  state card at the 402 x 874 reference viewport. It is part of the same rear
+  vector as the kraft shoulders, never a separately overlaid triangle. Rear
+  point and front pocket use one measured warm-kraft family, and the rounded
+  front pocket supplies the only mouth seam.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.

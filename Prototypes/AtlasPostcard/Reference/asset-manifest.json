@@ -401,7 +401,7 @@
     },
     {
       "name": "OnboardingAirmailEnvelopeBack",
-      "role": "rear open-envelope fold with narrow striped rails, diagonal kraft shoulders, a central V tip, and fold seams behind the onboarding state card; never a full rectangular border",
+      "role": "single rear open-envelope fold with narrow striped rails, diagonal kraft shoulders, and an integrated central V point behind the onboarding state card; never a full rectangular border or detached triangle",
       "source": "independent SVG reconstruction from the founder-approved onboarding direction",
       "transform": "section-level vector asset; never used as a whole-screen background",
       "output": {
@@ -419,7 +419,7 @@
       "role": "blank kraft front pocket for the onboarding open-envelope shell; preserves the recessed mouth, stitching, and left postal cancellation without the unrelated empty wax ring",
       "source": "built-in image edit using SavesEnvelope as the production construction reference",
       "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#blank-onboarding-front-pocket",
-      "transform": "connected white-background alpha removal and deterministic 1x/2x/3x resampling",
+      "transform": "connected white-background alpha removal, deterministic 1x/2x/3x resampling, and measured RGB correction (0.973, 0.932, 0.863) to match the approved warm kraft pocket",
       "output": {
         "imageset": "OnboardingEnvelopeFront.imageset",
         "filename": "onboardingenvelopefront.png",
