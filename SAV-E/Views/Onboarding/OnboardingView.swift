@@ -28,7 +28,7 @@ struct OnboardingView: View {
                 step == .language && proxy.size.height < 900
             )
             let horizontalPadding: CGFloat = proxy.size.width < 380 ? 16 : 24
-            let bottomActionLift = proxy.safeAreaInsets.bottom + 16
+            let bottomActionLift = proxy.safeAreaInsets.bottom + 22
 
             ZStack(alignment: .bottom) {
                 AtlasCanvas()
@@ -135,7 +135,7 @@ struct OnboardingView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, isCompactHeight ? 13 : 20)
+                .padding(.vertical, isCompactHeight ? 13 : 18)
                 .background(
                     primaryDisabled
                         ? SaveAtlasPalette.muted.opacity(0.36)
@@ -657,7 +657,7 @@ private struct ClueStepView: View {
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .lineLimit(1)
-                    .padding(.horizontal, 13)
+                    .padding(.horizontal, 18)
                     .frame(minHeight: 44)
                     .background(SaveAtlasPalette.paper.opacity(0.96))
                     .overlay {
@@ -772,6 +772,7 @@ private struct OnboardingSourceTicket: View {
             .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(isCompactHeight ? 10 : 12)
+        .frame(height: isCompactHeight ? 220 : 286)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1068,7 +1069,7 @@ private struct OnboardingReviewTicket: View {
     let phase: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 10) {
+        VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 14) {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
@@ -1148,8 +1149,15 @@ private struct OnboardingReviewTicket: View {
             .font(SaveAtlasType.body(isCompactHeight ? 9 : 10))
             .foregroundStyle(SaveAtlasPalette.muted)
         }
-        .padding(isCompactHeight ? 10 : 13)
-        .frame(minHeight: isCompactHeight ? 154 : 292, alignment: .top)
+        .padding(
+            EdgeInsets(
+                top: isCompactHeight ? 10 : 23,
+                leading: isCompactHeight ? 10 : 13,
+                bottom: isCompactHeight ? 10 : 13,
+                trailing: isCompactHeight ? 10 : 13
+            )
+        )
+        .frame(minHeight: isCompactHeight ? 154 : 307, alignment: .top)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1237,7 +1245,7 @@ private struct OnboardingSavedPostcard: View {
     let language: AppLanguage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             Text(language.localized(
                 english: "★ Lifted Saved Postcard ★",
                 traditionalChinese: "★ 已提起的收藏明信片 ★"
@@ -1272,7 +1280,7 @@ private struct OnboardingSavedPostcard: View {
                 Image("OnboardingNightCafe")
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 94, height: 120)
+                    .frame(width: 94, height: 128)
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -1290,6 +1298,7 @@ private struct OnboardingSavedPostcard: View {
                         OnboardingPostalCancellation()
                             .offset(x: -72, y: 16)
                     }
+                    .padding(.trailing, 15)
             }
 
             HStack(alignment: .top, spacing: 6) {
@@ -1327,8 +1336,10 @@ private struct OnboardingSavedPostcard: View {
                     .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
             }
         }
-        .padding(12)
-        .frame(minHeight: 346, alignment: .top)
+        .padding(.horizontal, 12)
+        .padding(.top, 22)
+        .padding(.bottom, 12)
+        .frame(minHeight: 354, alignment: .top)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1403,7 +1414,7 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 118
+        case .clue: return 110
         case .review: return 132
         case .stamp: return 134
         }
@@ -1411,7 +1422,7 @@ private enum OnboardingMemoPose {
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 120
+        case .clue: return 117
         case .review: return 82
         case .stamp: return 92
         }
@@ -1518,6 +1529,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .zIndex(memoPose.layerIndex)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .offset(x: -8 * scale, y: -5 * scale)
         }
     }
 }
