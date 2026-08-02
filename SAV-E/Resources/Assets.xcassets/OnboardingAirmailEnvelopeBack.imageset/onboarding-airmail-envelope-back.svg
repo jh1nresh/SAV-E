@@ -20,12 +20,11 @@
        only the connected striped rails and kraft shoulders visible. -->
   <g transform="scale(1 0.88)" filter="url(#paperShadow)">
     <path d="M3 54Q3 46 11 41L180 210L349 41Q357 46 357 54V238Q357 247 348 247H12Q3 247 3 238V54Z" fill="url(#airmail)"/>
-    <!-- One continuous light kraft backing. The state card hides its centre,
-         leaving connected warm shoulders between the ticket and airmail rails. -->
-    <path d="M14 61H346V232Q346 241 337 241H23Q14 241 14 232V61Z" fill="url(#kraftBacking)"/>
-    <path d="M21 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
-    <path d="M339 65L180 202" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
-    <path d="M15 229H345" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <!-- One continuous open liner: warm shoulders descend into the same
+         central point while the centre above that point stays transparent. -->
+    <path d="M9 58C45 70 82 116 180 202C278 116 315 70 351 58V232Q351 241 342 241H18Q9 241 9 232V58Z" fill="url(#kraftBacking)"/>
+    <path d="M15 63C49 77 86 120 180 202C274 120 311 77 345 63" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M10 229H350" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->
     <path d="M30 92L92 133" stroke="#FFF4E4" stroke-opacity="0.42" stroke-width="1"/>

@@ -23,7 +23,7 @@ struct OnboardingView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let isCompactHeight = proxy.size.height < 760
+            let isCompactHeight = proxy.size.height < 840
             let stepBodyUsesCompactLayout = isCompactHeight || (
                 step == .language && proxy.size.height < 900
             )
@@ -693,6 +693,8 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
+            .frame(width: 314, height: 286)
+            .scaleEffect(scale, anchor: .bottom)
             .frame(width: 314 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
             .offset(y: -153 * scale)
@@ -971,6 +973,8 @@ private struct ReviewPocketStage: View {
         ) { scale, _ in
             ZStack(alignment: .bottom) {
                 OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
+                    .frame(width: 300, height: 116)
+                    .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 300 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
                     .offset(y: -366 * scale)
@@ -981,6 +985,8 @@ private struct ReviewPocketStage: View {
                         isCompactHeight: isCompactHeight,
                         phase: phase
                     )
+                    .frame(width: 344, height: 302)
+                    .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 344 * scale, height: 302 * scale)
                     .offset(y: -130 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -1197,6 +1203,8 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
+                    .frame(width: 346, height: 354)
+                    .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 346 * scale, height: 354 * scale)
                     .offset(y: -118 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -1410,6 +1418,14 @@ private enum OnboardingMemoPose {
         case .review, .stamp: return 3
         }
     }
+
+    var canonicalStageHeight: CGFloat {
+        switch self {
+        case .clue: return 460
+        case .review: return 496
+        case .stamp: return 506
+        }
+    }
 }
 
 private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
@@ -1433,8 +1449,10 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
     var body: some View {
         GeometryReader { proxy in
             let fullWidth = min(max(proxy.size.width + 16, 0), 370)
-            let shellWidth = isCompactHeight ? min(fullWidth, 270) : fullWidth
-            let scale = shellWidth / 370
+            let widthScale = min(fullWidth / 370, isCompactHeight ? 270 / 370 : 1)
+            let heightScale = min(proxy.size.height / memoPose.canonicalStageHeight, 1)
+            let scale = isCompactHeight ? min(widthScale, heightScale) : widthScale
+            let shellWidth = 370 * scale
 
             ZStack(alignment: .bottom) {
                 OnboardingAirmailEnvelopeBack(
