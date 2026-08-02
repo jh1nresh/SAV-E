@@ -675,7 +675,7 @@ private struct CluePocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -70)
+                .offset(y: isCompactHeight ? -68 : -112)
 
             OnboardingSourceTicket(
                 clueText: $clueText,
@@ -926,7 +926,7 @@ private struct ReviewPocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -70)
+                .offset(y: isCompactHeight ? -68 : -112)
                 .zIndex(-1)
 
             OnboardingCompactSourceReceipt(clueLine: clueLine, language: language)
@@ -1141,7 +1141,7 @@ private struct MapStampPocketStage: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             OnboardingAirmailEnvelopeBack(isCompactHeight: isCompactHeight)
-                .offset(y: isCompactHeight ? -42 : -70)
+                .offset(y: isCompactHeight ? -68 : -112)
 
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)

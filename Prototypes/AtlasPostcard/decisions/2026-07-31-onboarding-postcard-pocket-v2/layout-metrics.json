@@ -10,7 +10,7 @@
       "asset": "OnboardingAirmailEnvelopeBack",
       "width": 354,
       "height": 246,
-      "bottomOffset": 70
+      "bottomOffset": 112
     },
     "frontPocket": {
       "asset": "SavesEnvelope",

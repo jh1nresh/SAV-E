@@ -59,9 +59,23 @@ mug illustration instead of a generic SF Symbol, repeats the approved source
 proof caption on all three pockets, and places the Map Stamp paperclip and
 postal cancellation over the photo area.
 
-Generic iOS Simulator build passed with `BUILD_EXIT=0`. Fresh same-commit Clue,
-Review, and Map Stamp runtime screenshots remain the ship gate for this
-correction.
+## Visible Rear-Envelope Correction — 2026-08-01
+
+The previous regular-height geometry placed the rear airmail envelope 70 pt
+above the stage bottom. The state cards extended above that asset, so the
+connected shoulder and top flap were fully occluded and the remaining sides
+read as two unrelated color rails. The shared rear-envelope layer now sits
+112 pt above the stage bottom (68 pt in compact height), exposing its connected
+top edge on Clue, Review, and Map Stamp while its lower edge remains behind the
+kraft front pocket.
+
+The narrow 1491 x 234 comparison crop is rejected as visual evidence because
+it removes the kraft pocket, Memo, postal seal, and fixed actions. The ship gate
+remains the three full 402 x 874 pt same-commit screenshots.
+
+The previous fidelity pass completed its generic iOS Simulator build with
+`BUILD_EXIT=0`. This visible-envelope correction remains gated by a fresh build
+and full same-commit Clue, Review, and Map Stamp runtime screenshots.
 
 ## Build and Test Result
 

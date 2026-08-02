@@ -42,7 +42,8 @@ and confirmed states respectively.
   retained-source presentation.
 - `OnboardingAirmailEnvelopeBack`: owned section-level vector asset with one
   connected striped border, cream shoulder, top flap, and fold lines. It begins
-  behind the state ticket and is hidden by the kraft pocket below. Canvas-drawn
+  above and behind the state ticket so its connected top shoulder remains
+  visible, then is hidden by the kraft pocket below. Canvas-drawn
   side rails, a full-height rounded backing card, or disconnected stripes fail
   the envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
