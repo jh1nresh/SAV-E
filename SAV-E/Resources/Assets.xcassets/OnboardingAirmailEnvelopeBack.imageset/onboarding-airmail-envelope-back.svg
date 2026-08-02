@@ -20,7 +20,14 @@
        only the connected striped rails and kraft shoulders visible. -->
   <g transform="scale(1 0.88)" filter="url(#paperShadow)">
     <path d="M3 54Q3 46 11 41L180 210L349 41Q357 46 357 54V238Q357 247 348 247H12Q3 247 3 238V54Z" fill="url(#airmail)"/>
+    <!-- The upper fold and lower rear body are two faces of the same kraft
+         sheet. Together they cover the cream carrier so the point below the
+         letter reads as paper, while the carrier remains visible only as the
+         narrow red/blue airmail edge. -->
+    <path d="M14 61L180 202L346 61Z" fill="url(#kraftShoulder)"/>
     <path d="M14 61L180 202L346 61V232Q346 241 337 241H23Q14 241 14 232V61Z" fill="url(#kraftShoulder)"/>
+    <path d="M21 65L180 198" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M339 65L180 198" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
     <path d="M15 229H345" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->
