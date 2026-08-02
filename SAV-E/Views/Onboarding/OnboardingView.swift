@@ -1263,7 +1263,7 @@ private struct OnboardingSavedPostcard: View {
 
                 Spacer(minLength: 0)
 
-                Image("KoffeeMameyaThumbnail")
+                Image("OnboardingNightCafe")
                     .resizable()
                     .scaledToFill()
                     .frame(width: 100, height: 128)
@@ -1389,7 +1389,7 @@ private enum OnboardingMemoPose {
 
     var assetName: String {
         switch self {
-        case .clue: return "SavesMemoSorting"
+        case .clue: return "OnboardingMemoClue"
         case .review: return "OnboardingMemoReview"
         case .stamp: return "OnboardingMemoStamp"
         }
@@ -1397,7 +1397,7 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 110
+        case .clue: return 118
         case .review: return 132
         case .stamp: return 128
         }
@@ -1405,15 +1405,15 @@ private enum OnboardingMemoPose {
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 109
-        case .review: return 92
+        case .clue: return 104
+        case .review: return 104
         case .stamp: return 104
         }
     }
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 134
+        case .clue: return 70
         case .review: return 42
         case .stamp: return 56
         }
@@ -1421,16 +1421,29 @@ private enum OnboardingMemoPose {
 
     var captionBottomPadding: CGFloat {
         switch self {
-        case .clue: return 90
-        case .review: return 70
-        case .stamp: return 48
+        case .clue: return 104
+        case .review: return 78
+        case .stamp: return 78
         }
     }
 
     var layerIndex: Double {
+        3
+    }
+
+    var rearBottomOffset: CGFloat {
         switch self {
-        case .clue: return 1.5
-        case .review, .stamp: return 3
+        case .clue: return 124
+        case .review: return 146
+        case .stamp: return 154
+        }
+    }
+
+    var frontPocketHeight: CGFloat {
+        switch self {
+        case .clue: return 191
+        case .review: return 156
+        case .stamp: return 138
         }
     }
 
@@ -1474,7 +1487,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     width: shellWidth,
                     height: 226 * scale
                 )
-                .offset(y: -124 * scale)
+                .offset(y: -memoPose.rearBottomOffset * scale)
 
                 cards(scale, shellWidth)
                     .zIndex(1)
@@ -1482,7 +1495,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 OnboardingPocketEnvelope(
                     caption: caption,
                     width: shellWidth,
-                    height: 191 * scale,
+                    height: memoPose.frontPocketHeight * scale,
                     captionBottomPadding: memoPose.captionBottomPadding * scale
                 )
                 .zIndex(2)

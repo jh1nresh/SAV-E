@@ -19,17 +19,19 @@ Atlas shell.
   Map Stamp meanings.
 - User confirmation remains mandatory before the proof becomes a Map Stamp.
 - Source retention stays visible through ticket copy and the pocket caption.
-- The existing SAV-E logo, Memo, owned envelope, thumbnail, atlas, paper, and
-  native shape assets are reused; no external or generated production asset was
-  added.
+- The existing SAV-E logo, Memo, owned envelope, atlas, paper, and native shape
+  assets are reused. The new owned `OnboardingNightCafe` fixture records its
+  built-in generation prompt and deterministic 1x/2x/3x outputs.
 - The fixed viewport has no `ScrollView`; primary and skip actions remain
   visible at 402 x 874 pt.
 - Reduced Motion renders the final proof composition immediately.
 
 ## Intentional Deviations
 
-- The generated concept's cafe illustration and decorative map are replaced by
-  owned `KoffeeMameyaThumbnail` and `MapAtlasScene` fixtures.
+- The generated concept's decorative map is replaced by the owned
+  `MapAtlasScene` fixture. The cafe slot uses the separately generated,
+  provenance-recorded `OnboardingNightCafe` asset rather than a crop of the
+  whole design board.
 - Review uses a compact retained coral receipt behind the sky candidate ticket
   instead of the generated full-size source card, preserving provenance and
   the fixed subtitle at the approved viewport.

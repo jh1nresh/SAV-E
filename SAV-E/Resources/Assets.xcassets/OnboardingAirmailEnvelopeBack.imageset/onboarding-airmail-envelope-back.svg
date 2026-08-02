@@ -6,9 +6,9 @@
       <rect x="21" width="13" height="42" fill="#A9DDEA"/>
     </pattern>
     <linearGradient id="kraftBacking" x1="180" y1="54" x2="180" y2="224" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F4DFC2"/>
-      <stop offset="0.62" stop-color="#F2D6B1"/>
-      <stop offset="1" stop-color="#F0D0A6"/>
+      <stop stop-color="#F0D2AA"/>
+      <stop offset="0.62" stop-color="#EBC696"/>
+      <stop offset="1" stop-color="#E6BA83"/>
     </linearGradient>
     <filter id="paperShadow" x="-8%" y="-8%" width="116%" height="122%">
       <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#3F281A" flood-opacity="0.12"/>
@@ -23,7 +23,7 @@
     <!-- One continuous open liner: warm shoulders descend into the same
          central point while the centre above that point stays transparent. -->
     <path d="M9 58C45 70 82 116 180 202C278 116 315 70 351 58V232Q351 241 342 241H18Q9 241 9 232V58Z" fill="url(#kraftBacking)"/>
-    <path d="M15 63C49 77 86 120 180 202C274 120 311 77 345 63" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
+    <path d="M15 63C49 77 86 120 180 202C274 120 311 77 345 63" stroke="#B77E45" stroke-opacity="0.52" stroke-width="1" stroke-dasharray="5 4"/>
     <path d="M10 229H350" stroke="#C39562" stroke-opacity="0.42" stroke-width="1" stroke-dasharray="5 4"/>
 
     <!-- Subtle paper fibres; visible only in the narrow shoulders. -->

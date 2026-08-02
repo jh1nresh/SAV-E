@@ -90,8 +90,8 @@ and confirmed states respectively.
 
 - Allowed: `OnboardingAirmailEnvelopeBack`, `OnboardingEnvelopeFront`,
   `OnboardingMemoClue`, `OnboardingMemoReview`, `OnboardingMemoStamp`,
-  `SavesMemoSorting`, `MemoMascot`,
-  `KoffeeMameyaThumbnail`, `PaperTexture`, and code-native Atlas shapes.
+  `SavesMemoSorting`, `MemoMascot`, `OnboardingNightCafe`, `PaperTexture`, and
+  code-native Atlas shapes.
 - Generated concept-fixture crops are rejected as production assets. The three
   separately generated Memo poses and blank onboarding pocket are allowed only
   with their prompt, identity reference, ownership route, alpha conversion,
@@ -126,8 +126,8 @@ and confirmed states respectively.
 - `clueText` remains real local user input.
 - Candidate/place names are clearly labeled local proof fixtures; no network
   lookup is implied.
-- The final place image uses the owned Koffee Mameya fixture only as a visual
-  example; it is not persisted as user data.
+- The final place image uses the owned `OnboardingNightCafe` fixture only as a
+  visual example; it is not persisted as user data.
 - The Review mug is an owned local vector illustration and is decorative only.
 
 ## Implementation Order
