@@ -1403,6 +1403,13 @@ private enum OnboardingMemoPose {
         case .stamp: return 48
         }
     }
+
+    var layerIndex: Double {
+        switch self {
+        case .clue: return 1.5
+        case .review, .stamp: return 3
+        }
+    }
 }
 
 private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
@@ -1456,7 +1463,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                         y: -memoPose.bottomOffset * scale
                     )
                     .accessibilityHidden(true)
-                    .zIndex(3)
+                    .zIndex(memoPose.layerIndex)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
