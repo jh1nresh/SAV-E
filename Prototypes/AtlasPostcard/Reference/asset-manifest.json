@@ -415,6 +415,22 @@
       "status": "complete"
     },
     {
+      "name": "OnboardingEnvelopeFront",
+      "role": "blank kraft front pocket for the onboarding open-envelope shell; preserves the recessed mouth, stitching, and left postal cancellation without the unrelated empty wax ring",
+      "source": "built-in image edit using SavesEnvelope as the production construction reference",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#blank-onboarding-front-pocket",
+      "transform": "connected white-background alpha removal and deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingEnvelopeFront.imageset",
+        "filename": "onboardingenvelopefront.png",
+        "width": 402,
+        "height": 207,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
       "name": "OnboardingMemoClue",
       "role": "owned Memo leaning over the Clue envelope mouth",
       "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",

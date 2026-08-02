@@ -18,14 +18,14 @@
       "topology": "V-folded airmail back with kraft shoulders; no horizontal top band"
     },
     "mouthLip": {
-      "width": 324,
-      "height": 26,
-      "bottomOffset": 149,
+      "width": 116,
+      "height": 30,
+      "bottomOffset": 146,
       "zIndex": 1.5,
-      "topology": "visible kraft V between the state card and the front pocket"
+      "topology": "paper-textured central kraft V sharing its base with the rear apex and remaining visible below every state card"
     },
     "frontPocket": {
-      "asset": "SavesEnvelope",
+      "asset": "OnboardingEnvelopeFront",
       "width": 342,
       "height": 176,
       "bottomOffset": 0
@@ -50,15 +50,15 @@
     "cards": {
       "clue": {
         "width": 294,
-        "bottomOffset": 154
+        "bottomOffset": 170
       },
       "review": {
         "width": 306,
-        "bottomOffset": 180
+        "bottomOffset": 170
       },
       "mapStamp": {
-        "width": 318,
-        "bottomOffset": 150
+        "width": 306,
+        "bottomOffset": 170
       }
     },
     "scaling": "Rear, mouth lip, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 342 pt shell; wider phones cap at 360 pt."

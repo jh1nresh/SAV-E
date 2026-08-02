@@ -115,8 +115,16 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTAssertTrue(element.waitForExistence(timeout: 5), file: file, line: line)
-        XCTAssertTrue(element.isHittable, file: file, line: line)
+        let settled = expectation(
+            for: NSPredicate(format: "exists == true AND hittable == true"),
+            evaluatedWith: element
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [settled], timeout: 5),
+            .completed,
+            file: file,
+            line: line
+        )
         XCTAssertGreaterThanOrEqual(element.frame.minX, app.frame.minX, file: file, line: line)
         XCTAssertGreaterThanOrEqual(element.frame.minY, app.frame.minY, file: file, line: line)
         XCTAssertLessThanOrEqual(element.frame.maxX, app.frame.maxX, file: file, line: line)

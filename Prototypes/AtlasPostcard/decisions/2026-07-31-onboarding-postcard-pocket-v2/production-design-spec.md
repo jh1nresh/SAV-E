@@ -83,11 +83,14 @@ and confirmed states respectively.
 
 ## Assets and Ownership
 
-- Allowed: `OnboardingAirmailEnvelopeBack`, `SavesEnvelope`,
+- Allowed: `OnboardingAirmailEnvelopeBack`, `OnboardingEnvelopeFront`,
+  `OnboardingMemoClue`, `OnboardingMemoReview`, `OnboardingMemoStamp`,
   `SavesMemoSorting`, `MemoMascot`,
   `KoffeeMameyaThumbnail`, `PaperTexture`, and code-native Atlas shapes.
-- Generated cafe photo, generated map, and generated Memo pose are rejected as
-  production assets.
+- Generated concept-fixture crops are rejected as production assets. The three
+  separately generated Memo poses and blank onboarding pocket are allowed only
+  with their prompt, identity reference, ownership route, alpha conversion,
+  and 1x/2x/3x outputs recorded in the asset manifest.
 - No new dependency or external image URL.
 
 ## Exact Copy and Typography

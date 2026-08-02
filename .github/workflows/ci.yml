@@ -100,6 +100,7 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
+        if: always()
         run: |
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \

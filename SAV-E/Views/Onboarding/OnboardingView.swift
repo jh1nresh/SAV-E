@@ -688,7 +688,7 @@ private struct CluePocketStage: View {
             )
             .frame(width: shellWidth - (48 * scale))
             .rotationEffect(.degrees(-1.2))
-            .offset(y: -154 * scale)
+            .offset(y: -170 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -935,7 +935,7 @@ private struct ReviewPocketStage: View {
                         phase: phase
                     )
                     .frame(width: shellWidth - (36 * scale))
-                    .offset(y: -180 * scale)
+                    .offset(y: -170 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1138,8 +1138,8 @@ private struct MapStampPocketStage: View {
         ) { scale, shellWidth in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: shellWidth - (24 * scale))
-                    .offset(y: -150 * scale)
+                    .frame(width: shellWidth - (36 * scale))
+                    .offset(y: -170 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1372,27 +1372,9 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 cards(scale, shellWidth)
                     .zIndex(1)
 
-                OnboardingEnvelopeMouthLip()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                SaveAtlasPalette.kraft.opacity(0.94),
-                                SaveAtlasPalette.paper.opacity(0.96),
-                                SaveAtlasPalette.kraft.opacity(0.98)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .overlay {
-                        OnboardingEnvelopeMouthLip()
-                            .stroke(
-                                SaveAtlasPalette.line.opacity(0.56),
-                                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
-                            )
-                    }
-                    .frame(width: shellWidth - (18 * scale), height: 26 * scale)
-                    .offset(y: -149 * scale)
+                OnboardingEnvelopeMouthLipSurface()
+                    .frame(width: 116 * scale, height: 30 * scale)
+                    .offset(y: -146 * scale)
                     .zIndex(1.5)
 
                 OnboardingPocketEnvelope(
@@ -1430,6 +1412,37 @@ private struct OnboardingEnvelopeMouthLip: Shape {
     }
 }
 
+private struct OnboardingEnvelopeMouthLipSurface: View {
+    var body: some View {
+        ZStack {
+            OnboardingEnvelopeMouthLip()
+                .fill(SaveAtlasPalette.kraft)
+
+            Image("PaperTexture")
+                .resizable(resizingMode: .tile)
+                .opacity(0.12)
+                .mask(OnboardingEnvelopeMouthLip())
+
+            LinearGradient(
+                colors: [
+                    SaveAtlasPalette.paper.opacity(0.22),
+                    SaveAtlasPalette.kraft.opacity(0.14)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .mask(OnboardingEnvelopeMouthLip())
+        }
+        .overlay {
+            OnboardingEnvelopeMouthLip()
+                .stroke(
+                    SaveAtlasPalette.line.opacity(0.58),
+                    style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                )
+        }
+    }
+}
+
 private struct OnboardingAirmailEnvelopeBack: View {
     let width: CGFloat
     let height: CGFloat
@@ -1449,7 +1462,7 @@ private struct OnboardingPocketEnvelope: View {
     let captionBottomPadding: CGFloat
 
     var body: some View {
-        Image("SavesEnvelope")
+        Image("OnboardingEnvelopeFront")
             .resizable()
             .frame(width: width, height: height)
             .overlay(alignment: .bottom) {

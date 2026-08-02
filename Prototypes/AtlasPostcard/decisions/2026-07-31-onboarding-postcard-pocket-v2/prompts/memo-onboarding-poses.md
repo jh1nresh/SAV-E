@@ -29,3 +29,13 @@ envelope: head and front paws visible, trunk curled gently left, eyes happily
 closed, and a satisfied expression. Isolate only the horizontal waist-up
 mascot; no envelope, books, card, text, shadow, or white sticker border.
 Preserve the canonical identity and rendering.
+
+## Blank onboarding front pocket
+
+Use the production `SavesEnvelope` as the identity and construction reference.
+Preserve its recessed opening, stitched edge, rounded lower corners, kraft
+paper, left airplane cancellation, lighting, and shadow. Remove only the empty
+right wax-seal ring and rebuild that region as uninterrupted kraft paper. The
+generated white background is removed mechanically, then the isolated pocket
+is resampled deterministically to 1x/2x/3x. This asset is onboarding-only; it
+does not replace `SavesEnvelope` elsewhere in the app.
