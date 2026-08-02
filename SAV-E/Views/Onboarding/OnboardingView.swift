@@ -704,7 +704,7 @@ private struct CluePocketStage: View {
             .scaleEffect(scale, anchor: .bottom)
             .frame(width: 300 * scale, height: 294 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(y: -153 * scale)
+            .offset(x: -5 * scale, y: -153 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -996,7 +996,7 @@ private struct ReviewPocketStage: View {
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 296 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(y: -366 * scale)
+                    .offset(x: -6 * scale, y: -361 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -1007,7 +1007,7 @@ private struct ReviewPocketStage: View {
                     .frame(width: 340, height: 308)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 340 * scale, height: 308 * scale)
-                    .offset(y: -130 * scale)
+                    .offset(x: -3 * scale, y: -121 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1071,7 +1071,7 @@ private struct OnboardingReviewTicket: View {
     var body: some View {
         VStack(alignment: .leading, spacing: isCompactHeight ? 7 : 14) {
             HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(language.localized(english: "Review Candidate", traditionalChinese: "待確認地點").uppercased())
                         .font(SaveAtlasType.strong(10))
                         .tracking(0.8)
@@ -1234,7 +1234,7 @@ private struct MapStampPocketStage: View {
                     .frame(width: 340, height: 359)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 340 * scale, height: 359 * scale)
-                    .offset(y: -118 * scale)
+                    .offset(x: -4 * scale, y: -113 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1245,7 +1245,7 @@ private struct OnboardingSavedPostcard: View {
     let language: AppLanguage
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             Text(language.localized(
                 english: "★ Lifted Saved Postcard ★",
                 traditionalChinese: "★ 已提起的收藏明信片 ★"
@@ -1298,7 +1298,7 @@ private struct OnboardingSavedPostcard: View {
                         OnboardingPostalCancellation()
                             .offset(x: -72, y: 16)
                     }
-                    .padding(.trailing, 15)
+                    .padding(.trailing, 22)
             }
 
             HStack(alignment: .top, spacing: 6) {
@@ -1335,9 +1335,11 @@ private struct OnboardingSavedPostcard: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
             }
+            .padding(.leading, 5)
+            .padding(.trailing, 13)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 22)
+        .padding(.top, 32)
         .padding(.bottom, 12)
         .frame(minHeight: 354, alignment: .top)
         .background {
@@ -1415,16 +1417,16 @@ private enum OnboardingMemoPose {
     var width: CGFloat {
         switch self {
         case .clue: return 110
-        case .review: return 132
-        case .stamp: return 134
+        case .review: return 140
+        case .stamp: return 144
         }
     }
 
     var horizontalOffset: CGFloat {
         switch self {
         case .clue: return 117
-        case .review: return 82
-        case .stamp: return 92
+        case .review: return 88
+        case .stamp: return 96
         }
     }
 
