@@ -26,7 +26,7 @@
       "topology": "one continuous rear envelope layer: a code-native kraft adhesive flap behind two broad illustrated kraft side wings with narrow outer airmail rails; the live letter sits above this rear layer, the front pocket overlaps its base, and no transparent center gap or detached rails remain"
     },
     "frontPocket": {
-      "asset": "OnboardingEnvelopeFront",
+      "asset": "OnboardingEnvelopeFrontV2",
       "width": 370,
       "height": {
         "clue": 187,

@@ -1706,7 +1706,7 @@ private struct OnboardingPocketEnvelope: View {
     var body: some View {
         let scale = width / 370
 
-        Image("OnboardingEnvelopeFront")
+        Image("OnboardingEnvelopeFrontV2")
             .resizable()
             .frame(width: width, height: height)
             .overlay(alignment: .bottom) {

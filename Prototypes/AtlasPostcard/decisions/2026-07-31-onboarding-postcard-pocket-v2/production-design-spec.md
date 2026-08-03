@@ -46,6 +46,10 @@ and confirmed states respectively.
   pocket, so the envelope never reads as a cut-open frame or central hole. A
   second backing card, closed-envelope duplicate, or disconnected stripes fail
   the open-envelope silhouette.
+- `OnboardingEnvelopeFrontV2`: one owned front pocket whose broad continuous
+  mouth and raised shoulders cover the lower ticket edge and terminate the rear
+  airmail rails. It replaces the detached centre notch without adding a second
+  runtime flap or pocket.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
 - `OnboardingReviewTicket`: sky scalloped ticket, candidate name, owned
@@ -98,7 +102,7 @@ and confirmed states respectively.
 
 ## Assets and Ownership
 
-- Allowed: `OnboardingAirmailEnvelopeBackV2`, `OnboardingEnvelopeFront`,
+- Allowed: `OnboardingAirmailEnvelopeBackV2`, `OnboardingEnvelopeFrontV2`,
   `OnboardingMemoClue`, `OnboardingMemoReview`, `OnboardingMemoStamp`,
   `SavesMemoSorting`, `MemoMascot`, `OnboardingNightCafe`, `PaperTexture`, and
   code-native Atlas shapes.

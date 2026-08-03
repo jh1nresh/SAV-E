@@ -448,6 +448,22 @@
       "status": "complete"
     },
     {
+      "name": "OnboardingEnvelopeFrontV2",
+      "role": "blank kraft front pocket with one broad continuous mouth, raised shoulders, stitched perimeter, and left postal cancellation; the shared mouth replaces the detached centre notch without adding another runtime layer",
+      "source": "deterministic composite of the founder-approved owned SavesEnvelope mouth and the existing owned OnboardingEnvelopeFront body",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/envelope-shell-v6.md#continuous-front-mouth",
+      "transform": "preserve the SavesEnvelope upper 90 px silhouette and mouth texture, remove its wax-seal region with mirrored owned kraft texture, blend into the existing onboarding pocket body over 30 px, and emit deterministic 1x/2x/3x RGBA outputs",
+      "output": {
+        "imageset": "OnboardingEnvelopeFrontV2.imageset",
+        "filename": "onboarding-envelope-front-v2.png",
+        "width": 402,
+        "height": 207,
+        "scale": "1x/2x/3x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
       "name": "OnboardingMemoClue",
       "role": "owned Memo leaning over the Clue envelope mouth",
       "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
