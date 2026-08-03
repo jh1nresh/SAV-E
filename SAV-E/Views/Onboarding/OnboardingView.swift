@@ -1056,7 +1056,7 @@ private struct OnboardingReviewTicket: View {
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 34, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 38, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1375,17 +1375,24 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 106
-        case .review: return 110
-        case .stamp: return 105
+        case .clue: return 102
+        case .review: return 126
+        case .stamp: return 118
         }
     }
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 132
-        case .review: return 84
-        case .stamp: return 98
+        case .clue: return 100
+        case .review: return 92
+        case .stamp: return 103
+        }
+    }
+
+    var captionHorizontalOffset: CGFloat {
+        switch self {
+        case .clue: return -8
+        case .review, .stamp: return -42
         }
     }
 
@@ -1486,7 +1493,8 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     caption: caption,
                     width: shellWidth,
                     height: memoPose.frontPocketHeight * scale,
-                    captionBottomPadding: memoPose.captionBottomPadding * scale
+                    captionBottomPadding: memoPose.captionBottomPadding * scale,
+                    captionHorizontalOffset: memoPose.captionHorizontalOffset * scale
                 )
                 .zIndex(2)
 
@@ -1520,14 +1528,30 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
         content
             .clipShape(SavePostcardScallopedRectangle(depth: 3, pitch: 10))
             .overlay {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .stroke(tint.opacity(0.62), lineWidth: 6)
+                OnboardingPostageBand(depth: 3, pitch: 10, inset: 6)
+                    .fill(tint.opacity(0.56), style: FillStyle(eoFill: true))
             }
             .overlay {
                 SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                    .stroke(edge.opacity(0.62), lineWidth: 0.8)
+                    .stroke(edge.opacity(0.48), lineWidth: 0.7)
             }
             .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
+    }
+}
+
+private struct OnboardingPostageBand: Shape {
+    let depth: CGFloat
+    let pitch: CGFloat
+    let inset: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = SavePostcardScallopedRectangle(depth: depth, pitch: pitch)
+            .path(in: rect)
+        path.addRoundedRect(
+            in: rect.insetBy(dx: inset, dy: inset),
+            cornerSize: CGSize(width: 2, height: 2)
+        )
+        return path
     }
 }
 
@@ -1580,6 +1604,7 @@ private struct OnboardingPocketEnvelope: View {
     let width: CGFloat
     let height: CGFloat
     let captionBottomPadding: CGFloat
+    let captionHorizontalOffset: CGFloat
 
     var body: some View {
         Image("OnboardingEnvelopeFront")
@@ -1593,6 +1618,7 @@ private struct OnboardingPocketEnvelope: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 90 * (width / 370))
                     .padding(.bottom, captionBottomPadding)
+                    .offset(x: captionHorizontalOffset)
             }
             .accessibilityHidden(true)
     }
