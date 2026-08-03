@@ -1444,9 +1444,12 @@ private enum OnboardingMemoPose {
     /// second envelope or a state-specific decorative card.
     var rearMouthLipHeight: CGFloat {
         switch self {
-        case .clue: return 34
-        case .review: return 31
-        case .stamp: return 28
+        // The reference silhouette exposes a shallow adhesive hinge, not a
+        // second kraft band. Keep the visible mouth within the 8–14 pt
+        // overlap used by the front pocket.
+        case .clue: return 14
+        case .review: return 13
+        case .stamp: return 12
         }
     }
 
