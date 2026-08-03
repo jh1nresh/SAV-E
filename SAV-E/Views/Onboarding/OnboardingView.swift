@@ -1530,16 +1530,95 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .clipShape(SavePostcardScallopedRectangle(depth: 5, pitch: 13.5))
+            .clipShape(OnboardingRoundedPostageRectangle(depth: 6, pitch: 14))
             .overlay {
-                OnboardingPostageBand(depth: 5, pitch: 13.5, inset: 7)
+                OnboardingPostageBand(depth: 6, pitch: 14, inset: 7)
                     .fill(tint.opacity(0.56), style: FillStyle(eoFill: true))
             }
             .overlay {
-                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
+                OnboardingRoundedPostageRectangle(depth: 6, pitch: 14)
                     .stroke(edge.opacity(0.48), lineWidth: 0.7)
             }
             .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
+    }
+}
+
+private struct OnboardingRoundedPostageRectangle: Shape {
+    let depth: CGFloat
+    let pitch: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let topLeft = CGPoint(x: rect.minX + depth, y: rect.minY + depth)
+        let topRight = CGPoint(x: rect.maxX - depth, y: rect.minY + depth)
+        let bottomRight = CGPoint(x: rect.maxX - depth, y: rect.maxY - depth)
+        let bottomLeft = CGPoint(x: rect.minX + depth, y: rect.maxY - depth)
+
+        path.move(to: topLeft)
+        addHorizontalScallops(
+            to: &path,
+            from: topLeft,
+            to: topRight,
+            outwardY: rect.minY
+        )
+        addVerticalScallops(
+            to: &path,
+            from: topRight,
+            to: bottomRight,
+            outwardX: rect.maxX
+        )
+        addHorizontalScallops(
+            to: &path,
+            from: bottomRight,
+            to: bottomLeft,
+            outwardY: rect.maxY
+        )
+        addVerticalScallops(
+            to: &path,
+            from: bottomLeft,
+            to: topLeft,
+            outwardX: rect.minX
+        )
+        path.closeSubpath()
+        return path
+    }
+
+    private func addHorizontalScallops(
+        to path: inout Path,
+        from start: CGPoint,
+        to end: CGPoint,
+        outwardY: CGFloat
+    ) {
+        let segmentCount = max(1, Int(abs(end.x - start.x) / pitch))
+        let segmentWidth = (end.x - start.x) / CGFloat(segmentCount)
+        for index in 0..<segmentCount {
+            let x0 = start.x + CGFloat(index) * segmentWidth
+            let x1 = x0 + segmentWidth
+            path.addCurve(
+                to: CGPoint(x: x1, y: start.y),
+                control1: CGPoint(x: x0 + segmentWidth * 0.24, y: outwardY),
+                control2: CGPoint(x: x1 - segmentWidth * 0.24, y: outwardY)
+            )
+        }
+    }
+
+    private func addVerticalScallops(
+        to path: inout Path,
+        from start: CGPoint,
+        to end: CGPoint,
+        outwardX: CGFloat
+    ) {
+        let segmentCount = max(1, Int(abs(end.y - start.y) / pitch))
+        let segmentHeight = (end.y - start.y) / CGFloat(segmentCount)
+        for index in 0..<segmentCount {
+            let y0 = start.y + CGFloat(index) * segmentHeight
+            let y1 = y0 + segmentHeight
+            path.addCurve(
+                to: CGPoint(x: start.x, y: y1),
+                control1: CGPoint(x: outwardX, y: y0 + segmentHeight * 0.24),
+                control2: CGPoint(x: outwardX, y: y1 - segmentHeight * 0.24)
+            )
+        }
     }
 }
 
@@ -1549,7 +1628,7 @@ private struct OnboardingPostageBand: Shape {
     let inset: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        var path = SavePostcardScallopedRectangle(depth: depth, pitch: pitch)
+        var path = OnboardingRoundedPostageRectangle(depth: depth, pitch: pitch)
             .path(in: rect)
         path.addRoundedRect(
             in: rect.insetBy(dx: inset, dy: inset),
