@@ -983,7 +983,7 @@ private struct ReviewPocketStage: View {
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 300 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(x: -12 * scale, y: -372 * scale)
+                    .offset(x: -12 * scale, y: -360 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -1200,10 +1200,10 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: 340, height: 354)
+                    .frame(width: 340, height: 344)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 340 * scale, height: 354 * scale)
-                    .offset(x: -13 * scale, y: -116 * scale)
+                    .frame(width: 340 * scale, height: 344 * scale)
+                    .offset(x: -13 * scale, y: -123 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1313,7 +1313,7 @@ private struct OnboardingSavedPostcard: View {
         .padding(.horizontal, 12)
         .padding(.top, 27)
         .padding(.bottom, 12)
-        .frame(minHeight: 354, alignment: .top)
+        .frame(minHeight: 344, alignment: .top)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -1375,16 +1375,16 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 118
-        case .review: return 118
+        case .clue: return 106
+        case .review: return 110
         case .stamp: return 105
         }
     }
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 110
-        case .review: return 72
+        case .clue: return 132
+        case .review: return 84
         case .stamp: return 98
         }
     }
@@ -1412,17 +1412,13 @@ private enum OnboardingMemoPose {
     var rearBottomOffset: CGFloat {
         switch self {
         case .clue: return 103
-        case .review: return 155
-        case .stamp: return 152
+        case .review: return 89
+        case .stamp: return 90
         }
     }
 
     var rearHeight: CGFloat {
-        switch self {
-        case .clue: return 220
-        case .review: return 145
-        case .stamp: return 148
-        }
+        220
     }
 
     var frontPocketHeight: CGFloat {
@@ -1522,14 +1518,14 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .clipShape(SavePostcardScallopedRectangle(depth: 5, pitch: 13.5))
+            .clipShape(SavePostcardScallopedRectangle(depth: 3, pitch: 10))
             .overlay {
-                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
-                    .stroke(tint.opacity(0.78), lineWidth: 4)
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(tint.opacity(0.62), lineWidth: 6)
             }
             .overlay {
-                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
-                    .stroke(edge.opacity(0.86), lineWidth: 1)
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(edge.opacity(0.62), lineWidth: 0.8)
             }
             .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
     }
