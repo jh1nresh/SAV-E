@@ -40,10 +40,12 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
-- `OnboardingAirmailEnvelopeBack`: owned open-liner illustration with broad
-  kraft side wings and narrow striped outer rails. Its centre stays transparent
-  above the pocket so the state ticket is the only visible central sheet.
-  A closed-envelope flap, a second backing card, or disconnected stripes fail
+- `OnboardingAirmailEnvelopeBack`: one continuous rear envelope layer composed
+  of a code-native kraft adhesive flap beneath the owned open-liner illustration
+  with broad kraft side wings and narrow striped outer rails. The flap fills the
+  liner's transparent centre behind the state ticket and overlaps the front
+  pocket, so the envelope never reads as a cut-open frame or central hole. A
+  second backing card, closed-envelope duplicate, or disconnected stripes fail
   the open-envelope silhouette.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
@@ -69,9 +71,11 @@ and confirmed states respectively.
 - The airmail liner and front kraft pocket read as one open envelope around the
   state ticket. The ticket is narrower than the pocket, and the shared pocket
   mouth covers its lower edge without creating a second horizontal seam.
-- The rear liner stays visible only as the two diagonal shoulders beside each
-  state card at the 402 x 874 reference viewport. The front pocket owns the
-  shallow centre point and mouth seam; no second central flap is rendered.
+- The rear envelope stays visible as two diagonal airmail shoulders plus one
+  connected kraft adhesive flap behind each state card at the 402 x 874
+  reference viewport. The front pocket overlaps the flap base and owns the
+  shallow centre point and mouth seam. There is one rear flap, not a second
+  envelope body, and no transparent gap may remain between ticket and pocket.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.

@@ -1675,10 +1675,58 @@ private struct OnboardingAirmailEnvelopeBack: View {
     let height: CGFloat
 
     var body: some View {
-        Image("OnboardingAirmailEnvelopeBack")
-            .resizable()
-            .frame(width: width, height: height)
-            .accessibilityHidden(true)
+        let adhesiveFlap = OnboardingRearAdhesiveFlapShape()
+
+        ZStack {
+            adhesiveFlap
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.91, green: 0.78, blue: 0.59),
+                            SaveAtlasPalette.kraft
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            OnboardingTicketPaperGrain()
+                .clipShape(adhesiveFlap)
+
+            adhesiveFlap
+                .stroke(
+                    SaveAtlasPalette.line.opacity(0.34),
+                    style: StrokeStyle(lineWidth: 0.8, dash: [5, 4])
+                )
+
+            Image("OnboardingAirmailEnvelopeBack")
+                .resizable()
+        }
+        .frame(width: width, height: height)
+        .clipped()
+        .accessibilityHidden(true)
+    }
+}
+
+/// The single adhesive flap of the open envelope. It sits behind the owned
+/// airmail side-wing illustration so the card never meets a transparent hole.
+private struct OnboardingRearAdhesiveFlapShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let horizontalInset = rect.width * (20 / 370)
+        let apexY = rect.minY + rect.height * (14 / 220)
+        let baseY = rect.maxY - rect.height * (4 / 220)
+        let apexRound = min(rect.width, rect.height) * 0.035
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + horizontalInset, y: baseY))
+        path.addLine(to: CGPoint(x: rect.midX - apexRound, y: apexY + apexRound))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX + apexRound, y: apexY + apexRound),
+            control: CGPoint(x: rect.midX, y: apexY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX - horizontalInset, y: baseY))
+        path.closeSubpath()
+        return path
     }
 }
 
