@@ -1490,6 +1490,11 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 )
 
                 cards(scale, shellWidth)
+                    .shadow(
+                        color: SaveAtlasPalette.ink.opacity(0.16),
+                        radius: 7 * scale,
+                        y: 4 * scale
+                    )
                     .zIndex(1)
 
                 OnboardingPocketEnvelope(
@@ -1693,14 +1698,31 @@ private struct OnboardingAirmailEnvelopeBack: View {
             OnboardingTicketPaperGrain()
                 .clipShape(adhesiveFlap)
 
-            adhesiveFlap
-                .stroke(
-                    SaveAtlasPalette.line.opacity(0.34),
-                    style: StrokeStyle(lineWidth: 0.8, dash: [5, 4])
-                )
-
             Image("OnboardingAirmailEnvelopeBack")
                 .resizable()
+                .shadow(
+                    color: SaveAtlasPalette.ink.opacity(0.12),
+                    radius: 4,
+                    y: 2
+                )
+
+            OnboardingRearFlapFoldShape()
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            SaveAtlasPalette.line.opacity(0.08),
+                            SaveAtlasPalette.ink.opacity(0.22)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    style: StrokeStyle(
+                        lineWidth: 3,
+                        lineCap: .round,
+                        lineJoin: .round
+                    )
+                )
+                .blur(radius: 1)
         }
         .frame(width: width, height: height)
         .clipped()
@@ -1730,6 +1752,22 @@ private struct OnboardingRearAdhesiveFlapShape: Shape {
     }
 }
 
+/// The two soft inner folds of the open flap. This deliberately omits the
+/// lower edge so the pocket mouth does not gain a dark outlined point.
+private struct OnboardingRearFlapFoldShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let horizontalInset = rect.width * (20 / 370)
+        let apexY = rect.minY + rect.height * (14 / 220)
+        let baseY = rect.maxY - rect.height * (4 / 220)
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + horizontalInset, y: baseY))
+        path.addLine(to: CGPoint(x: rect.midX, y: apexY))
+        path.addLine(to: CGPoint(x: rect.maxX - horizontalInset, y: baseY))
+        return path
+    }
+}
+
 private struct OnboardingPocketEnvelope: View {
     let caption: String
     let width: CGFloat
@@ -1738,6 +1776,8 @@ private struct OnboardingPocketEnvelope: View {
     let captionHorizontalOffset: CGFloat
 
     var body: some View {
+        let scale = width / 370
+
         Image("OnboardingEnvelopeFront")
             .resizable()
             .frame(width: width, height: height)
@@ -1751,6 +1791,11 @@ private struct OnboardingPocketEnvelope: View {
                     .padding(.bottom, captionBottomPadding)
                     .offset(x: captionHorizontalOffset)
             }
+            .shadow(
+                color: SaveAtlasPalette.ink.opacity(0.16),
+                radius: 6 * scale,
+                y: 4 * scale
+            )
             .accessibilityHidden(true)
     }
 }

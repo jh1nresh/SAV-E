@@ -76,6 +76,11 @@ and confirmed states respectively.
   reference viewport. The front pocket overlaps the flap base and owns the
   shallow centre point and mouth seam. There is one rear flap, not a second
   envelope body, and no transparent gap may remain between ticket and pocket.
+- Depth comes from soft inner-fold shading on the rear flap and a restrained
+  contact shadow cast by the live ticket onto the rear paper. The illustrated
+  rear wings separate softly from the canvas, and the front pocket casts one
+  shared paper shadow around the assembled shell. The pocket mouth must not
+  gain a separately outlined central point.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.
