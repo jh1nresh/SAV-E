@@ -15,15 +15,14 @@
       ]
     }
   ],
-  "rewrites": [
+  "redirects": [
     {
       "source": "/",
-      "destination": "https://sav-e-landing.vercel.app/"
-    },
-    {
-      "source": "/_next/:path*",
-      "destination": "https://sav-e-landing.vercel.app/_next/:path*"
-    },
+      "destination": "https://sav-e-landing.vercel.app/",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
     {
       "source": "/privacy",
       "destination": "/privacy/index.html"
