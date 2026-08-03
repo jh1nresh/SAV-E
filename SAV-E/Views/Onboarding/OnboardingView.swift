@@ -704,7 +704,10 @@ private struct CluePocketStage: View {
             .scaleEffect(scale, anchor: .bottom)
             .frame(width: 300 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -15 * scale, y: -153 * scale)
+            // Let the front pocket cover the ticket's lower scallops. The
+            // approved object reads as a letter inside one open envelope, not
+            // a postcard resting above a separate kraft panel.
+            .offset(x: -15 * scale, y: -140 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -983,7 +986,7 @@ private struct ReviewPocketStage: View {
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 300 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(x: -12 * scale, y: -360 * scale)
+                    .offset(x: -12 * scale, y: -346 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -994,7 +997,7 @@ private struct ReviewPocketStage: View {
                     .frame(width: 338, height: 302)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 338 * scale, height: 302 * scale)
-                    .offset(x: -10 * scale, y: -126 * scale)
+                    .offset(x: -10 * scale, y: -112 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1203,7 +1206,7 @@ private struct MapStampPocketStage: View {
                     .frame(width: 340, height: 344)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 340 * scale, height: 344 * scale)
-                    .offset(x: -13 * scale, y: -123 * scale)
+                    .offset(x: -13 * scale, y: -110 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1492,8 +1495,8 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 cards(scale, shellWidth)
                     .shadow(
                         color: SaveAtlasPalette.ink.opacity(0.16),
-                        radius: 7 * scale,
-                        y: 4 * scale
+                        radius: 4 * scale,
+                        y: 2 * scale
                     )
                     .zIndex(1)
 
@@ -1680,91 +1683,16 @@ private struct OnboardingAirmailEnvelopeBack: View {
     let height: CGFloat
 
     var body: some View {
-        let adhesiveFlap = OnboardingRearAdhesiveFlapShape()
-
-        ZStack {
-            adhesiveFlap
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.91, green: 0.78, blue: 0.59),
-                            SaveAtlasPalette.kraft
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            OnboardingTicketPaperGrain()
-                .clipShape(adhesiveFlap)
-
-            Image("OnboardingAirmailEnvelopeBack")
-                .resizable()
-                .shadow(
-                    color: SaveAtlasPalette.ink.opacity(0.12),
-                    radius: 4,
-                    y: 2
-                )
-
-            OnboardingRearFlapFoldShape()
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            SaveAtlasPalette.line.opacity(0.08),
-                            SaveAtlasPalette.ink.opacity(0.22)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    style: StrokeStyle(
-                        lineWidth: 3,
-                        lineCap: .round,
-                        lineJoin: .round
-                    )
-                )
-                .blur(radius: 1)
-        }
-        .frame(width: width, height: height)
-        .clipped()
-        .accessibilityHidden(true)
-    }
-}
-
-/// The single adhesive flap of the open envelope. It sits behind the owned
-/// airmail side-wing illustration so the card never meets a transparent hole.
-private struct OnboardingRearAdhesiveFlapShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let horizontalInset = rect.width * (20 / 370)
-        let apexY = rect.minY + rect.height * (14 / 220)
-        let baseY = rect.maxY - rect.height * (4 / 220)
-        let apexRound = min(rect.width, rect.height) * 0.035
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + horizontalInset, y: baseY))
-        path.addLine(to: CGPoint(x: rect.midX - apexRound, y: apexY + apexRound))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.midX + apexRound, y: apexY + apexRound),
-            control: CGPoint(x: rect.midX, y: apexY)
-        )
-        path.addLine(to: CGPoint(x: rect.maxX - horizontalInset, y: baseY))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// The two soft inner folds of the open flap. This deliberately omits the
-/// lower edge so the pocket mouth does not gain a dark outlined point.
-private struct OnboardingRearFlapFoldShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        let horizontalInset = rect.width * (20 / 370)
-        let apexY = rect.minY + rect.height * (14 / 220)
-        let baseY = rect.maxY - rect.height * (4 / 220)
-
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + horizontalInset, y: baseY))
-        path.addLine(to: CGPoint(x: rect.midX, y: apexY))
-        path.addLine(to: CGPoint(x: rect.maxX - horizontalInset, y: baseY))
-        return path
+        Image("OnboardingAirmailEnvelopeBackV2")
+            .resizable()
+            .shadow(
+                color: SaveAtlasPalette.ink.opacity(0.12),
+                radius: 4,
+                y: 2
+            )
+            .frame(width: width, height: height)
+            .clipped()
+            .accessibilityHidden(true)
     }
 }
 

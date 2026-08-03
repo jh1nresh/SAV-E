@@ -40,10 +40,9 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
-- `OnboardingAirmailEnvelopeBack`: one continuous rear envelope layer composed
-  of a code-native kraft adhesive flap beneath the owned open-liner illustration
-  with broad kraft side wings and narrow striped outer rails. The flap fills the
-  liner's transparent centre behind the state ticket and overlaps the front
+- `OnboardingAirmailEnvelopeBackV2`: one continuous owned rear-envelope layer
+  with broad kraft side wings, narrow striped outer rails, and matching kraft
+  rear paper filling the centre behind the state ticket. The rear layer overlaps the front
   pocket, so the envelope never reads as a cut-open frame or central hole. A
   second backing card, closed-envelope duplicate, or disconnected stripes fail
   the open-envelope silhouette.
@@ -70,10 +69,14 @@ and confirmed states respectively.
 - The envelope remains spatially stable while the ticket advances forward.
 - The airmail liner and front kraft pocket read as one open envelope around the
   state ticket. The ticket is narrower than the pocket, and the shared pocket
-  mouth covers its lower edge without creating a second horizontal seam.
+  mouth covers the ticket's lower scallops by 8–14 pt without creating a
+  second horizontal seam. A fully visible lower ticket edge means the ticket is
+  resting above the envelope and fails this composition.
 - The rear envelope stays visible as two diagonal airmail shoulders plus one
   connected kraft adhesive flap behind each state card at the 402 x 874
-  reference viewport. The front pocket overlaps the flap base and owns the
+  reference viewport. The rear paper's broad hinge is at the top and its two folds
+  descend to one soft central point beneath the letter. The front pocket
+  overlaps that lower point and owns the
   shallow centre point and mouth seam. There is one rear flap, not a second
   envelope body, and no transparent gap may remain between ticket and pocket.
 - Depth comes from soft inner-fold shading on the rear flap and a restrained
@@ -95,7 +98,7 @@ and confirmed states respectively.
 
 ## Assets and Ownership
 
-- Allowed: `OnboardingAirmailEnvelopeBack`, `OnboardingEnvelopeFront`,
+- Allowed: `OnboardingAirmailEnvelopeBackV2`, `OnboardingEnvelopeFront`,
   `OnboardingMemoClue`, `OnboardingMemoReview`, `OnboardingMemoStamp`,
   `SavesMemoSorting`, `MemoMascot`, `OnboardingNightCafe`, `PaperTexture`, and
   code-native Atlas shapes.
