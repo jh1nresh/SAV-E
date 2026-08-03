@@ -704,7 +704,7 @@ private struct CluePocketStage: View {
             .scaleEffect(scale, anchor: .bottom)
             .frame(width: 300 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -8 * scale, y: -153 * scale)
+            .offset(x: -15 * scale, y: -153 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -1056,7 +1056,7 @@ private struct OnboardingReviewTicket: View {
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 38, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 34, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
@@ -1375,7 +1375,7 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 102
+        case .clue: return 110
         case .review: return 126
         case .stamp: return 118
         }
@@ -1383,7 +1383,7 @@ private enum OnboardingMemoPose {
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 100
+        case .clue: return 104
         case .review: return 92
         case .stamp: return 103
         }
@@ -1484,7 +1484,10 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     width: shellWidth,
                     height: memoPose.rearHeight * scale
                 )
-                .offset(y: -memoPose.rearBottomOffset * scale)
+                .offset(
+                    x: -6 * scale,
+                    y: -memoPose.rearBottomOffset * scale
+                )
 
                 cards(scale, shellWidth)
                     .zIndex(1)
@@ -1496,6 +1499,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     captionBottomPadding: memoPose.captionBottomPadding * scale,
                     captionHorizontalOffset: memoPose.captionHorizontalOffset * scale
                 )
+                .offset(x: -6 * scale)
                 .zIndex(2)
 
                 Image(memoPose.assetName)
@@ -1526,13 +1530,13 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .clipShape(SavePostcardScallopedRectangle(depth: 3, pitch: 10))
+            .clipShape(SavePostcardScallopedRectangle(depth: 5, pitch: 13.5))
             .overlay {
-                OnboardingPostageBand(depth: 3, pitch: 10, inset: 6)
+                OnboardingPostageBand(depth: 5, pitch: 13.5, inset: 7)
                     .fill(tint.opacity(0.56), style: FillStyle(eoFill: true))
             }
             .overlay {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
                     .stroke(edge.opacity(0.48), lineWidth: 0.7)
             }
             .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
