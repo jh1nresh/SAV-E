@@ -400,6 +400,146 @@
       "status": "complete"
     },
     {
+      "name": "OnboardingAirmailEnvelopeBack",
+      "role": "rear open-envelope liner with two broad diagonal kraft side wings, narrow striped outer rails, and a transparent centre behind the onboarding state card; never a full rectangle or opaque central V",
+      "source": "built-in image generation using the founder-approved onboarding direction as the sole geometry and material reference",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/envelope-shell-v4.md#rear-side-wing-liner",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling; section-level layer only, never a whole-screen background",
+      "output": {
+        "imageset": "OnboardingAirmailEnvelopeBack.imageset",
+        "filename": "onboarding-airmail-envelope-back.png",
+        "width": 360,
+        "height": 220,
+        "scale": "1x/2x/3x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingAirmailEnvelopeBackV2",
+      "role": "complete rear open-envelope liner with two broad kraft side wings, narrow striped outer rails, and one continuous kraft centre behind the onboarding state card",
+      "source": "built-in image generation using the previous rear-side-wing asset as edit target and the founder-approved onboarding direction as construction reference",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/envelope-shell-v5.md#complete-rear-open-envelope-liner",
+      "transform": "flat chroma-key removal with the installed imagegen helper, alpha bounding-box measurement, transparent-padded 370:220 crop, deterministic 1x/2x/3x Lanczos resampling",
+      "output": {
+        "imageset": "OnboardingAirmailEnvelopeBackV2.imageset",
+        "filename": "onboarding-airmail-envelope-back-v2.png",
+        "width": 370,
+        "height": 220,
+        "scale": "1x/2x/3x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingEnvelopeFront",
+      "role": "blank kraft front pocket for the onboarding open-envelope shell; preserves the raised shoulders, shallow centre point, stitching, and left postal cancellation",
+      "source": "built-in image edit using the founder-approved onboarding direction as the sole geometry and material reference",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/envelope-shell-v4.md#front-kraft-pocket",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingEnvelopeFront.imageset",
+        "filename": "onboardingenvelopefront.png",
+        "width": 402,
+        "height": 207,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingEnvelopeFrontV2",
+      "role": "blank kraft front pocket with one broad continuous mouth, raised shoulders, stitched perimeter, and left postal cancellation; the shared mouth replaces the detached centre notch without adding another runtime layer",
+      "source": "deterministic composite of the founder-approved owned SavesEnvelope mouth and the existing owned OnboardingEnvelopeFront body",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/envelope-shell-v6.md#continuous-front-mouth",
+      "transform": "preserve the SavesEnvelope upper 90 px silhouette and mouth texture, remove its wax-seal region with mirrored owned kraft texture, blend into the existing onboarding pocket body over 30 px, and emit deterministic 1x/2x/3x RGBA outputs",
+      "output": {
+        "imageset": "OnboardingEnvelopeFrontV2.imageset",
+        "filename": "onboarding-envelope-front-v2.png",
+        "width": 402,
+        "height": 207,
+        "scale": "1x/2x/3x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoClue",
+      "role": "owned Memo leaning over the Clue envelope mouth",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#clue",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoClue.imageset",
+        "filename": "onboardingmemoclue.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoReview",
+      "role": "owned Memo pointer pose guiding the Review evidence marks",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#review",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoReview.imageset",
+        "filename": "onboardingmemoreview.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMemoStamp",
+      "role": "owned relaxed Memo pose resting on the confirmed Map Stamp pocket",
+      "source": "built-in image generation using MemoMascot and the founder-approved onboarding direction as identity and pose references",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/memo-onboarding-poses.md#stamp",
+      "transform": "flat chroma-key removal, alpha bounding-box crop, deterministic 1x/2x/3x resampling",
+      "output": {
+        "imageset": "OnboardingMemoStamp.imageset",
+        "filename": "onboardingmemostamp.png",
+        "width": 140,
+        "scale": "1x",
+        "colorMode": "RGBA"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingMoonMug",
+      "role": "owned moon-and-stars mug illustration on the Review Candidate ticket",
+      "source": "independent SVG reconstruction from the founder-approved onboarding direction",
+      "transform": "section-level vector asset; decorative only",
+      "output": {
+        "imageset": "OnboardingMoonMug.imageset",
+        "filename": "onboarding-moon-mug.svg",
+        "width": 96,
+        "height": 96,
+        "scale": "vector",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
+      "name": "OnboardingNightCafe",
+      "role": "owned warm night cafe image for the onboarding confirmed Map Stamp postcard",
+      "source": "built-in image generation using the founder-approved onboarding direction as the subject, composition, and lighting reference",
+      "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/night-cafe.md",
+      "transform": "deterministic 1x/2x/3x sips resampling",
+      "output": {
+        "imageset": "OnboardingNightCafe.imageset",
+        "filename": "onboarding-night-cafe.png",
+        "width": 100,
+        "height": 125,
+        "scale": "1x",
+        "colorMode": "RGB"
+      },
+      "status": "complete"
+    },
+    {
       "name": "PlanRouteRibbon",
       "role": "multicolor route ribbon and numbered route nodes",
       "source": "Reference/Targets/plan.png",

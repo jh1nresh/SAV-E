@@ -40,8 +40,9 @@ repo assets.
 - The mockup's cafe photo and atlas crop are directional placeholders.
 - Exact copy, iconography, progress labels, and metadata will be natively
   typeset and localized.
-- The generated Memo pose is not a production asset; use existing owned Memo
-  artwork or create a separately cleared asset before implementation.
+- The generated pose inside the concept mockup is not a production asset.
+  Production uses separately generated, locally owned Memo pose assets with
+  prompt and transform provenance recorded in the asset manifest.
 
 ## Remaining Risks
 

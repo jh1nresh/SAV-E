@@ -40,10 +40,21 @@ and confirmed states respectively.
 - `OnboardingStepTitle`: compact title above the pocket stage.
 - `OnboardingPocketStage`: shared owned kraft envelope, contextual Memo, and
   retained-source presentation.
+- `OnboardingAirmailEnvelopeBackV2`: one continuous owned rear-envelope layer
+  with broad kraft side wings, narrow striped outer rails, and matching kraft
+  rear paper filling the centre behind the state ticket. The rear layer overlaps the front
+  pocket, so the envelope never reads as a cut-open frame or central hole. A
+  second backing card, closed-envelope duplicate, or disconnected stripes fail
+  the open-envelope silhouette.
+- `OnboardingEnvelopeFrontV2`: one owned front pocket whose broad continuous
+  mouth and raised shoulders cover the lower ticket edge and terminate the rear
+  airmail rails. It replaces the detached centre notch without adding a second
+  runtime flap or pocket.
 - `OnboardingSourceTicket`: coral scalloped editable lined ticket and sample
   postage action.
-- `OnboardingReviewTicket`: sky scalloped ticket, candidate name, three postal
-  evidence marks, retained coral source receipt.
+- `OnboardingReviewTicket`: sky scalloped ticket, candidate name, owned
+  `OnboardingMoonMug`, three postal evidence marks, retained coral source
+  receipt.
 - `OnboardingSavedPostcard`: mint scalloped lifted header, photo, confirmation
   seal, source receipt, cancellation lines, and small decorative atlas fragment.
 - Existing `SavePostcardScallopedRectangle`, `SavePostcardSealShape`,
@@ -60,6 +71,23 @@ and confirmed states respectively.
 ## Expressive Mechanisms
 
 - The envelope remains spatially stable while the ticket advances forward.
+- The airmail liner and front kraft pocket read as one open envelope around the
+  state ticket. The ticket is narrower than the pocket, and the shared pocket
+  mouth covers the ticket's lower scallops by 8–14 pt without creating a
+  second horizontal seam. A fully visible lower ticket edge means the ticket is
+  resting above the envelope and fails this composition.
+- The rear envelope stays visible as two diagonal airmail shoulders plus one
+  connected kraft adhesive flap behind each state card at the 402 x 874
+  reference viewport. The rear paper's broad hinge is at the top and its two folds
+  descend to one soft central point beneath the letter. The front pocket
+  overlaps that lower point and owns the
+  shallow centre point and mouth seam. There is one rear flap, not a second
+  envelope body, and no transparent gap may remain between ticket and pocket.
+- Depth comes from soft inner-fold shading on the rear flap and a restrained
+  contact shadow cast by the live ticket onto the rear paper. The illustrated
+  rear wings separate softly from the canvas, and the front pocket casts one
+  shared paper shadow around the assembled shell. The pocket mouth must not
+  gain a separately outlined central point.
 - Memo appears once at the envelope edge to explain the current state.
 - Review keeps the coral source receipt visible behind the sky ticket.
 - Map Stamp reuses the saved-postcard structure, not a large fake map.
@@ -74,10 +102,14 @@ and confirmed states respectively.
 
 ## Assets and Ownership
 
-- Allowed: `SavesEnvelope`, `SavesMemoSorting`, `MemoMascot`,
-  `KoffeeMameyaThumbnail`, `PaperTexture`, and code-native Atlas shapes.
-- Generated cafe photo, generated map, and generated Memo pose are rejected as
-  production assets.
+- Allowed: `OnboardingAirmailEnvelopeBackV2`, `OnboardingEnvelopeFrontV2`,
+  `OnboardingMemoClue`, `OnboardingMemoReview`, `OnboardingMemoStamp`,
+  `SavesMemoSorting`, `MemoMascot`, `OnboardingNightCafe`, `PaperTexture`, and
+  code-native Atlas shapes.
+- Generated concept-fixture crops are rejected as production assets. The three
+  separately generated Memo poses and blank onboarding pocket are allowed only
+  with their prompt, identity reference, ownership route, alpha conversion,
+  and 1x/2x/3x outputs recorded in the asset manifest.
 - No new dependency or external image URL.
 
 ## Exact Copy and Typography
@@ -108,8 +140,9 @@ and confirmed states respectively.
 - `clueText` remains real local user input.
 - Candidate/place names are clearly labeled local proof fixtures; no network
   lookup is implied.
-- The final place image uses the owned Koffee Mameya fixture only as a visual
-  example; it is not persisted as user data.
+- The final place image uses the owned `OnboardingNightCafe` fixture only as a
+  visual example; it is not persisted as user data.
+- The Review mug is an owned local vector illustration and is decorative only.
 
 ## Implementation Order
 
@@ -127,6 +160,13 @@ and confirmed states respectively.
   than pixel-matching generated imagery.
 - Required: same pocket silhouette and stage anchor, source continuity, state
   color semantics, one Memo moment, one coral CTA, no clipping/scrolling.
+- Card fidelity is structural: Clue is a narrow coral lined ticket; Review is
+  a compact sky ticket over a visible coral source receipt; Map Stamp is a
+  mint saved postcard with the photo at upper-right, source receipt above the
+  atlas strip, and postal cancellation detail. A shared oversized white panel
+  with state-colored borders does not pass.
+- Memo must peek over the pocket mouth. Placing the mascot in the center of the
+  printed wax seal does not pass.
 
 ## Residual Risks
 

@@ -19,20 +19,130 @@ Atlas shell.
   Map Stamp meanings.
 - User confirmation remains mandatory before the proof becomes a Map Stamp.
 - Source retention stays visible through ticket copy and the pocket caption.
-- The existing SAV-E logo, Memo, owned envelope, thumbnail, atlas, paper, and
-  native shape assets are reused; no external or generated production asset was
-  added.
+- The existing SAV-E logo, Memo, owned envelope, atlas, paper, and native shape
+  assets are reused. The new owned `OnboardingNightCafe` fixture records its
+  built-in generation prompt and deterministic 1x/2x/3x outputs.
 - The fixed viewport has no `ScrollView`; primary and skip actions remain
   visible at 402 x 874 pt.
 - Reduced Motion renders the final proof composition immediately.
 
 ## Intentional Deviations
 
-- The generated concept's cafe illustration and decorative map are replaced by
-  owned `KoffeeMameyaThumbnail` and `MapAtlasScene` fixtures.
-- Review communicates retained provenance through the ticket footer and pocket
-  caption instead of exposing a large second coral card that would collide with
+- The generated concept's decorative map is replaced by the owned
+  `MapAtlasScene` fixture. The cafe slot uses the separately generated,
+  provenance-recorded `OnboardingNightCafe` asset rather than a crop of the
+  whole design board.
+- Review uses a compact retained coral receipt behind the sky candidate ticket
+  instead of the generated full-size source card, preserving provenance and
   the fixed subtitle at the approved viewport.
+
+## Founder Fidelity Correction — 2026-08-01
+
+The earlier rail-only correction removed the unintended full cream backing
+body but also removed the rear envelope shoulder/top edge. It left detached
+coral/sky tabs and retained three oversized white cards. That ruling was too
+narrow and is superseded.
+
+The corrected implementation:
+
+- replaces the Canvas approximation with one owned section-level
+  `OnboardingAirmailEnvelopeBack` layered raster asset containing the connected striped
+  border, cream shoulder, top flap, and fold lines;
+- keeps the lower shell behind the owned kraft pocket, so it cannot read as a
+  third full backing card;
+- narrows and state-tints the Clue, Review, and Map Stamp cards;
+- restores the Review source receipt and the approved Map Stamp information
+  order; and
+- moves Memo from the printed seal center to a peek over the pocket mouth.
+
+The final fidelity pass also removes the extra Clue privacy label, restores the
+approved airplane sample action and exact Review subtitle, uses one owned moon
+mug illustration instead of a generic SF Symbol, repeats the approved source
+proof caption on all three pockets, and places the Map Stamp paperclip and
+postal cancellation over the photo area.
+
+## Visible Rear-Envelope Correction — 2026-08-01
+
+The previous regular-height geometry placed the rear airmail envelope 70 pt
+above the stage bottom. The state cards extended above that asset, so the
+connected shoulder and top flap were fully occluded and the remaining sides
+read as two unrelated color rails. The shared rear-envelope layer now sits
+112 pt above the stage bottom (68 pt in compact height), exposing its connected
+top edge on Clue, Review, and Map Stamp while its lower edge remains behind the
+kraft front pocket.
+
+The narrow 1491 x 234 comparison crop is rejected as visual evidence because
+it removes the kraft pocket, Memo, postal seal, and fixed actions. The ship gate
+remains the three full 402 x 874 pt same-commit screenshots.
+
+The previous fidelity pass completed its generic iOS Simulator build with
+`BUILD_EXIT=0`. This visible-envelope correction remains gated by a fresh build
+and full same-commit Clue, Review, and Map Stamp runtime screenshots.
+
+## Open-Envelope Continuity Correction — 2026-08-01
+
+The 112 pt reveal exposed the complete artwork for a *closed* rear envelope,
+then placed the kraft pocket in front of it. Although no asset was missing, the
+result read as two envelopes cut apart and stacked. That geometry ruling is
+superseded.
+
+The rear artwork is now an open liner: one striped shoulder, continuous side
+rails, and a subtle curved inner-mouth seam. Its regular-height offset is 92 pt
+(58 pt compact), and its 342 pt width matches the rendered kraft pocket. The
+state ticket is the only object emerging from the shared mouth; there is no
+second flap or separate cream envelope body.
+
+## Envelope Topology and Card-Proportion Correction — 2026-08-01
+
+The open-liner correction above still encoded the rear layer as a complete
+striped rectangle with a cream inset. In runtime that exposed a horizontal
+airmail bar above every ticket and made the old kraft pocket read as a second,
+detached rectangle. Matching colors and z-order was not enough; the reference
+requires a different physical topology.
+
+This pass replaces the rear rectangle with one V-folded open-envelope back:
+
+- the outer airmail material is visible only as narrow side rails;
+- diagonal kraft shoulders sit between those rails and the ticket;
+- both folds meet at a central tip beneath the letter;
+- the front `SavesEnvelope` mouth overlaps that tip and the lower ticket edge;
+- the Clue, Review, and Map Stamp cards regain the taller proportions and
+  evidence order visible in the approved direction; and
+- the Review backing card becomes a deliberate coral source crown rather than
+  an almost-empty generic receipt.
+
+The Clue receipt date is rendered once. The Map Stamp uses a larger clipped
+photo, postal cancellation, source receipt, and atlas strip before entering the
+same pocket.
+
+## Foreground Construction Correction — 2026-08-02
+
+The previous generated shell still failed the approved construction: its rear
+asset was a large opaque central V, its front mouth was a smooth generic notch,
+and the ticket modifier added a second padded border. Whole-screen similarity
+scores were rejected because the shared cream background dominated them.
+
+This pass uses the approved board as the component authority:
+
+- the rear asset contains only two broad kraft diagonal side wings with narrow
+  coral/cream/sky rails; its centre is transparent;
+- the front asset owns the raised shoulders, shallow centre point, stitched
+  perimeter, paper grain, and lower-left airplane cancellation;
+- all three state tickets use one solid postage-scallop edge without an added
+  five-point outer padding layer; and
+- each state has measured rear offsets so the side wings remain visible beside
+  the letter and terminate behind the same front pocket.
+
+Acceptance is based on foreground crops of the envelope construction, not the
+full-screen background. Same-commit CI screenshots remain required.
+
+The first runtime read-back for this topology exposed four remaining measured
+differences: the front pocket began 18–32 pt below the approved mouth, Memo was
+oversized, the state-card edge rendered as a thin outline instead of a postage
+band, and the state cards sat 6–10 pt to the right. The follow-up geometry uses
+state-specific pocket/rear heights, smaller Memo frames, solid clipped postage
+edges, and explicit horizontal offsets. These values are recorded in
+`layout-metrics.json`; they are not inferred from the whole-screen score.
 
 ## Build and Test Result
 

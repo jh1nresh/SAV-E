@@ -1,0 +1,89 @@
+{
+  "viewport": {
+    "width": 402,
+    "height": 874
+  },
+  "pocketStage": {
+    "width": 354,
+    "height": {
+      "clue": 460,
+      "review": 496,
+      "mapStamp": 506
+    },
+    "rearEnvelope": {
+      "asset": "OnboardingAirmailEnvelopeBack",
+      "width": 370,
+      "height": {
+        "clue": 220,
+        "review": 145,
+        "mapStamp": 148
+      },
+      "bottomOffset": {
+        "clue": 103,
+        "review": 155,
+        "mapStamp": 152
+      },
+      "topology": "one continuous rear envelope layer: a code-native kraft adhesive flap behind two broad illustrated kraft side wings with narrow outer airmail rails; the live letter sits above this rear layer, the front pocket overlaps its base, and no transparent center gap or detached rails remain"
+    },
+    "frontPocket": {
+      "asset": "OnboardingEnvelopeFrontV2",
+      "width": 370,
+      "height": {
+        "clue": 187,
+        "review": 170,
+        "mapStamp": 162
+      },
+      "bottomOffset": 0
+    },
+    "memo": {
+      "assets": {
+        "clue": "OnboardingMemoClue",
+        "review": "OnboardingMemoReview",
+        "mapStamp": "OnboardingMemoStamp"
+      },
+      "width": {
+        "clue": 118,
+        "review": 118,
+        "mapStamp": 105
+      },
+      "bottomOffset": {
+        "clue": 90,
+        "review": 48,
+        "mapStamp": 50
+      },
+      "horizontalOffset": {
+        "clue": 110,
+        "review": 72,
+        "mapStamp": 98
+      }
+    },
+    "cards": {
+      "clue": {
+        "width": 300,
+        "height": 286,
+        "bottomOffset": 153,
+        "horizontalOffset": -8
+      },
+      "review": {
+        "width": 338,
+        "height": 302,
+        "bottomOffset": 126,
+        "horizontalOffset": -10,
+        "sourceBacking": {
+          "width": 300,
+          "height": 116,
+          "bottomOffset": 372,
+          "horizontalOffset": -12
+        }
+      },
+      "mapStamp": {
+        "width": 340,
+        "height": 354,
+        "bottomOffset": 116,
+        "horizontalOffset": -13
+      }
+    },
+    "scaling": "Rear, front pocket, cards, and Memo use one shell width and one uniform scale. The 402 pt viewport uses a 370 pt shell with 16 pt screen margins; compact height caps the composition at 270 pt while actions retain 44 pt hit targets."
+  },
+  "rule": "The rear layer, its integrated visible V point, front pocket, state card, and contextual Memo are one open-envelope coordinate system. The connected point must be visible between card and pocket; both kraft shoulders must connect to narrow airmail rails; no detached triangle or horizontal airmail band may appear above the card; no layer may be replaced by a whole-screen screenshot."
+}

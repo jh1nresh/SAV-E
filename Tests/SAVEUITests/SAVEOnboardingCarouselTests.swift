@@ -18,24 +18,33 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         primary.tap()
 
         // Clue step: cannot continue without a clue, sample fills it.
-        XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: 5))
+        assertFullyVisible(app.staticTexts["Drop one messy clue"], in: app)
+        let clueSubtitle = app.staticTexts["A link, caption, or note is enough."]
+        assertFullyVisible(clueSubtitle, in: app)
         XCTAssertFalse(primary.isEnabled)
         app.buttons["onboarding.sampleClue"].tap()
         XCTAssertTrue(primary.isEnabled)
         XCTAssertTrue(app.descendants(matching: .any)["onboarding.pocketStage.clue"].exists)
-        XCTAssertTrue(app.textViews["onboarding.clueEditor"].exists)
+        let clueEditor = app.textViews["onboarding.clueEditor"]
+        XCTAssertTrue(clueEditor.exists)
+        XCTAssertLessThanOrEqual(clueSubtitle.frame.maxY + 12, clueEditor.frame.minY)
         attach(app, name: "first-run-02-clue")
         primary.tap()
 
         // Review Candidate demo.
-        XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        assertFullyVisible(app.staticTexts["Memo found a likely place"], in: app)
+        assertFullyVisible(app.staticTexts["It stays in review until you confirm."], in: app)
         let reviewStage = app.descendants(matching: .any)["onboarding.pocketStage.review"]
         XCTAssertTrue(waitForReady(reviewStage))
         attach(app, name: "first-run-03-review")
         primary.tap()
 
         // Map Stamp demo is the final step; its CTA exits onboarding.
-        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        assertFullyVisible(app.staticTexts["You confirmed it. Stamped."], in: app)
+        assertFullyVisible(
+            app.staticTexts["Only places you confirm become private Map Stamps."],
+            in: app
+        )
         let mapStampStage = app.descendants(matching: .any)["onboarding.pocketStage.mapStamp"]
         XCTAssertTrue(waitForReady(mapStampStage))
         attach(app, name: "first-run-04-map-stamp")
@@ -97,6 +106,29 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
             evaluatedWith: element
         )
         return XCTWaiter.wait(for: [ready], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func assertFullyVisible(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let settled = expectation(
+            for: NSPredicate(format: "exists == true AND hittable == true"),
+            evaluatedWith: element
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [settled], timeout: 5),
+            .completed,
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(element.frame.minX, app.frame.minX, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(element.frame.minY, app.frame.minY, file: file, line: line)
+        XCTAssertLessThanOrEqual(element.frame.maxX, app.frame.maxX, file: file, line: line)
+        XCTAssertLessThanOrEqual(element.frame.maxY, app.frame.maxY, file: file, line: line)
     }
 
     @MainActor
