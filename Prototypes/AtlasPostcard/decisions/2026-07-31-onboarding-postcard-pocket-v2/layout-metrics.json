@@ -14,7 +14,7 @@
       "asset": "OnboardingAirmailEnvelopeBack",
       "width": 370,
       "height": {
-        "clue": 190,
+        "clue": 220,
         "review": 145,
         "mapStamp": 148
       },
@@ -30,7 +30,7 @@
       "width": 370,
       "height": {
         "clue": 187,
-        "review": 190,
+        "review": 170,
         "mapStamp": 162
       },
       "bottomOffset": 0
@@ -42,14 +42,19 @@
         "mapStamp": "OnboardingMemoStamp"
       },
       "width": {
-        "clue": 105,
+        "clue": 118,
         "review": 118,
         "mapStamp": 105
       },
       "bottomOffset": {
         "clue": 90,
-        "review": 45,
-        "mapStamp": 43
+        "review": 48,
+        "mapStamp": 50
+      },
+      "horizontalOffset": {
+        "clue": 110,
+        "review": 72,
+        "mapStamp": 98
       }
     },
     "cards": {

@@ -727,7 +727,7 @@ private struct OnboardingSourceTicket: View {
                 linedNoteBackground
 
                 TextEditor(text: $clueText)
-                    .font(.custom("Noteworthy-Light", size: isCompactHeight ? 13 : 19, relativeTo: .headline))
+                    .font(.custom("Noteworthy-Light", size: isCompactHeight ? 13 : 21, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .lineSpacing(2)
                     .scrollContentBackground(.hidden)
@@ -768,7 +768,7 @@ private struct OnboardingSourceTicket: View {
                     Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
                 }
             }
-            .font(SaveAtlasType.body(10))
+            .font(SaveAtlasType.body(11))
             .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(isCompactHeight ? 10 : 12)
@@ -776,7 +776,7 @@ private struct OnboardingSourceTicket: View {
         .background {
             ZStack {
                 SaveAtlasPalette.paper
-                SaveAtlasPalette.coral.opacity(0.08)
+                SaveAtlasPalette.coral.opacity(0.14)
                 OnboardingTicketPaperGrain()
             }
         }
@@ -1030,7 +1030,7 @@ private struct OnboardingSourceBackingTicket: View {
         .background {
             ZStack {
                 SaveAtlasPalette.paper
-                SaveAtlasPalette.coral.opacity(0.13)
+                SaveAtlasPalette.coral.opacity(0.16)
                 OnboardingTicketPaperGrain()
             }
         }
@@ -1311,7 +1311,7 @@ private struct OnboardingSavedPostcard: View {
             .padding(.horizontal, 7)
         }
         .padding(.horizontal, 12)
-        .padding(.top, 32)
+        .padding(.top, 27)
         .padding(.bottom, 12)
         .frame(minHeight: 354, alignment: .top)
         .background {
@@ -1375,7 +1375,7 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 105
+        case .clue: return 118
         case .review: return 118
         case .stamp: return 105
         }
@@ -1383,8 +1383,8 @@ private enum OnboardingMemoPose {
 
     var horizontalOffset: CGFloat {
         switch self {
-        case .clue: return 117
-        case .review: return 80
+        case .clue: return 110
+        case .review: return 72
         case .stamp: return 98
         }
     }
@@ -1392,8 +1392,8 @@ private enum OnboardingMemoPose {
     var bottomOffset: CGFloat {
         switch self {
         case .clue: return 90
-        case .review: return 45
-        case .stamp: return 43
+        case .review: return 48
+        case .stamp: return 50
         }
     }
 
@@ -1419,7 +1419,7 @@ private enum OnboardingMemoPose {
 
     var rearHeight: CGFloat {
         switch self {
-        case .clue: return 190
+        case .clue: return 220
         case .review: return 145
         case .stamp: return 148
         }
@@ -1428,7 +1428,7 @@ private enum OnboardingMemoPose {
     var frontPocketHeight: CGFloat {
         switch self {
         case .clue: return 187
-        case .review: return 190
+        case .review: return 170
         case .stamp: return 162
         }
     }
@@ -1525,7 +1525,11 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
             .clipShape(SavePostcardScallopedRectangle(depth: 5, pitch: 13.5))
             .overlay {
                 SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
-                    .stroke(edge.opacity(0.82), lineWidth: 1.6)
+                    .stroke(tint.opacity(0.78), lineWidth: 4)
+            }
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
+                    .stroke(edge.opacity(0.86), lineWidth: 1)
             }
             .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
     }
