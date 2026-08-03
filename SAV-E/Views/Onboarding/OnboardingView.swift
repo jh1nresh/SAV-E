@@ -1486,7 +1486,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                 )
                 .offset(
                     x: -6 * scale,
-                    y: -memoPose.rearBottomOffset * scale
+                    y: -(memoPose.rearBottomOffset + 4) * scale
                 )
 
                 cards(scale, shellWidth)
