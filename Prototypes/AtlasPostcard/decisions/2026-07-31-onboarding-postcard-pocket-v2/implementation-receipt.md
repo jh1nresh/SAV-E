@@ -136,6 +136,14 @@ This pass uses the approved board as the component authority:
 Acceptance is based on foreground crops of the envelope construction, not the
 full-screen background. Same-commit CI screenshots remain required.
 
+The first runtime read-back for this topology exposed four remaining measured
+differences: the front pocket began 18–32 pt below the approved mouth, Memo was
+oversized, the state-card edge rendered as a thin outline instead of a postage
+band, and the state cards sat 6–10 pt to the right. The follow-up geometry uses
+state-specific pocket/rear heights, smaller Memo frames, solid clipped postage
+edges, and explicit horizontal offsets. These values are recorded in
+`layout-metrics.json`; they are not inferred from the whole-screen score.
+
 ## Build and Test Result
 
 - `swiftc -frontend -parse`: passed.

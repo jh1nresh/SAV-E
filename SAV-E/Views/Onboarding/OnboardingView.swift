@@ -40,7 +40,7 @@ struct OnboardingView: View {
                         language: language,
                         onBack: goBack
                     )
-                    .padding(.horizontal, horizontalPadding)
+                    .padding(.horizontal, 12)
                     .padding(.top, isCompactHeight ? 6 : -14)
 
                     stepBody(isCompactHeight: stepBodyUsesCompactLayout)
@@ -700,11 +700,11 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(width: 304, height: 286)
+            .frame(width: 300, height: 286)
             .scaleEffect(scale, anchor: .bottom)
-            .frame(width: 304 * scale, height: 286 * scale)
+            .frame(width: 300 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
-            .offset(x: -2 * scale, y: -153 * scale)
+            .offset(x: -8 * scale, y: -153 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -983,7 +983,7 @@ private struct ReviewPocketStage: View {
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 300 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(x: -6 * scale, y: -366 * scale)
+                    .offset(x: -12 * scale, y: -372 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -994,7 +994,7 @@ private struct ReviewPocketStage: View {
                     .frame(width: 338, height: 302)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 338 * scale, height: 302 * scale)
-                    .offset(x: 0, y: -130 * scale)
+                    .offset(x: -10 * scale, y: -126 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1030,7 +1030,7 @@ private struct OnboardingSourceBackingTicket: View {
         .background {
             ZStack {
                 SaveAtlasPalette.paper
-                SaveAtlasPalette.coral.opacity(0.10)
+                SaveAtlasPalette.coral.opacity(0.13)
                 OnboardingTicketPaperGrain()
             }
         }
@@ -1143,7 +1143,7 @@ private struct OnboardingReviewTicket: View {
         .background {
             ZStack {
                 SaveAtlasPalette.paper
-                SaveAtlasPalette.sky.opacity(0.18)
+                SaveAtlasPalette.sky.opacity(0.22)
                 OnboardingTicketPaperGrain()
             }
         }
@@ -1203,7 +1203,7 @@ private struct MapStampPocketStage: View {
                     .frame(width: 340, height: 354)
                     .scaleEffect(scale, anchor: .bottom)
                     .frame(width: 340 * scale, height: 354 * scale)
-                    .offset(x: -4 * scale, y: -118 * scale)
+                    .offset(x: -13 * scale, y: -116 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1317,7 +1317,7 @@ private struct OnboardingSavedPostcard: View {
         .background {
             ZStack {
                 SaveAtlasPalette.paper
-                SaveAtlasPalette.mint.opacity(0.22)
+                SaveAtlasPalette.mint.opacity(0.30)
                 OnboardingTicketPaperGrain()
             }
         }
@@ -1375,33 +1375,33 @@ private enum OnboardingMemoPose {
 
     var width: CGFloat {
         switch self {
-        case .clue: return 118
-        case .review: return 132
-        case .stamp: return 120
+        case .clue: return 105
+        case .review: return 118
+        case .stamp: return 105
         }
     }
 
     var horizontalOffset: CGFloat {
         switch self {
         case .clue: return 117
-        case .review: return 88
-        case .stamp: return 105
+        case .review: return 80
+        case .stamp: return 98
         }
     }
 
     var bottomOffset: CGFloat {
         switch self {
-        case .clue: return 70
-        case .review: return 55
-        case .stamp: return 68
+        case .clue: return 90
+        case .review: return 45
+        case .stamp: return 43
         }
     }
 
     var captionBottomPadding: CGFloat {
         switch self {
-        case .clue: return 92
+        case .clue: return 87
         case .review: return 72
-        case .stamp: return 66
+        case .stamp: return 56
         }
     }
 
@@ -1412,16 +1412,32 @@ private enum OnboardingMemoPose {
     var rearBottomOffset: CGFloat {
         switch self {
         case .clue: return 103
-        case .review: return 139
-        case .stamp: return 144
+        case .review: return 155
+        case .stamp: return 152
+        }
+    }
+
+    var rearHeight: CGFloat {
+        switch self {
+        case .clue: return 190
+        case .review: return 145
+        case .stamp: return 148
         }
     }
 
     var frontPocketHeight: CGFloat {
         switch self {
-        case .clue: return 166
-        case .review: return 160
-        case .stamp: return 144
+        case .clue: return 187
+        case .review: return 190
+        case .stamp: return 162
+        }
+    }
+
+    var stageVerticalOffset: CGFloat {
+        switch self {
+        case .clue: return -8
+        case .review: return -7
+        case .stamp: return -4
         }
     }
 
@@ -1463,7 +1479,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
             ZStack(alignment: .bottom) {
                 OnboardingAirmailEnvelopeBack(
                     width: shellWidth,
-                    height: 190 * scale
+                    height: memoPose.rearHeight * scale
                 )
                 .offset(y: -memoPose.rearBottomOffset * scale)
 
@@ -1495,6 +1511,7 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                     .zIndex(memoPose.layerIndex)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .offset(y: memoPose.stageVerticalOffset * scale)
         }
     }
 }
@@ -1505,19 +1522,12 @@ private struct OnboardingPostageTicketStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background {
-                ZStack {
-                    SavePostcardScallopedRectangle(depth: 4, pitch: 11)
-                        .fill(SaveAtlasPalette.paper)
-                    SavePostcardScallopedRectangle(depth: 4, pitch: 11)
-                        .fill(tint.opacity(0.38))
-                }
-            }
+            .clipShape(SavePostcardScallopedRectangle(depth: 5, pitch: 13.5))
             .overlay {
-                SavePostcardScallopedRectangle(depth: 4, pitch: 11)
-                    .stroke(edge.opacity(0.78), lineWidth: 1)
+                SavePostcardScallopedRectangle(depth: 5, pitch: 13.5)
+                    .stroke(edge.opacity(0.82), lineWidth: 1.6)
             }
-            .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 4, y: 2)
+            .shadow(color: tint.opacity(0.14), radius: 4, y: 2)
     }
 }
 
