@@ -908,6 +908,7 @@ struct SaveLibraryView: View {
 struct SaveMapRootView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let shouldFocusOnUserLocation: Bool
+    var hidesCommandShelf: Bool = false
     let onOpenSearch: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
@@ -922,6 +923,7 @@ struct SaveMapRootView: View {
                 SaveAtlasInteractiveRootMap(
                     mapViewModel: mapViewModel,
                     shouldFocusOnUserLocation: shouldFocusOnUserLocation,
+                    hidesCommandShelf: hidesCommandShelf,
                     presentation: atlasPresentation,
                     onClearSelection: mapViewModel.clearSelectedMapObject
                 )
