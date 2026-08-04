@@ -143,6 +143,7 @@ enum SaveAtlasPresentationFactory {
         store: TripPackStore,
         onCapture: @escaping () -> Void,
         onOpenAssistant: @escaping () -> Void,
+        onAskSubmit: @escaping (String) -> Void,
         onCreateTrip: @escaping () -> Void,
         onOpenTrip: @escaping (UUID) -> Void,
         onOpenPassport: @escaping () -> Void
@@ -160,6 +161,7 @@ enum SaveAtlasPresentationFactory {
 
         presentation.onCapture = onCapture
         presentation.onOpenAssistant = onOpenAssistant
+        presentation.onAskSubmit = onAskSubmit
         presentation.onCreateTrip = onCreateTrip
         presentation.onOpenTripID = { id in
             let selectedTrip = UUID(uuidString: id)
