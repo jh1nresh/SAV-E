@@ -163,6 +163,13 @@ struct ContentView: View {
             }
         }
         .environment(\.appLanguageSettings, languageSettings)
+#if DEBUG
+        .task {
+            if DebugVaultExporter.isRequested {
+                await DebugVaultExporter.run()
+            }
+        }
+#endif
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
             isPresented: Binding(
