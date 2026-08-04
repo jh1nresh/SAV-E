@@ -561,6 +561,11 @@ struct SaveLibraryView: View {
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
                 savesContent
+                    // ReferenceViewport ignores the safe area; the prototype
+                    // screen above draws its own status-bar band, but this
+                    // flow layout must reserve it or the header renders under
+                    // the clock.
+                    .padding(.top, AtlasMetrics.statusBarHeight)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -631,7 +636,9 @@ struct SaveLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
-                .padding(.bottom, 22)
+                // Clear the floating Atlas tab bar so the last ticket stays
+                // reachable.
+                .padding(.bottom, 108)
             }
         }
         .background(SaveDottedBackground())
