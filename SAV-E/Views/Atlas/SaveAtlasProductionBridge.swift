@@ -544,7 +544,7 @@ struct SaveAtlasInteractiveRootMap: View {
     }
 }
 
-private struct SaveAtlasMapCommandShelf: View {
+struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
 
