@@ -359,11 +359,6 @@ struct ContentView: View {
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenPassport: openPassport
                             )
-                            // ReferenceViewport ignores the safe area, so flow
-                            // layouts must reserve the Atlas status bar band
-                            // themselves; without this the header renders under
-                            // the clock.
-                            .padding(.top, AtlasMetrics.statusBarHeight)
                         case .trips:
                             TripsHomeView(
                                 store: tripStore,
