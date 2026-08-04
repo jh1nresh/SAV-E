@@ -755,37 +755,7 @@ struct TripsAtlasScreen: View {
             .placed(x: 17, y: 433, width: 368, height: 208)
 
             HStack(spacing: 10) {
-                Button(action: presentation.onOpenAssistant) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AtlasPalette.forest)
-
-                        Text("Ask SAV-E to plan from your Map Stamps")
-                            .font(AtlasType.strong(14))
-                            .foregroundStyle(AtlasPalette.ink)
-                            .lineLimit(1)
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 31, height: 31)
-                            .background(AtlasPalette.coral, in: Circle())
-                    }
-                    .padding(.horizontal, 13)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-                    }
-                    .shadow(color: AtlasPalette.ink.opacity(0.06), radius: 6, y: 2)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Ask SAV-E to plan from your Map Stamps")
-                .accessibilityIdentifier("trips.assistant")
+                TripsAskField(onSubmit: presentation.onAskSubmit)
 
                 Button(action: presentation.onCreateTrip) {
                     Image(systemName: "plus")
@@ -804,6 +774,93 @@ struct TripsAtlasScreen: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trips.home")
+    }
+}
+
+/// Trips P1: a real inline ask input replacing the old fake-input Button.
+/// Idle rendering must stay pixel-equal to the previous button (placeholder is
+/// drawn by hand, not by TextField) so Atlas parity crops keep passing.
+private struct TripsAskField: View {
+    let onSubmit: (String) -> Void
+    @State private var query = ""
+    @FocusState private var focused: Bool
+
+    /// The resting row sits under the software keyboard (row bottom y≈724,
+    /// keyboard top ≈538 in canvas units). A fixed lift clears every current
+    /// iPhone keyboard after ReferenceViewport scaling, so no keyboard-frame
+    /// observation is needed.
+    private let focusedLift: CGFloat = 240
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AtlasPalette.forest)
+
+            ZStack(alignment: .leading) {
+                if query.isEmpty {
+                    Text("Ask SAV-E to plan from your Map Stamps")
+                        .font(AtlasType.strong(14))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .lineLimit(1)
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: $query)
+                    .font(AtlasType.strong(14))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .tint(AtlasPalette.coral)
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit(submit)
+                    .accessibilityLabel("Ask SAV-E to plan from your Map Stamps")
+                    .accessibilityIdentifier("trips.assistant.input")
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: submit) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 31, height: 31)
+                    .background(AtlasPalette.coral, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ask SAV-E")
+            .accessibilityIdentifier("trips.assistant.submit")
+        }
+        .padding(.horizontal, 13)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+        }
+        .shadow(
+            color: AtlasPalette.ink.opacity(focused ? 0.14 : 0.06),
+            radius: focused ? 10 : 6,
+            y: focused ? 4 : 2
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { focused = true }
+        .offset(y: focused ? -focusedLift : 0)
+        // Same curve as SaveTheme.Motion.standardSpring; SaveTheme itself is
+        // not compiled into the AtlasPostcardPrototype target.
+        .animation(.spring(response: 0.52, dampingFraction: 0.86), value: focused)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("trips.assistant")
+    }
+
+    private func submit() {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            focused = true
+            return
+        }
+        focused = false
+        query = ""
+        onSubmit(trimmed)
     }
 }
 
