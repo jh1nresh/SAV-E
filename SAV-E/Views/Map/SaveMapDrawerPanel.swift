@@ -42,7 +42,6 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                 .padding(.horizontal, 15)
                 .padding(.bottom, collapsedBottomInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityIdentifier("map.drawerPanel.shelf")
             }
         }
         .animation(SaveTheme.Motion.standardSpring, value: isExpanded)
@@ -84,7 +83,8 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         .padding(.top, 64)
         .offset(y: dragOffset)
         .ignoresSafeArea(edges: .bottom)
-        .accessibilityIdentifier("map.drawerPanel.expanded")
+        // No identifier here: the drawer content inside must keep exposing
+        // its own `drawer.root` container to the accessibility tree.
     }
 
     private func collapse() {

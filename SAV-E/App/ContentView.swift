@@ -704,8 +704,18 @@ struct ContentView: View {
         // card. Leaving the card selected kept both visible at once.
         mapVM.clearSelectedMapObject()
         mapDetailDrawerItem = item
-        drawerDetent = .large
-        isMapPanelExpanded = true
+        if selectedRootTab == .map, rootPath.isEmpty {
+            // Root Map owns the single morphing drawer surface.
+            drawerDetent = .large
+            isMapPanelExpanded = true
+        } else {
+            // Trip surfaces keep the presented sheet: their close/return
+            // semantics (and the UI tests encoding them) expect a modal.
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            isRootSheetPresented = true
+        }
     }
 
     private func openDrawer(_ target: DrawerLaunchTarget, tripID: UUID?) {
