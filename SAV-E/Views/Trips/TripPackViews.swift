@@ -5,6 +5,7 @@ struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
     let onCapture: () -> Void
     let onOpenAssistant: () -> Void
+    let onAskSubmit: (String) -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -58,6 +59,7 @@ struct TripsHomeView: View {
             store: store,
             onCapture: onCapture,
             onOpenAssistant: onOpenAssistant,
+            onAskSubmit: onAskSubmit,
             onCreateTrip: { showsCreateTrip = true },
             onOpenTrip: { tripID in
                 store.selectTrip(tripID)

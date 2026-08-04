@@ -385,6 +385,9 @@ struct AtlasPresentation: @unchecked Sendable {
     var onCreateTrip: () -> Void
     var onOpenAssistant: () -> Void
     var onOpenPassport: () -> Void
+    // Trips P1: the ask entry is a real input; submit carries the typed
+    // question into the expanding ask surface.
+    var onAskSubmit: (String) -> Void = { _ in }
 
     static let reference = AtlasPresentation(
         homeHero: .referenceTokyo,
