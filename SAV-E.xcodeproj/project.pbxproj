@@ -106,6 +106,7 @@
 		A6270F856D0B837CAD4276E9 /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */; };
 		ABC5B30875AFDEA6A822E8B8 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1CB9442676082D76FDEC15 /* SocialPlaceParser.swift */; };
 		ACCC06DDEECA4C38C1D1F773 /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2C636EDAE7EAA2E062014 /* GooglePlacesService.swift */; };
+		AD4BE003420D948F1CA15615 /* SaveMapDrawerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */; };
 		AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55AC71904B498274561F2D /* MapView.swift */; };
 		B118D409C44CFAEC868DE8C2 /* TripPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */; };
 		B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */; };
@@ -312,6 +313,7 @@
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
+		B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapDrawerPanel.swift; sourceTree = "<group>"; };
 		B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
 		BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPackStoreTests.swift; sourceTree = "<group>"; };
 		BBB8F950F5A31B6EAD614F31 /* AppLanguageSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettingsTests.swift; sourceTree = "<group>"; };
@@ -714,6 +716,7 @@
 			children = (
 				1A55AC71904B498274561F2D /* MapView.swift */,
 				61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */,
+				B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */,
 			);
 			path = Map;
 			sourceTree = "<group>";
@@ -1167,6 +1170,7 @@
 				8F19E2D31087563F35CA0A16 /* SaveLLMClient.swift in Sources */,
 				6F07949E22AA506EE5A64CD7 /* SaveLocalVaultService.swift in Sources */,
 				92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */,
+				AD4BE003420D948F1CA15615 /* SaveMapDrawerPanel.swift in Sources */,
 				6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */,
 				593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */,
 				3EA497DD9126B572939E0D11 /* SaveMemoryRecord.swift in Sources */,

@@ -131,6 +131,7 @@ struct ContentView: View {
     @State private var fullScreenCandidateActionID: UUID?
     @State private var fullScreenMapCandidateActionID: String?
     @State private var fullScreenActionError: String?
+    @State private var isMapPanelExpanded = false
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -152,7 +153,15 @@ struct ContentView: View {
     }
 
     var body: some View {
-        rootTabs
+        ZStack(alignment: .bottom) {
+            rootTabs
+            mapDrawerPanel
+        }
+        .onChange(of: selectedRootTab) { _, tab in
+            if tab != .map, isMapPanelExpanded {
+                collapseMapPanel()
+            }
+        }
         .environment(\.appLanguageSettings, languageSettings)
 #if DEBUG
         .task {
@@ -380,7 +389,9 @@ struct ContentView: View {
                             SaveMapRootView(
                                 mapViewModel: mapVM,
                                 shouldFocusOnUserLocation: true,
-                                hidesCommandShelf: isRootSheetPresented,
+                                // The single drawer panel owns the shelf now;
+                                // the canvas never draws its own copy.
+                                hidesCommandShelf: true,
                                 onOpenSearch: { openDrawer(.ask, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenPassport: openPassport
@@ -420,6 +431,33 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    /// The Map tab's single drawer surface (spec P2): the resting shelf and
+    /// the expanded ask/search drawer are one morphing container, replacing
+    /// the old shelf-in-canvas + presented-sheet pair that stacked two
+    /// drawers on screen.
+    @ViewBuilder
+    private var mapDrawerPanel: some View {
+        if isMapPanelExpanded || (selectedRootTab == .map && rootPath.isEmpty) {
+            SaveMapDrawerPanel(
+                isExpanded: $isMapPanelExpanded,
+                mapStampCount: mapVM.places.count,
+                showsCollapsedShelf: mapVM.selectedPlace == nil
+                    && selectedRootTab == .map
+                    && rootPath.isEmpty
+                    && incomingPlaceReceipt == nil,
+                onExpand: { openDrawer(.ask, tripID: nil) },
+                onCollapse: collapseMapPanel
+            ) {
+                drawerView
+            }
+        }
+    }
+
+    private func collapseMapPanel() {
+        isMapPanelExpanded = false
+        handleRootSheetDismiss()
     }
 
     @ViewBuilder
@@ -662,14 +700,22 @@ struct ContentView: View {
         }
 
         drawerVM.returnToCommands()
-        // One place, one surface: the detail sheet replaces the Atlas place
+        // One place, one surface: the detail panel replaces the Atlas place
         // card. Leaving the card selected kept both visible at once.
         mapVM.clearSelectedMapObject()
         mapDetailDrawerItem = item
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            drawerDetent = .medium
+        if selectedRootTab == .map, rootPath.isEmpty {
+            // Root Map owns the single morphing drawer surface.
+            drawerDetent = .large
+            isMapPanelExpanded = true
+        } else {
+            // Trip surfaces keep the presented sheet: their close/return
+            // semantics (and the UI tests encoding them) expect a modal.
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                drawerDetent = .medium
+            }
+            isRootSheetPresented = true
         }
-        isRootSheetPresented = true
     }
 
     private func openDrawer(_ target: DrawerLaunchTarget, tripID: UUID?) {
@@ -692,14 +738,17 @@ struct ContentView: View {
         }
 
         drawerLaunchRequest = DrawerLaunchRequest(target: target)
-        drawerDetent = .medium
-        isRootSheetPresented = true
+        drawerDetent = .large
+        isMapPanelExpanded = true
     }
 
     private func openPassport() {
         guard !isPassportPresented else { return }
         SaveHaptics.tap()
 
+        if isMapPanelExpanded {
+            collapseMapPanel()
+        }
         if isRootSheetPresented {
             isRootSheetPresented = false
             Task { @MainActor in
