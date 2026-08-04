@@ -54,6 +54,16 @@ struct KeychainAccountReferenceStore: AccountReferenceStoring {
         }
     }
 
+    /// Removes the stored reference so the next sign-in is treated as
+    /// first-time. Used when the backend identity domain is intentionally
+    /// rebuilt (new account-ref secret) and stored refs can never match.
+    func clear() throws {
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw AccountReferenceStoreError.keychain(status)
+        }
+    }
+
     private var baseQuery: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

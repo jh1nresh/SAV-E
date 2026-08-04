@@ -69,6 +69,13 @@ struct SaveApp: App {
         if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
         }
+        // After an intentional backend identity rebuild (new account-ref
+        // secret), stored refs can never match and the recovery screen has no
+        // forward path. Clearing the ref makes the next sign-in first-time;
+        // the local vault is untouched.
+        if ProcessInfo.processInfo.arguments.contains("--uitest-reset-account-gate") {
+            try? KeychainAccountReferenceStore.shared.clear()
+        }
 #endif
     }
 
