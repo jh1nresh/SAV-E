@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,16 +22,56 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Docs/spec/backend-only PRs don't need the 30-minute iOS pipeline.
+      # Fail-open: if this step errors, outputs.run stays unset and every
+      # gated step still runs.
+      - name: Detect iOS-relevant changes
+        id: scope
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files" \
+            --paginate --jq '.[].filename')"
+          run=false
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            case "$f" in
+              *.md) ;;
+              specs/*|docs/*|design-prompts/*) ;;
+              backend/*|save-rn/*|services/*|supabase/*) ;;
+              Prototypes/AtlasPostcard/decisions/*) ;;
+              *) run=true; break ;;
+            esac
+          done <<< "$files"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "iOS-relevant changes: $run"
+          echo "changed files:"; echo "$files"
+
       - name: Select Xcode 26.6
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Verify toolchain
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: xcodebuild -version
 
       - name: Check secrets packaging
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: scripts/test-package-google-places-secrets.sh
 
+      - name: Cache SwiftPM packages
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
       - name: Build without booting a simulator
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -44,6 +85,7 @@ jobs:
 
       - name: Create focused test simulator
         id: simulator
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           udid="$(xcrun simctl create \
             'SAV-E CI' \
@@ -52,6 +94,7 @@ jobs:
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
       - name: Run unit tests
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -65,12 +108,14 @@ jobs:
             test
 
       - name: Reset focused simulator before UI tests
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
 
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
         timeout-minutes: 20
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -93,6 +138,7 @@ jobs:
             test
 
       - name: Enforce Atlas production visual parity
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -100,19 +146,21 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
         run: |
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-First-Run"
 
       - name: Reset focused simulator before Trip sheet UI test
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
 
       - name: Run Trip atlas sheet family UI test
         timeout-minutes: 8
+        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -149,7 +197,7 @@ jobs:
           exit "$cleanup_status"
 
       - name: Upload Atlas parity evidence
-        if: always()
+        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: save-atlas-parity-${{ github.sha }}
