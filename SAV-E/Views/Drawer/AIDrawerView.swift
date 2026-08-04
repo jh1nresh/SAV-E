@@ -3495,6 +3495,10 @@ private struct SavedMapDetailDrawerContent: View {
         guard let updatedPlace = await PlaceBusinessEnricher.enrich(detailPlace) else { return }
         guard place.id == updatedPlace.id else { return }
         enrichedPlace = updatedPlace
+        // Persist so enriched photos/hours survive relaunch and sync across
+        // devices; previously they lived only in this view's state. Demo and
+        // offline sessions simply skip the write.
+        try? await SupabaseService.shared.updatePlace(updatedPlace)
     }
 
     private var placeEditor: some View {
