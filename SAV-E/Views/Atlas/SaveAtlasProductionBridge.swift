@@ -481,6 +481,9 @@ enum SaveAtlasPresentationFactory {
 struct SaveAtlasInteractiveRootMap: View {
     @ObservedObject var mapViewModel: MapViewModel
     let shouldFocusOnUserLocation: Bool
+    // One bottom surface at a time: while the root drawer sheet is up, the
+    // resting command shelf hides so two drawers never stack (spec P2).
+    let hidesCommandShelf: Bool
     let presentation: AtlasPresentation
     let onClearSelection: () -> Void
 
@@ -523,7 +526,7 @@ struct SaveAtlasInteractiveRootMap: View {
                 .id(place.id)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .placed(x: 15, y: 568, width: 372, height: 220)
-            } else {
+            } else if !hidesCommandShelf {
                 SaveAtlasMapCommandShelf(
                     mapStampCount: presentation.mapStampCount,
                     onOpenAssistant: presentation.onOpenAssistant
