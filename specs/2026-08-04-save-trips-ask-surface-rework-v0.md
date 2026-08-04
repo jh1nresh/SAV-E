@@ -60,6 +60,15 @@ today it presents a second drawer on top of the resting one (reported
 stacked drawers. Judged by side-by-side crop against `DESIGN.md` Atlas
 tokens.
 
+## P2b — One place, one card (Map selection)
+
+Selecting a saved place on Map currently shows the Atlas place card and,
+beneath it, the legacy `SavePlaceDrawerPresentation` strip ("Map Stamp ·
+From your SAV-E" with share/close) at the same time (reported 2026-08-04).
+Same rule as P2: one surface per object. The Atlas card is canonical; the
+legacy strip must not co-present. Fold its actions (share, plan-around,
+note) into the card.
+
 ## P3 — Trips layout de-clutter
 
 Replace the fixed-canvas Trips screen with flow layout honoring
