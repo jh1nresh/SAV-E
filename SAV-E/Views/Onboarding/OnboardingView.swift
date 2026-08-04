@@ -1709,6 +1709,10 @@ private struct OnboardingPocketEnvelope: View {
         Image("OnboardingEnvelopeFrontV2")
             .resizable()
             .frame(width: width, height: height)
+            // The front asset owns the concave mouth. Keeping the rear liner
+            // behind this single asset lets it appear only through the real
+            // opening, rather than drawing a second horizontal paper strip
+            // across the ticket.
             .overlay(alignment: .bottom) {
                 Text(caption)
                     .font(SaveAtlasType.editorial(14 * (width / 370)))
