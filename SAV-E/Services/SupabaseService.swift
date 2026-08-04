@@ -707,6 +707,14 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return rows.map { $0.toPlace() }
     }
 
+#if DEBUG
+    /// Raw authenticated GET for the vault-export debug rail. Returns the
+    /// verbatim response body so exported files stay a faithful snapshot.
+    func debugRawGET(path: String) async throws -> Data {
+        try await request(path: path)
+    }
+#endif
+
     // MARK: - HTTP
 
     @discardableResult
