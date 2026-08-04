@@ -655,6 +655,9 @@ struct ContentView: View {
         }
 
         drawerVM.returnToCommands()
+        // One place, one surface: the detail sheet replaces the Atlas place
+        // card. Leaving the card selected kept both visible at once.
+        mapVM.clearSelectedMapObject()
         mapDetailDrawerItem = item
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = .medium
