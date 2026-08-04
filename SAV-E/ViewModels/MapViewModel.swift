@@ -1751,12 +1751,13 @@ final class MapViewModel: ObservableObject {
         }
         mirrorToLocalVault(updatedPlace)
 
-        if let userId = authService.currentUserId {
-            do {
-                try await supabaseService.savePlace(updatedPlace, userId: userId)
-            } catch {
-                print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
-            }
+        do {
+            // updatePlace PATCHes the existing row; the create endpoint is a
+            // plain insert and 500s on the duplicate id, which silently kept
+            // enriched photos from ever persisting.
+            try await supabaseService.updatePlace(updatedPlace)
+        } catch {
+            print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
         }
     }
 

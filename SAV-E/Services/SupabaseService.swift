@@ -151,6 +151,15 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "status": place.status.rawValue,
             "rating": place.rating,
             "note": place.note,
+            // Enrichment fields: without these, business photos/hours fetched
+            // on detail open only ever lived in memory and never synced.
+            "google_place_id": place.googlePlaceId,
+            "google_rating": place.googleRating,
+            "google_price_level": place.googlePriceLevel,
+            "price_range": place.priceRange,
+            "opening_hours": place.openingHours,
+            "source_image_url": place.sourceImageUrl,
+            "business_photo_urls": place.businessPhotoUrls,
         ]
         let body = try Self.jsonBody(updates)
 
