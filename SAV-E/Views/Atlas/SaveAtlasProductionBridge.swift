@@ -486,6 +486,9 @@ struct SaveAtlasInteractiveRootMap: View {
     let hidesCommandShelf: Bool
     let presentation: AtlasPresentation
     let onClearSelection: () -> Void
+    // Spec P2b: the Atlas card is the one surface per selected place, so it
+    // carries the actions the retired legacy strip used to own.
+    let onPlanAroundPlace: (Place) -> Void
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -521,6 +524,9 @@ struct SaveAtlasInteractiveRootMap: View {
                     onClose: onClearSelection,
                     onOpen: {
                         presentation.onOpenPlace(place.id.uuidString)
+                    },
+                    onPlanAround: {
+                        onPlanAroundPlace(place)
                     }
                 )
                 .id(place.id)
@@ -609,6 +615,7 @@ private struct SaveAtlasLivePlaceCard: View {
     let place: Place
     let onClose: () -> Void
     let onOpen: () -> Void
+    let onPlanAround: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -617,6 +624,18 @@ private struct SaveAtlasLivePlaceCard: View {
                     .fill(AtlasPalette.line.opacity(0.48))
                     .frame(width: 38, height: 4)
                     .frame(maxWidth: .infinity)
+
+                // Spec P2b: share moved here from the retired legacy strip —
+                // the card is the only surface for a selected place.
+                SavePlaceShareButton(content: .place(place)) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 32, height: 32)
+                        .background(AtlasPalette.canvas, in: Circle())
+                }
+                .accessibilityLabel("Share \(place.name)")
+                .accessibilityIdentifier("map.place.share")
 
                 Button(action: onClose) {
                     Image(systemName: "xmark")
@@ -644,8 +663,19 @@ private struct SaveAtlasLivePlaceCard: View {
                     Text(primaryLocation(for: place))
                         .font(AtlasType.body(13))
                         .foregroundStyle(AtlasPalette.muted)
-                        .lineLimit(2)
+                        .lineLimit(savedNote == nil ? 2 : 1)
                         .accessibilityIdentifier("map.place.location")
+
+                    // Spec P2b: surface the saved memory note the legacy
+                    // strip context used to carry (read-only; edit stays in
+                    // the expanded detail).
+                    if let savedNote {
+                        Text(savedNote)
+                            .font(AtlasType.editorial(12))
+                            .foregroundStyle(AtlasPalette.forest.opacity(0.85))
+                            .lineLimit(1)
+                            .accessibilityIdentifier("map.place.note")
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -677,21 +707,40 @@ private struct SaveAtlasLivePlaceCard: View {
             .foregroundStyle(AtlasPalette.ink)
             .accessibilityIdentifier("map.place.context")
 
-            Button(action: onOpen) {
-                HStack {
-                    Spacer()
-                    Text("Open details")
-                        .font(AtlasType.strong(17))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 16, weight: .semibold))
-                    Spacer()
+            HStack(spacing: 8) {
+                Button(action: onOpen) {
+                    HStack {
+                        Spacer()
+                        Text("Open details")
+                            .font(AtlasType.strong(17))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 16, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(.white)
+                    .frame(minHeight: 42)
+                    .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                 }
-                .foregroundStyle(.white)
-                .frame(minHeight: 42)
-                .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("map.place.openDetails")
+
+                // Spec P2b: plan-around moved onto the card from the retired
+                // legacy strip's expanded sibling.
+                Button(action: onPlanAround) {
+                    Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 42, height: 42)
+                        .background(AtlasPalette.honey.opacity(0.82), in: RoundedRectangle(cornerRadius: 11))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 11)
+                                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Plan around \(place.name)")
+                .accessibilityIdentifier("map.place.planAround")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("map.place.openDetails")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -707,6 +756,10 @@ private struct SaveAtlasLivePlaceCard: View {
         .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.place.card")
+    }
+
+    private var savedNote: String? {
+        place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
     }
 
     private func primaryLocation(for place: Place) -> String {
