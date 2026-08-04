@@ -33,25 +33,32 @@ surfaces are still prototype-era.
 ## P1 — Ask in place on Trips (independently testable)
 
 Replace the fake-input Button with a real inline ask field on Trips. Submit
-runs the existing `AIDrawerViewModel` ask flow presented as a sheet **over
-Trips** — no tab switch.
+expands the ask surface **in place** — the on-screen panel grows into the
+conversation view. No tab switch, and no second drawer stacked on top of an
+existing one (founder decision 2026-08-04: the visible surface itself
+expands; never present an additional drawer over it).
 
 Acceptance scenarios:
 
 - Given Trips is open, when the user taps the ask field, then the keyboard
   appears and typed text renders in the field — still on Trips.
-- Given a typed question, when the user submits, then the ask flow presents
-  as a sheet over Trips and the answer references confirmed Map Stamps.
-- Given the sheet is dismissed, then the user is still on Trips with prior
-  scroll state.
+- Given a typed question, when the user submits, then the on-screen panel
+  expands into the ask conversation and the answer references confirmed Map
+  Stamps. No new drawer/sheet layer is presented.
+- Given the expanded panel is collapsed, then the user is still on Trips
+  with prior scroll state.
 - Existing `trips.assistant` accessibility id stays on the ask entry so
   current UI tests keep passing.
 
-## P2 — Drawer visual convergence
+## P2 — Drawer visual + presentation convergence
 
 Ask/search drawer adopts Atlas surfaces: paper background, kraft chip
-treatment, editorial type, postage accents. No behavior change. Judged by
-side-by-side crop against `DESIGN.md` Atlas tokens.
+treatment, editorial type, postage accents. Presentation rule applies on
+Map too: tapping the resting shelf expands that same shelf in place —
+today it presents a second drawer on top of the resting one (reported
+2026-08-04). One surface, two states (resting / expanded); never two
+stacked drawers. Judged by side-by-side crop against `DESIGN.md` Atlas
+tokens.
 
 ## P3 — Trips layout de-clutter
 
