@@ -700,14 +700,16 @@ private struct CluePocketStage: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(width: 300, height: 286)
+            .frame(width: 280, height: 286)
             .scaleEffect(scale, anchor: .bottom)
-            .frame(width: 300 * scale, height: 286 * scale)
+            .frame(width: 280 * scale, height: 286 * scale)
             .rotationEffect(.degrees(-1.2))
             // Let the front pocket cover the ticket's lower scallops. The
             // approved object reads as a letter inside one open envelope, not
-            // a postcard resting above a separate kraft panel.
-            .offset(x: -15 * scale, y: -140 * scale)
+            // a postcard resting above a separate kraft panel. Tickets share
+            // the envelope's -6 x offset so the kraft liner margins stay
+            // symmetric and the rear fold diagonals peek out on both sides.
+            .offset(x: -6 * scale, y: -140 * scale)
         }
         .accessibilityIdentifier("onboarding.pocketStage.clue")
     }
@@ -982,11 +984,11 @@ private struct ReviewPocketStage: View {
         ) { scale, _ in
             ZStack(alignment: .bottom) {
                 OnboardingSourceBackingTicket(clueLine: clueLine, language: language)
-                    .frame(width: 300, height: 116)
+                    .frame(width: 272, height: 116)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 300 * scale, height: 116 * scale)
+                    .frame(width: 272 * scale, height: 116 * scale)
                     .rotationEffect(.degrees(-1.2))
-                    .offset(x: -12 * scale, y: -346 * scale)
+                    .offset(x: -6 * scale, y: -346 * scale)
 
                 if phase >= 1 {
                     OnboardingReviewTicket(
@@ -994,10 +996,10 @@ private struct ReviewPocketStage: View {
                         isCompactHeight: isCompactHeight,
                         phase: phase
                     )
-                    .frame(width: 338, height: 302)
+                    .frame(width: 300, height: 302)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 338 * scale, height: 302 * scale)
-                    .offset(x: -10 * scale, y: -112 * scale)
+                    .frame(width: 300 * scale, height: 302 * scale)
+                    .offset(x: -6 * scale, y: -112 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
             }
@@ -1059,10 +1061,10 @@ private struct OnboardingReviewTicket: View {
                         .tracking(0.8)
                         .foregroundStyle(Color.saveBlueInk)
                     Text("Hidden Moon Cafe?")
-                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 34, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(isCompactHeight ? 18 : 30, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        .minimumScaleFactor(0.7)
                 }
 
                 Spacer(minLength: 0)
@@ -1203,10 +1205,12 @@ private struct MapStampPocketStage: View {
         ) { scale, _ in
             if phase >= 1 {
                 OnboardingSavedPostcard(language: language)
-                    .frame(width: 340, height: 344)
+                    .frame(width: 304, height: 344)
                     .scaleEffect(scale, anchor: .bottom)
-                    .frame(width: 340 * scale, height: 344 * scale)
-                    .offset(x: -13 * scale, y: -110 * scale)
+                    .frame(width: 304 * scale, height: 344 * scale)
+                    // Lifted enough that the postcard's map strip clears the
+                    // pocket mouth like the approved reference.
+                    .offset(x: -6 * scale, y: -138 * scale)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
@@ -1230,10 +1234,10 @@ private struct OnboardingSavedPostcard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Hidden Moon Cafe")
-                        .font(SaveAtlasType.strong(30, relativeTo: .headline))
+                        .font(SaveAtlasType.strong(24, relativeTo: .headline))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.78)
+                        .minimumScaleFactor(0.72)
 
                     Label(
                         language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
@@ -1411,7 +1415,9 @@ private enum OnboardingMemoPose {
         switch self {
         case .clue: return 87
         case .review: return 72
-        case .stamp: return 56
+        // Keep the stamp caption above the postage mark embossed on the
+        // front pocket's lower-left corner.
+        case .stamp: return 76
         }
     }
 
