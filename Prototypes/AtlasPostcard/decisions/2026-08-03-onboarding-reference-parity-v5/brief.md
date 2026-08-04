@@ -44,9 +44,10 @@
 - **Type mood:** warm, condensed, editorial.
 - **Motion:** one short ticket-settle transition; reduced motion renders the
   final composition directly.
-- **Do:** preserve one shared coordinate system; expose a restrained kraft rear
-  mouth lip; terminate rails behind the front pocket; keep state colors semantic;
-  validate each screen with the same viewport crop.
+- **Do:** preserve one shared coordinate system; let the rear liner appear only
+  through the front pocket's owned concave mouth; terminate rails behind the
+  front pocket; keep state colors semantic; validate each screen with the same
+  viewport crop.
 - **Don't:** add a second pocket/flap, place a separate decorative triangle on
   top, let cards fully occlude the liner, or use a whole-screen generated image
   as UI.
@@ -56,11 +57,11 @@
 ```text
 rear airmail liner
   -> state ticket / source crown
-  -> visible kraft rear-mouth lip
+  -> front kraft pocket mouth reveals the liner
   -> front kraft pocket
   -> Memo peek
 ```
 
-The rear-mouth lip is a shared part of the same envelope, not a third card or
-independent sticker. It must be visible only where the ticket enters the front
-pocket, with both ends tucked behind the front-pocket shoulders.
+The rear liner is a shared part of the same envelope, not a third card or
+independent sticker. It is visible only through the front pocket's owned mouth,
+with both ends tucked behind the front-pocket shoulders.

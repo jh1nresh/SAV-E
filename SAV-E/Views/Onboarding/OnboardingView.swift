@@ -1439,20 +1439,6 @@ private enum OnboardingMemoPose {
         }
     }
 
-    /// The open-envelope liner needs to remain visible where the letter enters
-    /// the front pocket. This is deliberately a narrow shared exposure, not a
-    /// second envelope or a state-specific decorative card.
-    var rearMouthLipHeight: CGFloat {
-        switch self {
-        // The reference silhouette exposes a shallow adhesive hinge, not a
-        // second kraft band. Keep the visible mouth within the 8–14 pt
-        // overlap used by the front pocket.
-        case .clue: return 14
-        case .review: return 13
-        case .stamp: return 12
-        }
-    }
-
     var stageVerticalOffset: CGFloat {
         switch self {
         case .clue: return -8
@@ -1513,19 +1499,6 @@ private struct OnboardingOpenEnvelopeShell<Cards: View>: View {
                         y: 2 * scale
                     )
                     .zIndex(1)
-
-                // Re-expose the continuous rear liner only at the physical
-                // opening. The live ticket and front pocket otherwise retain
-                // their established occlusion order.
-                OnboardingRearMouthLip(
-                    width: shellWidth,
-                    height: memoPose.rearMouthLipHeight * scale
-                )
-                .offset(
-                    x: -6 * scale,
-                    y: -(memoPose.frontPocketHeight - memoPose.rearMouthLipHeight) * scale
-                )
-                .zIndex(1.5)
 
                 OnboardingPocketEnvelope(
                     caption: caption,
@@ -1736,6 +1709,10 @@ private struct OnboardingPocketEnvelope: View {
         Image("OnboardingEnvelopeFrontV2")
             .resizable()
             .frame(width: width, height: height)
+            // The front asset owns the concave mouth. Keeping the rear liner
+            // behind this single asset lets it appear only through the real
+            // opening, rather than drawing a second horizontal paper strip
+            // across the ticket.
             .overlay(alignment: .bottom) {
                 Text(caption)
                     .font(SaveAtlasType.editorial(14 * (width / 370)))
@@ -1751,24 +1728,6 @@ private struct OnboardingPocketEnvelope: View {
                 radius: 6 * scale,
                 y: 4 * scale
             )
-            .accessibilityHidden(true)
-    }
-}
-
-/// A narrow crop of the existing rear-envelope asset. It restores the visible
-/// kraft hinge at the mouth without adding a separately styled flap.
-private struct OnboardingRearMouthLip: View {
-    let width: CGFloat
-    let height: CGFloat
-
-    var body: some View {
-        let assetHeight = width * (220 / 370)
-
-        Image("OnboardingAirmailEnvelopeBackV2")
-            .resizable()
-            .frame(width: width, height: assetHeight)
-            .frame(width: width, height: height, alignment: .bottom)
-            .clipped()
             .accessibilityHidden(true)
     }
 }
