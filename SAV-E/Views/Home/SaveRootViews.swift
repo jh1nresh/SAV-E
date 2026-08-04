@@ -631,7 +631,9 @@ struct SaveLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
-                .padding(.bottom, 22)
+                // Clear the floating Atlas tab bar so the last ticket stays
+                // reachable.
+                .padding(.bottom, 108)
             }
         }
         .background(SaveDottedBackground())
