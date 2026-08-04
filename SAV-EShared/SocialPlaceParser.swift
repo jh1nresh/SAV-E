@@ -1194,9 +1194,13 @@ struct SocialPlaceParser {
         }
 
         let isDouyinAggregateList = looksLikeDouyinAggregateFoodList(text: text, sourceURL: evidence.sourceURL)
+        let isXiaohongshuList = looksLikeXiaohongshuPlaceList(text: text, sourceURL: evidence.sourceURL)
+        let isDianpingList = looksLikeDianpingPlaceList(text: text, sourceURL: evidence.sourceURL)
         var candidates: [SocialPlaceCandidateDraft] = []
         candidates.append(contentsOf: mainlandMerchantCandidates(from: evidence, fullText: text))
         candidates.append(contentsOf: douyinFoodListCandidates(from: text, sourceURL: evidence.sourceURL))
+        candidates.append(contentsOf: xiaohongshuListCandidates(from: text, sourceURL: evidence.sourceURL))
+        candidates.append(contentsOf: dianpingListCandidates(from: text, sourceURL: evidence.sourceURL))
         if !isDouyinAggregateList || !candidates.isEmpty {
             candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
             candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL))
@@ -1435,6 +1439,196 @@ struct SocialPlaceParser {
                 extraMissingInfo: ["Douyin food-list candidate; confirm exact map listing"]
             )
         }
+    }
+
+    private func xiaohongshuListCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+        guard looksLikeXiaohongshuPlaceList(text: text, sourceURL: sourceURL) else { return [] }
+        
+        let regions = regionClues(from: text)
+        let primaryRegion = normalizedPrimaryRegion(from: regions)
+        
+        // Extract numbered items from Xiaohongshu lists
+        let segments = xiaohongshuListSegments(from: text, sourceURL: sourceURL)
+        guard segments.count >= 1 else { return [] }
+        
+        return segments.compactMap { segment in
+            guard let name = xiaohongshuVenueName(from: segment.body) else { return nil }
+            let category = category(from: "\(name)\n\(segment.body)\n\(text)")
+            var atoms = [
+                SocialEvidenceAtom(source: .numberedCaption, role: .venueName, value: name, line: segment.line, confidence: 0.68)
+            ]
+            if let primaryRegion {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: primaryRegion, line: text, confidence: 0.5))
+            }
+            
+            // Extract additional clues from the segment body
+            if let locationClue = firstLocationClue(in: segment.body) {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: locationClue, line: segment.line, confidence: 0.55))
+            }
+            
+            return draft(
+                name: name,
+                category: category,
+                sourceURL: sourceURL,
+                fullText: text,
+                atoms: atoms,
+                confidence: category == "food" ? 0.58 : 0.52,
+                tier: .weakCandidate,
+                extraMissingInfo: ["Xiaohongshu list candidate; verify exact map listing"]
+            )
+        }
+    }
+
+    private func dianpingListCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+        guard looksLikeDianpingPlaceList(text: text, sourceURL: sourceURL) else { return [] }
+        
+        let regions = regionClues(from: text)
+        let primaryRegion = normalizedPrimaryRegion(from: regions)
+        
+        // Extract numbered items from Dianping lists
+        let segments = dianpingListSegments(from: text, sourceURL: sourceURL)
+        guard segments.count >= 1 else { return [] }
+        
+        return segments.compactMap { segment in
+            guard let name = dianpingVenueName(from: segment.body) else { return nil }
+            let category = category(from: "\(name)\n\(segment.body)\n\(text)")
+            var atoms = [
+                SocialEvidenceAtom(source: .numberedCaption, role: .venueName, value: name, line: segment.line, confidence: 0.7)
+            ]
+            if let primaryRegion {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: primaryRegion, line: text, confidence: 0.5))
+            }
+            
+            // Extract rating and price info if available
+            if let rating = extractRating(from: segment.body) {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .placeHighlight, value: "評分：\(rating)", line: segment.line, confidence: 0.6))
+            }
+            if let price = extractPrice(from: segment.body) {
+                atoms.append(SocialEvidenceAtom(source: .captionSentence, role: .placeHighlight, value: "價格：\(price)", line: segment.line, confidence: 0.6))
+            }
+            
+            return draft(
+                name: name,
+                category: category,
+                sourceURL: sourceURL,
+                fullText: text,
+                atoms: atoms,
+                confidence: category == "food" ? 0.62 : 0.55,
+                tier: .weakCandidate,
+                extraMissingInfo: ["Dianping list candidate; confirm exact map listing"]
+            )
+        }
+    }
+
+    private func xiaohongshuListSegments(from text: String, sourceURL: String) -> [(line: String, body: String)] {
+        guard looksLikeXiaohongshuPlaceList(text: text, sourceURL: sourceURL) else { return [] }
+        
+        // Pattern for numbered lists in Xiaohongshu (e.g., "1. ", "1,", "①")
+        let pattern = #"(?:^|\n)\s*(\d{1,2}[\.、]|[①②③④⑤⑥⑦⑧⑨⑩]|🔟)\s*([^\n]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else {
+            return []
+        }
+        
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = regex.matches(in: text, range: range)
+        
+        var segments: [(line: String, body: String)] = []
+        for match in matches {
+            guard match.numberOfRanges > 1,
+                  let bodyRange = Range(match.range(at: 2), in: text) else {
+                continue
+            }
+            
+            let fullRange = Range(match.range, in: text)!
+            let line = SocialPlaceEvidenceScorer.cleanText(String(text[fullRange]))
+            let body = SocialPlaceEvidenceScorer.cleanText(String(text[bodyRange]))
+            
+            guard !body.isEmpty else { continue }
+            segments.append((line, body))
+        }
+        
+        return segments
+    }
+
+    private func dianpingListSegments(from text: String, sourceURL: String) -> [(line: String, body: String)] {
+        guard looksLikeDianpingPlaceList(text: text, sourceURL: sourceURL) else { return [] }
+        
+        // Pattern for numbered lists in Dianping (similar to Xiaohongshu but may include ratings)
+        let pattern = #"(?:^|\n)\s*(\d{1,2}[\.、]|[①②③④⑤⑥⑦⑧⑨⑩])\s*([^\n]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else {
+            return []
+        }
+        
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = regex.matches(in: text, range: range)
+        
+        var segments: [(line: String, body: String)] = []
+        for match in matches {
+            guard match.numberOfRanges > 1,
+                  let bodyRange = Range(match.range(at: 2), in: text) else {
+                continue
+            }
+            
+            let fullRange = Range(match.range, in: text)!
+            let line = SocialPlaceEvidenceScorer.cleanText(String(text[fullRange]))
+            let body = SocialPlaceEvidenceScorer.cleanText(String(text[bodyRange]))
+            
+            guard !body.isEmpty else { continue }
+            segments.append((line, body))
+        }
+        
+        return segments
+    }
+
+    private func xiaohongshuVenueName(from body: String) -> String? {
+        var value = body
+            .replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"#\w+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"@[\w\.]+"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.,，。:：;；!！"))
+        
+        // Remove common Xiaohongshu suffixes
+        value = value
+            .replacingOccurrences(of: #"(?i)(必吃 | 必去 | 推薦 | 推荐 | 打卡 | 探店).*"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.,，。:：;；!！"))
+        
+        guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(value) else { return nil }
+        return value.isEmpty ? nil : value
+    }
+
+    private func dianpingVenueName(from body: String) -> String? {
+        var value = body
+            .replacingOccurrences(of: #"https?://\S+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"\d\.\d\s*(?:分 | 星)"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?:￥|\$|人均)\s*\d+"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?:地址 | 位置)：?[^\n]*"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.,，。:：;；!！"))
+        
+        // Remove common Dianping suffixes
+        value = value
+            .replacingOccurrences(of: #"(?i)(預訂 | 预订 | 團購 | 团购 | 優惠 | 优惠).*"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r.,，。:：;；!！"))
+        
+        guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(value) else { return nil }
+        return value.isEmpty ? nil : value
+    }
+
+    private func extractRating(from text: String) -> String? {
+        let pattern = #"(\d\.\d)\s*(?:分 | 星)"#
+        return firstCapture(in: text, pattern: pattern)
+    }
+
+    private func extractPrice(from text: String) -> String? {
+        let patterns = [
+            #"(?:￥|\$)\s*(\d+)"#,
+            #"人均\s*(\d+)\s*(?:元 | 塊 | 块)?"#
+        ]
+        for pattern in patterns {
+            if let result = firstCapture(in: text, pattern: pattern) {
+                return result
+            }
+        }
+        return nil
     }
 
     private func numberedCandidates(
@@ -2083,6 +2277,46 @@ struct SocialPlaceParser {
         let pRangeCount = matches(in: text, pattern: #"(?i)\bP\d{1,2}(?:\s*[-–—]\s*P?\d{1,2})?\s+"#).count
         let textHasDouyinURL = text.range(of: #"(?i)https?://(?:www\.)?(?:v\.)?(?:ies)?douyin\.com/\S*"#, options: .regularExpression) != nil
         return pRangeCount >= 2 && (hasDouyinSource || textHasDouyinURL)
+    }
+
+    private func looksLikeXiaohongshuPlaceList(text: String, sourceURL: String) -> Bool {
+        let loweredURL = sourceURL.lowercased()
+        let hasXiaohongshuSource = loweredURL.contains("xiaohongshu.com") || 
+            loweredURL.contains("xhslink.com") || 
+            text.contains("小红书") || 
+            text.contains("小紅書")
+        guard hasXiaohongshuSource else { return false }
+        
+        // Check for numbered list patterns common in Xiaohongshu place lists
+        let numberedPatternCount = matches(in: text, pattern: #"(?:^|\n)\s*(?:\d{1,2}[\.、]|[①②③④⑤⑥⑦⑧⑨⑩]|🔟)\s+"#).count
+        let bulletPatternCount = matches(in: text, pattern: #"(?:^|\n)\s*[•●○▪▫◦▪️▫️]\s+"#).count
+        let emojiNumberCount = matches(in: text, pattern: #"(?:^|\n)\s*[1-9]⃣️?\s+"#).count
+        
+        // Check for typical Xiaohongshu list indicators
+        let hasListKeywords = text.range(of: #"(?:探店|打卡|推薦|推荐|必吃|必去|清單|清单|合集|攻略|地圖|地图)"#, options: .regularExpression) != nil
+        let hasMultipleVenues = (numberedPatternCount >= 2 || bulletPatternCount >= 3 || emojiNumberCount >= 2)
+        
+        return hasMultipleVenues && hasListKeywords
+    }
+
+    private func looksLikeDianpingPlaceList(text: String, sourceURL: String) -> Bool {
+        let loweredURL = sourceURL.lowercased()
+        let hasDianpingSource = loweredURL.contains("dianping.com") || 
+            loweredURL.contains("dpurl.cn") || 
+            text.contains("大众点评") || 
+            text.contains("大眾點評") ||
+            text.contains("美團") ||
+            text.contains("美团")
+        guard hasDianpingSource else { return false }
+        
+        // Check for Dianping-specific list patterns
+        let numberedPatternCount = matches(in: text, pattern: #"(?:^|\n)\s*(?:\d{1,2}[\.、]|[①②③④⑤⑥⑦⑧⑨⑩])\s+"#).count
+        let hasShopRatings = text.range(of: #"\d\.\d\s*(?:分|星)"#, options: .regularExpression) != nil
+        let hasPriceIndicators = text.range(of: #"(?:￥|\$|人均)\s*\d+"#, options: .regularExpression) != nil
+        let hasAddressPatterns = text.range(of: #"(?:地址|位置|距).*?(?:路|街|道|號|号)"#, options: .regularExpression) != nil
+        
+        return (numberedPatternCount >= 2 && (hasShopRatings || hasPriceIndicators || hasAddressPatterns)) ||
+            (numberedPatternCount >= 3)
     }
 
     private func looksLikeDouyinAggregateFoodList(text: String, sourceURL: String) -> Bool {

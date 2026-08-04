@@ -1,75 +1,34 @@
+```
 # Xcode
+*.xcodeproj/
+*.xcworkspace/
+*.swiftmodule/
+*.swiftdoc/
+*.swo/
+*.swp/
+
+# Build artifacts
 build/
 DerivedData/
-*.pbxuser
-!default.pbxuser
-*.mode1v3
-!default.mode1v3
-*.mode2v3
-!default.mode2v3
-*.perspectivev3
-!default.perspectivev3
-xcuserdata/
-*.xccheckout
-*.moved-aside
-*.xcuserstate
-*.xcscmblueprint
-*.xcworkspace
-!default.xcworkspace
+*.app/
+*.ipa/
+*.dSYM/
 
-# Swift Package Manager
-.build/
-Packages/
-Package.resolved
-*.xcodeproj
-!SAV-E.xcodeproj/
-!SAV-E.xcodeproj/**
-!Wanderly.xcodeproj
-SAV-E.xcodeproj/**/xcuserdata/
-SAV-E.xcodeproj/**/*.xcuserstate
-SAV-E.xcodeproj/**/xcdebugger/
-node_modules/
-backend/dist/
-
-# CocoaPods
+# Dependencies
 Pods/
-
-# Carthage
-Carthage/Build/
-
-# Fastlane
-fastlane/report.xml
-fastlane/Preview.html
-fastlane/screenshots/**/*.png
-fastlane/test_output
-
-# Secrets
-**/Secrets.plist
+Carthage/
+.swiftPM/
 
 # Environment
 .env
 .env.local
-.env.production
-supabase/.temp/
+.env.*
 
-# OS files
-.DS_Store
-*.swp
-*~
-._*
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.DS_Store
 Thumbs.db
-
-# IDE
-.idea/
-*.hmap
-*.ipa
-*.xcarchive
-*.dSYM.zip
-*.dSYM
-.vercel
-
-# Local product drafts
-SAV-E_PRD_v1.0.docx
-specs/app-store-screenshot-board.html
-specs/app-store-screenshots/
-specs/save-campaign-screenshots/
+```

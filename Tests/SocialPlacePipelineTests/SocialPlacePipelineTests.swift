@@ -524,6 +524,69 @@ final class SocialPlacePipelineTests: XCTestCase {
         """
     }
 
+    private var xiaohongshuPlaceListFixture: String {
+        """
+        台北必吃美食清單🧾 探店合集｜5 家隱藏版咖啡廳
+
+        1. 阿夢咖啡廳 📍中正紀念堂
+           煙花女麵 $350，份量超大
+           營業時間：11:00-21:30
+           深夜咖啡廳兼小餐館
+
+        2. Standard Bread 信義區
+           杜拜巧克力吐司 $399
+           韓國超紅麵包店
+           台北 101 附近
+
+        ③ 清水茶香 大安區
+           黑糖剉冰必點
+           人均$150
+           復興南路一段
+
+        4️⃣ 新咖啡實驗室
+           手沖咖啡專賣
+           推薦耶加雪菲
+           #台北咖啡 #大安區美食
+
+        5.  Known Cafe 台中
+           早午餐推薦
+           水湳市場附近
+           #台中美食
+
+        #台北美食 #探店 #打卡 #咖啡廳推薦
+        https://www.xiaohongshu.com/explore/abc123xyz
+        """
+    }
+
+    private var dianpingPlaceListFixture: String {
+        """
+        上海美食推薦｜大眾點評高分店鋪合集
+
+        1. 蟹尊苑 4.8 分 ￥200/人
+           地址：上海市黄浦区广东路 59 号
+           招牌大閘蟹超級好吃
+           預訂電話：021-12345678
+
+        2. 老上海弄堂菜 4.5 分 ￥150/人
+           地址：上海市靜安區南京西路 100 號
+           本幫菜正宗
+           近地鐵 2 號線
+
+        ③ 外灘景觀餐廳 4.7 分 ￥500/人
+           地址：上海市黄浦區中山東一路
+           夜景超美
+           需要提前預訂
+
+        4. 賀鴨郎 粵菜烤鴨 4.6 分 ￥380/人
+           地址：高雄市前鎮區林森四路 189 號 B1
+           承億酒店內
+           烤鴨皮脆肉嫩
+
+        #上海美食 #大眾點評 #魔都美食 #美食探店
+        https://www.dianping.com/shop/shanghai123
+        """
+    }
+
     @MainActor
     func testPlaceBearingSourceRunsPublicSearchAndPlacesMatchWithEvidenceReceipt() async throws {
         let places = StubGooglePlacesService()
@@ -4014,3 +4077,109 @@ private final class StubGeminiURLProtocol: URLProtocol {
 
     override func stopLoading() {}
 }
+
+    @MainActor
+    func testXiaohongshuPlaceListProducesMultiPlaceSourceUnderstanding() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.xiaohongshu.com/explore/abc123xyz",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: xiaohongshuPlaceListFixture,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        let names = analysis.placesFound.map(\.displayName)
+        XCTAssertEqual(analysis.sourceType, .multiPlaceList)
+        XCTAssertEqual(analysis.sourceIntent, .multiPlaceList)
+        XCTAssertTrue(analysis.isPlaceBearing)
+        XCTAssertTrue(names.contains("阿夢咖啡廳"))
+        XCTAssertTrue(names.contains("Standard Bread"))
+        XCTAssertTrue(names.contains("清水茶香"))
+        XCTAssertTrue(names.contains("新咖啡實驗室"))
+        XCTAssertTrue(names.contains("Known Cafe"))
+        XCTAssertTrue(analysis.regionClues.contains("台北"))
+        XCTAssertTrue(analysis.regionClues.contains("中正紀念堂"))
+        XCTAssertTrue(analysis.regionClues.contains("信義區"))
+        XCTAssertTrue(analysis.regionClues.contains("大安區"))
+    }
+
+    @MainActor
+    func testXiaohongshuPlaceListCreatesReviewCandidatesWithoutFakeCoordinates() {
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: xiaohongshuPlaceListFixture,
+            sourceURL: "https://www.xiaohongshu.com/explore/abc123xyz"
+        )
+
+        let names = candidates.map(\.candidateName)
+        XCTAssertGreaterThan(candidates.count, 1)
+        XCTAssertFalse(candidates.contains { $0.isSourceOnly })
+        XCTAssertTrue(names.contains("阿夢咖啡廳"))
+        XCTAssertTrue(names.contains("Standard Bread"))
+        XCTAssertTrue(names.contains("清水茶香"))
+        XCTAssertTrue(names.contains("新咖啡實驗室"))
+        XCTAssertTrue(names.contains("Known Cafe"))
+        XCTAssertTrue(candidates.allSatisfy { $0.latitude == nil && $0.longitude == nil })
+        XCTAssertTrue(candidates.allSatisfy { $0.address.isEmpty })
+        XCTAssertTrue(candidates.allSatisfy { !$0.hasReliableCoordinates })
+    }
+
+    @MainActor
+    func testDianpingPlaceListProducesMultiPlaceSourceUnderstanding() {
+        let analysis = SocialPlaceParser().analyze(
+            evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.dianping.com/shop/shanghai123",
+                resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: dianpingPlaceListFixture,
+                metadataTitle: nil,
+                metadataDescription: nil,
+                ocrLines: []
+            )
+        )
+
+        let names = analysis.placesFound.map(\.displayName)
+        XCTAssertEqual(analysis.sourceType, .multiPlaceList)
+        XCTAssertEqual(analysis.sourceIntent, .multiPlaceList)
+        XCTAssertTrue(analysis.isPlaceBearing)
+        XCTAssertTrue(names.contains("蟹尊苑"))
+        XCTAssertTrue(names.contains("老上海弄堂菜"))
+        XCTAssertTrue(names.contains("外灘景觀餐廳"))
+        XCTAssertTrue(names.contains("賀鴨郎"))
+        XCTAssertTrue(analysis.regionClues.contains("上海"))
+        XCTAssertTrue(analysis.regionClues.contains("黄浦区"))
+        XCTAssertTrue(analysis.regionClues.contains("靜安區"))
+    }
+
+    @MainActor
+    func testDianpingPlaceListCreatesReviewCandidatesWithoutFakeCoordinates() {
+        let service = SocialLinkReviewCandidateService()
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: dianpingPlaceListFixture,
+            sourceURL: "https://www.dianping.com/shop/shanghai123"
+        )
+
+        let names = candidates.map(\.candidateName)
+        XCTAssertGreaterThan(candidates.count, 1)
+        XCTAssertFalse(candidates.contains { $0.isSourceOnly })
+        XCTAssertTrue(names.contains("蟹尊苑"))
+        XCTAssertTrue(names.contains("老上海弄堂菜"))
+        XCTAssertTrue(names.contains("外灘景觀餐廳"))
+        XCTAssertTrue(names.contains("賀鴨郎"))
+        XCTAssertTrue(candidates.allSatisfy { $0.latitude == nil && $0.longitude == nil })
+        XCTAssertTrue(candidates.allSatisfy { $0.address.isEmpty })
+        XCTAssertTrue(candidates.allSatisfy { !$0.hasReliableCoordinates })
+        
+        // Verify rating and price extraction
+        let firstCandidate = candidates.first { $0.candidateName == "蟹尊苑" }
+        XCTAssertTrue(firstCandidate?.evidenceDiagnostic?.found.contains { $0.contains("評分") } == true)
+        XCTAssertTrue(firstCandidate?.evidenceDiagnostic?.found.contains { $0.contains("價格") } == true)
+    }
+
+}
+
+private final class StubGeminiURLProtocol: URLProtocol {
