@@ -380,6 +380,9 @@ struct ContentView: View {
                                 store: tripStore,
                                 onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenAssistant: { openDrawer(.ask, tripID: nil) },
+                                onAskSubmit: { query in
+                                    openDrawer(.ask, tripID: nil, initialQuery: query)
+                                },
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )
@@ -719,7 +722,11 @@ struct ContentView: View {
         }
     }
 
-    private func openDrawer(_ target: DrawerLaunchTarget, tripID: UUID?) {
+    private func openDrawer(
+        _ target: DrawerLaunchTarget,
+        tripID: UUID?,
+        initialQuery: String? = nil
+    ) {
         guard incomingPlaceReceipt == nil else { return }
         pendingCaptureTripID = tripID
         mapDetailDrawerItem = nil
@@ -735,10 +742,14 @@ struct ContentView: View {
             return
         case .ask:
             rootPath.removeAll()
-            selectedRootTab = .map
+            // Trips P1: asking from Trips expands the panel in place — the
+            // user stays on Trips instead of being bounced to Map.
+            if selectedRootTab != .trips {
+                selectedRootTab = .map
+            }
         }
 
-        drawerLaunchRequest = DrawerLaunchRequest(target: target)
+        drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery)
         drawerDetent = .large
         isMapPanelExpanded = true
     }

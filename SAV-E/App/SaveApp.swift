@@ -30,6 +30,7 @@ struct SaveApp: App {
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let petStageGalleryActive = ProcessInfo.processInfo.arguments.contains("--uitest-pet-stage-gallery")
+    private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -139,6 +140,8 @@ struct SaveApp: App {
 #if DEBUG
         if petStageGalleryActive {
             SavePetStageGalleryView()
+        } else if stampFeedFixtureActive {
+            SaveStampFeedFixtureView()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()
         } else if smokeHarnessActive {
@@ -528,6 +531,20 @@ private struct AuthenticatedRootView: View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
+        )
+        .environment(\.savePetIdentity, petIdentity)
+    }
+
+    /// Feeds the capture celebration (pet P2): non-nil only when companions
+    /// are enabled and the signed-in profile has picked a pet.
+    private var petIdentity: SavePetIdentity? {
+        guard SaveCompanionAvailability.isEnabled,
+              let profile = petCompanionStore.profile,
+              let preset = profile.petPreset else { return nil }
+        return SavePetIdentity(
+            preset: preset,
+            stage: profile.petStage,
+            name: profile.petName
         )
     }
 

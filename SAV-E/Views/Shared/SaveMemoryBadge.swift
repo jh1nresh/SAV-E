@@ -140,11 +140,15 @@ struct SaveStampMoment: Identifiable, Equatable {
 struct SaveStampMomentView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.savePetIdentity) private var petIdentity
     let moment: SaveStampMoment
     @State private var stamped = false
     @State private var settled = false
     @State private var textRevealed = false
     @State private var inkRipple = false
+    @State private var petArrived = false
+    @State private var petNibble = false
+    @State private var heartsRisen = false
 
     var body: some View {
         VStack(spacing: SaveTheme.Spacing.sm + 2) {
@@ -161,6 +165,14 @@ struct SaveStampMomentView: View {
                     .scaleEffect(stamped ? 1 : 1.85)
                     .rotationEffect(.degrees(stampRotation))
                     .opacity(stamped ? 1 : 0)
+
+                // Pet P2: every confirmed stamp feeds the companion. The pet
+                // hops in beside the fresh stamp, leans in for a nibble, and
+                // hearts drift up. Decorative only — Passport stays the XP
+                // ledger, so no number is claimed here.
+                if let pet = petIdentity {
+                    feedingVignette(pet)
+                }
             }
 
             VStack(spacing: 2) {
@@ -190,6 +202,30 @@ struct SaveStampMomentView: View {
         ))
     }
 
+    /// The companion sidles up to the fresh stamp and takes a nibble.
+    /// Sits inside the badge ZStack so the feed reads as one gesture:
+    /// stamp lands, pet arrives, hearts rise.
+    private func feedingVignette(_ pet: SavePetIdentity) -> some View {
+        ZStack {
+            SavePetAvatar(preset: pet.preset, stage: pet.stage, size: 52, animates: false)
+                .rotationEffect(.degrees(petNibble ? -10 : 4), anchor: .bottomLeading)
+                .offset(x: petArrived ? 52 : 96, y: 16)
+                .opacity(petArrived ? 1 : 0)
+
+            ForEach(0..<2, id: \.self) { index in
+                Image(systemName: "heart.fill")
+                    .font(.system(size: index == 0 ? 11 : 8, weight: .bold))
+                    .foregroundStyle(Color.saveCoral.opacity(heartsRisen ? 0 : 0.9))
+                    .offset(
+                        x: 30 + CGFloat(index) * 14,
+                        y: heartsRisen ? -34 - CGFloat(index) * 8 : -4
+                    )
+                    .opacity(petArrived ? 1 : 0)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
     /// Slam in hard, ripple the ink, settle upright a touch, then the words.
     private func playStampSequence() {
         SaveHaptics.stamp()
@@ -198,6 +234,8 @@ struct SaveStampMomentView: View {
             settled = true
             textRevealed = true
             inkRipple = true
+            petArrived = true
+            heartsRisen = true
             return
         }
 
@@ -212,6 +250,22 @@ struct SaveStampMomentView: View {
         }
         withAnimation(SaveTheme.Motion.standardSpring.delay(0.16)) {
             textRevealed = true
+        }
+
+        guard petIdentity != nil else { return }
+        // Feed after the stamp settles: arrive, nibble twice, hearts away.
+        withAnimation(SaveTheme.Motion.stampSpring.delay(0.5)) {
+            petArrived = true
+        }
+        withAnimation(
+            .easeInOut(duration: 0.22)
+                .repeatCount(4, autoreverses: true)
+                .delay(0.72)
+        ) {
+            petNibble = true
+        }
+        withAnimation(.easeOut(duration: 0.9).delay(0.95)) {
+            heartsRisen = true
         }
     }
 
@@ -241,6 +295,37 @@ private extension PlaceCategory {
         }
     }
 }
+
+#if DEBUG
+/// Launch-arg fixture (`--uitest-stamp-feed-fixture`) so the stamp + pet
+/// feeding motion can be verified deterministically without saving a real
+/// place. Pair with `--enable-internal-companions` to show the pet.
+struct SaveStampFeedFixtureView: View {
+    @State private var momentID = UUID()
+
+    var body: some View {
+        VStack(spacing: SaveTheme.Spacing.xl) {
+            SaveStampMomentView(
+                moment: SaveStampMoment(title: "Koffee Mameya", category: .cafe)
+            )
+            .id(momentID)
+
+            Button("Replay") { momentID = UUID() }
+                .accessibilityIdentifier("stampFeed.replay")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .environment(
+            \.savePetIdentity,
+            SavePetIdentity(preset: .spark, stage: .hatchling, name: "Spark")
+        )
+        // Without `.contain`, the container id would propagate onto every
+        // child element and clobber the Replay button's own identifier.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("stampFeed.root")
+    }
+}
+#endif
 
 #Preview {
     HStack(spacing: 18) {
