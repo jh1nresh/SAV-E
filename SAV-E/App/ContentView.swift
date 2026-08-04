@@ -373,6 +373,7 @@ struct ContentView: View {
                             SaveMapRootView(
                                 mapViewModel: mapVM,
                                 shouldFocusOnUserLocation: true,
+                                hidesCommandShelf: isRootSheetPresented,
                                 onOpenSearch: { openDrawer(.ask, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onOpenPassport: openPassport
