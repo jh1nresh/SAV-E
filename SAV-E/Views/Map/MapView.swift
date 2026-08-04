@@ -135,8 +135,11 @@ struct MapView: View {
                     }
                 )
                 .padding(.trailing, 16)
-                .padding(.bottom, 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                // Top-trailing: the bottom edge of every map surface is
+                // covered by a shelf/drawer or place card, which buried the
+                // button when it sat bottom-trailing.
+                .padding(.top, 14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .accessibilityIdentifier("map.currentLocation")
 
                 if let moment = viewModel.stampMoment {
