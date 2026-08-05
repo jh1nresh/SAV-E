@@ -565,10 +565,24 @@ struct DeterministicTripPlanner {
             .map(String.init)
             .filter { token in
                 let shortLocationTokens: Set<String> = ["la", "oc", "ny", "sf", "sd"]
-                return (token.count >= 3 || shortLocationTokens.contains(token))
+                // The 3-character floor exists to drop Latin noise, but CJK
+                // place names are routinely two characters — 加州, 台北, 東京,
+                // 京都. Holding them to the Latin floor silently discarded the
+                // region the user named, so "規劃加州 5天行程" planned some
+                // other city instead of asking which anchor they meant.
+                let minimumLength = Self.isCJK(token) ? 2 : 3
+                return (token.count >= minimumLength || shortLocationTokens.contains(token))
                     && !stopWords.contains(token)
                     && Int(token) == nil
             }
+    }
+
+    static func isCJK(_ token: String) -> Bool {
+        token.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value) ||   // CJK Unified Ideographs
+            (0x3400...0x4DBF).contains(scalar.value) ||   // Extension A
+            (0x3040...0x30FF).contains(scalar.value)      // Hiragana / Katakana
+        }
     }
 
     /// SAV-E's own nouns, removed before tokenizing.

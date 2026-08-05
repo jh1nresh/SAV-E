@@ -921,4 +921,30 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(stripped.contains("地圖章"))
         XCTAssertFalse(stripped.contains("規劃"))
     }
+
+    @MainActor
+    func testTwoCharacterCJKRegionStillCountsAsAConstraint() throws {
+        // CJK place names are routinely two characters. Holding them to the
+        // Latin 3-char floor dropped the region the user named, so asking for
+        // a region with no saved places planned some other city instead of
+        // offering anchors.
+        let places = [
+            makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
+            makePlace("Irvine Coffee", address: "Irvine, CA", latitude: 33.6846, longitude: -117.8265, category: .cafe),
+        ]
+
+        XCTAssertNil(
+            DeterministicTripPlanner().plan(for: "規劃加州 5天行程", places: places),
+            "a named region with no matching saved places must not silently plan elsewhere"
+        )
+    }
+
+    @MainActor
+    func testCJKDetectionCoversHanAndKana() {
+        XCTAssertTrue(DeterministicTripPlanner.isCJK("加州"))
+        XCTAssertTrue(DeterministicTripPlanner.isCJK("東京"))
+        XCTAssertTrue(DeterministicTripPlanner.isCJK("しぶや"))
+        XCTAssertFalse(DeterministicTripPlanner.isCJK("la"))
+        XCTAssertFalse(DeterministicTripPlanner.isCJK("tokyo"))
+    }
 }
