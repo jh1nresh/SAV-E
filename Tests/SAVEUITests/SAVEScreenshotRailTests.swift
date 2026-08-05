@@ -545,7 +545,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
         XCTAssertTrue(app.buttons["trips.capture"].exists)
-        XCTAssertTrue(app.buttons["trips.assistant"].exists)
+        // The ask entry is a real input now, not a button (spec P1), so the
+        // query is type-agnostic while the identifier stays the same.
+        XCTAssertTrue(app.descendants(matching: .any)["trips.assistant"].exists)
         XCTAssertTrue(app.buttons["trips.create"].exists)
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -581,6 +583,62 @@ final class SAVEScreenshotRailTests: XCTestCase {
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
+    }
+
+    @MainActor
+    func testTripsAskFieldExpandsInPlace() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+
+        // Tapping the ask entry focuses a real input; typed text renders in
+        // the field and the user stays on Trips (spec P1).
+        let askInput = app.textFields["trips.assistant.input"]
+        XCTAssertTrue(askInput.waitForExistence(timeout: stepTimeout))
+        askInput.tap()
+        askInput.typeText("Plan a day from my stamps")
+        XCTAssertEqual(askInput.value as? String, "Plan a day from my stamps")
+        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
+
+        // Submit expands the panel in place: one drawer surface, no tab
+        // switch to Map.
+        app.buttons["trips.assistant.submit"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Only one ask surface should be on screen."
+        )
+        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
+        attach(app, name: "trips-ask-expanded-in-place")
+
+        // Collapsing the panel (drag the grab handle down) returns to Trips.
+        // swipeDown() on the tiny handle flicks < the 80pt collapse threshold,
+        // so drag an explicit 260pt path instead.
+        let handle = app.descendants(matching: .any)["map.drawerPanel.handle"]
+        XCTAssertTrue(handle.waitForExistence(timeout: stepTimeout))
+        let dragStart = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        dragStart.press(
+            forDuration: 0.1,
+            thenDragTo: dragStart.withOffset(CGVector(dx: 0, dy: 260))
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.root"]
+                .waitForNonExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].exists)
+        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
     }
 
     @MainActor
@@ -696,6 +754,55 @@ final class SAVEScreenshotRailTests: XCTestCase {
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
+    }
+
+    @MainActor
+    func testMapPlaceCardOwnsStripActions() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-map-place-selected",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
+        dismissLocationAlertIfPresent()
+
+        // One place, one card (spec P2b): the Atlas card is canonical and now
+        // carries the retired legacy strip's actions.
+        let card = app.descendants(matching: .any)["map.place.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "map.place.card").count,
+            1,
+            "Exactly one surface should represent the selected place."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["map.place.share"].exists)
+        XCTAssertTrue(app.buttons["map.place.planAround"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["place.detail.root"].exists,
+            "The legacy place strip must not co-present with the Atlas card."
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        attach(app, name: "map-place-card-actions")
+
+        // Plan-around swaps the card for the single drawer surface.
+        app.buttons["map.place.planAround"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Plan-around should open exactly one drawer surface."
+        )
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
     }
 
     @MainActor

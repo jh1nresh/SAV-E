@@ -1,5 +1,25 @@
 import SwiftUI
 
+/// The signed-in user's chosen companion, injected into the environment so
+/// leaf views (e.g. the stamp celebration) can render the pet without
+/// threading profile state through every view model.
+struct SavePetIdentity: Equatable {
+    let preset: SavePetPreset
+    let stage: SavePetStage
+    let name: String?
+}
+
+private struct SavePetIdentityKey: EnvironmentKey {
+    static let defaultValue: SavePetIdentity? = nil
+}
+
+extension EnvironmentValues {
+    var savePetIdentity: SavePetIdentity? {
+        get { self[SavePetIdentityKey.self] }
+        set { self[SavePetIdentityKey.self] = newValue }
+    }
+}
+
 struct SavePetAvatar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

@@ -74,10 +74,14 @@ enum DrawerLaunchTarget: Equatable {
 struct DrawerLaunchRequest: Equatable {
     let id: UUID
     let target: DrawerLaunchTarget
+    /// Trips P1: a question typed before the drawer opened. When present the
+    /// drawer submits it immediately instead of focusing an empty field.
+    let initialQuery: String?
 
-    init(id: UUID = UUID(), target: DrawerLaunchTarget) {
+    init(id: UUID = UUID(), target: DrawerLaunchTarget, initialQuery: String? = nil) {
         self.id = id
         self.target = target
+        self.initialQuery = initialQuery
     }
 }
 
@@ -447,9 +451,19 @@ struct AIDrawerView: View {
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
-            Task { @MainActor in
-                await Task.yield()
-                searchFocused = true
+            if let query = request.initialQuery?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !query.isEmpty {
+                viewModel.query = query
+                Task { @MainActor in
+                    await Task.yield()
+                    submitSearchField()
+                }
+            } else {
+                Task { @MainActor in
+                    await Task.yield()
+                    searchFocused = true
+                }
             }
         case .addLink:
             if !isImportingURL {
