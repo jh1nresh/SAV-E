@@ -176,11 +176,12 @@ struct SaveSearchFollowUpChoiceGrid: View {
             HStack(spacing: 7) {
                 Image(systemName: "square.grid.2x2")
                     .font(.caption.weight(.bold))
-                Text(title ?? languageSettings.localized(english: "Narrow with one tap", traditionalChinese: "點一下繼續縮小"))
-                    .font(.caption.weight(.bold))
+                Text((title ?? languageSettings.localized(english: "Narrow with one tap", traditionalChinese: "點一下繼續縮小")).uppercased())
+                    .font(SaveAtlasType.display(11))
+                    .tracking(1.0)
                 Spacer(minLength: 0)
             }
-            .foregroundColor(.saveCocoa.opacity(0.82))
+            .foregroundColor(SaveAtlasPalette.muted)
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(choices) { choice in
@@ -197,14 +198,16 @@ struct SaveSearchFollowUpChoiceGrid: View {
                                 .minimumScaleFactor(0.76)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .foregroundColor(.saveInk)
+                        .foregroundColor(SaveAtlasPalette.ink)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, minHeight: 42)
-                        .background(Color.saveHoney.opacity(0.72))
+                        // Spec P2: kraft chips on an Atlas paper panel replace
+                        // the honey-yellow notebook chips.
+                        .background(SaveAtlasPalette.kraft.opacity(0.55))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                                .stroke(SaveAtlasPalette.line.opacity(0.62), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
@@ -214,10 +217,10 @@ struct SaveSearchFollowUpChoiceGrid: View {
             }
         }
         .padding(12)
-        .background(Color.saveNotebookPage.opacity(0.66))
+        .background(SaveAtlasPalette.paper)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.82), lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(0.4), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
