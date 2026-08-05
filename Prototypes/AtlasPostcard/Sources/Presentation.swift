@@ -352,6 +352,16 @@ struct AtlasTripSummaryPresentation: Identifiable, Equatable {
     let timing: String
 }
 
+/// A planning suggestion built from confirmed Map Stamps the user already has.
+struct AtlasTripRecommendationPresentation: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let sampleNames: [String]
+    /// The query to run when tapped.
+    let planningQuery: String
+}
+
 struct AtlasPresentation: @unchecked Sendable {
     var homeHero: AtlasHomeHeroPresentation
     var reviewCount: Int
@@ -388,6 +398,9 @@ struct AtlasPresentation: @unchecked Sendable {
     // Trips P1: the ask entry is a real input; submit carries the typed
     // question into the expanding ask surface.
     var onAskSubmit: (String) -> Void = { _ in }
+    /// One-tap planning suggestions derived from confirmed Map Stamps.
+    var tripRecommendations: [AtlasTripRecommendationPresentation] = []
+    var onPlanRecommendation: (String) -> Void = { _ in }
 
     static let reference = AtlasPresentation(
         homeHero: .referenceTokyo,

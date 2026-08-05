@@ -553,18 +553,58 @@ struct DeterministicTripPlanner {
         let stopWords: Set<String> = [
             "plan", "itinerary", "trip", "route", "schedule", "organize", "show",
             "my", "the", "a", "an", "to", "for", "from", "with", "and", "or",
-            "day", "days", "weekend", "places", "spots", "saved"
+            "day", "days", "weekend", "places", "spots", "saved",
+            // Number words `requestedDayCount` already consumed. Leaving them
+            // in makes "plan one day" search for a place called "one".
+            "one", "two", "three", "four", "five", "six", "seven",
+            "single", "half", "next", "this"
         ]
 
-        return normalized
+        return Self.strippingProductVocabulary(normalized)
             .split { !$0.isLetter && !$0.isNumber }
             .map(String.init)
             .filter { token in
                 let shortLocationTokens: Set<String> = ["la", "oc", "ny", "sf", "sd"]
-                return (token.count >= 3 || shortLocationTokens.contains(token))
+                // The 3-character floor exists to drop Latin noise, but CJK
+                // place names are routinely two characters — 加州, 台北, 東京,
+                // 京都. Holding them to the Latin floor silently discarded the
+                // region the user named, so "規劃加州 5天行程" planned some
+                // other city instead of asking which anchor they meant.
+                let minimumLength = Self.isCJK(token) ? 2 : 3
+                return (token.count >= minimumLength || shortLocationTokens.contains(token))
                     && !stopWords.contains(token)
                     && Int(token) == nil
             }
+    }
+
+    static func isCJK(_ token: String) -> Bool {
+        token.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value) ||   // CJK Unified Ideographs
+            (0x3400...0x4DBF).contains(scalar.value) ||   // Extension A
+            (0x3040...0x30FF).contains(scalar.value)      // Hiragana / Katakana
+        }
+    }
+
+    /// SAV-E's own nouns, removed before tokenizing.
+    ///
+    /// Every token that survives tokenizing is treated as a filter a place must
+    /// match, so "plan a day from my Map Stamps" — the vocabulary this app
+    /// taught the user — scored `stamps` as a place name, matched nothing, and
+    /// refused to plan at all. Stripping happens on the normalized string
+    /// rather than the token list because CJK text has no word separators:
+    /// "從我的地圖章規劃一天" tokenizes as a single run, so a stop-word set
+    /// could never catch it.
+    static let productVocabulary: [String] = [
+        "map stamps", "map stamp", "mapstamps", "mapstamp",
+        "stamps", "stamp", "sav-e", "save", "savee",
+        "memories", "memory", "clues", "clue", "vault",
+        "地圖章", "地圖", "收藏", "記憶", "線索", "行程", "規劃", "安排",
+    ]
+
+    static func strippingProductVocabulary(_ normalized: String) -> String {
+        productVocabulary.reduce(normalized) { text, noun in
+            text.replacingOccurrences(of: noun, with: " ")
+        }
     }
 
     private func normalize(_ text: String) -> String {

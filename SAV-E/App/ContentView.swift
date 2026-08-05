@@ -378,6 +378,7 @@ struct ContentView: View {
                         case .trips:
                             TripsHomeView(
                                 store: tripStore,
+                                savedPlaces: mapVM.places,
                                 onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenAssistant: { openDrawer(.ask, tripID: nil) },
                                 onAskSubmit: { query in
