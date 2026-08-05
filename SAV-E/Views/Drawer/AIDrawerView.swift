@@ -74,10 +74,14 @@ enum DrawerLaunchTarget: Equatable {
 struct DrawerLaunchRequest: Equatable {
     let id: UUID
     let target: DrawerLaunchTarget
+    /// Trips P1: a question typed before the drawer opened. When present the
+    /// drawer submits it immediately instead of focusing an empty field.
+    let initialQuery: String?
 
-    init(id: UUID = UUID(), target: DrawerLaunchTarget) {
+    init(id: UUID = UUID(), target: DrawerLaunchTarget, initialQuery: String? = nil) {
         self.id = id
         self.target = target
+        self.initialQuery = initialQuery
     }
 }
 
@@ -447,9 +451,19 @@ struct AIDrawerView: View {
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
-            Task { @MainActor in
-                await Task.yield()
-                searchFocused = true
+            if let query = request.initialQuery?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                !query.isEmpty {
+                viewModel.query = query
+                Task { @MainActor in
+                    await Task.yield()
+                    submitSearchField()
+                }
+            } else {
+                Task { @MainActor in
+                    await Task.yield()
+                    searchFocused = true
+                }
             }
         case .addLink:
             if !isImportingURL {
@@ -4185,17 +4199,20 @@ private struct NotebookBandLabel: View {
     }
 
     var body: some View {
+        // Spec P2: kraft chip treatment + editorial condensed type replaces
+        // the legacy honey-yellow notebook band.
         HStack(spacing: 7) {
             Text(title.uppercased())
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.display(11))
+                .tracking(1.1)
+                .foregroundColor(SaveAtlasPalette.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(Color.saveHoney)
-                .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.2))
+                .background(SaveAtlasPalette.kraft.opacity(0.58))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.62), lineWidth: 1))
                 .clipShape(Capsule())
             Rectangle()
-                .fill(Color.saveNotebookLine.opacity(0.28))
+                .fill(SaveAtlasPalette.line.opacity(0.28))
                 .frame(height: 1)
         }
         .padding(.top, 2)
@@ -6134,22 +6151,24 @@ private struct DrawerSuggestionRow: View {
     var text: String
 
     var body: some View {
+        // Spec P2: Atlas paper surface replaces the flat translucent-white
+        // material row.
         HStack(spacing: 9) {
             Image(systemName: icon)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundColor(SaveAtlasPalette.forest)
                 .frame(width: 28, height: 28)
-                .background(Color.saveCream.opacity(0.7))
+                .background(SaveAtlasPalette.canvas)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text(text)
-                .font(.subheadline)
+                .font(SaveAtlasType.body(15))
                 .fontWeight(.semibold)
-                .foregroundColor(colorScheme == .dark ? .white : .saveInk)
+                .foregroundColor(SaveAtlasPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
 
@@ -6157,18 +6176,17 @@ private struct DrawerSuggestionRow: View {
 
             Image(systemName: "arrow.up.right")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.7))
+                .foregroundColor(SaveAtlasPalette.muted)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(Color.white.opacity(0.16))
-        }
+        .background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.18), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -6180,46 +6198,44 @@ private struct AIResultActionBar: View {
     var onNewQuestion: () -> Void
 
     var body: some View {
+        // Spec P2: postage-coral primary + paper secondary replace the
+        // honey/cream notebook pair.
         HStack(spacing: 9) {
             Button(action: onFollowUp) {
                 Label(languageSettings.localized(english: "Follow up", traditionalChinese: "追問"), systemImage: "text.bubble")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.saveHoney)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-                    )
+                    .background(SaveAtlasPalette.coral)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
 
             Button(action: onNewQuestion) {
                 Label(languageSettings.localized(english: "New", traditionalChinese: "新的"), systemImage: "plus.bubble")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundColor(SaveAtlasPalette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.saveCream.opacity(0.74))
+                    .background(SaveAtlasPalette.paper)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line.opacity(0.5), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
         }
         .padding(8)
-        .background(Color.saveNotebookPage.opacity(0.94))
+        .background(SaveAtlasPalette.canvas.opacity(0.94))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
