@@ -1,7 +1,10 @@
 # SAV-E Design System
 
-> Last updated: 2026-05-27
+> Last updated: 2026-08-04
 > Status: source of truth for native iOS design work
+> Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
+> drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
+> Tokens" and "Legacy Cream-Notebook Tokens" below.
 
 ## Product Frame
 
@@ -162,9 +165,137 @@ Avoid these in user-facing UI:
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
 
-## Color Tokens
+## Atlas Postcard Tokens
 
-Use current SwiftUI tokens from `Wanderly/Extensions/Color+Theme.swift`.
+Atlas Postcard is the current visual system for SAV-E's primary surfaces. It
+reads as an illustrated travel atlas: warm paper panels, condensed editorial
+type, kraft luggage-tag chips, and postage/ticket shapes.
+
+Canonical source of truth is code:
+
+- Production: `SaveAtlasPalette` and `SaveAtlasType` in
+  `SAV-E/Extensions/Color+Theme.swift`.
+- Prototype twins: `AtlasPalette` and `AtlasType` in
+  `Prototypes/AtlasPostcard/Sources/Theme.swift`. The prototype is a
+  light-only, fixed-viewport reference. Production tokens are adaptive
+  light/dark and Dynamic Type aware (`relativeTo:`). On any mismatch,
+  production `SaveAtlasPalette` / `SaveAtlasType` win.
+
+Spec crops that judge "against DESIGN.md Atlas tokens" (for example
+`specs/2026-08-04-save-trips-ask-surface-rework-v0.md` P2) mean the tables and
+rules in this section.
+
+### Atlas Palette
+
+Hex values below are the `SaveAtlasPalette` values in code. If code and this
+table ever disagree, fix whichever one drifted in the same PR.
+
+| Role | Token | Light | Dark | Use |
+| --- | --- | --- | --- | --- |
+| Canvas | `SaveAtlasPalette.canvas` | `#FDF8F3` | `#11161C` | Full-screen Atlas background |
+| Paper | `SaveAtlasPalette.paper` | `#FFFDF7` | `#1B2027` | Cards, panels, drawer sheets (`saveAtlasPaper`) |
+| Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
+| Ink | `SaveAtlasPalette.ink` | `#2E2117` | `#FFF8ED` | Primary text, shadows at low opacity |
+| Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
+| Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state |
+| Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
+| Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
+| Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
+| Kraft | `SaveAtlasPalette.kraft` | `#F0CFA1` | `#71543C` | Chips, tags, Passport spine, neutral fills |
+| Honey | `SaveAtlasPalette.honey` | `#FFCC4F` | `#A87328` | Stamp emphasis, highlights |
+| Line | `SaveAtlasPalette.line` | `#A68F78` | `#807365` | Hairline strokes, postmark linework |
+
+Palette rules:
+
+- Canvas is the page; paper is the object. Panels sit on canvas as
+  `SaveAtlasPalette.paper` with a `line` stroke at roughly 0.28 to 0.70
+  opacity (`saveAtlasPaper(radius:shadow:)` is the standard treatment).
+- Forest is the Atlas "brand ink" for headings and ticket titles; body copy
+  uses `ink`, support copy uses `muted`.
+- State colors keep the legacy nouns: mint means confirmed/saved, sky means
+  review, coral means source clue or attention (see `SavePostcardTicketStyle`).
+- Shadows come from `ink` at very low opacity (~0.05 to 0.08), never black.
+- Dark mode uses the dark column above; do not reuse light pastels as dark
+  fills.
+
+### Atlas Typography
+
+`SaveAtlasType` replaces the system-font rules of the legacy section on all
+Atlas surfaces. All production variants accept `relativeTo:` for Dynamic Type.
+
+| Role | Token | Face | Use |
+| --- | --- | --- | --- |
+| Display | `SaveAtlasType.display(_:)` | AvenirNextCondensed-DemiBold | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | AvenirNextCondensed-Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | AvenirNextCondensed-Medium | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | AvenirNextCondensed-Regular | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | Georgia-Italic | Editorial brand moments: envelope titles, counts, postcard captions |
+
+Typography rules:
+
+- Eyebrows are `strong` at small sizes, uppercased, with positive tracking
+  (~0.65).
+- Editorial Georgia italic is a garnish for brand moments, not a body face.
+- Do not mix `SaveAtlasType` faces with the legacy heavy rounded system fonts
+  on the same surface.
+
+### Kraft Chips
+
+Kraft is the neutral "luggage tag" material for chips and tags on Atlas paper.
+
+- Chip fills use `SaveAtlasPalette.kraft` at 0.24 to 0.72 opacity; text on
+  kraft is `ink` or `forest`.
+- Strokes use `kraft` or `line`, often dashed (`StrokeStyle(dash:)`) for the
+  stitched-tag look.
+- Reference implementations: ask drawer chips (`AIDrawerView`), search result
+  chips (`SaveSearchResultsComponent`), Passport spine and stat chips
+  (`ProfileView`).
+- Kraft is neutral. Do not use it to signal state; state fills are mint, sky,
+  and coral.
+
+### Postage Accent
+
+Coral is the postage accent and the strongest color on any Atlas surface.
+
+- Primary action: coral fill, white label, `strong` type. Secondary action:
+  paper fill, `ink` label, `line` stroke. This pair replaces the legacy
+  honey/cream button pair on Atlas surfaces.
+- Postage and ticket shapes carry the metaphor: `SavePostcardScallopedRectangle`,
+  `SavePostcardSealShape`, and the onboarding postage ticket shapes in
+  `OnboardingView`.
+- Ticket states come from `SavePostcardTicketStyle`: review = sky, source clue
+  = coral, confirmed = mint with forest accents.
+- One coral primary per view section. If everything is coral, nothing is the
+  action.
+
+### Surface Ownership
+
+| Surface | System |
+| --- | --- |
+| Home (`SaveRootViews`) | Atlas |
+| Saves drawer + search results | Atlas |
+| Trips (`TripPackViews`) | Atlas |
+| Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
+| Ask drawer (`AIDrawerView`) | Atlas |
+| Onboarding, Passport, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
+| Shared primitives (`SaveMemoryBadge`, `CategoryPill`, `EmptyStateView`, `EvidenceLinkList`, `MemoMascotMark`, pet views) | Legacy cream-notebook |
+| Place bottom sheet, navigation/itinerary drawer components, Clip preview, smoke harness | Legacy cream-notebook |
+
+Rules:
+
+- New work on an Atlas surface uses Atlas tokens only. Do not introduce new
+  `save*` pastel usage there.
+- Legacy tokens on a mixed surface are migration debt, not precedent.
+- Moving a legacy surface to Atlas is fine; update the table above in the same
+  PR.
+
+## Legacy Cream-Notebook Tokens (legacy surfaces only)
+
+> Legacy: applies only to the legacy cream-notebook surfaces listed in
+> "Surface Ownership" above. Do not use these tokens for new work on Home,
+> Saves, Trips, Map, or the ask drawer — those are Atlas Postcard surfaces.
+
+Use current SwiftUI tokens from `SAV-E/Extensions/Color+Theme.swift`.
 
 | Role | Token | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
@@ -203,6 +334,9 @@ Palette rules:
   Do not reuse fixed light pastels for dark fills.
 
 ## Typography
+
+> Legacy: system typography applies to legacy cream-notebook surfaces only.
+> Atlas surfaces use `SaveAtlasType` (see "Atlas Typography" above).
 
 SAV-E uses native system typography.
 
