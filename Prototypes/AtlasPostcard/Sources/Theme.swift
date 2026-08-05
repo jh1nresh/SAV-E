@@ -6,20 +6,34 @@ enum AtlasMetrics {
     static let statusBarHeight: CGFloat = 48
 }
 
+// Light-only mirror of the production light column in `SaveAtlasPalette`
+// (SAV-E/Extensions/Color+Theme.swift). Per DESIGN.md, production wins on
+// any mismatch — keep these hex values byte-identical to production.
 enum AtlasPalette {
-    static let canvas = Color(red: 0.992, green: 0.973, blue: 0.953)
-    static let paper = Color(red: 1.00, green: 0.992, blue: 0.969)
-    static let forest = Color(red: 0.055, green: 0.29, blue: 0.20)
-    static let ink = Color(red: 0.18, green: 0.13, blue: 0.09)
-    static let muted = Color(red: 0.38, green: 0.35, blue: 0.31)
-    static let coral = Color(red: 0.949, green: 0.42, blue: 0.29)
-    static let mint = Color(red: 0.84, green: 0.91, blue: 0.77)
-    static let sky = Color(red: 0.71, green: 0.89, blue: 0.96)
-    static let lavender = Color(red: 0.89, green: 0.84, blue: 0.97)
-    static let kraft = Color(red: 0.94, green: 0.81, blue: 0.63)
-    static let honey = Color(red: 1.00, green: 0.80, blue: 0.31)
-    static let routeInk = Color(red: 0.25, green: 0.23, blue: 0.20)
-    static let line = Color(red: 0.65, green: 0.56, blue: 0.47)
+    static let canvas = Color(atlasHex: 0xFDF8F3)
+    static let paper = Color(atlasHex: 0xFFFDF7)
+    static let forest = Color(atlasHex: 0x0E4A33)
+    static let ink = Color(atlasHex: 0x2E2117)
+    static let muted = Color(atlasHex: 0x62594F)
+    static let coral = Color(atlasHex: 0xF26B4A)
+    static let mint = Color(atlasHex: 0xD6E8C4)
+    static let sky = Color(atlasHex: 0xB5E3F5)
+    static let lavender = Color(atlasHex: 0xE3D6F7)
+    static let kraft = Color(atlasHex: 0xF0CFA1)
+    static let honey = Color(atlasHex: 0xFFCC4F)
+    /// Prototype-only route stroke; no production twin.
+    static let routeInk = Color(atlasHex: 0x403B33)
+    static let line = Color(atlasHex: 0xA68F78)
+}
+
+private extension Color {
+    init(atlasHex hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
+    }
 }
 
 enum AtlasType {
