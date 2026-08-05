@@ -670,110 +670,146 @@ private struct HomeStampRow: View {
 struct TripsAtlasScreen: View {
     @Environment(\.atlasPresentation) private var presentation
 
+    /// Spec P3: Trips is a flow layout now, not a fixed `.placed()` canvas.
+    /// The tab bar overlays the canvas from y 786, so the pinned bottom row
+    /// keeps this much clearance.
+    private static let tabBarClearance: CGFloat = AtlasMetrics.height - 786 + 14
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            BrandHeader {
-                Button(action: presentation.onCapture) {
-                    Image(systemName: "link")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 40, height: 40)
-                        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 13))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 13)
-                                .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
-                        }
+            VStack(alignment: .leading, spacing: 0) {
+                Color.clear
+                    .frame(height: AtlasMetrics.statusBarHeight)
+                    .accessibilityHidden(true)
+
+                BrandHeader {
+                    Button(action: presentation.onCapture) {
+                        Image(systemName: "link")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(AtlasPalette.ink)
+                            .frame(width: 40, height: 40)
+                            .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 13))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 13)
+                                    .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Paste or share a link")
+                    .accessibilityIdentifier("trips.capture")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Paste or share a link")
-                .accessibilityIdentifier("trips.capture")
-            }
-            .placed(x: 0, y: 48, width: 402, height: 50)
+                .frame(height: 50)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("YOUR LITTLE ATLAS")
-                    .font(AtlasType.display(11))
-                    .tracking(1.1)
-                    .foregroundStyle(AtlasPalette.muted)
-                Text("Trips")
-                    .font(AtlasType.strong(30))
-                    .foregroundStyle(AtlasPalette.forest)
-                Text("Confirmed Map Stamps, arranged into journeys.")
-                    .font(AtlasType.regular(14))
-                    .foregroundStyle(AtlasPalette.muted)
-            }
-            .placed(x: 13, y: 105, width: 376, height: 65)
-
-            Image("MapAtlasScene")
-                .resizable()
-                .scaledToFill()
-                .saturation(0.82)
-                .clipped()
-                .overlay(AtlasPalette.canvas.opacity(0.08))
-                .placed(x: 0, y: 170, width: 402, height: 220)
-                .accessibilityHidden(true)
-
-            if let featured = presentation.tripSummaries.first {
-                FeaturedTripPostcard(trip: featured)
-                    .placed(x: 17, y: 242, width: 368, height: 139)
-            } else {
-                EmptyTripPostcard()
-                    .placed(x: 17, y: 242, width: 368, height: 139)
-            }
-
-            MemoMark(size: 67)
-                .placed(x: 298, y: 178, width: 72, height: 72)
-                .accessibilityHidden(true)
-
-            HStack {
-                Text("NEXT JOURNEYS")
-                    .font(AtlasType.strong(11))
-                    .tracking(1.1)
-                    .foregroundStyle(AtlasPalette.muted)
-                Spacer()
-                Text("\(presentation.tripSummaries.count) total")
-                    .font(AtlasType.regular(12))
-                    .foregroundStyle(AtlasPalette.muted)
-            }
-            .placed(x: 17, y: 407, width: 368, height: 22)
-
-            VStack(spacing: 11) {
-                ForEach(Array(presentation.tripSummaries.dropFirst().prefix(2))) { trip in
-                    CompactTripTicket(trip: trip)
-                }
-
-                if presentation.tripSummaries.dropFirst().isEmpty {
-                    Text("Your next trip can begin with one confirmed Map Stamp.")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("YOUR LITTLE ATLAS")
+                        .font(AtlasType.display(11))
+                        .tracking(1.1)
+                        .foregroundStyle(AtlasPalette.muted)
+                    Text("Trips")
+                        .font(AtlasType.strong(30))
+                        .foregroundStyle(AtlasPalette.forest)
+                    Text("Confirmed Map Stamps, arranged into journeys.")
                         .font(AtlasType.regular(14))
                         .foregroundStyle(AtlasPalette.muted)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .atlasPaper(radius: 18)
                 }
-            }
-            .placed(x: 17, y: 433, width: 368, height: 208)
+                .padding(.horizontal, 13)
+                .padding(.top, 7)
 
-            HStack(spacing: 10) {
-                TripsAskField(onSubmit: presentation.onAskSubmit)
+                heroScene
+                    .padding(.top, 7)
 
-                Button(action: presentation.onCreateTrip) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 50, height: 50)
-                        .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16))
+                HStack {
+                    Text("NEXT JOURNEYS")
+                        .font(AtlasType.strong(11))
+                        .tracking(1.1)
+                        .foregroundStyle(AtlasPalette.muted)
+                    Spacer()
+                    Text("\(presentation.tripSummaries.count) total")
+                        .font(AtlasType.regular(12))
+                        .foregroundStyle(AtlasPalette.muted)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Start a new Trip")
-                .accessibilityIdentifier("trips.create")
+                .padding(.horizontal, 17)
+                .padding(.top, 16)
+
+                if presentation.tripSummaries.dropFirst().isEmpty {
+                    // Spec P3: the old empty 208pt paper panel collapses to a
+                    // one-line hint.
+                    Text("Your next trip can begin with one confirmed Map Stamp.")
+                        .font(AtlasType.regular(13))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .padding(.horizontal, 17)
+                        .padding(.top, 10)
+                } else {
+                    VStack(spacing: 11) {
+                        ForEach(Array(presentation.tripSummaries.dropFirst().prefix(2))) { trip in
+                            CompactTripTicket(trip: trip)
+                                .frame(height: 98)
+                        }
+                    }
+                    .padding(.horizontal, 17)
+                    .padding(.top, 12)
+                }
+
+                Spacer(minLength: 12)
+
+                HStack(spacing: 10) {
+                    TripsAskField(onSubmit: presentation.onAskSubmit)
+
+                    Button(action: presentation.onCreateTrip) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 50, height: 50)
+                            .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Start a new Trip")
+                    .accessibilityIdentifier("trips.create")
+                }
+                .padding(.horizontal, 17)
+                .padding(.bottom, Self.tabBarClearance)
             }
-            .placed(x: 17, y: 670, width: 368, height: 54)
+            .frame(width: AtlasMetrics.width, alignment: .topLeading)
         }
         .frame(width: 402, height: 874)
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("trips.home")
+    }
+
+    /// Illustrated map scene with the featured trip postcard resting on its
+    /// lower half and Memo peeking over the top edge.
+    private var heroScene: some View {
+        ZStack(alignment: .top) {
+            Image("MapAtlasScene")
+                .resizable()
+                .scaledToFill()
+                .saturation(0.82)
+                .frame(width: AtlasMetrics.width, height: 211)
+                .clipped()
+                .overlay(AtlasPalette.canvas.opacity(0.08))
+                .accessibilityHidden(true)
+
+            MemoMark(size: 67)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
+                .padding(.trailing, 32)
+                .padding(.top, 8)
+                .accessibilityHidden(true)
+
+            Group {
+                if let featured = presentation.tripSummaries.first {
+                    FeaturedTripPostcard(trip: featured)
+                } else {
+                    EmptyTripPostcard()
+                }
+            }
+            .frame(height: 139)
+            .padding(.horizontal, 17)
+            .padding(.top, 72)
+        }
+        .frame(height: 211)
     }
 }
 
@@ -785,11 +821,11 @@ private struct TripsAskField: View {
     @State private var query = ""
     @FocusState private var focused: Bool
 
-    /// The resting row sits under the software keyboard (row bottom y≈724,
-    /// keyboard top ≈538 in canvas units). A fixed lift clears every current
-    /// iPhone keyboard after ReferenceViewport scaling, so no keyboard-frame
-    /// observation is needed.
-    private let focusedLift: CGFloat = 240
+    /// The resting row sits under the software keyboard (row bottom y≈772 in
+    /// the flow layout, keyboard top ≈538 in canvas units). A fixed lift
+    /// clears every current iPhone keyboard after ReferenceViewport scaling,
+    /// so no keyboard-frame observation is needed.
+    private let focusedLift: CGFloat = 264
 
     var body: some View {
         HStack(spacing: 10) {

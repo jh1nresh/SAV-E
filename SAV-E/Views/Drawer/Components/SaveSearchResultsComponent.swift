@@ -66,8 +66,8 @@ struct SaveSearchResultsComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(isPublicSection ? Color.saveCream.opacity(0.72) : Color.saveMint.opacity(0.72))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .background(isPublicSection ? SaveAtlasPalette.kraft.opacity(0.5) : SaveAtlasPalette.mint.opacity(0.72))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
 
                 Spacer(minLength: 0)
@@ -77,8 +77,8 @@ struct SaveSearchResultsComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .background(Color.saveHoney)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .background(SaveAtlasPalette.kraft.opacity(0.58))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
             }
 
@@ -111,10 +111,10 @@ struct SaveSearchResultsComponent: View {
                     }
                 }
                 .padding(12)
-                .background(Color.saveNotebookPage.opacity(0.50))
+                .background(SaveAtlasPalette.paper.opacity(0.50))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                        .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             } else {
@@ -126,11 +126,11 @@ struct SaveSearchResultsComponent: View {
             }
         }
         .padding(14)
-        .background(Color.saveNotebookPage.opacity(isVisuallySecondary ? 0.54 : 0.72))
+        .background(SaveAtlasPalette.paper.opacity(isVisuallySecondary ? 0.54 : 0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(
-                    Color.saveNotebookLine.opacity(isVisuallySecondary ? 0.78 : 1),
+                    SaveAtlasPalette.line.opacity(isVisuallySecondary ? 0.78 : 1),
                     lineWidth: isVisuallySecondary ? 1.4 : 2
                 )
         )
@@ -176,11 +176,12 @@ struct SaveSearchFollowUpChoiceGrid: View {
             HStack(spacing: 7) {
                 Image(systemName: "square.grid.2x2")
                     .font(.caption.weight(.bold))
-                Text(title ?? languageSettings.localized(english: "Narrow with one tap", traditionalChinese: "點一下繼續縮小"))
-                    .font(.caption.weight(.bold))
+                Text((title ?? languageSettings.localized(english: "Narrow with one tap", traditionalChinese: "點一下繼續縮小")).uppercased())
+                    .font(SaveAtlasType.display(11))
+                    .tracking(1.0)
                 Spacer(minLength: 0)
             }
-            .foregroundColor(.saveCocoa.opacity(0.82))
+            .foregroundColor(SaveAtlasPalette.muted)
 
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(choices) { choice in
@@ -197,14 +198,16 @@ struct SaveSearchFollowUpChoiceGrid: View {
                                 .minimumScaleFactor(0.76)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .foregroundColor(.saveInk)
+                        .foregroundColor(SaveAtlasPalette.ink)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity, minHeight: 42)
-                        .background(Color.saveHoney.opacity(0.72))
+                        // Spec P2: kraft chips on an Atlas paper panel replace
+                        // the honey-yellow notebook chips.
+                        .background(SaveAtlasPalette.kraft.opacity(0.55))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                                .stroke(SaveAtlasPalette.line.opacity(0.62), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
@@ -214,10 +217,10 @@ struct SaveSearchFollowUpChoiceGrid: View {
             }
         }
         .padding(12)
-        .background(Color.saveNotebookPage.opacity(0.66))
+        .background(SaveAtlasPalette.paper)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.82), lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(0.4), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -233,9 +236,9 @@ private struct SaveSearchAssistantMessage: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 34, height: 34)
-                .background(Color.saveHoney.opacity(0.82))
+                .background(SaveAtlasPalette.kraft.opacity(0.8))
                 .clipShape(Circle())
-                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+                .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.1))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(languageSettings.localized(english: "SAV-E answer", traditionalChinese: "SAV-E 回答"))
@@ -251,10 +254,10 @@ private struct SaveSearchAssistantMessage: View {
             }
         }
         .padding(12)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper.opacity(0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.9), lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(0.9), lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -296,22 +299,22 @@ private struct SaveSearchResultNotebookRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     SaveSearchStateChip(text: result.objectType.displayName(language: languageSettings.language), fill: typeFill)
-                    SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? .saveNotebookPage : .saveMint)
+                    SaveSearchStateChip(text: result.userState.displayName(language: languageSettings.language), fill: result.userState == .unsaved ? SaveAtlasPalette.paper : SaveAtlasPalette.mint)
                     if let category = result.category {
-                        SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: .saveNotebookPage)
+                        SaveSearchStateChip(text: category.displayName(language: languageSettings.language), fill: SaveAtlasPalette.paper)
                     }
                 }
 
                 if hasPlaceMetadata {
                     HStack(spacing: 6) {
                         if let ratingLabel {
-                            SaveSearchStateChip(text: ratingLabel, fill: .saveHoney)
+                            SaveSearchStateChip(text: ratingLabel, fill: SaveAtlasPalette.honey)
                         }
                         if let reviewsLabel {
-                            SaveSearchStateChip(text: reviewsLabel, fill: .saveNotebookPage)
+                            SaveSearchStateChip(text: reviewsLabel, fill: SaveAtlasPalette.paper)
                         }
                         if let distanceLabel = result.distanceLabel {
-                            SaveSearchStateChip(text: distanceLabel, fill: .saveHoney)
+                            SaveSearchStateChip(text: distanceLabel, fill: SaveAtlasPalette.kraft)
                         }
                     }
                 }
@@ -325,10 +328,10 @@ private struct SaveSearchResultNotebookRow: View {
             }
         }
         .padding(12)
-        .background(Color.saveCream.opacity(0.72))
+        .background(SaveAtlasPalette.canvas.opacity(0.9))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -351,7 +354,7 @@ private struct SaveSearchResultNotebookRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line, lineWidth: 1)
             )
         } else {
             fallbackIcon
@@ -366,7 +369,7 @@ private struct SaveSearchResultNotebookRow: View {
             .background(iconFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -449,22 +452,22 @@ private struct SaveSearchResultNotebookRow: View {
 
     private var iconFill: Color {
         switch result.objectType {
-        case .savedPlace, .triedMemory: return .saveMint
-        case .pendingCandidate, .sourceOnlyClue: return .saveSignal
-        case .review: return .saveSignal
-        case .mapVisibleUnsavedPlace: return .saveNotebookPage
-        case .tripStop: return .saveNotebookPage
-        case .newRecommendation: return .saveNotebookPage
+        case .savedPlace, .triedMemory: return SaveAtlasPalette.mint
+        case .pendingCandidate, .sourceOnlyClue: return SaveAtlasPalette.kraft
+        case .review: return SaveAtlasPalette.kraft
+        case .mapVisibleUnsavedPlace: return SaveAtlasPalette.paper
+        case .tripStop: return SaveAtlasPalette.paper
+        case .newRecommendation: return SaveAtlasPalette.paper
         }
     }
 
     private var typeFill: Color {
         switch result.objectType {
-        case .savedPlace, .triedMemory: return .saveMint
-        case .pendingCandidate, .sourceOnlyClue: return .saveSignal
-        case .mapVisibleUnsavedPlace, .newRecommendation: return .saveNotebookPage
-        case .review: return .saveSignal
-        case .tripStop: return .saveNotebookPage
+        case .savedPlace, .triedMemory: return SaveAtlasPalette.mint
+        case .pendingCandidate, .sourceOnlyClue: return SaveAtlasPalette.kraft
+        case .mapVisibleUnsavedPlace, .newRecommendation: return SaveAtlasPalette.paper
+        case .review: return SaveAtlasPalette.kraft
+        case .tripStop: return SaveAtlasPalette.paper
         }
     }
 }
@@ -482,7 +485,7 @@ private struct SaveSearchStateChip: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(fill.opacity(0.82))
-            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1.1))
             .clipShape(Capsule())
     }
 }
@@ -495,8 +498,8 @@ private extension View {
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(isPrimary ? Color.saveHoney : Color.saveNotebookPage)
-            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.1))
+            .background(isPrimary ? SaveAtlasPalette.kraft.opacity(0.75) : SaveAtlasPalette.paper)
+            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1.1))
             .clipShape(Capsule())
     }
 }

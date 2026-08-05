@@ -18,7 +18,7 @@ struct EmptyStateView: View {
                 SaveIconTile(
                     systemName: icon,
                     size: 34,
-                    fill: .saveHoney,
+                    fill: SaveAtlasPalette.kraft,
                     foreground: .saveInk,
                     strokeOpacity: 1,
                     cornerRadius: 11
@@ -49,21 +49,17 @@ struct EmptyStateView: View {
                 } label: {
                     Text(actionTitle)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.saveInk)
+                        .foregroundColor(.white)
                         .padding(.horizontal, SaveTheme.Spacing.xl)
                         .frame(minHeight: 44)
-                        .background(Color.saveHoney)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.6)
-                        )
+                        .background(SaveAtlasPalette.coral)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(SaveTheme.Spacing.xl)
-        .saveNotebookPage(cornerRadius: 22)
+        .saveAtlasPaper(radius: 22)
         .padding(SaveTheme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scaleEffect(appeared ? 1 : 0.94)

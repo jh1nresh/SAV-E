@@ -36,8 +36,8 @@ struct TripItineraryComponent: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.saveCream.opacity(0.48))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .background(SaveAtlasPalette.kraft.opacity(0.45))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())
 
                     Text(title)
@@ -106,10 +106,10 @@ struct TripItineraryComponent: View {
                         }
                     }
                     .frame(width: 34, height: 34)
-                    .background(Color.saveNotebookPage.opacity(0.74))
+                    .background(SaveAtlasPalette.paper.opacity(0.74))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
@@ -124,10 +124,10 @@ struct TripItineraryComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(Color.saveHoney)
+                    .background(SaveAtlasPalette.kraft.opacity(0.58))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
@@ -156,10 +156,10 @@ struct TripItineraryComponent: View {
             }
         }
         .padding(14)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper.opacity(0.72))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: canvasInputID) { _, _ in
@@ -404,7 +404,7 @@ private struct TripHealthSummaryCard: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(scoreColor.opacity(0.74))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
             }
 
@@ -418,11 +418,11 @@ private struct TripHealthSummaryCard: View {
             if !health.warnings.isEmpty || !health.gaps.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(health.warnings.prefix(2)) { warning in
-                        TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: .saveCoral)
+                        TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: SaveAtlasPalette.coral)
                     }
                     ForEach(health.gaps.prefix(3)) { gap in
                         VStack(alignment: .leading, spacing: 6) {
-                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: .saveCream)
+                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: SaveAtlasPalette.kraft)
                             if let suggestion = suggestionsByGapID[gap.id], let onAddSuggestion {
                                 ForEach(suggestion.options.prefix(3)) { option in
                                     Button(action: { onAddSuggestion(gap, option) }) {
@@ -439,7 +439,7 @@ private struct TripHealthSummaryCard: View {
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 6)
                                         .background(optionBackground(for: option.source))
-                                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                                         .clipShape(Capsule())
                                     }
                                     .buttonStyle(.plain)
@@ -451,18 +451,19 @@ private struct TripHealthSummaryCard: View {
             }
         }
         .padding(12)
-        .background(Color.saveCream.opacity(0.45))
+        .background(SaveAtlasPalette.canvas.opacity(0.9))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    // Traffic-light semantics stay; only the palette moves to Atlas.
     private var scoreColor: Color {
-        if health.score >= 80 { return .saveMint }
-        if health.score >= 65 { return .saveHoney }
-        return .saveCoral
+        if health.score >= 80 { return SaveAtlasPalette.mint }
+        if health.score >= 65 { return SaveAtlasPalette.honey }
+        return SaveAtlasPalette.coral
     }
 
     private func optionButtonTitle(for option: GapSuggestionOption) -> String {
@@ -494,13 +495,13 @@ private struct TripHealthSummaryCard: View {
     private func optionBackground(for source: GapSuggestionSource) -> Color {
         switch source {
         case .confirmedSaved:
-            return .saveMint.opacity(0.52)
+            return SaveAtlasPalette.mint.opacity(0.52)
         case .reviewCandidate:
-            return .saveSignal.opacity(0.42)
+            return SaveAtlasPalette.kraft.opacity(0.5)
         case .sourceClue:
-            return .saveSignal.opacity(0.42)
+            return SaveAtlasPalette.kraft.opacity(0.5)
         case .externalSuggestion:
-            return .saveCoral.opacity(0.24)
+            return SaveAtlasPalette.coral.opacity(0.22)
         }
     }
 }
@@ -558,8 +559,8 @@ private struct DaySection: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
-                .background(Color.saveHoney.opacity(0.66))
-                .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                .background(SaveAtlasPalette.kraft.opacity(0.58))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                 .clipShape(Capsule())
                 .padding(.bottom, 12)
 
@@ -568,13 +569,13 @@ private struct DaySection: View {
                     // Timeline
                     VStack(spacing: 0) {
                         Circle()
-                            .fill(Color.saveHoney)
+                            .fill(SaveAtlasPalette.kraft)
                             .frame(width: 10, height: 10)
-                            .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
+                            .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1))
                             .padding(.top, 5)
                         if index < day.stops.count - 1 {
                             Rectangle()
-                                .fill(Color.saveNotebookLine.opacity(0.22))
+                                .fill(SaveAtlasPalette.line.opacity(0.22))
                                 .frame(width: 2)
                                 .frame(maxHeight: .infinity)
                         }
@@ -596,8 +597,8 @@ private struct DaySection: View {
                                     .foregroundColor(.saveInk)
                                     .padding(.horizontal, 7)
                                     .padding(.vertical, 3)
-                                    .background(Color.saveNotebookPage.opacity(0.74))
-                                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                                    .background(SaveAtlasPalette.paper.opacity(0.74))
+                                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                                     .clipShape(Capsule())
                             }
                         }
@@ -611,7 +612,7 @@ private struct DaySection: View {
                                 StopBadge(text: stateLabel(placeState), tint: stateTint(placeState))
                             }
                             ForEach(stop.risks.prefix(2), id: \.self) { risk in
-                                StopBadge(text: riskLabel(risk), tint: .saveCoral)
+                                StopBadge(text: riskLabel(risk), tint: SaveAtlasPalette.coral)
                             }
                         }
                         if let note = stop.note {
@@ -642,10 +643,10 @@ private struct DaySection: View {
             }
         }
         .padding(14)
-        .background(Color.saveHoney.opacity(0.12))
+        .background(SaveAtlasPalette.kraft.opacity(0.14))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -696,10 +697,10 @@ private struct DaySection: View {
 
     private func stateTint(_ state: ItineraryPlaceState) -> Color {
         switch state {
-        case .sourceOnly: return .saveSignal
-        case .reviewCandidate: return .saveSignal
-        case .confirmedMapStamp: return .saveMint
-        case .externalSuggestion: return .saveCoral
+        case .sourceOnly: return SaveAtlasPalette.kraft
+        case .reviewCandidate: return SaveAtlasPalette.kraft
+        case .confirmedMapStamp: return SaveAtlasPalette.mint
+        case .externalSuggestion: return SaveAtlasPalette.coral
         }
     }
 
@@ -756,8 +757,8 @@ private struct StopCanvasControls: View {
                 Image(systemName: "arrow.up")
                     .font(.caption2.weight(.bold))
                     .frame(width: 28, height: 26)
-                    .background(Color.saveNotebookPage.opacity(0.74))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .background(SaveAtlasPalette.paper.opacity(0.74))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
             }
             .disabled(!canMoveEarlier)
@@ -767,8 +768,8 @@ private struct StopCanvasControls: View {
                 Image(systemName: "arrow.down")
                     .font(.caption2.weight(.bold))
                     .frame(width: 28, height: 26)
-                    .background(Color.saveNotebookPage.opacity(0.74))
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .background(SaveAtlasPalette.paper.opacity(0.74))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
             }
             .disabled(!canMoveLater)
@@ -780,8 +781,8 @@ private struct StopCanvasControls: View {
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
                         .frame(height: 26)
-                        .background((isApprovedExternalStop ? Color.saveMint : Color.saveHoney).opacity(0.58))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .background((isApprovedExternalStop ? SaveAtlasPalette.mint : SaveAtlasPalette.kraft).opacity(0.58))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())
                 }
 
@@ -790,8 +791,8 @@ private struct StopCanvasControls: View {
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
                         .frame(height: 26)
-                        .background(Color.saveCoral.opacity(0.22))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .background(SaveAtlasPalette.coral.opacity(0.2))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())
                 }
             }
@@ -823,7 +824,7 @@ private struct StopBadge: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(tint.opacity(0.52))
-            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
             .clipShape(Capsule())
     }
 }

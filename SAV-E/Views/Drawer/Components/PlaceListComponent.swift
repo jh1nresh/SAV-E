@@ -15,8 +15,8 @@ struct PlaceListComponent: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.saveCream.opacity(0.72))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .background(SaveAtlasPalette.kraft.opacity(0.45))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())
 
                     Text(title)
@@ -37,11 +37,11 @@ struct PlaceListComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.saveHoney)
+                    .background(SaveAtlasPalette.kraft.opacity(0.58))
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(Color.saveNotebookLine, lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1)
                     )
             }
 
@@ -68,10 +68,10 @@ struct PlaceListComponent: View {
             }
         }
         .padding(14)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
@@ -113,20 +113,20 @@ private struct PlaceListMatchRow: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.saveMint.opacity(0.64))
+                .background(SaveAtlasPalette.mint.opacity(0.64))
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(Color.saveNotebookLine.opacity(0.26), lineWidth: 1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.26), lineWidth: 1)
                 )
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.16), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.16), lineWidth: 1)
         )
         .contentShape(Rectangle())
     }

@@ -11,11 +11,11 @@ struct StatsView: View {
         ], spacing: 8) {
             StatItem(value: "\(stats.savedCount)", label: languageSettings.text(.memoryCards), color: .saveCocoa, icon: "rectangle.stack")
             StatItem(value: "\(stats.visitedCount)", label: languageSettings.text(.visited), color: .saveSuccess, icon: "figure.walk")
-            StatItem(value: "\(stats.citiesCount)", label: languageSettings.text(.cities), color: .saveHoney, icon: "building.2")
-            StatItem(value: "\(stats.waitingClues)", label: languageSettings.text(.waitingClues), color: .saveSignal, icon: "circle.hexagongrid")
+            StatItem(value: "\(stats.citiesCount)", label: languageSettings.text(.cities), color: SaveAtlasPalette.honey, icon: "building.2")
+            StatItem(value: "\(stats.waitingClues)", label: languageSettings.text(.waitingClues), color: SaveAtlasPalette.coral, icon: "circle.hexagongrid")
         }
         .padding(12)
-        .saveNotebookSurface(cornerRadius: 18)
+        .saveAtlasPaper(radius: 18)
         .padding(.horizontal)
     }
 }
@@ -36,7 +36,7 @@ struct StatItem: View {
                     .background(color.opacity(0.18))
                     .overlay(
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.7), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(0.7), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 Spacer()

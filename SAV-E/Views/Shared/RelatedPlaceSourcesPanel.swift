@@ -132,12 +132,7 @@ struct RelatedPlaceSourcesPanel: View {
             stateContent
         }
         .padding(14)
-        .saveNotebookSurface(
-            cornerRadius: 16,
-            fill: .saveNotebookPage,
-            opacity: 0.72,
-            strokeOpacity: 0.38
-        )
+        .saveAtlasPaper(radius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.relatedSources")
         .task(id: loadRequestID) {
@@ -265,7 +260,7 @@ struct RelatedPlaceSourcesPanel: View {
                     ),
                     systemImage: "arrow.clockwise"
                 )
-                .saveOutlinedButton(fill: .saveNotebookPage)
+                .saveOutlinedButton(fill: SaveAtlasPalette.paper)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("drawer.saved.relatedSources.refresh")
@@ -293,12 +288,7 @@ struct RelatedPlaceSourcesPanel: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
-        .saveNotebookSurface(
-            cornerRadius: 12,
-            fill: .saveCream,
-            opacity: 0.44,
-            strokeOpacity: 0.26
-        )
+        .saveAtlasPaper(radius: 12)
         .accessibilityIdentifier("drawer.saved.relatedSources.coverage")
     }
 
@@ -331,7 +321,7 @@ struct RelatedPlaceSourcesPanel: View {
         } label: {
             Label(title, systemImage: systemImage)
         }
-        .buttonStyle(SaveBrandPrimaryButtonStyle(fill: .saveHoney))
+        .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: .white))
         .disabled(state == .loading)
         .accessibilityIdentifier("drawer.saved.relatedSources.find")
     }
@@ -392,7 +382,7 @@ private struct RelatedPlaceSourceRow: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(Color.saveHoney.opacity(0.55))
+                        .background(SaveAtlasPalette.kraft.opacity(0.55))
                         .clipShape(Capsule())
 
                     Text(relationLabel)
@@ -422,7 +412,7 @@ private struct RelatedPlaceSourceRow: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .saveNotebookPage(cornerRadius: 12)
+            .saveAtlasPaper(radius: 12)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(source.platform.displayName), \(source.title), \(relationLabel)")
@@ -477,8 +467,8 @@ private struct RelatedSourceCoverageChip: View {
 
     private var statusColor: Color {
         switch entry.status {
-        case .searched: return .saveMint
-        case .partial: return .saveHoney
+        case .searched: return SaveAtlasPalette.mint
+        case .partial: return SaveAtlasPalette.honey
         case .failed: return .saveError.opacity(0.38)
         }
     }

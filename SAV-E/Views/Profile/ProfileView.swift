@@ -774,8 +774,8 @@ private struct EditProfileSheet: View {
         let uploadPhotoTitle = languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片")
         let inkColor = Color.saveInk
         let horizontalPadding = SaveTheme.Spacing.md
-        let honeyColor = Color.saveHoney
-        let notebookLineColor = Color.saveNotebookLine
+        let honeyColor = SaveAtlasPalette.kraft
+        let notebookLineColor = SaveAtlasPalette.line
 
         return NavigationStack {
             VStack(spacing: SaveTheme.Spacing.lg) {
@@ -788,10 +788,10 @@ private struct EditProfileSheet: View {
                             .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .frame(width: 38, height: 38)
-                            .background(Color.saveNotebookPage)
+                            .background(SaveAtlasPalette.paper)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                    .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
@@ -814,15 +814,11 @@ private struct EditProfileSheet: View {
                     } label: {
                         Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
                             .font(.caption.weight(.bold))
-                            .foregroundColor(.saveInk)
+                            .foregroundColor(.white)
                             .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 38)
-                            .background(Color.saveHoney)
+                            .background(SaveAtlasPalette.coral)
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-                            )
                     }
                     .disabled(isSaving)
                     .accessibilityIdentifier("profile.editSave")
@@ -859,7 +855,7 @@ private struct EditProfileSheet: View {
                     }
                 }
                 .padding(SaveTheme.Spacing.lg)
-                .saveNotebookPage(cornerRadius: 20)
+                .saveAtlasPaper(radius: 20)
                 .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
@@ -873,7 +869,7 @@ private struct EditProfileSheet: View {
                         .textInputAutocapitalization(.words)
                         .focused($isNameFocused)
                         .padding(SaveTheme.Spacing.md)
-                        .saveNotebookSurface(cornerRadius: 14)
+                        .saveAtlasPaper(radius: 14)
 
                     if let errorMessage {
                         Text(errorMessage)
@@ -886,7 +882,7 @@ private struct EditProfileSheet: View {
                     }
                 }
                 .padding(SaveTheme.Spacing.lg)
-                .saveNotebookSurface(cornerRadius: 20)
+                .saveAtlasPaper(radius: 20)
                 .padding(.horizontal)
 
                 Spacer()
@@ -1017,7 +1013,7 @@ private struct PassportHero: View {
                                 .frame(width: 28, height: 28)
                                 .background(SaveAtlasPalette.mint)
                                 .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
+                                .overlay(Circle().stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1))
                                 .offset(x: 6, y: 6)
                         }
 
@@ -1097,14 +1093,14 @@ private struct EditableProfileAvatar: View {
                 .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 28, height: 28)
-                .background(Color.saveHoney)
-                .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.2))
+                .background(SaveAtlasPalette.kraft)
+                .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.2))
                 .clipShape(Circle())
                 .offset(x: 2, y: 2)
         }
         .frame(width: 92, height: 92)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 2))
+        .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 2))
     }
 }
 
@@ -1135,7 +1131,7 @@ private struct ProfileAvatarView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1.6))
+        .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.6))
     }
 
     private var remoteURL: URL? {
@@ -1162,7 +1158,7 @@ private struct PassportNotebookSpine: View {
         VStack(spacing: 11) {
             ForEach(0..<4, id: \.self) { _ in
                 Circle()
-                    .fill(Color.saveNotebookPage)
+                    .fill(SaveAtlasPalette.paper)
                     .frame(width: 7, height: 7)
                     .overlay(Circle().stroke(Color.saveCocoa.opacity(0.16), lineWidth: 1))
             }
@@ -1370,8 +1366,8 @@ private struct PassportCityStrip: View {
                         .lineLimit(1)
                         .padding(.horizontal, SaveTheme.Spacing.sm)
                         .padding(.vertical, SaveTheme.Spacing.xs)
-                        .background(Color.saveHoney.opacity(0.18))
-                        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.62), lineWidth: 1))
+                        .background(SaveAtlasPalette.kraft.opacity(0.2))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.62), lineWidth: 1))
                         .clipShape(Capsule())
                 }
             }
@@ -1554,9 +1550,9 @@ private struct PassportVisibilityRow: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, SaveTheme.Spacing.sm)
                 .padding(.vertical, SaveTheme.Spacing.xs)
-                .background(Color.saveNotebookPage.opacity(0.76))
+                .background(SaveAtlasPalette.paper.opacity(0.76))
                 .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1))
             }
             .disabled(isUpdating)
             .accessibilityIdentifier("profile.visibility.\(place.id)")
@@ -1695,10 +1691,10 @@ private struct LanguageSettingsSheet: View {
                             .font(.caption.weight(.bold))
                             .foregroundColor(.saveInk)
                             .frame(width: 38, height: 38)
-                            .background(Color.saveNotebookPage)
+                            .background(SaveAtlasPalette.paper)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                    .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
@@ -1738,12 +1734,12 @@ private struct LanguageSettingsSheet: View {
                             .padding(SaveTheme.Spacing.md)
                             .background(
                                 languageSettings.language == language
-                                ? Color.saveHoney.opacity(0.22)
-                                : Color.saveCream.opacity(0.08)
+                                ? SaveAtlasPalette.kraft.opacity(0.25)
+                                : SaveAtlasPalette.canvas.opacity(0.5)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
+                                    .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         }
