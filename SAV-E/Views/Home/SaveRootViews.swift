@@ -911,6 +911,7 @@ struct SaveMapRootView: View {
     var hidesCommandShelf: Bool = false
     let onOpenSearch: () -> Void
     let onOpenSavedPlace: (Place) -> Void
+    let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
 
@@ -925,7 +926,8 @@ struct SaveMapRootView: View {
                     shouldFocusOnUserLocation: shouldFocusOnUserLocation,
                     hidesCommandShelf: hidesCommandShelf,
                     presentation: atlasPresentation,
-                    onClearSelection: mapViewModel.clearSelectedMapObject
+                    onClearSelection: mapViewModel.clearSelectedMapObject,
+                    onPlanAroundPlace: onPlanAroundPlace
                 )
             }
         }

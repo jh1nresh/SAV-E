@@ -395,6 +395,7 @@ struct ContentView: View {
                                 hidesCommandShelf: true,
                                 onOpenSearch: { openDrawer(.ask, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
                         }
