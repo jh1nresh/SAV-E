@@ -725,10 +725,10 @@ struct AIDrawerView: View {
                     .font(.system(size: 15, weight: .black))
                     .foregroundColor(.saveInk)
                     .frame(width: 30, height: 30)
-                    .background(Color.saveHoney)
+                    .background(SaveAtlasPalette.kraft)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .symbolEffect(.pulse, isActive: true)
@@ -775,10 +775,10 @@ struct AIDrawerView: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, SaveTheme.Spacing.md)
                     .padding(.vertical, SaveTheme.Spacing.sm)
-                    .background(Color.saveNotebookPage.opacity(0.62))
+                    .background(SaveAtlasPalette.paper.opacity(0.62))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
@@ -802,10 +802,10 @@ struct AIDrawerView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.saveInk)
                     .frame(width: 32, height: 32)
-                    .background(Color.saveNotebookPage.opacity(0.62))
+                    .background(SaveAtlasPalette.paper.opacity(0.62))
                     .overlay(
                         Circle()
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                     )
                     .clipShape(Circle())
             }
@@ -836,7 +836,7 @@ struct AIDrawerView: View {
                     systemName: "xmark",
                     size: 30,
                     iconSize: 11,
-                    fill: Color.saveNotebookPage.opacity(0.72),
+                    fill: SaveAtlasPalette.paper.opacity(0.72),
                     foreground: Color.saveCocoa.opacity(0.78),
                     strokeOpacity: 0.54,
                     cornerRadius: 9
@@ -988,11 +988,11 @@ struct AIDrawerView: View {
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 38)
                     .padding(.vertical, 2)
-                    .background(viewModel.activeCommandTab == tab ? Color.saveHoney.opacity(0.62) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
+                    .background(viewModel.activeCommandTab == tab ? SaveAtlasPalette.kraft.opacity(0.62) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(viewModel.activeCommandTab == tab ? 0.56 : 0.22), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(viewModel.activeCommandTab == tab ? 0.56 : 0.22), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -1183,7 +1183,7 @@ struct AIDrawerView: View {
                     .foregroundColor(.saveCocoa)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
-                    .background(Color.saveHoney.opacity(0.48), in: Capsule())
+                    .background(SaveAtlasPalette.kraft.opacity(0.48), in: Capsule())
             }
             .padding(.horizontal, SaveTheme.Spacing.lg)
 
@@ -1218,11 +1218,11 @@ struct AIDrawerView: View {
             }
             .padding(.horizontal, 11)
             .frame(minHeight: 40)
-            .background(Color.saveNotebookPage.opacity(0.58))
+            .background(SaveAtlasPalette.paper.opacity(0.58))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
             )
             .padding(.horizontal, SaveTheme.Spacing.lg)
 
@@ -1276,7 +1276,7 @@ struct AIDrawerView: View {
                     .frame(maxWidth: .infinity, minHeight: 38)
                 }
                 .foregroundColor(.saveInk)
-                .background(Color.saveHoney.opacity(0.58))
+                .background(SaveAtlasPalette.kraft.opacity(0.58))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .buttonStyle(.plain)
                 .disabled(isLoadingMoreFollowedFriends)
@@ -1350,11 +1350,11 @@ struct AIDrawerView: View {
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10)
                     .frame(minHeight: 38)
-                    .background(Color.saveNotebookPage.opacity(0.58))
+                    .background(SaveAtlasPalette.paper.opacity(0.58))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
                     )
                     .accessibilityIdentifier("drawer.friends.referral")
 
@@ -1372,11 +1372,11 @@ struct AIDrawerView: View {
                     }
                 }
                 .foregroundColor(.saveInk)
-                .background(Color.saveHoney.opacity(canFollowReferral ? 0.78 : 0.28))
+                .background(SaveAtlasPalette.kraft.opacity(canFollowReferral ? 0.78 : 0.28))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.44), lineWidth: 1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.44), lineWidth: 1)
                 )
                 .disabled(!canFollowReferral || isFollowingReferral)
                 .buttonStyle(.plain)
@@ -1610,7 +1610,7 @@ struct AIDrawerView: View {
         .font(.caption)
         .foregroundStyle(Color.saveCocoa.opacity(0.78))
         .padding(12)
-        .saveNotebookPage(cornerRadius: 14)
+        .saveAtlasPaper(radius: 14)
         .accessibilityIdentifier("drawer.linkAnalysis.privacy")
     }
 
@@ -1649,10 +1649,10 @@ struct AIDrawerView: View {
                         .font(.subheadline)
                         .foregroundColor(.saveInk)
                         .padding(10)
-                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .background(SaveAtlasPalette.paper.opacity(0.72))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.5), lineWidth: 1.2)
+                                .stroke(SaveAtlasPalette.line.opacity(0.5), lineWidth: 1.2)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
@@ -1661,10 +1661,10 @@ struct AIDrawerView: View {
                         .font(.caption)
                         .foregroundColor(.saveCocoa)
                         .padding(10)
-                        .background(Color.saveNotebookPage.opacity(0.54))
+                        .background(SaveAtlasPalette.paper.opacity(0.54))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.36), lineWidth: 1)
+                                .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
@@ -1674,17 +1674,17 @@ struct AIDrawerView: View {
                             .foregroundColor(.saveInk)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.saveHoney.opacity(0.88))
+                            .background(SaveAtlasPalette.kraft.opacity(0.88))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                    .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(12)
-                .background(Color.saveCream.opacity(0.32))
+                .background(SaveAtlasPalette.canvas.opacity(0.32))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 if collaborativeLists.isEmpty {
@@ -2103,7 +2103,7 @@ struct AIDrawerView: View {
                     traditionalChinese: "SAV-E 正在檢查來源並找出可能地點；目前還不會存進你的地圖。"
                 ),
                 isLoading: true,
-                tone: .saveHoney
+                tone: SaveAtlasPalette.kraft
             )
         case .ready(let candidateIDs):
             let count = candidateIDs.count
@@ -2122,7 +2122,7 @@ struct AIDrawerView: View {
                         : "找到 \(count) 個可能地點。請先打開分析憑證，只確認你要收藏的精確地點。"
                 ),
                 isLoading: false,
-                tone: count == 0 ? .saveHoney : .saveMint
+                tone: count == 0 ? SaveAtlasPalette.kraft : SaveAtlasPalette.mint
             )
         case .failed(let message):
             LinkAnalysisStatusCard(
@@ -2238,7 +2238,7 @@ private struct LinkAnalysisStatusCard: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .saveNotebookPage(cornerRadius: 14)
+        .saveAtlasPaper(radius: 14)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("drawer.linkAnalysis.status")
     }
@@ -2277,7 +2277,7 @@ private struct CaptureTripContextCard: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .saveNotebookPage(cornerRadius: 14)
+        .saveAtlasPaper(radius: 14)
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.saveCoral.opacity(0.48), lineWidth: 1)
@@ -3005,7 +3005,7 @@ private struct FollowedFriendRow: View {
             }
             .frame(width: 42, height: 42)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.saveNotebookLine.opacity(0.42), lineWidth: 1))
+            .overlay(Circle().stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(friend.displayName)
@@ -3044,7 +3044,7 @@ private struct FollowedFriendRow: View {
             .accessibilityIdentifier("drawer.friends.unfollow.\(friend.id)")
         }
         .padding(11)
-        .saveNotebookSurface(cornerRadius: 14, fill: .saveNotebookPage, opacity: 0.62, strokeOpacity: 0.34, lineWidth: 1)
+        .saveAtlasPaper(radius: 14)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.friends.following.\(friend.id)")
     }
@@ -3105,15 +3105,15 @@ private struct SocialPlaceRow: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
-                    .background(Color.saveHoney.opacity(0.78))
+                    .background(SaveAtlasPalette.kraft.opacity(0.78))
                     .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(languageSettings.localized(english: "Save \(place.name) to my SAV-E", traditionalChinese: "保存 \(place.name) 到我的 SAV-E"))
         }
         .padding(12)
-        .saveNotebookSurface(cornerRadius: 14, fill: .saveNotebookPage, opacity: 0.62, strokeOpacity: 0.34, lineWidth: 1)
+        .saveAtlasPaper(radius: 14)
     }
 }
 
@@ -3343,11 +3343,11 @@ private struct SavedMapDetailDrawerContent: View {
                     .font(.caption.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Color.saveNotebookPage.opacity(0.24))
+                    .background(SaveAtlasPalette.paper.opacity(0.24))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.3), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
                     )
             }
             .disabled(isSavingPlaceEdit || isUpdatingVisibility)
@@ -3533,7 +3533,7 @@ private struct SavedMapDetailDrawerContent: View {
                 .autocorrectionDisabled()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color.saveNotebookPage.opacity(0.5))
+                .background(SaveAtlasPalette.paper.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             TextField(languageSettings.localized(english: "Address", traditionalChinese: "地址"), text: $editAddress)
@@ -3541,7 +3541,7 @@ private struct SavedMapDetailDrawerContent: View {
                 .autocorrectionDisabled()
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color.saveNotebookPage.opacity(0.5))
+                .background(SaveAtlasPalette.paper.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             HStack(spacing: 8) {
@@ -3549,7 +3549,7 @@ private struct SavedMapDetailDrawerContent: View {
                     isEditingPlace = false
                     editError = nil
                 } label: {
-                    PlaceDetailActionLabel(title: languageSettings.text(.cancel), systemImage: "xmark", fill: Color.saveNotebookPage)
+                    PlaceDetailActionLabel(title: languageSettings.text(.cancel), systemImage: "xmark", fill: SaveAtlasPalette.paper)
                 }
                 .disabled(isSavingPlaceEdit)
 
@@ -3559,18 +3559,18 @@ private struct SavedMapDetailDrawerContent: View {
                     PlaceDetailActionLabel(
                         title: isSavingPlaceEdit ? languageSettings.text(.saving) : languageSettings.text(.save),
                         systemImage: "checkmark",
-                        fill: .saveHoney.opacity(0.8)
+                        fill: SaveAtlasPalette.kraft.opacity(0.8)
                     )
                 }
                 .disabled(isSavingPlaceEdit)
             }
         }
         .padding(10)
-        .background(Color.saveNotebookPage.opacity(0.4))
+        .background(SaveAtlasPalette.paper.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
     }
 
@@ -3792,9 +3792,9 @@ private struct MapDetailChip: View {
         .foregroundColor(.saveCocoa)
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
-        .background(Color.saveNotebookPage.opacity(0.38))
+        .background(SaveAtlasPalette.paper.opacity(0.38))
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.30), lineWidth: 1))
+        .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.30), lineWidth: 1))
     }
 }
 
@@ -3824,10 +3824,10 @@ private struct AddToListPanel: View {
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.saveHoney.opacity(0.72))
+                        .background(SaveAtlasPalette.kraft.opacity(0.72))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
@@ -3850,20 +3850,20 @@ private struct AddToListPanel: View {
                         .foregroundColor(.saveInk)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Color.saveHoney.opacity(0.72))
+                        .background(SaveAtlasPalette.kraft.opacity(0.72))
                         .overlay(
                             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
         }
         .padding(12)
-        .background(Color.saveCream.opacity(0.32))
+        .background(SaveAtlasPalette.canvas.opacity(0.32))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.26), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.26), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -3888,7 +3888,7 @@ private struct CollaborativeListCard: View {
                         .font(.title3)
                         .foregroundColor(.saveInk)
                         .frame(width: 32, height: 32)
-                        .background(Color.saveCream.opacity(0.76))
+                        .background(SaveAtlasPalette.canvas.opacity(0.76))
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -3921,10 +3921,10 @@ private struct CollaborativeListCard: View {
             }
         }
         .padding(12)
-        .background(Color.saveNotebookPage.opacity(0.62))
+        .background(SaveAtlasPalette.paper.opacity(0.62))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -3937,7 +3937,7 @@ private struct CollaborativeListCard: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
-                    .background(Color.saveHoney.opacity(0.56))
+                    .background(SaveAtlasPalette.kraft.opacity(0.56))
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -3950,7 +3950,7 @@ private struct CollaborativeListCard: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .background(SaveAtlasPalette.paper.opacity(0.72))
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
@@ -3962,7 +3962,7 @@ private struct CollaborativeListCard: View {
                         .foregroundColor(.saveInk)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(Color.saveNotebookPage.opacity(0.72))
+                        .background(SaveAtlasPalette.paper.opacity(0.72))
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
             }
@@ -3993,7 +3993,7 @@ private struct CollaborativeListCard: View {
                             }
                         }
                         .frame(width: 42, height: 42)
-                        .background(Color.saveCream.opacity(0.8))
+                        .background(SaveAtlasPalette.canvas.opacity(0.8))
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 3) {
@@ -4027,7 +4027,7 @@ private struct CollaborativeListCard: View {
                         }
                     }
                     .padding(9)
-                    .background(Color.saveCream.opacity(0.34))
+                    .background(SaveAtlasPalette.canvas.opacity(0.34))
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
@@ -4190,7 +4190,7 @@ private struct NotebookSpine: View {
         VStack(spacing: 11) {
             ForEach(0..<4, id: \.self) { _ in
                 Circle()
-                    .fill(Color.saveNotebookPage)
+                    .fill(SaveAtlasPalette.paper)
                     .frame(width: 7, height: 7)
                     .overlay(Circle().stroke(Color.saveCocoa.opacity(0.16), lineWidth: 1))
             }
@@ -4210,17 +4210,20 @@ private struct NotebookBandLabel: View {
     }
 
     var body: some View {
+        // Spec P2: kraft chip treatment + editorial condensed type replaces
+        // the legacy honey-yellow notebook band.
         HStack(spacing: 7) {
             Text(title.uppercased())
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.display(11))
+                .tracking(1.1)
+                .foregroundColor(SaveAtlasPalette.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(Color.saveHoney)
-                .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1.2))
+                .background(SaveAtlasPalette.kraft.opacity(0.58))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.62), lineWidth: 1))
                 .clipShape(Capsule())
             Rectangle()
-                .fill(Color.saveNotebookLine.opacity(0.28))
+                .fill(SaveAtlasPalette.line.opacity(0.28))
                 .frame(height: 1)
         }
         .padding(.top, 2)
@@ -4277,7 +4280,7 @@ private struct SavedPlacesSection: View {
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.saveNotebookLine.opacity(0.12), lineWidth: 1)
+                                    .stroke(SaveAtlasPalette.line.opacity(0.12), lineWidth: 1)
                             )
                         }
                     }
@@ -4312,7 +4315,7 @@ private struct SavedPlacesSection: View {
     }
 
     private var groupTint: Color {
-        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.58) : Color.white.opacity(0.30)
+        colorScheme == .dark ? SaveAtlasPalette.paper.opacity(0.58) : Color.white.opacity(0.30)
     }
 }
 
@@ -4557,11 +4560,7 @@ private struct ReviewCandidatesSection: View {
                         }
                     }
                 }
-                .saveNotebookSurface(
-                    cornerRadius: 22,
-                    opacity: 0.88,
-                    strokeOpacity: 0.24
-                )
+                .saveAtlasPaper(radius: 22)
             }
         }
     }
@@ -4660,10 +4659,10 @@ private struct ReviewCandidatesEmptyState: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.saveInk)
                 .frame(width: 34, height: 34)
-                .background(Color.saveCream.opacity(0.54))
+                .background(SaveAtlasPalette.canvas.opacity(0.54))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
+                        .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
@@ -4685,7 +4684,7 @@ private struct ReviewCandidatesEmptyState: View {
             Spacer(minLength: 0)
         }
         .padding(12)
-        .saveNotebookPage(cornerRadius: 14)
+        .saveAtlasPaper(radius: 14)
     }
 }
 
@@ -4795,6 +4794,14 @@ private struct ReviewCandidateDetailCard: View {
                 }
 
                 Menu {
+                    // When the primary action is Confirm (candidate already
+                    // has coordinates), re-running the exact-place search had
+                    // no entry point — a wrong match left the user stuck.
+                    if primaryAction.confirmsMapStamp {
+                        Button(action: onFindExactPlace) {
+                            Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
+                        }
+                    }
                     Button(action: onWrongBranch) {
                         Label(languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"), systemImage: "arrow.triangle.branch")
                     }
@@ -5388,7 +5395,7 @@ private struct ReviewCandidateProofPanel: View {
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.saveHoney.opacity(0.72))
+                            .background(SaveAtlasPalette.kraft.opacity(0.72))
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -5399,7 +5406,7 @@ private struct ReviewCandidateProofPanel: View {
 
             proofSection(title: languageSettings.localized(english: "Found", traditionalChinese: "找到"), systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
             proofSection(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveCoral)
-            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: .saveCream)
+            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: SaveAtlasPalette.canvas)
             nextActionRow
         }
     }
@@ -5433,7 +5440,7 @@ private struct ReviewCandidateProofPanel: View {
                 .font(.caption.weight(.bold))
                 .foregroundColor(.saveInk)
                 .frame(width: 22, height: 22)
-                .background(Color.saveHoney.opacity(0.72))
+                .background(SaveAtlasPalette.kraft.opacity(0.72))
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
@@ -5849,7 +5856,7 @@ private struct StampChip: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(color.opacity(0.24))
-            .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
             .clipShape(Capsule())
     }
 }
@@ -5857,7 +5864,7 @@ private struct StampChip: View {
 private struct CandidateActionButton: View {
     var title: String
     var systemImage: String
-    var fill: Color = .saveNotebookPage
+    var fill: Color = SaveAtlasPalette.paper
     var foreground: Color = .saveInk
     var disabled: Bool
     var action: () -> Void
@@ -5879,7 +5886,7 @@ private struct CandidateActionButton: View {
 private struct CandidateActionLabel: View {
     var title: String
     var systemImage: String
-    var fill: Color = .saveNotebookPage
+    var fill: Color = SaveAtlasPalette.paper
     var foreground: Color = .saveInk
 
     var body: some View {
@@ -5892,7 +5899,7 @@ private struct CandidateActionLabel: View {
             .background(fill)
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                    .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -5937,9 +5944,9 @@ private struct MemoryFlowCTA: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(Color.saveHoney.opacity(colorScheme == .dark ? 0.34 : 0.50))
+                    .background(SaveAtlasPalette.kraft.opacity(colorScheme == .dark ? 0.34 : 0.50))
                     .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.28), lineWidth: 1))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1))
 
                 Text(languageSettings.localized(
                     english: "Save what friends send. Ask when it matters.",
@@ -5959,9 +5966,9 @@ private struct MemoryFlowCTA: View {
             }
 
             HStack(spacing: 8) {
-                flowStep(number: "1", title: languageSettings.localized(english: "Review", traditionalChinese: "確認"), count: reviewCount, tint: .saveHoney)
+                flowStep(number: "1", title: languageSettings.localized(english: "Review", traditionalChinese: "確認"), count: reviewCount, tint: SaveAtlasPalette.kraft)
                 flowStep(number: "2", title: languageSettings.localized(english: "Stamp", traditionalChinese: "地圖章"), count: stampCount, tint: .saveMint)
-                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: .saveCream)
+                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: SaveAtlasPalette.canvas)
             }
 
             HStack(spacing: 10) {
@@ -5975,11 +5982,11 @@ private struct MemoryFlowCTA: View {
                     .foregroundColor(.saveInk)
                     .frame(maxWidth: .infinity)
                     .frame(height: 38)
-                    .background(Color.saveHoney.opacity(colorScheme == .dark ? 0.42 : 0.58))
+                    .background(SaveAtlasPalette.kraft.opacity(colorScheme == .dark ? 0.42 : 0.58))
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.30), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(0.30), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -5998,7 +6005,7 @@ private struct MemoryFlowCTA: View {
                     .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(0.24), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -6008,11 +6015,11 @@ private struct MemoryFlowCTA: View {
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(colorScheme == .dark ? .regularMaterial : .ultraThinMaterial)
-                .overlay(Color.saveNotebookPage.opacity(colorScheme == .dark ? 0.30 : 0.18))
+                .overlay(SaveAtlasPalette.paper.opacity(colorScheme == .dark ? 0.30 : 0.18))
         }
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(colorScheme == .dark ? 0.30 : 0.20), lineWidth: 1.1)
+                .stroke(SaveAtlasPalette.line.opacity(colorScheme == .dark ? 0.30 : 0.20), lineWidth: 1.1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .combine)
@@ -6080,9 +6087,9 @@ private struct SavedCategoryGrid: View {
                             .foregroundColor(.saveInk)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color.saveHoney.opacity(0.56))
+                            .background(SaveAtlasPalette.kraft.opacity(0.56))
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.32), lineWidth: 1))
+                            .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(languageSettings.localized(english: "Show all saved categories", traditionalChinese: "顯示所有已保存分類"))
@@ -6137,11 +6144,11 @@ private struct SavedCategoryGridButton: View {
             .padding(.horizontal, 9)
             .background {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? Color.saveHoney.opacity(0.42) : Color.saveNotebookPage.opacity(0.72))
+                    .fill(isSelected ? SaveAtlasPalette.kraft.opacity(0.42) : SaveAtlasPalette.paper.opacity(0.72))
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(isSelected ? 0.50 : 0.20), lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line.opacity(isSelected ? 0.50 : 0.20), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
@@ -6159,22 +6166,24 @@ private struct DrawerSuggestionRow: View {
     var text: String
 
     var body: some View {
+        // Spec P2: Atlas paper surface replaces the flat translucent-white
+        // material row.
         HStack(spacing: 9) {
             Image(systemName: icon)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .foregroundColor(SaveAtlasPalette.forest)
                 .frame(width: 28, height: 28)
-                .background(Color.saveCream.opacity(0.7))
+                .background(SaveAtlasPalette.canvas)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text(text)
-                .font(.subheadline)
+                .font(SaveAtlasType.body(15))
                 .fontWeight(.semibold)
-                .foregroundColor(colorScheme == .dark ? .white : .saveInk)
+                .foregroundColor(SaveAtlasPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
 
@@ -6182,18 +6191,17 @@ private struct DrawerSuggestionRow: View {
 
             Image(systemName: "arrow.up.right")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.7))
+                .foregroundColor(SaveAtlasPalette.muted)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(Color.white.opacity(0.16))
-        }
+        .background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.18), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -6205,46 +6213,44 @@ private struct AIResultActionBar: View {
     var onNewQuestion: () -> Void
 
     var body: some View {
+        // Spec P2: postage-coral primary + paper secondary replace the
+        // honey/cream notebook pair.
         HStack(spacing: 9) {
             Button(action: onFollowUp) {
                 Label(languageSettings.localized(english: "Follow up", traditionalChinese: "追問"), systemImage: "text.bubble")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.saveHoney)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-                    )
+                    .background(SaveAtlasPalette.coral)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
 
             Button(action: onNewQuestion) {
                 Label(languageSettings.localized(english: "New", traditionalChinese: "新的"), systemImage: "plus.bubble")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundColor(SaveAtlasPalette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.saveCream.opacity(0.74))
+                    .background(SaveAtlasPalette.paper)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line.opacity(0.5), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
             .buttonStyle(.plain)
         }
         .padding(8)
-        .background(Color.saveNotebookPage.opacity(0.94))
+        .background(SaveAtlasPalette.canvas.opacity(0.94))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -6255,16 +6261,16 @@ private enum AgentCommandTone {
 
     var color: Color {
         switch self {
-        case .signal: return .saveSignal
-        case .honey: return .saveHoney
-        case .sky: return .saveCream
-        case .cocoa: return .saveCream
+        case .signal: return SaveAtlasPalette.coral
+        case .honey: return SaveAtlasPalette.kraft
+        case .sky: return SaveAtlasPalette.canvas
+        case .cocoa: return SaveAtlasPalette.canvas
         }
     }
 
     var textColor: Color {
         switch self {
-        case .signal: return .saveSignal
+        case .signal: return SaveAtlasPalette.coral
         case .honey: return .saveInk
         case .sky: return .saveInk
         case .cocoa: return .saveInk
@@ -6273,10 +6279,10 @@ private enum AgentCommandTone {
 
     var chipFill: Color {
         switch self {
-        case .signal: return .saveSignal.opacity(0.18)
-        case .honey: return .saveHoney.opacity(0.58)
-        case .sky: return .saveCream.opacity(0.46)
-        case .cocoa: return .saveCream.opacity(0.54)
+        case .signal: return SaveAtlasPalette.coral.opacity(0.16)
+        case .honey: return SaveAtlasPalette.kraft.opacity(0.58)
+        case .sky: return SaveAtlasPalette.canvas
+        case .cocoa: return SaveAtlasPalette.canvas
         }
     }
 }
@@ -6305,7 +6311,7 @@ private struct AgentCommandRow: View {
                     }
                     .overlay(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(Color.saveNotebookLine.opacity(isPrimary ? 0.40 : 0.26), lineWidth: 1)
+                            .stroke(SaveAtlasPalette.line.opacity(isPrimary ? 0.40 : 0.26), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
 
@@ -6332,7 +6338,7 @@ private struct AgentCommandRow: View {
                         .foregroundColor(.saveInk)
                         .padding(5)
                         .background(tone.chipFill)
-                        .overlay(Circle().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Circle())
                     Text(commandLabel.uppercased())
                         .font(.caption2.weight(.bold))
@@ -6343,7 +6349,7 @@ private struct AgentCommandRow: View {
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
                         .background(tone.chipFill)
-                        .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())
                 }
                 .frame(maxWidth: 82, alignment: .trailing)
@@ -6356,7 +6362,7 @@ private struct AgentCommandRow: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(isPrimary ? 0.38 : 0.22), lineWidth: 1.1)
+                    .stroke(SaveAtlasPalette.line.opacity(isPrimary ? 0.38 : 0.22), lineWidth: 1.1)
             )
             .overlay(alignment: .leading) {
                 VStack(spacing: 6) {
@@ -6378,7 +6384,7 @@ private struct AgentCommandRow: View {
         if isPrimary {
             return tone.color.opacity(colorScheme == .dark ? 0.30 : 0.36)
         }
-        return colorScheme == .dark ? Color.saveNotebookPage.opacity(0.32) : Color.white.opacity(0.16)
+        return colorScheme == .dark ? SaveAtlasPalette.paper.opacity(0.32) : Color.white.opacity(0.16)
     }
 }
 
@@ -6408,7 +6414,7 @@ private struct AgentCommandCard: View {
                         }
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.saveNotebookLine.opacity(0.26), lineWidth: 1)
+                                .stroke(SaveAtlasPalette.line.opacity(0.26), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
@@ -6448,7 +6454,7 @@ private struct AgentCommandCard: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(tone.chipFill)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
 
                 Spacer(minLength: 0)
@@ -6462,7 +6468,7 @@ private struct AgentCommandCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.saveNotebookLine.opacity(0.22), lineWidth: 1)
+                    .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
@@ -6472,6 +6478,6 @@ private struct AgentCommandCard: View {
     }
 
     private var commandSurfaceTint: Color {
-        colorScheme == .dark ? Color.saveNotebookPage.opacity(0.30) : Color.white.opacity(0.16)
+        colorScheme == .dark ? SaveAtlasPalette.paper.opacity(0.30) : Color.white.opacity(0.16)
     }
 }

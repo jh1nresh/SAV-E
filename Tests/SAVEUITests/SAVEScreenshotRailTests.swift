@@ -757,6 +757,89 @@ final class SAVEScreenshotRailTests: XCTestCase {
     }
 
     @MainActor
+    func testLocateWithDeniedPermissionShowsRecoveryNotice() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-location-denied",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
+
+        // The identifier sits on a full-map container, so tap the button's
+        // actual top-trailing position instead of the element center.
+        let locate = app.descendants(matching: .any)["map.currentLocation"]
+        XCTAssertTrue(locate.waitForExistence(timeout: stepTimeout))
+        locate.coordinate(withNormalizedOffset: CGVector(dx: 0.91, dy: 0.06)).tap()
+
+        // Spec P4: denied permission surfaces an Atlas notice with an Open
+        // Settings action instead of a silent no-op.
+        let notice = app.descendants(matching: .any)["map.locationNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.locationNotice.openSettings"].exists)
+        attach(app, name: "map-location-denied-notice")
+
+        app.buttons["map.locationNotice.dismiss"].tap()
+        XCTAssertTrue(notice.waitForNonExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
+    func testMapPlaceCardOwnsStripActions() throws {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "--uitest-complete-onboarding",
+            "--skip-map-tour",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-map-place-selected",
+            "-save.appLanguage", "en",
+        ]
+        app.launch()
+
+        try signInViaReviewDemo(app: app)
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
+        dismissLocationAlertIfPresent()
+
+        // One place, one card (spec P2b): the Atlas card is canonical and now
+        // carries the retired legacy strip's actions.
+        let card = app.descendants(matching: .any)["map.place.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "map.place.card").count,
+            1,
+            "Exactly one surface should represent the selected place."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["map.place.share"].exists)
+        XCTAssertTrue(app.buttons["map.place.planAround"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["place.detail.root"].exists,
+            "The legacy place strip must not co-present with the Atlas card."
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        attach(app, name: "map-place-card-actions")
+
+        // Plan-around swaps the card for the single drawer surface.
+        app.buttons["map.place.planAround"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Plan-around should open exactly one drawer surface."
+        )
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
     func testSavedPlaceEntryUsesSingleCanonicalDetail() throws {
         let app = XCUIApplication()
         app.launchArguments += [

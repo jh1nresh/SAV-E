@@ -389,6 +389,9 @@ final class MapViewModel: ObservableObject {
     @Published private(set) var showsSocialMapLayer = false
     /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
     @Published var stampMoment: SaveStampMoment?
+    /// Spec P4: shown when a locate tap fails because location permission is
+    /// denied or restricted; offers the Open Settings recovery path.
+    @Published var showsLocationDeniedNotice = false
 
     private let supabaseService: SupabaseServiceProtocol
     private let relatedPlaceSourcesService: RelatedPlaceSourcesProviding
@@ -2086,7 +2089,14 @@ final class MapViewModel: ObservableObject {
         isLocatingUser = true
         defer { isLocatingUser = false }
 
-        guard let location = await locationService.requestCurrentLocation() else { return }
+        guard let location = await locationService.requestCurrentLocation() else {
+            // Spec P4: a denied/restricted permission used to fail silently
+            // here — surface the recovery notice instead.
+            if locationService.isAuthorizationDenied {
+                showsLocationDeniedNotice = true
+            }
+            return
+        }
 
         cameraPosition = .region(MKCoordinateRegion(
             center: location.coordinate,

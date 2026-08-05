@@ -386,8 +386,6 @@ struct ContentView: View {
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )
-                            .frame(width: 402, height: 786)
-                            .clipped()
                         case .map:
                             SaveMapRootView(
                                 mapViewModel: mapVM,
@@ -397,6 +395,7 @@ struct ContentView: View {
                                 hidesCommandShelf: true,
                                 onOpenSearch: { openDrawer(.ask, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
                         }

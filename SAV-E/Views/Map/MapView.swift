@@ -169,14 +169,130 @@ struct MapView: View {
                         }
                     }
                 }
+
+                // Spec P4: locate with denied/restricted permission surfaces
+                // a recovery notice instead of silently doing nothing.
+                if viewModel.showsLocationDeniedNotice {
+                    VStack {
+                        SaveLocationDeniedNotice(
+                            onOpenSettings: openSystemSettings,
+                            onDismiss: {
+                                withAnimation(SaveTheme.Motion.standardSpring) {
+                                    viewModel.showsLocationDeniedNotice = false
+                                }
+                            }
+                        )
+                        .padding(.top, geo.safeAreaInsets.top + 18)
+                        .padding(.horizontal, 24)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .zIndex(2)
+                    .transition(.asymmetric(
+                        insertion: .opacity,
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                }
             }
             .animation(SaveTheme.Motion.standardSpring, value: viewModel.stampMoment)
+            .animation(SaveTheme.Motion.standardSpring, value: viewModel.showsLocationDeniedNotice)
             .ignoresSafeArea()
         }
         .task(id: shouldFocusOnUserLocationOnLaunch) {
             guard shouldFocusOnUserLocationOnLaunch else { return }
             await viewModel.focusOnUserLocationOnLaunch()
         }
+    }
+
+    private func openSystemSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+/// Spec P4: Atlas-style notice with an Open Settings recovery path, shown
+/// when locating fails because permission is denied or restricted.
+private struct SaveLocationDeniedNotice: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let onOpenSettings: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "location.slash.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 34, height: 34)
+                    .background(SaveAtlasPalette.mint, in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.localized(
+                        english: "Location is off for SAV-E",
+                        traditionalChinese: "SAV-E 的定位權限已關閉"
+                    ))
+                    .font(SaveAtlasType.strong(16, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+
+                    Text(languageSettings.localized(
+                        english: "Allow location in Settings to jump the map to where you are.",
+                        traditionalChinese: "到「設定」開啟定位，地圖就能跳到你所在的位置。"
+                    ))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 28, height: 28)
+                        .background(SaveAtlasPalette.canvas, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Dismiss location notice",
+                    traditionalChinese: "關閉定位提示"
+                ))
+                .accessibilityIdentifier("map.locationNotice.dismiss")
+            }
+
+            Button(action: onOpenSettings) {
+                HStack {
+                    Spacer()
+                    Text(languageSettings.localized(
+                        english: "Open Settings",
+                        traditionalChinese: "打開設定"
+                    ))
+                    .font(SaveAtlasType.strong(15))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                }
+                .foregroundStyle(.white)
+                .frame(minHeight: 40)
+                .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("map.locationNotice.openSettings")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: 340)
+        .background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 10, y: 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.locationNotice")
     }
 }
 
@@ -254,10 +370,12 @@ struct PlaceMapPin: View {
             .scaleEffect(isSelected ? 1.24 : 1)
             .overlay {
                 if isSelected {
+                    // Map Stamp emphasis stays honey (DESIGN.md), on the
+                    // Atlas palette.
                     Circle()
-                        .stroke(Color.saveHoney.opacity(0.86), lineWidth: 3)
+                        .stroke(SaveAtlasPalette.honey.opacity(0.86), lineWidth: 3)
                         .frame(width: 46, height: 46)
-                        .shadow(color: Color.saveHoney.opacity(0.28), radius: 5)
+                        .shadow(color: SaveAtlasPalette.honey.opacity(0.28), radius: 5)
                 }
             }
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
