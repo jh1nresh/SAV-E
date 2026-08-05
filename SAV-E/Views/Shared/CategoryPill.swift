@@ -11,10 +11,10 @@ struct CategoryPill: View {
                 .font(.system(size: 10, weight: .black))
                 .foregroundColor(.saveInk)
                 .frame(width: 21, height: 21)
-                .background(isSelected ? Color.saveCream : Color.saveNotebookPage)
+                .background(isSelected ? SaveAtlasPalette.canvas : SaveAtlasPalette.paper)
                 .overlay(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.6), lineWidth: 1.1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             Text(category.displayName(language: languageSettings.language))
@@ -25,11 +25,13 @@ struct CategoryPill: View {
         .padding(.leading, 6)
         .padding(.trailing, 9)
         .frame(height: 34)
-        .background(isSelected ? Color.saveHoney : Color.saveNotebookPage.opacity(0.86))
+        // Spec P2 follow-up: kraft selected state on Atlas paper — this pill
+        // renders inside the Atlas ask drawer's FILTERS strip.
+        .background(isSelected ? SaveAtlasPalette.kraft.opacity(0.62) : SaveAtlasPalette.paper)
         .foregroundColor(.saveInk)
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: isSelected ? 1.4 : 1.2)
+                .stroke(SaveAtlasPalette.line.opacity(isSelected ? 0.7 : 0.5), lineWidth: isSelected ? 1.4 : 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityLabel(category.displayName(language: languageSettings.language))

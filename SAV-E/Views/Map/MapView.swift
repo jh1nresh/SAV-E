@@ -370,10 +370,12 @@ struct PlaceMapPin: View {
             .scaleEffect(isSelected ? 1.24 : 1)
             .overlay {
                 if isSelected {
+                    // Map Stamp emphasis stays honey (DESIGN.md), on the
+                    // Atlas palette.
                     Circle()
-                        .stroke(Color.saveHoney.opacity(0.86), lineWidth: 3)
+                        .stroke(SaveAtlasPalette.honey.opacity(0.86), lineWidth: 3)
                         .frame(width: 46, height: 46)
-                        .shadow(color: Color.saveHoney.opacity(0.28), radius: 5)
+                        .shadow(color: SaveAtlasPalette.honey.opacity(0.28), radius: 5)
                 }
             }
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)

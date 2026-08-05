@@ -277,9 +277,11 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
 | Ask drawer (`AIDrawerView`) | Atlas |
-| Onboarding, Passport, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
-| Shared primitives (`SaveMemoryBadge`, `CategoryPill`, `EmptyStateView`, `EvidenceLinkList`, `MemoMascotMark`, pet views) | Legacy cream-notebook |
-| Place bottom sheet, navigation/itinerary drawer components, Clip preview, smoke harness | Legacy cream-notebook |
+| Onboarding, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
+| Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
+| `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
+| Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
+| `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), Clip preview, smoke harness | Legacy cream-notebook |
 
 Rules:
 
