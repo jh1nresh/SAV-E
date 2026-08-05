@@ -43,7 +43,7 @@ struct SavePetCompanionCard: View {
                                     .foregroundColor(.saveInk)
                                     .padding(.horizontal, SaveTheme.Spacing.sm)
                                     .frame(height: 28)
-                                    .background(Color.saveHoney.opacity(0.58))
+                                    .background(SaveAtlasPalette.kraft.opacity(0.58))
                                     .clipShape(Capsule())
                             }
                         }
