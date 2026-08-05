@@ -3308,8 +3308,11 @@ private struct SavedMapDetailDrawerContent: View {
                 )
             }
 
+            // One fact, one home: rating/price live in the chips row, hours in
+            // Basic info, the note in "Your saved memory", the source in the
+            // confirmation line — the old Memory summary panel repeated all
+            // four and is gone.
             PlaceBasicInfoPanel(place: detailPlace)
-            PlaceInsightSummaryPanel(place: detailPlace, fallbackSummary: memorySummary)
 
             if isEditingPlace {
                 placeEditor

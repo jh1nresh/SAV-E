@@ -174,7 +174,13 @@ extension Place {
             .filter { !$0.isEmpty }
             .filter { line in
                 let normalizedLine = line.normalizedSummaryText
-                let metadataPrefixes = ["source:", "category:", "rating:", "reviews:", "hours:", "address:"]
+                // Vault-imported notes carry machine-written pipeline lines
+                // (location clue, Google Places match/address/coordinates) —
+                // debug text stays out of primary UI (DESIGN.md).
+                let metadataPrefixes = [
+                    "source:", "category:", "rating:", "reviews:", "hours:", "address:",
+                    "location clue:", "google places", "google maps", "coordinates:",
+                ]
                 return !line.localizedCaseInsensitiveContains("Source URL:") &&
                 !normalizedLine.hasPrefix("distance:") &&
                 !line.localizedCaseInsensitiveContains("Analysis pipeline:") &&
