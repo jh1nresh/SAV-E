@@ -1735,7 +1735,7 @@ final class MapViewModel: ObservableObject {
         selectedMapCandidate = nil
         selectedSocialPlace = nil
         selectedMapFeature = nil
-        guard place.businessPhotoURLStrings.count < 2 || place.googleRating == nil || place.priceRange == nil || place.openingHours == nil else { return }
+        guard PlaceBusinessEnricher.needsEnrichment(place) else { return }
         Task {
             await enrichSelectedPlacePhoto(place)
         }
@@ -1876,7 +1876,7 @@ final class MapViewModel: ObservableObject {
         selectedReviewCandidate = nil
         selectedMapCandidate = nil
         selectedSocialPlace = nil
-        guard place.businessPhotoURLStrings.count < 2 || place.googleRating == nil || place.priceRange == nil || place.openingHours == nil else { return }
+        guard PlaceBusinessEnricher.needsEnrichment(place) else { return }
         Task {
             await enrichSelectedPlacePhoto(place)
         }

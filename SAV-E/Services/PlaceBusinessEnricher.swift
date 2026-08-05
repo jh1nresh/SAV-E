@@ -13,9 +13,13 @@ enum PlaceBusinessEnricher {
         let openingHours: String?
     }
 
+    /// The photo carousel should offer a real gallery, not a single shot.
+    /// Places below this depth re-enrich (Google returns up to 6 here).
+    static let desiredPhotoDepth = 5
+
     /// Whether the place is still missing details worth fetching.
     static func needsEnrichment(_ place: Place) -> Bool {
-        place.businessPhotoURLStrings.count < 2 ||
+        place.businessPhotoURLStrings.count < desiredPhotoDepth ||
             place.googleRating == nil ||
             place.priceRange == nil ||
             place.openingHours == nil

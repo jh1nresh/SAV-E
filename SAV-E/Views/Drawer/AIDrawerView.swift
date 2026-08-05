@@ -3206,6 +3206,17 @@ private struct SavedMapDetailDrawerContent: View {
         VStack(alignment: .leading, spacing: 12) {
             postcardIdentity
 
+            // Business photo gallery: the postcard corner shows one shot, but
+            // enrichment fetches several — surface them all as a swipeable
+            // carousel once there is more than the header photo.
+            if detailPlace.businessPhotoURLStrings.count > 1 || isEnrichingBusinessDetails {
+                PlaceBusinessPhotoCarousel(
+                    imageURLs: detailPlace.businessPhotoURLStrings,
+                    isSearching: isEnrichingBusinessDetails
+                )
+                .accessibilityIdentifier("drawer.saved.photoCarousel")
+            }
+
             FlowLayout(spacing: 8) {
                 CategoryPill(category: detailPlace.category, isSelected: true)
                 if let rating = detailPlace.googleRating ?? detailPlace.rating {
@@ -5677,7 +5688,7 @@ private struct UnsavedMapCandidateCard: View {
         // Clear any photos carried over from a previously reused card so candidate
         // B never keeps showing candidate A's enriched photos.
         enrichedPhotoURLStrings = nil
-        guard candidate.businessPhotoURLStrings.count < 2 else { return }
+        guard candidate.businessPhotoURLStrings.count < PlaceBusinessEnricher.desiredPhotoDepth else { return }
         isEnrichingPhoto = true
         defer { isEnrichingPhoto = false }
         guard let urls = await PlaceBusinessEnricher.candidatePhotoURLs(for: candidate) else { return }
