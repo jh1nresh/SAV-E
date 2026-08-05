@@ -219,6 +219,29 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         try await request(path: "/v0/friend-share-events", method: "POST", body: body)
     }
 
+    // MARK: - TREK Projection
+
+    /// Projects a locally-planned trip into TREK. SAV-E stays the truth for
+    /// place memory; this creates a TREK-side copy of the confirmed Map Stamps
+    /// the user already arranged. Runs against the backend's stub provider
+    /// until the live OAuth connection is configured.
+    func projectTripToTrek(tripId: UUID, shareMode: String = "private") async throws -> TrekProjectionReceipt {
+        let body = try Self.jsonBody([
+            "requestId": UUID().uuidString.lowercased(),
+            "shareMode": shareMode,
+        ])
+        let (data, _) = try await requestWithResponse(
+            path: "/v0/trips/\(tripId.uuidString.lowercased())/trek-projection",
+            method: "POST",
+            body: body
+        )
+        do {
+            return try JSONDecoder().decode(TrekProjectionReceipt.self, from: data)
+        } catch {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid TREK receipt")
+        }
+    }
+
     // MARK: - KML Export
 
     func exportTrekKml(placeIds: [UUID]) async throws -> Data {

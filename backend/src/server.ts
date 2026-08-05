@@ -160,6 +160,18 @@ import {
   trekKmlResponseHeaders,
   type TrekKmlPlaceRow,
 } from "./trekKmlExport.js";
+import { TrekPlanningAdapter } from "./trekPlanningAdapter.js";
+import { TrekStubTransport } from "./trekStubTransport.js";
+import {
+  TrekProjectionError,
+  buildTrekPlanningRequest,
+  normalizeTrekProjectionRequestBody,
+  projectedDayCount,
+  trekProjectionStopsSql,
+  trekProjectionTripSql,
+  type TrekProjectionStopRow,
+  type TrekProjectionTripRow,
+} from "./trekProjection.js";
 import {
   TripSnapshotInputError,
   canonicalizeOwnedTripStops,
@@ -980,6 +992,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "exports" && id === "trek-kml") {
       return await handleTrekKmlExport(request, response, userId);
+    }
+    if (isV0 && resource === "trips" && id && segments[2] === "trek-projection") {
+      return await handleTrekProjection(request, response, id, userId);
     }
     if (isV0 && resource === "llm") {
       return await handleLLMProxy(request, response, segments.slice(1));
@@ -2445,6 +2460,80 @@ async function handleTrekKmlExport(
 
   response.writeHead(200, trekKmlResponseHeaders());
   response.end(kml);
+}
+
+/**
+ * Projects a locally-planned trip into TREK (spec
+ * 2026-07-31-save-trek-provider-and-simplified-trip-flow-v0).
+ *
+ * SAV-E stays the truth for clues, evidence, and confirmation; the TREK trip is
+ * a user-triggered projection of the confirmed Map Stamps the user already
+ * arranged here. This slice runs the adapter against the in-process stub
+ * transport — the live MCP connection needs OAuth against a deployed TREK
+ * instance, which is still an open founder decision.
+ */
+async function handleTrekProjection(
+  request: IncomingMessage,
+  response: ServerResponse,
+  tripId: string,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported TREK projection route" }, 405);
+  }
+
+  let requestId: string;
+  let shareMode: "private" | "map_only";
+  try {
+    ({ requestId, shareMode } = normalizeTrekProjectionRequestBody(await readJson(request)));
+  } catch (error) {
+    if (error instanceof TrekProjectionError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    throw error;
+  }
+
+  const { rows: tripRows } = await pool.query<TrekProjectionTripRow>(trekProjectionTripSql, [
+    tripId,
+    userId,
+  ]);
+  const trip = tripRows[0];
+  if (!trip) {
+    return sendJson(response, { error: "Trip not found" }, 404);
+  }
+
+  const { rows: stopRows } = await pool.query<TrekProjectionStopRow>(trekProjectionStopsSql, [
+    tripId,
+    userId,
+  ]);
+
+  let planningRequest;
+  let skippedStopCount: number;
+  try {
+    ({ request: planningRequest, skippedStopCount } = buildTrekPlanningRequest({
+      requestId,
+      shareMode,
+      trip,
+      stops: stopRows,
+    }));
+  } catch (error) {
+    if (error instanceof TrekProjectionError) {
+      return sendJson(response, { error: error.message }, 422);
+    }
+    throw error;
+  }
+
+  const transport = new TrekStubTransport(projectedDayCount(planningRequest));
+  const receipt = await new TrekPlanningAdapter(transport).execute(planningRequest);
+
+  return sendJson(response, {
+    ...receipt,
+    skippedStopCount,
+    // Until OAuth lands, every projection is a dry run against the stub. The
+    // app shows this so a receipt is never mistaken for a real TREK trip.
+    provider: "stub",
+    toolCalls: transport.callLog,
+  });
 }
 
 async function handleProfile(

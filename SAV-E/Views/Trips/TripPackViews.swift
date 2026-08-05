@@ -1356,6 +1356,8 @@ private struct TripPackShareView: View {
     @State private var kmlShareItem: TripPackKMLShareItem?
     @State private var isExportingKML = false
     @State private var errorMessage: String?
+    @State private var isProjectingToTrek = false
+    @State private var trekReceipt: TrekProjectionReceipt?
 
     var body: some View {
         ZStack {
@@ -1419,6 +1421,29 @@ private struct TripPackShareView: View {
                         .buttonStyle(.plain)
                         .disabled(isExportingKML || orderedConfirmedPlaceIDs.isEmpty)
                         .accessibilityIdentifier("trip.share.kml")
+
+                        Button {
+                            Task { await projectToTrek() }
+                        } label: {
+                            TripPostalExportStamp(
+                                title: localized("TREK", "TREK"),
+                                subtitle: isProjectingToTrek
+                                    ? localized("Projecting…", "投影中…")
+                                    : localized("Send this plan", "送出這份行程"),
+                                systemImage: "arrow.up.forward.app",
+                                tint: SaveAtlasPalette.kraft,
+                                isLoading: isProjectingToTrek,
+                                isDisabled: orderedConfirmedPlaceIDs.isEmpty
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isProjectingToTrek || orderedConfirmedPlaceIDs.isEmpty)
+                        .accessibilityIdentifier("trip.share.trek")
+                    }
+
+                    if let trekReceipt {
+                        TrekProjectionReceiptCard(receipt: trekReceipt)
+                            .accessibilityIdentifier("trip.share.trekReceipt")
                     }
 
                     TripPrivacyReceipt(
@@ -1516,6 +1541,22 @@ private struct TripPackShareView: View {
     private func cleanupKMLFile() {
         guard FileManager.default.fileExists(atPath: kmlFileURL.path) else { return }
         try? FileManager.default.removeItem(at: kmlFileURL)
+    }
+
+    /// Sends the arranged plan to TREK. The adapter reports tool-level
+    /// failures as a `failed` receipt rather than throwing, so a partial
+    /// projection still surfaces which step stopped — only transport-level
+    /// errors land in `errorMessage`.
+    private func projectToTrek() async {
+        guard !isProjectingToTrek, !orderedConfirmedPlaceIDs.isEmpty else { return }
+        isProjectingToTrek = true
+        defer { isProjectingToTrek = false }
+        do {
+            trekReceipt = try await SupabaseService.shared.projectTripToTrek(tripId: trip.id)
+        } catch {
+            trekReceipt = nil
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -1666,6 +1707,60 @@ private struct TripPostalExportStamp: View {
                 )
         }
         .opacity(isDisabled ? 0.62 : 1)
+    }
+}
+
+/// Shows what the last TREK projection actually did — imported count, skipped
+/// stops, and whether it ran against the real provider. A projection that
+/// silently "succeeded" against a stub would be worse than no feature at all.
+private struct TrekProjectionReceiptCard: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let receipt: TrekProjectionReceipt
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: receipt.status == .completed
+                    ? "checkmark.seal.fill"
+                    : "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(receipt.status == .completed
+                        ? SaveAtlasPalette.forest
+                        : SaveAtlasPalette.coral)
+
+                Text(languageSettings.localized(english: "TREK PROJECTION", traditionalChinese: "TREK 投影"))
+                    .font(SaveAtlasType.display(11))
+                    .tracking(1.0)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+
+                Spacer(minLength: 0)
+
+                if let remoteTripId = receipt.remoteTripId {
+                    Text("#\(remoteTripId)")
+                        .font(SaveAtlasType.display(11))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            Text(receipt.summary(language: languageSettings.language))
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if receipt.isStubProvider {
+                Text(languageSettings.localized(
+                    english: "Dry run — no TREK account is connected yet, so nothing left this device.",
+                    traditionalChinese: "測試投影 — 尚未連接 TREK 帳號，資料沒有離開這台裝置。"
+                ))
+                .font(SaveAtlasType.body(11))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("trip.share.trekReceipt.stubNotice")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .saveAtlasPaper(radius: 14)
     }
 }
 
