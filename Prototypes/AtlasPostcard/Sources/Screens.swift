@@ -733,7 +733,20 @@ struct TripsAtlasScreen: View {
                 .padding(.horizontal, 17)
                 .padding(.top, 16)
 
-                if presentation.tripSummaries.dropFirst().isEmpty {
+                if !presentation.tripRecommendations.isEmpty {
+                    // Planning suggestions built from the user's own confirmed
+                    // Map Stamps — Trips proposes instead of waiting to be asked.
+                    VStack(spacing: 9) {
+                        ForEach(presentation.tripRecommendations) { recommendation in
+                            TripRecommendationCard(
+                                recommendation: recommendation,
+                                onPlan: { presentation.onPlanRecommendation(recommendation.planningQuery) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 17)
+                    .padding(.top, 11)
+                } else if presentation.tripSummaries.dropFirst().isEmpty {
                     // Spec P3: the old empty 208pt paper panel collapses to a
                     // one-line hint.
                     Text("Your next trip can begin with one confirmed Map Stamp.")
@@ -810,6 +823,63 @@ struct TripsAtlasScreen: View {
             .padding(.top, 72)
         }
         .frame(height: 211)
+    }
+}
+
+/// One-tap planning suggestion derived from confirmed Map Stamps.
+private struct TripRecommendationCard: View {
+    let recommendation: AtlasTripRecommendationPresentation
+    let onPlan: () -> Void
+
+    var body: some View {
+        Button(action: onPlan) {
+            HStack(spacing: 11) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.forest)
+                    .frame(width: 34, height: 34)
+                    .background(AtlasPalette.mint.opacity(0.62), in: RoundedRectangle(cornerRadius: 11))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(recommendation.title)
+                        .font(AtlasType.strong(15))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .lineLimit(1)
+
+                    Text(recommendation.subtitle)
+                        .font(AtlasType.regular(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(1)
+
+                    if !recommendation.sampleNames.isEmpty {
+                        Text(recommendation.sampleNames.joined(separator: " · "))
+                            .font(AtlasType.editorial(11))
+                            .foregroundStyle(AtlasPalette.muted.opacity(0.9))
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(AtlasPalette.coral, in: Circle())
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(AtlasPalette.line.opacity(0.3), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(recommendation.title)
+        .accessibilityHint(recommendation.subtitle)
+        .accessibilityIdentifier("trips.recommendation.\(recommendation.id)")
     }
 }
 

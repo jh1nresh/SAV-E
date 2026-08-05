@@ -862,4 +862,63 @@ final class DeterministicTripPlannerTests: XCTestCase {
             createdAt: Date()
         )
     }
+
+    // MARK: - Product vocabulary must not act as a place filter
+
+    @MainActor
+    func testPlanningFromMyStampsUsesSavedPlacesInsteadOfRefusing() throws {
+        // "Map Stamps" is the noun the app itself teaches. Treating it as a
+        // filter matched no place and returned no plan at all.
+        let places = [
+            makePlace("Genghis Cohen", address: "448 N Fairfax Ave, Los Angeles", latitude: 34.0793, longitude: -118.3613, category: .food),
+            makePlace("Berenjak", address: "8500 Beverly Blvd, Los Angeles", latitude: 34.0755, longitude: -118.3766, category: .food),
+            makePlace("Maru Coffee", address: "1019 S Santa Fe Ave, Los Angeles", latitude: 34.0345, longitude: -118.2312, category: .cafe),
+        ]
+
+        let response = DeterministicTripPlanner().plan(for: "Plan a day from my stamps", places: places)
+
+        let itinerary = try XCTUnwrap(response, "planning from Map Stamps should produce an itinerary")
+        XCTAssertEqual(itinerary.componentType, .tripItinerary)
+        XCTAssertFalse(itinerary.itineraryDays.isEmpty)
+        XCTAssertFalse(itinerary.itineraryDays.flatMap(\.stops).isEmpty)
+    }
+
+    @MainActor
+    func testPlanningFromMapStampsPhraseAlsoPlans() throws {
+        let places = [
+            makePlace("Genghis Cohen", address: "448 N Fairfax Ave, Los Angeles", latitude: 34.0793, longitude: -118.3613, category: .food),
+            makePlace("Maru Coffee", address: "1019 S Santa Fe Ave, Los Angeles", latitude: 34.0345, longitude: -118.2312, category: .cafe),
+        ]
+
+        XCTAssertNotNil(DeterministicTripPlanner().plan(for: "plan one day from my Map Stamps", places: places))
+        XCTAssertNotNil(DeterministicTripPlanner().plan(for: "plan a day from my saved memories", places: places))
+    }
+
+    @MainActor
+    func testNamingAPlaceTheUserHasNotSavedStillRefusesToInvent() throws {
+        // The guard that product vocabulary was tripping is still needed: a
+        // real place name with no match must not silently plan something else.
+        let places = [
+            makePlace("Genghis Cohen", address: "448 N Fairfax Ave, Los Angeles", latitude: 34.0793, longitude: -118.3613, category: .food),
+        ]
+
+        XCTAssertNil(DeterministicTripPlanner().plan(for: "plan a day around Din Tai Fung", places: places))
+    }
+
+    @MainActor
+    func testStrippingProductVocabularyLeavesRealSearchTerms() {
+        XCTAssertEqual(
+            DeterministicTripPlanner.strippingProductVocabulary("plan a tokyo day from my stamps")
+                .split(separator: " ").map(String.init).filter { !$0.isEmpty },
+            ["plan", "a", "tokyo", "day", "from", "my"]
+        )
+    }
+
+    @MainActor
+    func testStrippingProductVocabularyHandlesCJKWithoutSeparators() {
+        // CJK has no word breaks, so a stop-word set could never catch these.
+        let stripped = DeterministicTripPlanner.strippingProductVocabulary("從我的地圖章規劃一天")
+        XCTAssertFalse(stripped.contains("地圖章"))
+        XCTAssertFalse(stripped.contains("規劃"))
+    }
 }

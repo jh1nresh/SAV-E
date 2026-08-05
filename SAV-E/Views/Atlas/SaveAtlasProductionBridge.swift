@@ -141,6 +141,8 @@ enum SaveAtlasPresentationFactory {
 
     static func trips(
         store: TripPackStore,
+        savedPlaces: [Place] = [],
+        language: AppLanguage = .english,
         onCapture: @escaping () -> Void,
         onOpenAssistant: @escaping () -> Void,
         onAskSubmit: @escaping (String) -> Void,
@@ -157,11 +159,17 @@ enum SaveAtlasPresentationFactory {
                     + store.planningTrips.map { tripSummary($0, timing: "PLANNING") }
                     + store.pastTrips.map { tripSummary($0, timing: "PAST") }
             )
+            presentation.tripRecommendations = SavedPlaceTripRecommender()
+                .recommendations(from: savedPlaces, excludingAreasFrom: store.trips)
+                .map { recommendationPresentation($0, language: language) }
         }
 
         presentation.onCapture = onCapture
         presentation.onOpenAssistant = onOpenAssistant
         presentation.onAskSubmit = onAskSubmit
+        // A recommendation runs the same ask path a typed question does, so
+        // the answer lands in the same expanding surface.
+        presentation.onPlanRecommendation = onAskSubmit
         presentation.onCreateTrip = onCreateTrip
         presentation.onOpenTripID = { id in
             let selectedTrip = UUID(uuidString: id)
@@ -463,6 +471,19 @@ enum SaveAtlasPresentationFactory {
             "TeamLabThumbnail",
             "ShibuyaSkyThumbnail",
         ][min(index, 3)]
+    }
+
+    private static func recommendationPresentation(
+        _ recommendation: SavedPlaceTripRecommendation,
+        language: AppLanguage
+    ) -> AtlasTripRecommendationPresentation {
+        AtlasTripRecommendationPresentation(
+            id: recommendation.id,
+            title: recommendation.title(language: language),
+            subtitle: recommendation.subtitle(language: language),
+            sampleNames: recommendation.sampleNames,
+            planningQuery: recommendation.planningQuery
+        )
     }
 
     private static func tripSummary(

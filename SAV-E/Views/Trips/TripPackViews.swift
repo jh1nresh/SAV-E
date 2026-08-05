@@ -3,6 +3,8 @@ import UIKit
 
 struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
+    /// Confirmed Map Stamps, used to recommend what to plan next.
+    var savedPlaces: [Place] = []
     let onCapture: () -> Void
     let onOpenAssistant: () -> Void
     let onAskSubmit: (String) -> Void
@@ -57,6 +59,8 @@ struct TripsHomeView: View {
     private var atlasPresentation: AtlasPresentation {
         SaveAtlasPresentationFactory.trips(
             store: store,
+            savedPlaces: savedPlaces,
+            language: languageSettings.language,
             onCapture: onCapture,
             onOpenAssistant: onOpenAssistant,
             onAskSubmit: onAskSubmit,
