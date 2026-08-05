@@ -1,6 +1,6 @@
 # SAV-E Design System
 
-> Last updated: 2026-08-04
+> Last updated: 2026-08-05
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
@@ -376,7 +376,7 @@ Spacing rules:
 
 ### Memo Mark
 
-Source: `Wanderly/Views/Shared/MemoMascotMark.swift`.
+Source: `SAV-E/Views/Shared/MemoMascotMark.swift`.
 
 Use for:
 
@@ -393,7 +393,7 @@ Do not use for:
 
 ### Memory Badge
 
-Source: `Wanderly/Views/Shared/SaveMemoryBadge.swift`.
+Source: `SAV-E/Views/Shared/SaveMemoryBadge.swift`.
 
 States:
 
@@ -405,7 +405,7 @@ Do not introduce new badge states without updating this document first.
 
 ### Shared Primitives
 
-Source: `Wanderly/Extensions/Color+Theme.swift`.
+Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 - Use `saveNotebookSurface` for drawer/detail panels that belong to SAV-E's
   memory layer.
@@ -417,7 +417,7 @@ Source: `Wanderly/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: `Wanderly/Views/Map/MapView.swift`.
+Source: `SAV-E/Views/Map/MapView.swift`.
 
 Rules:
 
@@ -482,7 +482,7 @@ view or disclosure, not in every card body.
 
 ### Passport
 
-Source: `Wanderly/Views/Profile/ProfileView.swift`.
+Source: `SAV-E/Views/Profile/ProfileView.swift`.
 
 Required content:
 
