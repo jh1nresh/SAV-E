@@ -4784,6 +4784,14 @@ private struct ReviewCandidateDetailCard: View {
                 }
 
                 Menu {
+                    // When the primary action is Confirm (candidate already
+                    // has coordinates), re-running the exact-place search had
+                    // no entry point — a wrong match left the user stuck.
+                    if primaryAction.confirmsMapStamp {
+                        Button(action: onFindExactPlace) {
+                            Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
+                        }
+                    }
                     Button(action: onWrongBranch) {
                         Label(languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"), systemImage: "arrow.triangle.branch")
                     }
