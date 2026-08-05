@@ -11,10 +11,10 @@ struct NavigationCardComponent: View {
                 .font(.system(size: 26, weight: .black))
                 .foregroundColor(.saveInk)
                 .frame(width: 58, height: 58)
-                .background(Color.saveCream.opacity(0.54))
+                .background(SaveAtlasPalette.canvas)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                        .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
@@ -24,8 +24,8 @@ struct NavigationCardComponent: View {
                     .foregroundColor(.saveInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color.saveHoney)
-                    .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                    .background(SaveAtlasPalette.kraft.opacity(0.58))
+                    .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
 
                 Text(place.name)
@@ -48,30 +48,27 @@ struct NavigationCardComponent: View {
                 .foregroundColor(.saveInk)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                .background(Color.saveCream.opacity(0.74))
-                .overlay(Capsule().stroke(Color.saveNotebookLine, lineWidth: 1))
+                .background(SaveAtlasPalette.canvas)
+                .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                 .clipShape(Capsule())
 
             Button(action: openInMaps) {
+                // Postage-coral primary CTA (spec P2 follow-up).
                 Label("Start Navigation", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                     .font(.headline)
-                    .foregroundColor(.saveInk)
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.saveHoney)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-                    )
+                    .background(SaveAtlasPalette.coral)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         }
         .padding(18)
         .frame(maxWidth: .infinity)
-        .background(Color.saveNotebookPage.opacity(0.72))
+        .background(SaveAtlasPalette.paper)
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
+                .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
