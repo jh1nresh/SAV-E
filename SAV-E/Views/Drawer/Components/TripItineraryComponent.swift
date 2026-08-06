@@ -11,6 +11,8 @@ struct TripItineraryComponent: View {
     @State private var exportAlert: TripItineraryExportAlert?
     @State private var exportTask: Task<Void, Never>?
     @State private var canvas: TripCanvasDraft
+    @State private var localGapCandidates: [SaveMapCandidate] = []
+    @State private var isLoadingLocalGapCandidates = false
 
     init(
         title: String,
@@ -168,6 +170,9 @@ struct TripItineraryComponent: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: canvasInputID) { _, _ in
             canvas = TripCanvasDraft(days: sourceDays)
+        }
+        .task(id: canvasInputID) {
+            await loadLocalGapCandidates()
         }
         .onAppear(perform: cleanupTemporaryExport)
         .sheet(item: $shareItem, onDismiss: cleanupTemporaryExport) { item in
@@ -352,10 +357,30 @@ struct TripItineraryComponent: View {
             days: canvas.visibleDays,
             savedPlaces: places,
             reviewCandidates: [],
-            mapCandidates: [],
+            // Public options near the plan's own stops. They render as
+            // `.externalSuggestion`: approve-gated and never auto-saved.
+            mapCandidates: localGapCandidates,
             outputLanguage: languageSettings.language
         )
         return Dictionary(uniqueKeysWithValues: suggestions.map { ($0.gapId, $0) })
+    }
+
+    /// Loads public options for the open gaps once per plan. Fire-and-forget:
+    /// a plan built from saved places must still render if this never returns.
+    private func loadLocalGapCandidates() async {
+        guard let gaps = tripHealth?.gaps, !gaps.isEmpty else {
+            localGapCandidates = []
+            return
+        }
+        guard !isLoadingLocalGapCandidates else { return }
+        isLoadingLocalGapCandidates = true
+        defer { isLoadingLocalGapCandidates = false }
+
+        localGapCandidates = await TripGapLocalOptionsService().candidates(
+            forGaps: gaps,
+            days: canvas.visibleDays,
+            savedPlaces: places
+        )
     }
 
     private func dayNumber(for gap: TripGap) -> Int {
