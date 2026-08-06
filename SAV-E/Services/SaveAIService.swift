@@ -14,11 +14,16 @@ final class SaveAIService {
 
     private let geminiTransport: SAVEGeminiTransport
 
-    init(apiKey: String? = nil, modelFallbacks: [String] = SaveAIService.defaultModelFallbacks) {
+    init(
+        apiKey: String? = nil,
+        modelFallbacks: [String] = SaveAIService.defaultModelFallbacks,
+        session: URLSession = .shared
+    ) {
         let resolved = apiKey
             ?? SAVEProductionConfig.clientGeminiAPIKeyIfAllowed()
         self.geminiTransport = SAVEGeminiTransport(
             modelFallbacks: modelFallbacks,
+            session: session,
             accessTokenProvider: { try await PrivyAuthService.shared.accessToken() },
             directAPIKey: resolved
         )
