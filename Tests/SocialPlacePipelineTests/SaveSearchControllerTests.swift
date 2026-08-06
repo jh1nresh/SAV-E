@@ -914,7 +914,81 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testDrawerAsksForDurationBeforePlanningAmbiguousTrip() async {
+    func testTripIntentClientReceivesQueryAndSavedAreasOnly() async {
+        let client = StubTripIntentClient(behaviour: .returns(
+            TripPlanningIntent(days: 1, searchTerms: ["los angeles"], rawMessage: "幫我規劃 LA 行程")
+        ))
+        let drawer = AIDrawerViewModel(aiService: SaveAIService(apiKey: ""), groundedAnswerClient: client)
+        drawer.places = [
+            place(name: "Los Angeles Taco", address: "Los Angeles, CA", category: .food, latitude: 34.0522, longitude: -118.2437),
+            place(name: "LA Coffee", address: "Los Angeles, CA", category: .cafe, latitude: 34.0450, longitude: -118.2500)
+        ]
+        drawer.query = "幫我規劃 LA 行程"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        XCTAssertEqual(client.tripIntentRequests.count, 1)
+        let request = client.tripIntentRequests[0]
+        XCTAssertEqual(request.query, "幫我規劃 LA 行程")
+        XCTAssertEqual(request.savedAreaHints, ["Los Angeles"])
+        // No place names, notes, or coordinates travel with the request.
+        XCTAssertFalse(request.savedAreaHints.contains { $0.contains("Taco") || $0.contains("Coffee") })
+    }
+
+    @MainActor
+    func testTripPlanningFallsBackToLiteralReadingWhenLLMFails() async {
+        let client = StubTripIntentClient(behaviour: .fails)
+        let drawer = AIDrawerViewModel(aiService: SaveAIService(apiKey: ""), groundedAnswerClient: client)
+        drawer.places = [
+            place(name: "Los Angeles Taco", address: "Los Angeles, CA", category: .food, latitude: 34.0522, longitude: -118.2437),
+            place(name: "LA Coffee", address: "Los Angeles, CA", category: .cafe, latitude: 34.0450, longitude: -118.2500)
+        ]
+        drawer.query = "幫我規劃 LA 2 天行程"
+
+        await drawer.submit(outputLanguage: .traditionalChinese)
+
+        // An unreachable extractor must not cost the user their itinerary.
+        guard case .displaying(let response) = drawer.drawerState else {
+            return XCTFail("Expected an itinerary despite the failed extraction")
+        }
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertEqual(response.itineraryDays.count, 2)
+    }
+
+    @MainActor
+    func testTripPlanningDoesNotWaitIndefinitelyOnTheLLM() async {
+        let client = StubTripIntentClient(behaviour: .hangs)
+        let drawer = AIDrawerViewModel(aiService: SaveAIService(apiKey: ""), groundedAnswerClient: client)
+        drawer.places = [
+            place(name: "Los Angeles Taco", address: "Los Angeles, CA", category: .food, latitude: 34.0522, longitude: -118.2437),
+            place(name: "LA Coffee", address: "Los Angeles, CA", category: .cafe, latitude: 34.0450, longitude: -118.2500)
+        ]
+        drawer.query = "幫我規劃 LA 2 天行程"
+
+        let started = Date()
+        await drawer.submit(outputLanguage: .traditionalChinese)
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertLessThan(elapsed, AIDrawerViewModel.tripIntentTimeout + 3)
+        guard case .displaying(let response) = drawer.drawerState else {
+            return XCTFail("Expected an itinerary after the extraction timed out")
+        }
+        XCTAssertEqual(response.componentType, .tripItinerary)
+    }
+
+    @MainActor
+    func testSavedAreaHintsRankDenserAreasFirst() {
+        let places = [
+            place(name: "A", address: "Los Angeles, CA", category: .food, latitude: 34.05, longitude: -118.24),
+            place(name: "B", address: "Los Angeles, CA", category: .cafe, latitude: 34.04, longitude: -118.25),
+            place(name: "C", address: "Irvine, CA", category: .food, latitude: 33.68, longitude: -117.82)
+        ]
+
+        XCTAssertEqual(AIDrawerViewModel.savedAreaHints(from: places), ["Los Angeles", "Irvine"])
+    }
+
+    @MainActor
+    func testDrawerPlansImmediatelyWhenTripDurationIsUnstated() async {
         let drawer = AIDrawerViewModel(
             aiService: SaveAIService(apiKey: ""),
             groundedAnswerClient: nil
@@ -940,11 +1014,13 @@ final class SaveSearchControllerTests: XCTestCase {
         await drawer.submit(outputLanguage: .traditionalChinese)
 
         guard case .displaying(let response) = drawer.drawerState else {
-            return XCTFail("Expected clarification response")
+            return XCTFail("Expected an itinerary")
         }
-        XCTAssertEqual(response.componentType, .message)
-        XCTAssertEqual(response.title, "需要行程天數")
-        XCTAssertTrue(response.messageText?.contains("幾天") == true)
+        // A trip request without a stated duration is answered with a trip,
+        // not with a question back.
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertFalse(response.itineraryDays.isEmpty)
+        XCTAssertNotNil(response.mapAction)
         XCTAssertEqual(response.followUpChoices.map(\.label), [
             "Los Angeles 1 天",
             "Los Angeles 3 天",
@@ -952,8 +1028,6 @@ final class SaveSearchControllerTests: XCTestCase {
             "吃喝 + 景點"
         ])
         XCTAssertTrue(response.followUpChoices.map(\.prompt).contains("規劃Los Angeles 1 天輕鬆行程"))
-        XCTAssertTrue(response.itineraryDays.isEmpty)
-        XCTAssertNil(response.mapAction)
     }
 
     @MainActor
@@ -3372,6 +3446,42 @@ final class SaveSearchControllerTests: XCTestCase {
             sections: [SaveSearchSection(id: "test", title: "Test", subtitle: "", results: [result])],
             outputLanguage: .english
         )
+    }
+}
+
+private final class StubTripIntentClient: SaveLLMClient {
+    enum Behaviour {
+        case returns(TripPlanningIntent)
+        case fails
+        case hangs
+    }
+
+    let behaviour: Behaviour
+    private(set) var tripIntentRequests: [TripIntentParseRequest] = []
+
+    init(behaviour: Behaviour) {
+        self.behaviour = behaviour
+    }
+
+    func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent {
+        throw SaveSearchIntentValidationError.malformedJSON
+    }
+
+    func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
+        throw SAVEGeminiTransportError.upstreamStatus(503)
+    }
+
+    func parseTripIntent(_ request: TripIntentParseRequest) async throws -> TripPlanningIntent {
+        tripIntentRequests.append(request)
+        switch behaviour {
+        case .returns(let intent):
+            return intent
+        case .fails:
+            throw SAVEGeminiTransportError.upstreamStatus(503)
+        case .hangs:
+            try await Task.sleep(nanoseconds: UInt64(60 * 1_000_000_000))
+            throw SaveSearchIntentValidationError.malformedJSON
+        }
     }
 }
 

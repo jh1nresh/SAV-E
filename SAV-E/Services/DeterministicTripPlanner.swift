@@ -203,14 +203,34 @@ struct DeterministicTripPlanner {
 
     func plan(for message: String, places: [Place], outputLanguage: AppLanguage = .english) -> SaveAIResponse? {
         guard isItineraryRequest(message), !places.isEmpty else { return nil }
-        guard let days = requestedDayCount(from: message) else {
-            return clarificationResponse(for: message, outputLanguage: outputLanguage)
-        }
+        return plan(
+            intent: deterministicIntent(from: message),
+            places: places,
+            outputLanguage: outputLanguage
+        )
+    }
+
+    /// Plans from an already-extracted intent.
+    ///
+    /// This is the real entry point; the string overload just runs the
+    /// deterministic extractor first. Selection, routing, and scheduling stay
+    /// here and stay deterministic, so a plan can only ever contain places the
+    /// user actually saved — whoever filled the intent.
+    func plan(
+        intent: TripPlanningIntent,
+        places: [Place],
+        outputLanguage: AppLanguage = .english
+    ) -> SaveAIResponse? {
+        guard !places.isEmpty else { return nil }
 
         let constraintPlanner = ItineraryConstraintPlanner()
-        let constraints = constraintPlanner.constraints(from: message)
+        let constraints = constraintPlanner.constraints(from: intent.rawMessage)
+        let days = intent.resolvedDays(
+            availablePlaceCount: places.count,
+            maxStopsPerDay: constraints.pace.maxStopsPerDay
+        )
         let selectedPlaces = selectedPlaces(
-            for: message,
+            for: intent,
             places: places,
             days: days,
             maxStopsPerDay: constraints.pace.maxStopsPerDay
@@ -258,7 +278,7 @@ struct DeterministicTripPlanner {
         let placeIds = orderedPlaces.map { $0.id.uuidString }
         return SaveAIResponse(
             componentType: .tripItinerary,
-            title: title(for: message, dayCount: itineraryDays.count, outputLanguage: outputLanguage),
+            title: title(for: intent.rawMessage, dayCount: itineraryDays.count, outputLanguage: outputLanguage),
             placeIds: placeIds,
             navigationPlaceId: nil,
             transportMode: constraints.transportMode ?? (selectedPlaces.count > 3 ? .driving : .walking),
@@ -266,7 +286,12 @@ struct DeterministicTripPlanner {
             tripHealth: health,
             messageText: nil,
             mapAction: MapActionData(type: .showRoute, placeIds: placeIds, lat: nil, lng: nil, span: nil),
-            aiMessage: planningMessage(for: message, selectedPlaces: selectedPlaces, outputLanguage: outputLanguage)
+            aiMessage: planningMessage(for: intent.rawMessage, selectedPlaces: selectedPlaces, outputLanguage: outputLanguage),
+            // When we sized the trip ourselves, the same choices that used to
+            // block the plan now ride along with it as one-tap reshapes.
+            followUpChoices: intent.days == nil
+                ? clarificationChoices(for: intent.rawMessage, outputLanguage: outputLanguage)
+                : []
         )
     }
 
@@ -335,28 +360,6 @@ struct DeterministicTripPlanner {
         return nil
     }
 
-    private func clarificationResponse(for message: String, outputLanguage: AppLanguage) -> SaveAIResponse {
-        let text = outputLanguage.localized(
-            english: "How many days should I plan for? Tell me the duration and style, for example: LA 1 day relaxed, LA 3 days food + activities, or LA weekend with kids. I will use your saved Map Stamps first, then keep public activity candidates separate for approval.",
-            traditionalChinese: "你想規劃幾天？先告訴我天數和風格，例如：LA 一日輕鬆、LA 3 天吃喝加景點、或 LA 週末親子。之後我會先用你的已存地圖章，再把公開活動候選分開給你批准。"
-        )
-        return SaveAIResponse(
-            componentType: .message,
-            title: outputLanguage.localized(
-                english: "Need trip duration",
-                traditionalChinese: "需要行程天數"
-            ),
-            placeIds: [],
-            navigationPlaceId: nil,
-            transportMode: .walking,
-            itineraryDays: [],
-            messageText: text,
-            mapAction: nil,
-            aiMessage: text,
-            followUpChoices: clarificationChoices(for: message, outputLanguage: outputLanguage)
-        )
-    }
-
     private func clarificationChoices(for message: String, outputLanguage: AppLanguage) -> [SaveSearchFollowUpChoice] {
         let destination = TripDestinationScope.destinationHint(from: message) ?? outputLanguage.localized(
             english: "this trip",
@@ -422,15 +425,28 @@ struct DeterministicTripPlanner {
 
     // MARK: - Selection
 
+    /// Fills the intent from wording alone — the floor an LLM extractor
+    /// improves on, and the fallback when one is unavailable or times out.
+    func deterministicIntent(from message: String) -> TripPlanningIntent {
+        TripPlanningIntent(
+            days: requestedDayCount(from: message),
+            searchTerms: tokens(from: normalize(message)),
+            rawMessage: message
+        )
+    }
+
     private func selectedPlaces(
-        for message: String,
+        for intent: TripPlanningIntent,
         places: [Place],
         days: Int,
         maxStopsPerDay: Int = 5
     ) -> [Place] {
-        let candidates = places.map { Candidate(place: $0, score: relevanceScore(for: $0, message: message)) }
+        let candidates = places.map { Candidate(place: $0, score: relevanceScore(for: $0, intent: intent)) }
         let positive = candidates.filter { $0.score > 0 }
-        if positive.isEmpty, hasSpecificPlanningConstraint(message) {
+        // A named place or region that matches nothing must refuse rather than
+        // plan somewhere else. Only a request with no specific ask may fall
+        // through to "plan from everything".
+        if positive.isEmpty, intent.hasSpecificRequest {
             return []
         }
         let maxStops = max(3, days * maxStopsPerDay)
@@ -521,10 +537,10 @@ struct DeterministicTripPlanner {
         !tokens(from: normalize(message)).isEmpty
     }
 
-    private func relevanceScore(for place: Place, message: String) -> Int {
-        let normalized = normalize(message)
+    private func relevanceScore(for place: Place, intent: TripPlanningIntent) -> Int {
+        let normalized = normalize(intent.rawMessage)
         let searchable = normalize("\(place.name) \(place.address) \(place.category.rawValue) \(place.category.displayName)")
-        let tokens = tokens(from: normalized)
+        let tokens = intent.searchTerms
         var score = 0
 
         let normalizedName = normalize(place.name)
