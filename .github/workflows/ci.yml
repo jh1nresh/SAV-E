@@ -216,12 +216,16 @@ jobs:
             echo "No UI test logs found; nothing to report."
             exit 0
           fi
+          # `|| true`: this step must never be the reason a job fails. Under
+          # `bash -eo pipefail` a grep that matches nothing exits 1, which
+          # would turn "the UI step died before running any test" into a
+          # second, misleading failure right next to the real one.
           retried="$(
             cat "${logs[@]}" |
               grep -oE "Test Case '-\[[^]]+\]' (passed|failed)" |
               sed -E "s/^Test Case '-\[(.+)\]' .*/\1/" |
               sort | uniq -c |
-              awk '$1 > 1 { printf "%s attempts: %s %s\n", $1, $2, $3 }'
+              awk '$1 > 1 { printf "%s attempts: %s %s\n", $1, $2, $3 }' || true
           )"
           if [[ -z "$retried" ]]; then
             echo "No UI test needed a retry."
