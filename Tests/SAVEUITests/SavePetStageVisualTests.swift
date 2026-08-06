@@ -1,17 +1,17 @@
 import XCTest
 
-final class SavePetStageVisualTests: XCTestCase {
+final class SavePetStageVisualTests: SAVEUITestCase {
     @MainActor
     func testAllPresetAndStageVisualsRender() {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--enable-internal-companions",
-            "--uitest-pet-stage-gallery",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
-        XCTAssertTrue(app.descendants(matching: .any)["pet.gallery.root"].waitForExistence(timeout: 15))
+        let app = makeApp(
+            launchArguments: [
+                "--enable-internal-companions",
+                "--uitest-pet-stage-gallery",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        XCTAssertTrue(app.descendants(matching: .any)["pet.gallery.root"].waitForExistence(timeout: timeout(15)))
 
         for stage in ["hatchling", "companion", "guardian"] {
             for preset in ["sprout", "spark", "cloud"] {
@@ -47,19 +47,19 @@ final class SavePetStageVisualTests: XCTestCase {
     /// prove the pet motion actually renders.
     @MainActor
     func testStampFeedingAnimationRenders() {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--enable-internal-companions",
-            "--uitest-stamp-feed-fixture",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
-        XCTAssertTrue(app.descendants(matching: .any)["stampFeed.root"].waitForExistence(timeout: 15))
+        let app = makeApp(
+            launchArguments: [
+                "--enable-internal-companions",
+                "--uitest-stamp-feed-fixture",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        XCTAssertTrue(app.descendants(matching: .any)["stampFeed.root"].waitForExistence(timeout: timeout(15)))
 
         // Replay so we sample from a known point in the sequence.
         let replay = app.descendants(matching: .any)["stampFeed.replay"]
-        XCTAssertTrue(replay.waitForExistence(timeout: 10))
+        XCTAssertTrue(replay.waitForExistence(timeout: timeout(10)))
         replay.tap()
         let arrivalFrame = app.screenshot()
         Thread.sleep(forTimeInterval: 0.9)

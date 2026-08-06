@@ -17,7 +17,9 @@ concurrency:
 jobs:
   ios:
     runs-on: macos-26
-    timeout-minutes: 40
+    # The UI suite is ~10 minutes on a healthy runner but has been observed at
+    # 3-4x that on a contended one, and failing tests are now retried.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,6 +94,11 @@ jobs:
             'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
             'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          # Boot now and block until the device reports ready, so first-boot
+          # work never lands inside a test's launch budget. Letting xcodebuild
+          # cold-boot the simulator is what surfaces as "Timed out while
+          # launching application via Xcode" on the first test of a step.
+          xcrun simctl bootstatus "$udid" -b
 
       - name: Run unit tests
         if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
@@ -112,10 +119,21 @@ jobs:
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
+          # An erased device does first-boot work on the next boot. Do it here
+          # rather than inside the first test's app launch.
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
 
+      # -retry-tests-on-failure is the backstop for simulator-level faults the
+      # test code cannot defend against (wedged backboard, "Failed to get
+      # background assertion"), which have taken out whole runs on main. It
+      # only re-runs tests that failed, so a green run costs nothing, and a
+      # genuine regression still fails all three attempts. Any retry that did
+      # happen is surfaced by the next step rather than being swallowed.
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
-        timeout-minutes: 20
+        timeout-minutes: 35
         if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -134,6 +152,8 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
             -only-testing:SAVEUITests/SAVEOnboardingCarouselTests/testProofFirstFlowReachesOpenAppCTA \
+            -test-iterations 3 \
+            -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
@@ -157,10 +177,15 @@ jobs:
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
+          # An erased device does first-boot work on the next boot. Do it here
+          # rather than inside the first test's app launch.
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
 
       - name: Run Trip atlas sheet family UI test
-        timeout-minutes: 8
+        timeout-minutes: 15
         if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Trip-Sheets-tests.log
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -170,11 +195,41 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable \
+            -test-iterations 3 \
+            -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
+
+      # A retried test reports as a pass, which is the point — but silently
+      # passing on the second attempt is exactly how ambient flake hides. Name
+      # every test that needed more than one attempt so the trend stays visible
+      # even while the job is green.
+      - name: Report retried UI tests
+        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
+        run: |
+          shopt -s nullglob
+          logs=("$RUNNER_TEMP"/SAVE-*-tests.log)
+          if ((${#logs[@]} == 0)); then
+            echo "No UI test logs found; nothing to report."
+            exit 0
+          fi
+          retried="$(
+            cat "${logs[@]}" |
+              grep -oE "Test Case '-\[[^]]+\]' (passed|failed)" |
+              sed -E "s/^Test Case '-\[(.+)\]' .*/\1/" |
+              sort | uniq -c |
+              awk '$1 > 1 { printf "%s attempts: %s %s\n", $1, $2, $3 }'
+          )"
+          if [[ -z "$retried" ]]; then
+            echo "No UI test needed a retry."
+            exit 0
+          fi
+          while IFS= read -r line; do
+            echo "::warning title=Flaky UI test::$line"
+          done <<< "$retried"
 
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''

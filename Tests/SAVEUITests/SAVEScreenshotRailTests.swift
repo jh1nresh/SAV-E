@@ -8,29 +8,23 @@ import XCTest
 /// Extract the PNGs with `specs/capture-app-screenshots.sh`. The test skips
 /// (never hard-fails) when a step of the demo flow can't be reached, so a
 /// partial rail still yields whatever screenshots were captured before it.
-final class SAVEScreenshotRailTests: XCTestCase {
-
-    private let stepTimeout: TimeInterval = 10
-
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
+final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-home-region-taipei",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-home-region-taipei",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
             app.descendants(matching: .any)["home.cityAtlas.taipei"].waitForExistence(timeout: stepTimeout),
             "Production Home should render the illustrated Taipei city atlas."
@@ -61,18 +55,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
         ]
 
         for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = XCUIApplication()
-            app.launchArguments += [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                launchArgument,
-                "-save.appLanguage", "en",
-            ]
-            app.launch()
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding",
+                    "--skip-map-tour",
+                    "--uitest-repair-review-demo-seed",
+                    launchArgument,
+                    "-save.appLanguage", "en",
+                ]
+            )
+            launch(app)
             try signInViaReviewDemo(app: app)
 
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
             XCTAssertTrue(
                 app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
                 "Production Home should render the owned \(city) city atlas."
@@ -80,7 +75,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
             XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
             attach(app, name: attachmentName)
-            app.terminate()
+            terminate(app)
         }
     }
 
@@ -104,18 +99,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
         ]
 
         for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = XCUIApplication()
-            app.launchArguments += [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                launchArgument,
-                "-save.appLanguage", "en",
-            ]
-            app.launch()
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding",
+                    "--skip-map-tour",
+                    "--uitest-repair-review-demo-seed",
+                    launchArgument,
+                    "-save.appLanguage", "en",
+                ]
+            )
+            launch(app)
             try signInViaReviewDemo(app: app)
 
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
             XCTAssertTrue(
                 app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
                 "Production Home should render the owned \(city) city atlas."
@@ -123,24 +119,25 @@ final class SAVEScreenshotRailTests: XCTestCase {
             XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
             attach(app, name: attachmentName)
-            app.terminate()
+            terminate(app)
         }
     }
 
     @MainActor
     func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
-        let ownedSceneApp = XCUIApplication()
-        ownedSceneApp.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-home-region-tustin",
-            "-save.appLanguage", "en",
-        ]
-        ownedSceneApp.launch()
+        let ownedSceneApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-home-region-tustin",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(ownedSceneApp)
         try signInViaReviewDemo(app: ownedSceneApp)
 
-        XCTAssertTrue(ownedSceneApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(ownedSceneApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
             ownedSceneApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"]
                 .waitForExistence(timeout: stepTimeout),
@@ -149,20 +146,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(ownedSceneApp.staticTexts["Tustin"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(ownedSceneApp.descendants(matching: .any)["home.regionalHero"].exists)
         attach(ownedSceneApp, name: "atlas-home-city-southern-california")
-        ownedSceneApp.terminate()
-
-        let fallbackApp = XCUIApplication()
-        fallbackApp.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-home-region-san-francisco",
-            "-save.appLanguage", "en",
-        ]
-        fallbackApp.launch()
+        terminate(ownedSceneApp)
+        let fallbackApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-home-region-san-francisco",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(fallbackApp)
         try signInViaReviewDemo(app: fallbackApp)
 
-        XCTAssertTrue(fallbackApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(fallbackApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
             fallbackApp.descendants(matching: .any)["home.regionalHero"]
                 .waitForExistence(timeout: stepTimeout),
@@ -173,19 +170,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testCaptureAtlasProductionParity() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-atlas-parity-fixture",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-atlas-parity-fixture",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         attach(app, name: "atlas-home")
 
         openRootTab("Saves", app: app)
@@ -196,7 +193,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let trip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
         ).firstMatch
-        XCTAssertTrue(trip.waitForExistence(timeout: 20))
+        XCTAssertTrue(trip.waitForExistence(timeout: timeout(20)))
         trip.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-plan")
@@ -213,16 +210,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testCaptureAppStoreScreens() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-        ]
-        // Force English so label-based queries (tabs, passport button) and the
-        // App Store screenshots themselves are deterministic. NSArgumentDomain
-        // is fine here: the app only reads this key once at startup.
-        app.launchArguments += ["-save.appLanguage", "en"]
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                // Force English so label-based queries (tabs, passport button)
+                // and the App Store screenshots themselves are deterministic.
+                // NSArgumentDomain is fine here: the app only reads this key
+                // once at startup.
+                "-save.appLanguage", "en",
+            ]
+        )
 
         // The map may ask for location on first render; dismiss so the rail
         // never stalls behind a system alert.
@@ -237,12 +236,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
             return false
         }
 
-        app.launch()
-
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         let home = app.descendants(matching: .any)["home.root"]
-        guard home.waitForExistence(timeout: 45) else {
+        guard home.waitForExistence(timeout: launchTimeout) else {
             attach(app, name: "debug-after-signin")
             throw XCTSkip("Home never appeared after demo sign-in.")
         }
@@ -255,7 +253,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
         ).firstMatch
-        guard firstTrip.waitForExistence(timeout: 20), firstTrip.isHittable else {
+        guard firstTrip.waitForExistence(timeout: timeout(20)), firstTrip.isHittable else {
             throw XCTSkip("Review-demo Trip Packs were not seeded.")
         }
         firstTrip.tap()
@@ -293,19 +291,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
     func testAtlasHomeAndSavesRenderPersistedPlaceData() throws {
         let storageID = UUID().uuidString.lowercased()
         let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
-        let app = XCUIApplication()
-        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage",
-            "-save.appLanguage", "en",
-        ]
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
 
-        app.launch()
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
         let capture = app.buttons["home.capture"]
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
@@ -314,28 +313,26 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-postcard-capture")
         let captureInput = app.textViews["capture.input"]
-        XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
-        captureInput.tap()
-        captureInput.typeText(mapURL)
+        typeText(mapURL, into: captureInput)
         let analyze = app.buttons["capture.analyze"]
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
         let analyzedCandidate = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
         ).firstMatch
         XCTAssertTrue(
-            analyzedCandidate.waitForExistence(timeout: 20),
+            analyzedCandidate.waitForExistence(timeout: timeout(20)),
             "Expected the analyzed link to persist as a Review Candidate."
         )
 
-        app.terminate()
+        terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
-        app.launch()
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.staticTexts["1 clue needs your help"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-production-home")
 
@@ -375,28 +372,28 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testGlobalTabsAreReachableAndTripUsesScopedTabs() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-        ]
-        app.launchArguments += ["-save.appLanguage", "en"]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.buttons["home.capture"].exists)
         XCTAssertTrue(app.buttons["home.review"].exists)
         XCTAssertTrue(app.buttons["home.saves"].exists)
         let continueTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'home.trip.'")
         ).firstMatch
-        XCTAssertTrue(continueTrip.waitForExistence(timeout: 20))
+        XCTAssertTrue(continueTrip.waitForExistence(timeout: timeout(20)))
 
         let recentSaves = app.descendants(matching: .any)["home.recentSaves"]
-        if !recentSaves.waitForExistence(timeout: 1) {
+        if !recentSaves.waitForExistence(timeout: timeout(1)) {
             app.swipeUp()
         }
         XCTAssertTrue(recentSaves.waitForExistence(timeout: stepTimeout))
@@ -454,21 +451,21 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     func testTripMapMarkerDetailReturnsToScopedTabs() throws {
         let storageID = UUID().uuidString.lowercased()
-        let app = XCUIApplication()
-        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
 
         openRootTab("Trips", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         let routeTrip = app.buttons.matching(
             NSPredicate(
@@ -490,7 +487,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
             NSPredicate(format: "identifier BEGINSWITH 'map.pin.saved.'")
         )
         XCTAssertTrue(
-            routePins.firstMatch.waitForExistence(timeout: 20),
+            routePins.firstMatch.waitForExistence(timeout: timeout(20)),
             "A route-framed Trip Map should expose at least one numbered saved-place marker."
         )
         guard let firstHittableRoutePin = routePins.allElementsBoundByIndex.first(where: \.isHittable) else {
@@ -531,19 +528,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testCaptureAtlasTripsAndLiveMaps() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         openRootTab("Trips", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.buttons["trips.capture"].exists)
         // The ask entry is a real input now, not a button (spec P1), so the
         // query is type-agnostic while the identifier stays the same.
@@ -587,25 +584,23 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testTripsAskFieldExpandsInPlace() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
         openRootTab("Trips", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         // Tapping the ask entry focuses a real input; typed text renders in
         // the field and the user stays on Trips (spec P1).
         let askInput = app.textFields["trips.assistant.input"]
-        XCTAssertTrue(askInput.waitForExistence(timeout: stepTimeout))
-        askInput.tap()
-        askInput.typeText("Plan a day from my stamps")
+        typeText("Plan a day from my stamps", into: askInput)
         XCTAssertEqual(askInput.value as? String, "Plan a day from my stamps")
         XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
 
@@ -643,18 +638,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testTripUsesPlanMapAndTopSharePostcardPocket() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
         openRootTab("Trips", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -685,18 +680,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testHomeReviewCluesOpensSavesWithoutDrawer() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         let reviewClues = app.buttons["home.review"]
         XCTAssertTrue(reviewClues.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(reviewClues.isHittable)
@@ -716,18 +711,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testGlobalShellSeparatesCaptureFromMapDrawer() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["drawer.launcher"].exists)
 
         let captureButtons = app.buttons.matching(identifier: "home.capture")
@@ -758,20 +753,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testLocateWithDeniedPermissionShowsRecoveryNotice() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-location-denied",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-location-denied",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         openRootTab("Map", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
 
         // The identifier sits on a full-map container, so tap the button's
         // actual top-trailing position instead of the element center.
@@ -792,20 +787,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testMapPlaceCardOwnsStripActions() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-map-place-selected",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         openRootTab("Map", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
         dismissLocationAlertIfPresent()
 
         // One place, one card (spec P2b): the Atlas card is canonical and now
@@ -841,20 +836,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testSavedPlaceEntryUsesSingleCanonicalDetail() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "--uitest-map-place-selected",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         openRootTab("Saves", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: launchTimeout))
 
         let mapStampsSegment = app.buttons["saves.segment.mapStamps"]
         XCTAssertTrue(mapStampsSegment.waitForExistence(timeout: stepTimeout))
@@ -958,19 +953,19 @@ final class SAVEScreenshotRailTests: XCTestCase {
         ]
 
         for fixture in fixtures {
-            let app = XCUIApplication()
-            app.launchArguments += [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                fixture.launchArgument,
-                "-save.appLanguage", "en",
-            ]
-            app.launch()
-
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding",
+                    "--skip-map-tour",
+                    "--uitest-repair-review-demo-seed",
+                    fixture.launchArgument,
+                    "-save.appLanguage", "en",
+                ]
+            )
+            launch(app)
             try signInViaReviewDemo(app: app)
 
-            XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: 45))
+            XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: launchTimeout))
             XCTAssertEqual(
                 app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
                 1,
@@ -992,24 +987,24 @@ final class SAVEScreenshotRailTests: XCTestCase {
                 "Discovery detail should keep one coral primary action."
             )
             attach(app, name: fixture.attachmentName)
-            app.terminate()
+            terminate(app)
         }
     }
 
     @MainActor
     func testTripStopEditorSurfaceIsReachable() throws {
         let storageID = UUID().uuidString.lowercased()
-        let app = XCUIApplication()
-        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
 
         openRootTab("Trips", app: app)
@@ -1021,7 +1016,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
                 "Tokyo Weekend"
             )
         ).firstMatch
-        XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: launchTimeout))
         firstTrip.tap()
 
         let firstStopEditor = app.buttons.matching(
@@ -1052,7 +1047,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(keyboardDone.waitForExistence(timeout: stepTimeout))
         keyboardDone.tap()
         app.buttons["trip.stop.edit.save"].tap()
-        XCTAssertFalse(app.descendants(matching: .any)["trip.stop.edit"].waitForExistence(timeout: 2))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.stop.edit"]
+                .waitForNonExistence(timeout: stepTimeout),
+            "Trip stop editor never dismissed after save."
+        )
 
         XCTAssertTrue(firstStopEditor.waitForExistence(timeout: stepTimeout))
         firstStopEditor.tap()
@@ -1079,15 +1078,16 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     func testPassportAndPostalImportSurfacesAreReachable() throws {
         let storageID = UUID().uuidString.lowercased()
-        let app = XCUIApplication()
-        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage",
-            "-save.appLanguage", "en",
-        ]
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
 
         addUIInterruptionMonitor(withDescription: "Location permission") { alert in
             for label in ["Allow While Using App", "Allow Once", "Don't Allow"] {
@@ -1100,9 +1100,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
             return false
         }
 
-        app.launch()
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
         for tab in ["Home", "Saves", "Trips", "Map"] {
             openRootTab(tab, app: app)
@@ -1147,18 +1147,18 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testPassportConnectionsKeepsFriendsAndListsReachable() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-            "-save.appLanguage", "en",
-        ]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: launchTimeout))
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
 
@@ -1175,15 +1175,15 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     func testTripKmlExportMenuSmoke() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-repair-review-demo-seed",
-        ]
-        app.launchArguments += ["-save.appLanguage", "en"]
-        app.launch()
-
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
         try signInViaReviewDemo(app: app)
 
         openRootTab("Trips", app: app)
@@ -1192,7 +1192,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
         ).firstMatch
-        XCTAssertTrue(firstTrip.waitForExistence(timeout: 45))
+        XCTAssertTrue(firstTrip.waitForExistence(timeout: launchTimeout))
         firstTrip.tap()
 
         let shareAction = app.buttons["trip.share.action"]
@@ -1219,19 +1219,20 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let tripName = "Link Trip \(storageID.prefix(8))"
         let placeName = "Quarter Sheets Pizza Club"
         let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
-        let app = XCUIApplication()
-        app.launchEnvironment["SAVE_UI_TEST_STORAGE_ID"] = storageID
-        app.launchArguments += [
-            "--uitest-complete-onboarding",
-            "--skip-map-tour",
-            "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage",
-            "-save.appLanguage", "en",
-        ]
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
 
-        app.launch()
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
         let capture = app.buttons["home.capture"]
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
@@ -1239,19 +1240,17 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         let captureInput = app.textViews["capture.input"]
-        XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
-        captureInput.tap()
-        captureInput.typeText(mapURL)
+        typeText(mapURL, into: captureInput)
         let analyze = app.buttons["capture.analyze"]
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
         let candidate = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
         ).firstMatch
         XCTAssertTrue(
-            candidate.waitForExistence(timeout: 20),
+            candidate.waitForExistence(timeout: timeout(20)),
             "Expected a map-ready Review Candidate.\n\(app.debugDescription)"
         )
         candidate.tap()
@@ -1275,25 +1274,26 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let tripNameField = app.textFields["trip.create.name"]
         XCTAssertTrue(tripNameField.waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-trip-create-sheet")
-        tripNameField.tap()
-        tripNameField.typeText(tripName)
-        let cityField = app.textFields["trip.create.city"]
-        cityField.tap()
-        cityField.typeText("Los Angeles")
+        typeText(tripName, into: tripNameField)
+        typeText("Los Angeles", into: app.textFields["trip.create.city"])
         app.buttons["trip.create.submit"].tap()
 
-        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["trip.create.sheet"]
+                .waitForNonExistence(timeout: stepTimeout),
+            "Trip create sheet never dismissed after submit."
+        )
         try assertSavedPlaceAndTripStopPersist(
             app: app,
             placeName: placeName,
             tripName: tripName
         )
 
-        app.terminate()
+        terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
-        app.launch()
+        launch(app)
         try signInViaReviewDemoRequired(app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: 45))
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         try assertSavedPlaceAndTripStopPersist(
             app: app,
             placeName: placeName,
@@ -1309,7 +1309,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     private func signInViaReviewDemo(app: XCUIApplication) throws {
         let emailField = app.textFields["signin.emailField"]
         // The opening animation holds the screen for ~2s before SignInView.
-        guard emailField.waitForExistence(timeout: 20) else {
+        guard emailField.waitForExistence(timeout: timeout(20)) else {
             // A previous demo session may already be signed in.
             if app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout) {
                 return
@@ -1317,12 +1317,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
             throw XCTSkip("Email sign-in field never appeared — cannot reach the demo session.")
         }
 
-        emailField.tap()
-        emailField.typeText("appreview@wanderly.app")
+        typeText("appreview@wanderly.app", into: emailField)
         dismissKeyboard(app: app) // sign-in layout ignores the keyboard safe area
 
         let sendCode = app.buttons["signin.sendCode"]
-        guard waitUntilHittable(sendCode, timeout: stepTimeout) else {
+        guard waitUntilHittable(sendCode) else {
             throw XCTSkip("Send-code button not tappable — cannot start the demo flow.")
         }
         sendCode.tap()
@@ -1331,12 +1330,11 @@ final class SAVEScreenshotRailTests: XCTestCase {
         guard codeField.waitForExistence(timeout: stepTimeout) else {
             throw XCTSkip("Verification-code field never appeared after sending the demo code.")
         }
-        codeField.tap()
-        codeField.typeText("424242")
+        typeText("424242", into: codeField)
         dismissKeyboard(app: app) // number pad has no return key
 
         let verify = app.buttons["signin.verify"]
-        guard waitUntilHittable(verify, timeout: stepTimeout) else {
+        guard waitUntilHittable(verify) else {
             throw XCTSkip("Verify button not tappable — cannot enter the demo session.")
         }
         verify.tap()
@@ -1345,7 +1343,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     private func signInViaReviewDemoRequired(app: XCUIApplication) throws {
         let emailField = app.textFields["signin.emailField"]
-        if !emailField.waitForExistence(timeout: 20) {
+        if !emailField.waitForExistence(timeout: timeout(20)) {
             XCTAssertTrue(
                 app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout),
                 "Email sign-in and Home were both unavailable."
@@ -1353,26 +1351,24 @@ final class SAVEScreenshotRailTests: XCTestCase {
             return
         }
 
-        emailField.tap()
-        emailField.typeText("appreview@wanderly.app")
+        typeText("appreview@wanderly.app", into: emailField)
         dismissKeyboard(app: app)
 
         let sendCode = app.buttons["signin.sendCode"]
         XCTAssertTrue(
-            waitUntilHittable(sendCode, timeout: stepTimeout),
+            waitUntilHittable(sendCode),
             "Send-code button never became tappable."
         )
         sendCode.tap()
 
         let codeField = app.textFields["signin.codeField"]
         XCTAssertTrue(codeField.waitForExistence(timeout: stepTimeout))
-        codeField.tap()
-        codeField.typeText("424242")
+        typeText("424242", into: codeField)
         dismissKeyboard(app: app)
 
         let verify = app.buttons["signin.verify"]
         XCTAssertTrue(
-            waitUntilHittable(verify, timeout: stepTimeout),
+            waitUntilHittable(verify),
             "Verify button never became tappable after dismissing the keyboard."
         )
         verify.tap()
@@ -1384,21 +1380,9 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     private func dismissKeyboard(app: XCUIApplication) {
         let done = app.buttons["signin.keyboardDone"]
-        if done.waitForExistence(timeout: 3), done.isHittable {
+        if done.waitForExistence(timeout: timeout(3)), done.isHittable {
             done.tap()
         }
-    }
-
-    @MainActor
-    private func waitUntilHittable(
-        _ element: XCUIElement,
-        timeout: TimeInterval
-    ) -> Bool {
-        let expectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "exists == true AND hittable == true"),
-            object: element
-        )
-        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     // MARK: - Helpers
@@ -1409,7 +1393,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout), "Missing \(title) root tab")
         tab.tap()
         if let screenIdentifier = rootScreenIdentifier(for: title),
-           !app.descendants(matching: .any)[screenIdentifier].waitForExistence(timeout: 2) {
+           !app.descendants(matching: .any)[screenIdentifier].waitForExistence(timeout: timeout(2)) {
             tab.tap()
         }
     }
@@ -1437,7 +1421,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
 
     @MainActor
     private func replaceText(in field: XCUIElement, with replacement: String) {
-        field.tap()
+        focus(field)
         if let current = field.value as? String,
            current != field.placeholderValue,
            !current.isEmpty {
@@ -1503,10 +1487,10 @@ final class SAVEScreenshotRailTests: XCTestCase {
     @MainActor
     private func scrollUntilExists(_ element: XCUIElement, app: XCUIApplication) -> Bool {
         for _ in 0..<6 {
-            if element.waitForExistence(timeout: 1) { return true }
+            if element.waitForExistence(timeout: timeout(1)) { return true }
             app.swipeUp()
         }
-        return element.waitForExistence(timeout: 1)
+        return element.waitForExistence(timeout: timeout(1))
     }
 
     /// Dismisses the system location permission alert if it is on screen.
@@ -1516,7 +1500,7 @@ final class SAVEScreenshotRailTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow While Using App", "Allow Once", "Don't Allow"] {
             let button = springboard.buttons[label]
-            if button.waitForExistence(timeout: 3) {
+            if button.waitForExistence(timeout: timeout(3)) {
                 button.tap()
                 return
             }
@@ -1551,13 +1535,5 @@ final class SAVEScreenshotRailTests: XCTestCase {
             }
         }
         return false
-    }
-
-    @MainActor
-    private func attach(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
     }
 }
