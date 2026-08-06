@@ -11,6 +11,8 @@ struct TripItineraryComponent: View {
     @State private var exportAlert: TripItineraryExportAlert?
     @State private var exportTask: Task<Void, Never>?
     @State private var canvas: TripCanvasDraft
+    @State private var localGapCandidates: [SaveMapCandidate] = []
+    @State private var isLoadingLocalGapCandidates = false
 
     init(
         title: String,
@@ -133,7 +135,11 @@ struct TripItineraryComponent: View {
             }
 
             if let tripHealth {
-                TripHealthSummaryCard(health: tripHealth, suggestionsByGapID: suggestionsByGapID) { gap, option in
+                TripHealthSummaryCard(
+                    health: tripHealth,
+                    dayCount: canvas.visibleDays.count,
+                    suggestionsByGapID: suggestionsByGapID
+                ) { gap, option in
                     canvas.insertGapSuggestion(
                         option,
                         dayNumber: dayNumber(for: gap),
@@ -164,6 +170,9 @@ struct TripItineraryComponent: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: canvasInputID) { _, _ in
             canvas = TripCanvasDraft(days: sourceDays)
+        }
+        .task(id: canvasInputID) {
+            await loadLocalGapCandidates()
         }
         .onAppear(perform: cleanupTemporaryExport)
         .sheet(item: $shareItem, onDismiss: cleanupTemporaryExport) { item in
@@ -348,17 +357,34 @@ struct TripItineraryComponent: View {
             days: canvas.visibleDays,
             savedPlaces: places,
             reviewCandidates: [],
-            mapCandidates: [],
+            // Public options near the plan's own stops. They render as
+            // `.externalSuggestion`: approve-gated and never auto-saved.
+            mapCandidates: localGapCandidates,
             outputLanguage: languageSettings.language
         )
         return Dictionary(uniqueKeysWithValues: suggestions.map { ($0.gapId, $0) })
     }
 
-    private func dayNumber(for gap: TripGap) -> Int {
-        if let explicit = Int(gap.dayId.filter(\.isNumber)) {
-            return explicit
+    /// Loads public options for the open gaps once per plan. Fire-and-forget:
+    /// a plan built from saved places must still render if this never returns.
+    private func loadLocalGapCandidates() async {
+        guard let gaps = tripHealth?.gaps, !gaps.isEmpty else {
+            localGapCandidates = []
+            return
         }
-        return canvas.visibleDays.first?.dayNumber ?? 1
+        guard !isLoadingLocalGapCandidates else { return }
+        isLoadingLocalGapCandidates = true
+        defer { isLoadingLocalGapCandidates = false }
+
+        localGapCandidates = await TripGapLocalOptionsService().candidates(
+            forGaps: gaps,
+            days: canvas.visibleDays,
+            savedPlaces: places
+        )
+    }
+
+    private func dayNumber(for gap: TripGap) -> Int {
+        gap.dayNumber ?? canvas.visibleDays.first?.dayNumber ?? 1
     }
 
 }
@@ -382,6 +408,7 @@ private enum TripItineraryExportError: Error {
 
 private struct TripHealthSummaryCard: View {
     let health: TripHealth
+    var dayCount: Int = 1
     var suggestionsByGapID: [String: GapSuggestion] = [:]
     var onAddSuggestion: ((TripGap, GapSuggestionOption) -> Void)?
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -415,14 +442,18 @@ private struct TripHealthSummaryCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if !health.warnings.isEmpty || !health.gaps.isEmpty {
+            if !warningDigests.isEmpty || !health.gaps.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(health.warnings.prefix(2)) { warning in
-                        TripHealthLine(icon: "exclamationmark.triangle.fill", text: warning.message, tint: SaveAtlasPalette.coral)
+                    ForEach(warningDigests.prefix(2)) { digest in
+                        TripHealthLine(
+                            icon: "exclamationmark.triangle.fill",
+                            text: warningText(for: digest),
+                            tint: SaveAtlasPalette.coral
+                        )
                     }
                     ForEach(health.gaps.prefix(3)) { gap in
                         VStack(alignment: .leading, spacing: 6) {
-                            TripHealthLine(icon: "plus.square.dashed", text: gap.message, tint: SaveAtlasPalette.kraft)
+                            TripHealthLine(icon: "plus.square.dashed", text: gapText(for: gap), tint: SaveAtlasPalette.kraft)
                             if let suggestion = suggestionsByGapID[gap.id], let onAddSuggestion {
                                 ForEach(suggestion.options.prefix(3)) { option in
                                     Button(action: { onAddSuggestion(gap, option) }) {
@@ -457,6 +488,35 @@ private struct TripHealthSummaryCard: View {
                 .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
         )
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var warningDigests: [TripWarningDigest] {
+        health.warningDigests()
+    }
+
+    /// A caveat that holds on every day reads as one plan-wide line; one that only hits some
+    /// days keeps the day scope so the repeat is not silently dropped.
+    private func warningText(for digest: TripWarningDigest) -> String {
+        guard !digest.coversWholeTrip(dayCount: dayCount) else { return digest.message }
+        return languageSettings.localized(
+            english: "\(digest.message) (\(englishDayScope(digest.dayNumbers)))",
+            traditionalChinese: "\(digest.message)（第 \(digest.dayNumbers.map(String.init).joined(separator: "、")) 天）"
+        )
+    }
+
+    /// Gaps are not collapsed: each one owns its own suggestions and fills a specific day,
+    /// so a repeated gap message gets the day that makes the repeat meaningful.
+    private func gapText(for gap: TripGap) -> String {
+        guard dayCount > 1, let dayNumber = gap.dayNumber else { return gap.message }
+        return languageSettings.localized(
+            english: "\(gap.message) (Day \(dayNumber))",
+            traditionalChinese: "\(gap.message)（第 \(dayNumber) 天）"
+        )
+    }
+
+    private func englishDayScope(_ dayNumbers: [Int]) -> String {
+        let list = dayNumbers.map(String.init).joined(separator: ", ")
+        return dayNumbers.count == 1 ? "Day \(list)" : "Days \(list)"
     }
 
     // Traffic-light semantics stay; only the palette moves to Atlas.

@@ -477,6 +477,56 @@ final class AIDrawerViewModel: ObservableObject {
         Task { await recordRecommendationAnalysisReceiptIfNeeded(for: groundedResponse) }
     }
 
+    /// Reads the request through the LLM when one is configured, falling back
+    /// to literal parsing on any failure.
+    ///
+    /// The fallback is not just for offline: planning must never wait on the
+    /// network longer than a person will wait for an itinerary, and the
+    /// deterministic reading is always good enough to produce a plan. Only
+    /// extraction is delegated — selection, routing, and scheduling stay local,
+    /// so a hallucinated term can at worst narrow the plan, never populate it.
+    private func tripPlanningIntent(
+        for query: String,
+        planner: DeterministicTripPlanner
+    ) async -> TripPlanningIntent {
+        let fallback = planner.deterministicIntent(from: query)
+        guard let groundedAnswerClient else { return fallback }
+
+        let request = TripIntentParseRequest(
+            query: query,
+            savedAreaHints: Self.savedAreaHints(from: places)
+        )
+        let extraction = Task { try await groundedAnswerClient.parseTripIntent(request) }
+        let timeout = Task {
+            try await Task.sleep(nanoseconds: UInt64(Self.tripIntentTimeout * 1_000_000_000))
+            extraction.cancel()
+        }
+        defer { timeout.cancel() }
+
+        do {
+            return try await extraction.value
+        } catch {
+            return fallback
+        }
+    }
+
+    static let tripIntentTimeout: Double = 4
+    static let maxSavedAreaHints = 8
+
+    /// City/area labels only — the same granularity the grounded-answer
+    /// context already sends, ordered so the user's densest areas come first.
+    static func savedAreaHints(from places: [Place]) -> [String] {
+        var counts: [String: Int] = [:]
+        for place in places {
+            guard let label = SavedPlaceTripRecommender.areaLabel(for: place) else { continue }
+            counts[label, default: 0] += 1
+        }
+        return counts
+            .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
+            .prefix(maxSavedAreaHints)
+            .map(\.key)
+    }
+
     private func showTripPlanningResponse(query: String, outputLanguage: AppLanguage) async {
         let requestID = UUID()
         activeRequestID = requestID
@@ -485,8 +535,10 @@ final class AIDrawerViewModel: ObservableObject {
         rememberQuery(query)
 
         do {
-            let deterministicDraft = DeterministicTripPlanner().plan(
-                for: query,
+            let planner = DeterministicTripPlanner()
+            let intent = await tripPlanningIntent(for: query, planner: planner)
+            let deterministicDraft = planner.plan(
+                intent: intent,
                 places: places,
                 outputLanguage: outputLanguage
             )

@@ -479,6 +479,15 @@ struct GroundedAnswerJSONValidator {
 protocol SaveLLMClient {
     func parseIntent(_ request: IntentParseRequest) async throws -> SaveSearchIntent
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer
+    func parseTripIntent(_ request: TripIntentParseRequest) async throws -> TripPlanningIntent
+}
+
+extension SaveLLMClient {
+    /// Every client can at least read the wording literally. Clients that can
+    /// do better override this; nothing downstream has to care which happened.
+    func parseTripIntent(_ request: TripIntentParseRequest) async throws -> TripPlanningIntent {
+        DeterministicTripPlanner().deterministicIntent(from: request.query)
+    }
 }
 
 struct DeterministicSaveIntentParser: SaveLLMClient {
@@ -514,6 +523,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
     private let validator: SaveSearchIntentJSONValidator
     private let groundedAnswerValidator: GroundedAnswerJSONValidator
     private let promptPolicy: SaveAgentPromptPolicy
+    private let tripIntentValidator = TripIntentJSONValidator()
     private let geminiTransport: SAVEGeminiTransport
 
     init(
@@ -588,6 +598,46 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         """
         let text = try await generateText(prompt: prompt, temperature: 0, maxOutputTokens: 512)
         return try validator.parseIntentJSON(extractJSONObject(from: text), rawText: request.query)
+    }
+
+    func parseTripIntent(_ request: TripIntentParseRequest) async throws -> TripPlanningIntent {
+        let payload: [String: Any] = [
+            "task": "parse_trip_planning_intent",
+            "query": request.query,
+            "savedAreas": request.savedAreaHints
+        ]
+        let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+        let payloadJSON = String(data: payloadData, encoding: .utf8) ?? "{}"
+        let prompt = """
+        You extract trip-planning intent for SAV-E, a personal place-memory app. The planner that consumes your output can only ever use places the user already saved, so your job is to say WHAT they asked for, not to name any place.
+        Respond ONLY with strict JSON. No markdown.
+
+        days:
+        - The number of days requested, or null if they did not say. null is normal and fine — do NOT guess a number to avoid null.
+        - Map vague durations: "weekend"/"週末" -> 2, "a long weekend" -> 3, "day trip"/"一日" -> 1.
+
+        searchTerms: words a saved place must match to count as specifically requested.
+        - Include only what narrows WHICH places: a place name, a neighborhood, a city, a cuisine, a category word.
+        - EXCLUDE everything else: verbs ("plan", "規劃"), app nouns ("stamps", "map stamps", "地圖章", "saved", "vault"), number words, filler, pronouns, vibe words with no category ("chill", "fun").
+        - Translate a vibe into a category when it clearly implies one: "somewhere to walk around" -> ["attraction"], "想喝咖啡" -> ["cafe"].
+        - Empty list means "no specific ask, use anything nearby". That is the right answer for a generic request. Never emit a term just to fill the list — a term that matches nothing makes the planner refuse.
+        - Prefer a listed savedArea spelling when the user clearly means that area.
+
+        Examples:
+        Query: "Plan a day from my stamps" -> {"days":1,"searchTerms":[]}
+        Query: "幫我規劃 LA 行程" -> {"days":null,"searchTerms":["los angeles"]}
+        Query: "規劃加州 5天行程" -> {"days":5,"searchTerms":["california"]}
+        Query: "weekend in Taipei, mostly food" -> {"days":2,"searchTerms":["taipei","food"]}
+        Query: "plan something chill with my parents" -> {"days":null,"searchTerms":[]}
+
+        Input:
+        \(payloadJSON)
+
+        Output schema:
+        {"days": null, "searchTerms": []}
+        """
+        let text = try await generateText(prompt: prompt, temperature: 0, maxOutputTokens: 256)
+        return try tripIntentValidator.parse(extractJSONObject(from: text), rawQuery: request.query)
     }
 
     func renderGroundedAnswer(_ request: GroundedAnswerRequest) async throws -> GroundedLLMAnswer {
