@@ -72,6 +72,7 @@
 		76FC5BA1F7C59B7D0436B3B5 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54876D21CED56B8E43591F6E /* StatsView.swift */; };
 		77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */; };
 		78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EBE852DE7618089938F9421 /* Assets.xcassets */; };
+		A1B2C3D400000063 /* TripPlanningIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000064 /* TripPlanningIntentTests.swift */; };
 		A1B2C3D400000021 /* SavedPlaceTripRecommenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000022 /* SavedPlaceTripRecommenderTests.swift */; };
 		793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */; };
 		7D221A99C9D47E9AA8E5D3C8 /* MapCoachmarkTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */; };
@@ -295,6 +296,7 @@
 		87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialMapSignals.swift; sourceTree = "<group>"; };
 		898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelatedPlaceSourcesPanel.swift; sourceTree = "<group>"; };
 		A1B2C3D400000022 /* SavedPlaceTripRecommenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPlaceTripRecommenderTests.swift; sourceTree = "<group>"; };
+		A1B2C3D400000064 /* TripPlanningIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanningIntentTests.swift; sourceTree = "<group>"; };
 		8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTripPlannerTests.swift; sourceTree = "<group>"; };
 		8E4E1C29F7B70DDB7014AD98 /* SavePetCompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePetCompanionTests.swift; sourceTree = "<group>"; };
 		8EBE852DE7618089938F9421 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -696,6 +698,7 @@
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
 				A1B2C3D400000022 /* SavedPlaceTripRecommenderTests.swift */,
+				A1B2C3D400000064 /* TripPlanningIntentTests.swift */,
 				1BBD7E840405A678802BD835 /* PlaceDeduplicationTests.swift */,
 				CB5ACF05D119435062A8CA24 /* RelatedPlaceSourcesClientTests.swift */,
 				81A98C2E4AE6FC2ADD4E59E2 /* ReviewDemoTests.swift */,
@@ -1073,6 +1076,7 @@
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
 				A1B2C3D400000021 /* SavedPlaceTripRecommenderTests.swift in Sources */,
+				A1B2C3D400000063 /* TripPlanningIntentTests.swift in Sources */,
 				9E128B182EBB30CE71CA03D8 /* PlaceDeduplicationTests.swift in Sources */,
 				8C5B4D4B69560B6FF869E33D /* RelatedPlaceSourcesClientTests.swift in Sources */,
 				36589FF0D1AC553DE90E6457 /* ReviewDemoTests.swift in Sources */,

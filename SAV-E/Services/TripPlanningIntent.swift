@@ -53,3 +53,49 @@ struct TripPlanningIntent: Equatable {
     static let maximumInferredDays = 3
     static let comfortableStopsPerDay = 4
 }
+
+/// What a trip-intent extraction is given.
+///
+/// Privacy: the query plus area labels the user already saved places in —
+/// the same city/area granularity `GroundedAnswerContext` uses. No notes,
+/// no full addresses, no coordinates.
+struct TripIntentParseRequest: Equatable {
+    let query: String
+    var savedAreaHints: [String] = []
+}
+
+/// Clamps a model-produced intent down to something the planner can trust.
+///
+/// The planner selects only from saved places, so a bad `searchTerms` value
+/// cannot inject a place — but it can still make a plan refuse by matching
+/// nothing, or bloat scoring with dozens of terms. Both are bounded here.
+struct TripIntentJSONValidator {
+    static let maxSearchTerms = 6
+    static let maxTermLength = 24
+
+    func parse(_ json: String, rawQuery: String) throws -> TripPlanningIntent {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SaveSearchIntentValidationError.malformedJSON
+        }
+
+        var days: Int?
+        if let raw = object["days"] as? Int {
+            days = max(1, min(raw, TripPlanningIntent.maximumDays))
+        } else if let raw = object["days"] as? Double {
+            days = max(1, min(Int(raw), TripPlanningIntent.maximumDays))
+        }
+
+        let rawTerms = (object["searchTerms"] as? [Any])?.compactMap { $0 as? String } ?? []
+        let terms = rawTerms
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty && $0.count <= Self.maxTermLength }
+            .reduce(into: [String]()) { result, term in
+                guard !result.contains(term) else { return }
+                result.append(term)
+            }
+            .prefix(Self.maxSearchTerms)
+
+        return TripPlanningIntent(days: days, searchTerms: Array(terms), rawMessage: rawQuery)
+    }
+}
