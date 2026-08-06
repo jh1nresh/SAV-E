@@ -905,7 +905,9 @@ private struct TripsAskField: View {
 
             ZStack(alignment: .leading) {
                 if query.isEmpty {
-                    Text("Ask SAV-E to plan from your Map Stamps")
+                    // Short enough to fit the 402pt row without truncating;
+                    // the accessibility label keeps the full sentence.
+                    Text("Ask SAV-E to plan a trip")
                         .font(AtlasType.strong(14))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
