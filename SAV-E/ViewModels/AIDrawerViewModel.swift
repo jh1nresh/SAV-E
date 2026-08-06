@@ -485,7 +485,7 @@ final class AIDrawerViewModel: ObservableObject {
     /// deterministic reading is always good enough to produce a plan. Only
     /// extraction is delegated — selection, routing, and scheduling stay local,
     /// so a hallucinated term can at worst narrow the plan, never populate it.
-    private func tripPlanningIntent(
+    func tripPlanningIntent(
         for query: String,
         planner: DeterministicTripPlanner
     ) async -> TripPlanningIntent {
