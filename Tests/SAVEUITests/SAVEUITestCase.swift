@@ -114,13 +114,19 @@ class SAVEUITestCase: XCTestCase {
 
     // MARK: - Text entry
 
-    /// Taps `element` until the keyboard is genuinely up, so the next
+    /// Taps `element` until it actually holds keyboard focus, so the next
     /// `typeText` has somewhere to go.
     ///
     /// Typing straight after `tap()` fails as "Neither element nor any
-    /// descendant has keyboard focus" when the simulator is slow to raise the
-    /// keyboard. Retapping is safe: a tap on an already-focused field only
-    /// moves the caret.
+    /// descendant has keyboard focus" when the simulator is slow to hand focus
+    /// over. Retapping is safe: a tap on an already-focused field only moves
+    /// the caret.
+    ///
+    /// Focus is checked per element, not by asking whether a keyboard is on
+    /// screen. Moving between two fields in the same form leaves the keyboard
+    /// up throughout, so its presence says nothing about whether *this* tap
+    /// landed — which is exactly how the Trip stop editor still failed on
+    /// `trip.stop.edit.duration` after the first pass at this helper.
     @MainActor
     @discardableResult
     func focus(
@@ -135,14 +141,19 @@ class SAVEUITestCase: XCTestCase {
             line: line
         )
 
-        let keyboard = XCUIApplication().keyboards.firstMatch
+        let focused = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "hasKeyboardFocus == true"),
+            object: element
+        )
         for _ in 0..<3 {
             element.tap()
-            if keyboard.waitForExistence(timeout: timeout(5)) { return true }
+            if XCTWaiter.wait(for: [focused], timeout: timeout(5)) == .completed {
+                return true
+            }
         }
 
         XCTFail(
-            "Keyboard never appeared for '\(element.identifier)', so typing would drop the text.",
+            "'\(element.identifier)' never took keyboard focus, so typing would drop the text.",
             file: file,
             line: line
         )
