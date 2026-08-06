@@ -914,7 +914,7 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testDrawerAsksForDurationBeforePlanningAmbiguousTrip() async {
+    func testDrawerPlansImmediatelyWhenTripDurationIsUnstated() async {
         let drawer = AIDrawerViewModel(
             aiService: SaveAIService(apiKey: ""),
             groundedAnswerClient: nil
@@ -940,11 +940,13 @@ final class SaveSearchControllerTests: XCTestCase {
         await drawer.submit(outputLanguage: .traditionalChinese)
 
         guard case .displaying(let response) = drawer.drawerState else {
-            return XCTFail("Expected clarification response")
+            return XCTFail("Expected an itinerary")
         }
-        XCTAssertEqual(response.componentType, .message)
-        XCTAssertEqual(response.title, "需要行程天數")
-        XCTAssertTrue(response.messageText?.contains("幾天") == true)
+        // A trip request without a stated duration is answered with a trip,
+        // not with a question back.
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertFalse(response.itineraryDays.isEmpty)
+        XCTAssertNotNil(response.mapAction)
         XCTAssertEqual(response.followUpChoices.map(\.label), [
             "Los Angeles 1 天",
             "Los Angeles 3 天",
@@ -952,8 +954,6 @@ final class SaveSearchControllerTests: XCTestCase {
             "吃喝 + 景點"
         ])
         XCTAssertTrue(response.followUpChoices.map(\.prompt).contains("規劃Los Angeles 1 天輕鬆行程"))
-        XCTAssertTrue(response.itineraryDays.isEmpty)
-        XCTAssertNil(response.mapAction)
     }
 
     @MainActor

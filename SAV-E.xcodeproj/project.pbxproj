@@ -41,6 +41,7 @@
 		430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */; };
 		45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */; };
 		A1B2C3D400000011 /* SavedPlaceTripRecommender.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000012 /* SavedPlaceTripRecommender.swift */; };
+		A1B2C3D400000061 /* TripPlanningIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000062 /* TripPlanningIntent.swift */; };
 		47019D109073AB4BB2707D28 /* SaveCompanionAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */; };
 		47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E674763445F956B8660707 /* Color+Theme.swift */; };
 		4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */; };
@@ -338,6 +339,7 @@
 		D7341CE0888D59F87FF9795A /* SaveGuideCustomizationControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveGuideCustomizationControllerTests.swift; sourceTree = "<group>"; };
 		D7A6509BF9A779BA3BD56C45 /* CompanionAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = CompanionAssets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D400000012 /* SavedPlaceTripRecommender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SavedPlaceTripRecommender.swift; path = ../Services/SavedPlaceTripRecommender.swift; sourceTree = "<group>"; };
+		A1B2C3D400000062 /* TripPlanningIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TripPlanningIntent.swift; path = ../Services/TripPlanningIntent.swift; sourceTree = "<group>"; };
 		D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCompanionAvailability.swift; sourceTree = "<group>"; };
 		D874F1D0FD76DECBCE8398FF /* SocialCaptionVenueExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialCaptionVenueExtractor.swift; sourceTree = "<group>"; };
 		DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -777,6 +779,7 @@
 				146D4B13678DF31140133614 /* SaveCard.swift */,
 				9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */,
 				D852F842FFC43EA37CE16271 /* SaveCompanionAvailability.swift */,
+				A1B2C3D400000062 /* TripPlanningIntent.swift */,
 				A1B2C3D400000012 /* SavedPlaceTripRecommender.swift */,
 				468D23D10B68903C13C10154 /* SaveGuideModels.swift */,
 				2C0D3A7A18E473C94F819125 /* SaveMemoryRecord.swift */,
@@ -1172,6 +1175,7 @@
 				8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */,
 				1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */,
 				47019D109073AB4BB2707D28 /* SaveCompanionAvailability.swift in Sources */,
+				A1B2C3D400000061 /* TripPlanningIntent.swift in Sources */,
 				A1B2C3D400000011 /* SavedPlaceTripRecommender.swift in Sources */,
 				D6A7E1A1FA84E376E5DED98D /* SaveGuideCustomizationController.swift in Sources */,
 				B76C75E6A77E56F866167BA1 /* SaveGuideModels.swift in Sources */,

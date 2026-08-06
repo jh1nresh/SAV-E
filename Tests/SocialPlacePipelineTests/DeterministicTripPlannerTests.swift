@@ -141,7 +141,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
-    func testPlannerAsksForDaysOrStyleWhenTripRequestIsUnderspecified() throws {
+    func testPlannerSizesTripItselfWhenDurationIsUnstated() throws {
         let places = [
             makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
             makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
@@ -153,14 +153,53 @@ final class DeterministicTripPlannerTests: XCTestCase {
             outputLanguage: .traditionalChinese
         ))
 
-        XCTAssertEqual(response.componentType, .message)
-        XCTAssertTrue(response.messageText?.contains("幾天") == true)
-        XCTAssertTrue(response.messageText?.contains("公開活動候選") == true)
+        // Not stating a duration is a complete request, not an underspecified
+        // one — two stops is comfortably one day, so plan it.
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertEqual(response.itineraryDays.count, 1)
+        XCTAssertEqual(response.placeIds.count, 2)
+        XCTAssertNotNil(response.mapAction)
+        XCTAssertTrue(response.aiMessage?.contains("天數") == true)
+
+        // The choices that used to block the plan now reshape it.
         XCTAssertEqual(response.followUpChoices.count, 4)
         XCTAssertEqual(response.followUpChoices.first?.label, "Los Angeles 1 天")
         XCTAssertTrue(response.followUpChoices.map(\.prompt).contains("規劃Los Angeles 3 天吃喝加景點"))
-        XCTAssertTrue(response.itineraryDays.isEmpty)
-        XCTAssertNil(response.mapAction)
+    }
+
+    @MainActor
+    func testPlannerOmitsReshapeChoicesWhenUserStatedDuration() throws {
+        let places = [
+            makePlace("Los Angeles Taco", address: "Los Angeles, CA", latitude: 34.0522, longitude: -118.2437, category: .food),
+            makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "幫我規劃 LA 2 天行程",
+            places: places,
+            outputLanguage: .traditionalChinese
+        ))
+
+        XCTAssertEqual(response.itineraryDays.count, 2)
+        XCTAssertTrue(response.followUpChoices.isEmpty)
+    }
+
+    @MainActor
+    func testInferredTripLengthStaysShortEvenWithALargeVault() {
+        let intent = TripPlanningIntent(days: nil, searchTerms: [], rawMessage: "plan a trip")
+
+        XCTAssertEqual(intent.resolvedDays(availablePlaceCount: 2, maxStopsPerDay: 4), 1)
+        XCTAssertEqual(intent.resolvedDays(availablePlaceCount: 6, maxStopsPerDay: 4), 2)
+        XCTAssertEqual(intent.resolvedDays(availablePlaceCount: 200, maxStopsPerDay: 4), 3)
+    }
+
+    @MainActor
+    func testStatedTripLengthIsHonouredAndCappedAtAWeek() {
+        let five = TripPlanningIntent(days: 5, searchTerms: [], rawMessage: "")
+        let twenty = TripPlanningIntent(days: 20, searchTerms: [], rawMessage: "")
+
+        XCTAssertEqual(five.resolvedDays(availablePlaceCount: 3, maxStopsPerDay: 4), 5)
+        XCTAssertEqual(twenty.resolvedDays(availablePlaceCount: 300, maxStopsPerDay: 4), 7)
     }
 
     @MainActor
