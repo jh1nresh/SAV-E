@@ -264,6 +264,55 @@ struct TripHealth: Codable, Equatable, Hashable {
     let strengths: [String]
     let warnings: [TripWarning]
     let gaps: [TripGap]
+
+    /// A trip-level health card aggregates every day's warnings, so a caveat that is true
+    /// on each day (unverified opening hours, for example) repeats once per day and reads
+    /// as a rendering bug. Collapse repeats of the same warning into one entry and keep the
+    /// days it came from, so the summary stays short without losing which days are affected.
+    func warningDigests() -> [TripWarningDigest] {
+        var digests: [TripWarningDigest] = []
+        var indexByKey: [String: Int] = [:]
+
+        for warning in warnings {
+            let key = "\(warning.type.rawValue)|\(warning.message)"
+            if let index = indexByKey[key] {
+                digests[index].merge(warning)
+            } else {
+                indexByKey[key] = digests.count
+                digests.append(TripWarningDigest(warning: warning))
+            }
+        }
+        return digests
+    }
+}
+
+/// One warning message plus every day it was raised on.
+struct TripWarningDigest: Identifiable, Equatable {
+    let warning: TripWarning
+    private(set) var dayNumbers: [Int]
+
+    init(warning: TripWarning) {
+        self.warning = warning
+        self.dayNumbers = warning.dayNumber.map { [$0] } ?? []
+    }
+
+    var id: String { warning.id }
+    var message: String { warning.message }
+    var severity: Severity { warning.severity }
+    var type: TripWarning.WarningType { warning.type }
+
+    /// True when the warning applies to every day of the plan (or carries no day scope at
+    /// all), which is when naming days adds noise instead of information.
+    func coversWholeTrip(dayCount: Int) -> Bool {
+        dayNumbers.isEmpty || (dayCount > 0 && Set(dayNumbers).count >= dayCount)
+    }
+
+    fileprivate mutating func merge(_ other: TripWarning) {
+        if let dayNumber = other.dayNumber, !dayNumbers.contains(dayNumber) {
+            dayNumbers.append(dayNumber)
+            dayNumbers.sort()
+        }
+    }
 }
 
 struct TripWarning: Identifiable, Codable, Equatable, Hashable {
@@ -271,7 +320,15 @@ struct TripWarning: Identifiable, Codable, Equatable, Hashable {
     let type: WarningType
     let severity: Severity
     let message: String
+    /// Day this warning was raised for, in the same `day-<number>` form `TripGap` uses.
+    /// Nil when the warning is trip-wide or came from a model response without day scope.
+    var dayId: String? = nil
     var affectedBlockIds: [String] = []
+
+    var dayNumber: Int? {
+        guard let dayId else { return nil }
+        return Int(dayId.filter(\.isNumber))
+    }
 
     enum WarningType: String, Codable, Equatable, Hashable {
         case tooManyStops = "too_many_stops"
@@ -291,6 +348,8 @@ struct TripGap: Identifiable, Codable, Equatable, Hashable {
     var area: String? = nil
     let severity: Severity
     let message: String
+
+    var dayNumber: Int? { Int(dayId.filter(\.isNumber)) }
 
     enum GapType: String, Codable, Equatable, Hashable {
         case missingBreakfast = "missing_breakfast"

@@ -751,6 +751,7 @@ struct DeterministicTripPlanner {
                     english: "This day has \(stops.count) stops; make it less rushed before committing.",
                     traditionalChinese: "這天有 \(stops.count) 站；確認前建議排鬆一點。"
                 ),
+                dayId: dayId,
                 affectedBlockIds: stops.map(\.id.uuidString)
             ))
         }
@@ -764,6 +765,7 @@ struct DeterministicTripPlanner {
                     english: "Opening hours are not verified for every stop.",
                     traditionalChinese: "不是每一站都已確認營業時間。"
                 ),
+                dayId: dayId,
                 affectedBlockIds: stops.filter { $0.risks.contains(.hoursUnknown) }.map(\.id.uuidString)
             ))
         }
