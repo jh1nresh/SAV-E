@@ -243,7 +243,11 @@ final class DeterministicTripPlannerTests: XCTestCase {
             makePlace("LA Coffee", address: "Los Angeles, CA", latitude: 34.0450, longitude: -118.2500, category: .cafe)
         ]
 
-        let response = try await SaveAIService(apiKey: "").query(
+        // `apiKey: ""` only disables the *direct* key. The transport can still
+        // reach the backend proxy, so on a machine with Secrets.plist this test
+        // used to hit a live model and assert against whatever it invented.
+        // Cutting the session is what actually makes Gemini missing.
+        let response = try await SaveAIService(apiKey: "", session: .offlineForTesting).query(
             "幫我規劃 LA 兩天行程",
             places: places,
             outputLanguage: .traditionalChinese
@@ -1100,4 +1104,23 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(DeterministicTripPlanner.isCJK("la"))
         XCTAssertFalse(DeterministicTripPlanner.isCJK("tokyo"))
     }
+}
+
+/// A session that cannot reach anything, so a test asserting offline behaviour
+/// asserts offline behaviour on every machine — with or without Secrets.plist.
+private final class UnreachableURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
+}
+
+extension URLSession {
+    static let offlineForTesting: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [UnreachableURLProtocol.self]
+        return URLSession(configuration: config)
+    }()
 }
