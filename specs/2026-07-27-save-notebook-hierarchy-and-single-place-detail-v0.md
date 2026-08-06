@@ -3,7 +3,7 @@
 Date: 2026-07-27
 Status: implementation spec
 GitHub issue: [#35](https://github.com/jh1nresh/SAV-E/issues/35)
-Repo: `/Users/jhinresh/projects/wanderly-current`
+Repo: `/Users/jhinresh/projects/sav-e`
 
 ## Decision
 

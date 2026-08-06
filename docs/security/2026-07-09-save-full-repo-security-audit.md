@@ -2,7 +2,7 @@
 
 ## Scope
 
-- Repo: `/Users/jhinresh/projects/wanderly-current`
+- Repo: `/Users/jhinresh/projects/sav-e`
 - Branch: `ios-design-stamp-moment`
 - Revision reviewed: `54727ec48e132d00822e3e2a49878a52764705ef`
 - Mode: Codex Security standard scan plus targeted high-risk review across backend, iOS, App Clip, Supabase Edge Functions, dependency/config surfaces, and source-recovery fetchers.
@@ -25,11 +25,11 @@ The source-recovery URL fetch path was reviewed specifically for SSRF. The curre
 
 Evidence:
 
-- `POST /v0/sendblue/webhook` is registered before normal auth in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:662).
-- `handleSendblueWebhook` reads JSON and processes it without verifying a Sendblue signature in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:920).
-- The bot trusts caller-supplied `from_number`, `number`, `from`, or `fromNumber` in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/wanderly-current/backend/src/sendblueBot.ts:1836).
-- A first-time sender is auto-created as a verified iMessage binding in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:764).
-- `verifySignature` exists in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/wanderly-current/backend/src/sendblueBot.ts:2430), but route wiring was not found.
+- `POST /v0/sendblue/webhook` is registered before normal auth in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:662).
+- `handleSendblueWebhook` reads JSON and processes it without verifying a Sendblue signature in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:920).
+- The bot trusts caller-supplied `from_number`, `number`, `from`, or `fromNumber` in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/sav-e/backend/src/sendblueBot.ts:1836).
+- A first-time sender is auto-created as a verified iMessage binding in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:764).
+- `verifySignature` exists in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/sav-e/backend/src/sendblueBot.ts:2430), but route wiring was not found.
 
 Impact:
 
@@ -43,11 +43,11 @@ Read the raw request body, verify Sendblue HMAC/shared-secret before parsing or 
 
 Evidence:
 
-- Full inbound webhook payload is logged in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:928).
-- Sender and text are logged in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/wanderly-current/backend/src/sendblueBot.ts:1969).
-- Replies are logged in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:958).
-- My SAV-E tokens are stable HMAC links without expiry in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:798).
-- Those links expose saved places, visits, and reviews in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:824).
+- Full inbound webhook payload is logged in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:928).
+- Sender and text are logged in [backend/src/sendblueBot.ts](/Users/jhinresh/projects/sav-e/backend/src/sendblueBot.ts:1969).
+- Replies are logged in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:958).
+- My SAV-E tokens are stable HMAC links without expiry in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:798).
+- Those links expose saved places, visits, and reviews in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:824).
 
 Impact:
 
@@ -61,9 +61,9 @@ Replace raw logs with structured redacted logs: hashed phone, event type, body s
 
 Evidence:
 
-- README policy says Gemini should remain a backend secret, but [project.yml](/Users/jhinresh/projects/wanderly-current/project.yml:34) adds `SAV-E/Resources/Secrets.plist` as an app resource and [project.yml](/Users/jhinresh/projects/wanderly-current/project.yml:143) adds the share-extension `Secrets.plist` as a resource.
-- The prebuild scripts create those local files from templates if missing in [project.yml](/Users/jhinresh/projects/wanderly-current/project.yml:38) and [project.yml](/Users/jhinresh/projects/wanderly-current/project.yml:147).
-- The shared transport allows a client Gemini fallback from `GEMINI_API_KEY` when enabled in [SAV-EShared/SAVEProductionConfig.swift](/Users/jhinresh/projects/wanderly-current/SAV-EShared/SAVEProductionConfig.swift:27).
+- README policy says Gemini should remain a backend secret, but [project.yml](/Users/jhinresh/projects/sav-e/project.yml:34) adds `SAV-E/Resources/Secrets.plist` as an app resource and [project.yml](/Users/jhinresh/projects/sav-e/project.yml:143) adds the share-extension `Secrets.plist` as a resource.
+- The prebuild scripts create those local files from templates if missing in [project.yml](/Users/jhinresh/projects/sav-e/project.yml:38) and [project.yml](/Users/jhinresh/projects/sav-e/project.yml:147).
+- The shared transport allows a client Gemini fallback from `GEMINI_API_KEY` when enabled in [SAV-EShared/SAVEProductionConfig.swift](/Users/jhinresh/projects/sav-e/SAV-EShared/SAVEProductionConfig.swift:27).
 - The actual local `Secrets.plist` files are ignored, not tracked, by `.gitignore`, which prevents a git leak but does not prevent bundling into archives.
 
 Impact:
@@ -78,10 +78,10 @@ Remove Gemini keys from all client `Secrets.plist` files. Make the backend proxy
 
 Evidence:
 
-- Public referrals route before auth in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:652).
-- Social/referral queries select `p.*` in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:2507), [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:2551), and [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:2593).
-- `formatSocialPlace` returns `placeFields`, including `note`, `source_url`, `source_image_url`, and photos from [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:316), via [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:2631).
-- Public claim cards explicitly state `source_policy: "raw sources private"` in [backend/src/placeClaims.ts](/Users/jhinresh/projects/wanderly-current/backend/src/placeClaims.ts:148).
+- Public referrals route before auth in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:652).
+- Social/referral queries select `p.*` in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:2507), [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:2551), and [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:2593).
+- `formatSocialPlace` returns `placeFields`, including `note`, `source_url`, `source_image_url`, and photos from [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:316), via [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:2631).
+- Public claim cards explicitly state `source_policy: "raw sources private"` in [backend/src/placeClaims.ts](/Users/jhinresh/projects/sav-e/backend/src/placeClaims.ts:148).
 
 Impact:
 
@@ -95,10 +95,10 @@ Create a dedicated public/social place projection. Do not reuse `placeFields`; i
 
 Evidence:
 
-- `POST /public/v0/claim-usage-receipts` is reachable without auth in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:1048).
-- The handler inserts caller-supplied usage receipts in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:1101).
-- Public cards expose `claim_id` in [backend/src/placeClaims.ts](/Users/jhinresh/projects/wanderly-current/backend/src/placeClaims.ts:72).
-- Usage and accepted counts feed reputation output in [backend/src/placeClaims.ts](/Users/jhinresh/projects/wanderly-current/backend/src/placeClaims.ts:360).
+- `POST /public/v0/claim-usage-receipts` is reachable without auth in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:1048).
+- The handler inserts caller-supplied usage receipts in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:1101).
+- Public cards expose `claim_id` in [backend/src/placeClaims.ts](/Users/jhinresh/projects/sav-e/backend/src/placeClaims.ts:72).
+- Usage and accepted counts feed reputation output in [backend/src/placeClaims.ts](/Users/jhinresh/projects/sav-e/backend/src/placeClaims.ts:360).
 
 Impact:
 
@@ -112,9 +112,9 @@ Require a signed client/session proof, rate-limit by IP/session/claim, dedupe by
 
 Evidence:
 
-- Unauthenticated callers can mint guest sessions in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:658).
-- Guest tokens are accepted by `resolveUserId` in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:3088).
-- The Gemini proxy forwards caller-controlled content using the server key in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:1345).
+- Unauthenticated callers can mint guest sessions in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:658).
+- Guest tokens are accepted by `resolveUserId` in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:3088).
+- The Gemini proxy forwards caller-controlled content using the server key in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:1345).
 
 Impact:
 
@@ -128,8 +128,8 @@ Gate proxy access by authenticated users or tightly scoped first-run sessions, a
 
 Evidence:
 
-- `POST /v0/workflows/place-recovery/runs/:runId/result` only verifies run ownership before accepting result writes in [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:1882).
-- The normalizer accepts caller-supplied result type, evidence tier, evidence refs, candidate refs, agent id, and model provenance in [backend/src/workflowContracts.ts](/Users/jhinresh/projects/wanderly-current/backend/src/workflowContracts.ts:139).
+- `POST /v0/workflows/place-recovery/runs/:runId/result` only verifies run ownership before accepting result writes in [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:1882).
+- The normalizer accepts caller-supplied result type, evidence tier, evidence refs, candidate refs, agent id, and model provenance in [backend/src/workflowContracts.ts](/Users/jhinresh/projects/sav-e/backend/src/workflowContracts.ts:139).
 
 Impact:
 
@@ -158,7 +158,7 @@ Either retire the Edge Function from production or enforce ownership/visibility 
 
 Evidence:
 
-- Semgrep flagged [backend/src/server.ts](/Users/jhinresh/projects/wanderly-current/backend/src/server.ts:3386), which returns `{ rejectUnauthorized: false }` when `PGSSLMODE=no-verify`.
+- Semgrep flagged [backend/src/server.ts](/Users/jhinresh/projects/sav-e/backend/src/server.ts:3386), which returns `{ rejectUnauthorized: false }` when `PGSSLMODE=no-verify`.
 - Backend docs describe this as a temporary accepted environment.
 
 Impact:

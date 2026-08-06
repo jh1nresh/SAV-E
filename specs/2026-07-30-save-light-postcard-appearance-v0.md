@@ -51,7 +51,7 @@ or account boundary changes.
 
 ## Xcode context receipt
 
-- Product/repo: SAV-E `/Users/jhinresh/projects/wanderly-current`
+- Product/repo: SAV-E `/Users/jhinresh/projects/sav-e`
 - Platform: iOS
 - Project: `SAV-E.xcodeproj`
 - Scheme/target: `SAV-E` / `SAVE` with embedded `SAVEClip`

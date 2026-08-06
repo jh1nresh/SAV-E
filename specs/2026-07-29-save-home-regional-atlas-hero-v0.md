@@ -60,7 +60,7 @@ from the founder-approved local Tokyo scene as a style/composition reference.
 
 ## Xcode context receipt
 
-- Product/repo: SAV-E `/Users/jhinresh/projects/wanderly-current`
+- Product/repo: SAV-E `/Users/jhinresh/projects/sav-e`
 - Platform: iOS
 - Project: `SAV-E.xcodeproj`
 - Scheme/target: `SAV-E` / `SAVE`

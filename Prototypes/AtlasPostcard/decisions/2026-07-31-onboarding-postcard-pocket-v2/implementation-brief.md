@@ -63,7 +63,7 @@ Merge, TestFlight upload, App Store submission, or any cache/process deletion.
 
 ## Xcode Context Receipt
 
-- Product/repo: SAV-E `/Users/jhinresh/projects/wanderly-current`
+- Product/repo: SAV-E `/Users/jhinresh/projects/sav-e`
 - Platform: iOS
 - Project/workspace/package: `SAV-E.xcodeproj`
 - Scheme/target: `SAV-E` / `SAVE`

@@ -60,7 +60,7 @@ east-coast scene; another generic skyline-only city would add less recognition.
 
 ## Xcode context receipt
 
-- **Product/repo:** SAV-E, `/Users/jhinresh/projects/wanderly-current`
+- **Product/repo:** SAV-E, `/Users/jhinresh/projects/sav-e`
 - **Platform:** iOS
 - **Project:** `SAV-E.xcodeproj`
 - **Scheme/target:** `SAV-E`
