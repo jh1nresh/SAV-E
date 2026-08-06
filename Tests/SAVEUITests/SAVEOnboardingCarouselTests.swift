@@ -1,15 +1,15 @@
 import XCTest
 
-final class SAVEOnboardingCarouselTests: XCTestCase {
+final class SAVEOnboardingCarouselTests: SAVEUITestCase {
     @MainActor
     func testProofFirstFlowReachesOpenAppCTA() {
         let app = launchOnboardingApp()
         let primary = app.buttons["onboarding.primary"]
 
         // Language step comes first.
-        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: 10))
-        XCTAssertTrue(primary.waitForExistence(timeout: 5))
-        XCTAssertTrue(primary.isHittable)
+        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(primary.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(waitUntilHittable(primary))
         XCTAssertLessThanOrEqual(primary.frame.maxY, app.frame.maxY - 8)
         attach(app, name: "first-run-01-language")
         let englishChoice = app.buttons["onboarding.language.en"]
@@ -52,7 +52,7 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
 
         waitForDisappearance(of: primary)
         let opening = app.descendants(matching: .any)["opening.loading"]
-        XCTAssertTrue(opening.waitForExistence(timeout: 3))
+        XCTAssertTrue(opening.waitForExistence(timeout: stepTimeout))
         attach(app, name: "first-run-05-opening")
     }
 
@@ -63,18 +63,18 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         let skip = app.buttons["onboarding.skip"]
 
         // Language step is not skippable.
-        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Hi, I'm Memo."].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(skip.exists)
         primary.tap()
 
-        XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
-        XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
         // Skipping the final Map Stamp step exits onboarding.
-        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
         waitForDisappearance(of: primary)
@@ -82,30 +82,29 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
 
     @MainActor
     private func launchOnboardingApp() -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments += [
+        let app = makeApp(launchArguments: [
             "--uitest-reset-onboarding",
             "--uitest-hold-opening",
             "-save.appLanguage", "en"
-        ]
-        app.launch()
+        ])
+        launch(app)
         return app
     }
 
     @MainActor
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 6) {
+    private func waitForDisappearance(of element: XCUIElement) {
         let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: element)
-        wait(for: [gone], timeout: timeout)
+        wait(for: [gone], timeout: stepTimeout)
     }
 
     @MainActor
-    private func waitForReady(_ element: XCUIElement, timeout: TimeInterval = 4) -> Bool {
-        guard element.waitForExistence(timeout: timeout) else { return false }
+    private func waitForReady(_ element: XCUIElement) -> Bool {
+        guard element.waitForExistence(timeout: stepTimeout) else { return false }
         let ready = expectation(
             for: NSPredicate(format: "value == 'ready'"),
             evaluatedWith: element
         )
-        return XCTWaiter.wait(for: [ready], timeout: timeout) == .completed
+        return XCTWaiter.wait(for: [ready], timeout: stepTimeout) == .completed
     }
 
     @MainActor
@@ -115,13 +114,9 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        let settled = expectation(
-            for: NSPredicate(format: "exists == true AND hittable == true"),
-            evaluatedWith: element
-        )
-        XCTAssertEqual(
-            XCTWaiter.wait(for: [settled], timeout: 5),
-            .completed,
+        XCTAssertTrue(
+            waitUntilHittable(element),
+            "Element never settled into a hittable state.",
             file: file,
             line: line
         )
@@ -129,13 +124,5 @@ final class SAVEOnboardingCarouselTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(element.frame.minY, app.frame.minY, file: file, line: line)
         XCTAssertLessThanOrEqual(element.frame.maxX, app.frame.maxX, file: file, line: line)
         XCTAssertLessThanOrEqual(element.frame.maxY, app.frame.maxY, file: file, line: line)
-    }
-
-    @MainActor
-    private func attach(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
     }
 }

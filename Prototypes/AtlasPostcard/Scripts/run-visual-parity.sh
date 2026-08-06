@@ -245,6 +245,13 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
     fi
 
     test_index=0
+    # xcresulttool folds every attempt of a test into a single manifest entry,
+    # so a retried test contributes each screenshot more than once. Collect all
+    # candidates with their timestamps and keep the newest copy of each screen:
+    # this gate only runs once the test step has succeeded, so the final attempt
+    # is the one that passed and its screenshots are the ones worth comparing.
+    candidates=""
+    tab="$(printf '\t')"
     while attachment_count="$(
         plutil -extract "$test_index.attachments" raw -o - "$manifest" 2>/dev/null
     )"; do
@@ -256,6 +263,9 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
             exported_name="$(
                 plutil -extract "$prefix.exportedFileName" raw -o - "$manifest"
             )"
+            timestamp="$(
+                plutil -extract "$prefix.timestamp" raw -o - "$manifest" 2>/dev/null
+            )" || timestamp=0
             case "$human_name" in
                 atlas-home*)
                     screen="home"
@@ -274,18 +284,38 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     ;;
             esac
 
-            case "$screen" in
-                home|saves|plan|map)
-                    if [[ -e "$ARTIFACT_DIR/output/$screen.png" ]]; then
-                        echo "error: duplicate attachment: $human_name" >&2
-                        rm -rf "$export_dir"
-                        exit 2
-                    fi
-                    cp "$export_dir/$exported_name" "$ARTIFACT_DIR/output/$screen.png"
-                    ;;
-            esac
+            candidates="$candidates$screen$tab$timestamp$tab$exported_name
+"
         done
         ((test_index += 1))
+    done
+
+    for screen in home saves plan map; do
+        newest="$(
+            printf '%s' "$candidates" |
+                awk -F"$tab" -v want="$screen" '
+                    $1 == want && (file == "" || $2 + 0 >= best) {
+                        best = $2 + 0
+                        file = $3
+                    }
+                    END { print file }
+                '
+        )"
+        if [[ -z "$newest" ]]; then
+            echo "error: result bundle has no $screen attachment" >&2
+            rm -rf "$export_dir"
+            exit 2
+        fi
+
+        attempts="$(
+            printf '%s' "$candidates" |
+                awk -F"$tab" -v want="$screen" '$1 == want { n += 1 } END { print n + 0 }'
+        )"
+        if ((attempts > 1)); then
+            echo "note: $screen has $attempts attachments (test retried); using the newest"
+        fi
+
+        cp "$export_dir/$newest" "$ARTIFACT_DIR/output/$screen.png"
     done
     rm -rf "$export_dir"
 else
