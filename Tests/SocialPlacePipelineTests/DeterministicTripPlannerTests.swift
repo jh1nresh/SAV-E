@@ -323,6 +323,120 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testMultiDayTripHealthCollapsesTheSameWarningIntoOneTripWideLine() throws {
+        // Trip Health aggregates every day, so an identical caveat used to render
+        // once per day and read as a rendering bug instead of per-day information.
+        let places = [
+            makePlace("Taipei Coffee", address: "臺北市大安區", latitude: 25.0330, longitude: 121.5430, category: .cafe),
+            makePlace("Taipei Lunch", address: "臺北市大安區", latitude: 25.0340, longitude: 121.5440, category: .food),
+            makePlace("Taipei Museum", address: "臺北市中正區", latitude: 25.0360, longitude: 121.5200, category: .attraction),
+            makePlace("Taipei Dinner", address: "臺北市信義區", latitude: 25.0350, longitude: 121.5650, category: .food),
+            makePlace("Taipei Park", address: "臺北市信義區", latitude: 25.0370, longitude: 121.5670, category: .attraction),
+            makePlace("Taipei Bar", address: "臺北市中山區", latitude: 25.0520, longitude: 121.5320, category: .bar)
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a 3 day Taipei trip",
+            places: places
+        ))
+        let health = try XCTUnwrap(response.tripHealth)
+        let dayCount = response.itineraryDays.count
+
+        XCTAssertEqual(dayCount, 3)
+        XCTAssertGreaterThan(
+            health.warnings.filter { $0.type == .hoursUnknown }.count,
+            1,
+            "each day should still raise its own warning in the underlying data"
+        )
+        XCTAssertTrue(
+            health.warnings.allSatisfy { $0.dayNumber != nil },
+            "planner warnings must carry the day they were raised for"
+        )
+
+        let hoursDigests = health.warningDigests().filter { $0.type == .hoursUnknown }
+        let digest = try XCTUnwrap(hoursDigests.first)
+        XCTAssertEqual(hoursDigests.count, 1, "the repeated warning must collapse into a single line")
+        XCTAssertEqual(digest.dayNumbers, Array(1...dayCount))
+        XCTAssertTrue(
+            digest.coversWholeTrip(dayCount: dayCount),
+            "a caveat true on every day needs no day label"
+        )
+    }
+
+    @MainActor
+    func testWarningDigestKeepsDayScopeWhenAWarningOnlyHitsSomeDays() throws {
+        let health = TripHealth(
+            score: 80,
+            strengths: [],
+            warnings: [
+                hoursWarning(dayNumber: 1),
+                TripWarning(
+                    id: "day-2-too-many-stops",
+                    type: .tooManyStops,
+                    severity: .medium,
+                    message: "This day has 6 stops; make it less rushed before committing.",
+                    dayId: "day-2"
+                ),
+                hoursWarning(dayNumber: 3)
+            ],
+            gaps: []
+        )
+
+        let digests = health.warningDigests()
+
+        XCTAssertEqual(digests.map(\.type), [.hoursUnknown, .tooManyStops])
+        XCTAssertEqual(digests[0].dayNumbers, [1, 3])
+        XCTAssertFalse(
+            digests[0].coversWholeTrip(dayCount: 3),
+            "a warning that skips a day must keep its day scope"
+        )
+        XCTAssertEqual(digests[1].dayNumbers, [2])
+        XCTAssertFalse(digests[1].coversWholeTrip(dayCount: 3))
+    }
+
+    @MainActor
+    func testWarningDigestTreatsWarningsWithoutADayAsTripWide() throws {
+        // Model-generated health can arrive without day scope; those must not be
+        // labelled with a day they never claimed.
+        let health = TripHealth(
+            score: 90,
+            strengths: [],
+            warnings: [
+                TripWarning(
+                    id: "low-memory-coverage",
+                    type: .lowMemoryCoverage,
+                    severity: .medium,
+                    message: "Only a few stops come from confirmed memory."
+                ),
+                TripWarning(
+                    id: "low-memory-coverage-repeat",
+                    type: .lowMemoryCoverage,
+                    severity: .medium,
+                    message: "Only a few stops come from confirmed memory."
+                )
+            ],
+            gaps: []
+        )
+
+        let digest = try XCTUnwrap(health.warningDigests().first)
+
+        XCTAssertEqual(health.warningDigests().count, 1, "identical dayless warnings still collapse")
+        XCTAssertTrue(digest.dayNumbers.isEmpty)
+        XCTAssertTrue(digest.coversWholeTrip(dayCount: 3))
+    }
+
+    @MainActor
+    private func hoursWarning(dayNumber: Int) -> TripWarning {
+        TripWarning(
+            id: "day-\(dayNumber)-hours-unknown",
+            type: .hoursUnknown,
+            severity: .low,
+            message: "Opening hours are not verified for every stop.",
+            dayId: "day-\(dayNumber)"
+        )
+    }
+
+    @MainActor
     func testPlannerPrioritizesReasonableActivitySlotOverMoreFoodStops() throws {
         let now = Date()
         let places = [
