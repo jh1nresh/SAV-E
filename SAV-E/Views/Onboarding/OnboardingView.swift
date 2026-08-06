@@ -101,6 +101,17 @@ struct OnboardingView: View {
             .id(step)
             .transition(.opacity)
 
+            if step == .mapStamp {
+                Text(step.closingLine(language: language, hasOwnClue: hasOwnClue))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 28)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("onboarding.closingLine")
+            }
+
             ProofDemoCanvas(
                 step: step,
                 clueText: trimmedClue,
@@ -126,7 +137,7 @@ struct OnboardingView: View {
         VStack(spacing: isCompactHeight ? 6 : 10) {
             Button(action: advance) {
                 HStack(spacing: 8) {
-                    Text(step.primaryTitle(language: language))
+                    Text(step.primaryTitle(language: language, hasOwnClue: hasOwnClue))
                     Image(systemName: step == .mapStamp ? "arrow.right" : "chevron.right")
                         .font(.subheadline.weight(.bold))
                 }
@@ -176,6 +187,12 @@ struct OnboardingView: View {
     }
 
     // MARK: - Flow
+
+    /// Whether the user supplied a clue of their own (an untouched sample
+    /// does not count), which decides what the ending can honestly promise.
+    private var hasOwnClue: Bool {
+        Self.clueWorthKeeping(rawClue: clueText, language: language) != nil
+    }
 
     private var trimmedClue: String {
         clueText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -241,11 +258,38 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        onComplete(trimmedClue.isEmpty ? nil : trimmedClue)
+        onComplete(Self.clueWorthKeeping(rawClue: clueText, language: language))
+    }
+
+    /// The clue to actually import, or `nil` when there is nothing real to
+    /// keep.
+    ///
+    /// The sample clue is auto-filled so the walkthrough has something to
+    /// demonstrate, which meant every completed onboarding queued a Review
+    /// Candidate for a cafe that does not exist — the shipped vault held three
+    /// "Hidden Moon Cafe" clues and four unparseable ones among its 116
+    /// pending clues. Demo content stays demo content: an untouched sample is
+    /// shown, then dropped.
+    ///
+    /// Every language's sample counts, not just the active one — switching
+    /// language mid-onboarding leaves the other sample sitting in the field,
+    /// and it is still not something the user wrote.
+    static func clueWorthKeeping(rawClue: String, language: AppLanguage) -> String? {
+        let clue = rawClue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clue.isEmpty else { return nil }
+        let samples = AppLanguage.allCases.map {
+            sampleClue(language: $0).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard !samples.contains(clue) else { return nil }
+        return clue
     }
 
     private func useSampleClue() {
-        clueText = language.localized(
+        clueText = Self.sampleClue(language: language)
+    }
+
+    static func sampleClue(language: AppLanguage) -> String {
+        language.localized(
             english: "IG Reel: quiet cafe with a tiny patio near the station, tagged @hidden.moon.cafe",
             traditionalChinese: "IG Reels：捷運站旁有小庭院的安靜咖啡店，標記 @hidden.moon.cafe"
         )
@@ -326,6 +370,26 @@ private enum OnboardingStep: Int, CaseIterable {
         }
     }
 
+    /// What is actually waiting on the other side of the final button.
+    ///
+    /// Onboarding used to end on a generic line and drop the user onto a Home
+    /// screen with nothing on it — the "you're all set, here's an empty
+    /// dashboard" ending. The closing copy now states the real next step, and
+    /// differs by whether the user gave a clue of their own: promising a first
+    /// Map Stamp to someone who only watched the sample would be a lie.
+    func closingLine(language: AppLanguage, hasOwnClue: Bool) -> String {
+        guard self == .mapStamp else { return "" }
+        return hasOwnClue
+            ? language.localized(
+                english: "Your clue is waiting in Review. Confirm it to make your first Map Stamp.",
+                traditionalChinese: "你的線索已在待確認。確認它，就是你的第一個地圖章。"
+            )
+            : language.localized(
+                english: "Paste a link any time and I'll work out the place.",
+                traditionalChinese: "隨時貼一個連結給我，我來找出地點。"
+            )
+    }
+
     func primaryTitle(language: AppLanguage) -> String {
         switch self {
         case .language:
@@ -337,6 +401,11 @@ private enum OnboardingStep: Int, CaseIterable {
         case .mapStamp:
             return language.localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
         }
+    }
+
+    func primaryTitle(language: AppLanguage, hasOwnClue: Bool) -> String {
+        guard self == .mapStamp, hasOwnClue else { return primaryTitle(language: language) }
+        return language.localized(english: "Open Review", traditionalChinese: "打開待確認")
     }
 
     func primaryHint(language: AppLanguage) -> String {
