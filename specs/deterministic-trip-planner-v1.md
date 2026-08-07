@@ -7,7 +7,7 @@
 
 Title: Add deterministic trip planner before Gemini polish
 
-Repo: `/Users/jhinresh/projects/wanderly-current`
+Repo: `/Users/jhinresh/projects/sav-e`
 
 Problem: SAV-E itinerary planning currently depends on Gemini to choose places, order stops, and invent a schedule from raw saved-place metadata. That makes plans feel intelligent when Gemini behaves, but unstable when saved places span multiple cities, when Gemini overgeneralizes, or when the API key/rate limit fails.
 

@@ -176,7 +176,7 @@ and confirmed states respectively.
 
 ## Implementation Gate
 
-- Target repo: `/Users/jhinresh/projects/wanderly-current`
+- Target repo: `/Users/jhinresh/projects/sav-e`
 - Approved direction: One Postcard, Three States
 - Screens and states in scope: Clue, Review Candidate, Map Stamp onboarding
 - Existing components to preserve: flow state, top bar, bottom actions,

@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 Status: implementation spec
-Repo: `/Users/jhinresh/projects/wanderly-current`
+Repo: `/Users/jhinresh/projects/sav-e`
 
 ## Decision
 
@@ -380,7 +380,7 @@ The App Review demo guest cannot call this account-only endpoint.
 ### P2 Xcode context receipt
 
 ```text
-Product/repo: SAV-E / /Users/jhinresh/projects/wanderly-current
+Product/repo: SAV-E / /Users/jhinresh/projects/sav-e
 Platform: iOS SwiftUI with existing Node backend
 Project: SAV-E.xcodeproj (project.yml is the XcodeGen source)
 Scheme / target: SAV-E / SAVE

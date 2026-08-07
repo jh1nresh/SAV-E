@@ -3,7 +3,7 @@
 Created: 2026-07-10
 Source: Telegram product direction from JhiNResH + X post `saboo_shubham_/status/2074899257652597051` on self-learning agents.
 Product: SAV-E
-Repo: `/Users/jhinresh/projects/wanderly-current`
+Repo: `/Users/jhinresh/projects/sav-e`
 Status: product spec / PM Gate input
 Risk: medium-high because this touches social import state, private memory, correction data, and the core SAV-E IA.
 

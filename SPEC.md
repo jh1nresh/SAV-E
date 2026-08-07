@@ -5,10 +5,15 @@ Scaffold a complete iOS app project for "SAV-E" — an AI-powered place discover
 
 ## Project Structure Required
 
+> **This is the original scaffold brief, not a map of the repo as it stands.**
+> The tree below is what was asked for at the start; the shipped structure has
+> since diverged (some listed views were never built, others were added). For
+> the current layout read `README.md` and the directory itself.
+
 ```
-Wanderly/
-├── Wanderly.xcodeproj/          (or use Swift Package if simpler)
-├── Wanderly/
+SAV-E/
+├── SAV-E.xcodeproj/          (or use Swift Package if simpler)
+├── SAV-E/
 │   ├── App/
 │   │   ├── SaveApp.swift       (main app entry)
 │   │   └── ContentView.swift        (tab-based root view)
@@ -51,11 +56,11 @@ Wanderly/
 │   │   └── Color+Theme.swift       (SAV-E color theme)
 │   └── Resources/
 │       └── Assets.xcassets
-├── WanderlyShareExtension/
+├── SAV-EShareExtension/
 │   ├── ShareViewController.swift    (Share Extension entry)
 │   └── Info.plist
-├── WanderlyClip/
-│   ├── WanderlyClipApp.swift        (App Clip entry)
+├── SAV-EClip/
+│   ├── SAV-EClipApp.swift        (App Clip entry)
 │   └── ClipContentView.swift
 ├── .env.example
 ├── README.md
