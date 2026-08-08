@@ -640,6 +640,57 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testDraftAugmentationRewritesAfternoonGapAsPendingApproval() throws {
+        // The health card said "no clear afternoon activity" right next to the
+        // 3:30 PM suggestion the augmentation just inserted. The gap stays
+        // open (nothing is confirmed until approved) but now points at the
+        // pending approval, at low severity, with the score re-derived from
+        // the shared formula.
+        let places = [
+            makePlace("Tokyo Ramen", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food),
+            makePlace("Tokyo Sushi", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .food),
+        ]
+        let draft = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day Tokyo trip",
+            places: places
+        ))
+        let originalGap = try XCTUnwrap(
+            draft.itineraryDays.first?.health?.gaps.first { $0.type == .missingAfternoonActivity }
+        )
+        XCTAssertEqual(originalGap.severity, .medium)
+
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            draft,
+            publicCandidates: [SaveMapCandidate(
+                title: "teamLab Planets",
+                subtitle: "Tokyo",
+                latitude: 35.6494,
+                longitude: 139.7898,
+                category: .attraction
+            )],
+            places: places,
+            outputLanguage: .english
+        )
+
+        let dayHealth = try XCTUnwrap(augmented.itineraryDays.first?.health)
+        let rewrittenGap = try XCTUnwrap(dayHealth.gaps.first { $0.type == .missingAfternoonActivity })
+        XCTAssertEqual(rewrittenGap.severity, .low)
+        XCTAssertTrue(rewrittenGap.message.localizedCaseInsensitiveContains("approve"))
+        XCTAssertGreaterThan(
+            dayHealth.score,
+            try XCTUnwrap(draft.itineraryDays.first?.health?.score),
+            "downgrading the gap must re-score the day"
+        )
+
+        let tripHealth = try XCTUnwrap(augmented.tripHealth)
+        XCTAssertEqual(tripHealth.score, dayHealth.score, "one-day trip aggregate mirrors the day")
+        XCTAssertFalse(
+            tripHealth.gaps.contains { $0.message == originalGap.message },
+            "the trip-wide card must not repeat the stale gap message"
+        )
+    }
+
+    @MainActor
     func testDraftAugmentationSkipsDaysThatAlreadyHaveASavedActivity() throws {
         let places = [
             makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .attraction),

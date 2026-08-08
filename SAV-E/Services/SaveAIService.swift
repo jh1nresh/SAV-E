@@ -403,7 +403,33 @@ final class SaveAIService {
                 return time.hasPrefix("6:") || time.hasPrefix("7:") || time.hasPrefix("8:")
             } ?? stops.endIndex
             stops.insert(suggestion, at: insertionIndex)
-            return day.replacingStops(stops)
+
+            var updatedDay = day.replacingStops(stops)
+            // The health line still said "no afternoon activity" right next to
+            // the suggestion we just placed there. Rewrite that gap to point
+            // at the pending approval (still open — nothing is confirmed yet)
+            // and let the shared formula re-score the day.
+            updatedDay.health = day.health.map { health in
+                TripHealth.scored(
+                    strengths: health.strengths,
+                    warnings: health.warnings,
+                    gaps: health.gaps.map { gap in
+                        guard gap.type == .missingAfternoonActivity else { return gap }
+                        return TripGap(
+                            id: gap.id,
+                            type: gap.type,
+                            dayId: gap.dayId,
+                            area: gap.area,
+                            severity: .low,
+                            message: outputLanguage.localized(
+                                english: "A public activity candidate is in the afternoon slot — approve it to close this gap.",
+                                traditionalChinese: "下午已放入公開景點候選；核准後這個缺口就補上。"
+                            )
+                        )
+                    }
+                )
+            }
+            return updatedDay
         }
 
         guard inserted else { return draft }
@@ -419,7 +445,11 @@ final class SaveAIService {
             navigationPlaceId: draft.navigationPlaceId,
             transportMode: draft.transportMode,
             itineraryDays: days,
-            tripHealth: draft.tripHealth,
+            // Re-aggregate so the trip-wide card reflects the rewritten
+            // per-day gaps instead of repeating the stale ones.
+            tripHealth: draft.tripHealth.map {
+                TripHealth.aggregating(days, strengths: $0.strengths)
+            },
             messageText: draft.messageText,
             mapAction: draft.mapAction,
             aiMessage: [draft.aiMessage, suggestionNote]

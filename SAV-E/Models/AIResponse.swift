@@ -411,6 +411,44 @@ enum Severity: String, Codable, Equatable, Hashable {
     case low
     case medium
     case high
+
+    /// Score penalty in the deterministic trip-health formula.
+    var healthPenalty: Int {
+        switch self {
+        case .low: return 4
+        case .medium: return 10
+        case .high: return 18
+        }
+    }
+}
+
+extension TripHealth {
+    /// The deterministic health formula — 100 minus every warning and gap
+    /// penalty, floored at 45. One home for the score, so anything that edits
+    /// warnings or gaps (the planner, draft augmentation) re-scores the same
+    /// way instead of leaving a stale number next to changed lines.
+    static func scored(strengths: [String], warnings: [TripWarning], gaps: [TripGap]) -> TripHealth {
+        let penalty = warnings.reduce(0) { $0 + $1.severity.healthPenalty }
+            + gaps.reduce(0) { $0 + $1.severity.healthPenalty }
+        return TripHealth(
+            score: max(45, 100 - penalty),
+            strengths: strengths,
+            warnings: warnings,
+            gaps: gaps
+        )
+    }
+
+    /// Trip-wide health from per-day healths: average day score, concatenated
+    /// warnings and gaps. Mirrors the planner's aggregation so re-aggregating
+    /// after a day changes produces the same shape.
+    static func aggregating(_ days: [ItineraryDay], strengths: [String]) -> TripHealth {
+        TripHealth(
+            score: days.compactMap(\.health?.score).reduce(0, +) / max(1, days.count),
+            strengths: strengths,
+            warnings: days.flatMap { $0.health?.warnings ?? [] },
+            gaps: days.flatMap { $0.health?.gaps ?? [] }
+        )
+    }
 }
 
 // MARK: - Codable DTOs (what Gemini actually returns)
