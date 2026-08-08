@@ -3,14 +3,19 @@ import Foundation
 private let firstRef = "save_account_" + String(repeating: "A", count: 43)
 private let secondRef = "save_account_" + String(repeating: "B", count: 43)
 
-private func response(_ state: AccountStatusState, ref: String?) -> AccountStatusResponse {
+private func response(
+    _ state: AccountStatusState,
+    ref: String?,
+    match: AccountReferenceMatch? = nil
+) -> AccountStatusResponse {
     AccountStatusResponse(
         version: "v0",
         state: state,
         accountRef: ref,
         profile: AccountStatusProfile(exists: state != .new, customized: state == .ready),
         counts: state == .recoveryRequired ? nil : AccountStatusCounts(stamps: 0, reviewItems: 0),
-        recoveryReason: state == .recoveryRequired ? "split_profile_binding" : nil
+        recoveryReason: state == .recoveryRequired ? "split_profile_binding" : nil,
+        accountRefMatch: match
     )
 }
 
@@ -39,6 +44,15 @@ expect(
     AccountGatePolicy.decide(status: response(.ready, ref: secondRef), storedAccountRef: firstRef, sessionOrigin: .interactive),
     .recovery(.differentAccount),
     "different account"
+)
+expect(
+    AccountGatePolicy.decide(
+        status: response(.ready, ref: secondRef, match: .previous),
+        storedAccountRef: firstRef,
+        sessionOrigin: .restored
+    ),
+    .verified(accountRef: secondRef, shouldStore: true),
+    "verified previous reference migrates"
 )
 expect(
     AccountGatePolicy.decide(status: response(.new, ref: firstRef), storedAccountRef: nil, sessionOrigin: .interactive),
@@ -76,4 +90,4 @@ expect(
     "malformed account ref"
 )
 
-print("account-session-gate-check: 11/11 passed")
+print("account-session-gate-check: 12/12 passed")

@@ -1,6 +1,7 @@
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type AccountStatusState = "ready" | "new" | "empty" | "recovery_required";
+export type AccountRefMatch = "current" | "previous" | "none";
 
 export interface AccountStatusResponse {
   version: "v0";
@@ -15,6 +16,7 @@ export interface AccountStatusResponse {
     review_items: number;
   } | null;
   recovery_reason: "split_profile_binding" | "conflicting_profile_binding" | null;
+  account_ref_match: AccountRefMatch | null;
 }
 
 export interface AccountStatusHttpResult {
@@ -34,6 +36,8 @@ interface AccountStatusRequestDependencies {
   method?: string;
   authorizationHeader?: string | string[];
   accountRefSecret?: string;
+  previousAccountRefSecrets?: readonly string[];
+  presentedAccountRef?: string | string[];
   verifySubject: (token: string) => Promise<string>;
   query: (sql: string, values: readonly unknown[]) => Promise<{ rows: unknown[] }>;
 }
@@ -107,7 +111,13 @@ export async function evaluateAccountStatusRequest(
   const { rows } = await dependencies.query(accountStatusSql, [subject]);
   return {
     statusCode: 200,
-    body: accountStatusResponse(rows, subject, secret),
+    body: accountStatusResponse(
+      rows,
+      subject,
+      secret,
+      dependencies.presentedAccountRef,
+      dependencies.previousAccountRefSecrets,
+    ),
   };
 }
 
@@ -195,6 +205,8 @@ export function accountStatusResponse(
   rawRows: unknown[],
   subject: string,
   accountRefSecret: string,
+  presentedAccountRef?: string | string[],
+  previousAccountRefSecrets: readonly string[] = [],
 ): AccountStatusResponse {
   const rows = rawRows.map(normalizeRow);
   if (rows.length === 0) {
@@ -205,6 +217,12 @@ export function accountStatusResponse(
       profile: { exists: false, customized: false },
       counts: { stamps: 0, review_items: 0 },
       recovery_reason: null,
+      account_ref_match: accountRefMatch(
+        subject,
+        presentedAccountRef,
+        accountRefSecret,
+        previousAccountRefSecrets,
+      ),
     };
   }
 
@@ -216,6 +234,7 @@ export function accountStatusResponse(
       profile: { exists: true, customized: null },
       counts: null,
       recovery_reason: "conflicting_profile_binding",
+      account_ref_match: null,
     };
   }
 
@@ -228,6 +247,7 @@ export function accountStatusResponse(
       profile: { exists: true, customized: null },
       counts: null,
       recovery_reason: "split_profile_binding",
+      account_ref_match: null,
     };
   }
 
@@ -242,6 +262,12 @@ export function accountStatusResponse(
     profile: { exists: true, customized: row.customized },
     counts: { stamps: row.placesCount, review_items: row.reviewItemsCount },
     recovery_reason: null,
+    account_ref_match: accountRefMatch(
+      row.profileId,
+      presentedAccountRef,
+      accountRefSecret,
+      previousAccountRefSecrets,
+    ),
   };
 }
 
@@ -257,10 +283,49 @@ export function isOpaqueAccountRef(value: string): boolean {
   return /^save_account_[A-Za-z0-9_-]{43}$/.test(value);
 }
 
+export function accountRefMatch(
+  profileId: string,
+  presentedAccountRef: string | string[] | undefined,
+  currentSecret: string,
+  previousSecrets: readonly string[] = [],
+): AccountRefMatch | null {
+  if (presentedAccountRef === undefined) return null;
+  if (typeof presentedAccountRef !== "string" || !isOpaqueAccountRef(presentedAccountRef)) {
+    return "none";
+  }
+
+  if (secureAccountRefEqual(presentedAccountRef, opaqueAccountRef(profileId, currentSecret))) {
+    return "current";
+  }
+  for (const secret of previousSecrets) {
+    const normalizedSecret = secret.trim();
+    if (
+      normalizedSecret
+      && normalizedSecret !== currentSecret
+      && secureAccountRefEqual(presentedAccountRef, opaqueAccountRef(profileId, normalizedSecret))
+    ) {
+      return "previous";
+    }
+  }
+  return "none";
+}
+
 export function stableAccountRefSecret(environment: NodeJS.ProcessEnv): string | undefined {
   return environment.SAVE_ACCOUNT_REF_SECRET?.trim()
     || environment.SAVE_MY_SAVES_SECRET?.trim()
     || undefined;
+}
+
+export function previousAccountRefSecrets(environment: NodeJS.ProcessEnv): string[] {
+  const current = stableAccountRefSecret(environment);
+  const configured = environment.SAVE_ACCOUNT_REF_PREVIOUS_SECRETS
+    ?.split(",")
+    .map((value) => value.trim()) ?? [];
+  const fallbackUsedBeforeDedicatedSecret = environment.SAVE_ACCOUNT_REF_SECRET?.trim()
+    ? environment.SAVE_MY_SAVES_SECRET?.trim()
+    : undefined;
+  return [...new Set([...configured, fallbackUsedBeforeDedicatedSecret]
+    .filter((value): value is string => Boolean(value) && value !== current))];
 }
 
 export async function resolveProfileSubject(
@@ -297,6 +362,12 @@ function bearerToken(header: string | string[] | undefined): string | undefined 
   const value = Array.isArray(header) ? header[0] : header;
   const match = value?.match(/^Bearer\s+([^\s]+)$/i);
   return match?.[1];
+}
+
+function secureAccountRefEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, "utf8");
+  const rightBytes = Buffer.from(right, "utf8");
+  return leftBytes.length === rightBytes.length && timingSafeEqual(leftBytes, rightBytes);
 }
 
 function normalizeRow(value: unknown): {

@@ -585,9 +585,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     // MARK: - Profile
 
-    func fetchAccountStatus() async throws -> AccountStatusResponse {
+    func fetchAccountStatus(storedAccountRef: String?) async throws -> AccountStatusResponse {
         guard isConfigured else { throw SupabaseError.notConfigured }
-        let data = try await request(path: "/v0/account-status")
+        let headers = storedAccountRef.map { ["X-SAVE-Account-Ref": $0] } ?? [:]
+        let data = try await request(path: "/v0/account-status", additionalHeaders: headers)
         return try JSONDecoder.supabase.decode(AccountStatusResponse.self, from: data)
     }
 
@@ -731,13 +732,15 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         path: String,
         method: String = "GET",
         body: Data? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> Data {
         let (data, _) = try await requestWithResponse(
             path: path,
             method: method,
             body: body,
-            requiresAuth: requiresAuth
+            requiresAuth: requiresAuth,
+            additionalHeaders: additionalHeaders
         )
         return data
     }
@@ -746,7 +749,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         path: String,
         method: String = "GET",
         body: Data? = nil,
-        requiresAuth: Bool = true
+        requiresAuth: Bool = true,
+        additionalHeaders: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         guard let apiBaseURL else { throw SupabaseError.notConfigured }
 
@@ -757,6 +761,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (name, value) in additionalHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         if requiresAuth {
             do {
                 request.setValue("Bearer \(try await privyAccessToken())", forHTTPHeaderField: "Authorization")

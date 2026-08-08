@@ -53,10 +53,27 @@ final class AccountSessionGateTests: XCTestCase {
         XCTAssertEqual(store.saveCount, 0)
     }
 
+    func testBackendVerifiedPreviousReferenceMigratesWithoutOpeningAnotherAccount() async {
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        let provider = StubAccountStatusProvider(
+            response: response(.ready, ref: secondRef, accountRefMatch: .previous)
+        )
+        let gate = AccountSessionGate(statusProvider: provider, referenceStore: store)
+
+        await gate.verify(sessionGeneration: 17, sessionOrigin: .restored, reviewerDemo: false)
+
+        XCTAssertEqual(gate.state, .verified(sessionGeneration: 17))
+        XCTAssertEqual(store.value, secondRef)
+        XCTAssertEqual(store.saveCount, 1)
+        XCTAssertEqual(provider.presentedRefs, [firstRef])
+    }
+
     func testDifferentAccountNeverOverwritesConfirmedReference() async {
         let store = InMemoryAccountReferenceStore(value: firstRef)
         let gate = AccountSessionGate(
-            statusProvider: StubAccountStatusProvider(response: response(.ready, ref: secondRef)),
+            statusProvider: StubAccountStatusProvider(
+                response: response(.ready, ref: secondRef, accountRefMatch: .none)
+            ),
             referenceStore: store
         )
 
@@ -199,7 +216,8 @@ final class AccountSessionGateTests: XCTestCase {
         ref: String?,
         stamps: Int = 0,
         reviewItems: Int = 0,
-        recoveryReason: String? = nil
+        recoveryReason: String? = nil,
+        accountRefMatch: AccountReferenceMatch? = nil
     ) -> AccountStatusResponse {
         AccountStatusResponse(
             version: "v0",
@@ -211,7 +229,8 @@ final class AccountSessionGateTests: XCTestCase {
                 : AccountStatusCounts(stamps: stamps, reviewItems: reviewItems),
             recoveryReason: state == .recoveryRequired
                 ? (recoveryReason ?? "split_profile_binding")
-                : nil
+                : nil,
+            accountRefMatch: accountRefMatch
         )
     }
 }
@@ -222,6 +241,7 @@ private final class StubAccountStatusProvider: AccountStatusProviding {
     private let error: Error?
     private let confirmationError: Error?
     private(set) var confirmedRefs: [String] = []
+    private(set) var presentedRefs: [String?] = []
 
     init(
         response: AccountStatusResponse,
@@ -241,7 +261,8 @@ private final class StubAccountStatusProvider: AccountStatusProviding {
         self.confirmationError = error
     }
 
-    func fetchAccountStatus() async throws -> AccountStatusResponse {
+    func fetchAccountStatus(storedAccountRef: String?) async throws -> AccountStatusResponse {
+        presentedRefs.append(storedAccountRef)
         if let error { throw error }
         return try XCTUnwrap(response)
     }
