@@ -723,6 +723,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func debugRawGET(path: String) async throws -> Data {
         try await request(path: path)
     }
+
+    /// Same, but against an explicit base URL. Exists so the legacy-migration
+    /// rail can read the pre-rebuild backend with the same live session token,
+    /// which never leaves the process.
+    func debugRawGET(path: String, baseURL: String) async throws -> Data {
+        let (data, _) = try await requestWithResponse(path: path, baseURLOverride: baseURL)
+        return data
+    }
+
+    /// Raw authenticated POST used by the legacy-migration rail to replay
+    /// records into the current backend. The server re-derives ownership from
+    /// the token, so a replayed body cannot write into another account.
+    func debugRawPOST(path: String, body: Data) async throws -> Data {
+        try await request(path: path, method: "POST", body: body)
+    }
 #endif
 
     // MARK: - HTTP
@@ -750,11 +765,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         method: String = "GET",
         body: Data? = nil,
         requiresAuth: Bool = true,
-        additionalHeaders: [String: String] = [:]
+        additionalHeaders: [String: String] = [:],
+        baseURLOverride: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
-        guard let apiBaseURL else { throw SupabaseError.notConfigured }
+        guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
-        guard let url = URL(string: "\(apiBaseURL)\(path)") else {
+        guard let url = URL(string: "\(base)\(path)") else {
             throw SupabaseError.notConfigured
         }
 

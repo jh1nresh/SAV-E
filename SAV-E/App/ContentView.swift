@@ -168,6 +168,9 @@ struct ContentView: View {
             if DebugVaultExporter.isRequested {
                 await DebugVaultExporter.run()
             }
+            if DebugLegacyMigrator.isRequested {
+                await DebugLegacyMigrator.run()
+            }
         }
 #endif
         .alert(
