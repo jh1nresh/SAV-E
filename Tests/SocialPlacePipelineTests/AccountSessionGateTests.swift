@@ -200,6 +200,65 @@ final class AccountSessionGateTests: XCTestCase {
         XCTAssertEqual(demoGate.state, .verified(sessionGeneration: 15))
     }
 
+    func testRebindClearsStoredReferenceAndLandsInExplicitConfirmation() async {
+        // The rebuild scenario: device holds a ref minted with a secret that no
+        // longer exists anywhere, so the match can never be "previous".
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        let gate = AccountSessionGate(
+            statusProvider: StubAccountStatusProvider(
+                response: response(.ready, ref: secondRef, stamps: 70, reviewItems: 12, accountRefMatch: .none)
+            ),
+            referenceStore: store
+        )
+        await gate.verify(sessionGeneration: 3, sessionOrigin: .interactive, reviewerDemo: false)
+        XCTAssertEqual(gate.state, .recoveryNeeded(.differentAccount))
+
+        await gate.resetDeviceBinding(sessionGeneration: 3, sessionOrigin: .interactive, reviewerDemo: false)
+
+        // The device forgot its binding and re-entered the normal first-time
+        // path: contents shown, nothing stored until the user confirms.
+        XCTAssertNil(store.value)
+        XCTAssertEqual(
+            gate.state,
+            .accountNeedsConfirmation(.existingAccount(stamps: 70, reviewItems: 12))
+        )
+    }
+
+    func testRebindIsANoOpOutsideTheDifferentAccountRecoveryState() async {
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        let gate = AccountSessionGate(
+            statusProvider: StubAccountStatusProvider(response: response(.ready, ref: firstRef)),
+            referenceStore: store
+        )
+        await gate.verify(sessionGeneration: 4, sessionOrigin: .restored, reviewerDemo: false)
+        XCTAssertEqual(gate.state, .verified(sessionGeneration: 4))
+
+        await gate.resetDeviceBinding(sessionGeneration: 4, sessionOrigin: .restored, reviewerDemo: false)
+
+        // A verified session must not be able to wipe its own binding.
+        XCTAssertEqual(store.value, firstRef)
+        XCTAssertEqual(store.clearCount, 0)
+        XCTAssertEqual(gate.state, .verified(sessionGeneration: 4))
+    }
+
+    func testRebindKeychainFailureSurfacesUnavailableInsteadOfRetryLoop() async {
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        store.clearError = AccountReferenceStoreError.keychain(-25300)
+        let gate = AccountSessionGate(
+            statusProvider: StubAccountStatusProvider(
+                response: response(.ready, ref: secondRef, accountRefMatch: .none)
+            ),
+            referenceStore: store
+        )
+        await gate.verify(sessionGeneration: 5, sessionOrigin: .interactive, reviewerDemo: false)
+        XCTAssertEqual(gate.state, .recoveryNeeded(.differentAccount))
+
+        await gate.resetDeviceBinding(sessionGeneration: 5, sessionOrigin: .interactive, reviewerDemo: false)
+
+        XCTAssertEqual(gate.state, .unavailable)
+        XCTAssertEqual(store.value, firstRef)
+    }
+
     func testPublishedStateNeverContainsOpaqueReference() async {
         let gate = AccountSessionGate(
             statusProvider: StubAccountStatusProvider(response: response(.new, ref: firstRef)),
@@ -276,7 +335,9 @@ private final class StubAccountStatusProvider: AccountStatusProviding {
 
 private final class InMemoryAccountReferenceStore: AccountReferenceStoring {
     var value: String?
+    var clearError: Error?
     private(set) var saveCount = 0
+    private(set) var clearCount = 0
 
     init(value: String? = nil) {
         self.value = value
@@ -289,5 +350,11 @@ private final class InMemoryAccountReferenceStore: AccountReferenceStoring {
     func save(_ accountRef: String) throws {
         value = accountRef
         saveCount += 1
+    }
+
+    func clear() throws {
+        if let clearError { throw clearError }
+        value = nil
+        clearCount += 1
     }
 }

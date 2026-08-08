@@ -461,6 +461,8 @@ private struct AuthenticatedRootView: View {
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
     @ObservedObject var petCompanionStore: SavePetCompanionStore
 
+    @State private var isRebindConfirmationPresented = false
+
     private var taskID: AccountGateTaskID {
         AccountGateTaskID(generation: sessionGeneration, origin: sessionOrigin)
     }
@@ -580,7 +582,50 @@ private struct AuthenticatedRootView: View {
             primaryAction: signOutForGoogleChoice,
             secondaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
             secondaryAccessibilityID: "accountGate.retry",
-            secondaryAction: verifyAccount
+            secondaryAction: verifyAccount,
+            tertiaryTitle: reason == .differentAccount
+                ? languageSettings.localized(
+                    english: "Re-link this phone to the current account…",
+                    traditionalChinese: "把這支手機重新連結到現在的帳號…"
+                )
+                : nil,
+            tertiaryAccessibilityID: "accountGate.rebindDevice",
+            tertiaryAction: { isRebindConfirmationPresented = true }
+        )
+        .confirmationDialog(
+            languageSettings.localized(
+                english: "Forget the old account link on this phone?",
+                traditionalChinese: "要清除這支手機上的舊帳號連結嗎？"
+            ),
+            isPresented: $isRebindConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button(
+                languageSettings.localized(
+                    english: "Forget old link and continue",
+                    traditionalChinese: "清除舊連結並繼續"
+                ),
+                role: .destructive
+            ) {
+                Task { await resetDeviceBinding() }
+            }
+            Button(
+                languageSettings.localized(english: "Cancel", traditionalChinese: "取消"),
+                role: .cancel
+            ) {}
+        } message: {
+            Text(languageSettings.localized(
+                english: "Only this phone's record of the old account link is removed — no saved places or map data are deleted. Next you'll see the current account's contents and confirm it yourself before anything is linked.",
+                traditionalChinese: "只會清除這支手機上舊的帳號連結紀錄，不會刪除任何已存地點或地圖資料。下一步會先顯示現在帳號裡的內容，由你親自確認後才會連結。"
+            ))
+        }
+    }
+
+    private func resetDeviceBinding() async {
+        await accountGate.resetDeviceBinding(
+            sessionGeneration: sessionGeneration,
+            sessionOrigin: sessionOrigin,
+            reviewerDemo: authService.isReviewerDemo
         )
     }
 
@@ -760,6 +805,9 @@ private struct AccountAccessView: View {
     let secondaryTitle: String?
     let secondaryAccessibilityID: String?
     let secondaryAction: (() async -> Void)?
+    var tertiaryTitle: String? = nil
+    var tertiaryAccessibilityID: String? = nil
+    var tertiaryAction: (() -> Void)? = nil
 
     @State private var isWorking = false
 
@@ -816,6 +864,17 @@ private struct AccountAccessView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .accessibilityIdentifier(secondaryAccessibilityID ?? "")
+                    }
+
+                    if let tertiaryTitle, let tertiaryAction {
+                        Button(tertiaryTitle) {
+                            tertiaryAction()
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.saveMutedText)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .accessibilityIdentifier(tertiaryAccessibilityID ?? "")
                     }
                 }
                 .disabled(isWorking)

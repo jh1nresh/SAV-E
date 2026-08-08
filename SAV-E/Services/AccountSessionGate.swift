@@ -9,6 +9,7 @@ protocol AccountStatusProviding {
 protocol AccountReferenceStoring {
     func load() throws -> String?
     func save(_ accountRef: String) throws
+    func clear() throws
 }
 
 enum AccountGateState: Equatable {
@@ -77,6 +78,33 @@ final class AccountSessionGate: ObservableObject {
             pendingConfirmation = nil
             state = Self.isAuthenticationError(error) ? .reauthenticationRequired : .unavailable
         }
+    }
+
+    /// Escape hatch for a device whose stored reference can never verify
+    /// again — the rebuild scenario, where the secret that minted it is gone
+    /// and a "previous" match is permanently impossible.
+    ///
+    /// Only acts from the `.differentAccount` recovery state, and only
+    /// forgets this device's binding record: local data is untouched, and the
+    /// next verification runs the normal first-time confirmation flow, which
+    /// shows the account's contents before anything is bound.
+    func resetDeviceBinding(
+        sessionGeneration: Int,
+        sessionOrigin: AccountSessionOrigin,
+        reviewerDemo: Bool
+    ) async {
+        guard case .recoveryNeeded(.differentAccount) = state else { return }
+        do {
+            try referenceStore.clear()
+        } catch {
+            state = .unavailable
+            return
+        }
+        await verify(
+            sessionGeneration: sessionGeneration,
+            sessionOrigin: sessionOrigin,
+            reviewerDemo: reviewerDemo
+        )
     }
 
     func confirmPendingAccount(sessionGeneration: Int) async {
