@@ -470,6 +470,80 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testPlannerCapsMealsPerDayForFoodOnlyVault() throws {
+        // A food-only vault used to fill every slot with a meal — one lunch
+        // and a stack of identical 6:30 PM dinners. A day holds lunch + dinner
+        // (+ one cafe); the rest of the vault stays for other days.
+        let now = Date()
+        let places = (1...6).map { index in
+            makePlace(
+                "Tokyo Food \(index)",
+                address: "Tokyo",
+                latitude: 35.6700 + Double(index) * 0.001,
+                longitude: 139.7600 + Double(index) * 0.001,
+                category: .food,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day Tokyo trip",
+            places: places
+        ))
+        let stops = response.itineraryDays.flatMap(\.stops)
+
+        XCTAssertEqual(stops.count, 2, "one day holds lunch + dinner, not a meal in every slot")
+        XCTAssertEqual(stops.compactMap(\.time).filter { $0 == "6:30 PM" }.count, 1, "dinner slot must not stack")
+    }
+
+    @MainActor
+    func testPlannerFillsDayWithSavedActivitiesInsteadOfMoreFood() throws {
+        // With activities saved, about half the day should be places to go,
+        // not just one token attraction plus wall-to-wall food.
+        let now = Date()
+        let places = [
+            makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .attraction, createdAt: now.addingTimeInterval(-10)),
+            makePlace("Tokyo Garden", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .attraction, createdAt: now.addingTimeInterval(-20)),
+            makePlace("Tokyo Tower", address: "Tokyo", latitude: 35.6720, longitude: 139.7620, category: .attraction, createdAt: now.addingTimeInterval(-30)),
+            makePlace("Tokyo Ramen", address: "Tokyo", latitude: 35.6730, longitude: 139.7630, category: .food, createdAt: now),
+            makePlace("Tokyo Sushi", address: "Tokyo", latitude: 35.6740, longitude: 139.7640, category: .food, createdAt: now.addingTimeInterval(-1)),
+            makePlace("Tokyo Curry", address: "Tokyo", latitude: 35.6750, longitude: 139.7650, category: .food, createdAt: now.addingTimeInterval(-2)),
+        ]
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day Tokyo trip",
+            places: places
+        ))
+        let stops = response.itineraryDays.flatMap(\.stops)
+        let activityCount = stops.filter { stop in
+            places.first { $0.name == stop.placeName }?.category == .attraction
+        }.count
+        let foodCount = stops.filter { stop in
+            places.first { $0.name == stop.placeName }?.category == .food
+        }.count
+
+        XCTAssertGreaterThanOrEqual(activityCount, 2)
+        XCTAssertLessThanOrEqual(foodCount, 2)
+    }
+
+    @MainActor
+    func testSchedulerTurnsThirdFoodStopIntoAfternoonBiteNotSecondDinner() {
+        let places = [
+            makePlace("Lunch", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food),
+            makePlace("Dinner", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .food),
+            makePlace("Extra Food", address: "Tokyo", latitude: 35.6720, longitude: 139.7620, category: .food),
+        ]
+
+        let scheduled = ItineraryConstraintPlanner().schedule(
+            places,
+            constraints: .balanced,
+            outputLanguage: .english
+        )
+
+        XCTAssertEqual(scheduled.map(\.time), ["12:30 PM", "6:30 PM", "3:00 PM"])
+    }
+
+    @MainActor
     func testPlannerLabelsDeterministicStopsAsConfirmedMapStampsWithUnknownRisks() throws {
         let places = [
             makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6710, longitude: 139.7640, category: .attraction),

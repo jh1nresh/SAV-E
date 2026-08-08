@@ -95,7 +95,10 @@ struct MapView: View {
                     .standard(
                         elevation: .flat,
                         emphasis: .muted,
-                        pointsOfInterest: .excludingAll,
+                        // Native Apple Maps POIs stay visible: tapping one is
+                        // the primary "save a place you can see" entry, and
+                        // selectMapFeature depends on selectable POI features.
+                        pointsOfInterest: .all,
                         showsTraffic: false
                     )
                 )

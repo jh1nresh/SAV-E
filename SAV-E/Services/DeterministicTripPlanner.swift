@@ -99,9 +99,15 @@ struct ItineraryConstraintPlanner {
                 ? ("9:00 AM", 60, outputLanguage.localized(english: "Good morning or coffee stop.", traditionalChinese: "適合早上開始或中途喝杯咖啡。"))
                 : ("2:30 PM", 45, outputLanguage.localized(english: "Good reset stop between bigger plans.", traditionalChinese: "適合放在兩個主要行程之間休息。"))
         case .food:
-            return foodCount == 0 && index < max(2, count - 1)
-                ? ("12:30 PM", 90, outputLanguage.localized(english: "Meal slot based on saved food memory.", traditionalChinese: "依照你存過的美食記憶安排成午餐。"))
-                : ("6:30 PM", 105, outputLanguage.localized(english: "Dinner slot based on saved food memory.", traditionalChinese: "依照你存過的美食記憶安排成晚餐。"))
+            if foodCount == 0, index < max(2, count - 1) {
+                return ("12:30 PM", 90, outputLanguage.localized(english: "Meal slot based on saved food memory.", traditionalChinese: "依照你存過的美食記憶安排成午餐。"))
+            }
+            if foodCount <= 1 {
+                return ("6:30 PM", 105, outputLanguage.localized(english: "Dinner slot based on saved food memory.", traditionalChinese: "依照你存過的美食記憶安排成晚餐。"))
+            }
+            // A third food stop on the same day is a light bite, not a second
+            // dinner stacked onto 6:30 PM.
+            return ("3:00 PM", 45, outputLanguage.localized(english: "Light afternoon bite between bigger plans.", traditionalChinese: "安排成兩個主要行程之間的下午小食。"))
         case .bar:
             return ("8:30 PM", 90, outputLanguage.localized(english: "Evening stop.", traditionalChinese: "適合放在晚上收尾。"))
         case .attraction:
@@ -505,18 +511,36 @@ struct DeterministicTripPlanner {
     ) -> [Place] {
         let ranked = rankedCandidates(candidates)
         let activities = ranked.filter { isActivity($0.place) }
-        guard !activities.isEmpty else {
-            return Array(ranked.prefix(maxStops).map(\.place))
-        }
 
-        let targetActivityCount = min(activities.count, max(1, min(days, maxStops / 2)))
-        var selected: [Candidate] = Array(activities.prefix(targetActivityCount))
-        var selectedIDs = Set(selected.map(\.place.id))
+        // A day realistically holds one lunch + one dinner, one cafe, and one
+        // bar. Without these caps a food-heavy vault turned every slot into a
+        // meal; extra saved food stays in the vault for another trip.
+        var remainingMealBudget: [PlaceCategory: Int] = [
+            .food: 2 * days,
+            .cafe: 1 * days,
+            .bar: 1 * days,
+        ]
+        var selected: [Candidate] = []
+        var selectedIDs = Set<UUID>()
 
-        for candidate in ranked where selected.count < maxStops {
-            guard !selectedIDs.contains(candidate.place.id) else { continue }
+        func take(_ candidate: Candidate) {
+            guard !selectedIDs.contains(candidate.place.id) else { return }
+            if let budget = remainingMealBudget[candidate.place.category] {
+                guard budget > 0 else { return }
+                remainingMealBudget[candidate.place.category] = budget - 1
+            }
             selected.append(candidate)
             selectedIDs.insert(candidate.place.id)
+        }
+
+        // Roughly half of each day goes to non-meal activities when the vault
+        // has them, instead of one token attraction for the whole trip.
+        let targetActivityCount = min(activities.count, max(days, maxStops / 2))
+        for candidate in activities where selected.count < targetActivityCount {
+            take(candidate)
+        }
+        for candidate in ranked where selected.count < maxStops {
+            take(candidate)
         }
 
         return rankedCandidates(selected).map(\.place)

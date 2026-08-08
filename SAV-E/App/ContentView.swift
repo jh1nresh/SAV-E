@@ -680,10 +680,17 @@ struct ContentView: View {
             onOpenPassport: openPassport,
             onDismissMapDetailSheet: {
                 isRootSheetPresented = false
+                // Closing a place detail on the Map tab returns straight to
+                // the map: leaving the panel expanded stranded the user on an
+                // empty ask/search drawer as an extra step.
+                if isMapPanelExpanded {
+                    collapseMapPanel()
+                }
             },
             onDismissMapDetail: {
                 mapVM.clearSelectedMapObject()
-            }
+            },
+            onShowMapCandidatesOnMap: showMapCandidatesOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
         .presentationDetents([.height(132), .medium, .large], selection: $drawerDetent)
@@ -868,6 +875,17 @@ struct ContentView: View {
         }
     }
 
+    /// "Find exact place" lands the user on the map with the candidate pins
+    /// focused, instead of stranding them in a drawer list that covers the
+    /// map. Any open drawer surface closes; tapping a pin opens its receipt.
+    private func showMapCandidatesOnMap() {
+        isRootSheetPresented = false
+        isMapPanelExpanded = false
+        rootPath.removeAll()
+        selectedRootTab = .map
+        drawerVM.returnToCommands()
+    }
+
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -877,15 +895,21 @@ struct ContentView: View {
             )
             return
         }
-        transitionFromFullScreenToMapDrawer {
-            drawerVM.query = query
+        fullScreenRoute = nil
+        rootPath.removeAll()
+        selectedRootTab = .map
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
             let candidates = await mapVM.prepareMapCandidatesForDrawerQuery(query)
-            drawerVM.mapCandidates = candidates
-            await drawerVM.submit(
-                reviewCandidates: mapVM.reviewCandidates,
-                outputLanguage: languageSettings.language
-            )
-            drawerDetent = .medium
+            if candidates.isEmpty {
+                // No map match: fall back to the guided drawer flow so the
+                // user gets the "add another clue" explanation instead of an
+                // empty map.
+                openDrawer(.ask, tripID: nil, initialQuery: query)
+            } else {
+                drawerVM.mapCandidates = candidates
+                showMapCandidatesOnMap()
+            }
         }
     }
 

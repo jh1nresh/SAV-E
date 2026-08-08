@@ -149,6 +149,9 @@ struct AIDrawerView: View {
     var onOpenPassport: () -> Void = {}
     var onDismissMapDetailSheet: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
+    /// "Find exact place" promises the map: when the search lands candidate
+    /// pins, the host closes this drawer surface so the user sees them.
+    var onShowMapCandidatesOnMap: () -> Void = {}
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var commandBarMinHeight: CGFloat = 52
@@ -2005,12 +2008,11 @@ struct AIDrawerView: View {
                 openReviewCandidateDetail(candidate)
             } else {
                 viewModel.mapCandidates = candidates
-                addSpotStatus = languageSettings.localized(
-                    english: "Found \(candidates.count) possible map match\(candidates.count == 1 ? "" : "es") for \(candidate.name).",
-                    traditionalChinese: "找到 \(candidates.count) 個可能符合「\(candidate.name)」的地圖結果。"
-                )
-                await viewModel.submit(reviewCandidates: reviewCandidates)
-                withAnimation { drawerDetent = .medium }
+                addSpotStatus = nil
+                // Take the user to the map itself: the camera has focused the
+                // candidate pins, so close the drawer instead of covering the
+                // map with a results list. Tapping a pin opens its receipt.
+                onShowMapCandidatesOnMap()
             }
         }
     }
@@ -5581,16 +5583,22 @@ private struct UnsavedMapCandidateCard: View {
     var candidate: SaveMapCandidate
     var isWorking: Bool
     var onSave: () -> Void
-    @State private var enrichedPhotoURLStrings: [String]?
+    @State private var enrichedCandidate: SaveMapCandidate?
     @State private var isEnrichingPhoto = false
 
-    /// Photos shown by the carousel: prefers freshly enriched Google Places
-    /// photos, otherwise falls back to whatever the candidate already carries.
-    private var displayPhotoURLStrings: [String] {
-        if let enrichedPhotoURLStrings, !enrichedPhotoURLStrings.isEmpty {
-            return enrichedPhotoURLStrings
+    /// The candidate this card renders: prefers the freshly enriched Google
+    /// Places details (photos, rating, hours, address), otherwise whatever the
+    /// tap carried. Enrichment happens here because the map's selection-bound
+    /// enrichment dies the moment the detail surface clears the selection.
+    private var displayCandidate: SaveMapCandidate {
+        if let enrichedCandidate, enrichedCandidate.id == candidate.id {
+            return enrichedCandidate
         }
-        return candidate.businessPhotoURLStrings
+        return candidate
+    }
+
+    private var displayPhotoURLStrings: [String] {
+        displayCandidate.businessPhotoURLStrings
     }
 
     var body: some View {
@@ -5603,8 +5611,8 @@ private struct UnsavedMapCandidateCard: View {
                 UnsavedCandidateFact(title: languageSettings.localized(english: "Reviews", traditionalChinese: "評論"), value: reviewText ?? "—")
                 UnsavedCandidateFact(
                     title: languageSettings.localized(english: "Distance", traditionalChinese: "距離"),
-                    value: candidate.distanceLabel ?? languageSettings.localized(english: "On map", traditionalChinese: "在地圖上"),
-                    valueColor: candidate.distanceLabel == nil ? .saveCocoa.opacity(0.68) : .saveInk
+                    value: displayCandidate.distanceLabel ?? languageSettings.localized(english: "On map", traditionalChinese: "在地圖上"),
+                    valueColor: displayCandidate.distanceLabel == nil ? .saveCocoa.opacity(0.68) : .saveInk
                 )
             }
             .padding(.vertical, 2)
@@ -5630,11 +5638,11 @@ private struct UnsavedMapCandidateCard: View {
                     if let hoursText {
                         UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Hours", traditionalChinese: "營業時間"), value: hoursText)
                     }
-                    if let distanceLabel = candidate.distanceLabel {
+                    if let distanceLabel = displayCandidate.distanceLabel {
                         UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Distance", traditionalChinese: "距離"), value: distanceLabel)
                     }
                     UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Category", traditionalChinese: "類別"), value: categoryText)
-                    UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Address", traditionalChinese: "地址"), value: candidate.subtitle)
+                    UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Address", traditionalChinese: "地址"), value: displayCandidate.subtitle)
                     UnsavedCandidateInfoRow(title: languageSettings.localized(english: "State", traditionalChinese: "狀態"), value: unsavedStateText)
                     UnsavedCandidateInfoRow(title: languageSettings.localized(english: "Source", traditionalChinese: "來源"), value: sourceSummary)
                 }
@@ -5683,37 +5691,37 @@ private struct UnsavedMapCandidateCard: View {
         }
     }
 
-    /// Fire-and-forget photo enrichment so unsaved candidates show business
-    /// photos too. Never blocks the card; the carousel shows its "Finding
-    /// business photo" placeholder until URLs arrive, and stays graceful on
-    /// failure (we simply keep whatever the candidate already had).
+    /// Fire-and-forget full enrichment (photos, rating, hours, address) so
+    /// unsaved candidates show business details everywhere. Never blocks the
+    /// card; the carousel shows its "Finding business photo" placeholder until
+    /// details arrive, and stays graceful on failure (we simply keep whatever
+    /// the candidate already had).
     private func enrichCandidatePhotos() async {
-        // Clear any photos carried over from a previously reused card so candidate
-        // B never keeps showing candidate A's enriched photos.
-        enrichedPhotoURLStrings = nil
-        guard candidate.businessPhotoURLStrings.count < PlaceBusinessEnricher.desiredPhotoDepth else { return }
+        // Clear any details carried over from a previously reused card so
+        // candidate B never keeps showing candidate A's enriched details.
+        enrichedCandidate = nil
         isEnrichingPhoto = true
         defer { isEnrichingPhoto = false }
-        guard let urls = await PlaceBusinessEnricher.candidatePhotoURLs(for: candidate) else { return }
+        guard let updated = await PlaceBusinessEnricher.enrichedCandidate(candidate) else { return }
         // The .task is cancelled when candidate.id changes, so this guards against
         // writing a stale result after the card was reused.
         guard !Task.isCancelled else { return }
-        enrichedPhotoURLStrings = urls
+        enrichedCandidate = updated
     }
 
     private var ratingText: String {
-        guard let rating = candidate.rating else { return "—" }
+        guard let rating = displayCandidate.rating else { return "—" }
         return String(format: "%.1f", rating)
     }
 
     private var reviewText: String? {
-        candidate.reviewCount.map {
+        displayCandidate.reviewCount.map {
             NumberFormatter.localizedString(from: NSNumber(value: $0), number: .decimal)
         }
     }
 
     private var hoursText: String? {
-        candidate.evidence.compactMap { evidence -> String? in
+        displayCandidate.evidence.compactMap { evidence -> String? in
             guard let range = evidence.range(of: "Hours:", options: [.caseInsensitive]) else { return nil }
             let value = evidence[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
             return value.isEmpty ? nil : value
@@ -5725,7 +5733,7 @@ private struct UnsavedMapCandidateCard: View {
             categoryText,
             languageSettings.localized(english: "unsaved map result", traditionalChinese: "未保存的地圖結果")
         ]
-        if let distanceLabel = candidate.distanceLabel {
+        if let distanceLabel = displayCandidate.distanceLabel {
             parts.append(distanceLabel)
         }
         return parts.joined(separator: " · ")
@@ -5747,7 +5755,7 @@ private struct UnsavedMapCandidateCard: View {
         if candidate.evidence.contains(where: { $0.localizedCaseInsensitiveCompare("Apple Maps POI") == .orderedSame }) {
             return languageSettings.localized(english: "Selected from Apple Maps · Map search", traditionalChinese: "從 Apple 地圖選取 · 地圖搜尋")
         }
-        if let searchQuery = candidate.evidence.compactMap({ line -> String? in
+        if let searchQuery = displayCandidate.evidence.compactMap({ line -> String? in
             guard let range = line.range(of: "Search:", options: [.caseInsensitive]) else {
                 return nil
             }
@@ -5764,7 +5772,7 @@ private struct UnsavedMapCandidateCard: View {
     }
 
     private var categoryText: String {
-        candidate.category?.displayName(language: languageSettings.language) ?? languageSettings.localized(english: "Place", traditionalChinese: "地點")
+        displayCandidate.category?.displayName(language: languageSettings.language) ?? languageSettings.localized(english: "Place", traditionalChinese: "地點")
     }
 
     private var unsavedStateText: String {

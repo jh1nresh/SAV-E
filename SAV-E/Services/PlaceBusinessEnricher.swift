@@ -54,6 +54,20 @@ enum PlaceBusinessEnricher {
         for candidate: SaveMapCandidate,
         service: GooglePlacesServiceProtocol = GooglePlacesService.shared
     ) async -> [String]? {
+        let urls = await enrichedCandidate(candidate, service: service)?.businessPhotoURLs
+        return urls?.isEmpty == false ? urls : nil
+    }
+
+    /// Fully enriches an unsaved map candidate — photos, rating, review count,
+    /// price, hours, category, and a real address for placeholder subtitles —
+    /// by best-match Google Places lookup. Existing candidate values win.
+    /// Returns `nil` when no new details were found. Never throws — safe for
+    /// fire-and-forget `.task`, and self-contained so any surface (drawer,
+    /// full-screen detail) can enrich without depending on map selection state.
+    static func enrichedCandidate(
+        _ candidate: SaveMapCandidate,
+        service: GooglePlacesServiceProtocol = GooglePlacesService.shared
+    ) async -> SaveMapCandidate? {
         let coordinate = CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude)
         guard let match = await bestGoogleMatch(
             name: candidate.title,
@@ -70,7 +84,43 @@ enum PlaceBusinessEnricher {
             .prefix(6)
             .compactMap { service.photoURL(reference: $0, maxWidth: 900) }
             .map(\.absoluteString)
-        return photoURLs.isEmpty ? nil : photoURLs
+        let rating = details?.rating ?? match.rating
+        let priceLevel = details?.priceLevel ?? match.priceLevel
+        let openingHours = details?.openingHours?.first
+        let hasDetails = !photoURLs.isEmpty ||
+            rating != nil ||
+            match.reviewCount != nil ||
+            priceLevel != nil ||
+            openingHours != nil
+        guard hasDetails else { return nil }
+
+        var updated = candidate
+        if !photoURLs.isEmpty {
+            updated.photoURL = updated.photoURL ?? photoURLs.first
+            updated.businessPhotoURLs = photoURLs
+        }
+        updated.rating = updated.rating ?? rating
+        updated.reviewCount = updated.reviewCount ?? match.reviewCount
+        if let category = PlaceCategory.from(googleTypes: details?.types ?? match.types) {
+            updated.category = category
+        }
+        // POI taps carry "Selected on map" instead of an address; show the
+        // matched street address once Google resolves one.
+        let address = (details?.formattedAddress ?? match.address)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let existingSubtitle = updated.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !address.isEmpty, existingSubtitle.isEmpty || existingSubtitle == "Selected on map" {
+            updated.subtitle = address
+        }
+        if let priceLevel,
+           !updated.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Price:") }) {
+            updated.evidence.append("Price: \(String(repeating: "$", count: max(1, priceLevel)))")
+        }
+        if let openingHours,
+           !updated.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Hours:") }) {
+            updated.evidence.append("Hours: \(openingHours)")
+        }
+        return updated
     }
 
     private static func businessDetails(

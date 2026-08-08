@@ -1669,6 +1669,7 @@ final class MapViewModel: ObservableObject {
             )
             mapCandidates = candidates
             selectedMapCandidate = nil
+            focusCameraOnMapCandidates(candidates)
             return candidates
         }
 
@@ -1693,6 +1694,7 @@ final class MapViewModel: ObservableObject {
             )
             mapCandidates = candidates
             selectedMapCandidate = nil
+            focusCameraOnMapCandidates(candidates)
             return candidates
         }
         let categories = saveSearchController.mapCandidateCategories(for: query)
@@ -1711,7 +1713,30 @@ final class MapViewModel: ObservableObject {
                 return categories.contains(category)
             }
         }
+        focusCameraOnMapCandidates(mapCandidates)
         return mapCandidates
+    }
+
+    /// Drawer searches (including "Find exact place" on a Review clue) drop
+    /// their result pins on the map; without moving the camera the user never
+    /// sees them. Fit the region around every candidate so the map takes the
+    /// user to the places it found.
+    private func focusCameraOnMapCandidates(_ candidates: [SaveMapCandidate]) {
+        guard let minLatitude = candidates.map(\.latitude).min(),
+              let maxLatitude = candidates.map(\.latitude).max(),
+              let minLongitude = candidates.map(\.longitude).min(),
+              let maxLongitude = candidates.map(\.longitude).max()
+        else { return }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLatitude + maxLatitude) / 2,
+            longitude: (minLongitude + maxLongitude) / 2
+        )
+        let span = MKCoordinateSpan(
+            latitudeDelta: min(40, max(0.02, (maxLatitude - minLatitude) * 1.5)),
+            longitudeDelta: min(40, max(0.02, (maxLongitude - minLongitude) * 1.5))
+        )
+        cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
     }
 
     private func currentLocationSearchCenter() async -> CLLocationCoordinate2D? {
@@ -1987,70 +2012,20 @@ final class MapViewModel: ObservableObject {
     }
 
     private func enrichSelectedMapCandidate(_ candidate: SaveMapCandidate) async {
-        guard let update = await businessDetails(for: candidate) else { return }
-        guard selectedMapCandidate?.id == candidate.id else { return }
-
-        var updatedCandidate = selectedMapCandidate ?? candidate
-        if !update.photoURLs.isEmpty {
-            let urls = update.photoURLs.map(\.absoluteString)
-            updatedCandidate.photoURL = updatedCandidate.photoURL ?? urls.first
-            updatedCandidate.businessPhotoURLs = urls
-        }
-        updatedCandidate.rating = updatedCandidate.rating ?? update.rating
-        updatedCandidate.reviewCount = updatedCandidate.reviewCount ?? update.reviewCount
-        if let category = update.category {
-            updatedCandidate.category = category
-        }
-        if let priceRange = update.priceRange,
-           !updatedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Price:") }) {
-            updatedCandidate.evidence.append("Price: \(priceRange)")
-        }
-        if let openingHours = update.openingHours,
-           !updatedCandidate.evidence.contains(where: { $0.localizedCaseInsensitiveContains("Hours:") }) {
-            updatedCandidate.evidence.append("Hours: \(openingHours)")
-        }
-
-        selectedMapCandidate = updatedCandidate
+        // Start from the latest snapshot so the distance hydration that ran
+        // just before this is preserved in the merged result.
+        let latestCandidate = selectedMapCandidate?.id == candidate.id
+            ? (selectedMapCandidate ?? candidate)
+            : candidate
+        guard let updatedCandidate = await PlaceBusinessEnricher.enrichedCandidate(
+            latestCandidate,
+            service: googlePlacesService
+        ) else { return }
         if let index = mapCandidates.firstIndex(where: { $0.id == candidate.id }) {
             mapCandidates[index] = updatedCandidate
         }
-    }
-
-    private func businessDetails(for candidate: SaveMapCandidate) async -> (photoURLs: [URL], rating: Double?, reviewCount: Int?, priceRange: String?, openingHours: String?, category: PlaceCategory?)? {
-        do {
-            let coordinate = CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude)
-            let matches = try await googlePlacesService.searchPlace(query: "\(candidate.title) \(candidate.subtitle)", near: coordinate)
-            let candidateLocation = CLLocation(latitude: candidate.latitude, longitude: candidate.longitude)
-            guard let match = matches.first(where: { match in
-                let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                let sameArea = candidateLocation.distance(from: matchLocation) < 250
-                let sameName = match.name.localizedCaseInsensitiveContains(candidate.title) ||
-                    candidate.title.localizedCaseInsensitiveContains(match.name)
-                return sameArea || sameName
-            }) else { return nil }
-
-            let details = try? await googlePlacesService.getPlaceDetails(placeId: match.id)
-            let photoReferences = details?.photoReferences?.isEmpty == false
-                ? details?.photoReferences ?? []
-                : [match.photoReference].compactMap { $0 }
-            let photoURLs = photoReferences
-                .prefix(6)
-                .compactMap { googlePlacesService.photoURL(reference: $0, maxWidth: 900) }
-            let priceLevel = details?.priceLevel ?? match.priceLevel
-            let hasDetails = !photoURLs.isEmpty || details?.rating != nil || match.rating != nil || match.reviewCount != nil || priceLevel != nil || details?.openingHours?.isEmpty == false
-            guard hasDetails else { return nil }
-
-            return (
-                photoURLs,
-                details?.rating ?? match.rating,
-                match.reviewCount,
-                priceLevel.map { String(repeating: "$", count: max(1, $0)) },
-                details?.openingHours?.first,
-                PlaceCategory.from(googleTypes: details?.types ?? match.types)
-            )
-        } catch {
-            return nil
-        }
+        guard selectedMapCandidate?.id == candidate.id else { return }
+        selectedMapCandidate = updatedCandidate
     }
 
     private func appleMapsURL(title: String, coordinate: CLLocationCoordinate2D) -> String? {
