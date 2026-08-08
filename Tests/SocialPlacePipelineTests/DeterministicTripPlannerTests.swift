@@ -527,6 +527,111 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testGroupingRebalancesFoodClusterAcrossDaysInsteadOfOneAllFoodDay() throws {
+        // Geographic chunking put every restaurant in the same neighborhood
+        // into the same day, so one day absorbed the whole trip's meal budget.
+        let now = Date()
+        var places: [Place] = []
+        for index in 0..<4 {
+            places.append(makePlace(
+                "Tokyo Food \(index)",
+                address: "Tokyo",
+                latitude: 35.6700,
+                longitude: 139.7600 + Double(index) * 0.0001,
+                category: .food,
+                createdAt: now.addingTimeInterval(Double(-index))
+            ))
+        }
+        places.append(makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6700, longitude: 139.7650, category: .attraction, createdAt: now.addingTimeInterval(-10)))
+        places.append(makePlace("Tokyo Garden", address: "Tokyo", latitude: 35.6700, longitude: 139.7651, category: .attraction, createdAt: now.addingTimeInterval(-11)))
+        places.append(makePlace("Tokyo Cafe A", address: "Tokyo", latitude: 35.6700, longitude: 139.7652, category: .cafe, createdAt: now.addingTimeInterval(-12)))
+        places.append(makePlace("Tokyo Cafe B", address: "Tokyo", latitude: 35.6700, longitude: 139.7653, category: .cafe, createdAt: now.addingTimeInterval(-13)))
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a 2 day Tokyo trip",
+            places: places
+        ))
+
+        XCTAssertEqual(response.itineraryDays.count, 2)
+        let allStops = response.itineraryDays.flatMap(\.stops)
+        XCTAssertEqual(Set(allStops.map(\.placeName)).count, allStops.count, "rebalancing must not drop or duplicate stops")
+        for day in response.itineraryDays {
+            let foodCount = day.stops.filter { stop in
+                places.first { $0.name == stop.placeName }?.category == .food
+            }.count
+            XCTAssertLessThanOrEqual(foodCount, 2, "day \(day.dayNumber) absorbed more than one day's meal budget")
+        }
+    }
+
+    @MainActor
+    func testDeterministicDraftWeavesPublicActivityAsApprovalGatedStop() throws {
+        // All-food vault + no LLM: the fetched public activity candidates used
+        // to be dropped, leaving only a text nudge. They now enter the draft
+        // as labeled, approval-gated external suggestions.
+        let places = [
+            makePlace("Tokyo Ramen", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food),
+            makePlace("Tokyo Sushi", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .food),
+        ]
+        let draft = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day Tokyo trip",
+            places: places
+        ))
+        let candidate = SaveMapCandidate(
+            title: "teamLab Planets",
+            subtitle: "6-1-16 Toyosu, Koto City, Tokyo",
+            latitude: 35.6494,
+            longitude: 139.7898,
+            category: .attraction
+        )
+
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            draft,
+            publicCandidates: [candidate],
+            places: places,
+            outputLanguage: .english
+        )
+
+        let stops = try XCTUnwrap(augmented.itineraryDays.first?.stops)
+        let suggestion = try XCTUnwrap(stops.first { $0.placeState == .externalSuggestion })
+        XCTAssertNil(suggestion.placeId)
+        XCTAssertEqual(suggestion.placeName, "teamLab Planets")
+        XCTAssertTrue(suggestion.risks.contains(.externalSuggestion))
+        let dinnerIndex = try XCTUnwrap(stops.firstIndex { $0.time == "6:30 PM" })
+        let suggestionIndex = try XCTUnwrap(stops.firstIndex { $0.id == suggestion.id })
+        XCTAssertLessThan(suggestionIndex, dinnerIndex, "suggestion should land in the afternoon, before dinner")
+        XCTAssertEqual(augmented.placeIds, draft.placeIds, "saved-only route fields must not gain public stops")
+        XCTAssertEqual(augmented.mapAction, draft.mapAction)
+    }
+
+    @MainActor
+    func testDraftAugmentationSkipsDaysThatAlreadyHaveASavedActivity() throws {
+        let places = [
+            makePlace("Tokyo Museum", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .attraction),
+            makePlace("Tokyo Ramen", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .food),
+        ]
+        let draft = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day Tokyo trip",
+            places: places
+        ))
+        let candidate = SaveMapCandidate(
+            title: "teamLab Planets",
+            subtitle: "Tokyo",
+            latitude: 35.6494,
+            longitude: 139.7898,
+            category: .attraction
+        )
+
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            draft,
+            publicCandidates: [candidate],
+            places: places,
+            outputLanguage: .english
+        )
+
+        XCTAssertEqual(augmented, draft, "a day with a saved activity needs no external suggestion")
+    }
+
+    @MainActor
     func testSchedulerTurnsThirdFoodStopIntoAfternoonBiteNotSecondDinner() {
         let places = [
             makePlace("Lunch", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food),

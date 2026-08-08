@@ -708,8 +708,65 @@ struct DeterministicTripPlanner {
     private func groups(_ places: [Place], requestedDays: Int) -> [[Place]] {
         let dayCount = max(1, min(requestedDays, places.count))
         let chunkSize = Int(ceil(Double(places.count) / Double(dayCount)))
-        return stride(from: 0, to: places.count, by: chunkSize).map { start in
+        var days = stride(from: 0, to: places.count, by: chunkSize).map { start in
             Array(places[start..<min(start + chunkSize, places.count)])
+        }
+        rebalanceMealHeavyDays(&days)
+        return days
+    }
+
+    /// Selection caps meals per day across the whole trip, but geographic
+    /// chunking can still cluster the trip's entire food budget into one day
+    /// (every restaurant in the same neighborhood lands in the same chunk).
+    /// Swap the excess meal stops with non-meal stops from a lighter day so no
+    /// day exceeds its realistic meal count; chunk sizes (pacing) stay intact.
+    private func rebalanceMealHeavyDays(_ days: inout [[Place]]) {
+        guard days.count > 1 else { return }
+        let dailyCaps: [(category: PlaceCategory, cap: Int)] = [
+            (.food, 2), (.cafe, 1), (.bar, 1),
+        ]
+
+        func count(_ category: PlaceCategory, in day: [Place]) -> Int {
+            day.filter { $0.category == category }.count
+        }
+
+        var didSwap = false
+        for (category, cap) in dailyCaps {
+            var safety = days.reduce(0) { $0 + $1.count }
+            while safety > 0 {
+                safety -= 1
+                guard let overIndex = days.indices.first(where: { count(category, in: days[$0]) > cap }),
+                      let overStopIndex = days[overIndex].lastIndex(where: { $0.category == category })
+                else { break }
+
+                // A valid trade partner is a day with meal room, offering a
+                // stop whose own category will not overflow in the heavy day.
+                var swapTarget: (dayIndex: Int, stopIndex: Int)?
+                outer: for dayIndex in days.indices where dayIndex != overIndex {
+                    guard count(category, in: days[dayIndex]) < cap else { continue }
+                    for stopIndex in days[dayIndex].indices.reversed() {
+                        let stopCategory = days[dayIndex][stopIndex].category
+                        guard stopCategory != category else { continue }
+                        let heavyDayCap = dailyCaps.first { $0.category == stopCategory }?.cap ?? Int.max
+                        if count(stopCategory, in: days[overIndex]) < heavyDayCap {
+                            swapTarget = (dayIndex, stopIndex)
+                            break outer
+                        }
+                    }
+                }
+                guard let swapTarget else { break }
+
+                let movedMeal = days[overIndex][overStopIndex]
+                days[overIndex][overStopIndex] = days[swapTarget.dayIndex][swapTarget.stopIndex]
+                days[swapTarget.dayIndex][swapTarget.stopIndex] = movedMeal
+                didSwap = true
+            }
+        }
+
+        // Swapping breaks the global nearest-neighbor order, so restore a
+        // sensible route within each affected day.
+        if didSwap {
+            days = days.map(nearestNeighborOrder)
         }
     }
 
