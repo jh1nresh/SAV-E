@@ -55,8 +55,10 @@ struct KeychainAccountReferenceStore: AccountReferenceStoring {
     }
 
     /// Removes the stored reference so the next sign-in is treated as
-    /// first-time. Used by isolated DEBUG UI-test setup only; production
-    /// account-ref rotation is migrated after server-side identity proof.
+    /// first-time. Reached two ways: isolated DEBUG UI-test setup, and the
+    /// user-confirmed re-link action on the different-account recovery
+    /// screen — the escape hatch for a reference whose minting secret no
+    /// longer exists, where a "previous" match is permanently impossible.
     func clear() throws {
         let status = SecItemDelete(baseQuery as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
