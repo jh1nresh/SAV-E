@@ -2583,7 +2583,7 @@ struct MapDetailDrawerView: View {
                     UnsavedMapCandidateCard(
                         candidate: candidate,
                         isWorking: isWorkingMapCandidateID == candidate.id,
-                        onSave: { onSaveMapCandidate(candidate) }
+                        onSave: { onSaveMapCandidate($0) }
                     )
                 case .socialPlace(let place):
                     SocialPlaceDetailCard(
@@ -5582,7 +5582,7 @@ private struct UnsavedMapCandidateCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     var candidate: SaveMapCandidate
     var isWorking: Bool
-    var onSave: () -> Void
+    var onSave: (SaveMapCandidate) -> Void
     @State private var enrichedCandidate: SaveMapCandidate?
     @State private var isEnrichingPhoto = false
 
@@ -5670,7 +5670,7 @@ private struct UnsavedMapCandidateCard: View {
                     fill: SaveAtlasPalette.coral,
                     foreground: .white,
                     disabled: isWorking,
-                    action: onSave
+                    action: { onSave(displayCandidate) }
                 )
                 .accessibilityIdentifier("drawer.unsaved.primaryAction")
 

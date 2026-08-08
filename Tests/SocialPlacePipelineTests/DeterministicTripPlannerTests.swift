@@ -564,6 +564,42 @@ final class DeterministicTripPlannerTests: XCTestCase {
     }
 
     @MainActor
+    func testGroupingMovesExcessFoodWhenLighterDayHasNoSwapCandidate() throws {
+        let now = Date()
+        var places = (0..<6).map { index in
+            makePlace(
+                "Tokyo Food \(index)",
+                address: "Tokyo",
+                latitude: 35.6700,
+                longitude: 139.7600 + Double(index) * 0.0001,
+                category: .food,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
+        places.append(makePlace(
+            "Tokyo Museum",
+            address: "Tokyo",
+            latitude: 35.6700,
+            longitude: 139.7700,
+            category: .attraction,
+            createdAt: now.addingTimeInterval(-20)
+        ))
+
+        let response = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a 3 day Tokyo trip",
+            places: places
+        ))
+
+        XCTAssertEqual(response.itineraryDays.count, 3)
+        for day in response.itineraryDays {
+            let foodCount = day.stops.filter { stop in
+                places.first { $0.name == stop.placeName }?.category == .food
+            }.count
+            XCTAssertLessThanOrEqual(foodCount, 2, "day \(day.dayNumber) exceeded the daily food cap")
+        }
+    }
+
+    @MainActor
     func testDeterministicDraftWeavesPublicActivityAsApprovalGatedStop() throws {
         // All-food vault + no LLM: the fetched public activity candidates used
         // to be dropped, leaving only a text nudge. They now enter the draft

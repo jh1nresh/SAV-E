@@ -707,67 +707,54 @@ struct DeterministicTripPlanner {
 
     private func groups(_ places: [Place], requestedDays: Int) -> [[Place]] {
         let dayCount = max(1, min(requestedDays, places.count))
-        let chunkSize = Int(ceil(Double(places.count) / Double(dayCount)))
-        var days = stride(from: 0, to: places.count, by: chunkSize).map { start in
-            Array(places[start..<min(start + chunkSize, places.count)])
-        }
-        rebalanceMealHeavyDays(&days)
-        return days
-    }
-
-    /// Selection caps meals per day across the whole trip, but geographic
-    /// chunking can still cluster the trip's entire food budget into one day
-    /// (every restaurant in the same neighborhood lands in the same chunk).
-    /// Swap the excess meal stops with non-meal stops from a lighter day so no
-    /// day exceeds its realistic meal count; chunk sizes (pacing) stay intact.
-    private func rebalanceMealHeavyDays(_ days: inout [[Place]]) {
-        guard days.count > 1 else { return }
+        let baseSize = places.count / dayCount
+        let remainder = places.count % dayCount
+        let targetSizes = (0..<dayCount).map { baseSize + ($0 < remainder ? 1 : 0) }
         let dailyCaps: [(category: PlaceCategory, cap: Int)] = [
             (.food, 2), (.cafe, 1), (.bar, 1),
         ]
+        var days = Array(repeating: [Place](), count: dayCount)
+        var assignedIDs = Set<UUID>()
 
         func count(_ category: PlaceCategory, in day: [Place]) -> Int {
             day.filter { $0.category == category }.count
         }
 
-        var didSwap = false
+        // Selection already caps meals across the whole trip. Distributing
+        // those categories first guarantees that geographic ordering cannot
+        // concentrate the entire allowance into one day.
         for (category, cap) in dailyCaps {
-            var safety = days.reduce(0) { $0 + $1.count }
-            while safety > 0 {
-                safety -= 1
-                guard let overIndex = days.indices.first(where: { count(category, in: days[$0]) > cap }),
-                      let overStopIndex = days[overIndex].lastIndex(where: { $0.category == category })
-                else { break }
-
-                // A valid trade partner is a day with meal room, offering a
-                // stop whose own category will not overflow in the heavy day.
-                var swapTarget: (dayIndex: Int, stopIndex: Int)?
-                outer: for dayIndex in days.indices where dayIndex != overIndex {
-                    guard count(category, in: days[dayIndex]) < cap else { continue }
-                    for stopIndex in days[dayIndex].indices.reversed() {
-                        let stopCategory = days[dayIndex][stopIndex].category
-                        guard stopCategory != category else { continue }
-                        let heavyDayCap = dailyCaps.first { $0.category == stopCategory }?.cap ?? Int.max
-                        if count(stopCategory, in: days[overIndex]) < heavyDayCap {
-                            swapTarget = (dayIndex, stopIndex)
-                            break outer
+            for place in places where place.category == category {
+                guard let dayIndex = days.indices
+                    .filter({ days[$0].count < targetSizes[$0] && count(category, in: days[$0]) < cap })
+                    .min(by: { lhs, rhs in
+                        let leftCategoryCount = count(category, in: days[lhs])
+                        let rightCategoryCount = count(category, in: days[rhs])
+                        if leftCategoryCount != rightCategoryCount {
+                            return leftCategoryCount < rightCategoryCount
                         }
-                    }
+                        if days[lhs].count != days[rhs].count {
+                            return days[lhs].count < days[rhs].count
+                        }
+                        return lhs < rhs
+                    }) else {
+                    assertionFailure("Trip-wide meal caps must fit into daily caps")
+                    continue
                 }
-                guard let swapTarget else { break }
-
-                let movedMeal = days[overIndex][overStopIndex]
-                days[overIndex][overStopIndex] = days[swapTarget.dayIndex][swapTarget.stopIndex]
-                days[swapTarget.dayIndex][swapTarget.stopIndex] = movedMeal
-                didSwap = true
+                days[dayIndex].append(place)
+                assignedIDs.insert(place.id)
             }
         }
 
-        // Swapping breaks the global nearest-neighbor order, so restore a
-        // sensible route within each affected day.
-        if didSwap {
-            days = days.map(nearestNeighborOrder)
+        for place in places where !assignedIDs.contains(place.id) {
+            guard let dayIndex = days.indices.first(where: { days[$0].count < targetSizes[$0] }) else {
+                assertionFailure("Balanced day targets must fit every selected place")
+                continue
+            }
+            days[dayIndex].append(place)
         }
+
+        return days.map(nearestNeighborOrder)
     }
 
     private func distance(from lhs: Place, to rhs: Place) -> CLLocationDistance {
