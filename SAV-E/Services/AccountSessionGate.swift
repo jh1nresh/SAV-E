@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 protocol AccountStatusProviding {
-    func fetchAccountStatus() async throws -> AccountStatusResponse
+    func fetchAccountStatus(storedAccountRef: String?) async throws -> AccountStatusResponse
     func confirmAccount(expectedAccountRef: String) async throws -> AccountStatusResponse
 }
 
@@ -61,11 +61,12 @@ final class AccountSessionGate: ObservableObject {
         }
 
         do {
-            let status = try await statusProvider.fetchAccountStatus()
+            let storedAccountRef = try referenceStore.load()
+            let status = try await statusProvider.fetchAccountStatus(storedAccountRef: storedAccountRef)
             guard revision == verificationRevision, !Task.isCancelled else { return }
             let decision = AccountGatePolicy.decide(
                 status: status,
-                storedAccountRef: try referenceStore.load(),
+                storedAccountRef: storedAccountRef,
                 sessionOrigin: sessionOrigin
             )
             try apply(decision, sessionGeneration: sessionGeneration, revision: revision)

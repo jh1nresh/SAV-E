@@ -325,7 +325,7 @@ jobs:
 
       - name: Audit production dependencies
         working-directory: save-rn
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run audit:production
 
   evidence-rubric:
     uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d

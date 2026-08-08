@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  accountRefMatch,
   accountStatusResponse,
   accountStatusSql,
   evaluateAccountConfirmationRequest,
   evaluateAccountStatusRequest,
   opaqueAccountRef,
+  previousAccountRefSecrets,
   resolveProfileSubject,
   stableAccountRefSecret,
 } from "./accountStatus.js";
@@ -185,6 +187,30 @@ test("opaque account refs are stable, domain scoped, and rotate with the secret"
   assert.doesNotMatch(first, /canonical-profile/);
 });
 
+test("account status proves only current or configured previous refs for the authenticated profile", () => {
+  const profileId = "canonical-profile";
+  const previousSecret = `${secret}-previous`;
+  const currentRef = opaqueAccountRef(profileId, secret);
+  const previousRef = opaqueAccountRef(profileId, previousSecret);
+
+  assert.equal(accountRefMatch(profileId, undefined, secret, [previousSecret]), null);
+  assert.equal(accountRefMatch(profileId, currentRef, secret, [previousSecret]), "current");
+  assert.equal(accountRefMatch(profileId, previousRef, secret, [previousSecret]), "previous");
+  assert.equal(accountRefMatch(profileId, opaqueAccountRef("other-profile", previousSecret), secret, [previousSecret]), "none");
+  assert.equal(accountRefMatch(profileId, "raw-profile-id", secret, [previousSecret]), "none");
+  assert.equal(accountRefMatch(profileId, [previousRef, currentRef], secret, [previousSecret]), "none");
+
+  const response = accountStatusResponse(
+    [row({ profile_id: profileId, places_count: 3 })],
+    subject,
+    secret,
+    previousRef,
+    [previousSecret],
+  );
+  assert.equal(response.account_ref_match, "previous");
+  assert.equal(response.account_ref, currentRef);
+});
+
 test("account ref secret prefers the dedicated key and never falls back to guest state", () => {
   assert.equal(stableAccountRefSecret({
     SAVE_ACCOUNT_REF_SECRET: " dedicated ",
@@ -192,6 +218,17 @@ test("account ref secret prefers the dedicated key and never falls back to guest
   }), "dedicated");
   assert.equal(stableAccountRefSecret({ SAVE_MY_SAVES_SECRET: " my-saves " }), "my-saves");
   assert.equal(stableAccountRefSecret({ SAVE_GUEST_SESSION_SECRET: "guest-only" }), undefined);
+});
+
+test("previous account-ref secrets include the pre-dedicated fallback without duplicates", () => {
+  assert.deepEqual(previousAccountRefSecrets({
+    SAVE_ACCOUNT_REF_SECRET: " current ",
+    SAVE_MY_SAVES_SECRET: " legacy ",
+    SAVE_ACCOUNT_REF_PREVIOUS_SECRETS: " older, legacy, current, older, ",
+  }), ["older", "legacy"]);
+  assert.deepEqual(previousAccountRefSecrets({
+    SAVE_MY_SAVES_SECRET: " legacy ",
+  }), []);
 });
 
 test("account confirmation authenticates, binds the expected ref, and creates only a missing profile", async () => {
@@ -374,6 +411,8 @@ test("account status route runs before ensureProfile and stays outside the mutat
   assert.match(routeBlock, /rollbackTransaction/);
   assert.match(routeBlock, /Cache-Control/);
   assert.match(routeBlock, /Vary/);
+  assert.match(routeBlock, /x-save-account-ref/);
+  assert.match(routeBlock, /previousAccountRefSecrets/);
 
   const confirmStart = routeBlock.indexOf('if (segments[1] === "confirm")');
   const confirmBlock = routeBlock.slice(confirmStart);

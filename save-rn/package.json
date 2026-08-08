@@ -11,7 +11,8 @@
     "check:import-links": "node scripts/check-import-link-fixtures.js",
     "check:friend-share": "node scripts/check-friend-share-fixtures.js",
     "check:save-cards": "node scripts/check-save-card-fixtures.js",
-    "check:save-actions": "node scripts/check-save-action-fixtures.js"
+    "check:save-actions": "node scripts/check-save-action-fixtures.js",
+    "audit:production": "node scripts/check-production-audit.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.7",
@@ -40,7 +41,8 @@
   "overrides": {
     "axios": "1.18.0",
     "brace-expansion": "5.0.9",
-    "hono": "4.12.32",
+    "hono": "4.13.1",
+    "nanoid": "3.3.18",
     "postcss": "8.5.23",
     "socket.io-parser": "4.2.7",
     "tar": "7.5.22",

@@ -12,6 +12,12 @@ enum AccountStatusState: String, Decodable, Sendable {
     case recoveryRequired = "recovery_required"
 }
 
+enum AccountReferenceMatch: String, Decodable, Sendable {
+    case current
+    case previous
+    case none
+}
+
 struct AccountStatusResponse: Decodable, Equatable, Sendable {
     let version: String
     let state: AccountStatusState
@@ -19,6 +25,7 @@ struct AccountStatusResponse: Decodable, Equatable, Sendable {
     let profile: AccountStatusProfile
     let counts: AccountStatusCounts?
     let recoveryReason: String?
+    let accountRefMatch: AccountReferenceMatch?
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -27,6 +34,7 @@ struct AccountStatusResponse: Decodable, Equatable, Sendable {
         case profile
         case counts
         case recoveryReason = "recovery_reason"
+        case accountRefMatch = "account_ref_match"
     }
 }
 
@@ -91,8 +99,14 @@ enum AccountGatePolicy {
         }
 
         if let storedAccountRef {
-            guard storedAccountRef == accountRef else {
-                return .recovery(.differentAccount)
+            if storedAccountRef != accountRef {
+                guard status.accountRefMatch == .previous else {
+                    return .recovery(.differentAccount)
+                }
+                if status.state == .new {
+                    return .recovery(.missingConfirmedProfile)
+                }
+                return .verified(accountRef: accountRef, shouldStore: true)
             }
             if status.state == .new {
                 return .recovery(.missingConfirmedProfile)

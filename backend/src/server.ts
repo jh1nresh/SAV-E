@@ -5,6 +5,7 @@ import pg, { type PoolClient } from "pg";
 import {
   evaluateAccountConfirmationRequest,
   evaluateAccountStatusRequest,
+  previousAccountRefSecrets,
   resolveProfileSubject,
   stableAccountRefSecret,
 } from "./accountStatus.js";
@@ -906,7 +907,7 @@ createServer(async (request, response) => {
         return sendJson(response, { error: "Not found" }, 404);
       }
       response.setHeader("Cache-Control", "private, no-store");
-      response.setHeader("Vary", "Authorization");
+      response.setHeader("Vary", "Authorization, X-SAVE-Account-Ref");
       response.setHeader("Referrer-Policy", "no-referrer");
       if (segments[1] === "confirm") {
         if (request.method !== "POST") {
@@ -947,6 +948,8 @@ createServer(async (request, response) => {
         method: request.method,
         authorizationHeader: request.headers.authorization,
         accountRefSecret: stableAccountRefSecret(process.env),
+        previousAccountRefSecrets: previousAccountRefSecrets(process.env),
+        presentedAccountRef: request.headers["x-save-account-ref"],
         verifySubject: verifiedPrivySubject,
         query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
       });
