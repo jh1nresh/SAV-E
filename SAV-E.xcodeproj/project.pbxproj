@@ -114,6 +114,7 @@
 		AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55AC71904B498274561F2D /* MapView.swift */; };
 		B118D409C44CFAEC868DE8C2 /* TripPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */; };
 		B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */; };
+		A1B2C3D400000071 /* DebugLegacyMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000072 /* DebugLegacyMigrator.swift */; };
 		B45133218BC50C705B223B87 /* DebugVaultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */; };
 		B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */; };
 		B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */; };
@@ -159,6 +160,7 @@
 		FD27CCBFEDABF6FCDAF3AB57 /* SaveSearchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */; };
 		FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFA0C8D8324DF32424B5147A /* SocialLinkReviewCandidateService.swift */; };
 		FE9576767070B9ABC8214BB8 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78E2B528C610D14058FBFF5 /* PendingPlaceImportService.swift */; };
+		A1B2C3D400000073 /* DebugLegacyMigratorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D400000074 /* DebugLegacyMigratorTests.swift */; };
 		FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */; };
 		FFFB2F9105F65B9FC37DD8B6 /* SocialMapSignals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */; };
 /* End PBXBuildFile section */
@@ -259,6 +261,7 @@
 		42EC012C324D256BB87EE382 /* NavigationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationService.swift; sourceTree = "<group>"; };
 		451867EDFD260856B3380670 /* SavePetAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePetAvatar.swift; sourceTree = "<group>"; };
 		45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanningIntentTests.swift; sourceTree = "<group>"; };
+		A1B2C3D400000074 /* DebugLegacyMigratorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugLegacyMigratorTests.swift; sourceTree = "<group>"; };
 		468D23D10B68903C13C10154 /* SaveGuideModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveGuideModels.swift; sourceTree = "<group>"; };
 		482E0F42191576E75DFAA558 /* SAV-EClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "SAV-EClip.entitlements"; sourceTree = "<group>"; };
 		48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerifiedPlaceClaimsClientTests.swift; sourceTree = "<group>"; };
@@ -269,6 +272,7 @@
 		4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImport.swift; sourceTree = "<group>"; };
 		51DF55BE93F14D29CE673F5D /* SaveAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAIService.swift; sourceTree = "<group>"; };
 		5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugVaultExporter.swift; sourceTree = "<group>"; };
+		A1B2C3D400000072 /* DebugLegacyMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DebugLegacyMigrator.swift; path = ../Services/DebugLegacyMigrator.swift; sourceTree = "<group>"; };
 		53130D5A88AAB65EF3312276 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		54876D21CED56B8E43591F6E /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchController.swift; sourceTree = "<group>"; };
@@ -532,6 +536,7 @@
 				24848A1006E5A3FFBB38324D /* AccountSessionGateLogic.swift */,
 				53130D5A88AAB65EF3312276 /* AIParsingService.swift */,
 				5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */,
+				A1B2C3D400000072 /* DebugLegacyMigrator.swift */,
 				82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */,
 				C7E2C636EDAE7EAA2E062014 /* GooglePlacesService.swift */,
 				9EC0381352FF23295F3BE120 /* GoogleTakeoutImportService.swift */,
@@ -729,6 +734,7 @@
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
 				BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */,
 				45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */,
+				A1B2C3D400000074 /* DebugLegacyMigratorTests.swift */,
 				48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */,
 			);
 			name = SocialPlacePipelineTests;
@@ -1107,6 +1113,7 @@
 				C86068410AB6A519BCFA6710 /* TripGapLocalOptionsServiceTests.swift in Sources */,
 				80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */,
 				FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */,
+				A1B2C3D400000073 /* DebugLegacyMigratorTests.swift in Sources */,
 				3AE07A508B3AB47A5B8C4813 /* VerifiedPlaceClaimsClientTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1155,6 +1162,7 @@
 				C44497858CBEC5C4CDD76988 /* Components.swift in Sources */,
 				F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */,
 				B45133218BC50C705B223B87 /* DebugVaultExporter.swift in Sources */,
+				A1B2C3D400000071 /* DebugLegacyMigrator.swift in Sources */,
 				08517724B9C3842471E1208C /* DeterministicTripPlanner.swift in Sources */,
 				4CF65DAE4673D60F28E20D77 /* EmptyStateView.swift in Sources */,
 				9FB7081124C31C9CCA80433F /* EvidenceLinkList.swift in Sources */,
