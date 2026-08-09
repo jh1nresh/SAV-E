@@ -893,7 +893,6 @@ struct DeterministicTripPlanner {
             ))
         }
 
-        let score = healthScore(warnings: warnings, gaps: gaps)
         let strengths = [
             outputLanguage.localized(
                 english: "Uses confirmed saved Map Stamps first.",
@@ -905,14 +904,11 @@ struct DeterministicTripPlanner {
             )
         ]
 
-        return TripHealth(score: score, strengths: strengths, warnings: warnings, gaps: gaps)
+        return TripHealth.scored(strengths: strengths, warnings: warnings, gaps: gaps)
     }
 
     private func overallTripHealth(for days: [ItineraryDay], outputLanguage: AppLanguage) -> TripHealth {
-        let warnings = days.flatMap { $0.health?.warnings ?? [] }
-        let gaps = days.flatMap { $0.health?.gaps ?? [] }
-        let averageScore = days.compactMap(\.health?.score).reduce(0, +) / max(1, days.count)
-        let strengths = [
+        TripHealth.aggregating(days, strengths: [
             outputLanguage.localized(
                 english: "Built from saved place memory, not unlabeled public guesses.",
                 traditionalChinese: "從已存地點記憶生成，不混入未標記的公開猜測。"
@@ -921,26 +917,7 @@ struct DeterministicTripPlanner {
                 english: "Each stop keeps its source state visible.",
                 traditionalChinese: "每一站都保留來源狀態標籤。"
             )
-        ]
-        return TripHealth(score: averageScore, strengths: strengths, warnings: warnings, gaps: gaps)
-    }
-
-    private func healthScore(warnings: [TripWarning], gaps: [TripGap]) -> Int {
-        let warningPenalty = warnings.reduce(0) { score, warning in
-            score + penalty(for: warning.severity)
-        }
-        let gapPenalty = gaps.reduce(0) { score, gap in
-            score + penalty(for: gap.severity)
-        }
-        return max(45, 100 - warningPenalty - gapPenalty)
-    }
-
-    private func penalty(for severity: Severity) -> Int {
-        switch severity {
-        case .low: return 4
-        case .medium: return 10
-        case .high: return 18
-        }
+        ])
     }
 
     private func hasMealSlot(in stops: [ItineraryStop], matching prefixes: [String]) -> Bool {

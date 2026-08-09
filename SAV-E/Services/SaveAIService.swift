@@ -61,11 +61,22 @@ final class SaveAIService {
             return localResponse
         }
 
-        let deterministicDraft = deterministicDraftOverride ?? DeterministicTripPlanner().plan(
+        // Weave real public activity candidates into the deterministic draft
+        // as approval-gated external suggestions. This keeps the "no
+        // all-restaurant itinerary" policy true even when the LLM polish is
+        // unavailable and the draft ships as-is.
+        let deterministicDraft = (deterministicDraftOverride ?? DeterministicTripPlanner().plan(
             for: userMessage,
             places: places,
             outputLanguage: outputLanguage
-        )
+        )).map {
+            Self.draftAugmentedWithPublicActivities(
+                $0,
+                publicCandidates: publicCandidates,
+                places: places,
+                outputLanguage: outputLanguage
+            )
+        }
 
         // Build multi-turn contents array
         var contents: [[String: Any]] = []
@@ -330,6 +341,121 @@ final class SaveAIService {
         outputLanguage.localized(
             english: "For trip planning, only use the retrieval candidate set: Map Stamps by exact UUID plus public discovery candidates by exact name with placeId null. Prioritize a reasonable itinerary structure over filling every slot. If saved places are mostly or all food/drink, the plan must reserve space for an attraction or public activity candidate when one is available; do not output an all-restaurant itinerary.",
             traditionalChinese: "行程規劃只能使用檢索候選集合：地圖章必須用正確 UUID，公開探索候選必須用精確名稱且 placeId 維持 null。合理行程結構優先於把所有空格塞滿。如果已存地點多半或全是吃喝，且有景點或公開活動候選，行程必須保留景點／活動，不可直接輸出全餐廳行程。"
+        )
+    }
+
+    /// Deterministically inserts public activity candidates into an itinerary
+    /// draft as approval-gated `.externalSuggestion` stops — one per day that
+    /// has no saved attraction/shopping stop. Mirrors what the LLM polish is
+    /// allowed to do (exact candidate names, placeId nil), so an all-food
+    /// vault still gets real places to go when the LLM path is unavailable.
+    /// Saved-only fields (placeIds, mapAction, navigation) are untouched.
+    static func draftAugmentedWithPublicActivities(
+        _ draft: SaveAIResponse,
+        publicCandidates: [SaveMapCandidate],
+        places: [Place],
+        outputLanguage: AppLanguage
+    ) -> SaveAIResponse {
+        guard draft.componentType == .tripItinerary,
+              !draft.itineraryDays.isEmpty,
+              !publicCandidates.isEmpty else {
+            return draft
+        }
+
+        let placesByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id.uuidString, $0) })
+        var remainingCandidates = publicCandidates
+        var inserted = false
+
+        let days = draft.itineraryDays.map { day -> ItineraryDay in
+            guard let candidate = remainingCandidates.first else { return day }
+            let hasActivity = day.stops.contains { stop in
+                if let placeID = stop.placeId, let place = placesByID[placeID] {
+                    return place.category == .attraction || place.category == .shopping
+                }
+                return stop.placeState == .externalSuggestion
+            }
+            guard !hasActivity else { return day }
+            remainingCandidates.removeFirst()
+            inserted = true
+
+            let suggestion = ItineraryStop(
+                id: UUID(),
+                placeId: nil,
+                placeState: .externalSuggestion,
+                placeName: candidate.title,
+                time: "3:30 PM",
+                duration: 90,
+                note: outputLanguage.localized(
+                    english: "Public discovery near your saved stops. Approve it to keep it in the plan.",
+                    traditionalChinese: "公開探索候選，在你已存地點附近；核准後才會留在行程裡。"
+                ),
+                sourceSummary: outputLanguage.localized(
+                    english: "Public discovery candidate · not saved to your SAV-E",
+                    traditionalChinese: "公開探索候選 · 尚未存進你的 SAV-E"
+                ),
+                risks: [.externalSuggestion, .hoursUnknown, .bookingUnknown]
+            )
+            // Land the suggestion in the afternoon: before the first evening
+            // stop when one exists, otherwise at the end of the day.
+            var stops = day.stops
+            let insertionIndex = stops.firstIndex { stop in
+                guard let time = stop.time?.lowercased(), time.contains("pm") else { return false }
+                return time.hasPrefix("6:") || time.hasPrefix("7:") || time.hasPrefix("8:")
+            } ?? stops.endIndex
+            stops.insert(suggestion, at: insertionIndex)
+
+            var updatedDay = day.replacingStops(stops)
+            // The health line still said "no afternoon activity" right next to
+            // the suggestion we just placed there. Rewrite that gap to point
+            // at the pending approval (still open — nothing is confirmed yet)
+            // and let the shared formula re-score the day.
+            updatedDay.health = day.health.map { health in
+                TripHealth.scored(
+                    strengths: health.strengths,
+                    warnings: health.warnings,
+                    gaps: health.gaps.map { gap in
+                        guard gap.type == .missingAfternoonActivity else { return gap }
+                        return TripGap(
+                            id: gap.id,
+                            type: gap.type,
+                            dayId: gap.dayId,
+                            area: gap.area,
+                            severity: .low,
+                            message: outputLanguage.localized(
+                                english: "A public activity candidate is in the afternoon slot — approve it to close this gap.",
+                                traditionalChinese: "下午已放入公開景點候選；核准後這個缺口就補上。"
+                            )
+                        )
+                    }
+                )
+            }
+            return updatedDay
+        }
+
+        guard inserted else { return draft }
+
+        let suggestionNote = outputLanguage.localized(
+            english: "I added public activity candidates to balance the meals — approve each one to keep it.",
+            traditionalChinese: "我補了公開景點候選來平衡吃喝；每一個都要核准後才會留在行程。"
+        )
+        return SaveAIResponse(
+            componentType: draft.componentType,
+            title: draft.title,
+            placeIds: draft.placeIds,
+            navigationPlaceId: draft.navigationPlaceId,
+            transportMode: draft.transportMode,
+            itineraryDays: days,
+            // Re-aggregate so the trip-wide card reflects the rewritten
+            // per-day gaps instead of repeating the stale ones.
+            tripHealth: draft.tripHealth.map {
+                TripHealth.aggregating(days, strengths: $0.strengths)
+            },
+            messageText: draft.messageText,
+            mapAction: draft.mapAction,
+            aiMessage: [draft.aiMessage, suggestionNote]
+                .compactMap { $0 }
+                .joined(separator: " "),
+            followUpChoices: draft.followUpChoices
         )
     }
 
