@@ -798,13 +798,13 @@ struct DeterministicTripPlanner {
         let categories = Set(selectedPlaces.map(\.category))
         if categories.isSubset(of: [.food, .cafe, .bar]) {
             notes.append(outputLanguage.localized(
-                english: "You mostly saved food/drink stops, so add public attractions nearby only after you choose the trip vibe.",
-                traditionalChinese: "你目前多半存的是吃喝點；要不要我再依照行程風格補附近景點？"
+                english: "You mostly saved food/drink stops. Any public activity candidate stays separate and needs your approval.",
+                traditionalChinese: "你目前多半存的是吃喝點；公開景點候選會分開標記，並由你核准後才加入。"
             ))
         } else if !categories.contains(.attraction) {
             notes.append(outputLanguage.localized(
-                english: "You do not have saved attractions in this draft yet; public discovery should stay separate until you pick what to add.",
-                traditionalChinese: "這版還沒有已存景點；我會先把公開探索跟你的地圖章分開。"
+                english: "This draft has no saved attractions yet. Public activity candidates stay separate and need your approval.",
+                traditionalChinese: "這版還沒有已存景點；公開景點候選會與地圖章分開，並由你核准後才加入。"
             ))
         }
         return notes.joined(separator: " ")
@@ -899,8 +899,8 @@ struct DeterministicTripPlanner {
                 traditionalChinese: "優先使用你已確認的地圖章。"
             ),
             outputLanguage.localized(
-                english: "Keeps unverifiable external additions out of the draft.",
-                traditionalChinese: "不會把未確認的外部建議直接混進行程。"
+                english: "Keeps public discovery candidates labeled and approval-gated.",
+                traditionalChinese: "公開探索候選會保留標記，並須由你核准。"
             )
         ]
 
@@ -910,8 +910,8 @@ struct DeterministicTripPlanner {
     private func overallTripHealth(for days: [ItineraryDay], outputLanguage: AppLanguage) -> TripHealth {
         TripHealth.aggregating(days, strengths: [
             outputLanguage.localized(
-                english: "Built from saved place memory, not unlabeled public guesses.",
-                traditionalChinese: "從已存地點記憶生成，不混入未標記的公開猜測。"
+                english: "Builds from saved Map Stamps and labels public discovery separately.",
+                traditionalChinese: "從已存地圖章生成，並將公開探索分開標記。"
             ),
             outputLanguage.localized(
                 english: "Each stop keeps its source state visible.",

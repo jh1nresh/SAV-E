@@ -353,13 +353,19 @@ final class AIDrawerViewModel: ObservableObject {
             let deterministicResponse = SaveAIResponse.planAroundDraft(draft, outputLanguage: outputLanguage)
             let savedRoutePlaceIDs = Set(draft.routeStops.compactMap(\.savedPlaceUUIDString).compactMap(UUID.init(uuidString:)))
             let routePlaces = places.filter { savedRoutePlaceIDs.contains($0.id) }
+            let routePublicCandidates = SaveAIResponse.planAroundPublicCandidates(
+                mapCandidates,
+                acceptedBy: draft
+            )
             let polishedResponse = await aiService.polishItineraryDraft(
                 deterministicResponse,
                 userMessage: prompt,
                 places: routePlaces,
-                publicCandidates: mapCandidates,
+                publicCandidates: routePublicCandidates,
                 outputLanguage: outputLanguage,
-                requiredPlaceIDs: [place.id.uuidString]
+                requiredPlaceIDs: [place.id.uuidString],
+                maxStopsPerDay: duration.maxStops,
+                dailyCategoryCaps: nil
             )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
@@ -953,13 +959,22 @@ private extension AIDrawerViewModel {
     }
 }
 
-private extension SaveAIResponse {
+extension SaveAIResponse {
+    static func planAroundPublicCandidates(
+        _ candidates: [SaveMapCandidate],
+        acceptedBy draft: SavePlanAroundDraft
+    ) -> [SaveMapCandidate] {
+        let acceptedIDs = Set(draft.routeStops.compactMap(\.mapCandidateID))
+        return candidates.filter { acceptedIDs.contains($0.id) }
+    }
+
     static func planAroundDraft(_ draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> SaveAIResponse {
         let savedPlaceIDs = draft.routeStops.compactMap(\.savedPlaceUUIDString)
         let stops = draft.routeStops.enumerated().map { index, stop in
             let evidence = stop.evidence.isEmpty ? nil : "Evidence: \(stop.evidence.joined(separator: "; "))"
+            let sourceSummary = stop.itinerarySourceSummary(outputLanguage: outputLanguage)
             let noteParts = [
-                stop.sourceLabel,
+                sourceSummary,
                 stop.distanceLabel.map { "\($0) from anchor" },
                 stop.reason,
                 evidence,
@@ -968,10 +983,13 @@ private extension SaveAIResponse {
             return ItineraryStop(
                 id: UUID(),
                 placeId: stop.savedPlaceUUIDString,
+                placeState: stop.itineraryPlaceState,
                 placeName: stop.title,
                 time: nil,
                 duration: suggestedDurationMinutes(for: stop),
-                note: noteParts.joined(separator: " · ")
+                note: noteParts.joined(separator: " · "),
+                sourceSummary: sourceSummary,
+                risks: stop.itineraryRisks
             )
         }
         let title = outputLanguage.localized(
@@ -1015,10 +1033,48 @@ private extension SaveAIResponse {
 }
 
 private extension SavePlanStop {
+    var mapCandidateID: String? {
+        guard source == .unsavedMapCandidate, id.hasPrefix("map-candidate-") else { return nil }
+        return String(id.dropFirst("map-candidate-".count))
+    }
+
     var savedPlaceUUIDString: String? {
         guard id.hasPrefix("place-") else { return nil }
         let raw = String(id.dropFirst("place-".count))
         guard UUID(uuidString: raw) != nil else { return nil }
         return raw
+    }
+
+    var itineraryPlaceState: ItineraryPlaceState {
+        switch source {
+        case .anchor, .userSaved:
+            return .confirmedMapStamp
+        case .pendingCandidate:
+            return .reviewCandidate
+        case .unsavedMapCandidate:
+            return .externalSuggestion
+        }
+    }
+
+    var itineraryRisks: [TripRisk] {
+        switch source {
+        case .anchor, .userSaved:
+            return [.hoursUnknown, .bookingUnknown]
+        case .pendingCandidate:
+            return [.needsReview, .hoursUnknown, .bookingUnknown]
+        case .unsavedMapCandidate:
+            return [.externalSuggestion, .hoursUnknown, .bookingUnknown]
+        }
+    }
+
+    func itinerarySourceSummary(outputLanguage: AppLanguage) -> String {
+        switch source {
+        case .anchor, .userSaved:
+            return outputLanguage.localized(english: "From your SAV-E", traditionalChinese: "來自你的 SAV-E")
+        case .pendingCandidate:
+            return outputLanguage.localized(english: "Review candidate", traditionalChinese: "待確認候選")
+        case .unsavedMapCandidate:
+            return outputLanguage.localized(english: "New recommendation", traditionalChinese: "新推薦")
+        }
     }
 }

@@ -39,6 +39,31 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.newSuggestions.first?.sourceLabel, "New recommendation")
         XCTAssertEqual(draft.retrievalReceipt.candidateCount, 1)
         XCTAssertTrue(draft.explanation.contains("Map Stamp"))
+
+        let responseDraft = SaveAIResponse.planAroundDraft(draft, outputLanguage: .english)
+        let publicStops = responseDraft.itineraryDays
+            .flatMap(\.stops)
+            .filter { $0.placeState == .externalSuggestion }
+        XCTAssertEqual(publicStops.map(\.placeName), ["The Geffen Contemporary at MOCA"])
+
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            responseDraft,
+            publicCandidates: [SaveMapCandidate(
+                title: "The Geffen Contemporary at MOCA",
+                subtitle: "Little Tokyo · Museum",
+                latitude: 34.0506,
+                longitude: -118.2396,
+                category: .attraction
+            )],
+            places: [anchor, coffee],
+            outputLanguage: .english,
+            maxStopsPerDay: SavePlanDuration.halfDay.maxStops
+        )
+        XCTAssertEqual(
+            augmented.itineraryDays.flatMap(\.stops).filter { $0.placeState == .externalSuggestion }.count,
+            1,
+            "an existing plan-around public activity must not be inserted twice"
+        )
     }
 
     @MainActor
@@ -232,20 +257,20 @@ final class SavePlanAroundControllerTests: XCTestCase {
         let savedCoffee = place(name: "Saved Coffee", address: "Los Angeles, CA", category: .cafe, latitude: 34.0480, longitude: -118.2390)
         let response = searchController.search(query: "", places: [anchor, savedCoffee], localRecords: [])
         let anchorResult = try XCTUnwrap(response.fromYourSave.results.first { $0.title == "Anchor Lunch" })
+        let wrongCityCandidate = SaveMapCandidate(
+            id: "tokyo-coffee",
+            title: "Tokyo Coffee",
+            subtitle: "Tokyo · Cafe",
+            latitude: 35.6764,
+            longitude: 139.6500,
+            category: .cafe,
+            evidence: ["Public map candidate"]
+        )
 
         let result = planController.planAround(
             anchor: anchorResult,
             savedResults: response.fromYourSave.results,
-            mapCandidates: [
-                SaveMapCandidate(
-                    title: "Tokyo Coffee",
-                    subtitle: "Tokyo · Cafe",
-                    latitude: 35.6764,
-                    longitude: 139.6500,
-                    category: .cafe,
-                    evidence: ["Public map candidate"]
-                )
-            ],
+            mapCandidates: [wrongCityCandidate],
             request: SavePlanAroundRequest(
                 anchorResultID: anchorResult.id,
                 duration: .halfDay,
@@ -260,6 +285,22 @@ final class SavePlanAroundControllerTests: XCTestCase {
 
         XCTAssertFalse(draft.routeStops.map(\.title).contains("Tokyo Coffee"))
         XCTAssertTrue(draft.retrievalReceipt.skippedReasons.contains { $0.contains("outside requested city") })
+
+        let filteredCandidates = SaveAIResponse.planAroundPublicCandidates(
+            [wrongCityCandidate],
+            acceptedBy: draft
+        )
+        XCTAssertTrue(filteredCandidates.isEmpty)
+
+        let responseDraft = SaveAIResponse.planAroundDraft(draft, outputLanguage: .english)
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            responseDraft,
+            publicCandidates: filteredCandidates,
+            places: [anchor, savedCoffee],
+            outputLanguage: .english,
+            maxStopsPerDay: SavePlanDuration.halfDay.maxStops
+        )
+        XCTAssertFalse(augmented.itineraryDays.flatMap(\.stops).contains { $0.placeName == "Tokyo Coffee" })
     }
 
     @MainActor
@@ -356,6 +397,26 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.nearbySaved.first?.title, "Likely Gallery")
         XCTAssertEqual(draft.nearbySaved.first?.sourceLabel, "Review candidate")
         XCTAssertTrue(draft.nearbySaved.first?.evidence.contains("Coordinates and category corroborated") == true)
+
+        let responseDraft = SaveAIResponse.planAroundDraft(draft, outputLanguage: .english)
+        let reviewStop = try XCTUnwrap(
+            responseDraft.itineraryDays.flatMap(\.stops).first { $0.placeName == "Likely Gallery" }
+        )
+        XCTAssertEqual(reviewStop.placeState, .reviewCandidate)
+        XCTAssertTrue(reviewStop.risks.contains(.needsReview))
+
+        let validated = try XCTUnwrap(ItineraryPlanValidator(
+            savedPlaces: [anchor],
+            publicCandidates: [],
+            fallback: responseDraft,
+            requiredPlaceIDs: [anchor.id.uuidString],
+            maxStopsPerDay: SavePlanDuration.halfDay.maxStops,
+            dailyCategoryCaps: nil
+        ).validated(responseDraft))
+        XCTAssertEqual(
+            validated.itineraryDays.flatMap(\.stops).first { $0.placeName == "Likely Gallery" }?.placeState,
+            .reviewCandidate
+        )
     }
 
     @MainActor
