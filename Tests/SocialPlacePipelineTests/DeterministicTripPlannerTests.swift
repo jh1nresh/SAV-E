@@ -688,6 +688,87 @@ final class DeterministicTripPlannerTests: XCTestCase {
             tripHealth.gaps.contains { $0.message == originalGap.message },
             "the trip-wide card must not repeat the stale gap message"
         )
+        XCTAssertFalse(dayHealth.strengths.contains { $0.contains("unverifiable external additions") })
+        XCTAssertTrue(dayHealth.strengths.contains { $0.contains("approval-gated") })
+        XCTAssertFalse(tripHealth.strengths.contains { $0.contains("unlabeled public guesses") })
+        XCTAssertTrue(tripHealth.strengths.contains { $0.contains("labels public discovery separately") })
+
+        let suggestion = try XCTUnwrap(
+            augmented.itineraryDays.first?.stops.first { $0.placeState == .externalSuggestion }
+        )
+        let hoursWarning = try XCTUnwrap(dayHealth.warnings.first { $0.type == .hoursUnknown })
+        XCTAssertTrue(hoursWarning.affectedBlockIds.contains(suggestion.id.uuidString))
+    }
+
+    @MainActor
+    func testAIServiceKeepsFullRelaxedDayWithinCapacityAndUsesLaterDay() async throws {
+        let breakfast = makePlace("Breakfast", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food)
+        let cafe = makePlace("Cafe", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .cafe)
+        let dinner = makePlace("Dinner", address: "Tokyo", latitude: 35.6720, longitude: 139.7620, category: .food)
+        let dayTwoLunch = makePlace("Day Two Lunch", address: "Tokyo", latitude: 35.6730, longitude: 139.7630, category: .food)
+        let places = [breakfast, cafe, dinner, dayTwoLunch]
+        let draft = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [
+                stop(place: breakfast, time: "9:00 AM"),
+                stop(place: cafe, time: "3:00 PM"),
+                stop(place: dinner, time: "6:30 PM")
+            ]),
+            ItineraryDay(dayNumber: 2, label: "Day 2", stops: [
+                stop(place: dayTwoLunch, time: "12:30 PM")
+            ])
+        ])
+
+        let augmented = try await SaveAIService(apiKey: "", session: .offlineForTesting).query(
+            "Plan a relaxed two day Tokyo trip",
+            places: places,
+            publicCandidates: [SaveMapCandidate(
+                title: "teamLab Planets",
+                subtitle: "Tokyo",
+                latitude: 35.6494,
+                longitude: 139.7898,
+                category: .attraction
+            )],
+            outputLanguage: .english,
+            deterministicDraftOverride: draft
+        )
+
+        XCTAssertEqual(augmented.itineraryDays[0].stops.count, ItineraryPace.relaxed.maxStopsPerDay)
+        XCTAssertFalse(augmented.itineraryDays[0].stops.contains { $0.placeState == .externalSuggestion })
+        XCTAssertEqual(augmented.itineraryDays[1].stops.count, 2)
+        XCTAssertTrue(augmented.itineraryDays[1].stops.contains { $0.placeState == .externalSuggestion })
+        XCTAssertTrue(augmented.itineraryDays.allSatisfy { $0.stops.count <= ItineraryPace.relaxed.maxStopsPerDay })
+    }
+
+    @MainActor
+    func testDraftAugmentationDoesNotOverfillFullRelaxedTrip() throws {
+        let lunch = makePlace("Lunch", address: "Tokyo", latitude: 35.6700, longitude: 139.7600, category: .food)
+        let dinner = makePlace("Dinner", address: "Tokyo", latitude: 35.6710, longitude: 139.7610, category: .food)
+        let hotel = makePlace("Hotel", address: "Tokyo", latitude: 35.6720, longitude: 139.7620, category: .stay)
+        let places = [lunch, dinner, hotel]
+        let draft = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [
+                stop(place: lunch, time: "12:30 PM"),
+                stop(place: dinner, time: "6:30 PM"),
+                stop(place: hotel, time: "8:00 PM")
+            ])
+        ])
+
+        let augmented = SaveAIService.draftAugmentedWithPublicActivities(
+            draft,
+            publicCandidates: [SaveMapCandidate(
+                title: "teamLab Planets",
+                subtitle: "Tokyo",
+                latitude: 35.6494,
+                longitude: 139.7898,
+                category: .attraction
+            )],
+            places: places,
+            outputLanguage: .english,
+            maxStopsPerDay: ItineraryPace.relaxed.maxStopsPerDay
+        )
+
+        XCTAssertEqual(augmented, draft)
+        XCTAssertEqual(augmented.itineraryDays[0].stops.count, ItineraryPace.relaxed.maxStopsPerDay)
     }
 
     @MainActor
@@ -773,10 +854,18 @@ final class DeterministicTripPlannerTests: XCTestCase {
                 stop(place: museum, time: "10:00 AM")
             ])
         ])
+        var spoofedSavedStop = stop(place: museum, time: "9:30 AM")
+        spoofedSavedStop.placeState = .externalSuggestion
+        spoofedSavedStop.sourceSummary = "Public discovery · not saved"
+        spoofedSavedStop.risks = [.externalSuggestion]
+        var spoofedPublicStop = publicStop("大安森林公園", time: "11:00 AM")
+        spoofedPublicStop.placeState = .confirmedMapStamp
+        spoofedPublicStop.sourceSummary = "Confirmed Map Stamp"
+        spoofedPublicStop.risks = []
         let llmResponse = itineraryResponse(days: [
             ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [
-                stop(place: museum, time: "9:30 AM"),
-                publicStop("大安森林公園", time: "11:00 AM"),
+                spoofedSavedStop,
+                spoofedPublicStop,
                 stop(place: lunch, time: "12:45 PM")
             ]),
             ItineraryDay(dayNumber: 2, label: "第 2 天", stops: [
@@ -797,6 +886,107 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(validated.placeIds, [museum.id.uuidString, lunch.id.uuidString, cafe.id.uuidString])
         XCTAssertEqual(validated.mapAction?.type, .showRoute)
         XCTAssertEqual(validated.mapAction?.placeIds, validated.placeIds)
+
+        let normalizedSavedStop = try XCTUnwrap(
+            validated.itineraryDays.flatMap(\.stops).first { $0.placeId == museum.id.uuidString }
+        )
+        XCTAssertEqual(normalizedSavedStop.placeState, .confirmedMapStamp)
+        XCTAssertFalse(normalizedSavedStop.risks.contains(.externalSuggestion))
+        XCTAssertNotEqual(normalizedSavedStop.sourceSummary, "Public discovery · not saved")
+
+        let normalizedPublicStop = try XCTUnwrap(
+            validated.itineraryDays.flatMap(\.stops).first { $0.placeName == "大安森林公園" }
+        )
+        XCTAssertNil(normalizedPublicStop.placeId)
+        XCTAssertEqual(normalizedPublicStop.placeState, .externalSuggestion)
+        XCTAssertTrue(normalizedPublicStop.risks.contains(.externalSuggestion))
+        XCTAssertTrue(normalizedPublicStop.risks.contains(.hoursUnknown))
+        XCTAssertTrue(normalizedPublicStop.risks.contains(.bookingUnknown))
+        XCTAssertNotEqual(normalizedPublicStop.sourceSummary, "Confirmed Map Stamp")
+        var canvas = TripCanvasDraft(days: validated.itineraryDays)
+        XCTAssertFalse(canvas.isApprovedExternalStop(normalizedPublicStop.id))
+        canvas.approveExternalStop(normalizedPublicStop.id)
+        XCTAssertTrue(canvas.isApprovedExternalStop(normalizedPublicStop.id))
+    }
+
+    @MainActor
+    func testItineraryPlanValidatorRejectsDayAboveRequestedPaceCapacity() {
+        let places = (1...4).map { index in
+            makePlace(
+                "Tokyo Stop \(index)",
+                address: "Tokyo",
+                latitude: 35.6700 + Double(index) * 0.001,
+                longitude: 139.7600 + Double(index) * 0.001,
+                category: .food
+            )
+        }
+        let overCapacity = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: places.map { stop(place: $0, time: "12:30 PM") })
+        ])
+
+        let validated = ItineraryPlanValidator(
+            savedPlaces: places,
+            publicCandidates: [],
+            fallback: overCapacity,
+            requiredPlaceIDs: [],
+            maxStopsPerDay: ItineraryPace.relaxed.maxStopsPerDay,
+            dailyCategoryCaps: nil
+        ).validated(overCapacity)
+
+        XCTAssertNil(validated)
+    }
+
+    @MainActor
+    func testItineraryPlanValidatorRejectsRegroupedDayAboveMealCategoryCap() {
+        let places = (1...4).map { index in
+            makePlace(
+                "Tokyo Meal \(index)",
+                address: "Tokyo",
+                latitude: 35.6700 + Double(index) * 0.001,
+                longitude: 139.7600 + Double(index) * 0.001,
+                category: .food
+            )
+        }
+        let fallback = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [
+                stop(place: places[0], time: "12:30 PM"),
+                stop(place: places[1], time: "6:30 PM")
+            ]),
+            ItineraryDay(dayNumber: 2, label: "Day 2", stops: [
+                stop(place: places[2], time: "12:30 PM"),
+                stop(place: places[3], time: "6:30 PM")
+            ])
+        ])
+        let regrouped = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "Day 1", stops: [
+                stop(place: places[0], time: "11:00 AM"),
+                stop(place: places[1], time: "12:30 PM"),
+                stop(place: places[2], time: "6:30 PM")
+            ]),
+            ItineraryDay(dayNumber: 2, label: "Day 2", stops: [
+                stop(place: places[3], time: "12:30 PM")
+            ])
+        ])
+
+        let validated = ItineraryPlanValidator(
+            savedPlaces: places,
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: []
+        ).validated(regrouped)
+
+        XCTAssertNil(validated)
+
+        let planAroundProfile = ItineraryPlanValidator(
+            savedPlaces: places,
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: [],
+            maxStopsPerDay: SavePlanDuration.fullDay.maxStops,
+            dailyCategoryCaps: nil
+        ).validated(regrouped)
+
+        XCTAssertNotNil(planAroundProfile, "plan-around owns a different category profile")
     }
 
     @MainActor
@@ -818,6 +1008,35 @@ final class DeterministicTripPlannerTests: XCTestCase {
             fallback: fallback,
             requiredPlaceIDs: []
         ).validated(llmResponse)
+
+        XCTAssertNil(validated)
+    }
+
+    @MainActor
+    func testItineraryPlanValidatorRejectsSavedIDWithMismatchedName() {
+        let lunch = makePlace("Taipei Lunch", address: "台北市大安區", latitude: 25.0410, longitude: 121.5450, category: .food)
+        let fallback = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [stop(place: lunch, time: "12:30 PM")])
+        ])
+        let borrowedIDStop = ItineraryStop(
+            id: UUID(),
+            placeId: lunch.id.uuidString,
+            placeState: .confirmedMapStamp,
+            placeName: "Completely Different Restaurant",
+            time: "12:30 PM",
+            duration: 60,
+            note: nil
+        )
+        let response = itineraryResponse(days: [
+            ItineraryDay(dayNumber: 1, label: "第 1 天", stops: [borrowedIDStop])
+        ])
+
+        let validated = ItineraryPlanValidator(
+            savedPlaces: [lunch],
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: []
+        ).validated(response)
 
         XCTAssertNil(validated)
     }

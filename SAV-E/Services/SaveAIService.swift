@@ -37,7 +37,9 @@ final class SaveAIService {
         conversationHistory: [ConversationTurn] = [],
         outputLanguage: AppLanguage = .english,
         deterministicDraftOverride: SaveAIResponse? = nil,
-        requiredPlaceIDs: Set<String> = []
+        requiredPlaceIDs: Set<String> = [],
+        maxStopsPerDay: Int? = nil,
+        dailyCategoryCaps: [PlaceCategory: Int]? = ItineraryPlanValidator.standardDailyCategoryCaps
     ) async throws -> SaveAIResponse {
         guard !places.isEmpty else {
             return SaveAIResponse(
@@ -61,6 +63,9 @@ final class SaveAIService {
             return localResponse
         }
 
+        let resolvedMaxStopsPerDay = maxStopsPerDay
+            ?? ItineraryConstraintPlanner().constraints(from: userMessage).pace.maxStopsPerDay
+
         // Weave real public activity candidates into the deterministic draft
         // as approval-gated external suggestions. This keeps the "no
         // all-restaurant itinerary" policy true even when the LLM polish is
@@ -74,7 +79,8 @@ final class SaveAIService {
                 $0,
                 publicCandidates: publicCandidates,
                 places: places,
-                outputLanguage: outputLanguage
+                outputLanguage: outputLanguage,
+                maxStopsPerDay: resolvedMaxStopsPerDay
             )
         }
 
@@ -129,7 +135,9 @@ final class SaveAIService {
                     fallback: deterministicDraft,
                     places: places,
                     publicCandidates: publicCandidates,
-                    requiredPlaceIDs: requiredPlaceIDs
+                    requiredPlaceIDs: requiredPlaceIDs,
+                    maxStopsPerDay: resolvedMaxStopsPerDay,
+                    dailyCategoryCaps: dailyCategoryCaps
                 )
             }
             return parsed
@@ -149,7 +157,9 @@ final class SaveAIService {
         places: [Place],
         publicCandidates: [SaveMapCandidate] = [],
         outputLanguage: AppLanguage = .english,
-        requiredPlaceIDs: Set<String> = []
+        requiredPlaceIDs: Set<String> = [],
+        maxStopsPerDay: Int? = nil,
+        dailyCategoryCaps: [PlaceCategory: Int]? = ItineraryPlanValidator.standardDailyCategoryCaps
     ) async -> SaveAIResponse {
         guard deterministicDraft.componentType == .tripItinerary else {
             return deterministicDraft
@@ -165,7 +175,9 @@ final class SaveAIService {
                 publicCandidates: publicCandidates,
                 outputLanguage: outputLanguage,
                 deterministicDraftOverride: deterministicDraft,
-                requiredPlaceIDs: requiredPlaceIDs
+                requiredPlaceIDs: requiredPlaceIDs,
+                maxStopsPerDay: maxStopsPerDay,
+                dailyCategoryCaps: dailyCategoryCaps
             )
         } catch {
             return deterministicDraft
@@ -305,7 +317,7 @@ final class SaveAIService {
               "dayNumber": 1,
               "label": "Day 1",
               "stops": [
-                {"placeId": "uuid", "placeName": "Name", "time": "9:00 AM", "duration": 90, "note": "optional"}
+                {"placeId": "uuid or null", "placeState": "confirmedMapStamp or externalSuggestion", "placeName": "Name", "time": "9:00 AM", "duration": 90, "note": "optional", "sourceSummary": "source label", "risks": ["external_suggestion", "hours_unknown", "booking_unknown"]}
               ]
             }
           ],
@@ -324,9 +336,10 @@ final class SaveAIService {
         - If a DETERMINISTIC PLANNER DRAFT is provided, treat it as the approved candidate set. You may reorder, assign time slots, regroup by day, and drop optional non-anchor stops. A reasonable day structure outranks maximizing the number of saved food/drink stops. Every non-null place ID must come from USER'S MAP STAMPS.
         - \(Self.itineraryCandidatePolicyInstruction(outputLanguage: outputLanguage))
         - Stops from the deterministic draft or PUBLIC DISCOVERY CANDIDATES with null or empty placeId are unsaved/public candidates. You may keep those stops only with null placeId, using their exact candidate name, and clearly label them as unsaved/public.
+        - Every null-placeId public stop must use placeState "externalSuggestion" and include the "external_suggestion" risk. Saved Map Stamp UUID stops must use placeState "confirmedMapStamp".
         - The itinerary should read like an assistant-planned draft, not a debug report. Explain the plan in aiMessage before the stop list.
         - If the user asks for trip planning without days or style, still return a usable draft from Map Stamps, then ask exactly one concise follow-up about days or vibe in aiMessage.
-        - If the user's saved Map Stamps are mostly food/drink and the trip is missing attractions or activities, use PUBLIC DISCOVERY CANDIDATES when provided to add one attraction/public activity lane. If no public candidates are provided, mention the gap instead of inventing exact places.
+        - If the user's saved Map Stamps are mostly food/drink and the trip is missing attractions or activities, use PUBLIC DISCOVERY CANDIDATES when one fits within the requested daily pace. Never exceed the pace cap to add one; if every day is full, mention the gap instead of inventing or overfilling.
         - For destination-specific requests, choose Map Stamps whose name/address matches the destination or whose coordinates are geographically near the matching anchor places.
         - If the Map Stamps are far apart, still plan them honestly with realistic travel notes instead of rejecting them as "not in San Francisco".
         - placeList: set placeIds + mapAction.filterPins with same ids
@@ -339,8 +352,8 @@ final class SaveAIService {
 
     static func itineraryCandidatePolicyInstruction(outputLanguage: AppLanguage) -> String {
         outputLanguage.localized(
-            english: "For trip planning, only use the retrieval candidate set: Map Stamps by exact UUID plus public discovery candidates by exact name with placeId null. Prioritize a reasonable itinerary structure over filling every slot. If saved places are mostly or all food/drink, the plan must reserve space for an attraction or public activity candidate when one is available; do not output an all-restaurant itinerary.",
-            traditionalChinese: "行程規劃只能使用檢索候選集合：地圖章必須用正確 UUID，公開探索候選必須用精確名稱且 placeId 維持 null。合理行程結構優先於把所有空格塞滿。如果已存地點多半或全是吃喝，且有景點或公開活動候選，行程必須保留景點／活動，不可直接輸出全餐廳行程。"
+            english: "For trip planning, only use the retrieval candidate set: Map Stamps by exact UUID plus public discovery candidates by exact name with placeId null. Prioritize a reasonable itinerary structure over filling every slot. If saved places are mostly or all food/drink, reserve space for an attraction or public activity candidate when the requested daily pace has capacity; do not output an all-restaurant itinerary by overfilling a day.",
+            traditionalChinese: "行程規劃只能使用檢索候選集合：地圖章必須用正確 UUID，公開活動候選必須用精確名稱且 placeId 維持 null。合理行程結構優先於把所有空格塞滿。如果已存地點多半或全是吃喝，且每日上限仍有空間，行程應保留景點／活動；不可直接輸出全餐廳行程，也不可為了補景點超出每日上限。"
         )
     }
 
@@ -354,7 +367,8 @@ final class SaveAIService {
         _ draft: SaveAIResponse,
         publicCandidates: [SaveMapCandidate],
         places: [Place],
-        outputLanguage: AppLanguage
+        outputLanguage: AppLanguage,
+        maxStopsPerDay: Int = ItineraryPace.balanced.maxStopsPerDay
     ) -> SaveAIResponse {
         guard draft.componentType == .tripItinerary,
               !draft.itineraryDays.isEmpty,
@@ -374,7 +388,10 @@ final class SaveAIService {
                 }
                 return stop.placeState == .externalSuggestion
             }
-            guard !hasActivity else { return day }
+            // Never make a day more crowded than the pace the user asked
+            // for. Keeping the candidate available lets a later under-cap day
+            // use it instead of silently dropping it.
+            guard !hasActivity, day.stops.count < maxStopsPerDay else { return day }
             remainingCandidates.removeFirst()
             inserted = true
 
@@ -410,9 +427,22 @@ final class SaveAIService {
             // at the pending approval (still open — nothing is confirmed yet)
             // and let the shared formula re-score the day.
             updatedDay.health = day.health.map { health in
-                TripHealth.scored(
+                let updatedWarnings = health.warnings.map { warning in
+                    guard warning.type == .hoursUnknown else { return warning }
+                    return TripWarning(
+                        id: warning.id,
+                        type: warning.type,
+                        severity: warning.severity,
+                        message: warning.message,
+                        dayId: warning.dayId,
+                        affectedBlockIds: stops
+                            .filter { $0.risks.contains(.hoursUnknown) }
+                            .map(\.id.uuidString)
+                    )
+                }
+                return TripHealth.scored(
                     strengths: health.strengths,
-                    warnings: health.warnings,
+                    warnings: updatedWarnings,
                     gaps: health.gaps.map { gap in
                         guard gap.type == .missingAfternoonActivity else { return gap }
                         return TripGap(
@@ -464,13 +494,17 @@ final class SaveAIService {
         fallback: SaveAIResponse,
         places: [Place],
         publicCandidates: [SaveMapCandidate],
-        requiredPlaceIDs: Set<String>
+        requiredPlaceIDs: Set<String>,
+        maxStopsPerDay: Int,
+        dailyCategoryCaps: [PlaceCategory: Int]?
     ) -> SaveAIResponse {
         ItineraryPlanValidator(
             savedPlaces: places,
             publicCandidates: publicCandidates,
             fallback: fallback,
-            requiredPlaceIDs: requiredPlaceIDs
+            requiredPlaceIDs: requiredPlaceIDs,
+            maxStopsPerDay: maxStopsPerDay,
+            dailyCategoryCaps: dailyCategoryCaps
         ).validated(response) ?? fallback
     }
 
@@ -500,7 +534,16 @@ final class SaveAIService {
                     "dayNumber": day.dayNumber,
                     "label": day.label ?? "Day \(day.dayNumber)",
                     "stops": day.stops.map { stop in
-                        ["placeId": stop.placeId ?? "", "placeName": stop.placeName, "time": stop.time ?? "", "duration": stop.duration ?? 60, "note": stop.note ?? ""] as [String: Any]
+                        [
+                            "placeId": stop.placeId ?? "",
+                            "placeState": stop.placeState?.rawValue ?? "",
+                            "placeName": stop.placeName,
+                            "time": stop.time ?? "",
+                            "duration": stop.duration ?? 60,
+                            "note": stop.note ?? "",
+                            "sourceSummary": stop.sourceSummary ?? "",
+                            "risks": stop.risks.map(\.rawValue)
+                        ] as [String: Any]
                     }
                 ] as [String: Any]
             }
@@ -514,18 +557,57 @@ final class SaveAIService {
 }
 
 struct ItineraryPlanValidator {
+    static let standardDailyCategoryCaps: [PlaceCategory: Int] = [
+        .food: 2,
+        .cafe: 1,
+        .bar: 1
+    ]
+
     let savedPlaces: [Place]
     let publicCandidates: [SaveMapCandidate]
     let fallback: SaveAIResponse
     let requiredPlaceIDs: Set<String>
+    let maxStopsPerDay: Int
+    let dailyCategoryCaps: [PlaceCategory: Int]?
+
+    init(
+        savedPlaces: [Place],
+        publicCandidates: [SaveMapCandidate],
+        fallback: SaveAIResponse,
+        requiredPlaceIDs: Set<String>,
+        maxStopsPerDay: Int = ItineraryPace.balanced.maxStopsPerDay,
+        dailyCategoryCaps: [PlaceCategory: Int]? = ItineraryPlanValidator.standardDailyCategoryCaps
+    ) {
+        self.savedPlaces = savedPlaces
+        self.publicCandidates = publicCandidates
+        self.fallback = fallback
+        self.requiredPlaceIDs = requiredPlaceIDs
+        self.maxStopsPerDay = maxStopsPerDay
+        self.dailyCategoryCaps = dailyCategoryCaps
+    }
 
     func validated(_ response: SaveAIResponse) -> SaveAIResponse? {
         guard response.componentType == .tripItinerary,
-              !response.itineraryDays.isEmpty else {
+              !response.itineraryDays.isEmpty,
+              response.itineraryDays.allSatisfy({ $0.stops.count <= maxStopsPerDay }) else {
             return nil
         }
 
-        let validSavedIDs = Set(savedPlaces.map { $0.id.uuidString })
+        let savedPlacesByID = Dictionary(uniqueKeysWithValues: savedPlaces.map { ($0.id.uuidString, $0) })
+        let validSavedIDs = Set(savedPlacesByID.keys)
+        let fallbackStops = fallback.itineraryDays.flatMap(\.stops)
+        let fallbackStopsByPublicName = Dictionary(
+            fallbackStops
+                .filter { Self.nonEmptyPlaceID($0.placeId) == nil }
+                .map { (Self.normalizedName($0.placeName), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let fallbackStopsBySavedID = Dictionary(
+            fallbackStops.compactMap { stop in
+                Self.nonEmptyPlaceID(stop.placeId).map { ($0, stop) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
         let fallbackPublicNames = Set(
             fallback.itineraryDays
                 .flatMap(\.stops)
@@ -533,21 +615,98 @@ struct ItineraryPlanValidator {
                 .map { Self.normalizedName($0.placeName) }
         )
         let publicCandidateNames = Set(publicCandidates.map { Self.normalizedName($0.title) })
+        let publicCategoriesByName = Dictionary(
+            publicCandidates.compactMap { candidate in
+                candidate.category.map { (Self.normalizedName(candidate.title), $0) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
 
         let stops = response.itineraryDays.flatMap(\.stops)
         guard !stops.isEmpty else { return nil }
 
         var stopSavedIDs: [String] = []
-        for stop in stops {
-            if let placeID = Self.nonEmptyPlaceID(stop.placeId) {
-                guard validSavedIDs.contains(placeID) else { return nil }
-                stopSavedIDs.append(placeID)
-            } else {
-                let name = Self.normalizedName(stop.placeName)
-                guard fallbackPublicNames.contains(name) || publicCandidateNames.contains(name) else {
-                    return nil
+        var normalizedDays: [ItineraryDay] = []
+        for day in response.itineraryDays {
+            var normalizedStops: [ItineraryStop] = []
+            for stop in day.stops {
+                if let placeID = Self.nonEmptyPlaceID(stop.placeId) {
+                    guard let savedPlace = savedPlacesByID[placeID],
+                          Self.normalizedName(stop.placeName) == Self.normalizedName(savedPlace.name) else {
+                        return nil
+                    }
+                    stopSavedIDs.append(placeID)
+                    let fallbackStop = fallbackStopsBySavedID[placeID]
+                    normalizedStops.append(ItineraryStop(
+                        id: stop.id,
+                        placeId: placeID,
+                        placeState: .confirmedMapStamp,
+                        placeName: savedPlace.name,
+                        time: stop.time,
+                        duration: stop.duration,
+                        note: stop.note,
+                        sourceSummary: fallbackStop?.sourceSummary,
+                        risks: Self.normalizedRisks(
+                            fallbackStop?.risks.filter { $0 != .externalSuggestion } ?? [],
+                            adding: [.hoursUnknown, .bookingUnknown]
+                        )
+                    ))
+                } else {
+                    let name = Self.normalizedName(stop.placeName)
+                    guard fallbackPublicNames.contains(name) || publicCandidateNames.contains(name) else {
+                        return nil
+                    }
+                    let fallbackStop = fallbackStopsByPublicName[name]
+                    let trustedState = fallbackStop?.placeState
+                    guard trustedState != .confirmedMapStamp else { return nil }
+                    let normalizedState: ItineraryPlaceState
+                    let normalizedRisks: [TripRisk]
+                    switch trustedState {
+                    case .some(.reviewCandidate):
+                        normalizedState = .reviewCandidate
+                        normalizedRisks = Self.normalizedRisks(
+                            fallbackStop?.risks ?? [],
+                            adding: [.needsReview, .hoursUnknown, .bookingUnknown]
+                        )
+                    case .some(.sourceOnly):
+                        normalizedState = .sourceOnly
+                        normalizedRisks = Self.normalizedRisks(
+                            fallbackStop?.risks ?? [],
+                            adding: [.sourceWeak, .needsReview]
+                        )
+                    case .some(.externalSuggestion), .none:
+                        normalizedState = .externalSuggestion
+                        normalizedRisks = [.externalSuggestion, .hoursUnknown, .bookingUnknown]
+                    case .some(.confirmedMapStamp):
+                        return nil
+                    }
+                    normalizedStops.append(ItineraryStop(
+                        id: stop.id,
+                        placeId: nil,
+                        placeState: normalizedState,
+                        placeName: stop.placeName,
+                        time: stop.time,
+                        duration: stop.duration,
+                        note: stop.note,
+                        sourceSummary: fallbackStop?.sourceSummary,
+                        risks: normalizedRisks
+                    ))
                 }
             }
+            guard Self.respectsDailyCategoryCaps(
+                normalizedStops,
+                savedPlacesByID: savedPlacesByID,
+                publicCategoriesByName: publicCategoriesByName,
+                caps: dailyCategoryCaps
+            ) else {
+                return nil
+            }
+            normalizedDays.append(ItineraryDay(
+                dayNumber: day.dayNumber,
+                label: day.label,
+                stops: normalizedStops,
+                health: nil
+            ))
         }
         guard Set(stopSavedIDs).count == stopSavedIDs.count else {
             return nil
@@ -580,7 +739,7 @@ struct ItineraryPlanValidator {
             placeIds: orderedSavedIDs,
             navigationPlaceId: navigationPlaceID,
             transportMode: response.transportMode,
-            itineraryDays: response.itineraryDays,
+            itineraryDays: normalizedDays,
             messageText: response.messageText,
             mapAction: generatedMapAction,
             aiMessage: response.aiMessage ?? fallback.aiMessage
@@ -599,6 +758,31 @@ struct ItineraryPlanValidator {
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private static func normalizedRisks(_ risks: [TripRisk], adding required: [TripRisk]) -> [TripRisk] {
+        var seen = Set<TripRisk>()
+        return (risks + required).filter { seen.insert($0).inserted }
+    }
+
+    private static func respectsDailyCategoryCaps(
+        _ stops: [ItineraryStop],
+        savedPlacesByID: [String: Place],
+        publicCategoriesByName: [String: PlaceCategory],
+        caps: [PlaceCategory: Int]?
+    ) -> Bool {
+        guard let caps else { return true }
+        var counts: [PlaceCategory: Int] = [:]
+        for stop in stops {
+            let category = nonEmptyPlaceID(stop.placeId)
+                .flatMap { savedPlacesByID[$0]?.category }
+                ?? publicCategoriesByName[normalizedName(stop.placeName)]
+            guard let category else { continue }
+            counts[category, default: 0] += 1
+        }
+        return caps.allSatisfy { category, limit in
+            counts[category, default: 0] <= limit
+        }
     }
 }
 
