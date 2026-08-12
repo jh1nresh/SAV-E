@@ -10,7 +10,6 @@ private struct DeferredAccountScopedLink: Equatable {
 struct SaveApp: App {
     @StateObject private var authService = PrivyAuthService.shared
     @StateObject private var languageSettings = AppLanguageSettings()
-    @StateObject private var petCompanionStore = SavePetCompanionStore()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage(
         "pendingFriendShareURL",
@@ -29,7 +28,6 @@ struct SaveApp: App {
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
-    private let petStageGalleryActive = ProcessInfo.processInfo.arguments.contains("--uitest-pet-stage-gallery")
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
 #endif
 
@@ -138,9 +136,7 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if petStageGalleryActive {
-            SavePetStageGalleryView()
-        } else if stampFeedFixtureActive {
+        if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()
@@ -182,8 +178,7 @@ struct SaveApp: App {
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
-                    onVerificationChanged: updateVerifiedAccount,
-                    petCompanionStore: petCompanionStore
+                    onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
             }
@@ -459,7 +454,6 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
-    @ObservedObject var petCompanionStore: SavePetCompanionStore
 
     @State private var isRebindConfirmationPresented = false
 
@@ -499,54 +493,10 @@ private struct AuthenticatedRootView: View {
         }
     }
 
-    @ViewBuilder
     private var verifiedAccountContent: some View {
-        if SaveCompanionAvailability.isEnabled {
-            companionAccountContent
-        } else {
-            mainAccountContent
-        }
-    }
-
-    @ViewBuilder
-    private var companionAccountContent: some View {
-        if let userID = authService.currentUserId {
-            Group {
-                switch petCompanionStore.phase(for: userID) {
-                case .idle, .loading:
-                    AuthLoadingView()
-                case .needsSelection:
-                    SavePetSelectionView(store: petCompanionStore)
-                case .ready, .unavailable:
-                    mainAccountContent
-                }
-            }
-            .task(id: userID) {
-                await petCompanionStore.load(userID: userID)
-            }
-        } else {
-            AuthLoadingView()
-        }
-    }
-
-    private var mainAccountContent: some View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
-        )
-        .environment(\.savePetIdentity, petIdentity)
-    }
-
-    /// Feeds the capture celebration (pet P2): non-nil only when companions
-    /// are enabled and the signed-in profile has picked a pet.
-    private var petIdentity: SavePetIdentity? {
-        guard SaveCompanionAvailability.isEnabled,
-              let profile = petCompanionStore.profile,
-              let preset = profile.petPreset else { return nil }
-        return SavePetIdentity(
-            preset: preset,
-            stage: profile.petStage,
-            name: profile.petName
         )
     }
 

@@ -191,9 +191,6 @@ struct ProfileView: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("profile.controlPocket")
 
-                    SavePetCompanionCard(profile: viewModel.profile)
-                        .padding(.horizontal)
-
                     PassportCountingRulesPanel(stats: passportStats)
 
                     PassportVisibilityPanel(
