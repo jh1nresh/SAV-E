@@ -6,6 +6,7 @@ struct TripItineraryComponent: View {
     var tripHealth: TripHealth?
     let aiMessage: String?
     var places: [Place] = []
+    var travelLegs: [TripTravelLeg] = []
     /// Persists the distilled plan as a Trip. Nil hides the save action
     /// (previews / surfaces without a trip store).
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)?
@@ -25,6 +26,7 @@ struct TripItineraryComponent: View {
         tripHealth: TripHealth? = nil,
         aiMessage: String?,
         places: [Place] = [],
+        travelLegs: [TripTravelLeg] = [],
         onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
     ) {
         self.title = title
@@ -32,6 +34,7 @@ struct TripItineraryComponent: View {
         self.tripHealth = tripHealth
         self.aiMessage = aiMessage
         self.places = places
+        self.travelLegs = travelLegs
         self.onSaveTripPlan = onSaveTripPlan
         _canvas = State(initialValue: TripCanvasDraft(days: days))
     }
@@ -182,6 +185,7 @@ struct TripItineraryComponent: View {
                     DaySection(
                         day: day,
                         approvedExternalStopIDs: canvas.approvedExternalStopIDs,
+                        travelLegs: travelLegs,
                         onApproveExternalStop: { stopID in canvas.approveExternalStop(stopID) },
                         onSkipStop: { stopID in canvas.skipStop(stopID) },
                         onMoveEarlier: { stopID in canvas.moveStopEarlier(stopID) },
@@ -778,11 +782,43 @@ struct ShareSheet: UIViewControllerRepresentable {
 private struct DaySection: View {
     let day: ItineraryDay
     let approvedExternalStopIDs: Set<UUID>
+    var travelLegs: [TripTravelLeg] = []
     let onApproveExternalStop: (UUID) -> Void
     let onSkipStop: (UUID) -> Void
     let onMoveEarlier: (UUID) -> Void
     let onMoveLater: (UUID) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+
+    /// A leg renders only when its two stops are still adjacent in the
+    /// current canvas order, so user reordering can never surface a stale
+    /// estimate.
+    private func travelLeg(before index: Int) -> TripTravelLeg? {
+        guard index > 0 else { return nil }
+        let previous = day.stops[index - 1]
+        let current = day.stops[index]
+        guard let fromID = previous.placeId, let toID = current.placeId else { return nil }
+        return travelLegs.first { $0.fromPlaceId == fromID && $0.toPlaceId == toID }
+    }
+
+    private func travelLegLabel(_ leg: TripTravelLeg) -> String {
+        switch leg.mode {
+        case .walking:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min walk",
+                traditionalChinese: "步行約 \(leg.durationMinutes) 分鐘"
+            )
+        case .driving:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min drive",
+                traditionalChinese: "開車約 \(leg.durationMinutes) 分鐘"
+            )
+        case .transit:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min transit",
+                traditionalChinese: "大眾運輸約 \(leg.durationMinutes) 分鐘"
+            )
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -798,6 +834,13 @@ private struct DaySection: View {
                 .padding(.bottom, 12)
 
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
+                if let leg = travelLeg(before: index) {
+                    Label(travelLegLabel(leg), systemImage: leg.mode == .driving ? "car" : "figure.walk")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.saveMutedText)
+                        .padding(.leading, 20)
+                        .padding(.vertical, 2)
+                }
                 HStack(alignment: .top, spacing: 12) {
                     // Timeline
                     VStack(spacing: 0) {

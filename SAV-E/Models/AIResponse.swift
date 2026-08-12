@@ -15,6 +15,10 @@ struct SaveAIResponse: Equatable {
     let mapAction: MapActionData?
     let aiMessage: String?
     var followUpChoices: [SaveSearchFollowUpChoice] = []
+    /// Live travel legs keyed by consecutive place-ID pairs. Pure decoration:
+    /// the UI renders a leg only when two stops are still adjacent in that
+    /// order, so reordering or polish can never surface a stale estimate.
+    var travelLegs: [TripTravelLeg] = []
 
     enum ComponentType: String, Codable, Equatable {
         case placeList, navigationCard, tripItinerary, message
@@ -48,6 +52,15 @@ struct MapActionData: Codable, Equatable {
 }
 
 // MARK: - Itinerary
+
+/// A live routing estimate between two specific stops.
+struct TripTravelLeg: Equatable, Hashable {
+    let fromPlaceId: String
+    let toPlaceId: String
+    let durationMinutes: Int
+    let distanceMeters: Int
+    let mode: SaveAIResponse.TransportMode
+}
 
 struct ItineraryDay: Identifiable, Equatable {
     let dayNumber: Int

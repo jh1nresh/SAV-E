@@ -45,6 +45,7 @@ final class AIDrawerViewModel: ObservableObject {
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let groundedAnswerClient: SaveLLMClient?
     private let persistenceService: SupabaseServiceProtocol
+    private let tripRouteService: TripRouteServiceProtocol
     private let logger = Logger(subsystem: "SAV-E", category: "RecommendationAnalysisReceipt")
 
     /// Multi-turn conversation context for the current session.
@@ -59,7 +60,8 @@ final class AIDrawerViewModel: ObservableObject {
         locationService: (any AIDrawerLocationProviding)? = nil,
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig(),
-        persistenceService: SupabaseServiceProtocol = SupabaseService.shared
+        persistenceService: SupabaseServiceProtocol = SupabaseService.shared,
+        tripRouteService: TripRouteServiceProtocol = GoogleTripRouteService()
     ) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
@@ -68,6 +70,7 @@ final class AIDrawerViewModel: ObservableObject {
         self.mapCandidateSearchService = mapCandidateSearchService
         self.groundedAnswerClient = groundedAnswerClient
         self.persistenceService = persistenceService
+        self.tripRouteService = tripRouteService
     }
 
     func submit(
@@ -543,10 +546,11 @@ final class AIDrawerViewModel: ObservableObject {
         do {
             let planner = DeterministicTripPlanner()
             let intent = await tripPlanningIntent(for: query, planner: planner)
-            let deterministicDraft = planner.plan(
+            let deterministicDraft = await planner.routeEnhancedPlan(
                 intent: intent,
                 places: places,
-                outputLanguage: outputLanguage
+                outputLanguage: outputLanguage,
+                routeService: tripRouteService
             )
             guard let deterministicDraft else {
                 guard activeRequestID == requestID else { return }

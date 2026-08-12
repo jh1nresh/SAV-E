@@ -615,6 +615,7 @@ struct AIDrawerView: View {
                             tripHealth: response.tripHealth,
                             aiMessage: response.aiMessage,
                             places: viewModel.places,
+                            travelLegs: response.travelLegs,
                             onSaveTripPlan: onSaveTripPlan
                         )
 
