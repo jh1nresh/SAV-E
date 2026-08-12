@@ -41,6 +41,7 @@
 		47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E674763445F956B8660707 /* Color+Theme.swift */; };
 		4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */; };
 		4CF65DAE4673D60F28E20D77 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */; };
+		4E0E17A42FE83F382BEA166C /* TripHoursAnnotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */; };
 		4EF9CBE70CD4A87789905A9B /* SavePlanAroundModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4029203B816A870C920B8924 /* SavePlanAroundModels.swift */; };
 		4F0D78F6B793A1B0F5B3F4CC /* SAVEUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 087079BA81CF1E30FDEDEA1D /* SAVEUITestCase.swift */; };
 		4F96A8556DEC1BDEE2074F27 /* MessagesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0263F2B88706E83B518B1B7 /* MessagesViewController.swift */; };
@@ -105,6 +106,7 @@
 		A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BF2F96FC1EA2FD6AEF8E767 /* ShareViewController.swift */; };
 		A6270F856D0B837CAD4276E9 /* PlaceBottomSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */; };
 		ABC5B30875AFDEA6A822E8B8 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1CB9442676082D76FDEC15 /* SocialPlaceParser.swift */; };
+		ABE3E8BF30A03EEBDF33203D /* TripHoursAnnotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D9407490B019866AC67525E /* TripHoursAnnotator.swift */; };
 		ACCC06DDEECA4C38C1D1F773 /* GooglePlacesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E2C636EDAE7EAA2E062014 /* GooglePlacesService.swift */; };
 		AD4BE003420D948F1CA15615 /* SaveMapDrawerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */; };
 		AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55AC71904B498274561F2D /* MapView.swift */; };
@@ -292,6 +294,7 @@
 		7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAroundControllerTests.swift; sourceTree = "<group>"; };
 		7D106F6003E9C0CD87F7B2E0 /* OnboardingSampleClueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSampleClueTests.swift; sourceTree = "<group>"; };
 		7D404A68838FF556ADEBC2D7 /* SaveLocationIntentRecommendationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocationIntentRecommendationServiceTests.swift; sourceTree = "<group>"; };
+		7D9407490B019866AC67525E /* TripHoursAnnotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotator.swift; sourceTree = "<group>"; };
 		7EAE0D2F9B15DB6C5183415B /* SaveLocalVaultServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultServiceTests.swift; sourceTree = "<group>"; };
 		8165C7FCD4C17E50EFFC6532 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		81A98C2E4AE6FC2ADD4E59E2 /* ReviewDemoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewDemoTests.swift; sourceTree = "<group>"; };
@@ -323,6 +326,7 @@
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
+		B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotatorTests.swift; sourceTree = "<group>"; };
 		B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapDrawerPanel.swift; sourceTree = "<group>"; };
 		B83DDE4E3ACC60AF68724EAB /* SavePlaceFromURLIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceFromURLIntent.swift; sourceTree = "<group>"; };
 		BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPackStoreTests.swift; sourceTree = "<group>"; };
@@ -547,6 +551,7 @@
 				C0CF4C9AB8BF5F3EFEA8857C /* SupabaseService.swift */,
 				30859A9A0FE5EB6FD7DD53AF /* TripGapLocalOptionsService.swift */,
 				629C82F55BE43AD1BF6165D4 /* TripGapSuggestionEngine.swift */,
+				7D9407490B019866AC67525E /* TripHoursAnnotator.swift */,
 				D034AFB62E7C2C1C777B0FF0 /* TripKMLExportService.swift */,
 				3583981E50146631D488BF56 /* TripPersistence.swift */,
 				1858429D7CE130C6A555F9D3 /* TripPlanningIntent.swift */,
@@ -717,6 +722,7 @@
 				24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */,
 				6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */,
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
+				B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */,
 				BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */,
 				45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */,
 				551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */,
@@ -1092,6 +1098,7 @@
 				B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */,
 				77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */,
 				C86068410AB6A519BCFA6710 /* TripGapLocalOptionsServiceTests.swift in Sources */,
+				4E0E17A42FE83F382BEA166C /* TripHoursAnnotatorTests.swift in Sources */,
 				80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */,
 				8111929D20C39DD9E9E4F1A3 /* TripPlanSaveTests.swift in Sources */,
 				FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */,
@@ -1217,6 +1224,7 @@
 				CBA17520CBB278E88B318ED7 /* Trip.swift in Sources */,
 				21AABDBAB8347963FAD04AB9 /* TripGapLocalOptionsService.swift in Sources */,
 				C784851F7F8FC6B3D8CE0703 /* TripGapSuggestionEngine.swift in Sources */,
+				ABE3E8BF30A03EEBDF33203D /* TripHoursAnnotator.swift in Sources */,
 				F6BB8B9B625606BB8C917B5C /* TripItineraryComponent.swift in Sources */,
 				52F3150AD3808E4B701E6268 /* TripKMLExportService.swift in Sources */,
 				B118D409C44CFAEC868DE8C2 /* TripPackStore.swift in Sources */,

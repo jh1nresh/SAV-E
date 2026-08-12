@@ -38,6 +38,9 @@ struct GooglePlaceDetails: Codable {
     var websiteUrl: String?
     var photoReferences: [String]?
     var types: [String] = []
+    /// Structured `opening_hours.periods`, when Google returns them. The flat
+    /// `openingHours` strings stay for display; the planner needs these.
+    var openingPeriods: [SavePlaceOpeningPeriod]? = nil
 }
 
 enum PlaceMatchProvider: String, Codable, Hashable {
@@ -456,7 +459,10 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             phoneNumber: result["formatted_phone_number"] as? String,
             websiteUrl: result["website"] as? String,
             photoReferences: photos?.compactMap { $0["photo_reference"] as? String },
-            types: result["types"] as? [String] ?? []
+            types: result["types"] as? [String] ?? [],
+            openingPeriods: SavePlaceOpeningPeriod.periods(
+                fromGooglePeriods: openingHours?["periods"] as? [[String: Any]]
+            )
         )
     }
 

@@ -46,6 +46,7 @@ final class AIDrawerViewModel: ObservableObject {
     private let groundedAnswerClient: SaveLLMClient?
     private let persistenceService: SupabaseServiceProtocol
     private let tripRouteService: TripRouteServiceProtocol
+    private let tripHoursAnnotator: TripHoursAnnotator
     private let logger = Logger(subsystem: "SAV-E", category: "RecommendationAnalysisReceipt")
 
     /// Multi-turn conversation context for the current session.
@@ -61,7 +62,8 @@ final class AIDrawerViewModel: ObservableObject {
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig(),
         persistenceService: SupabaseServiceProtocol = SupabaseService.shared,
-        tripRouteService: TripRouteServiceProtocol = GoogleTripRouteService()
+        tripRouteService: TripRouteServiceProtocol = GoogleTripRouteService(),
+        tripHoursProvider: TripHoursProviding = GoogleTripHoursService()
     ) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
@@ -71,6 +73,7 @@ final class AIDrawerViewModel: ObservableObject {
         self.groundedAnswerClient = groundedAnswerClient
         self.persistenceService = persistenceService
         self.tripRouteService = tripRouteService
+        self.tripHoursAnnotator = TripHoursAnnotator(hoursProvider: tripHoursProvider)
     }
 
     func submit(
@@ -578,7 +581,7 @@ final class AIDrawerViewModel: ObservableObject {
             )
             let deterministicPlaces = places.filter { deterministicPlaceIDs.contains($0.id) }
             let publicCandidates = await publicDiscoveryCandidates(for: query, scopedPlaces: deterministicPlaces)
-            let response = try await aiService.query(
+            let polished = try await aiService.query(
                 query,
                 places: deterministicPlaces,
                 publicCandidates: publicCandidates,
@@ -586,6 +589,13 @@ final class AIDrawerViewModel: ObservableObject {
                 outputLanguage: outputLanguage,
                 deterministicDraftOverride: deterministicDraft,
                 requiredPlaceIDs: Set(deterministicPlaces.map { $0.id.uuidString })
+            )
+            // Best-effort hours check: verified-open stops lose their hours
+            // risk; stops closed at their slot gain an explicit hours gap.
+            let response = await tripHoursAnnotator.annotated(
+                polished,
+                places: deterministicPlaces,
+                outputLanguage: outputLanguage
             )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
