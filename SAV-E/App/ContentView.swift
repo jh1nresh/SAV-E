@@ -623,6 +623,9 @@ struct ContentView: View {
                 selectedRootTab = .saves
             },
             onAddPlaceToTrip: requestTripAssignment,
+            onSaveTripPlan: { name, city, stops in
+                await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
+            },
             onPrepareMapSearch: { query in
                 await mapVM.prepareMapCandidatesForDrawerQuery(query)
             },

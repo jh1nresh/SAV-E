@@ -70,6 +70,7 @@
 		7D221A99C9D47E9AA8E5D3C8 /* MapCoachmarkTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3ACFB516D928E076AD9406E /* MapCoachmarkTour.swift */; };
 		806AA7CB9520B5744E502805 /* TripPlanningIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1858429D7CE130C6A555F9D3 /* TripPlanningIntent.swift */; };
 		80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */; };
+		8111929D20C39DD9E9E4F1A3 /* TripPlanSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */; };
 		82B81EF68AE9F7C892CC0BDC /* SaveSmokeHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E85A66D5F0A1827A64467BAF /* SaveSmokeHarnessView.swift */; };
 		8746C09CA17512D2446230C3 /* Secrets.plist in Resources */ = {isa = PBXBuildFile; fileRef = D22D539942802E3845E8D2CE /* Secrets.plist */; };
 		885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 059853D65770FEA0F3E4A6FD /* Screens.swift */; };
@@ -263,6 +264,7 @@
 		5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugVaultExporter.swift; sourceTree = "<group>"; };
 		53130D5A88AAB65EF3312276 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		54876D21CED56B8E43591F6E /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanSaveTests.swift; sourceTree = "<group>"; };
 		5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchController.swift; sourceTree = "<group>"; };
 		5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasHomeHeroPresentationTests.swift; sourceTree = "<group>"; };
 		5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlaceEvidence.swift; sourceTree = "<group>"; };
@@ -712,6 +714,7 @@
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
 				BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */,
 				45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */,
+				551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */,
 				48E2307D86CDE51DDAC87AB9 /* VerifiedPlaceClaimsClientTests.swift */,
 			);
 			name = SocialPlacePipelineTests;
@@ -1084,6 +1087,7 @@
 				77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */,
 				C86068410AB6A519BCFA6710 /* TripGapLocalOptionsServiceTests.swift in Sources */,
 				80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */,
+				8111929D20C39DD9E9E4F1A3 /* TripPlanSaveTests.swift in Sources */,
 				FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */,
 				3AE07A508B3AB47A5B8C4813 /* VerifiedPlaceClaimsClientTests.swift in Sources */,
 			);
@@ -1266,7 +1270,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -1480,7 +1484,7 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = "SAV-E";
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
-				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestLocationConfirmation\": false, \"NSAppClipRequestEphemeralUserNotification\": false]";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (

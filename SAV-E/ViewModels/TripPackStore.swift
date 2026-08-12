@@ -25,6 +25,8 @@ enum TripPackStoreError: LocalizedError {
     case startTimeTooLong
     case noteTooLong
     case invalidMove
+    case planHasNoStops
+    case planTooManyStops
 
     var errorDescription: String? {
         switch self {
@@ -44,6 +46,10 @@ enum TripPackStoreError: LocalizedError {
             return "Note must be 4096 bytes or fewer."
         case .invalidMove:
             return "That stop cannot move any farther."
+        case .planHasNoStops:
+            return "This plan has no confirmed Map Stamps to save."
+        case .planTooManyStops:
+            return "A trip can hold at most 100 stops."
         }
     }
 }
@@ -236,6 +242,80 @@ final class TripPackStore: ObservableObject {
             isOptimized: false,
             createdAt: nowProvider()
         )
+
+        state = .saving
+        do {
+            try await persistence.saveTrip(trip, userId: userID)
+            trips.append(trip)
+            trips = sortedTrips(trips)
+            selectedTripID = trip.id
+            state = .saved
+            return trip
+        } catch {
+            state = .failed(error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// Creates a trip from an AI itinerary plan in one persistence snapshot.
+    /// Stops arrive pre-distilled (`TripCanvasDraft.tripSaveSelection`) so only
+    /// confirmed saved places reach the backend.
+    @discardableResult
+    func createTrip(
+        fromPlanNamed name: String,
+        city: String,
+        stops planStops: [TripPlanPersistableStop]
+    ) async -> Trip? {
+        guard !planStops.isEmpty else {
+            fail(TripPackStoreError.planHasNoStops)
+            return nil
+        }
+        guard planStops.count <= 100 else {
+            fail(TripPackStoreError.planTooManyStops)
+            return nil
+        }
+        guard planStops.allSatisfy({ (1...365).contains($0.day) }) else {
+            fail(TripPackStoreError.invalidDay)
+            return nil
+        }
+        guard planStops.allSatisfy({ $0.duration.map { (1...1440).contains($0) } ?? true }) else {
+            fail(TripPackStoreError.invalidDuration)
+            return nil
+        }
+
+        let tripStops = planStops.map { stop -> TripStop in
+            // Backend limits are bytes, not characters. Over-limit values are
+            // dropped rather than truncated so one long field never aborts the
+            // whole plan save.
+            let startTime = Self.normalizedText(stop.startTime).flatMap { text -> String? in
+                text.utf8.count <= 64 ? text : nil
+            }
+            let note = Self.normalizedText(stop.note).flatMap { text -> String? in
+                text.utf8.count <= 4096 ? text : nil
+            }
+            return TripStop(
+                id: UUID(),
+                placeId: stop.placeID,
+                placeName: stop.placeName,
+                day: stop.day,
+                orderIndex: stop.orderIndex,
+                startTime: startTime,
+                duration: stop.duration,
+                note: note
+            )
+        }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trip = Self.normalized(Trip(
+            id: UUID(),
+            name: trimmedName.isEmpty ? "Untitled Trip" : trimmedName,
+            city: city.trimmingCharacters(in: .whitespacesAndNewlines),
+            startDate: nil,
+            endDate: nil,
+            places: tripStops,
+            isOptimized: false,
+            createdAt: nowProvider()
+        ))
 
         state = .saving
         do {
