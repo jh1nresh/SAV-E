@@ -1,4 +1,5 @@
 import XCTest
+import MapKit
 @testable import SAVE
 
 final class DeterministicTripPlannerTests: XCTestCase {
@@ -907,6 +908,69 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertFalse(canvas.isApprovedExternalStop(normalizedPublicStop.id))
         canvas.approveExternalStop(normalizedPublicStop.id)
         XCTAssertTrue(canvas.isApprovedExternalStop(normalizedPublicStop.id))
+    }
+
+    @MainActor
+    func testItineraryPolishRecomputesTripHealthAndCarriesDrivingModeToMapAction() throws {
+        let places = [
+            makePlace("Driving Museum", address: "Los Angeles", latitude: 34.0610, longitude: -118.3090, category: .attraction),
+            makePlace("Driving Lunch", address: "Los Angeles", latitude: 34.0710, longitude: -118.2990, category: .food),
+            makePlace("Driving Cafe", address: "Los Angeles", latitude: 34.0810, longitude: -118.2890, category: .cafe),
+            makePlace("Driving Shops", address: "Los Angeles", latitude: 34.0910, longitude: -118.2790, category: .shopping)
+        ]
+        let fallback = try XCTUnwrap(DeterministicTripPlanner().plan(
+            for: "Plan a one day driving trip in Los Angeles",
+            places: places
+        ))
+        let polishedDays = fallback.itineraryDays.map { day in
+            ItineraryDay(
+                dayNumber: day.dayNumber,
+                label: day.label,
+                stops: day.stops,
+                health: nil
+            )
+        }
+        let polished = SaveAIResponse(
+            componentType: .tripItinerary,
+            title: fallback.title,
+            placeIds: fallback.placeIds,
+            navigationPlaceId: fallback.navigationPlaceId,
+            transportMode: .walking,
+            itineraryDays: polishedDays,
+            tripHealth: nil,
+            messageText: fallback.messageText,
+            mapAction: nil,
+            aiMessage: fallback.aiMessage
+        )
+        XCTAssertEqual(fallback.mapAction?.transportMode, .driving)
+
+        let validated = try XCTUnwrap(ItineraryPlanValidator(
+            savedPlaces: places,
+            publicCandidates: [],
+            fallback: fallback,
+            requiredPlaceIDs: Set(fallback.placeIds),
+            dailyCategoryCaps: nil
+        ).validated(polished))
+
+        XCTAssertTrue(validated.itineraryDays.allSatisfy { $0.health != nil })
+        XCTAssertNotNil(validated.tripHealth)
+        XCTAssertEqual(validated.mapAction?.transportMode, .driving)
+        XCTAssertEqual(
+            validated.mapAction?.transportMode?.mapKitDirectionsTransportType,
+            MKDirectionsTransportType.automobile
+        )
+    }
+
+    @MainActor
+    func testLegacyMapActionPayloadDecodesWithoutTransportMode() throws {
+        let data = try XCTUnwrap(
+            #"{"type":"showRoute","placeIds":[],"lat":null,"lng":null,"span":null}"#.data(using: .utf8)
+        )
+
+        let action = try JSONDecoder().decode(MapActionData.self, from: data)
+
+        XCTAssertEqual(action.type, .showRoute)
+        XCTAssertNil(action.transportMode)
     }
 
     @MainActor

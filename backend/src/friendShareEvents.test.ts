@@ -378,6 +378,10 @@ test("place create route wraps only receipt saves and keeps origin internal", ()
   assert.match(handler, /insert into friend_share_events[\s\S]*'server'/);
   assert.match(handler, /place: formatPlace\(canonicalPlace\)/);
   assert.match(handler, /outcome: created === true \? "saved" : "already_saved"/);
+  assert.match(handler, /on conflict \(id\) do update[\s\S]*where places\.user_id = excluded\.user_id/i,
+    "generic POST /places must make a same-account client id idempotent");
+  assert.match(handler, /Place id conflict/,
+    "an id collision must not return another account's place");
   assert.match(handler, /sendJson\(response, formatPlace\(rows\[0\]\), 201\)/,
     "generic POST /places must retain its original unwrapped response");
   assert.match(serverSource, /origin_shared_place_link_id: _originSharedPlaceLinkId/);

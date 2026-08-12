@@ -358,16 +358,24 @@ struct DeterministicTripPlanner {
         let health = overallTripHealth(for: itineraryDays, outputLanguage: outputLanguage)
 
         let placeIds = routeOrderPlaces.map { $0.id.uuidString }
+        let transportMode = constraints.transportMode ?? (selectedPlaces.count > 3 ? .driving : .walking)
         return SaveAIResponse(
             componentType: .tripItinerary,
             title: title(for: intent.rawMessage, dayCount: itineraryDays.count, outputLanguage: outputLanguage),
             placeIds: placeIds,
             navigationPlaceId: nil,
-            transportMode: constraints.transportMode ?? (selectedPlaces.count > 3 ? .driving : .walking),
+            transportMode: transportMode,
             itineraryDays: itineraryDays,
             tripHealth: health,
             messageText: nil,
-            mapAction: MapActionData(type: .showRoute, placeIds: placeIds, lat: nil, lng: nil, span: nil),
+            mapAction: MapActionData(
+                type: .showRoute,
+                placeIds: placeIds,
+                lat: nil,
+                lng: nil,
+                span: nil,
+                transportMode: transportMode
+            ),
             aiMessage: planningMessage(for: intent.rawMessage, selectedPlaces: selectedPlaces, outputLanguage: outputLanguage),
             // When we sized the trip ourselves, the same choices that used to
             // block the plan now ride along with it as one-tap reshapes.
@@ -893,7 +901,7 @@ struct DeterministicTripPlanner {
 
     // MARK: - Trip Judge
 
-    private func tripHealth(
+    func tripHealth(
         for stops: [ItineraryStop],
         dayNumber: Int,
         maxStopsPerDay: Int,
@@ -984,7 +992,7 @@ struct DeterministicTripPlanner {
         return TripHealth.scored(strengths: strengths, warnings: warnings, gaps: gaps)
     }
 
-    private func overallTripHealth(for days: [ItineraryDay], outputLanguage: AppLanguage) -> TripHealth {
+    func overallTripHealth(for days: [ItineraryDay], outputLanguage: AppLanguage) -> TripHealth {
         TripHealth.aggregating(days, strengths: [
             outputLanguage.localized(
                 english: "Builds from saved Map Stamps and labels public discovery separately.",
