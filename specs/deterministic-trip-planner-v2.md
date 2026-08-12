@@ -1,7 +1,7 @@
 # SAV-E Deterministic Trip Planner V2
 
 > Last updated: 2026-08-12
-> Status: implementation spec
+> Status: implemented 2026-08-12 (branch claude/trip-planner-v2; P1 save-as-trip, P2 Routes API waypoint optimization, P3 travel legs, P4 opening-hours annotation)
 > Builds on: `deterministic-trip-planner-v1.md` (V1 shipped through PR #113–#115)
 
 ## PM Gate
