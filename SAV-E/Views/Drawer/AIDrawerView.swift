@@ -120,6 +120,7 @@ struct AIDrawerView: View {
     var onImportSharedTextAsReviewCandidates: (String) async throws -> [UUID] = { _ in [] }
     var onOpenReview: () -> Void = {}
     var onAddPlaceToTrip: (Place) -> Void = { _ in }
+    var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
     var onClearMapSearchResults: () -> Void = {}
     var collaborativeLists: [SaveCollaborativeList] = []
@@ -613,7 +614,9 @@ struct AIDrawerView: View {
                             days: response.itineraryDays,
                             tripHealth: response.tripHealth,
                             aiMessage: response.aiMessage,
-                            places: viewModel.places
+                            places: viewModel.places,
+                            travelLegs: response.travelLegs,
+                            onSaveTripPlan: onSaveTripPlan
                         )
 
                     case .message:

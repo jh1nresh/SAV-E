@@ -245,6 +245,82 @@ struct DeterministicTripPlanner {
 
         let orderedPlaces = nearestNeighborOrder(selectedPlaces)
         let groupedPlaces = groups(orderedPlaces, requestedDays: days)
+        return response(
+            intent: intent,
+            constraints: constraints,
+            constraintPlanner: constraintPlanner,
+            selectedPlaces: selectedPlaces,
+            groupedPlaces: groupedPlaces,
+            routeOrderPlaces: orderedPlaces,
+            travelLegs: [],
+            outputLanguage: outputLanguage
+        )
+    }
+
+    /// The deterministic plan with per-day stop order optimized by a real
+    /// routing engine (Google Routes API) and live travel legs attached.
+    ///
+    /// Selection, day grouping, and scheduling stay deterministic. Routing can
+    /// only reorder stops *within* a day (first/last fixed) and decorate legs;
+    /// any routing failure — no key, offline, quota, transit mode — leaves that
+    /// day exactly as the deterministic planner drew it.
+    func routeEnhancedPlan(
+        intent: TripPlanningIntent,
+        places: [Place],
+        outputLanguage: AppLanguage = .english,
+        routeService: TripRouteServiceProtocol
+    ) async -> SaveAIResponse? {
+        guard !places.isEmpty else { return nil }
+
+        let constraintPlanner = ItineraryConstraintPlanner()
+        let constraints = constraintPlanner.constraints(from: intent.rawMessage)
+        let days = intent.resolvedDays(
+            availablePlaceCount: places.count,
+            maxStopsPerDay: constraints.pace.maxStopsPerDay
+        )
+        let selectedPlaces = selectedPlaces(
+            for: intent,
+            places: places,
+            days: days,
+            maxStopsPerDay: constraints.pace.maxStopsPerDay
+        )
+        guard !selectedPlaces.isEmpty else { return nil }
+
+        let orderedPlaces = nearestNeighborOrder(selectedPlaces)
+        var groupedPlaces = groups(orderedPlaces, requestedDays: days)
+        let mode = constraints.transportMode ?? (selectedPlaces.count > 3 ? .driving : .walking)
+        var travelLegs: [TripTravelLeg] = []
+        for index in groupedPlaces.indices where groupedPlaces[index].count >= 2 {
+            guard let dayPlan = try? await routeService.optimizedDay(groupedPlaces[index], mode: mode),
+                  Set(dayPlan.orderedPlaces.map(\.id)) == Set(groupedPlaces[index].map(\.id)) else {
+                continue
+            }
+            groupedPlaces[index] = dayPlan.orderedPlaces
+            travelLegs.append(contentsOf: dayPlan.legs)
+        }
+
+        return response(
+            intent: intent,
+            constraints: constraints,
+            constraintPlanner: constraintPlanner,
+            selectedPlaces: selectedPlaces,
+            groupedPlaces: groupedPlaces,
+            routeOrderPlaces: travelLegs.isEmpty ? orderedPlaces : groupedPlaces.flatMap { $0 },
+            travelLegs: travelLegs,
+            outputLanguage: outputLanguage
+        )
+    }
+
+    private func response(
+        intent: TripPlanningIntent,
+        constraints: ItineraryConstraints,
+        constraintPlanner: ItineraryConstraintPlanner,
+        selectedPlaces: [Place],
+        groupedPlaces: [[Place]],
+        routeOrderPlaces: [Place],
+        travelLegs: [TripTravelLeg],
+        outputLanguage: AppLanguage
+    ) -> SaveAIResponse {
         let itineraryDays = groupedPlaces.enumerated().map { index, places in
             let scheduled = constraintPlanner.schedule(
                 places,
@@ -281,7 +357,7 @@ struct DeterministicTripPlanner {
         }
         let health = overallTripHealth(for: itineraryDays, outputLanguage: outputLanguage)
 
-        let placeIds = orderedPlaces.map { $0.id.uuidString }
+        let placeIds = routeOrderPlaces.map { $0.id.uuidString }
         return SaveAIResponse(
             componentType: .tripItinerary,
             title: title(for: intent.rawMessage, dayCount: itineraryDays.count, outputLanguage: outputLanguage),
@@ -297,7 +373,8 @@ struct DeterministicTripPlanner {
             // block the plan now ride along with it as one-tap reshapes.
             followUpChoices: intent.days == nil
                 ? clarificationChoices(for: intent.rawMessage, outputLanguage: outputLanguage)
-                : []
+                : [],
+            travelLegs: travelLegs
         )
     }
 
