@@ -15,6 +15,10 @@ struct SaveAIResponse: Equatable {
     let mapAction: MapActionData?
     let aiMessage: String?
     var followUpChoices: [SaveSearchFollowUpChoice] = []
+    /// Live travel legs keyed by consecutive place-ID pairs. Pure decoration:
+    /// the UI renders a leg only when two stops are still adjacent in that
+    /// order, so reordering or polish can never surface a stale estimate.
+    var travelLegs: [TripTravelLeg] = []
 
     enum ComponentType: String, Codable, Equatable {
         case placeList, navigationCard, tripItinerary, message
@@ -49,6 +53,15 @@ struct MapActionData: Codable, Equatable {
 
 // MARK: - Itinerary
 
+/// A live routing estimate between two specific stops.
+struct TripTravelLeg: Equatable, Hashable {
+    let fromPlaceId: String
+    let toPlaceId: String
+    let durationMinutes: Int
+    let distanceMeters: Int
+    let mode: SaveAIResponse.TransportMode
+}
+
 struct ItineraryDay: Identifiable, Equatable {
     let dayNumber: Int
     let label: String?
@@ -72,6 +85,28 @@ struct ItineraryStop: Identifiable, Equatable {
 enum TripKmlExportSelectionError: Error, Equatable {
     case noConfirmedMapStamps
     case tooManyConfirmedMapStamps(Int)
+}
+
+/// One itinerary stop distilled into the shape `trip_stops` accepts. Only
+/// confirmed Map Stamps can ever reach persistence — the backend rejects any
+/// stop whose place is not owned by the user, so external/public suggestions
+/// are excluded up front and reported via `excludedStopCount`.
+struct TripPlanPersistableStop: Equatable {
+    let placeID: UUID
+    let placeName: String
+    let day: Int
+    let orderIndex: Int
+    let startTime: String?
+    let duration: Int?
+    let note: String?
+}
+
+struct TripPlanSaveSelection: Equatable {
+    let stops: [TripPlanPersistableStop]
+    /// Visible stops that cannot be persisted (external suggestions, review
+    /// candidates, source-only clues, duplicates). Shown to the user before
+    /// saving so exclusion is explicit, never silent.
+    let excludedStopCount: Int
 }
 
 struct TripCanvasDraft: Equatable {
@@ -118,6 +153,49 @@ struct TripCanvasDraft: Equatable {
             throw TripKmlExportSelectionError.tooManyConfirmedMapStamps(placeIDs.count)
         }
         return placeIDs
+    }
+
+    /// Distills the current canvas into persistable trip stops using the same
+    /// eligibility rule as KML export: visible, `confirmedMapStamp`, a valid
+    /// saved-place UUID, deduplicated. Day numbers and in-day order follow the
+    /// canvas as the user arranged it.
+    func tripSaveSelection(availablePlaces: [Place]) throws -> TripPlanSaveSelection {
+        let availablePlaceIDs = Set(availablePlaces.map(\.id))
+        var seenPlaceIDs = Set<UUID>()
+        var stops: [TripPlanPersistableStop] = []
+        var excludedStopCount = 0
+
+        for day in visibleDays {
+            var orderIndex = 0
+            for stop in day.stops {
+                guard stop.placeState == .confirmedMapStamp,
+                      let rawPlaceID = stop.placeId,
+                      let placeID = UUID(uuidString: rawPlaceID),
+                      availablePlaceIDs.contains(placeID),
+                      seenPlaceIDs.insert(placeID).inserted else {
+                    excludedStopCount += 1
+                    continue
+                }
+                stops.append(TripPlanPersistableStop(
+                    placeID: placeID,
+                    placeName: stop.placeName,
+                    day: day.dayNumber,
+                    orderIndex: orderIndex,
+                    startTime: stop.time,
+                    duration: stop.duration,
+                    note: stop.note
+                ))
+                orderIndex += 1
+            }
+        }
+
+        guard !stops.isEmpty else {
+            throw TripKmlExportSelectionError.noConfirmedMapStamps
+        }
+        guard stops.count <= 100 else {
+            throw TripKmlExportSelectionError.tooManyConfirmedMapStamps(stops.count)
+        }
+        return TripPlanSaveSelection(stops: stops, excludedStopCount: excludedStopCount)
     }
 
     mutating func approveExternalStop(_ stopID: UUID) {

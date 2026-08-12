@@ -6,6 +6,10 @@ struct TripItineraryComponent: View {
     var tripHealth: TripHealth?
     let aiMessage: String?
     var places: [Place] = []
+    var travelLegs: [TripTravelLeg] = []
+    /// Persists the distilled plan as a Trip. Nil hides the save action
+    /// (previews / surfaces without a trip store).
+    var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)?
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var shareItem: TripItineraryShareItem?
     @State private var exportAlert: TripItineraryExportAlert?
@@ -13,19 +17,25 @@ struct TripItineraryComponent: View {
     @State private var canvas: TripCanvasDraft
     @State private var localGapCandidates: [SaveMapCandidate] = []
     @State private var isLoadingLocalGapCandidates = false
+    @State private var saveTripPrompt: TripPlanSavePrompt?
+    @State private var isSavingTrip = false
 
     init(
         title: String,
         days: [ItineraryDay],
         tripHealth: TripHealth? = nil,
         aiMessage: String?,
-        places: [Place] = []
+        places: [Place] = [],
+        travelLegs: [TripTravelLeg] = [],
+        onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
     ) {
         self.title = title
         self.sourceDays = days
         self.tripHealth = tripHealth
         self.aiMessage = aiMessage
         self.places = places
+        self.travelLegs = travelLegs
+        self.onSaveTripPlan = onSaveTripPlan
         _canvas = State(initialValue: TripCanvasDraft(days: days))
     }
 
@@ -95,6 +105,28 @@ struct TripItineraryComponent: View {
                         }
                         .disabled(true)
                     }
+
+                    if onSaveTripPlan != nil {
+                        Divider()
+
+                        Button(action: presentSaveTripPrompt) {
+                            Label(
+                                languageSettings.localized(
+                                    english: isSavingTrip ? "Saving Trip…" : "Save as Trip",
+                                    traditionalChinese: isSavingTrip ? "正在儲存旅程…" : "存成旅程"
+                                ),
+                                systemImage: "suitcase"
+                            )
+                        }
+                        .disabled(isSavingTrip || tripSaveDisabledReason != nil)
+
+                        if let tripSaveDisabledReason {
+                            Button(action: {}) {
+                                Label(tripSaveDisabledReason, systemImage: "info.circle")
+                            }
+                            .disabled(true)
+                        }
+                    }
                 } label: {
                     Group {
                         if isExportingKml {
@@ -153,6 +185,7 @@ struct TripItineraryComponent: View {
                     DaySection(
                         day: day,
                         approvedExternalStopIDs: canvas.approvedExternalStopIDs,
+                        travelLegs: travelLegs,
                         onApproveExternalStop: { stopID in canvas.approveExternalStop(stopID) },
                         onSkipStop: { stopID in canvas.skipStop(stopID) },
                         onMoveEarlier: { stopID in canvas.moveStopEarlier(stopID) },
@@ -177,6 +210,17 @@ struct TripItineraryComponent: View {
         .onAppear(perform: cleanupTemporaryExport)
         .sheet(item: $shareItem, onDismiss: cleanupTemporaryExport) { item in
             ShareSheet(items: [item.url])
+        }
+        .sheet(item: $saveTripPrompt) { prompt in
+            TripPlanSaveSheet(
+                defaultName: title,
+                selection: prompt.selection,
+                onSave: { name, city in
+                    saveTripPrompt = nil
+                    savePlanAsTrip(name: name, city: city, selection: prompt.selection)
+                },
+                onCancel: { saveTripPrompt = nil }
+            )
         }
         .alert(item: $exportAlert) { alert in
             Alert(
@@ -268,6 +312,68 @@ struct TripItineraryComponent: View {
                 english: "This trip cannot be exported yet.",
                 traditionalChinese: "這份行程目前還不能匯出。"
             )
+        }
+    }
+
+    private var tripSaveDisabledReason: String? {
+        do {
+            _ = try canvas.tripSaveSelection(availablePlaces: places)
+            return nil
+        } catch let error as TripKmlExportSelectionError {
+            return selectionMessage(for: error)
+        } catch {
+            return languageSettings.localized(
+                english: "This plan cannot be saved yet.",
+                traditionalChinese: "這份行程目前還不能儲存。"
+            )
+        }
+    }
+
+    private func presentSaveTripPrompt() {
+        do {
+            let selection = try canvas.tripSaveSelection(availablePlaces: places)
+            saveTripPrompt = TripPlanSavePrompt(selection: selection)
+        } catch {
+            exportAlert = TripItineraryExportAlert(
+                title: languageSettings.localized(
+                    english: "Couldn’t Save Trip",
+                    traditionalChinese: "無法儲存旅程"
+                ),
+                message: (error as? TripKmlExportSelectionError).map(selectionMessage(for:))
+                    ?? error.localizedDescription
+            )
+        }
+    }
+
+    private func savePlanAsTrip(name: String, city: String, selection: TripPlanSaveSelection) {
+        guard let onSaveTripPlan, !isSavingTrip else { return }
+        isSavingTrip = true
+        Task {
+            let trip = await onSaveTripPlan(name, city, selection.stops)
+            isSavingTrip = false
+            if let trip {
+                exportAlert = TripItineraryExportAlert(
+                    title: languageSettings.localized(
+                        english: "Saved to Trip Packs",
+                        traditionalChinese: "已存入旅程包"
+                    ),
+                    message: languageSettings.localized(
+                        english: "“\(trip.name)” now holds \(trip.places.count) stops from this plan.",
+                        traditionalChinese: "「\(trip.name)」已收錄這份行程的 \(trip.places.count) 個地點。"
+                    )
+                )
+            } else {
+                exportAlert = TripItineraryExportAlert(
+                    title: languageSettings.localized(
+                        english: "Couldn’t Save Trip",
+                        traditionalChinese: "無法儲存旅程"
+                    ),
+                    message: languageSettings.localized(
+                        english: "SAV-E could not save this plan as a trip. Try again.",
+                        traditionalChinese: "SAV-E 無法把這份行程存成旅程，請再試一次。"
+                    )
+                )
+            }
         }
     }
 
@@ -402,6 +508,77 @@ private struct TripItineraryExportAlert: Identifiable {
 
 private enum TripItineraryExportError: Error {
     case temporaryFileCleanupFailed
+}
+
+private struct TripPlanSavePrompt: Identifiable {
+    let id = UUID()
+    let selection: TripPlanSaveSelection
+}
+
+/// Confirmation sheet for "Save as Trip": name/city entry plus an explicit
+/// count of stops that cannot be persisted (anything that is not a confirmed
+/// Map Stamp), so exclusion is never silent.
+private struct TripPlanSaveSheet: View {
+    let defaultName: String
+    let selection: TripPlanSaveSelection
+    let onSave: (_ name: String, _ city: String) -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var name: String = ""
+    @State private var city: String = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(
+                        languageSettings.localized(english: "Trip name", traditionalChinese: "旅程名稱"),
+                        text: $name
+                    )
+                    .accessibilityIdentifier("tripPlanSave.name")
+                    TextField(
+                        languageSettings.localized(english: "City (optional)", traditionalChinese: "城市（選填）"),
+                        text: $city
+                    )
+                    .accessibilityIdentifier("tripPlanSave.city")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(languageSettings.localized(
+                            english: "\(selection.stops.count) confirmed Map Stamps will be saved.",
+                            traditionalChinese: "將儲存 \(selection.stops.count) 個已確認地圖章。"
+                        ))
+                        if selection.excludedStopCount > 0 {
+                            Text(languageSettings.localized(
+                                english: "\(selection.excludedStopCount) stops are not confirmed Map Stamps yet and will be left out.",
+                                traditionalChinese: "另有 \(selection.excludedStopCount) 個停靠點尚未確認為地圖章，不會存入。"
+                            ))
+                        }
+                    }
+                }
+            }
+            .navigationTitle(languageSettings.localized(english: "Save as Trip", traditionalChinese: "存成旅程"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(
+                        languageSettings.localized(english: "Cancel", traditionalChinese: "取消"),
+                        action: onCancel
+                    )
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(languageSettings.localized(english: "Save", traditionalChinese: "儲存")) {
+                        onSave(name, city)
+                    }
+                    .accessibilityIdentifier("tripPlanSave.confirm")
+                }
+            }
+            .onAppear {
+                if name.isEmpty { name = defaultName }
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 // MARK: - Trip Health
@@ -605,11 +782,43 @@ struct ShareSheet: UIViewControllerRepresentable {
 private struct DaySection: View {
     let day: ItineraryDay
     let approvedExternalStopIDs: Set<UUID>
+    var travelLegs: [TripTravelLeg] = []
     let onApproveExternalStop: (UUID) -> Void
     let onSkipStop: (UUID) -> Void
     let onMoveEarlier: (UUID) -> Void
     let onMoveLater: (UUID) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+
+    /// A leg renders only when its two stops are still adjacent in the
+    /// current canvas order, so user reordering can never surface a stale
+    /// estimate.
+    private func travelLeg(before index: Int) -> TripTravelLeg? {
+        guard index > 0 else { return nil }
+        let previous = day.stops[index - 1]
+        let current = day.stops[index]
+        guard let fromID = previous.placeId, let toID = current.placeId else { return nil }
+        return travelLegs.first { $0.fromPlaceId == fromID && $0.toPlaceId == toID }
+    }
+
+    private func travelLegLabel(_ leg: TripTravelLeg) -> String {
+        switch leg.mode {
+        case .walking:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min walk",
+                traditionalChinese: "步行約 \(leg.durationMinutes) 分鐘"
+            )
+        case .driving:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min drive",
+                traditionalChinese: "開車約 \(leg.durationMinutes) 分鐘"
+            )
+        case .transit:
+            return languageSettings.localized(
+                english: "≈ \(leg.durationMinutes) min transit",
+                traditionalChinese: "大眾運輸約 \(leg.durationMinutes) 分鐘"
+            )
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -625,6 +834,13 @@ private struct DaySection: View {
                 .padding(.bottom, 12)
 
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
+                if let leg = travelLeg(before: index) {
+                    Label(travelLegLabel(leg), systemImage: leg.mode == .driving ? "car" : "figure.walk")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.saveMutedText)
+                        .padding(.leading, 20)
+                        .padding(.vertical, 2)
+                }
                 HStack(alignment: .top, spacing: 12) {
                     // Timeline
                     VStack(spacing: 0) {

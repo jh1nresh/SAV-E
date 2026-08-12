@@ -24,7 +24,6 @@ protocol SupabaseServiceProtocol {
     func fetchProfile(for userId: String) async throws -> UserProfile?
     func updateProfile(_ profile: UserProfile) async throws
     func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage
-    func selectPet(preset: SavePetPreset, name: String) async throws -> UserProfile
     func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws
     func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws
     func unfollowProfile(followId: String) async throws
@@ -621,23 +620,6 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         ]
         let body = try Self.jsonBody(updates)
         try await request(path: "/profile", method: "PATCH", body: body)
-    }
-
-    func selectPet(preset: SavePetPreset, name: String) async throws -> UserProfile {
-        guard isConfigured else {
-            var profile = UserProfile.mock
-            profile.petPreset = preset
-            profile.petName = name
-            profile.petXP = 0
-            return profile
-        }
-
-        let body = try Self.jsonBody([
-            "pet_preset": preset.rawValue,
-            "pet_name": name,
-        ])
-        let data = try await request(path: "/profile", method: "PATCH", body: body)
-        return try JSONDecoder.supabase.decode(ProfileRow.self, from: data).toProfile()
     }
 
     // MARK: - Social Graph
@@ -1874,9 +1856,6 @@ private struct ProfileRow: Codable {
     let saved_count: Int?
     let visited_count: Int?
     let cities_count: Int?
-    let pet_preset: SavePetPreset?
-    let pet_name: String?
-    let pet_xp: Int?
 
     func toProfile() -> UserProfile {
         UserProfile(
@@ -1889,10 +1868,7 @@ private struct ProfileRow: Codable {
             citiesCount: cities_count ?? 0,
             isPremium: is_premium,
             collections: [],
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
-            petPreset: pet_preset,
-            petName: pet_name,
-            petXP: pet_xp ?? 0
+            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
         )
     }
 }

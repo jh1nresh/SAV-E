@@ -485,7 +485,8 @@ final class SaveAIService {
             aiMessage: [draft.aiMessage, suggestionNote]
                 .compactMap { $0 }
                 .joined(separator: " "),
-            followUpChoices: draft.followUpChoices
+            followUpChoices: draft.followUpChoices,
+            travelLegs: draft.travelLegs
         )
     }
 
@@ -742,7 +743,10 @@ struct ItineraryPlanValidator {
             itineraryDays: normalizedDays,
             messageText: response.messageText,
             mapAction: generatedMapAction,
-            aiMessage: response.aiMessage ?? fallback.aiMessage
+            aiMessage: response.aiMessage ?? fallback.aiMessage,
+            // Legs are pair-keyed decoration from the deterministic draft; the
+            // UI drops any leg whose stops are no longer adjacent.
+            travelLegs: fallback.travelLegs
         )
     }
 

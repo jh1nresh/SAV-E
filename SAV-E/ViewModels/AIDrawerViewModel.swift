@@ -45,6 +45,8 @@ final class AIDrawerViewModel: ObservableObject {
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let groundedAnswerClient: SaveLLMClient?
     private let persistenceService: SupabaseServiceProtocol
+    private let tripRouteService: TripRouteServiceProtocol
+    private let tripHoursAnnotator: TripHoursAnnotator
     private let logger = Logger(subsystem: "SAV-E", category: "RecommendationAnalysisReceipt")
 
     /// Multi-turn conversation context for the current session.
@@ -59,7 +61,9 @@ final class AIDrawerViewModel: ObservableObject {
         locationService: (any AIDrawerLocationProviding)? = nil,
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig(),
-        persistenceService: SupabaseServiceProtocol = SupabaseService.shared
+        persistenceService: SupabaseServiceProtocol = SupabaseService.shared,
+        tripRouteService: TripRouteServiceProtocol = GoogleTripRouteService(),
+        tripHoursProvider: TripHoursProviding = GoogleTripHoursService()
     ) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
@@ -68,6 +72,8 @@ final class AIDrawerViewModel: ObservableObject {
         self.mapCandidateSearchService = mapCandidateSearchService
         self.groundedAnswerClient = groundedAnswerClient
         self.persistenceService = persistenceService
+        self.tripRouteService = tripRouteService
+        self.tripHoursAnnotator = TripHoursAnnotator(hoursProvider: tripHoursProvider)
     }
 
     func submit(
@@ -543,10 +549,11 @@ final class AIDrawerViewModel: ObservableObject {
         do {
             let planner = DeterministicTripPlanner()
             let intent = await tripPlanningIntent(for: query, planner: planner)
-            let deterministicDraft = planner.plan(
+            let deterministicDraft = await planner.routeEnhancedPlan(
                 intent: intent,
                 places: places,
-                outputLanguage: outputLanguage
+                outputLanguage: outputLanguage,
+                routeService: tripRouteService
             )
             guard let deterministicDraft else {
                 guard activeRequestID == requestID else { return }
@@ -574,7 +581,7 @@ final class AIDrawerViewModel: ObservableObject {
             )
             let deterministicPlaces = places.filter { deterministicPlaceIDs.contains($0.id) }
             let publicCandidates = await publicDiscoveryCandidates(for: query, scopedPlaces: deterministicPlaces)
-            let response = try await aiService.query(
+            let polished = try await aiService.query(
                 query,
                 places: deterministicPlaces,
                 publicCandidates: publicCandidates,
@@ -582,6 +589,13 @@ final class AIDrawerViewModel: ObservableObject {
                 outputLanguage: outputLanguage,
                 deterministicDraftOverride: deterministicDraft,
                 requiredPlaceIDs: Set(deterministicPlaces.map { $0.id.uuidString })
+            )
+            // Best-effort hours check: verified-open stops lose their hours
+            // risk; stops closed at their slot gain an explicit hours gap.
+            let response = await tripHoursAnnotator.annotated(
+                polished,
+                places: deterministicPlaces,
+                outputLanguage: outputLanguage
             )
             guard activeRequestID == requestID else { return }
             activeRequestID = nil
