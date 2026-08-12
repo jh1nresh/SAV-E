@@ -26,6 +26,47 @@ struct GoogleTakeoutSaveSummary {
     var reviewDrafts: Int
 }
 
+enum GoogleTakeoutBatchSaver {
+    @MainActor
+    static func save(
+        _ drafts: [ImportedPlaceDraft],
+        existingKeys: Set<String>,
+        persist: (Place) async throws -> Void,
+        didPersist: (Place) -> Void
+    ) async throws -> GoogleTakeoutSaveSummary {
+        var batchKeys: Set<String> = []
+        var saved = 0
+        var skippedDuplicates = 0
+        var reviewDrafts = 0
+
+        for draft in drafts {
+            guard let place = draft.toPlace() else {
+                reviewDrafts += 1
+                continue
+            }
+
+            let key = draft.deduplicationKey
+            guard !existingKeys.contains(key), !batchKeys.contains(key) else {
+                skippedDuplicates += 1
+                continue
+            }
+
+            try await persist(place)
+            batchKeys.insert(key)
+            saved += 1
+            // Record each acknowledged write immediately. If a later item
+            // fails, retry deduplication can still see the successful prefix.
+            didPersist(place)
+        }
+
+        return GoogleTakeoutSaveSummary(
+            saved: saved,
+            skippedDuplicates: skippedDuplicates,
+            reviewDrafts: reviewDrafts
+        )
+    }
+}
+
 struct ImportedPlaceDraft: Identifiable, Hashable {
     enum ReviewState: Hashable {
         case readyToSave
@@ -95,7 +136,9 @@ struct ImportedPlaceDraft: Identifiable, Hashable {
         }
 
         return Place(
-            id: UUID(),
+            // Keep one client-generated id for the lifetime of this draft so
+            // retrying an ambiguous network response remains idempotent.
+            id: id,
             name: name,
             address: address,
             latitude: latitude,

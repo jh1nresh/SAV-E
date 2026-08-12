@@ -2093,36 +2093,15 @@ final class MapViewModel: ObservableObject {
         }
 
         let existingKeys = Set(places.map(\.importDeduplicationKey))
-        var batchKeys: Set<String> = []
-        var savedPlaces: [Place] = []
-        var skippedDuplicates = 0
-        var reviewDrafts = 0
-
-        for draft in drafts {
-            guard let place = draft.toPlace() else {
-                reviewDrafts += 1
-                continue
+        return try await GoogleTakeoutBatchSaver.save(
+            drafts,
+            existingKeys: existingKeys,
+            persist: { place in
+                try await supabaseService.savePlace(place, userId: userId)
+            },
+            didPersist: { place in
+                places.insert(place, at: 0)
             }
-
-            let key = draft.deduplicationKey
-            guard !existingKeys.contains(key), !batchKeys.contains(key) else {
-                skippedDuplicates += 1
-                continue
-            }
-
-            try await supabaseService.savePlace(place, userId: userId)
-            batchKeys.insert(key)
-            savedPlaces.append(place)
-        }
-
-        if !savedPlaces.isEmpty {
-            places = savedPlaces + places
-        }
-
-        return GoogleTakeoutSaveSummary(
-            saved: savedPlaces.count,
-            skippedDuplicates: skippedDuplicates,
-            reviewDrafts: reviewDrafts
         )
     }
 
@@ -2156,7 +2135,14 @@ final class MapViewModel: ObservableObject {
             if let region = regionContaining(routePlaces) {
                 cameraPosition = .region(region)
             }
-            Task { await calculateRoute(for: routePlaces, calculationID: calculationID) }
+            let transportType = action.transportMode?.mapKitDirectionsTransportType ?? .walking
+            Task {
+                await calculateRoute(
+                    for: routePlaces,
+                    calculationID: calculationID,
+                    transportType: transportType
+                )
+            }
 
         case .resetPins:
             activeFilter = nil
@@ -2178,7 +2164,11 @@ final class MapViewModel: ObservableObject {
         calculatedRoute = nil
     }
 
-    private func calculateRoute(for places: [Place], calculationID: UUID) async {
+    private func calculateRoute(
+        for places: [Place],
+        calculationID: UUID,
+        transportType: MKDirectionsTransportType = .walking
+    ) async {
         guard calculationID == routeCalculationID else { return }
         calculatedRoute = nil
         guard places.count >= 2 else { return }
@@ -2193,7 +2183,7 @@ final class MapViewModel: ObservableObject {
             let request = MKDirections.Request()
             request.source = source
             request.destination = destination
-            request.transportType = .walking
+            request.transportType = transportType
 
             do {
                 let directions = MKDirections(request: request)

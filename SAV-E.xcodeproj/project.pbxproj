@@ -114,6 +114,7 @@
 		B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33940014B7E9BB8072DC45FE /* SAVEUISmokeHarnessTests.swift */; };
 		B45133218BC50C705B223B87 /* DebugVaultExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */; };
 		B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */; };
+		B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */; };
 		B76C75E6A77E56F866167BA1 /* SaveGuideModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468D23D10B68903C13C10154 /* SaveGuideModels.swift */; };
 		B945C77C24159AB3A988E41D /* TripPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3583981E50146631D488BF56 /* TripPersistence.swift */; };
@@ -145,6 +146,7 @@
 		E4C22B184E0F159096CD5304 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32313D7425E554355EEDF42 /* UserProfile.swift */; };
 		E50147EFD7E84680403EBFB6 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1A097A4193288BCF9B829B49 /* ZIPFoundation */; };
 		E962B07677F83EC27DB285FB /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1974222FBD914DA6249A96E /* LocationService.swift */; };
+		EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
 		F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8165C7FCD4C17E50EFFC6532 /* ContentView.swift */; };
 		F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */; };
@@ -282,6 +284,7 @@
 		688D2E9854BB58E7A3D3774A /* EvidenceLinkList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvidenceLinkList.swift; sourceTree = "<group>"; };
 		6BFC17A59739B006535A4794 /* SavedPlaceTripRecommender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPlaceTripRecommender.swift; sourceTree = "<group>"; };
 		6C84069DBCF7887D8E65D10D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMemoryVaultAppender.swift; sourceTree = "<group>"; };
 		6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchIntentParser.swift; sourceTree = "<group>"; };
 		736FAD76F2C8F9181B521ED7 /* AccountSessionGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionGate.swift; sourceTree = "<group>"; };
 		738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SAV-EClipApp.swift"; sourceTree = "<group>"; };
@@ -668,6 +671,7 @@
 			isa = PBXGroup;
 			children = (
 				BCD47697053E087BC8D7F914 /* GoogleMapsListPlaceExtractor.swift */,
+				6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */,
 				82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */,
 				14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */,
 				5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */,
@@ -1113,6 +1117,7 @@
 			files = (
 				4082CE633C9619E79F2C0AD3 /* GoogleMapsListPlaceExtractor.swift in Sources */,
 				45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */,
+				EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */,
 				A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */,
 				9F3813BB934F44CF302ACC48 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				FBC3CB8617EB8D79B7DE203D /* SocialPlaceEvidence.swift in Sources */,
@@ -1198,6 +1203,7 @@
 				6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */,
 				593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */,
 				3EA497DD9126B572939E0D11 /* SaveMemoryRecord.swift in Sources */,
+				B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */,
 				F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */,
 				9B89D237E9E3B0347D707D58 /* SavePlaceFromURLIntent.swift in Sources */,
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,

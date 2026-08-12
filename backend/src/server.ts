@@ -1350,7 +1350,15 @@ async function handlePlaces(
     }
 
     const insert = buildInsert("places", body, [...placeFields, "user_id"]);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
+    const { rows } = await pool.query(
+      `${insert.sql}
+       on conflict (id) do update
+       set id = excluded.id
+       where places.user_id = excluded.user_id
+       returning *`,
+      insert.values,
+    );
+    if (!rows[0]) return sendJson(response, { error: "Place id conflict" }, 409);
     return sendJson(response, formatPlace(rows[0]), 201);
   }
 

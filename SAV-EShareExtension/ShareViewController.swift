@@ -1253,8 +1253,9 @@ struct ShareExtensionView: View {
                 throw NSError(domain: "save", code: 5, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this post. Share the map link or include the place name."])
             }
         } catch {
-            saveSourceOnlyMemory(parseContent, reason: error.localizedDescription)
-            parseError = userFacingParseError(from: error)
+            if saveSourceOnlyMemory(parseContent, reason: error.localizedDescription) {
+                parseError = userFacingParseError(from: error)
+            }
         }
         isParsing = false
     }
@@ -3497,9 +3498,11 @@ struct ShareExtensionView: View {
         }
     }
 
-    private func saveSourceOnlyMemory(_ source: String, reason: String) {
+    @discardableResult
+    private func saveSourceOnlyMemory(_ source: String, reason: String) -> Bool {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) else {
-            return
+            parseError = "Shared app storage is unavailable"
+            return false
         }
 
         let fileURL = containerURL.appendingPathComponent("save-memory-records.json")
@@ -3523,17 +3526,22 @@ struct ShareExtensionView: View {
             evidenceDiagnostic: diagnostic,
             createdAt: Date()
         )
-        _ = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in
-            var records = loadMemoryRecords(from: coordinatedURL)
-            records.insert(record, at: 0)
-            guard let data = try? JSONEncoder.shareMemory.encode(records) else { return }
-            _ = write(data, to: coordinatedURL)
+        var saved = false
+        let coordinated = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in
+            do {
+                let existingData = FileManager.default.fileExists(atPath: coordinatedURL.path)
+                    ? try Data(contentsOf: coordinatedURL)
+                    : nil
+                let data = try SaveMemoryVaultAppender.appending(record, to: existingData)
+                saved = write(data, to: coordinatedURL)
+            } catch {
+                // Fail closed: an unreadable or unexpected vault must never be
+                // replaced with only the new source-only record.
+                parseError = "Couldn't read shared app storage"
+                saved = false
+            }
         }
-    }
-
-    private func loadMemoryRecords(from fileURL: URL) -> [ShareMemoryRecord] {
-        guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        return (try? JSONDecoder.shareMemory.decode([ShareMemoryRecord].self, from: data)) ?? []
+        return coordinated && saved
     }
 
     private func appGroupFileURL(named fileName: String) -> URL? {
@@ -3607,23 +3615,6 @@ struct ShareExtensionView: View {
         case "shopping": return "bag.fill"
         default: return "mappin"
         }
-    }
-}
-
-private extension JSONEncoder {
-    static var shareMemory: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
-    }
-}
-
-private extension JSONDecoder {
-    static var shareMemory: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
     }
 }
 

@@ -34,6 +34,14 @@ struct SaveAIResponse: Equatable {
             case .driving: return MKLaunchOptionsDirectionsModeDriving
             }
         }
+
+        var mapKitDirectionsTransportType: MKDirectionsTransportType {
+            switch self {
+            case .walking: return .walking
+            case .transit: return .transit
+            case .driving: return .automobile
+            }
+        }
     }
 }
 
@@ -45,6 +53,23 @@ struct MapActionData: Codable, Equatable {
     let lat: Double?
     let lng: Double?
     let span: Double?
+    let transportMode: SaveAIResponse.TransportMode?
+
+    init(
+        type: ActionType,
+        placeIds: [String]?,
+        lat: Double?,
+        lng: Double?,
+        span: Double?,
+        transportMode: SaveAIResponse.TransportMode? = nil
+    ) {
+        self.type = type
+        self.placeIds = placeIds
+        self.lat = lat
+        self.lng = lng
+        self.span = span
+        self.transportMode = transportMode
+    }
 
     enum ActionType: String, Codable, Equatable {
         case filterPins, focusRegion, showRoute, resetPins

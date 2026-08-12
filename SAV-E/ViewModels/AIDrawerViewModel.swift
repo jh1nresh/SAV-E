@@ -1018,16 +1018,24 @@ extension SaveAIResponse {
             english: " Public discovery could not fill: \(draft.unfilledGaps.map(\.displayName).joined(separator: ", ")).",
             traditionalChinese: " 公開探索尚未補上：\(draft.unfilledGaps.map(\.displayName).joined(separator: ", "))。"
         )
+        let transportMode: SaveAIResponse.TransportMode = draft.routeStops.count > 3 ? .driving : .walking
         return SaveAIResponse(
             componentType: .tripItinerary,
             title: title,
             placeIds: savedPlaceIDs,
             navigationPlaceId: draft.anchor.savedPlaceUUIDString,
-            transportMode: draft.routeStops.count > 3 ? .driving : .walking,
+            transportMode: transportMode,
             itineraryDays: [ItineraryDay(dayNumber: 1, label: title, stops: stops)],
             messageText: nil,
             mapAction: savedPlaceIDs.count >= 2
-                ? MapActionData(type: .showRoute, placeIds: savedPlaceIDs, lat: nil, lng: nil, span: nil)
+                ? MapActionData(
+                    type: .showRoute,
+                    placeIds: savedPlaceIDs,
+                    lat: nil,
+                    lng: nil,
+                    span: nil,
+                    transportMode: transportMode
+                )
                 : MapActionData(type: .focusRegion, placeIds: nil, lat: draft.anchor.latitude, lng: draft.anchor.longitude, span: 0.03),
             aiMessage: draft.explanation + publicNote + gapNote
         )

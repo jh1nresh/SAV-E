@@ -137,7 +137,8 @@ final class SaveAIService {
                     publicCandidates: publicCandidates,
                     requiredPlaceIDs: requiredPlaceIDs,
                     maxStopsPerDay: resolvedMaxStopsPerDay,
-                    dailyCategoryCaps: dailyCategoryCaps
+                    dailyCategoryCaps: dailyCategoryCaps,
+                    outputLanguage: outputLanguage
                 )
             }
             return parsed
@@ -497,7 +498,8 @@ final class SaveAIService {
         publicCandidates: [SaveMapCandidate],
         requiredPlaceIDs: Set<String>,
         maxStopsPerDay: Int,
-        dailyCategoryCaps: [PlaceCategory: Int]?
+        dailyCategoryCaps: [PlaceCategory: Int]?,
+        outputLanguage: AppLanguage
     ) -> SaveAIResponse {
         ItineraryPlanValidator(
             savedPlaces: places,
@@ -505,7 +507,8 @@ final class SaveAIService {
             fallback: fallback,
             requiredPlaceIDs: requiredPlaceIDs,
             maxStopsPerDay: maxStopsPerDay,
-            dailyCategoryCaps: dailyCategoryCaps
+            dailyCategoryCaps: dailyCategoryCaps,
+            outputLanguage: outputLanguage
         ).validated(response) ?? fallback
     }
 
@@ -570,6 +573,7 @@ struct ItineraryPlanValidator {
     let requiredPlaceIDs: Set<String>
     let maxStopsPerDay: Int
     let dailyCategoryCaps: [PlaceCategory: Int]?
+    let outputLanguage: AppLanguage
 
     init(
         savedPlaces: [Place],
@@ -577,7 +581,8 @@ struct ItineraryPlanValidator {
         fallback: SaveAIResponse,
         requiredPlaceIDs: Set<String>,
         maxStopsPerDay: Int = ItineraryPace.balanced.maxStopsPerDay,
-        dailyCategoryCaps: [PlaceCategory: Int]? = ItineraryPlanValidator.standardDailyCategoryCaps
+        dailyCategoryCaps: [PlaceCategory: Int]? = ItineraryPlanValidator.standardDailyCategoryCaps,
+        outputLanguage: AppLanguage = .english
     ) {
         self.savedPlaces = savedPlaces
         self.publicCandidates = publicCandidates
@@ -585,6 +590,7 @@ struct ItineraryPlanValidator {
         self.requiredPlaceIDs = requiredPlaceIDs
         self.maxStopsPerDay = maxStopsPerDay
         self.dailyCategoryCaps = dailyCategoryCaps
+        self.outputLanguage = outputLanguage
     }
 
     func validated(_ response: SaveAIResponse) -> SaveAIResponse? {
@@ -626,6 +632,7 @@ struct ItineraryPlanValidator {
         let stops = response.itineraryDays.flatMap(\.stops)
         guard !stops.isEmpty else { return nil }
 
+        let healthJudge = DeterministicTripPlanner()
         var stopSavedIDs: [String] = []
         var normalizedDays: [ItineraryDay] = []
         for day in response.itineraryDays {
@@ -706,7 +713,12 @@ struct ItineraryPlanValidator {
                 dayNumber: day.dayNumber,
                 label: day.label,
                 stops: normalizedStops,
-                health: nil
+                health: healthJudge.tripHealth(
+                    for: normalizedStops,
+                    dayNumber: day.dayNumber,
+                    maxStopsPerDay: maxStopsPerDay,
+                    outputLanguage: outputLanguage
+                )
             ))
         }
         guard Set(stopSavedIDs).count == stopSavedIDs.count else {
@@ -724,12 +736,16 @@ struct ItineraryPlanValidator {
         }
 
         let orderedSavedIDs = stopSavedIDs.removingDuplicates()
+        // The deterministic draft reflects the user's requested travel mode.
+        // The polish response may improve copy, but must not change routing truth.
+        let transportMode = fallback.transportMode
         let generatedMapAction = orderedSavedIDs.isEmpty ? nil : MapActionData(
             type: .showRoute,
             placeIds: orderedSavedIDs,
             lat: nil,
             lng: nil,
-            span: nil
+            span: nil,
+            transportMode: transportMode
         )
         let navigationPlaceID = Self.nonEmptyPlaceID(response.navigationPlaceId).flatMap { validSavedIDs.contains($0) ? $0 : nil }
             ?? Self.nonEmptyPlaceID(fallback.navigationPlaceId)
@@ -739,8 +755,11 @@ struct ItineraryPlanValidator {
             title: response.title ?? fallback.title,
             placeIds: orderedSavedIDs,
             navigationPlaceId: navigationPlaceID,
-            transportMode: response.transportMode,
+            transportMode: transportMode,
             itineraryDays: normalizedDays,
+            tripHealth: fallback.tripHealth.map { _ in
+                healthJudge.overallTripHealth(for: normalizedDays, outputLanguage: outputLanguage)
+            },
             messageText: response.messageText,
             mapAction: generatedMapAction,
             aiMessage: response.aiMessage ?? fallback.aiMessage,

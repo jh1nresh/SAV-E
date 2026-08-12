@@ -465,6 +465,152 @@ final class SocialPlacePipelineTests: XCTestCase {
         ))
     }
 
+    func testSaveMemoryVaultAppenderPreservesEveryExistingRecordField() throws {
+        let richVault = """
+        [
+          {
+            "id": "8F38B86F-46D8-4D09-A797-6D37AE4D0C2C",
+            "state": "confirmed_place",
+            "sourceURL": "https://example.com/source",
+            "sourceText": "Original clue",
+            "title": "Original title",
+            "placeName": "Original place",
+            "address": "123 Main Street",
+            "evidence": ["Verified coordinates"],
+            "evidenceDiagnostic": {
+              "found": ["Google Places match"],
+              "attempts": [],
+              "missingFields": [],
+              "nextBestClue": "None",
+              "recoveryPlan": {"strategy": "keep"},
+              "rejectedEvidence": ["guess"]
+            },
+            "placeHighlights": ["Window seat"],
+            "recommendedItems": [{"name": "Toast", "price": "$12"}],
+            "vibeTags": ["Cozy"],
+            "accessNotes": ["Near transit"],
+            "sourceHandle": "@original",
+            "latitude": 25.033,
+            "longitude": 121.5654,
+            "category": "cafe",
+            "status": "want_to_go",
+            "rating": 4.8,
+            "createdAt": "2026-08-12T12:00:00Z",
+            "googlePlaceId": "place-123",
+            "sourceImageUrl": "https://example.com/source.jpg",
+            "businessPhotoUrls": ["https://example.com/business.jpg"]
+          }
+        ]
+        """
+        let existingData = try XCTUnwrap(richVault.data(using: .utf8))
+        let appendedData = try SaveMemoryVaultAppender.appending(
+            [
+                "id": "6E2EC629-FF2E-487D-9289-0B8F957C0DE0",
+                "state": "source_only",
+                "title": "New source"
+            ],
+            to: existingData
+        )
+
+        let originalRecords = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: existingData) as? [[String: Any]]
+        )
+        let appendedRecords = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: appendedData) as? [[String: Any]]
+        )
+        XCTAssertEqual(appendedRecords.count, 2)
+        XCTAssertEqual(appendedRecords.first?["state"] as? String, "source_only")
+
+        let originalCanonical = try JSONSerialization.data(
+            withJSONObject: try XCTUnwrap(originalRecords.first),
+            options: [.sortedKeys]
+        )
+        let preservedCanonical = try JSONSerialization.data(
+            withJSONObject: appendedRecords[1],
+            options: [.sortedKeys]
+        )
+        XCTAssertEqual(preservedCanonical, originalCanonical)
+    }
+
+    func testSaveMemoryVaultAppenderRejectsUnexpectedRootWithoutReplacement() throws {
+        let malformedRoot = try XCTUnwrap(#"{"state":"confirmed_place"}"#.data(using: .utf8))
+
+        XCTAssertThrowsError(
+            try SaveMemoryVaultAppender.appending(["state": "source_only"], to: malformedRoot)
+        )
+    }
+
+    @MainActor
+    func testGoogleTakeoutRetrySkipsPrefixPersistedBeforeLaterFailure() async throws {
+        let drafts = [
+            ImportedPlaceDraft(
+                name: "First Cafe",
+                address: "1 First Street",
+                latitude: 34.01,
+                longitude: -118.21,
+                sourceURL: "https://maps.google.com/?cid=first",
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            ),
+            ImportedPlaceDraft(
+                name: "Second Cafe",
+                address: "2 Second Street",
+                latitude: 34.02,
+                longitude: -118.22,
+                sourceURL: "https://maps.google.com/?cid=second",
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            )
+        ]
+        var persisted: [Place] = []
+        var attempts: [String] = []
+        var attemptedIDs: [UUID] = []
+        var failed = false
+
+        do {
+            _ = try await GoogleTakeoutBatchSaver.save(
+                drafts,
+                existingKeys: [],
+                persist: { place in
+                    attempts.append(place.name)
+                    attemptedIDs.append(place.id)
+                    if place.name == "Second Cafe" {
+                        throw NSError(domain: "GoogleTakeoutBatchSaverTests", code: 1)
+                    }
+                },
+                didPersist: { place in
+                    persisted.insert(place, at: 0)
+                }
+            )
+        } catch {
+            failed = true
+        }
+
+        XCTAssertTrue(failed)
+        XCTAssertEqual(persisted.map(\.name), ["First Cafe"])
+        XCTAssertEqual(persisted.first?.id, drafts[0].id)
+
+        let retry = try await GoogleTakeoutBatchSaver.save(
+            drafts,
+            existingKeys: Set(persisted.map(\.importDeduplicationKey)),
+            persist: { place in
+                attempts.append(place.name)
+                attemptedIDs.append(place.id)
+            },
+            didPersist: { place in
+                persisted.insert(place, at: 0)
+            }
+        )
+
+        XCTAssertEqual(retry.saved, 1)
+        XCTAssertEqual(retry.skippedDuplicates, 1)
+        XCTAssertEqual(Set(persisted.map(\.name)), ["First Cafe", "Second Cafe"])
+        XCTAssertEqual(attempts, ["First Cafe", "Second Cafe", "Second Cafe"])
+        XCTAssertEqual(attemptedIDs[1], attemptedIDs[2])
+    }
+
     @MainActor
     private func parseTakeoutFixture(_ contents: String, fileExtension: String) async throws -> GoogleTakeoutImportResult {
         let url = FileManager.default.temporaryDirectory
