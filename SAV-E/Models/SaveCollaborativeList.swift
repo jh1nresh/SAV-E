@@ -146,6 +146,10 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
     var items: [SaveListItem]
     var createdAt: Date
     var updatedAt: Date
+    /// True when this list exists on the SAV-E backend (loaded from or created
+    /// against `/v0/lists`). Local-only lists stay false until their create
+    /// sync succeeds.
+    var serverBacked: Bool
 
     init(
         id: UUID = UUID(),
@@ -155,7 +159,8 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
         viewerRole: SaveListRole = .owner,
         items: [SaveListItem] = [],
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        serverBacked: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -165,6 +170,27 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
         self.items = items
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.serverBacked = serverBacked
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, note, ownerDisplayName, viewerRole, items, createdAt, updatedAt, serverBacked
+    }
+
+    /// Custom decode so lists persisted before `serverBacked` existed
+    /// (UserDefaults key `save.collaborativeLists.v1` and legacy `d=` links)
+    /// keep decoding.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        ownerDisplayName = try container.decodeIfPresent(String.self, forKey: .ownerDisplayName) ?? "You"
+        viewerRole = try container.decodeIfPresent(SaveListRole.self, forKey: .viewerRole) ?? .owner
+        items = try container.decodeIfPresent([SaveListItem].self, forKey: .items) ?? []
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        serverBacked = try container.decodeIfPresent(Bool.self, forKey: .serverBacked) ?? false
     }
 
     var shareSubject: String {
@@ -267,6 +293,91 @@ struct SaveSharedListPayload: Codable, Hashable {
         return url.scheme == "https" &&
             ["sav-e-app.vercel.app"].contains(url.host ?? "") &&
             url.path == "/list"
+    }
+
+    /// Server short-code list links carry `?c=<code>` instead of an embedded
+    /// `d=` snapshot. Codes match the backend's `^[A-Za-z0-9_-]{6,32}$` shape.
+    static func shareCode(from url: URL) -> String? {
+        guard isListLink(url),
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+              let code = components.queryItems?.first(where: { $0.name == "c" })?.value?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              code.range(of: "^[A-Za-z0-9_-]{6,32}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return code
+    }
+}
+
+// MARK: - Server rows (`GET /v0/lists`, `POST /v0/list-joins`)
+
+/// One item row from the lists API. `payload` is the `SaveListItem` snapshot
+/// the adding client encoded with a plain `JSONEncoder`; decoding is lenient
+/// so a single malformed payload drops that item, not the whole list.
+struct SaveCollaborativeListServerItemRow: Codable, Hashable {
+    var id: String?
+    var payload: SaveListItem?
+    var added_by: String?
+    var created_at: String?
+
+    init(id: String? = nil, payload: SaveListItem?, added_by: String? = nil, created_at: String? = nil) {
+        self.id = id
+        self.payload = payload
+        self.added_by = added_by
+        self.created_at = created_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? container.decodeIfPresent(String.self, forKey: .id)
+        payload = try? container.decodeIfPresent(SaveListItem.self, forKey: .payload)
+        added_by = try? container.decodeIfPresent(String.self, forKey: .added_by)
+        created_at = try? container.decodeIfPresent(String.self, forKey: .created_at)
+    }
+}
+
+struct SaveCollaborativeListServerRow: Codable, Hashable {
+    var id: String
+    var title: String
+    var note: String?
+    var owner_id: String?
+    var viewer_role: String?
+    var items: [SaveCollaborativeListServerItemRow]?
+    var created_at: String?
+    var updated_at: String?
+}
+
+extension SaveCollaborativeList {
+    /// Maps a server list row into the local model. Returns nil only when the
+    /// row id is not a UUID (client-supplied ids always are).
+    init?(serverRow row: SaveCollaborativeListServerRow) {
+        guard let listID = UUID(uuidString: row.id) else { return nil }
+        let role = SaveListRole(rawValue: row.viewer_role ?? "") ?? .viewer
+        let items = (row.items ?? []).compactMap(\.payload)
+        let createdAt = Self.serverDate(row.created_at) ?? Date()
+        let updatedAt = Self.serverDate(row.updated_at) ?? createdAt
+        self.init(
+            id: listID,
+            title: row.title,
+            note: row.note,
+            ownerDisplayName: role == .owner ? "You" : "Shared list",
+            viewerRole: role,
+            items: items,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            serverBacked: true
+        )
+        self = sanitizingPhotoURLs()
+    }
+
+    static func serverDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) {
+            return date
+        }
+        return ISO8601DateFormatter().date(from: value)
     }
 }
 

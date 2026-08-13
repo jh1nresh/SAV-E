@@ -52,6 +52,12 @@ protocol SupabaseServiceProtocol {
     func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference
     func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard
     func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow]
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL)
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow
+    func fetchMyReferral() async throws -> (code: String, url: URL)
 }
 
 protocol RelatedPlaceSourcesProviding {
@@ -689,6 +695,76 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: path, requiresAuth: false)
         let row = try JSONDecoder.supabase.decode(ReferralProfileRow.self, from: data)
         return row.toProfile()
+    }
+
+    // MARK: - Collaborative Lists
+
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/v0/lists")
+        return try JSONDecoder.supabase.decode([SaveCollaborativeListServerRow].self, from: data)
+    }
+
+    /// Accepts the client-generated list uuid so offline-first creates stay
+    /// idempotent: replays of the same id return the existing row.
+    /// Throws `.notConfigured` (instead of the usual write no-op) because
+    /// callers use success to flip a list to `serverBacked`.
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try JSONEncoder.supabase.encode(CollaborativeListCreateBody(
+            id: id.uuidString.lowercased(),
+            title: title,
+            note: note
+        ))
+        try await request(path: "/v0/lists", method: "POST", body: body)
+    }
+
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws {
+        guard isConfigured else { return }
+
+        let body = try JSONEncoder.supabase.encode(CollaborativeListItemCreateBody(payload: payload))
+        try await request(path: "/v0/lists/\(listID.uuidString.lowercased())/items", method: "POST", body: body)
+    }
+
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        // Share codes grant viewer or editor only; the owner role can never be
+        // handed out via link, so an owner-role request downgrades to editor.
+        let grantRole = role.canEdit ? SaveListRole.editor : .viewer
+        let body = try Self.jsonBody(["role": grantRole.rawValue])
+        let data = try await request(
+            path: "/v0/lists/\(listID.uuidString.lowercased())/share-codes",
+            method: "POST",
+            body: body
+        )
+        let row = try JSONDecoder.supabase.decode(ListShareCodeRow.self, from: data)
+        guard let url = URL(string: row.url) else {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid list share link")
+        }
+        return (row.code, url)
+    }
+
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let body = try Self.jsonBody(["code": code])
+        let data = try await request(path: "/v0/list-joins", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(SaveCollaborativeListServerRow.self, from: data)
+    }
+
+    /// Mints (first call) or returns the caller's own referral code + URL.
+    func fetchMyReferral() async throws -> (code: String, url: URL) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+
+        let data = try await request(path: "/v0/me/referral")
+        let row = try JSONDecoder.supabase.decode(MyReferralRow.self, from: data)
+        guard let url = URL(string: row.url) else {
+            throw SupabaseError.invalidResponse("SAV-E returned an invalid referral link")
+        }
+        return (row.code, url)
     }
 
     func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] {
@@ -1909,6 +1985,28 @@ private struct SharedPlaceLinkRow: Codable {
     let code: String
     let url: String
     let payload: SharedPlaceData
+}
+
+private struct CollaborativeListCreateBody: Encodable {
+    let id: String
+    let title: String
+    let note: String?
+}
+
+private struct CollaborativeListItemCreateBody: Encodable {
+    let payload: SaveListItem
+}
+
+private struct ListShareCodeRow: Decodable {
+    let code: String
+    let role: String?
+    let url: String
+    let expires_at: String?
+}
+
+private struct MyReferralRow: Decodable {
+    let code: String
+    let url: String
 }
 
 // MARK: - JSON Coding

@@ -24,6 +24,10 @@ struct ProfileView: View {
     }
     var onCreateList: (String, String?) -> Void = { _, _ in }
     var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
+    var onShareListLink: (SaveCollaborativeList, SaveListRole) async -> URL? = { list, role in
+        list.shareURL(role: role)
+    }
+    var onLoadMyReferralURL: () async -> URL? = { nil }
     var onOpenListOnMap: (SaveCollaborativeList) -> Void = { _ in }
     var onFollowReferral: (String) async throws -> Void = { _ in }
     var onRefreshFollowedFriends: () async -> Void = {}
@@ -124,6 +128,8 @@ struct ProfileView: View {
                                 hasMoreFollowedFriends: hasMoreFollowedFriends,
                                 onCreateList: onCreateList,
                                 onShareListURL: onShareListURL,
+                                onShareListLink: onShareListLink,
+                                onLoadMyReferralURL: onLoadMyReferralURL,
                                 onOpenListOnMap: onOpenListOnMap,
                                 onFollowReferral: onFollowReferral,
                                 onRefreshFollowedFriends: onRefreshFollowedFriends,
@@ -276,6 +282,8 @@ private struct PassportConnectionsView: View {
     let hasMoreFollowedFriends: Bool
     let onCreateList: (String, String?) -> Void
     let onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL?
+    let onShareListLink: (SaveCollaborativeList, SaveListRole) async -> URL?
+    let onLoadMyReferralURL: () async -> URL?
     let onOpenListOnMap: (SaveCollaborativeList) -> Void
     let onFollowReferral: (String) async throws -> Void
     let onRefreshFollowedFriends: () async -> Void
@@ -290,6 +298,7 @@ private struct PassportConnectionsView: View {
     @State private var listNote = ""
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var myInviteURL: URL?
 
     var body: some View {
         ScrollView {
@@ -311,6 +320,10 @@ private struct PassportConnectionsView: View {
         .task {
             guard followedFriends.isEmpty else { return }
             await onRefreshFollowedFriends()
+        }
+        .task {
+            guard myInviteURL == nil else { return }
+            myInviteURL = await onLoadMyReferralURL()
         }
         .accessibilityIdentifier("profile.connections.root")
     }
@@ -397,6 +410,46 @@ private struct PassportConnectionsView: View {
 
     private var friendsSection: some View {
         VStack(spacing: SaveTheme.Spacing.md) {
+            // Hidden while nil (API unconfigured or the referral fetch failed)
+            // so there is never a dead share button.
+            if let myInviteURL {
+                ShareLink(item: myInviteURL) {
+                    HStack(spacing: SaveTheme.Spacing.md) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(width: 44, height: 44)
+                            .background(SaveAtlasPalette.honey.opacity(0.55), in: SavePostcardSealShape())
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(languageSettings.localized(english: "My invite link", traditionalChinese: "我的邀請連結"))
+                                .font(SaveAtlasType.strong(15))
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                            Text(languageSettings.localized(
+                                english: "Friends who open it follow you",
+                                traditionalChinese: "朋友打開後就會追蹤你"
+                            ))
+                            .font(SaveAtlasType.body(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                    }
+                    .padding(SaveTheme.Spacing.md)
+                    .background(SaveAtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(SaveAtlasPalette.honey.opacity(0.78), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.connections.myInvite")
+            }
+
             postcardPocket(
                 eyebrow: languageSettings.localized(english: "FOLLOW A FRIEND", traditionalChinese: "追蹤朋友"),
                 title: languageSettings.localized(english: "Paste their SAV-E link", traditionalChinese: "貼上對方的 SAV-E 連結")
@@ -664,15 +717,11 @@ private struct PassportConnectionsView: View {
                 }
                 .accessibilityIdentifier("profile.connections.openList")
 
-                if let viewerURL = onShareListURL(list, .viewer) {
-                    ShareLink(item: viewerURL) {
-                        Label(
-                            languageSettings.localized(english: "Share", traditionalChinese: "分享"),
-                            systemImage: "square.and.arrow.up"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                }
+                ListShareLinkControl(
+                    list: list,
+                    legacyURL: onShareListURL(list, .viewer),
+                    resolve: onShareListLink
+                )
             }
             .font(SaveAtlasType.strong(12))
             .foregroundStyle(SaveAtlasPalette.ink)
@@ -748,6 +797,36 @@ private struct PassportConnectionsView: View {
             SaveHaptics.tap()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Share button for a list ticket. Shows the legacy base64 viewer link
+/// immediately (never a dead button) and swaps in the server short-code URL
+/// once `resolve` returns it.
+private struct ListShareLinkControl: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    let list: SaveCollaborativeList
+    let legacyURL: URL?
+    let resolve: (SaveCollaborativeList, SaveListRole) async -> URL?
+
+    @State private var resolvedURL: URL?
+
+    var body: some View {
+        if let url = resolvedURL ?? legacyURL ?? list.shareURL(role: .viewer) {
+            ShareLink(item: url) {
+                Label(
+                    languageSettings.localized(english: "Share", traditionalChinese: "分享"),
+                    systemImage: "square.and.arrow.up"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .accessibilityIdentifier("profile.connections.shareList")
+            .task(id: list.id) {
+                guard resolvedURL == nil else { return }
+                resolvedURL = await resolve(list, .viewer)
+            }
         }
     }
 }

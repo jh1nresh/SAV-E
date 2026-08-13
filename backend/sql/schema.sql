@@ -1434,3 +1434,57 @@ create trigger update_work_orders_updated_at before update on work_orders
 drop trigger if exists update_workflow_runs_updated_at on workflow_runs;
 create trigger update_workflow_runs_updated_at before update on workflow_runs
     for each row execute procedure update_updated_at();
+
+-- Collaborative lists v2: server-backed lists + membership ACL + short share codes
+-- (specs/2026-08-12-collaborative-lists-v2-server.md)
+
+create table if not exists lists (
+    id uuid primary key default gen_random_uuid(),
+    owner_id text references profiles(id) on delete cascade not null,
+    title text not null,
+    note text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_lists_owner on lists(owner_id);
+
+create table if not exists list_items (
+    id uuid primary key default gen_random_uuid(),
+    list_id uuid references lists(id) on delete cascade not null,
+    added_by text references profiles(id) on delete set null,
+    payload jsonb not null,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_list_items_list on list_items(list_id);
+
+create table if not exists list_members (
+    id uuid primary key default gen_random_uuid(),
+    list_id uuid references lists(id) on delete cascade not null,
+    user_id text references profiles(id) on delete cascade not null,
+    role text not null,
+    created_at timestamptz not null default now(),
+    constraint list_members_role_check check (role in ('owner', 'editor', 'viewer')),
+    constraint list_members_unique_member unique (list_id, user_id)
+);
+
+create index if not exists idx_list_members_user on list_members(user_id);
+
+create table if not exists list_share_codes (
+    id uuid primary key default gen_random_uuid(),
+    list_id uuid references lists(id) on delete cascade not null,
+    code text not null unique,
+    role text not null,
+    created_by text references profiles(id) on delete cascade not null,
+    expires_at timestamptz default (now() + interval '90 days'),
+    created_at timestamptz not null default now(),
+    constraint list_share_codes_code_check check (code ~ '^[A-Za-z0-9_-]{6,32}$'),
+    constraint list_share_codes_role_check check (role in ('editor', 'viewer'))
+);
+
+create index if not exists idx_list_share_codes_list on list_share_codes(list_id);
+
+drop trigger if exists update_lists_updated_at on lists;
+create trigger update_lists_updated_at before update on lists
+    for each row execute procedure update_updated_at();

@@ -213,6 +213,12 @@ struct ContentView: View {
                 onShareListURL: { list, role in
                     mapVM.shareURL(for: list, role: role)
                 },
+                onShareListLink: { list, role in
+                    await mapVM.shareLink(for: list, role: role)
+                },
+                onLoadMyReferralURL: {
+                    await mapVM.myReferralURL()
+                },
                 onOpenListOnMap: openCollaborativeListOnMap,
                 onFollowReferral: { value in
                     try await mapVM.followReferral(value)
