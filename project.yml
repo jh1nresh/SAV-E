@@ -111,6 +111,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.core
+        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
   DebugBridgeTouch:
@@ -124,6 +125,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.touch
+        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
   DebugBridgeUI:
@@ -138,6 +140,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.ui
+        GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
 
