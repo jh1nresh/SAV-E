@@ -109,6 +109,7 @@ struct ContentView: View {
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
@@ -132,21 +133,27 @@ struct ContentView: View {
     @State private var fullScreenMapCandidateActionID: String?
     @State private var fullScreenActionError: String?
     @State private var isMapPanelExpanded = false
+    @State private var suppressPendingOnboardingCaptureResume = false
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        pendingOnboardingClue: Binding<String> = .constant(""),
         storageScope: ContentStorageScope = .production
     ) {
         _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
+        _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
-        _isRootSheetPresented = State(initialValue: incomingPlaceReceipt.wrappedValue != nil)
+        let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
+        _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
         _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
         _selectedRootTab = State(initialValue: .home)
         _rootPath = State(initialValue: [])
-        _fullScreenRoute = State(initialValue: nil)
+        let onboardingClue = pendingOnboardingClue.wrappedValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _fullScreenRoute = State(initialValue: onboardingClue.isEmpty || hasInitialReceipt ? nil : .capture)
         _fullScreenCandidateActionID = State(initialValue: nil)
         _fullScreenMapCandidateActionID = State(initialValue: nil)
         _fullScreenActionError = State(initialValue: nil)
@@ -297,6 +304,9 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }
+            // A save/import only aims the camera; opening the detail again
+            // would stack a drawer on top of a flow the user just finished.
+            guard !mapVM.consumeCameraOnlySelection() else { return }
             guard selectedRootTab != .map else { return }
             openMapDetail(.savedPlace(place))
         }
@@ -382,7 +392,6 @@ struct ContentView: View {
                             TripsHomeView(
                                 store: tripStore,
                                 savedPlaces: mapVM.places,
-                                onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenAssistant: { openDrawer(.ask, tripID: nil) },
                                 onAskSubmit: { query in
                                     openDrawer(.ask, tripID: nil, initialQuery: query)
@@ -448,6 +457,7 @@ struct ContentView: View {
         if isMapPanelExpanded || (selectedRootTab == .map && rootPath.isEmpty) {
             SaveMapDrawerPanel(
                 isExpanded: $isMapPanelExpanded,
+                detent: $drawerDetent,
                 mapStampCount: mapVM.places.count,
                 showsCollapsedShelf: mapVM.selectedPlace == nil
                     && selectedRootTab == .map
@@ -489,14 +499,20 @@ struct ContentView: View {
         case .capture:
             SaveCaptureFlowView(
                 tripName: captureTripName,
+                initialText: pendingOnboardingClue,
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
                 },
                 onComplete: {
+                    pendingOnboardingClue = ""
                     fullScreenRoute = nil
                     selectedRootTab = .saves
                 },
                 onCancel: {
+                    // Closing is not consent to discard a private clue. Keep it
+                    // for the next Add Link tap or app launch without trapping
+                    // the user in an immediately re-presented cover.
+                    suppressPendingOnboardingCaptureResume = true
                     fullScreenRoute = nil
                 }
             )
@@ -521,7 +537,6 @@ struct ContentView: View {
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
                 onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
-                onMarkCandidateWrongBranch: markFullScreenCandidateWrongBranch,
                 onInvestigateCandidateMore: investigateFullScreenCandidate,
                 onSaveMapCandidate: saveFullScreenMapCandidate,
                 onSaveSocialPlace: saveFullScreenSocialPlace,
@@ -588,17 +603,13 @@ struct ContentView: View {
                 try await mapVM.deletePlace(place)
             },
             onSaveCandidate: { candidate, nameOverride in
-                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                requestTripAssignment(for: place)
+                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
             },
             onRejectCandidate: { candidate in
                 try await mapVM.rejectReviewCandidate(candidate)
             },
             onSaveCandidateAsSourceOnly: { candidate in
                 try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
-            },
-            onMarkCandidateWrongBranch: { candidate in
-                try await mapVM.markReviewCandidateWrongBranch(candidate)
             },
             onInvestigateCandidateMore: { candidate in
                 try await mapVM.investigateReviewCandidateMore(candidate)
@@ -628,6 +639,9 @@ struct ContentView: View {
             },
             onPrepareMapSearch: { query in
                 await mapVM.prepareMapCandidatesForDrawerQuery(query)
+            },
+            onBeginExactSearchResolution: { candidate in
+                mapVM.beginExactSearchResolution(for: candidate)
             },
             onClearMapSearchResults: {
                 mapVM.clearMapSearchResults()
@@ -747,6 +761,7 @@ struct ContentView: View {
 
         switch target {
         case .addLink:
+            suppressPendingOnboardingCaptureResume = false
             fullScreenRoute = .capture
             return
         case .review, .saved:
@@ -803,8 +818,8 @@ struct ContentView: View {
         Task {
             defer { fullScreenCandidateActionID = nil }
             do {
-                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                requestFullScreenTripAssignment(for: place)
+                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                fullScreenRoute = nil
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
@@ -822,13 +837,6 @@ struct ContentView: View {
         performFullScreenCandidateAction(candidate) {
             try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
             fullScreenRoute = nil
-        }
-    }
-
-    private func markFullScreenCandidateWrongBranch(_ candidate: PlaceReviewCandidate) {
-        performFullScreenCandidateAction(candidate) {
-            try await mapVM.markReviewCandidateWrongBranch(candidate)
-            openExactSearch(candidate)
         }
     }
 
@@ -910,6 +918,9 @@ struct ContentView: View {
                 // empty map.
                 openDrawer(.ask, tripID: nil, initialQuery: query)
             } else {
+                // Saving one of these pins resolves the clue itself, so the
+                // item leaves Review instead of lingering there.
+                mapVM.beginExactSearchResolution(for: candidate)
                 drawerVM.mapCandidates = candidates
                 showMapCandidatesOnMap()
             }
@@ -1023,6 +1034,7 @@ struct ContentView: View {
         }
         guard let pendingDetail else {
             mapVM.clearSelectedMapObject()
+            resumePendingOnboardingCaptureIfNeeded()
             return
         }
 
@@ -1055,6 +1067,30 @@ struct ContentView: View {
         }
         if pendingTripAssignmentPlace != nil {
             presentTripAssignmentDialog()
+            return
+        }
+        resumePendingOnboardingCaptureIfNeeded()
+    }
+
+    private func resumePendingOnboardingCaptureIfNeeded() {
+        guard !suppressPendingOnboardingCaptureResume,
+              !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              incomingPlaceReceipt == nil,
+              fullScreenRoute == nil,
+              !isRootSheetPresented,
+              pendingTripAssignmentPlace == nil
+        else { return }
+
+        Task { @MainActor in
+            await Task.yield()
+            guard !suppressPendingOnboardingCaptureResume,
+                  !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  incomingPlaceReceipt == nil,
+                  fullScreenRoute == nil,
+                  !isRootSheetPresented,
+                  pendingTripAssignmentPlace == nil
+            else { return }
+            fullScreenRoute = .capture
         }
     }
 
@@ -1188,6 +1224,7 @@ struct ContentView: View {
 private struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let tripName: String?
+    let initialText: String
     let onImport: (String) async throws -> [UUID]
     let onComplete: () -> Void
     let onCancel: () -> Void
@@ -1330,6 +1367,11 @@ private struct SaveCaptureFlowView: View {
             .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
         }
         .accessibilityIdentifier("capture.flow")
+        .onAppear {
+            if sharedText.isEmpty {
+                sharedText = initialText
+            }
+        }
     }
 
     private var trimmedText: String {

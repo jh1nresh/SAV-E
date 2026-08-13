@@ -40,7 +40,7 @@ final class SAVEOnboardingCarouselTests: SAVEUITestCase {
         primary.tap()
 
         // Map Stamp demo is the final step; its CTA exits onboarding.
-        assertFullyVisible(app.staticTexts["You confirmed it. Stamped."], in: app)
+        assertFullyVisible(app.staticTexts["Demo complete. Stamped."], in: app)
         assertFullyVisible(
             app.staticTexts["Only places you confirm become private Map Stamps."],
             in: app
@@ -74,7 +74,7 @@ final class SAVEOnboardingCarouselTests: SAVEUITestCase {
         skip.tap()
 
         // Skipping the final Map Stamp step exits onboarding.
-        XCTAssertTrue(app.staticTexts["You confirmed it. Stamped."].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Demo complete. Stamped."].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
         waitForDisappearance(of: primary)

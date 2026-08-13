@@ -1987,6 +1987,158 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionOnlyRetiresClueForReturnedCandidate() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Coffee",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["User asked for the exact branch"],
+            confidence: 0.7,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let returnedCandidate = SaveMapCandidate(
+            id: "returned-candidate",
+            title: "Review Coffee Xinyi",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        let unrelatedCandidate = SaveMapCandidate(
+            id: "unrelated-poi",
+            title: "Unrelated Bakery",
+            subtitle: "Taipei",
+            latitude: 25.041,
+            longitude: 121.553,
+            category: .food
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [returnedCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        try await map.saveMapCandidateAsPlace(unrelatedCandidate)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        try await map.saveMapCandidateAsPlace(returnedCandidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionTreatsDuplicateRetryAsSuccess() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-duplicate-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Retry Coffee",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Retry after a correction failure"],
+            confidence: 0.7,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let returnedCandidate = SaveMapCandidate(
+            id: "retry-candidate",
+            title: "Retry Coffee Xinyi",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        try await map.saveMapCandidateAsPlace(returnedCandidate)
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [returnedCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        try await map.saveMapCandidateAsPlace(returnedCandidate)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertFalse(map.mapCandidates.contains { $0.id == returnedCandidate.id })
+    }
+
+    @MainActor
+    func testNonPlaceQueryClearsStaleExactSearchResults() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-clear-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Old Search",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [],
+            confidence: 0.5,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let oldCandidate = SaveMapCandidate(
+            id: "old-candidate",
+            title: "Old Search Result",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [oldCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        let results = await map.prepareMapCandidatesForDrawerQuery("date night")
+        try await map.saveMapCandidateAsPlace(oldCandidate)
+
+        XCTAssertTrue(results.isEmpty)
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testPlainTextClueImportsWithoutRequiringAURL() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plain-text-clue-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+
+        let importedIDs = try await map.importSharedTextAsReviewCandidates("鼎泰豐 信義店")
+
+        XCTAssertFalse(importedIDs.isEmpty)
+        XCTAssertEqual(map.reviewCandidates.first?.id, importedIDs.first)
+        XCTAssertFalse(map.reviewCandidates.first?.name.isEmpty ?? true)
+    }
+
+    @MainActor
     func testMapNonRouteActionsClearStaleTripRoute() {
         let map = MapViewModel()
         var route = [

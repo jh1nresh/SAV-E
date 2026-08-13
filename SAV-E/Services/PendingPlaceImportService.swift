@@ -559,7 +559,6 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
 final class PendingPlaceImportService {
     static let shared = PendingPlaceImportService()
-    private static let onboardingFirstClueSourceURL = "save://onboarding/first-clue"
 
     private let fileManager: FileManager
     private let overrideContainerURL: URL?
@@ -583,66 +582,6 @@ final class PendingPlaceImportService {
 
     func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate]) {
         appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName)
-    }
-
-    @discardableResult
-    func queueOnboardingFirstClue(
-        _ rawClue: String,
-        candidateService: SocialLinkReviewCandidateService = .shared
-    ) -> [PendingReviewCandidate] {
-        let candidates = Self.onboardingFirstClueCandidates(from: rawClue, candidateService: candidateService)
-        restorePendingReviewCandidates(candidates)
-        return candidates
-    }
-
-    static func onboardingFirstClueCandidates(
-        from rawClue: String,
-        candidateService: SocialLinkReviewCandidateService = .shared
-    ) -> [PendingReviewCandidate] {
-        let clue = rawClue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clue.isEmpty else { return [] }
-
-        let candidates = candidateService
-            .reviewCandidatesOrSourceOnly(fromEvidenceText: clue, sourceURL: onboardingFirstClueSourceURL)
-            .prefix(3)
-            .map { normalizeOnboardingFirstClueCandidate($0, clue: clue) }
-        return Array(candidates)
-    }
-
-    private static func normalizeOnboardingFirstClueCandidate(
-        _ candidate: PendingReviewCandidate,
-        clue: String
-    ) -> PendingReviewCandidate {
-        var normalized = candidate
-        normalized.sourceURL = nil
-        normalized.sourceText = clue
-        if normalized.isSourceOnly || normalized.candidateName == "Social link" {
-            normalized.candidateName = onboardingClueTitle(from: clue)
-        }
-        normalized.evidence = normalizedOnboardingEvidence(normalized.evidence, clue: clue)
-        if var diagnostic = normalized.evidenceDiagnostic {
-            diagnostic.found = normalizedOnboardingEvidence(diagnostic.found, clue: clue)
-            diagnostic.recoveryPlan?.sourceURL = nil
-            normalized.evidenceDiagnostic = diagnostic
-        }
-        return normalized
-    }
-
-    private static func normalizedOnboardingEvidence(_ evidence: [String], clue: String) -> [String] {
-        var values = evidence.filter { !$0.contains(onboardingFirstClueSourceURL) }
-        values.insert("Onboarding clue: \(clue)", at: 0)
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
-    }
-
-    private static func onboardingClueTitle(from clue: String) -> String {
-        let firstLine = clue
-            .split(whereSeparator: \.isNewline)
-            .first
-            .map(String.init) ?? clue
-        let title = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard title.count > 72 else { return title }
-        return String(title.prefix(69)) + "..."
     }
 
     private func consumePendingArray<Element: Decodable>(named fileName: String, as elementType: Element.Type) -> [Element] {

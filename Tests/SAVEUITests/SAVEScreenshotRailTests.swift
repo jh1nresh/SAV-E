@@ -541,7 +541,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.buttons["trips.capture"].exists)
+        XCTAssertFalse(
+            app.buttons["trips.capture"].exists,
+            "Trips dropped its header capture button; capture lives on Home and Saves."
+        )
         // The ask entry is a real input now, not a button (spec P1), so the
         // query is type-agnostic while the identifier stays the same.
         XCTAssertTrue(app.descendants(matching: .any)["trips.assistant"].exists)
@@ -1263,6 +1266,26 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Confirm candidate never became tappable.\n\(app.debugDescription)"
         )
         confirmCandidate.tap()
+
+        // Saving no longer interrupts with a trip prompt; adding to a Trip is
+        // an explicit action from the saved place detail.
+        let savedPlace = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@", placeName)
+        ).firstMatch
+        XCTAssertTrue(
+            savedPlace.waitForExistence(timeout: timeout(20)),
+            "Confirmed candidate should appear as a saved place.\n\(app.debugDescription)"
+        )
+        savedPlace.tap()
+
+        let savedDetailScroll = app.scrollViews["place.detail.scroll"]
+        XCTAssertTrue(savedDetailScroll.waitForExistence(timeout: stepTimeout))
+        let addToTrip = app.buttons["drawer.saved.addToTrip"]
+        XCTAssertTrue(
+            scrollUntilHittable(addToTrip, in: savedDetailScroll),
+            "Add-to-trip action never became tappable.\n\(app.debugDescription)"
+        )
+        addToTrip.tap()
 
         let createTripAndAdd = app.buttons
             .matching(identifier: "saved.addToTrip.create")
