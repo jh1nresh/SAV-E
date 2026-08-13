@@ -230,7 +230,31 @@ struct ContentView: View {
                 onShareListURL: { list, role in
                     mapVM.shareURL(for: list, role: role)
                 },
+                onShareListLink: { list, role in
+                    await mapVM.shareLink(for: list, role: role)
+                },
+                onLoadMyReferralURL: {
+                    await mapVM.myReferralURL()
+                },
                 onOpenListOnMap: openCollaborativeListOnMap,
+                currentUserID: PrivyAuthService.shared.currentUserId,
+                onRefreshLists: {
+                    // Sync entry point that spawns its own server refresh —
+                    // an async wrapper keeps the poll-on-open contract simple.
+                    mapVM.reloadCollaborativeLists()
+                },
+                onLoadListMembers: { list in
+                    await mapVM.listMembers(for: list)
+                },
+                onRemoveListMember: { member, list in
+                    try await mapVM.removeListMember(member, from: list)
+                },
+                onLoadListShareCodes: { list in
+                    await mapVM.listShareCodes(for: list)
+                },
+                onRevokeListShareCode: { code, list in
+                    try await mapVM.revokeListShareCode(code.code, for: list)
+                },
                 onFollowReferral: { value in
                     try await mapVM.followReferral(value)
                 },
@@ -668,42 +692,8 @@ struct ContentView: View {
             onAddPlaceToList: { place, listID in
                 try mapVM.addPlace(place, toListID: listID)
             },
-            onShareListURL: { list, role in
-                mapVM.shareURL(for: list, role: role)
-            },
-            onSaveListItem: { item in
-                _ = try await mapVM.saveListItemAsPlace(item)
-            },
-            onPlanList: { list in
-                await mapVM.planCollaborativeList(list)
-            },
-            socialPlaces: mapVM.visibleSocialPlaces,
-            followedFriends: mapVM.followedFriends,
-            isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
-            followedFriendsLoadFailed: mapVM.followedFriendsLoadFailed,
-            hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
-            isLoadingMoreFollowedFriends: mapVM.isLoadingMoreFollowedFriends,
-            followedFriendsLoadMoreFailed: mapVM.followedFriendsLoadMoreFailed,
-            onSelectSocialLens: { lens in
-                mapVM.selectSocialLens(lens)
-            },
             onSaveSocialPlace: { place in
                 _ = try await mapVM.saveSocialPlaceToMySave(place)
-            },
-            onFollowReferral: { value in
-                try await mapVM.followReferral(value)
-            },
-            onRefreshFollowedFriends: {
-                await mapVM.refreshFollowedFriends(force: true)
-            },
-            onSearchFollowedFriends: { query in
-                await mapVM.refreshFollowedFriends(query: query, force: true)
-            },
-            onLoadMoreFollowedFriends: {
-                await mapVM.loadMoreFollowedFriends()
-            },
-            onUnfollowFriend: { friend in
-                try await mapVM.unfollowFriend(friend)
             },
             selectedCategories: mapVM.selectedCategories,
             onToggleCategory: { category in

@@ -168,6 +168,188 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
     }
 
+    // MARK: - Server short-code links (`?c=`)
+
+    @MainActor
+    func testShareCodeParsesServerListLinks() throws {
+        let https = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=Ab3_x-9Q"))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: https), "Ab3_x-9Q")
+        XCTAssertTrue(SaveSharedListPayload.isListLink(https))
+
+        let scheme = try XCTUnwrap(URL(string: "wanderly://list?c=abcdef"))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: scheme), "abcdef")
+    }
+
+    @MainActor
+    func testShareCodeRejectsMalformedOrLegacyLinks() throws {
+        // Legacy embedded-snapshot link has no code.
+        let legacy = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?d=eyJ9&r=viewer"))
+        XCTAssertNil(SaveSharedListPayload.shareCode(from: legacy))
+
+        // Too short, bad characters, wrong host/path.
+        XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=abc"))))
+        XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=abc%20def1"))))
+        XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://evil.example.com/list?c=abcdef"))))
+        XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/trip?c=abcdef"))))
+    }
+
+    // MARK: - Server row mapping
+
+    @MainActor
+    func testServerRowMapsToCollaborativeListAndRoundTripsItemPayload() throws {
+        let item = SaveListItem.from(place: place(name: "Onibus Coffee", category: .cafe), addedByDisplayName: "Ezven")
+        let listID = UUID()
+        let row = SaveCollaborativeListServerRow(
+            id: listID.uuidString.lowercased(),
+            title: "Tokyo cafes",
+            note: "Saturday",
+            owner_id: "did:privy:owner",
+            viewer_role: "editor",
+            items: [SaveCollaborativeListServerItemRow(id: UUID().uuidString, payload: item, added_by: "did:privy:owner")],
+            created_at: "2026-08-12T10:00:00Z",
+            updated_at: "2026-08-12T11:30:00.123Z"
+        )
+
+        // Round trip the row itself the way the API layer does (plain coders).
+        let data = try JSONEncoder.supabase.encode(row)
+        let decodedRow = try JSONDecoder.supabase.decode(SaveCollaborativeListServerRow.self, from: data)
+        let list = try XCTUnwrap(SaveCollaborativeList(serverRow: decodedRow))
+
+        XCTAssertEqual(list.id, listID)
+        XCTAssertEqual(list.title, "Tokyo cafes")
+        XCTAssertEqual(list.note, "Saturday")
+        XCTAssertEqual(list.viewerRole, .editor)
+        XCTAssertTrue(list.serverBacked)
+        XCTAssertEqual(list.items.count, 1)
+        XCTAssertEqual(list.items.first?.title, "Onibus Coffee")
+        XCTAssertEqual(list.items.first?.addedByDisplayName, "Ezven")
+        XCTAssertEqual(list.createdAt, SaveCollaborativeList.serverDate("2026-08-12T10:00:00Z"))
+        XCTAssertEqual(list.updatedAt, SaveCollaborativeList.serverDate("2026-08-12T11:30:00.123Z"))
+    }
+
+    @MainActor
+    func testServerRowDropsUndecodableItemPayloadsInsteadOfFailing() throws {
+        let json = """
+        {
+          "id": "\(UUID().uuidString)",
+          "title": "Lenient list",
+          "viewer_role": "viewer",
+          "items": [
+            {"id": "x", "payload": {"unexpected": true}, "added_by": null, "created_at": null}
+          ]
+        }
+        """
+        let row = try JSONDecoder.supabase.decode(SaveCollaborativeListServerRow.self, from: Data(json.utf8))
+        let list = try XCTUnwrap(SaveCollaborativeList(serverRow: row))
+
+        XCTAssertTrue(list.items.isEmpty)
+        XCTAssertEqual(list.viewerRole, .viewer)
+        XCTAssertFalse(list.canEdit)
+    }
+
+    @MainActor
+    func testServerRowWithNonUUIDIdIsRejected() {
+        let row = SaveCollaborativeListServerRow(id: "not-a-uuid", title: "Bad", viewer_role: "owner")
+        XCTAssertNil(SaveCollaborativeList(serverRow: row))
+    }
+
+    // MARK: - Merge + cache compatibility
+
+    @MainActor
+    func testMergeServerWinsByIdAndKeepsLocalOnlyLists() {
+        let sharedID = UUID()
+        let serverList = SaveCollaborativeList(
+            id: sharedID,
+            title: "Server title",
+            viewerRole: .editor,
+            updatedAt: Date(timeIntervalSinceNow: -10),
+            serverBacked: true
+        )
+        let staleLocal = SaveCollaborativeList(id: sharedID, title: "Stale local title", updatedAt: Date())
+        let localOnly = SaveCollaborativeList(title: "Offline list", updatedAt: Date(timeIntervalSinceNow: -100))
+
+        let merged = MapViewModel.mergeCollaborativeLists(server: [serverList], local: [staleLocal, localOnly])
+
+        XCTAssertEqual(merged.count, 2)
+        let winner = merged.first(where: { $0.id == sharedID })
+        XCTAssertEqual(winner?.title, "Server title")
+        XCTAssertEqual(winner?.viewerRole, .editor)
+        XCTAssertTrue(merged.contains(where: { $0.id == localOnly.id }))
+        // Sorted by updatedAt descending.
+        XCTAssertEqual(merged.map(\.id), [sharedID, localOnly.id])
+    }
+
+    @MainActor
+    func testLegacyPersistedListsDecodeWithServerBackedDefaultingFalse() throws {
+        // Snapshot of the pre-serverBacked persisted shape (plain JSONEncoder:
+        // dates are seconds since the reference date).
+        let json = """
+        {
+          "id": "\(UUID().uuidString)",
+          "title": "Legacy list",
+          "ownerDisplayName": "You",
+          "viewerRole": "owner",
+          "items": [],
+          "createdAt": 745000000,
+          "updatedAt": 745000000
+        }
+        """
+        let list = try JSONDecoder().decode(SaveCollaborativeList.self, from: Data(json.utf8))
+        XCTAssertFalse(list.serverBacked)
+        XCTAssertEqual(list.title, "Legacy list")
+
+        // And the new field survives its own round trip.
+        var backed = list
+        backed.serverBacked = true
+        let reencoded = try JSONEncoder().encode(backed)
+        XCTAssertTrue(try JSONDecoder().decode(SaveCollaborativeList.self, from: reencoded).serverBacked)
+    }
+
+    // MARK: - Member + share-code row mapping
+
+    @MainActor
+    func testListMemberRowMapsRoleDateAndDisplayNameFallback() throws {
+        let named = try JSONDecoder().decode(SaveListMemberRow.self, from: Data("""
+        {"user_id": "did:privy:abc", "role": "owner", "display_name": "  Ezven  ", "created_at": "2026-08-01T10:20:30.123Z"}
+        """.utf8))
+        let info = SaveListMemberInfo(row: named)
+        XCTAssertEqual(info.id, "did:privy:abc")
+        XCTAssertEqual(info.role, .owner)
+        XCTAssertEqual(info.displayName, "Ezven")
+        XCTAssertNotNil(info.joinedAt)
+
+        // Missing role/name/date degrade instead of dropping the row.
+        let bare = SaveListMemberInfo(row: SaveListMemberRow(user_id: "did:privy:xyz"))
+        XCTAssertEqual(bare.role, .viewer)
+        XCTAssertEqual(bare.displayName, "Traveler")
+        XCTAssertNil(bare.joinedAt)
+    }
+
+    @MainActor
+    func testListShareCodeRowMapsAndNeverGrantsOwnerBadge() {
+        let editor = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(
+            code: "abc123",
+            role: "editor",
+            url: "https://sav-e-app.vercel.app/list?c=abc123",
+            expires_at: "2026-09-01T00:00:00Z",
+            created_at: "2026-08-01T00:00:00Z"
+        ))
+        XCTAssertEqual(editor.id, "abc123")
+        XCTAssertEqual(editor.role, .editor)
+        XCTAssertEqual(editor.url?.absoluteString, "https://sav-e-app.vercel.app/list?c=abc123")
+        XCTAssertNotNil(editor.expiresAt)
+        XCTAssertNotNil(editor.createdAt)
+
+        // Share codes only ever grant viewer/editor; an "owner" (or unknown)
+        // role from the server renders as the safer viewer badge.
+        let owner = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(code: "own", role: "owner"))
+        XCTAssertEqual(owner.role, .viewer)
+        let unknown = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(code: "wat", role: "banana"))
+        XCTAssertEqual(unknown.role, .viewer)
+        XCTAssertNil(unknown.url)
+        XCTAssertNil(unknown.expiresAt)
+    }
+
     @MainActor
     private func place(name: String, category: PlaceCategory) -> Place {
         Place(

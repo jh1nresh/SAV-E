@@ -489,7 +489,7 @@ final class MapViewModel: ObservableObject {
         self.collaborativeListStore = collaborativeListStore
         self.referralHandoffStore = referralHandoffStore
         self.usesRemotePersistence = usesRemotePersistence
-        self.collaborativeLists = collaborativeListStore.load()
+        reloadCollaborativeLists()
     }
 
     // MARK: - Computed
@@ -1281,17 +1281,64 @@ final class MapViewModel: ObservableObject {
         )
         collaborativeLists.insert(list, at: 0)
         persistCollaborativeLists()
+        // Fire-and-forget server create with the same uuid (idempotent server
+        // side); a failure leaves the list local-only and the next share/load
+        // retries.
+        if usesRemotePersistence {
+            Task { [weak self] in
+                await self?.syncCollaborativeListCreate(list)
+            }
+        }
         return list
     }
 
     func addPlace(_ place: Place, toListID listID: UUID) throws {
+        let item = SaveListItem.from(place: place)
+        var added = false
         try updateCollaborativeList(listID) { list in
-            list.add(.from(place: place))
+            let countBefore = list.items.count
+            list.add(item)
+            added = list.items.count > countBefore
+        }
+        guard added,
+              usesRemotePersistence,
+              collaborativeLists.first(where: { $0.id == listID })?.serverBacked == true else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await supabaseService.addCollaborativeListItem(listID: listID, payload: item)
+            } catch {
+                print("MapViewModel: failed to sync list item \(item.title) to list \(listID): \(error)")
+            }
         }
     }
 
     func shareURL(for list: SaveCollaborativeList, role: SaveListRole) -> URL? {
         collaborativeLists.first(where: { $0.id == list.id })?.shareURL(role: role) ?? list.shareURL(role: role)
+    }
+
+    /// Server short-code share link. Ensures the list exists server-side
+    /// first (idempotent create with the local uuid); on any failure — offline,
+    /// unconfigured, non-owner — falls back to the legacy base64 link.
+    func shareLink(for list: SaveCollaborativeList, role: SaveListRole) async -> URL {
+        let current = collaborativeLists.first(where: { $0.id == list.id }) ?? list
+        let legacy = shareURL(for: current, role: role) ?? Self.listShareFallbackURL
+        guard usesRemotePersistence, current.viewerRole == .owner else { return legacy }
+        do {
+            if !current.serverBacked {
+                try await supabaseService.createCollaborativeListRow(
+                    id: current.id,
+                    title: current.title,
+                    note: current.note
+                )
+                markCollaborativeListServerBacked(current.id)
+            }
+            let grant = try await supabaseService.createListShareCode(listID: current.id, role: role)
+            return grant.url
+        } catch {
+            print("MapViewModel: falling back to legacy share link for \(current.title): \(error)")
+            return legacy
+        }
     }
 
     @discardableResult
@@ -1301,9 +1348,130 @@ final class MapViewModel: ObservableObject {
         return list
     }
 
+    /// Server-side join via a `?c=` short code. Inserts/replaces the joined
+    /// list locally and posts the same didJoin notification legacy joins use.
+    @discardableResult
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeList {
+        let row = try await supabaseService.joinCollaborativeList(code: code)
+        guard let joined = SaveCollaborativeList(serverRow: row) else {
+            throw SaveCollaborativeListError.invalidLink
+        }
+        if let index = collaborativeLists.firstIndex(where: { $0.id == joined.id }) {
+            collaborativeLists[index] = joined
+        } else {
+            collaborativeLists.insert(joined, at: 0)
+        }
+        persistCollaborativeLists()
+        NotificationCenter.default.post(name: SaveCollaborativeListNotification.didJoin, object: joined)
+        return joined
+    }
+
+    /// Member roster for the list's manage view. Degrades to empty — the UI
+    /// treats "no members" and "fetch failed" the same (nothing to manage).
+    func listMembers(for list: SaveCollaborativeList) async -> [SaveListMemberInfo] {
+        guard usesRemotePersistence, list.serverBacked else { return [] }
+        do {
+            let rows = try await supabaseService.fetchListMembers(listID: list.id)
+            return rows.map(SaveListMemberInfo.init(row:))
+        } catch {
+            print("MapViewModel: failed to load members for list \(list.title): \(error)")
+            return []
+        }
+    }
+
+    /// Removes a member server-side. When the removed member is the current
+    /// user (= leaving the list) the list is dropped from the local cache too;
+    /// removing someone else changes nothing locally.
+    func removeListMember(_ member: SaveListMemberInfo, from list: SaveCollaborativeList) async throws {
+        guard usesRemotePersistence else { return }
+        try await supabaseService.removeListMember(listID: list.id, userID: member.userID)
+        guard member.userID == authService.currentUserId else { return }
+        collaborativeLists.removeAll { $0.id == list.id }
+        persistCollaborativeLists()
+    }
+
+    /// Active share codes for the list (owner only server-side). Degrades to
+    /// empty on failure for the same reason as `listMembers(for:)`.
+    func listShareCodes(for list: SaveCollaborativeList) async -> [SaveListShareCodeInfo] {
+        guard usesRemotePersistence, list.serverBacked else { return [] }
+        do {
+            let rows = try await supabaseService.fetchListShareCodes(listID: list.id)
+            return rows.map(SaveListShareCodeInfo.init(row:))
+        } catch {
+            print("MapViewModel: failed to load share codes for list \(list.title): \(error)")
+            return []
+        }
+    }
+
+    /// Revokes one share code. Existing members keep access, so no local
+    /// list state changes.
+    func revokeListShareCode(_ code: String, for list: SaveCollaborativeList) async throws {
+        guard usesRemotePersistence else { return }
+        try await supabaseService.revokeListShareCode(listID: list.id, code: code)
+    }
+
+    /// The caller's own invite link (`GET /v0/me/referral`, mints on first
+    /// call). Nil when the API is unconfigured or the fetch fails.
+    func myReferralURL() async -> URL? {
+        guard usesRemotePersistence else { return nil }
+        return (try? await supabaseService.fetchMyReferral())?.url
+    }
+
+    /// Sync signature by design: local cache renders immediately, the server
+    /// refresh lands on a later main-actor hop (fire-and-forget with
+    /// retry-on-next-load).
     func reloadCollaborativeLists() {
         collaborativeLists = collaborativeListStore.load()
+        guard usesRemotePersistence else { return }
+        Task { [weak self] in
+            await self?.refreshCollaborativeListsFromServer()
+        }
     }
+
+    /// Server rows win per id; lists the server doesn't know about (offline
+    /// creates, legacy `d=` imports) are kept. Pure so tests can pin the rule.
+    nonisolated static func mergeCollaborativeLists(
+        server: [SaveCollaborativeList],
+        local: [SaveCollaborativeList]
+    ) -> [SaveCollaborativeList] {
+        let serverIDs = Set(server.map(\.id))
+        let localOnly = local.filter { !serverIDs.contains($0.id) }
+        return (server + localOnly).sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private func refreshCollaborativeListsFromServer() async {
+        let rows: [SaveCollaborativeListServerRow]
+        do {
+            rows = try await supabaseService.fetchCollaborativeListRows()
+        } catch {
+            print("MapViewModel: failed to refresh collaborative lists: \(error)")
+            return
+        }
+        guard !rows.isEmpty else { return }
+        let serverLists = rows.compactMap { SaveCollaborativeList(serverRow: $0) }
+        collaborativeLists = Self.mergeCollaborativeLists(server: serverLists, local: collaborativeLists)
+        persistCollaborativeLists()
+    }
+
+    private func syncCollaborativeListCreate(_ list: SaveCollaborativeList) async {
+        do {
+            try await supabaseService.createCollaborativeListRow(id: list.id, title: list.title, note: list.note)
+            markCollaborativeListServerBacked(list.id)
+        } catch SupabaseError.notConfigured {
+            // Unconfigured builds keep lists local-only; nothing to report.
+        } catch {
+            print("MapViewModel: failed to sync new list \(list.title): \(error)")
+        }
+    }
+
+    private func markCollaborativeListServerBacked(_ listID: UUID) {
+        guard let index = collaborativeLists.firstIndex(where: { $0.id == listID }),
+              !collaborativeLists[index].serverBacked else { return }
+        collaborativeLists[index].serverBacked = true
+        persistCollaborativeLists()
+    }
+
+    private static let listShareFallbackURL = URL(string: "https://sav-e-app.vercel.app/list")!
 
     func selectSocialLens(_ lens: SaveSocialLens) {
         socialLens = lens

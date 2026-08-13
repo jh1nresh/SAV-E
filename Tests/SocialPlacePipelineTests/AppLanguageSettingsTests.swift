@@ -35,11 +35,6 @@ final class AppLanguageSettingsTests: XCTestCase {
             "貼上連結，或問你收藏的地點..."
         )
 
-        XCTAssertEqual(CommandDrawerTab.saved.title(language: .english), "Saved")
-        XCTAssertEqual(CommandDrawerTab.saved.title(language: .traditionalChinese), "收藏")
-        XCTAssertEqual(CommandDrawerTab.review.title(language: .english), "Review")
-        XCTAssertEqual(CommandDrawerTab.review.title(language: .traditionalChinese), "待確認")
-
         let englishSuggestions = SaveMVPDrawerEntryCopy.suggestions(language: .english)
         XCTAssertEqual(englishSuggestions, [
             "Paste a place link",

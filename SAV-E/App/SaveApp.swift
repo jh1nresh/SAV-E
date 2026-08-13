@@ -332,6 +332,23 @@ struct SaveApp: App {
             deferredAccountScopedLink = nil
             return
         }
+        // `?c=` short codes join server-side (role enforced by the backend).
+        // Reviewer demo skips the server and falls through to the legacy path,
+        // where the code-only link simply reports as invalid.
+        if let code = SaveSharedListPayload.shareCode(from: link.url), !authService.isReviewerDemo {
+            let processingID = UUID()
+            let linkID = link.id
+            accountScopedURLProcessingID = processingID
+            Task {
+                await completeDeferredListJoin(
+                    code: code,
+                    linkID: linkID,
+                    processingID: processingID,
+                    generation: generation
+                )
+            }
+            return
+        }
         do {
             openedList = try activeCollaborativeListStore.join(from: link.url)
         } catch {
@@ -344,6 +361,67 @@ struct SaveApp: App {
         if deferredAccountScopedLink?.id == link.id {
             deferredAccountScopedLink = nil
         }
+    }
+
+    @MainActor
+    private func completeDeferredListJoin(
+        code: String,
+        linkID: UUID,
+        processingID: UUID,
+        generation: Int
+    ) async {
+        var joined: SaveCollaborativeList?
+        var joinError: Error?
+        do {
+            let row = try await supabaseService.joinCollaborativeList(code: code)
+            joined = SaveCollaborativeList(serverRow: row)
+            if joined == nil {
+                joinError = SaveCollaborativeListError.invalidLink
+            }
+        } catch {
+            joinError = error
+        }
+
+        guard accountScopedURLProcessingID == processingID else { return }
+        accountScopedURLProcessingID = nil
+        guard let link = deferredAccountScopedLink,
+              link.id == linkID,
+              link.ownerGeneration == generation,
+              isCurrentAccountVerified,
+              authService.sessionGeneration == generation,
+              SaveSharedListPayload.isListLink(link.url) else {
+            if deferredAccountScopedLink?.id == linkID {
+                deferredAccountScopedLink = nil
+            }
+            return
+        }
+
+        if let joined {
+            storeJoinedList(joined)
+            openedList = joined
+        } else {
+            openedList = SaveCollaborativeList(
+                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
+                note: (joinError ?? SaveCollaborativeListError.invalidLink).localizedDescription,
+                viewerRole: .viewer
+            )
+        }
+        deferredAccountScopedLink = nil
+    }
+
+    /// Persists a server-joined list into the active local store (cache) and
+    /// posts didJoin so ContentView's observer reloads MapViewModel.
+    @MainActor
+    private func storeJoinedList(_ list: SaveCollaborativeList) {
+        let store = activeCollaborativeListStore
+        var lists = store.load()
+        if let index = lists.firstIndex(where: { $0.id == list.id }) {
+            lists[index] = list
+        } else {
+            lists.insert(list, at: 0)
+        }
+        store.save(lists)
+        NotificationCenter.default.post(name: SaveCollaborativeListNotification.didJoin, object: list)
     }
 
     @MainActor
