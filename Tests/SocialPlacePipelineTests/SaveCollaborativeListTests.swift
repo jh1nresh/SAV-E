@@ -305,6 +305,51 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(try JSONDecoder().decode(SaveCollaborativeList.self, from: reencoded).serverBacked)
     }
 
+    // MARK: - Member + share-code row mapping
+
+    @MainActor
+    func testListMemberRowMapsRoleDateAndDisplayNameFallback() throws {
+        let named = try JSONDecoder().decode(SaveListMemberRow.self, from: Data("""
+        {"user_id": "did:privy:abc", "role": "owner", "display_name": "  Ezven  ", "created_at": "2026-08-01T10:20:30.123Z"}
+        """.utf8))
+        let info = SaveListMemberInfo(row: named)
+        XCTAssertEqual(info.id, "did:privy:abc")
+        XCTAssertEqual(info.role, .owner)
+        XCTAssertEqual(info.displayName, "Ezven")
+        XCTAssertNotNil(info.joinedAt)
+
+        // Missing role/name/date degrade instead of dropping the row.
+        let bare = SaveListMemberInfo(row: SaveListMemberRow(user_id: "did:privy:xyz"))
+        XCTAssertEqual(bare.role, .viewer)
+        XCTAssertEqual(bare.displayName, "Traveler")
+        XCTAssertNil(bare.joinedAt)
+    }
+
+    @MainActor
+    func testListShareCodeRowMapsAndNeverGrantsOwnerBadge() {
+        let editor = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(
+            code: "abc123",
+            role: "editor",
+            url: "https://sav-e-app.vercel.app/list?c=abc123",
+            expires_at: "2026-09-01T00:00:00Z",
+            created_at: "2026-08-01T00:00:00Z"
+        ))
+        XCTAssertEqual(editor.id, "abc123")
+        XCTAssertEqual(editor.role, .editor)
+        XCTAssertEqual(editor.url?.absoluteString, "https://sav-e-app.vercel.app/list?c=abc123")
+        XCTAssertNotNil(editor.expiresAt)
+        XCTAssertNotNil(editor.createdAt)
+
+        // Share codes only ever grant viewer/editor; an "owner" (or unknown)
+        // role from the server renders as the safer viewer badge.
+        let owner = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(code: "own", role: "owner"))
+        XCTAssertEqual(owner.role, .viewer)
+        let unknown = SaveListShareCodeInfo(row: SaveListShareCodeInfoRow(code: "wat", role: "banana"))
+        XCTAssertEqual(unknown.role, .viewer)
+        XCTAssertNil(unknown.url)
+        XCTAssertNil(unknown.expiresAt)
+    }
+
     @MainActor
     private func place(name: String, category: PlaceCategory) -> Place {
         Place(

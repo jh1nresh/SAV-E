@@ -57,6 +57,10 @@ protocol SupabaseServiceProtocol {
     func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws
     func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL)
     func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow]
+    func removeListMember(listID: UUID, userID: String) async throws
+    func fetchListShareCodes(listID: UUID) async throws -> [SaveListShareCodeInfoRow]
+    func revokeListShareCode(listID: UUID, code: String) async throws
     func fetchMyReferral() async throws -> (code: String, url: URL)
 }
 
@@ -753,6 +757,49 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let body = try Self.jsonBody(["code": code])
         let data = try await request(path: "/v0/list-joins", method: "POST", body: body)
         return try JSONDecoder.supabase.decode(SaveCollaborativeListServerRow.self, from: data)
+    }
+
+    /// Member roster for a server-backed list (`GET /v0/lists/:id/members`,
+    /// member-only). Degrades to empty when the API is unconfigured so the
+    /// manage UI never throws on local-only builds.
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/v0/lists/\(listID.uuidString.lowercased())/members")
+        return try JSONDecoder.supabase.decode([SaveListMemberRow].self, from: data)
+    }
+
+    /// Removes a member (owner removing others) or leaves the list (non-owner
+    /// removing self). `DELETE /v0/lists/:id/members/:memberUserId` → 204.
+    func removeListMember(listID: UUID, userID: String) async throws {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        guard let encodedUserID = userID.urlPathEncoded else { throw SupabaseError.recordNotFound }
+
+        try await request(
+            path: "/v0/lists/\(listID.uuidString.lowercased())/members/\(encodedUserID)",
+            method: "DELETE"
+        )
+    }
+
+    /// Active share codes for a list (`GET /v0/lists/:id/share-codes`,
+    /// owner only). Degrades to empty when the API is unconfigured.
+    func fetchListShareCodes(listID: UUID) async throws -> [SaveListShareCodeInfoRow] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/v0/lists/\(listID.uuidString.lowercased())/share-codes")
+        return try JSONDecoder.supabase.decode([SaveListShareCodeInfoRow].self, from: data)
+    }
+
+    /// Revokes one share code (`DELETE /v0/lists/:id/share-codes/:code` → 204,
+    /// owner only). Existing members keep their access.
+    func revokeListShareCode(listID: UUID, code: String) async throws {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        guard let encodedCode = code.urlPathEncoded else { throw SupabaseError.recordNotFound }
+
+        try await request(
+            path: "/v0/lists/\(listID.uuidString.lowercased())/share-codes/\(encodedCode)",
+            method: "DELETE"
+        )
     }
 
     /// Mints (first call) or returns the caller's own referral code + URL.
@@ -2007,6 +2054,83 @@ private struct ListShareCodeRow: Decodable {
 private struct MyReferralRow: Decodable {
     let code: String
     let url: String
+}
+
+/// One member row from `GET /v0/lists/:id/members`. Non-private (and lenient
+/// on everything but `user_id`) because the manage UI maps it into
+/// `SaveListMemberInfo` outside this file.
+struct SaveListMemberRow: Codable, Hashable {
+    var user_id: String
+    var role: String?
+    var display_name: String?
+    var created_at: String?
+}
+
+/// One share-code row from `GET /v0/lists/:id/share-codes` (owner only).
+struct SaveListShareCodeInfoRow: Codable, Hashable {
+    var code: String
+    var role: String?
+    var url: String?
+    var expires_at: String?
+    var created_at: String?
+}
+
+/// View-facing member of a server-backed collaborative list.
+struct SaveListMemberInfo: Identifiable, Hashable {
+    let userID: String
+    let role: SaveListRole
+    let displayName: String
+    let joinedAt: Date?
+
+    var id: String { userID }
+
+    init(userID: String, role: SaveListRole, displayName: String, joinedAt: Date? = nil) {
+        self.userID = userID
+        self.role = role
+        self.displayName = displayName
+        self.joinedAt = joinedAt
+    }
+
+    init(row: SaveListMemberRow) {
+        let trimmedName = row.display_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.init(
+            userID: row.user_id,
+            role: SaveListRole(rawValue: row.role ?? "") ?? .viewer,
+            displayName: trimmedName.isEmpty ? "Traveler" : trimmedName,
+            joinedAt: SaveCollaborativeList.serverDate(row.created_at)
+        )
+    }
+}
+
+/// View-facing active share code for a server-backed collaborative list.
+struct SaveListShareCodeInfo: Identifiable, Hashable {
+    let code: String
+    let role: SaveListRole
+    let url: URL?
+    let expiresAt: Date?
+    let createdAt: Date?
+
+    var id: String { code }
+
+    init(code: String, role: SaveListRole, url: URL? = nil, expiresAt: Date? = nil, createdAt: Date? = nil) {
+        self.code = code
+        self.role = role
+        self.url = url
+        self.expiresAt = expiresAt
+        self.createdAt = createdAt
+    }
+
+    init(row: SaveListShareCodeInfoRow) {
+        self.init(
+            code: row.code,
+            // Share codes only ever grant viewer or editor; an unknown or
+            // missing role renders as the safer viewer badge.
+            role: SaveListRole(rawValue: row.role ?? "") == .editor ? .editor : .viewer,
+            url: row.url.flatMap(URL.init(string:)),
+            expiresAt: SaveCollaborativeList.serverDate(row.expires_at),
+            createdAt: SaveCollaborativeList.serverDate(row.created_at)
+        )
+    }
 }
 
 // MARK: - JSON Coding

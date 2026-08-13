@@ -104,18 +104,24 @@ import {
 } from "./followList.js";
 import {
   formatListItemRow,
+  formatListMemberRow,
   formatListRow,
+  formatShareCodeRow,
   listBodyMaxBytes,
   listForMember,
   listMaxItems,
+  listMembersForViewer,
   listShareURL,
   listsForMember,
   memberRole,
   normalizeListCreate,
   normalizeListItemCreate,
   normalizeListJoin,
+  normalizeListMemberUserId,
+  normalizeListShareCode,
   normalizeShareCodeCreate,
   referralShareURL,
+  shareCodesForOwner,
 } from "./listContracts.js";
 import {
   WorkflowContractError,
@@ -1016,8 +1022,8 @@ createServer(async (request, response) => {
       return await handleFollows(request, response, id, url, userId, isV0);
     }
     if (isV0 && resource === "shared-place-links") return await handleSharedPlaceLinks(request, response, id, userId);
-    if (isV0 && resource === "lists" && segments.length <= 3) {
-      return await handleLists(request, response, id, segments[2], userId);
+    if (isV0 && resource === "lists" && segments.length <= 4) {
+      return await handleLists(request, response, id, segments[2], segments[3], userId);
     }
     if (isV0 && resource === "list-joins" && !id) {
       return await handleListJoins(request, response, userId);
@@ -2959,6 +2965,7 @@ async function handleLists(
   response: ServerResponse,
   listId: string | undefined,
   sub: string | undefined,
+  subId: string | undefined,
   userId: string,
 ): Promise<void> {
   if (request.method === "GET") {
@@ -3046,7 +3053,65 @@ async function handleLists(
     }
   }
 
-  if (request.method === "POST" && listId && sub === "items") {
+  if (request.method === "GET" && listId && sub === "members" && !subId) {
+    // Membership is enforced inside the SQL: a member list always includes the
+    // viewer themselves, so an empty result means "not a member" (or no list).
+    const rows = await listMembersForViewer(listId, userId, poolListQuery);
+    if (rows.length === 0) throw new ApiError(404, "List not found");
+    return sendJson(response, rows.map((row) => formatListMemberRow(row)));
+  }
+
+  if (request.method === "DELETE" && listId && sub === "members" && subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    const targetUserId = normalizeListMemberUserId(subId);
+    if (!targetUserId) throw new ApiError(404, "List member not found");
+
+    const role = await memberRole(listId, userId, poolListQuery);
+    if (!role) throw new ApiError(404, "List not found");
+    if (role === "owner") {
+      if (targetUserId === userId) {
+        return sendJson(response, { error: "Owners cannot leave their own list" }, 409);
+      }
+    } else if (targetUserId !== userId) {
+      // Non-owners may only remove themselves (leave); hide everything else.
+      throw new ApiError(404, "List member not found");
+    }
+
+    const { rows } = await pool.query(
+      `delete from list_members
+       where list_id = $1 and user_id = $2 and role <> 'owner'
+       returning user_id`,
+      [listId, targetUserId],
+    );
+    if (!rows[0]) throw new ApiError(404, "List member not found");
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method === "GET" && listId && sub === "share-codes" && !subId) {
+    const viewerRole = await memberRole(listId, userId, poolListQuery);
+    if (viewerRole !== "owner") throw new ApiError(404, "List not found");
+    const rows = await shareCodesForOwner(listId, userId, poolListQuery);
+    return sendJson(response, rows.map((row) => formatShareCodeRow(row)));
+  }
+
+  if (request.method === "DELETE" && listId && sub === "share-codes" && subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    const code = normalizeListShareCode(subId);
+    if (!code) throw new ApiError(404, "Share code not found");
+
+    const role = await memberRole(listId, userId, poolListQuery);
+    if (role !== "owner") throw new ApiError(404, "List not found");
+
+    // Revoking deletes the code; members who already joined keep membership.
+    const { rows } = await pool.query(
+      "delete from list_share_codes where list_id = $1 and code = $2 returning code",
+      [listId, code],
+    );
+    if (!rows[0]) throw new ApiError(404, "Share code not found");
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method === "POST" && listId && sub === "items" && !subId) {
     if (!isUuid(listId)) throw new ApiError(404, "List not found");
     let item: ReturnType<typeof normalizeListItemCreate>;
     try {
@@ -3101,7 +3166,7 @@ async function handleLists(
     }
   }
 
-  if (request.method === "POST" && listId && sub === "share-codes") {
+  if (request.method === "POST" && listId && sub === "share-codes" && !subId) {
     if (!isUuid(listId)) throw new ApiError(404, "List not found");
     let create: ReturnType<typeof normalizeShareCodeCreate>;
     try {

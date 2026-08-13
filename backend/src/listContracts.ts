@@ -6,6 +6,7 @@ export const listItemPayloadMaxBytes = 8 * 1024;
 export const listMaxItems = 200;
 export const listBodyMaxBytes = 16 * 1024;
 export const listShareCodePattern = /^[A-Za-z0-9_-]{6,32}$/;
+export const listMemberUserIdMaxLength = 128;
 export const listShareBaseURL = "https://sav-e-app.vercel.app/list";
 export const referralShareBaseURL = "https://sav-e-app.vercel.app/r";
 
@@ -79,6 +80,19 @@ export function normalizeShareCodeCreate(body: JsonObject): ListShareCodeCreate 
   return { role };
 }
 
+export function normalizeListMemberUserId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || [...trimmed].length > listMemberUserIdMaxLength) return null;
+  return trimmed;
+}
+
+export function normalizeListShareCode(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return listShareCodePattern.test(trimmed) ? trimmed : null;
+}
+
 const memberListSelect = `select
   l.id::text as id,
   l.owner_id,
@@ -147,6 +161,59 @@ limit 1`,
   return typeof role === "string" && role ? role : null;
 }
 
+export async function listMembersForViewer(
+  listId: string,
+  viewerId: string,
+  query: ListQuery,
+): Promise<JsonObject[]> {
+  if (!viewerId.trim()) throw new Error("Authenticated user id is required");
+  if (!uuidPattern.test(listId)) return [];
+  const { rows } = await query(
+    `select
+  m.user_id,
+  m.role,
+  p.display_name,
+  m.created_at
+from list_members m
+join profiles p on p.id = m.user_id
+where m.list_id = $1
+  and exists (
+    select 1
+    from list_members viewer
+    where viewer.list_id = m.list_id and viewer.user_id = $2
+  )
+order by m.created_at, m.user_id`,
+    [listId, viewerId],
+  );
+  return rows;
+}
+
+export async function shareCodesForOwner(
+  listId: string,
+  ownerId: string,
+  query: ListQuery,
+): Promise<JsonObject[]> {
+  if (!ownerId.trim()) throw new Error("Authenticated user id is required");
+  if (!uuidPattern.test(listId)) return [];
+  const { rows } = await query(
+    `select
+  c.code,
+  c.role,
+  c.expires_at,
+  c.created_at
+from list_share_codes c
+where c.list_id = $1
+  and exists (
+    select 1
+    from list_members owner
+    where owner.list_id = c.list_id and owner.user_id = $2 and owner.role = 'owner'
+  )
+order by c.created_at desc, c.code`,
+    [listId, ownerId],
+  );
+  return rows;
+}
+
 export function formatListRow(row: JsonObject): JsonObject {
   return {
     id: stringOrNull(row.id),
@@ -167,6 +234,26 @@ export function formatListItemRow(row: JsonObject): JsonObject {
     id: stringOrNull(row.id),
     payload: row.payload ?? null,
     added_by: stringOrNull(row.added_by),
+    created_at: isoTimestamp(row.created_at),
+  };
+}
+
+export function formatListMemberRow(row: JsonObject): JsonObject {
+  return {
+    user_id: stringOrNull(row.user_id),
+    role: stringOrNull(row.role),
+    display_name: stringOrNull(row.display_name),
+    created_at: isoTimestamp(row.created_at),
+  };
+}
+
+export function formatShareCodeRow(row: JsonObject, shareBaseURL = listShareBaseURL): JsonObject {
+  const code = stringOrNull(row.code);
+  return {
+    code,
+    role: stringOrNull(row.role),
+    url: code ? listShareURL(code, shareBaseURL) : null,
+    expires_at: isoTimestamp(row.expires_at),
     created_at: isoTimestamp(row.created_at),
   };
 }

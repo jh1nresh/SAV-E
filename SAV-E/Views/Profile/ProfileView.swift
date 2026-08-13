@@ -29,6 +29,12 @@ struct ProfileView: View {
     }
     var onLoadMyReferralURL: () async -> URL? = { nil }
     var onOpenListOnMap: (SaveCollaborativeList) -> Void = { _ in }
+    var currentUserID: String?
+    var onRefreshLists: () async -> Void = {}
+    var onLoadListMembers: (SaveCollaborativeList) async -> [SaveListMemberInfo] = { _ in [] }
+    var onRemoveListMember: (SaveListMemberInfo, SaveCollaborativeList) async throws -> Void = { _, _ in }
+    var onLoadListShareCodes: (SaveCollaborativeList) async -> [SaveListShareCodeInfo] = { _ in [] }
+    var onRevokeListShareCode: (SaveListShareCodeInfo, SaveCollaborativeList) async throws -> Void = { _, _ in }
     var onFollowReferral: (String) async throws -> Void = { _ in }
     var onRefreshFollowedFriends: () async -> Void = {}
     var onSearchFollowedFriends: (String) async -> Void = { _ in }
@@ -131,6 +137,12 @@ struct ProfileView: View {
                                 onShareListLink: onShareListLink,
                                 onLoadMyReferralURL: onLoadMyReferralURL,
                                 onOpenListOnMap: onOpenListOnMap,
+                                currentUserID: currentUserID,
+                                onRefreshLists: onRefreshLists,
+                                onLoadListMembers: onLoadListMembers,
+                                onRemoveListMember: onRemoveListMember,
+                                onLoadListShareCodes: onLoadListShareCodes,
+                                onRevokeListShareCode: onRevokeListShareCode,
                                 onFollowReferral: onFollowReferral,
                                 onRefreshFollowedFriends: onRefreshFollowedFriends,
                                 onSearchFollowedFriends: onSearchFollowedFriends,
@@ -285,6 +297,12 @@ private struct PassportConnectionsView: View {
     let onShareListLink: (SaveCollaborativeList, SaveListRole) async -> URL?
     let onLoadMyReferralURL: () async -> URL?
     let onOpenListOnMap: (SaveCollaborativeList) -> Void
+    let currentUserID: String?
+    let onRefreshLists: () async -> Void
+    let onLoadListMembers: (SaveCollaborativeList) async -> [SaveListMemberInfo]
+    let onRemoveListMember: (SaveListMemberInfo, SaveCollaborativeList) async throws -> Void
+    let onLoadListShareCodes: (SaveCollaborativeList) async -> [SaveListShareCodeInfo]
+    let onRevokeListShareCode: (SaveListShareCodeInfo, SaveCollaborativeList) async throws -> Void
     let onFollowReferral: (String) async throws -> Void
     let onRefreshFollowedFriends: () async -> Void
     let onSearchFollowedFriends: (String) async -> Void
@@ -324,6 +342,15 @@ private struct PassportConnectionsView: View {
         .task {
             guard myInviteURL == nil else { return }
             myInviteURL = await onLoadMyReferralURL()
+        }
+        // Poll-on-open: server membership/role changes (someone joined, a code
+        // was revoked, you were removed) land when the lists section shows.
+        .task {
+            await onRefreshLists()
+        }
+        .onChange(of: selectedSection) { _, newSection in
+            guard newSection == .lists else { return }
+            Task { await onRefreshLists() }
         }
         .accessibilityIdentifier("profile.connections.root")
     }
@@ -722,6 +749,29 @@ private struct PassportConnectionsView: View {
                     legacyURL: onShareListURL(list, .viewer),
                     resolve: onShareListLink
                 )
+
+                // Members/share-code management only exists server-side, so
+                // local-only lists get no dead Manage entry.
+                if list.serverBacked {
+                    NavigationLink {
+                        ListManageView(
+                            list: list,
+                            currentUserID: currentUserID,
+                            onLoadMembers: onLoadListMembers,
+                            onRemoveMember: onRemoveListMember,
+                            onLoadShareCodes: onLoadListShareCodes,
+                            onRevokeShareCode: onRevokeListShareCode
+                        )
+                    } label: {
+                        Label(
+                            languageSettings.localized(english: "Manage", traditionalChinese: "管理"),
+                            systemImage: "person.2.badge.gearshape"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
+                    .accessibilityIdentifier("profile.connections.manageList")
+                }
             }
             .font(SaveAtlasType.strong(12))
             .foregroundStyle(SaveAtlasPalette.ink)
@@ -828,6 +878,420 @@ private struct ListShareLinkControl: View {
                 resolvedURL = await resolve(list, .viewer)
             }
         }
+    }
+}
+
+// MARK: - List Management
+
+/// Member + share-code management for one server-backed collaborative list.
+/// Owners remove members and revoke share codes; everyone else can only
+/// leave the list. All mutations round-trip through the SAV-E backend.
+private struct ListManageView: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dismiss) private var dismiss
+
+    let list: SaveCollaborativeList
+    let currentUserID: String?
+    let onLoadMembers: (SaveCollaborativeList) async -> [SaveListMemberInfo]
+    let onRemoveMember: (SaveListMemberInfo, SaveCollaborativeList) async throws -> Void
+    let onLoadShareCodes: (SaveCollaborativeList) async -> [SaveListShareCodeInfo]
+    let onRevokeShareCode: (SaveListShareCodeInfo, SaveCollaborativeList) async throws -> Void
+
+    @State private var members: [SaveListMemberInfo] = []
+    @State private var shareCodes: [SaveListShareCodeInfo] = []
+    @State private var isLoadingMembers = true
+    @State private var isLoadingShareCodes = true
+    @State private var memberPendingRemoval: SaveListMemberInfo?
+    @State private var codePendingRevoke: SaveListShareCodeInfo?
+    @State private var isLeaveConfirmationPresented = false
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    private var isOwner: Bool {
+        list.viewerRole == .owner
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: SaveTheme.Spacing.lg) {
+                topBar
+                membersSection
+
+                if isOwner {
+                    shareCodesSection
+                } else {
+                    leaveButton
+                }
+
+                inlineError
+            }
+            .padding(.horizontal)
+            .padding(.bottom, SaveTheme.Spacing.xl)
+        }
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            members = await onLoadMembers(list)
+            isLoadingMembers = false
+        }
+        .task {
+            guard isOwner else {
+                isLoadingShareCodes = false
+                return
+            }
+            shareCodes = await onLoadShareCodes(list)
+            isLoadingShareCodes = false
+        }
+        .confirmationDialog(
+            languageSettings.localized(english: "Remove this member?", traditionalChinese: "要移除這位成員嗎？"),
+            isPresented: Binding(
+                get: { memberPendingRemoval != nil },
+                set: { if !$0 { memberPendingRemoval = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: memberPendingRemoval
+        ) { member in
+            Button(
+                languageSettings.localized(english: "Remove \(member.displayName)", traditionalChinese: "移除 \(member.displayName)"),
+                role: .destructive
+            ) {
+                Task { await remove(member) }
+            }
+        } message: { member in
+            Text(languageSettings.localized(
+                english: "\(member.displayName) loses access to \"\(list.title)\". Their own saved places stay untouched.",
+                traditionalChinese: "\(member.displayName) 將失去「\(list.title)」的存取權；對方自己收藏的地點不受影響。"
+            ))
+        }
+        .confirmationDialog(
+            languageSettings.localized(english: "Revoke this share code?", traditionalChinese: "要撤銷這個分享碼嗎？"),
+            isPresented: Binding(
+                get: { codePendingRevoke != nil },
+                set: { if !$0 { codePendingRevoke = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: codePendingRevoke
+        ) { code in
+            Button(
+                languageSettings.localized(english: "Revoke code", traditionalChinese: "撤銷分享碼"),
+                role: .destructive
+            ) {
+                Task { await revoke(code) }
+            }
+        } message: { _ in
+            Text(languageSettings.localized(
+                english: "The link stops working for new joiners. People already in the list keep access.",
+                traditionalChinese: "連結將無法再加入新成員；已加入的成員仍保有存取權。"
+            ))
+        }
+        .confirmationDialog(
+            languageSettings.localized(english: "Leave this list?", traditionalChinese: "要退出這個清單嗎？"),
+            isPresented: $isLeaveConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button(
+                languageSettings.localized(english: "Leave list", traditionalChinese: "退出清單"),
+                role: .destructive
+            ) {
+                Task { await leave() }
+            }
+        } message: {
+            Text(languageSettings.localized(
+                english: "\"\(list.title)\" disappears from your passport. Rejoin any time with a fresh share link.",
+                traditionalChinese: "「\(list.title)」會從你的護照移除；之後可用新的分享連結再加入。"
+            ))
+        }
+        .accessibilityIdentifier("profile.connections.manageList.root")
+    }
+
+    private var topBar: some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            PassportIconButton(systemName: "chevron.left") {
+                SaveHaptics.tap()
+                dismiss()
+            }
+            .accessibilityLabel(languageSettings.localized(english: "Back to connections", traditionalChinese: "返回連線"))
+            .accessibilityIdentifier("profile.connections.manageList.back")
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(languageSettings.localized(english: "MANAGE LIST", traditionalChinese: "管理清單"))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(1.1)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Text(list.title)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(list.viewerRole.displayName.uppercased())
+                .font(SaveAtlasType.strong(9))
+                .tracking(0.7)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(SaveAtlasPalette.mint.opacity(0.62), in: Capsule())
+        }
+        .padding(.top, SaveTheme.Spacing.lg)
+    }
+
+    private var membersSection: some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            Text(languageSettings.localized(english: "MEMBERS", traditionalChinese: "成員"))
+                .font(SaveAtlasType.strong(10))
+                .tracking(1.05)
+                .foregroundStyle(SaveAtlasPalette.coral)
+
+            if isLoadingMembers {
+                ProgressView()
+                    .tint(SaveAtlasPalette.forest)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SaveTheme.Spacing.lg)
+            } else if members.isEmpty {
+                Text(languageSettings.localized(
+                    english: "Couldn't load members. Check your connection and reopen this page.",
+                    traditionalChinese: "無法載入成員，請確認網路後再重開此頁。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SaveTheme.Spacing.md)
+            } else {
+                ForEach(members) { member in
+                    memberRow(member)
+                }
+            }
+        }
+    }
+
+    private func memberRow(_ member: SaveListMemberInfo) -> some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 42, height: 42)
+                .background(SaveAtlasPalette.mint.opacity(0.62), in: SavePostcardSealShape())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(isSelf(member)
+                    ? languageSettings.localized(english: "\(member.displayName) (You)", traditionalChinese: "\(member.displayName)（你）")
+                    : member.displayName)
+                    .font(SaveAtlasType.strong(14))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                if let joinedAt = member.joinedAt {
+                    Text(languageSettings.localized(
+                        english: "Joined \(joinedAt.formatted(date: .abbreviated, time: .omitted))",
+                        traditionalChinese: "加入於 \(joinedAt.formatted(date: .abbreviated, time: .omitted))"
+                    ))
+                    .font(SaveAtlasType.body(11))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            Spacer()
+
+            Text(member.role.displayName.uppercased())
+                .font(SaveAtlasType.strong(9))
+                .tracking(0.7)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(SaveAtlasPalette.honey.opacity(0.55), in: Capsule())
+
+            // The backend rejects owner self-removal (409), so the minus only
+            // renders for other members.
+            if isOwner, !isSelf(member) {
+                Button {
+                    SaveHaptics.tap()
+                    memberPendingRemoval = member
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.minus")
+                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+                .disabled(isWorking)
+                .accessibilityLabel(languageSettings.localized(english: "Remove member", traditionalChinese: "移除成員"))
+                .accessibilityIdentifier("profile.connections.removeMember")
+            }
+        }
+        .padding(SaveTheme.Spacing.md)
+        .background(SaveAtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.mint.opacity(0.72), lineWidth: 1)
+        }
+    }
+
+    private var shareCodesSection: some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            Text(languageSettings.localized(english: "SHARE CODES", traditionalChinese: "分享碼"))
+                .font(SaveAtlasType.strong(10))
+                .tracking(1.05)
+                .foregroundStyle(SaveAtlasPalette.coral)
+
+            if isLoadingShareCodes {
+                ProgressView()
+                    .tint(SaveAtlasPalette.forest)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, SaveTheme.Spacing.lg)
+            } else if shareCodes.isEmpty {
+                Text(languageSettings.localized(
+                    english: "No active share codes. Tap Share on the list to mint one.",
+                    traditionalChinese: "目前沒有分享碼；在清單上點「分享」即可產生。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SaveTheme.Spacing.md)
+            } else {
+                ForEach(shareCodes) { code in
+                    shareCodeRow(code)
+                }
+            }
+        }
+    }
+
+    private func shareCodeRow(_ code: SaveListShareCodeInfo) -> some View {
+        HStack(spacing: SaveTheme.Spacing.md) {
+            Image(systemName: "link")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 42, height: 42)
+                .background(SaveAtlasPalette.honey.opacity(0.55), in: SavePostcardSealShape())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(code.code)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+                Text(expiryLabel(for: code))
+                    .font(SaveAtlasType.body(11))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+            }
+
+            Spacer()
+
+            Text(code.role.displayName.uppercased())
+                .font(SaveAtlasType.strong(9))
+                .tracking(0.7)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(SaveAtlasPalette.mint.opacity(0.62), in: Capsule())
+
+            Button {
+                SaveHaptics.tap()
+                codePendingRevoke = code
+            } label: {
+                Image(systemName: "xmark.circle")
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .frame(width: 38, height: 38)
+            }
+            .buttonStyle(.plain)
+            .disabled(isWorking)
+            .accessibilityLabel(languageSettings.localized(english: "Revoke share code", traditionalChinese: "撤銷分享碼"))
+            .accessibilityIdentifier("profile.connections.revokeCode")
+        }
+        .padding(SaveTheme.Spacing.md)
+        .background(SaveAtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.honey.opacity(0.72), lineWidth: 1)
+        }
+    }
+
+    private var leaveButton: some View {
+        Button {
+            SaveHaptics.tap()
+            isLeaveConfirmationPresented = true
+        } label: {
+            Label(
+                languageSettings.localized(english: "Leave list", traditionalChinese: "退出清單"),
+                systemImage: "rectangle.portrait.and.arrow.right"
+            )
+            .font(SaveAtlasType.strong(13))
+            .foregroundStyle(Color.saveError)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(Color.saveError.opacity(0.08), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(Color.saveError.opacity(0.45), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isWorking || currentUserID == nil)
+        .accessibilityIdentifier("profile.connections.leaveList")
+    }
+
+    @ViewBuilder
+    private var inlineError: some View {
+        if let errorMessage {
+            Text(errorMessage)
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(Color.saveError)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SaveTheme.Spacing.md)
+                .background(Color.saveError.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func isSelf(_ member: SaveListMemberInfo) -> Bool {
+        guard let currentUserID else { return false }
+        return member.userID == currentUserID
+    }
+
+    private func expiryLabel(for code: SaveListShareCodeInfo) -> String {
+        guard let expiresAt = code.expiresAt else {
+            return languageSettings.localized(english: "Never expires", traditionalChinese: "永不過期")
+        }
+        let formatted = expiresAt.formatted(date: .abbreviated, time: .shortened)
+        return languageSettings.localized(english: "Expires \(formatted)", traditionalChinese: "到期：\(formatted)")
+    }
+
+    private func remove(_ member: SaveListMemberInfo) async {
+        isWorking = true
+        errorMessage = nil
+        do {
+            try await onRemoveMember(member, list)
+            members.removeAll { $0.userID == member.userID }
+            SaveHaptics.tap()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isWorking = false
+    }
+
+    private func revoke(_ code: SaveListShareCodeInfo) async {
+        isWorking = true
+        errorMessage = nil
+        do {
+            try await onRevokeShareCode(code, list)
+            shareCodes = await onLoadShareCodes(list)
+            SaveHaptics.tap()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isWorking = false
+    }
+
+    private func leave() async {
+        guard let currentUserID else { return }
+        isWorking = true
+        errorMessage = nil
+        let selfMember = members.first { $0.userID == currentUserID }
+            ?? SaveListMemberInfo(userID: currentUserID, role: list.viewerRole, displayName: "You")
+        do {
+            try await onRemoveMember(selfMember, list)
+            SaveHaptics.stamp()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isWorking = false
     }
 }
 

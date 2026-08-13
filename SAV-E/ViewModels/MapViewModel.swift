@@ -1226,6 +1226,50 @@ final class MapViewModel: ObservableObject {
         return joined
     }
 
+    /// Member roster for the list's manage view. Degrades to empty — the UI
+    /// treats "no members" and "fetch failed" the same (nothing to manage).
+    func listMembers(for list: SaveCollaborativeList) async -> [SaveListMemberInfo] {
+        guard usesRemotePersistence, list.serverBacked else { return [] }
+        do {
+            let rows = try await supabaseService.fetchListMembers(listID: list.id)
+            return rows.map(SaveListMemberInfo.init(row:))
+        } catch {
+            print("MapViewModel: failed to load members for list \(list.title): \(error)")
+            return []
+        }
+    }
+
+    /// Removes a member server-side. When the removed member is the current
+    /// user (= leaving the list) the list is dropped from the local cache too;
+    /// removing someone else changes nothing locally.
+    func removeListMember(_ member: SaveListMemberInfo, from list: SaveCollaborativeList) async throws {
+        guard usesRemotePersistence else { return }
+        try await supabaseService.removeListMember(listID: list.id, userID: member.userID)
+        guard member.userID == authService.currentUserId else { return }
+        collaborativeLists.removeAll { $0.id == list.id }
+        persistCollaborativeLists()
+    }
+
+    /// Active share codes for the list (owner only server-side). Degrades to
+    /// empty on failure for the same reason as `listMembers(for:)`.
+    func listShareCodes(for list: SaveCollaborativeList) async -> [SaveListShareCodeInfo] {
+        guard usesRemotePersistence, list.serverBacked else { return [] }
+        do {
+            let rows = try await supabaseService.fetchListShareCodes(listID: list.id)
+            return rows.map(SaveListShareCodeInfo.init(row:))
+        } catch {
+            print("MapViewModel: failed to load share codes for list \(list.title): \(error)")
+            return []
+        }
+    }
+
+    /// Revokes one share code. Existing members keep access, so no local
+    /// list state changes.
+    func revokeListShareCode(_ code: String, for list: SaveCollaborativeList) async throws {
+        guard usesRemotePersistence else { return }
+        try await supabaseService.revokeListShareCode(listID: list.id, code: code)
+    }
+
     /// The caller's own invite link (`GET /v0/me/referral`, mints on first
     /// call). Nil when the API is unconfigured or the fetch fails.
     func myReferralURL() async -> URL? {

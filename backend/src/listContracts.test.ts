@@ -3,11 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   formatListItemRow,
+  formatListMemberRow,
   formatListRow,
+  formatShareCodeRow,
   listBodyMaxBytes,
   listForMember,
   listItemPayloadMaxBytes,
   listMaxItems,
+  listMemberUserIdMaxLength,
+  listMembersForViewer,
   listNoteMaxLength,
   listShareURL,
   listTitleMaxLength,
@@ -16,8 +20,11 @@ import {
   normalizeListCreate,
   normalizeListItemCreate,
   normalizeListJoin,
+  normalizeListMemberUserId,
+  normalizeListShareCode,
   normalizeShareCodeCreate,
   referralShareURL,
+  shareCodesForOwner,
 } from "./listContracts.js";
 
 const memberId = "did:privy:member";
@@ -133,6 +140,102 @@ test("memberRole reads a single membership row scoped to the caller", async () =
   assert.equal(await memberRole("not-a-uuid", memberId, empty.query), null);
 });
 
+test("member user id and share code path params revalidate before the database", () => {
+  assert.equal(normalizeListMemberUserId(" did:privy:friend "), "did:privy:friend");
+  assert.equal(normalizeListMemberUserId(""), null);
+  assert.equal(normalizeListMemberUserId("   "), null);
+  assert.equal(normalizeListMemberUserId(42), null);
+  assert.equal(normalizeListMemberUserId("x".repeat(listMemberUserIdMaxLength)), "x".repeat(128));
+  assert.equal(normalizeListMemberUserId("x".repeat(listMemberUserIdMaxLength + 1)), null);
+
+  assert.equal(normalizeListShareCode(" AbC123_x "), "AbC123_x");
+  assert.equal(normalizeListShareCode("shrt"), null);
+  assert.equal(normalizeListShareCode("bad!code"), null);
+  assert.equal(normalizeListShareCode("x".repeat(33)), null);
+  assert.equal(normalizeListShareCode(7), null);
+});
+
+test("listMembersForViewer enforces the viewer's membership in SQL and stays column-explicit", async () => {
+  const { calls, query } = capturingQuery();
+  await listMembersForViewer(listId, memberId, query);
+
+  assert.equal(calls.length, 1);
+  const sql = calls[0].sql;
+  assert.match(sql, /from list_members m/);
+  assert.match(sql, /join profiles p on p\.id = m\.user_id/);
+  assert.match(
+    sql,
+    /exists \(\s*select 1\s*from list_members viewer\s*where viewer\.list_id = m\.list_id and viewer\.user_id = \$2\s*\)/,
+    "the viewer's own membership must gate the row set inside the SQL",
+  );
+  assert.match(sql, /p\.display_name/);
+  assert.doesNotMatch(sql, /select\s+\*/i);
+  assert.doesNotMatch(sql, /email/i, "profile email must never be selected");
+  assert.doesNotMatch(sql, /phone/i, "profile phone must never be selected");
+  assert.doesNotMatch(sql, /privy/i, "privy identifiers must never be selected");
+  assert.doesNotMatch(sql, /avatar_url|instagram_id|referral_code/i);
+  assert.deepEqual(calls[0].values, [listId, memberId]);
+
+  assert.deepEqual(await listMembersForViewer("not-a-uuid", memberId, query), []);
+  assert.equal(calls.length, 1, "invalid uuids must not reach the database");
+  await assert.rejects(() => listMembersForViewer(listId, "  ", query), /user id is required/);
+});
+
+test("shareCodesForOwner requires the owner role inside the SQL", async () => {
+  const { calls, query } = capturingQuery();
+  await shareCodesForOwner(listId, memberId, query);
+
+  assert.equal(calls.length, 1);
+  const sql = calls[0].sql;
+  assert.match(sql, /from list_share_codes c/);
+  assert.match(
+    sql,
+    /exists \(\s*select 1\s*from list_members owner\s*where owner\.list_id = c\.list_id and owner\.user_id = \$2 and owner\.role = 'owner'\s*\)/,
+    "only the list owner may enumerate share codes",
+  );
+  assert.doesNotMatch(sql, /select\s+\*/i);
+  assert.deepEqual(calls[0].values, [listId, memberId]);
+
+  assert.deepEqual(await shareCodesForOwner("not-a-uuid", memberId, query), []);
+  assert.equal(calls.length, 1, "invalid uuids must not reach the database");
+  await assert.rejects(() => shareCodesForOwner(listId, "  ", query), /user id is required/);
+});
+
+test("member and share-code formatters keep their contracts and drop private columns", () => {
+  const member = formatListMemberRow({
+    user_id: "did:privy:friend",
+    role: "editor",
+    display_name: "Kato",
+    created_at: new Date("2026-08-12T00:00:00.123Z"),
+    email: "must-not-leak@example.com",
+    privy_user_id: "must-not-leak",
+  });
+  assert.deepEqual(member, {
+    user_id: "did:privy:friend",
+    role: "editor",
+    display_name: "Kato",
+    created_at: "2026-08-12T00:00:00Z",
+  });
+  assert.equal(JSON.stringify(member).includes("must-not-leak"), false);
+
+  const shareCode = formatShareCodeRow({
+    code: "AbC123_x",
+    role: "viewer",
+    expires_at: "2026-11-10T00:00:00Z",
+    created_at: new Date("2026-08-12T01:02:03.000Z"),
+    created_by: "must-not-leak",
+  });
+  assert.deepEqual(shareCode, {
+    code: "AbC123_x",
+    role: "viewer",
+    url: listShareURL("AbC123_x"),
+    expires_at: "2026-11-10T00:00:00Z",
+    created_at: "2026-08-12T01:02:03Z",
+  });
+  assert.equal(JSON.stringify(shareCode).includes("must-not-leak"), false);
+  assert.equal(formatShareCodeRow({ code: null }).url, null);
+});
+
 test("list formatter keeps the response contract and drops private columns", () => {
   const formatted = formatListRow({
     id: listId,
@@ -220,6 +323,58 @@ test("lists routes are authenticated and enforce membership ACL in SQL", () => {
   assert.ok(ownerCheck > 0 && mint > ownerCheck, "owner check must precede share-code mint");
   assert.match(listsHandler, /insert into list_share_codes \(list_id, code, role, created_by\)/);
   assert.match(listsHandler, /Unsupported lists route/);
+});
+
+test("member management and share-code revocation enforce ownership rules", () => {
+  const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+
+  // Members routes live inside the authenticated lists dispatch.
+  const authGate = serverSource.indexOf("const userId = await resolveUserId(request);");
+  assert.ok(authGate > 0);
+  const registration = serverSource.indexOf('resource === "lists" && segments.length <= 4');
+  assert.ok(registration > authGate, "lists dispatch (incl. members) must sit after resolveUserId");
+
+  const listsHandler = serverSource.slice(
+    serverSource.indexOf("async function handleLists"),
+    serverSource.indexOf("async function handleListJoins"),
+  );
+
+  // GET members goes through the SQL-side membership guard and 404s non-members.
+  const membersRoute = listsHandler.indexOf('sub === "members" && !subId');
+  const membersQuery = listsHandler.indexOf("listMembersForViewer(listId, userId");
+  assert.ok(membersRoute > 0 && membersQuery > membersRoute);
+  assert.match(listsHandler, /rows\.length === 0\) throw new ApiError\(404, "List not found"\)/);
+  assert.match(listsHandler, /formatListMemberRow\(row\)/);
+
+  // Owners cannot leave their own list; non-owners may only remove themselves.
+  assert.match(
+    listsHandler,
+    /sendJson\(response, \{ error: "Owners cannot leave their own list" \}, 409\)/,
+  );
+  assert.match(listsHandler, /\} else if \(targetUserId !== userId\) \{/);
+  assert.match(
+    listsHandler,
+    /delete from list_members\s*where list_id = \$1 and user_id = \$2 and role <> 'owner'/,
+    "the member delete must never remove an owner row",
+  );
+
+  // Share-code listing and revocation are owner-gated (404, never 403) before any query.
+  const listCodesRoute = listsHandler.indexOf('request.method === "GET" && listId && sub === "share-codes" && !subId');
+  const listCodesQuery = listsHandler.indexOf("shareCodesForOwner(listId, userId");
+  assert.ok(listCodesRoute > 0 && listCodesQuery > listCodesRoute);
+  const revokeRoute = listsHandler.indexOf('request.method === "DELETE" && listId && sub === "share-codes" && subId');
+  assert.ok(revokeRoute > 0);
+  const revokeBranch = listsHandler.slice(revokeRoute);
+  const revokeOwnerCheck = revokeBranch.indexOf('role !== "owner"');
+  const revokeDelete = revokeBranch.indexOf("delete from list_share_codes where list_id = $1 and code = $2");
+  assert.ok(
+    revokeOwnerCheck > 0 && revokeDelete > revokeOwnerCheck,
+    "owner check must precede the share-code delete",
+  );
+  assert.match(listsHandler, /normalizeListShareCode\(subId\)/);
+  assert.match(listsHandler, /normalizeListMemberUserId\(subId\)/);
+  assert.match(listsHandler, /shareCodesForOwner\(listId, userId/);
+  assert.match(listsHandler, /formatShareCodeRow\(row\)/);
 });
 
 test("list joins upgrade viewer to editor but never downgrade, and expire with 410", () => {
