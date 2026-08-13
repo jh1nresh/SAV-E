@@ -145,6 +145,36 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
+    func testShareContentWithoutFallbackURLKeepsImmediatePlainTextItem() {
+        let content = SavePlaceShareContent(
+            subject: "SAV-E Map Result: Kato",
+            fallbackURL: nil,
+            fallbackText: "SAV-E Map Result\nKato",
+            payload: SharedPlaceData(
+                id: "place_1",
+                name: "Kato",
+                address: "Los Angeles",
+                lat: 34.035,
+                lng: -118.238,
+                category: "Food",
+                rating: nil,
+                reviewCount: nil,
+                priceRange: nil,
+                hours: nil,
+                sourceLabel: "SAV-E",
+                sourceURL: nil,
+                photoURLs: [],
+                note: nil
+            ),
+            sourcePlaceId: nil,
+            optionalShareNote: nil
+        )
+
+        XCTAssertEqual(content.immediateShareText, content.fallbackText)
+        XCTAssertNil(content.fallbackURL)
+    }
+
+    @MainActor
     func testPrivateShareNoteIsExcludedUntilExplicitlyIncluded() throws {
         let fallbackURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/embeddedPayload"))
         let payload = SharedPlaceData(

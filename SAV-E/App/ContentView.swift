@@ -109,6 +109,7 @@ struct ContentView: View {
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
@@ -132,21 +133,27 @@ struct ContentView: View {
     @State private var fullScreenMapCandidateActionID: String?
     @State private var fullScreenActionError: String?
     @State private var isMapPanelExpanded = false
+    @State private var suppressPendingOnboardingCaptureResume = false
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        pendingOnboardingClue: Binding<String> = .constant(""),
         storageScope: ContentStorageScope = .production
     ) {
         _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
+        _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
-        _isRootSheetPresented = State(initialValue: incomingPlaceReceipt.wrappedValue != nil)
+        let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
+        _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
         _drawerLaunchRequest = State(initialValue: DrawerLaunchRequest(target: .review))
         _selectedRootTab = State(initialValue: .home)
         _rootPath = State(initialValue: [])
-        _fullScreenRoute = State(initialValue: nil)
+        let onboardingClue = pendingOnboardingClue.wrappedValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        _fullScreenRoute = State(initialValue: onboardingClue.isEmpty || hasInitialReceipt ? nil : .capture)
         _fullScreenCandidateActionID = State(initialValue: nil)
         _fullScreenMapCandidateActionID = State(initialValue: nil)
         _fullScreenActionError = State(initialValue: nil)
@@ -492,14 +499,20 @@ struct ContentView: View {
         case .capture:
             SaveCaptureFlowView(
                 tripName: captureTripName,
+                initialText: pendingOnboardingClue,
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
                 },
                 onComplete: {
+                    pendingOnboardingClue = ""
                     fullScreenRoute = nil
                     selectedRootTab = .saves
                 },
                 onCancel: {
+                    // Closing is not consent to discard a private clue. Keep it
+                    // for the next Add Link tap or app launch without trapping
+                    // the user in an immediately re-presented cover.
+                    suppressPendingOnboardingCaptureResume = true
                     fullScreenRoute = nil
                 }
             )
@@ -748,6 +761,7 @@ struct ContentView: View {
 
         switch target {
         case .addLink:
+            suppressPendingOnboardingCaptureResume = false
             fullScreenRoute = .capture
             return
         case .review, .saved:
@@ -1020,6 +1034,7 @@ struct ContentView: View {
         }
         guard let pendingDetail else {
             mapVM.clearSelectedMapObject()
+            resumePendingOnboardingCaptureIfNeeded()
             return
         }
 
@@ -1052,6 +1067,30 @@ struct ContentView: View {
         }
         if pendingTripAssignmentPlace != nil {
             presentTripAssignmentDialog()
+            return
+        }
+        resumePendingOnboardingCaptureIfNeeded()
+    }
+
+    private func resumePendingOnboardingCaptureIfNeeded() {
+        guard !suppressPendingOnboardingCaptureResume,
+              !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              incomingPlaceReceipt == nil,
+              fullScreenRoute == nil,
+              !isRootSheetPresented,
+              pendingTripAssignmentPlace == nil
+        else { return }
+
+        Task { @MainActor in
+            await Task.yield()
+            guard !suppressPendingOnboardingCaptureResume,
+                  !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  incomingPlaceReceipt == nil,
+                  fullScreenRoute == nil,
+                  !isRootSheetPresented,
+                  pendingTripAssignmentPlace == nil
+            else { return }
+            fullScreenRoute = .capture
         }
     }
 
@@ -1185,6 +1224,7 @@ struct ContentView: View {
 private struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let tripName: String?
+    let initialText: String
     let onImport: (String) async throws -> [UUID]
     let onComplete: () -> Void
     let onCancel: () -> Void
@@ -1327,6 +1367,11 @@ private struct SaveCaptureFlowView: View {
             .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
         }
         .accessibilityIdentifier("capture.flow")
+        .onAppear {
+            if sharedText.isEmpty {
+                sharedText = initialText
+            }
+        }
     }
 
     private var trimmedText: String {

@@ -42,6 +42,37 @@ final class OnboardingSampleClueTests: XCTestCase {
     }
 
     @MainActor
+    func testRealClueClosingCopyDoesNotClaimItWasAlreadySaved() {
+        let copy = OnboardingStep.mapStamp.closingLine(language: .english, hasOwnClue: true)
+        let title = OnboardingStep.mapStamp.title(language: .english, hasOwnClue: true)
+        let subtitle = OnboardingStep.mapStamp.subtitle(language: .english, hasOwnClue: true)
+
+        XCTAssertTrue(copy.contains("analyze it into Review"))
+        XCTAssertFalse(copy.contains("waiting in Review"))
+        XCTAssertTrue(title.contains("Demo"))
+        XCTAssertTrue(subtitle.contains("stays unsaved"))
+    }
+
+    @MainActor
+    func testPendingClueIsVisibleOnlyToItsOwnerAfterClaiming() {
+        XCTAssertTrue(PendingOnboardingClueAccess.isAvailable(
+            text: "鼎泰豐 信義店",
+            ownerUserID: "",
+            currentUserID: "account-a"
+        ))
+        XCTAssertTrue(PendingOnboardingClueAccess.isAvailable(
+            text: "鼎泰豐 信義店",
+            ownerUserID: "account-a",
+            currentUserID: "account-a"
+        ))
+        XCTAssertFalse(PendingOnboardingClueAccess.isAvailable(
+            text: "鼎泰豐 信義店",
+            ownerUserID: "account-a",
+            currentUserID: "account-b"
+        ))
+    }
+
+    @MainActor
     func testEmptyClueIsNotImported() {
         XCTAssertNil(OnboardingView.clueWorthKeeping(rawClue: "   ", language: .english))
     }

@@ -16,6 +16,10 @@ struct SavePlaceShareContent {
         cacheKey(includingOptionalNote: true)
     }
 
+    /// Safe item available before any network work. A short link may replace
+    /// it later, but the first tap never waits for that upgrade.
+    var immediateShareText: String { fallbackText }
+
     func cacheKey(includingOptionalNote: Bool) -> String {
         guard let payload = payload(includingOptionalNote: includingOptionalNote),
               let data = try? JSONEncoder().encode(payload)
@@ -97,7 +101,6 @@ struct SavePlaceShareButton<Label: View>: View {
 
     @State private var shareURL: URL?
     @State private var basePreparationID: UUID?
-    @State private var shortLinkFailed = false
     @State private var activeContentKey: String
 
     init(content: SavePlaceShareContent, @ViewBuilder label: @escaping () -> Label) {
@@ -113,19 +116,12 @@ struct SavePlaceShareButton<Label: View>: View {
                 ShareLink(item: shareURL, subject: Text(content.subject), message: Text(content.message(for: shareURL))) {
                     label()
                 }
-            } else if content.payload != nil, !shortLinkFailed {
-                Button {
-                    Task {
-                        await prepareShortLink()
-                    }
-                } label: {
-                    label()
-                        .opacity(isPreparing ? 0.56 : 1)
-                }
-                .disabled(isPreparing)
-                .accessibilityLabel(isPreparing ? "Preparing share link" : "Create share link")
             } else {
-                ShareLink(item: content.fallbackText, subject: Text(content.subject)) {
+                // A short link is an upgrade, never a gate. When there is no
+                // embedded fallback URL, the first tap must still open the
+                // system share sheet with safe plain text while preparation
+                // continues in the background.
+                ShareLink(item: content.immediateShareText, subject: Text(content.subject)) {
                     label()
                 }
             }
@@ -172,21 +168,14 @@ struct SavePlaceShareButton<Label: View>: View {
             guard !Task.isCancelled, activeContentKey == contentKey else { return }
             if let fallback = content.fallbackURL {
                 shareURL = fallback
-            } else {
-                // No URL of any kind: degrade to the plain-text ShareLink
-                // instead of leaving a button that never presents anything.
-                shortLinkFailed = true
             }
         }
     }
-
-    private var isPreparing: Bool { basePreparationID != nil }
 
     private func resetForCurrentContent(_ contentKey: String) {
         guard activeContentKey != contentKey else { return }
         activeContentKey = contentKey
         shareURL = content.fallbackURL
-        shortLinkFailed = false
         basePreparationID = nil
     }
 }

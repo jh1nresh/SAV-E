@@ -24,6 +24,13 @@ struct SaveApp: App {
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
     @State private var minimumOpeningAnimationCompleted = false
+    /// A real clue typed during onboarding is handed to the explicit capture
+    /// screen after sign-in. It is not queued or saved until the user taps
+    /// Analyze into Review.
+    @AppStorage("pendingOnboardingClue") private var pendingOnboardingClue = ""
+    /// Empty until the first verified account receives the clue. Once claimed,
+    /// another account must never see or import that unfinished private text.
+    @AppStorage("pendingOnboardingClueOwnerID") private var pendingOnboardingClueOwnerID = ""
 #if DEBUG
     @State private var smokeHarnessActive = SaveSmokeHarness.isLaunchEnabled
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
@@ -57,6 +64,8 @@ struct SaveApp: App {
         // the persistent domain, so the in-app write back to true would never be read.
         if ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding") {
             UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
+            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
         }
         // Keep the first-run map coachmark tour out of UI tests / smoke runs so
         // it never traps focus over the map under test.
@@ -67,6 +76,8 @@ struct SaveApp: App {
         // screen (and the review-demo flow behind it) is immediately reachable.
         if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
+            UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
         }
         // After an intentional backend identity rebuild (new account-ref
         // secret), stored refs can never match and the recovery screen has no
@@ -153,7 +164,10 @@ struct SaveApp: App {
     @ViewBuilder
     private var standardRootContent: some View {
         if shouldShowOnboarding {
-            OnboardingView { _ in
+            OnboardingView { firstClue in
+                if let firstClue {
+                    storeUnclaimedOnboardingClue(firstClue)
+                }
                 hasCompletedOnboarding = true
 #if DEBUG
                 forceOnboardingForUITests = false
@@ -170,13 +184,18 @@ struct SaveApp: App {
             case .unknown:
                 AuthLoadingView()
             case .unauthenticated:
-                SignInView()
+                SignInView(
+                    pendingOnboardingClue: $pendingOnboardingClue,
+                    pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID
+                )
                     .environmentObject(authService)
             case .authenticated:
                 AuthenticatedRootView(
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
+                    pendingOnboardingClue: $pendingOnboardingClue,
+                    pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
                 )
                     .environmentObject(authService)
@@ -271,6 +290,11 @@ struct SaveApp: App {
         openedList = nil
         openedReferral = nil
         linkErrorMessage = nil
+    }
+
+    private func storeUnclaimedOnboardingClue(_ clue: String) {
+        pendingOnboardingClue = clue
+        pendingOnboardingClueOwnerID = ""
     }
 
     @MainActor
@@ -447,6 +471,8 @@ private struct AuthenticatedRootView: View {
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var pendingOnboardingClue: String
+    @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
 
     @State private var isRebindConfirmationPresented = false
@@ -490,8 +516,37 @@ private struct AuthenticatedRootView: View {
     private var verifiedAccountContent: some View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
+            pendingOnboardingClue: pendingClueForVerifiedAccount,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
         )
+        .onAppear(perform: claimPendingOnboardingClueIfNeeded)
+    }
+
+    private var pendingClueForVerifiedAccount: Binding<String> {
+        Binding(
+            get: {
+                guard PendingOnboardingClueAccess.isAvailable(
+                    text: pendingOnboardingClue,
+                    ownerUserID: pendingOnboardingClueOwnerID,
+                    currentUserID: authService.currentUserId
+                ) else { return "" }
+                return pendingOnboardingClue
+            },
+            set: { newValue in
+                pendingOnboardingClue = newValue
+                if newValue.isEmpty {
+                    pendingOnboardingClueOwnerID = ""
+                }
+            }
+        )
+    }
+
+    private func claimPendingOnboardingClueIfNeeded() {
+        guard !pendingOnboardingClue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              pendingOnboardingClueOwnerID.isEmpty,
+              let userID = authService.currentUserId
+        else { return }
+        pendingOnboardingClueOwnerID = userID
     }
 
     private func accountConfirmationView(_ kind: AccountConfirmationKind) -> some View {
@@ -1086,6 +1141,8 @@ private struct SaveOpeningHintPill: View {
 struct SignInView: View {
     @EnvironmentObject var authService: PrivyAuthService
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Binding var pendingOnboardingClue: String
+    @Binding var pendingOnboardingClueOwnerID: String
     @State private var email = ""
     @State private var showEmailCode = false
     @State private var verificationCode = ""
@@ -1152,7 +1209,13 @@ struct SignInView: View {
             Text(errorMessage ?? "")
         }
         .sheet(isPresented: $showsSampleProof) {
-            OnboardingView(startWithSampleProof: true) { _ in
+            OnboardingView(startWithSampleProof: true) { firstClue in
+                // Completing the untouched sample returns nil. Preserve a real
+                // first-run clue that is still waiting for sign-in.
+                if let firstClue {
+                    pendingOnboardingClue = firstClue
+                    pendingOnboardingClueOwnerID = ""
+                }
                 showsSampleProof = false
             }
         }
@@ -1320,6 +1383,14 @@ struct SignInView: View {
                 }
             }
         }
+    }
+}
+
+enum PendingOnboardingClueAccess {
+    static func isAvailable(text: String, ownerUserID: String, currentUserID: String?) -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let currentUserID else { return false }
+        return ownerUserID.isEmpty || ownerUserID == currentUserID
     }
 }
 

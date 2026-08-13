@@ -351,6 +351,15 @@ enum SharedPlaceSaveOutcome {
     }
 }
 
+struct ExactSearchResolution {
+    let clue: PlaceReviewCandidate
+    let candidateIDs: Set<String>
+
+    func includes(candidateID: String) -> Bool {
+        candidateIDs.contains(candidateID)
+    }
+}
+
 @MainActor
 final class MapViewModel: ObservableObject {
     private static let pendingReviewImportBatchLimit = 4
@@ -393,10 +402,10 @@ final class MapViewModel: ObservableObject {
     /// consumes it to skip opening the detail surface — saving ends the flow,
     /// the stamp toast is the confirmation.
     private var selectionIsCameraOnly = false
-    /// The Review clue an exact-place map search is resolving. Saving one of
-    /// the resulting map candidates retires this clue from the Review queue;
-    /// without the link the clue would stay in Review forever.
-    private var exactSearchResolutionCandidate: PlaceReviewCandidate?
+    /// The Review clue an exact-place map search is resolving, scoped to the
+    /// exact candidates returned by that search. A later unrelated map tap
+    /// must never retire the clue.
+    private var exactSearchResolution: ExactSearchResolution?
     /// Spec P4: shown when a locate tap fails because location permission is
     /// denied or restricted; offers the Open Settings recovery path.
     @Published var showsLocationDeniedNotice = false
@@ -746,23 +755,38 @@ final class MapViewModel: ObservableObject {
     }
 
     func importSharedTextAsReviewCandidates(_ sharedText: String) async throws -> [UUID] {
-        guard let userId = authService.currentUserId else {
-            throw SupabaseError.notAuthenticated
-        }
-
         let normalizedShare = SocialShareTextNormalizer.normalize(sharedText)
-        guard let sourceURL = normalizedShare.primaryURL,
-              let analysisInput = normalizedShare.privacyScopedAnalysisInput
-        else {
+        let sourceURL = normalizedShare.primaryURL
+        let analysisInput: String
+        if let privacyScopedInput = normalizedShare.privacyScopedAnalysisInput {
+            analysisInput = privacyScopedInput
+        } else if sourceURL == nil {
+            let textEvidence = normalizedShare.captionEvidence.trimmingCharacters(in: .whitespacesAndNewlines)
+            analysisInput = textEvidence.isEmpty
+                ? sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                : textEvidence
+        } else {
             throw URLError(.badURL)
         }
-        _ = try? saveLocalVaultService.saveSourceOnly(url: sourceURL)
+        guard !analysisInput.isEmpty else { throw URLError(.badURL) }
+        if let sourceURL {
+            _ = try? saveLocalVaultService.saveSourceOnly(url: sourceURL)
+        }
+
         let candidates: [PendingReviewCandidate]
         if !usesRemotePersistence {
-            candidates = socialLinkReviewCandidateService.reviewCandidatesOrSourceOnly(
-                fromEvidenceText: normalizedShare.captionEvidence,
-                sourceURL: sourceURL.absoluteString
-            )
+            candidates = socialLinkReviewCandidateService
+                .reviewCandidatesOrSourceOnly(
+                    fromEvidenceText: normalizedShare.captionEvidence.isEmpty
+                        ? analysisInput
+                        : normalizedShare.captionEvidence,
+                    sourceURL: sourceURL?.absoluteString ?? ""
+                )
+                .map { candidate in
+                    var candidate = candidate
+                    if sourceURL == nil { candidate.sourceURL = nil }
+                    return candidate
+                }
             let importedCandidates = try candidates.map { pendingCandidate in
                 let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
                 return PlaceReviewCandidate(
@@ -789,7 +813,16 @@ final class MapViewModel: ObservableObject {
             return importedCandidates.map(\.id)
         }
 
-        candidates = await socialLinkReviewCandidateService.reviewCandidates(fromSharedText: analysisInput)
+        guard let userId = authService.currentUserId else {
+            throw SupabaseError.notAuthenticated
+        }
+        candidates = await socialLinkReviewCandidateService
+            .reviewCandidates(fromSharedText: analysisInput)
+            .map { candidate in
+                var candidate = candidate
+                if sourceURL == nil { candidate.sourceURL = nil }
+                return candidate
+            }
         var importedCandidateIDs: [UUID] = []
         for candidate in candidates {
             mirrorToLocalVault(candidate)
@@ -849,6 +882,7 @@ final class MapViewModel: ObservableObject {
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
         }
+        clearExactSearchResolution(matching: candidate.id)
     }
 
     func saveReviewCandidateAsSourceOnly(_ candidate: PlaceReviewCandidate) async throws {
@@ -861,6 +895,7 @@ final class MapViewModel: ObservableObject {
             reason: "User kept the source without confirming a place."
         )
         updateLocalCandidate(candidate.id, status: "source_only")
+        clearExactSearchResolution(matching: candidate.id)
     }
 
     func investigateReviewCandidateMore(_ candidate: PlaceReviewCandidate) async throws {
@@ -869,6 +904,7 @@ final class MapViewModel: ObservableObject {
             eventType: .investigateMore,
             reason: "User asked SAV-E to investigate this clue further."
         )
+        clearExactSearchResolution(matching: candidate.id)
     }
 
     @discardableResult
@@ -900,6 +936,7 @@ final class MapViewModel: ObservableObject {
                     selectedReviewCandidate = nil
                 }
                 focusSavedPlace(existing, showStampMoment: false)
+                clearExactSearchResolution(matching: candidate.id)
                 return existing
             }
 
@@ -911,6 +948,7 @@ final class MapViewModel: ObservableObject {
                 selectedReviewCandidate = nil
             }
             revealImportedPlaces([place])
+            clearExactSearchResolution(matching: candidate.id)
             return place
         }
 
@@ -933,6 +971,7 @@ final class MapViewModel: ObservableObject {
                 selectedReviewCandidate = nil
             }
             focusSavedPlace(existing, showStampMoment: false)
+            clearExactSearchResolution(matching: candidate.id)
             return existing
         }
 
@@ -973,6 +1012,7 @@ final class MapViewModel: ObservableObject {
             selectedReviewCandidate = nil
         }
         revealImportedPlaces([place])
+        clearExactSearchResolution(matching: candidate.id)
         return place
     }
 
@@ -994,10 +1034,14 @@ final class MapViewModel: ObservableObject {
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
 
         if let existing = existingSavedPlace(matching: place) {
+            let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                candidateID: candidate.id,
+                to: existing
+            )
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
-            await resolveExactSearchClueIfNeeded(to: existing)
             focusSavedPlace(existing, showStampMoment: false)
+            if resolvedExactSearch { return }
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
 
@@ -1006,6 +1050,12 @@ final class MapViewModel: ObservableObject {
                 try await supabaseService.savePlace(place, userId: userId)
             } catch {
                 print("MapViewModel: failed to sync saved map candidate \(place.name): \(error)")
+                if exactSearchResolution?.includes(candidateID: candidate.id) == true {
+                    // Resolving a Review clue is a two-record operation. Do
+                    // not mark the clue saved against a place row that never
+                    // reached the backend; keep both items available to retry.
+                    throw error
+                }
                 syncFailedPlaceName = place.name
             }
         }
@@ -1014,33 +1064,27 @@ final class MapViewModel: ObservableObject {
         if !places.contains(where: { $0.matches(place) }) {
             places = [place] + places
         }
+        _ = try await resolveExactSearchClueIfNeeded(candidateID: candidate.id, to: place)
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
-        await resolveExactSearchClueIfNeeded(to: place)
         revealImportedPlaces([place])
     }
 
     /// After an exact-place search saves a map candidate, the originating
     /// Review clue is resolved: drop it from the queue everywhere and record
     /// the correction so the backend row leaves "review" too.
-    private func resolveExactSearchClueIfNeeded(to place: Place) async {
-        guard let clue = exactSearchResolutionCandidate else { return }
-        exactSearchResolutionCandidate = nil
+    private func resolveExactSearchClueIfNeeded(candidateID: String, to place: Place) async throws -> Bool {
+        guard let resolution = exactSearchResolution,
+              resolution.includes(candidateID: candidateID) else { return false }
 
-        try? saveLocalVaultService.removeReviewCandidate(clue.id)
-        reviewCandidates.removeAll { $0.id == clue.id }
-        if selectedReviewCandidate?.id == clue.id {
-            selectedReviewCandidate = nil
-        }
-
-        guard usesRemotePersistence else { return }
-        var updatedClue = clue
-        updatedClue.name = place.name
-        updatedClue.address = place.address
-        updatedClue.latitude = place.latitude
-        updatedClue.longitude = place.longitude
-        updatedClue.status = "saved"
-        do {
+        let clue = resolution.clue
+        if usesRemotePersistence {
+            var updatedClue = clue
+            updatedClue.name = place.name
+            updatedClue.address = place.address
+            updatedClue.latitude = place.latitude
+            updatedClue.longitude = place.longitude
+            updatedClue.status = "saved"
             // The place row is already saved above; only the id travels with
             // the decision so the backend never inserts it a second time.
             try await recordCorrectionEvent(
@@ -1050,9 +1094,23 @@ final class MapViewModel: ObservableObject {
                 userFinalPlaceId: place.id,
                 reason: "User resolved review candidate to an exact map place."
             )
-        } catch {
-            print("MapViewModel: failed to record exact-search resolution for \(clue.name): \(error)")
         }
+
+        // Remote persistence must succeed before the local clue disappears.
+        // On failure the candidate stays visible and the error reaches the UI,
+        // so the user can retry without a clue that later reappears on refresh.
+        try saveLocalVaultService.removeReviewCandidate(clue.id)
+        reviewCandidates.removeAll { $0.id == clue.id }
+        if selectedReviewCandidate?.id == clue.id {
+            selectedReviewCandidate = nil
+        }
+        exactSearchResolution = nil
+        return true
+    }
+
+    private func clearExactSearchResolution(matching candidateID: UUID) {
+        guard exactSearchResolution?.clue.id == candidateID else { return }
+        exactSearchResolution = nil
     }
 
     @discardableResult
@@ -1678,6 +1736,7 @@ final class MapViewModel: ObservableObject {
         categories: Set<PlaceCategory> = []
     ) async {
         guard !isLoadingMapCandidates else { return }
+        exactSearchResolution = nil
         let searchCenter = coordinate ?? mapCandidateSearchCenter()
         let searchSpan = span ?? MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
         isLoadingMapCandidates = true
@@ -1696,10 +1755,14 @@ final class MapViewModel: ObservableObject {
     }
 
     func prepareMapCandidatesForDrawerQuery(_ query: String) async -> [SaveMapCandidate] {
-        guard saveSearchController.shouldPrepareMapCandidates(for: query) else { return mapCandidates }
         // A fresh search invalidates any clue link; the exact-search caller
         // re-links via beginExactSearchResolution after this returns.
-        exactSearchResolutionCandidate = nil
+        exactSearchResolution = nil
+        guard saveSearchController.shouldPrepareMapCandidates(for: query) else {
+            mapCandidates = []
+            selectedMapCandidate = nil
+            return []
+        }
         if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
             let candidates = await mapCandidateSearchService.searchCandidates(
                 matching: exactQuery,
@@ -1883,14 +1946,17 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
         selectedCategories = []
         activeFilter = nil
-        exactSearchResolutionCandidate = nil
+        exactSearchResolution = nil
         clearRoute()
     }
 
     /// Links the current map-candidate results to the Review clue they came
     /// from, so saving a candidate also retires that clue.
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
-        exactSearchResolutionCandidate = candidate
+        exactSearchResolution = ExactSearchResolution(
+            clue: candidate,
+            candidateIDs: Set(mapCandidates.map(\.id))
+        )
     }
 
     func selectMapFeature(_ feature: MapFeature?) {
