@@ -175,7 +175,7 @@ struct ContentView: View {
         _fullScreenActionError = State(initialValue: nil)
     }
 
-    var body: some View {
+    private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
             mapDrawerPanel
@@ -208,6 +208,12 @@ struct ContentView: View {
             }
         }
 #endif
+    }
+
+    var body: some View {
+        // Split from the alert/sheet chain: one flat modifier expression here
+        // pushes the type checker past its time budget.
+        rootScaffold
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
             isPresented: Binding(
