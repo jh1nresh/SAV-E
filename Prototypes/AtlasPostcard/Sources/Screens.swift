@@ -685,20 +685,7 @@ struct TripsAtlasScreen: View {
                     .accessibilityHidden(true)
 
                 BrandHeader {
-                    Button(action: presentation.onCapture) {
-                        Image(systemName: "link")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(AtlasPalette.ink)
-                            .frame(width: 40, height: 40)
-                            .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 13))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 13)
-                                    .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Paste or share a link")
-                    .accessibilityIdentifier("trips.capture")
+                    EmptyView()
                 }
                 .frame(height: 50)
 

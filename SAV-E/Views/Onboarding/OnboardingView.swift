@@ -93,8 +93,8 @@ struct OnboardingView: View {
         VStack(spacing: isCompactHeight ? 8 : 20) {
             OnboardingStepTitle(
                 eyebrow: step.eyebrow(language: language),
-                title: step.title(language: language),
-                subtitle: step.subtitle(language: language),
+                title: step.title(language: language, hasOwnClue: hasOwnClue),
+                subtitle: step.subtitle(language: language, hasOwnClue: hasOwnClue),
                 isCompactHeight: isCompactHeight,
                 showsEyebrow: false
             )
@@ -304,7 +304,7 @@ struct OnboardingView: View {
 
 // MARK: - Steps
 
-private enum OnboardingStep: Int, CaseIterable {
+enum OnboardingStep: Int, CaseIterable {
     case language
     case clue
     case candidate
@@ -332,7 +332,7 @@ private enum OnboardingStep: Int, CaseIterable {
         }
     }
 
-    func title(language: AppLanguage) -> String {
+    func title(language: AppLanguage, hasOwnClue: Bool = false) -> String {
         switch self {
         case .language:
             return language.localized(english: "Hi, I'm Memo.", traditionalChinese: "嗨，我是 Memo。")
@@ -341,11 +341,16 @@ private enum OnboardingStep: Int, CaseIterable {
         case .candidate:
             return language.localized(english: "Memo found a likely place", traditionalChinese: "Memo 找到一個可能地點")
         case .mapStamp:
-            return language.localized(english: "You confirmed it. Stamped.", traditionalChinese: "你確認了，蓋章。")
+            return hasOwnClue
+                ? language.localized(
+                    english: "Demo complete. Your clue is next.",
+                    traditionalChinese: "示範完成。接著處理你的線索。"
+                )
+                : language.localized(english: "Demo complete. Stamped.", traditionalChinese: "示範完成，已蓋章。")
         }
     }
 
-    func subtitle(language: AppLanguage) -> String {
+    func subtitle(language: AppLanguage, hasOwnClue: Bool = false) -> String {
         switch self {
         case .language:
             return language.localized(
@@ -363,10 +368,15 @@ private enum OnboardingStep: Int, CaseIterable {
                 traditionalChinese: "在你確認之前都會留在待確認。"
             )
         case .mapStamp:
-            return language.localized(
-                english: "Only places you confirm become private Map Stamps.",
-                traditionalChinese: "只有你確認的地點會變成私人地圖章。"
-            )
+            return hasOwnClue
+                ? language.localized(
+                    english: "The example was confirmed. Your clue stays unsaved until you analyze and confirm it.",
+                    traditionalChinese: "範例地點已確認；你的線索要等你分析並確認後才會保存。"
+                )
+                : language.localized(
+                    english: "Only places you confirm become private Map Stamps.",
+                    traditionalChinese: "只有你確認的地點會變成私人地圖章。"
+                )
         }
     }
 
@@ -375,14 +385,15 @@ private enum OnboardingStep: Int, CaseIterable {
     /// Onboarding used to end on a generic line and drop the user onto a Home
     /// screen with nothing on it — the "you're all set, here's an empty
     /// dashboard" ending. The closing copy now states the real next step, and
-    /// differs by whether the user gave a clue of their own: promising a first
-    /// Map Stamp to someone who only watched the sample would be a lie.
+    /// differs by whether the user gave a clue of their own. A real clue is
+    /// handed to the explicit capture screen, but nothing enters Review until
+    /// the user chooses Analyze into Review there.
     func closingLine(language: AppLanguage, hasOwnClue: Bool) -> String {
         guard self == .mapStamp else { return "" }
         return hasOwnClue
             ? language.localized(
-                english: "Your clue is waiting in Review. Confirm it to make your first Map Stamp.",
-                traditionalChinese: "你的線索已在待確認。確認它，就是你的第一個地圖章。"
+                english: "Your clue is ready. Open SAV-E, then analyze it into Review when you're ready.",
+                traditionalChinese: "你的線索已準備好。打開 SAV-E 後，由你決定何時分析並送進待確認。"
             )
             : language.localized(
                 english: "Paste a link any time and I'll work out the place.",
@@ -405,7 +416,7 @@ private enum OnboardingStep: Int, CaseIterable {
 
     func primaryTitle(language: AppLanguage, hasOwnClue: Bool) -> String {
         guard self == .mapStamp, hasOwnClue else { return primaryTitle(language: language) }
-        return language.localized(english: "Open Review", traditionalChinese: "打開待確認")
+        return language.localized(english: "Continue with my clue", traditionalChinese: "帶著我的線索繼續")
     }
 
     func primaryHint(language: AppLanguage) -> String {
@@ -758,8 +769,8 @@ private struct CluePocketStage: View {
     var body: some View {
         OnboardingOpenEnvelopeShell(
             caption: language.localized(
-                english: "Memo keeps the source as proof.",
-                traditionalChinese: "Memo 會把來源留作證據。"
+                english: "In this demo, Memo keeps the source as proof.",
+                traditionalChinese: "在這個示範中，Memo 會把來源留作證據。"
             ),
             isCompactHeight: isCompactHeight,
             memoPose: .clue
@@ -1292,8 +1303,8 @@ private struct OnboardingSavedPostcard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(language.localized(
-                english: "★ Lifted Saved Postcard ★",
-                traditionalChinese: "★ 已提起的收藏明信片 ★"
+                english: "★ Demo Saved Postcard ★",
+                traditionalChinese: "★ 示範收藏明信片 ★"
             ).uppercased())
                 .font(SaveAtlasType.strong(12))
                 .tracking(0.8)
@@ -1309,7 +1320,7 @@ private struct OnboardingSavedPostcard: View {
                         .minimumScaleFactor(0.72)
 
                     Label(
-                        language.localized(english: "Confirmed by you", traditionalChinese: "由你確認"),
+                        language.localized(english: "Demo confirmation", traditionalChinese: "示範確認"),
                         systemImage: "hand.thumbsup.fill"
                     )
                     .font(SaveAtlasType.strong(13))
@@ -1357,7 +1368,7 @@ private struct OnboardingSavedPostcard: View {
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(language.localized(english: "Saved", traditionalChinese: "保存"))
+                    Text(language.localized(english: "Demo saved", traditionalChinese: "示範保存"))
                     Text(language.localized(english: "Oct 12", traditionalChinese: "10 月 12 日"))
                 }
             }

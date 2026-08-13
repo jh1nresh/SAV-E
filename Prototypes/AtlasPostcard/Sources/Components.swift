@@ -23,10 +23,12 @@ struct BrandHeader<Trailing: View>: View {
                 HStack(spacing: 9) {
                     MemoMark(size: 40)
                         .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "book.closed.fill")
-                                .font(.system(size: 8, weight: .bold))
+                            // A person badge, not a book: this is the profile
+                            // entry and has to read as one at a glance.
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(AtlasPalette.forest)
-                                .frame(width: 16, height: 16)
+                                .frame(width: 17, height: 17)
                                 .background(AtlasPalette.mint, in: Circle())
                                 .overlay {
                                     Circle()
