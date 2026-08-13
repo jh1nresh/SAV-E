@@ -695,42 +695,8 @@ struct ContentView: View {
             onAddPlaceToList: { place, listID in
                 try mapVM.addPlace(place, toListID: listID)
             },
-            onShareListURL: { list, role in
-                mapVM.shareURL(for: list, role: role)
-            },
-            onSaveListItem: { item in
-                _ = try await mapVM.saveListItemAsPlace(item)
-            },
-            onPlanList: { list in
-                await mapVM.planCollaborativeList(list)
-            },
-            socialPlaces: mapVM.visibleSocialPlaces,
-            followedFriends: mapVM.followedFriends,
-            isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
-            followedFriendsLoadFailed: mapVM.followedFriendsLoadFailed,
-            hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
-            isLoadingMoreFollowedFriends: mapVM.isLoadingMoreFollowedFriends,
-            followedFriendsLoadMoreFailed: mapVM.followedFriendsLoadMoreFailed,
-            onSelectSocialLens: { lens in
-                mapVM.selectSocialLens(lens)
-            },
             onSaveSocialPlace: { place in
                 _ = try await mapVM.saveSocialPlaceToMySave(place)
-            },
-            onFollowReferral: { value in
-                try await mapVM.followReferral(value)
-            },
-            onRefreshFollowedFriends: {
-                await mapVM.refreshFollowedFriends(force: true)
-            },
-            onSearchFollowedFriends: { query in
-                await mapVM.refreshFollowedFriends(query: query, force: true)
-            },
-            onLoadMoreFollowedFriends: {
-                await mapVM.loadMoreFollowedFriends()
-            },
-            onUnfollowFriend: { friend in
-                try await mapVM.unfollowFriend(friend)
             },
             selectedCategories: mapVM.selectedCategories,
             onToggleCategory: { category in
