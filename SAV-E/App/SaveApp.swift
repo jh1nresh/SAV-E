@@ -533,10 +533,17 @@ private struct AuthenticatedRootView: View {
                 return pendingOnboardingClue
             },
             set: { newValue in
+                guard let currentUserID = authService.currentUserId else { return }
+                guard PendingOnboardingClueAccess.canMutate(
+                    ownerUserID: pendingOnboardingClueOwnerID,
+                    currentUserID: currentUserID
+                ) else { return }
                 pendingOnboardingClue = newValue
-                if newValue.isEmpty {
-                    pendingOnboardingClueOwnerID = ""
-                }
+                pendingOnboardingClueOwnerID = PendingOnboardingClueAccess.ownerAfterMutation(
+                    newText: newValue,
+                    ownerUserID: pendingOnboardingClueOwnerID,
+                    currentUserID: currentUserID
+                )
             }
         )
     }
@@ -1212,7 +1219,11 @@ struct SignInView: View {
             OnboardingView(startWithSampleProof: true) { firstClue in
                 // Completing the untouched sample returns nil. Preserve a real
                 // first-run clue that is still waiting for sign-in.
-                if let firstClue {
+                if let firstClue,
+                   PendingOnboardingClueAccess.canStoreUnclaimed(
+                       existingText: pendingOnboardingClue,
+                       ownerUserID: pendingOnboardingClueOwnerID
+                   ) {
                     pendingOnboardingClue = firstClue
                     pendingOnboardingClueOwnerID = ""
                 }
@@ -1391,6 +1402,20 @@ enum PendingOnboardingClueAccess {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let currentUserID else { return false }
         return ownerUserID.isEmpty || ownerUserID == currentUserID
+    }
+
+    static func canMutate(ownerUserID: String, currentUserID: String?) -> Bool {
+        guard let currentUserID else { return false }
+        return ownerUserID.isEmpty || ownerUserID == currentUserID
+    }
+
+    static func canStoreUnclaimed(existingText: String, ownerUserID: String) -> Bool {
+        existingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ownerUserID.isEmpty
+    }
+
+    static func ownerAfterMutation(newText: String, ownerUserID: String, currentUserID: String) -> String {
+        guard !newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
+        return ownerUserID.isEmpty ? currentUserID : ownerUserID
     }
 }
 

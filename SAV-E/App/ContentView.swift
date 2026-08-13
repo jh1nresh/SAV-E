@@ -134,6 +134,8 @@ struct ContentView: View {
     @State private var fullScreenActionError: String?
     @State private var isMapPanelExpanded = false
     @State private var suppressPendingOnboardingCaptureResume = false
+    @State private var exactSearchRequestID: UUID?
+    @State private var isExactSearchSessionActive = false
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -165,8 +167,16 @@ struct ContentView: View {
             mapDrawerPanel
         }
         .onChange(of: selectedRootTab) { _, tab in
+            if tab != .map {
+                invalidateExactSearchRequest()
+            }
             if tab != .map, isMapPanelExpanded {
                 collapseMapPanel()
+            }
+        }
+        .onChange(of: fullScreenRoute?.id) { _, routeID in
+            if routeID != nil {
+                invalidateExactSearchRequest()
             }
         }
         .environment(\.appLanguageSettings, languageSettings)
@@ -292,6 +302,7 @@ struct ContentView: View {
         }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
+            invalidateExactSearchRequest()
             fullScreenRoute = nil
             pendingReceiptMapDetail = nil
             mapDetailDrawerItem = nil
@@ -500,6 +511,7 @@ struct ContentView: View {
             SaveCaptureFlowView(
                 tripName: captureTripName,
                 initialText: pendingOnboardingClue,
+                onDraftChange: { pendingOnboardingClue = $0 },
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
                 },
@@ -641,9 +653,12 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(query)
             },
             onBeginExactSearchResolution: { candidate in
+                isExactSearchSessionActive = true
                 mapVM.beginExactSearchResolution(for: candidate)
             },
             onClearMapSearchResults: {
+                isExactSearchSessionActive = false
+                guard exactSearchRequestID == nil else { return }
                 mapVM.clearMapSearchResults()
             },
             collaborativeLists: mapVM.collaborativeLists,
@@ -754,6 +769,7 @@ struct ContentView: View {
         initialQuery: String? = nil
     ) {
         guard incomingPlaceReceipt == nil else { return }
+        invalidateExactSearchRequest()
         pendingCaptureTripID = tripID
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
@@ -909,9 +925,16 @@ struct ContentView: View {
         fullScreenRoute = nil
         rootPath.removeAll()
         selectedRootTab = .map
+        isExactSearchSessionActive = false
+        mapVM.clearMapSearchResults()
+        let requestID = UUID()
+        exactSearchRequestID = requestID
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 180_000_000)
-            let candidates = await mapVM.prepareMapCandidatesForDrawerQuery(query)
+            guard exactSearchRequestID == requestID else { return }
+            let result = await mapVM.prepareMapCandidatesForDrawerQuery(query)
+            guard exactSearchRequestID == requestID else { return }
+            guard case .current(let candidates) = result else { return }
             if candidates.isEmpty {
                 // No map match: fall back to the guided drawer flow so the
                 // user gets the "add another clue" explanation instead of an
@@ -922,9 +945,18 @@ struct ContentView: View {
                 // item leaves Review instead of lingering there.
                 mapVM.beginExactSearchResolution(for: candidate)
                 drawerVM.mapCandidates = candidates
+                exactSearchRequestID = nil
+                isExactSearchSessionActive = true
                 showMapCandidatesOnMap()
             }
         }
+    }
+
+    private func invalidateExactSearchRequest() {
+        guard exactSearchRequestID != nil || isExactSearchSessionActive else { return }
+        exactSearchRequestID = nil
+        isExactSearchSessionActive = false
+        mapVM.clearMapSearchResults()
     }
 
     private func openFoodAnalysis(_ place: Place) {
@@ -1225,6 +1257,7 @@ private struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let tripName: String?
     let initialText: String
+    let onDraftChange: (String) -> Void
     let onImport: (String) async throws -> [UUID]
     let onComplete: () -> Void
     let onCancel: () -> Void
@@ -1371,6 +1404,9 @@ private struct SaveCaptureFlowView: View {
             if sharedText.isEmpty {
                 sharedText = initialText
             }
+        }
+        .onChange(of: sharedText) { _, draft in
+            onDraftChange(draft)
         }
     }
 

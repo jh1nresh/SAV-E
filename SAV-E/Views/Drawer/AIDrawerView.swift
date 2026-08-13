@@ -85,6 +85,24 @@ struct DrawerLaunchRequest: Equatable {
     }
 }
 
+struct MapSearchRequestGate {
+    private(set) var currentID: UUID?
+
+    mutating func begin() -> UUID {
+        let requestID = UUID()
+        currentID = requestID
+        return requestID
+    }
+
+    mutating func cancel() {
+        currentID = nil
+    }
+
+    func isCurrent(_ requestID: UUID) -> Bool {
+        currentID == requestID
+    }
+}
+
 struct AIDrawerView: View {
     private enum LinkAnalysisState: Equatable {
         case idle
@@ -120,7 +138,7 @@ struct AIDrawerView: View {
     var onOpenReview: () -> Void = {}
     var onAddPlaceToTrip: (Place) -> Void = { _ in }
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
-    var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
+    var onPrepareMapSearch: (String) async -> MapCandidateSearchResult = { _ in .current([]) }
     /// Links exact-place map results to the Review clue they resolve, so
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
@@ -179,6 +197,8 @@ struct AIDrawerView: View {
     @State private var pendingUnfollowFriend: SaveFollowedFriend?
     @State private var unfollowingFriendID: String?
     @State private var unfollowFriendMessage: String?
+    @State private var mapSearchTask: Task<Void, Never>?
+    @State private var mapSearchRequestGate = MapSearchRequestGate()
 
     var body: some View {
         GeometryReader { proxy in
@@ -434,6 +454,8 @@ struct AIDrawerView: View {
     }
 
     private func applyLaunchRequest(_ request: DrawerLaunchRequest) {
+        cancelMapSearch()
+        onClearMapSearchResults()
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
@@ -1904,6 +1926,8 @@ struct AIDrawerView: View {
     }
 
     private func submitSearchField() {
+        cancelMapSearch()
+        onClearMapSearchResults()
         SaveHaptics.tap()
         voiceQuery.stop()
         searchFocused = false
@@ -1964,8 +1988,10 @@ struct AIDrawerView: View {
                 : languageSettings.localized(english: "Looking for nearby public options. SAV-E memory still stays first.", traditionalChinese: "正在找附近公開候選地點。SAV-E 記憶仍會優先。")
         withAnimation { drawerDetent = .medium }
 
-        Task {
-            let candidates = await onPrepareMapSearch(fallbackQuery)
+        startMapSearch { requestID in
+            let result = await onPrepareMapSearch(fallbackQuery)
+            guard isCurrentMapSearch(requestID) else { return }
+            guard case .current(let candidates) = result else { return }
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
                 addSpotStatus = isExactSearch
@@ -2001,8 +2027,10 @@ struct AIDrawerView: View {
         )
         withAnimation { drawerDetent = .medium }
 
-        Task {
-            let candidates = await onPrepareMapSearch(query)
+        startMapSearch { requestID in
+            let result = await onPrepareMapSearch(query)
+            guard isCurrentMapSearch(requestID) else { return }
+            guard case .current(let candidates) = result else { return }
             if candidates.isEmpty {
                 viewModel.mapCandidates = []
                 addSpotStatus = languageSettings.localized(
@@ -2037,12 +2065,10 @@ struct AIDrawerView: View {
     }
 
     private func closeDrawerContent() {
+        cancelMapSearch()
+        onClearMapSearchResults()
         voiceQuery.stop()
-        let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
-        if shouldClearMapSearch {
-            onClearMapSearchResults()
-        }
         showSavedCategories = false
         showReviewInbox = false
         showLists = false
@@ -2051,6 +2077,7 @@ struct AIDrawerView: View {
     }
 
     private func closeMapSearchResults() {
+        cancelMapSearch()
         voiceQuery.stop()
         viewModel.reset()
         onClearMapSearchResults()
@@ -2068,6 +2095,22 @@ struct AIDrawerView: View {
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = collapsedDrawerDetent
         }
+    }
+
+    private func startMapSearch(_ operation: @escaping (UUID) async -> Void) {
+        mapSearchTask?.cancel()
+        let requestID = mapSearchRequestGate.begin()
+        mapSearchTask = Task { await operation(requestID) }
+    }
+
+    private func isCurrentMapSearch(_ requestID: UUID) -> Bool {
+        !Task.isCancelled && mapSearchRequestGate.isCurrent(requestID)
+    }
+
+    private func cancelMapSearch() {
+        mapSearchTask?.cancel()
+        mapSearchTask = nil
+        mapSearchRequestGate.cancel()
     }
 
     private func importSharedTextToReviewCandidates(_ sharedText: String) {

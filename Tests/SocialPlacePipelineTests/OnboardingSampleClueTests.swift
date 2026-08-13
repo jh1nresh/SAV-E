@@ -73,6 +73,43 @@ final class OnboardingSampleClueTests: XCTestCase {
     }
 
     @MainActor
+    func testOnlyTheOwnerCanMutateAnOwnedPendingClue() {
+        XCTAssertTrue(PendingOnboardingClueAccess.canMutate(
+            ownerUserID: "",
+            currentUserID: "account-b"
+        ))
+        XCTAssertTrue(PendingOnboardingClueAccess.canMutate(
+            ownerUserID: "account-a",
+            currentUserID: "account-a"
+        ))
+        XCTAssertFalse(PendingOnboardingClueAccess.canMutate(
+            ownerUserID: "account-a",
+            currentUserID: "account-b"
+        ))
+        XCTAssertEqual(PendingOnboardingClueAccess.ownerAfterMutation(
+            newText: "Account A edited draft",
+            ownerUserID: "",
+            currentUserID: "account-a"
+        ), "account-a")
+    }
+
+    @MainActor
+    func testSampleProofCannotOverwriteAnotherAccountsPendingClue() {
+        XCTAssertFalse(PendingOnboardingClueAccess.canStoreUnclaimed(
+            existingText: "Account A private clue",
+            ownerUserID: "account-a"
+        ))
+        XCTAssertTrue(PendingOnboardingClueAccess.canStoreUnclaimed(
+            existingText: "Existing unclaimed clue",
+            ownerUserID: ""
+        ))
+        XCTAssertTrue(PendingOnboardingClueAccess.canStoreUnclaimed(
+            existingText: "",
+            ownerUserID: "account-a"
+        ))
+    }
+
+    @MainActor
     func testEmptyClueIsNotImported() {
         XCTAssertNil(OnboardingView.clueWorthKeeping(rawClue: "   ", language: .english))
     }

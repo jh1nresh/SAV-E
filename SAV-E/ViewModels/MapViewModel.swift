@@ -360,6 +360,16 @@ struct ExactSearchResolution {
     }
 }
 
+enum MapCandidateSearchResult {
+    case current([SaveMapCandidate])
+    case superseded
+
+    var candidates: [SaveMapCandidate]? {
+        guard case .current(let candidates) = self else { return nil }
+        return candidates
+    }
+}
+
 @MainActor
 final class MapViewModel: ObservableObject {
     private static let pendingReviewImportBatchLimit = 4
@@ -406,11 +416,15 @@ final class MapViewModel: ObservableObject {
     /// exact candidates returned by that search. A later unrelated map tap
     /// must never retire the clue.
     private var exactSearchResolution: ExactSearchResolution?
+    /// Invalidates any in-flight map search before it can publish stale pins.
+    private var mapCandidateSearchGeneration = UUID()
     /// Spec P4: shown when a locate tap fails because location permission is
     /// denied or restricted; offers the Open Settings recovery path.
     @Published var showsLocationDeniedNotice = false
 
     private let supabaseService: SupabaseServiceProtocol
+    private let mapCandidatePlaceSaver: (Place, String) async throws -> Void
+    private let mapCandidateUserIDProvider: () -> String?
     private let relatedPlaceSourcesService: RelatedPlaceSourcesProviding
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
@@ -438,6 +452,8 @@ final class MapViewModel: ObservableObject {
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
+        mapCandidatePlaceSaver: ((Place, String) async throws -> Void)? = nil,
+        mapCandidateUserIDProvider: (() -> String?)? = nil,
         pendingImportService: PendingPlaceImportService = .shared,
         locationService: LocationService? = nil,
         googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
@@ -453,6 +469,12 @@ final class MapViewModel: ObservableObject {
         usesRemotePersistence: Bool = true
     ) {
         self.supabaseService = supabaseService
+        self.mapCandidatePlaceSaver = mapCandidatePlaceSaver ?? { place, userID in
+            try await supabaseService.savePlace(place, userId: userID)
+        }
+        self.mapCandidateUserIDProvider = mapCandidateUserIDProvider ?? {
+            PrivyAuthService.shared.currentUserId
+        }
         self.relatedPlaceSourcesService = relatedPlaceSourcesService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
@@ -752,6 +774,16 @@ final class MapViewModel: ObservableObject {
             candidate.status == "review" || candidate.status == "confirmed" ||
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
         }
+        if let resolution = exactSearchResolution {
+            if let refreshedClue = reviewCandidates.first(where: { $0.id == resolution.clue.id }) {
+                exactSearchResolution = ExactSearchResolution(
+                    clue: refreshedClue,
+                    candidateIDs: resolution.candidateIDs
+                )
+            } else {
+                exactSearchResolution = nil
+            }
+        }
     }
 
     func importSharedTextAsReviewCandidates(_ sharedText: String) async throws -> [UUID] {
@@ -1017,6 +1049,9 @@ final class MapViewModel: ObservableObject {
     }
 
     func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws {
+        let exactResolution = exactSearchResolution.flatMap { resolution in
+            resolution.includes(candidateID: candidate.id) ? resolution : nil
+        }
         let draft = SavePlaceDraft(
             title: candidate.title,
             address: candidate.subtitle.trimmedForDraft,
@@ -1035,6 +1070,7 @@ final class MapViewModel: ObservableObject {
 
         if let existing = existingSavedPlace(matching: place) {
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                resolution: exactResolution,
                 candidateID: candidate.id,
                 to: existing
             )
@@ -1045,12 +1081,12 @@ final class MapViewModel: ObservableObject {
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
 
-        if let userId = authService.currentUserId {
+        if let userId = mapCandidateUserIDProvider() {
             do {
-                try await supabaseService.savePlace(place, userId: userId)
+                try await mapCandidatePlaceSaver(place, userId)
             } catch {
                 print("MapViewModel: failed to sync saved map candidate \(place.name): \(error)")
-                if exactSearchResolution?.includes(candidateID: candidate.id) == true {
+                if exactResolution != nil {
                     // Resolving a Review clue is a two-record operation. Do
                     // not mark the clue saved against a place row that never
                     // reached the backend; keep both items available to retry.
@@ -1064,7 +1100,11 @@ final class MapViewModel: ObservableObject {
         if !places.contains(where: { $0.matches(place) }) {
             places = [place] + places
         }
-        _ = try await resolveExactSearchClueIfNeeded(candidateID: candidate.id, to: place)
+        _ = try await resolveExactSearchClueIfNeeded(
+            resolution: exactResolution,
+            candidateID: candidate.id,
+            to: place
+        )
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
         revealImportedPlaces([place])
@@ -1073,8 +1113,12 @@ final class MapViewModel: ObservableObject {
     /// After an exact-place search saves a map candidate, the originating
     /// Review clue is resolved: drop it from the queue everywhere and record
     /// the correction so the backend row leaves "review" too.
-    private func resolveExactSearchClueIfNeeded(candidateID: String, to place: Place) async throws -> Bool {
-        guard let resolution = exactSearchResolution,
+    private func resolveExactSearchClueIfNeeded(
+        resolution: ExactSearchResolution?,
+        candidateID: String,
+        to place: Place
+    ) async throws -> Bool {
+        guard let resolution,
               resolution.includes(candidateID: candidateID) else { return false }
 
         let clue = resolution.clue
@@ -1104,7 +1148,9 @@ final class MapViewModel: ObservableObject {
         if selectedReviewCandidate?.id == clue.id {
             selectedReviewCandidate = nil
         }
-        exactSearchResolution = nil
+        if exactSearchResolution?.clue.id == clue.id {
+            exactSearchResolution = nil
+        }
         return true
     }
 
@@ -1736,6 +1782,7 @@ final class MapViewModel: ObservableObject {
         categories: Set<PlaceCategory> = []
     ) async {
         guard !isLoadingMapCandidates else { return }
+        let searchGeneration = beginMapCandidateSearch()
         exactSearchResolution = nil
         let searchCenter = coordinate ?? mapCandidateSearchCenter()
         let searchSpan = span ?? MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
@@ -1748,20 +1795,22 @@ final class MapViewModel: ObservableObject {
             excluding: places,
             categories: categories
         )
+        guard mapCandidateSearchGeneration == searchGeneration else { return }
         mapCandidates = candidates
         if let selectedMapCandidate, !candidates.contains(where: { $0.id == selectedMapCandidate.id }) {
             self.selectedMapCandidate = nil
         }
     }
 
-    func prepareMapCandidatesForDrawerQuery(_ query: String) async -> [SaveMapCandidate] {
+    func prepareMapCandidatesForDrawerQuery(_ query: String) async -> MapCandidateSearchResult {
+        let searchGeneration = beginMapCandidateSearch()
         // A fresh search invalidates any clue link; the exact-search caller
         // re-links via beginExactSearchResolution after this returns.
         exactSearchResolution = nil
         guard saveSearchController.shouldPrepareMapCandidates(for: query) else {
             mapCandidates = []
             selectedMapCandidate = nil
-            return []
+            return .current([])
         }
         if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
             let candidates = await mapCandidateSearchService.searchCandidates(
@@ -1770,10 +1819,11 @@ final class MapViewModel: ObservableObject {
                 span: nil,
                 excluding: places
             )
+            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
             mapCandidates = candidates
             selectedMapCandidate = nil
             focusCameraOnMapCandidates(candidates)
-            return candidates
+            return .current(candidates)
         }
 
         let searchCenter: CLLocationCoordinate2D?
@@ -1781,9 +1831,11 @@ final class MapViewModel: ObservableObject {
             !saveSearchController.mapCandidateCategories(for: query).isEmpty
         if shouldUseCurrentLocation {
             guard let currentLocationCenter = await currentLocationSearchCenter() else {
+                guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
                 mapCandidates = []
-                return []
+                return .current([])
             }
+            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
             searchCenter = currentLocationCenter
         } else {
             searchCenter = nil
@@ -1795,21 +1847,26 @@ final class MapViewModel: ObservableObject {
                 span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
                 excluding: places
             )
+            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
             mapCandidates = candidates
             selectedMapCandidate = nil
             focusCameraOnMapCandidates(candidates)
-            return candidates
+            return .current(candidates)
         }
         let categories = saveSearchController.mapCandidateCategories(for: query)
         if !categories.isEmpty {
             selectedCategories = categories
             activeFilter = nil
         }
-        await refreshMapCandidates(
-            near: searchCenter,
+        let candidates = await mapCandidateSearchService.searchCandidates(
+            near: searchCenter ?? mapCandidateSearchCenter(),
             span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+            excluding: places,
             categories: categories
         )
+        guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
+        mapCandidates = candidates
+        selectedMapCandidate = nil
         if !categories.isEmpty {
             mapCandidates = mapCandidates.filter { candidate in
                 guard let category = candidate.category else { return false }
@@ -1817,7 +1874,7 @@ final class MapViewModel: ObservableObject {
             }
         }
         focusCameraOnMapCandidates(mapCandidates)
-        return mapCandidates
+        return .current(mapCandidates)
     }
 
     /// Drawer searches (including "Find exact place" on a Review clue) drop
@@ -1941,6 +1998,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func clearMapSearchResults() {
+        _ = beginMapCandidateSearch()
         mapCandidates = []
         selectedMapCandidate = nil
         selectedMapFeature = nil
@@ -1953,10 +2011,18 @@ final class MapViewModel: ObservableObject {
     /// Links the current map-candidate results to the Review clue they came
     /// from, so saving a candidate also retires that clue.
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
+        guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
         exactSearchResolution = ExactSearchResolution(
-            clue: candidate,
+            clue: currentClue,
             candidateIDs: Set(mapCandidates.map(\.id))
         )
+    }
+
+    @discardableResult
+    private func beginMapCandidateSearch() -> UUID {
+        let generation = UUID()
+        mapCandidateSearchGeneration = generation
+        return generation
     }
 
     func selectMapFeature(_ feature: MapFeature?) {
