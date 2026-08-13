@@ -95,7 +95,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "97"
+        CURRENT_PROJECT_VERSION: "98"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: SAV-E/SAV-E.entitlements
       configs:
@@ -160,7 +160,7 @@ targets:
         INFOPLIST_GENERATION_MODE: GeneratedFile
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.Clip
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "97"
+        CURRENT_PROJECT_VERSION: "98"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: SAV-EClip/SAV-EClip.entitlements
         GENERATE_INFOPLIST_FILE: true
@@ -214,7 +214,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.ShareExtension
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "97"
+        CURRENT_PROJECT_VERSION: "98"
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SAV-EShareExtension/Info.plist
         CODE_SIGN_ENTITLEMENTS: SAV-EShareExtension/SAV-EShareExtension.entitlements
@@ -231,7 +231,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.iMessage
         MARKETING_VERSION: "1.0.0"
-        CURRENT_PROJECT_VERSION: "97"
+        CURRENT_PROJECT_VERSION: "98"
         GENERATE_INFOPLIST_FILE: false
         INFOPLIST_FILE: SAV-EiMessage/Info.plist
         CODE_SIGN_ENTITLEMENTS: SAV-EiMessage/SAV-EiMessage.entitlements
