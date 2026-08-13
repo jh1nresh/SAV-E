@@ -220,7 +220,31 @@ struct ContentView: View {
                 onShareListURL: { list, role in
                     mapVM.shareURL(for: list, role: role)
                 },
+                onShareListLink: { list, role in
+                    await mapVM.shareLink(for: list, role: role)
+                },
+                onLoadMyReferralURL: {
+                    await mapVM.myReferralURL()
+                },
                 onOpenListOnMap: openCollaborativeListOnMap,
+                currentUserID: PrivyAuthService.shared.currentUserId,
+                onRefreshLists: {
+                    // Sync entry point that spawns its own server refresh —
+                    // an async wrapper keeps the poll-on-open contract simple.
+                    mapVM.reloadCollaborativeLists()
+                },
+                onLoadListMembers: { list in
+                    await mapVM.listMembers(for: list)
+                },
+                onRemoveListMember: { member, list in
+                    try await mapVM.removeListMember(member, from: list)
+                },
+                onLoadListShareCodes: { list in
+                    await mapVM.listShareCodes(for: list)
+                },
+                onRevokeListShareCode: { code, list in
+                    try await mapVM.revokeListShareCode(code.code, for: list)
+                },
                 onFollowReferral: { value in
                     try await mapVM.followReferral(value)
                 },

@@ -103,6 +103,27 @@ import {
   unfollowByRelationshipId,
 } from "./followList.js";
 import {
+  formatListItemRow,
+  formatListMemberRow,
+  formatListRow,
+  formatShareCodeRow,
+  listBodyMaxBytes,
+  listForMember,
+  listMaxItems,
+  listMembersForViewer,
+  listShareURL,
+  listsForMember,
+  memberRole,
+  normalizeListCreate,
+  normalizeListItemCreate,
+  normalizeListJoin,
+  normalizeListMemberUserId,
+  normalizeListShareCode,
+  normalizeShareCodeCreate,
+  referralShareURL,
+  shareCodesForOwner,
+} from "./listContracts.js";
+import {
   WorkflowContractError,
   normalizePlaceRecoveryWorkOrderCreate,
   normalizePlaceRecoveryRunCreate,
@@ -1001,6 +1022,15 @@ createServer(async (request, response) => {
       return await handleFollows(request, response, id, url, userId, isV0);
     }
     if (isV0 && resource === "shared-place-links") return await handleSharedPlaceLinks(request, response, id, userId);
+    if (isV0 && resource === "lists" && segments.length <= 4) {
+      return await handleLists(request, response, id, segments[2], segments[3], userId);
+    }
+    if (isV0 && resource === "list-joins" && !id) {
+      return await handleListJoins(request, response, userId);
+    }
+    if (isV0 && resource === "me" && id === "referral" && segments.length === 2) {
+      return await handleMyReferral(request, response, userId);
+    }
     if (isV0 && resource === "workflows") return await handleWorkflows(request, response, segments.slice(1), userId);
     if (resource === "social" && id === "signals") return await handleSocialSignals(request, response, url, userId);
     if (resource === "memory") {
@@ -2924,6 +2954,350 @@ async function handleSharedPlaceLinks(
   }
 
   return sendJson(response, { error: "Unsupported shared place links route" }, 405);
+}
+
+function poolListQuery(sql: string, values: readonly unknown[]): Promise<{ rows: JsonBody[] }> {
+  return pool.query(sql, [...values] as QueryValue[]);
+}
+
+async function handleLists(
+  request: IncomingMessage,
+  response: ServerResponse,
+  listId: string | undefined,
+  sub: string | undefined,
+  subId: string | undefined,
+  userId: string,
+): Promise<void> {
+  if (request.method === "GET") {
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("Vary", "Authorization");
+  }
+
+  if (request.method === "GET" && !listId) {
+    const rows = await listsForMember(userId, poolListQuery);
+    return sendJson(response, rows.map((row) => formatListRow(row)));
+  }
+
+  if (request.method === "GET" && listId && !sub) {
+    const row = await listForMember(listId, userId, poolListQuery);
+    if (!row) throw new ApiError(404, "List not found");
+    return sendJson(response, formatListRow(row));
+  }
+
+  if (request.method === "POST" && !listId) {
+    let create: ReturnType<typeof normalizeListCreate>;
+    try {
+      create = normalizeListCreate(await readJson(request, listBodyMaxBytes));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message = error instanceof Error ? error.message : "Invalid list payload";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const client = await pool.connect();
+    let transactionFinished = false;
+    try {
+      await client.query("begin");
+      let createdListId: string;
+      if (create.id) {
+        // Offline-first idempotency: honor the client-supplied uuid, but never
+        // let one account claim (or read back) another account's list id.
+        const { rows } = await client.query(
+          `insert into lists (id, owner_id, title, note)
+           values ($1, $2, $3, $4)
+           on conflict (id) do nothing
+           returning id::text as id`,
+          [create.id, userId, create.title, create.note],
+        );
+        if (rows[0]) {
+          createdListId = String(rows[0].id);
+        } else {
+          const { rows: existing } = await client.query(
+            "select id::text as id, owner_id from lists where id = $1",
+            [create.id],
+          );
+          if (!existing[0] || existing[0].owner_id !== userId) {
+            throw new ApiError(409, "List id conflict");
+          }
+          createdListId = String(existing[0].id);
+        }
+      } else {
+        const { rows } = await client.query(
+          "insert into lists (owner_id, title, note) values ($1, $2, $3) returning id::text as id",
+          [userId, create.title, create.note],
+        );
+        createdListId = String(rows[0].id);
+      }
+
+      await client.query(
+        `insert into list_members (list_id, user_id, role)
+         values ($1, $2, 'owner')
+         on conflict (list_id, user_id) do nothing`,
+        [createdListId, userId],
+      );
+
+      const created = await listForMember(
+        createdListId,
+        userId,
+        (sql, values) => client.query(sql, [...values] as QueryValue[]),
+      );
+      if (!created) throw new ApiError(404, "List not found");
+      await client.query("commit");
+      transactionFinished = true;
+      return sendJson(response, formatListRow(created), 201);
+    } catch (error) {
+      if (!transactionFinished) await rollbackQuietly(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  if (request.method === "GET" && listId && sub === "members" && !subId) {
+    // Membership is enforced inside the SQL: a member list always includes the
+    // viewer themselves, so an empty result means "not a member" (or no list).
+    const rows = await listMembersForViewer(listId, userId, poolListQuery);
+    if (rows.length === 0) throw new ApiError(404, "List not found");
+    return sendJson(response, rows.map((row) => formatListMemberRow(row)));
+  }
+
+  if (request.method === "DELETE" && listId && sub === "members" && subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    const targetUserId = normalizeListMemberUserId(subId);
+    if (!targetUserId) throw new ApiError(404, "List member not found");
+
+    const role = await memberRole(listId, userId, poolListQuery);
+    if (!role) throw new ApiError(404, "List not found");
+    if (role === "owner") {
+      if (targetUserId === userId) {
+        return sendJson(response, { error: "Owners cannot leave their own list" }, 409);
+      }
+    } else if (targetUserId !== userId) {
+      // Non-owners may only remove themselves (leave); hide everything else.
+      throw new ApiError(404, "List member not found");
+    }
+
+    const { rows } = await pool.query(
+      `delete from list_members
+       where list_id = $1 and user_id = $2 and role <> 'owner'
+       returning user_id`,
+      [listId, targetUserId],
+    );
+    if (!rows[0]) throw new ApiError(404, "List member not found");
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method === "GET" && listId && sub === "share-codes" && !subId) {
+    const viewerRole = await memberRole(listId, userId, poolListQuery);
+    if (viewerRole !== "owner") throw new ApiError(404, "List not found");
+    const rows = await shareCodesForOwner(listId, userId, poolListQuery);
+    return sendJson(response, rows.map((row) => formatShareCodeRow(row)));
+  }
+
+  if (request.method === "DELETE" && listId && sub === "share-codes" && subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    const code = normalizeListShareCode(subId);
+    if (!code) throw new ApiError(404, "Share code not found");
+
+    const role = await memberRole(listId, userId, poolListQuery);
+    if (role !== "owner") throw new ApiError(404, "List not found");
+
+    // Revoking deletes the code; members who already joined keep membership.
+    const { rows } = await pool.query(
+      "delete from list_share_codes where list_id = $1 and code = $2 returning code",
+      [listId, code],
+    );
+    if (!rows[0]) throw new ApiError(404, "Share code not found");
+    return sendJson(response, null, 204);
+  }
+
+  if (request.method === "POST" && listId && sub === "items" && !subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    let item: ReturnType<typeof normalizeListItemCreate>;
+    try {
+      item = normalizeListItemCreate(await readJson(request, listBodyMaxBytes));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message = error instanceof Error ? error.message : "Invalid list item payload";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const client = await pool.connect();
+    let transactionFinished = false;
+    try {
+      await client.query("begin");
+      const role = await memberRole(
+        listId,
+        userId,
+        (sql, values) => client.query(sql, [...values] as QueryValue[]),
+      );
+      if (!role) throw new ApiError(404, "List not found");
+      if (role === "viewer") {
+        await client.query("rollback");
+        transactionFinished = true;
+        return sendJson(response, { error: "Viewers cannot add to this list" }, 403);
+      }
+
+      const { rows: countRows } = await client.query(
+        "select count(*)::int as item_count from list_items where list_id = $1",
+        [listId],
+      );
+      const itemCount = Number(asObject(countRows[0]).item_count);
+      if (itemCount >= listMaxItems) {
+        throw new ApiError(409, `Lists are limited to ${listMaxItems} items`);
+      }
+
+      const { rows } = await client.query(
+        `insert into list_items (list_id, added_by, payload)
+         values ($1, $2, $3)
+         returning id::text as id, payload, added_by, created_at`,
+        [listId, userId, JSON.stringify(item.payload)],
+      );
+      await client.query("update lists set updated_at = now() where id = $1", [listId]);
+      const responseBody = formatListItemRow(asObject(rows[0]));
+      await client.query("commit");
+      transactionFinished = true;
+      return sendJson(response, responseBody, 201);
+    } catch (error) {
+      if (!transactionFinished) await rollbackQuietly(client);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  if (request.method === "POST" && listId && sub === "share-codes" && !subId) {
+    if (!isUuid(listId)) throw new ApiError(404, "List not found");
+    let create: ReturnType<typeof normalizeShareCodeCreate>;
+    try {
+      create = normalizeShareCodeCreate(await readJson(request, listBodyMaxBytes));
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      const message = error instanceof Error ? error.message : "Invalid share code payload";
+      return sendJson(response, { error: message }, 400);
+    }
+
+    const role = await memberRole(listId, userId, poolListQuery);
+    if (role !== "owner") throw new ApiError(404, "List not found");
+
+    const code = await uniqueListShareCode();
+    const { rows } = await pool.query(
+      `insert into list_share_codes (list_id, code, role, created_by)
+       values ($1, $2, $3, $4)
+       returning code, role, expires_at`,
+      [listId, code, create.role, userId],
+    );
+    const row = formatDates(asObject(rows[0]));
+    return sendJson(response, {
+      code: row.code,
+      role: row.role,
+      url: listShareURL(String(row.code)),
+      expires_at: row.expires_at ?? null,
+    }, 201);
+  }
+
+  return sendJson(response, { error: "Unsupported lists route" }, 405);
+}
+
+async function handleListJoins(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported list joins route" }, 405);
+  }
+
+  let join: ReturnType<typeof normalizeListJoin>;
+  try {
+    join = normalizeListJoin(await readJson(request, listBodyMaxBytes));
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    const message = error instanceof Error ? error.message : "Invalid list join payload";
+    return sendJson(response, { error: message }, 400);
+  }
+
+  const { rows } = await pool.query(
+    `select
+       list_id::text as list_id,
+       role,
+       expires_at,
+       (expires_at is null or expires_at > now()) as active
+     from list_share_codes
+     where code = $1
+     limit 1`,
+    [join.code],
+  );
+  if (!rows[0]) throw new ApiError(404, "List link not found");
+  const shareCode = asObject(rows[0]);
+  if (shareCode.active !== true) throw new ApiError(410, "List link expired");
+
+  const listId = String(shareCode.list_id);
+  await pool.query(
+    `insert into list_members (list_id, user_id, role)
+     values ($1, $2, $3)
+     on conflict (list_id, user_id) do update set role = case
+       when list_members.role = 'owner' then 'owner'
+       when excluded.role = 'editor' then 'editor'
+       else list_members.role
+     end`,
+    [listId, userId, shareCode.role],
+  );
+
+  const row = await listForMember(listId, userId, poolListQuery);
+  if (!row) throw new ApiError(404, "List not found");
+  return sendJson(response, formatListRow(row));
+}
+
+async function handleMyReferral(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "GET") {
+    return sendJson(response, { error: "Unsupported referral route" }, 405);
+  }
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Vary", "Authorization");
+
+  const { rows } = await pool.query("select referral_code from profiles where id = $1", [userId]);
+  let code = stringValue(rows[0]?.referral_code);
+
+  for (let attempt = 0; attempt < 6 && !code; attempt += 1) {
+    const candidate = randomBytes(6).toString("base64url");
+    try {
+      // Idempotent mint: never overwrite an existing code, even under
+      // concurrent requests — the null-guarded update loses harmlessly.
+      await pool.query(
+        "update profiles set referral_code = $2 where id = $1 and referral_code is null",
+        [userId, candidate],
+      );
+    } catch (error) {
+      if (isUniqueViolationError(error)) continue;
+      throw error;
+    }
+    const { rows: refreshed } = await pool.query(
+      "select referral_code from profiles where id = $1",
+      [userId],
+    );
+    code = stringValue(refreshed[0]?.referral_code);
+  }
+  if (!code) throw new ApiError(500, "Could not allocate referral code");
+
+  return sendJson(response, { code, url: referralShareURL(code) });
+}
+
+async function uniqueListShareCode(): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const code = randomBytes(6).toString("base64url");
+    const { rows } = await pool.query("select code from list_share_codes where code = $1", [code]);
+    if (!rows[0]) return code;
+  }
+  throw new ApiError(500, "Could not allocate share code");
+}
+
+function isUniqueViolationError(error: unknown): boolean {
+  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "23505";
 }
 
 async function handleWorkflows(
