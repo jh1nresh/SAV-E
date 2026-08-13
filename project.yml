@@ -30,6 +30,7 @@ targets:
     sources:
       - path: SAV-E
         excludes:
+          - DebugBridge
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
       - path: SAV-EShared
@@ -48,6 +49,12 @@ targets:
         product: Privy
       - package: ZIPFoundation
         product: ZIPFoundation
+      - target: DebugBridgeUI
+        link: false
+      - target: DebugBridgeCore
+        link: false
+      - target: DebugBridgeTouch
+        link: false
       - target: SAVEShareExtension
       # SAVEiMessageExtension is a parked spike: not embedded in shipping builds
       # until it has iMessage app icons + is validated. Build it via its own scheme.
@@ -91,6 +98,50 @@ targets:
         CURRENT_PROJECT_VERSION: "97"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_ENTITLEMENTS: SAV-E/SAV-E.entitlements
+      configs:
+        Debug:
+          OTHER_LDFLAGS: "$(inherited) -framework DebugBridgeUI -framework DebugBridgeCore -framework DebugBridgeTouch"
+
+  DebugBridgeCore:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: SAV-E/DebugBridge/Sources/DebugBridgeCore
+    settings:
+      base:
+        DEFINES_MODULE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.core
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  DebugBridgeTouch:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: SAV-E/DebugBridge/Sources/DebugBridgeTouch/DebugBridgeTouch.m
+      - path: SAV-E/DebugBridge/Sources/DebugBridgeTouch/include/DebugBridgeTouch.h
+        headerVisibility: public
+    settings:
+      base:
+        DEFINES_MODULE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.touch
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  DebugBridgeUI:
+    type: framework.static
+    platform: iOS
+    sources:
+      - path: SAV-E/DebugBridge/Sources/DebugBridgeUI
+    dependencies:
+      - target: DebugBridgeCore
+      - target: DebugBridgeTouch
+    settings:
+      base:
+        DEFINES_MODULE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.ui
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
 
 
   SAVEClip:

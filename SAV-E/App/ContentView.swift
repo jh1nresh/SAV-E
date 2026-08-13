@@ -76,6 +76,20 @@ private enum SaveFullScreenRoute: Identifiable {
     }
 }
 
+#if DEBUG
+private struct DebugQARefreshToken: Equatable {
+    let rootTab: String
+    let fullScreenKind: String?
+    let isRootSheetPresented: Bool
+    let isMapPanelExpanded: Bool
+    let rootPathDepth: Int
+    let savedPlaceCount: Int
+    let reviewCandidateCount: Int
+    let mapCandidateCount: Int
+    let hasIncomingReceipt: Bool
+}
+#endif
+
 enum ContentStorageScope: Equatable {
     case production
     case reviewerDemo
@@ -161,7 +175,7 @@ struct ContentView: View {
         _fullScreenActionError = State(initialValue: nil)
     }
 
-    var body: some View {
+    private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
             mapDrawerPanel
@@ -179,6 +193,10 @@ struct ContentView: View {
                 invalidateExactSearchRequest()
             }
         }
+#if DEBUG
+        .onAppear { syncDebugQAState() }
+        .onChange(of: debugQARefreshToken) { _, _ in syncDebugQAState() }
+#endif
         .environment(\.appLanguageSettings, languageSettings)
 #if DEBUG
         .task {
@@ -190,6 +208,12 @@ struct ContentView: View {
             }
         }
 #endif
+    }
+
+    var body: some View {
+        // Split from the alert/sheet chain: one flat modifier expression here
+        // pushes the type checker past its time budget.
+        rootScaffold
         .alert(
             languageSettings.localized(english: "Saved on this phone only", traditionalChinese: "只存在這支手機上"),
             isPresented: Binding(
@@ -948,6 +972,41 @@ struct ContentView: View {
         isExactSearchSessionActive = false
         mapVM.clearMapSearchResults()
     }
+
+#if DEBUG
+    private var debugQARefreshToken: DebugQARefreshToken {
+        let fullScreenKind: String? = switch fullScreenRoute {
+        case .capture: "capture"
+        case .placeDetail: "placeDetail"
+        case nil: nil
+        }
+        return DebugQARefreshToken(
+            rootTab: selectedRootTab.atlasTitle.lowercased(),
+            fullScreenKind: fullScreenKind,
+            isRootSheetPresented: isRootSheetPresented,
+            isMapPanelExpanded: isMapPanelExpanded,
+            rootPathDepth: rootPath.count,
+            savedPlaceCount: mapVM.places.count,
+            reviewCandidateCount: mapVM.reviewCandidates.count,
+            mapCandidateCount: mapVM.mapCandidates.count,
+            hasIncomingReceipt: incomingPlaceReceipt != nil
+        )
+    }
+
+    private func syncDebugQAState() {
+        let snapshot = debugQARefreshToken
+        let state = DebugQAState.shared
+        state.qaRootTab = snapshot.rootTab
+        state.qaFullScreenKind = snapshot.fullScreenKind
+        state.qaIsRootSheetPresented = snapshot.isRootSheetPresented
+        state.qaIsMapPanelExpanded = snapshot.isMapPanelExpanded
+        state.qaRootPathDepth = snapshot.rootPathDepth
+        state.qaSavedPlaceCount = snapshot.savedPlaceCount
+        state.qaReviewCandidateCount = snapshot.reviewCandidateCount
+        state.qaMapCandidateCount = snapshot.mapCandidateCount
+        state.qaHasIncomingReceipt = snapshot.hasIncomingReceipt
+    }
+#endif
 
     private func openFoodAnalysis(_ place: Place) {
         transitionFromFullScreenToMapDrawer {
