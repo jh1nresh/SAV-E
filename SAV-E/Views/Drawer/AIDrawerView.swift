@@ -24,46 +24,6 @@ enum MapDetailDrawerItem: Identifiable {
     }
 }
 
-enum CommandDrawerTab: String, CaseIterable, Hashable {
-    case saved
-    case review
-    case lists
-    case friends
-
-    static let publicTestCases: [CommandDrawerTab] = [.saved, .review, .friends]
-
-    var title: String {
-        switch self {
-        case .saved: return "Saved"
-        case .review: return "Review"
-        case .lists: return "Lists"
-        case .friends: return "Friends"
-        }
-    }
-
-    func title(language: AppLanguage) -> String {
-        switch self {
-        case .saved:
-            return language.localized(english: "Saved", traditionalChinese: "收藏")
-        case .review:
-            return language.localized(english: "Review", traditionalChinese: "待確認")
-        case .lists:
-            return language.localized(english: "Lists", traditionalChinese: "清單")
-        case .friends:
-            return language.localized(english: "Friends", traditionalChinese: "朋友")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .saved: return "bookmark.fill"
-        case .review: return "checklist.unchecked"
-        case .lists: return "person.2.wave.2.fill"
-        case .friends: return "person.2.fill"
-        }
-    }
-}
-
 enum DrawerLaunchTarget: Equatable {
     case ask
     case addLink
@@ -130,23 +90,7 @@ struct AIDrawerView: View {
         SaveCollaborativeList(title: title, note: note)
     }
     var onAddPlaceToList: (Place, UUID) throws -> Void = { _, _ in }
-    var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
-    var onSaveListItem: (SaveListItem) async throws -> Void = { _ in }
-    var onPlanList: (SaveCollaborativeList) async -> Void = { _ in }
-    var socialPlaces: [Place] = []
-    var followedFriends: [SaveFollowedFriend] = []
-    var isLoadingFollowedFriends = false
-    var followedFriendsLoadFailed = false
-    var hasMoreFollowedFriends = false
-    var isLoadingMoreFollowedFriends = false
-    var followedFriendsLoadMoreFailed = false
-    var onSelectSocialLens: (SaveSocialLens) -> Void = { _ in }
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
-    var onFollowReferral: (String) async throws -> Void = { _ in }
-    var onRefreshFollowedFriends: () async -> Void = {}
-    var onSearchFollowedFriends: (String) async -> Void = { _ in }
-    var onLoadMoreFollowedFriends: () async -> Void = {}
-    var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
     var onOpenPassport: () -> Void = {}
@@ -163,22 +107,9 @@ struct AIDrawerView: View {
     @State private var addSpotStatus: String?
     @State private var candidateActionInFlight: UUID?
     @State private var mapCandidateActionInFlight: String?
-    @State private var showReviewInbox = false
-    @State private var showSavedCategories = false
     @State private var isImportingURL = false
     @State private var linkAnalysisState: LinkAnalysisState = .idle
     @State private var showsSlowLoadingHint = false
-    @State private var showLists = false
-    @State private var selectedListID: UUID?
-    @State private var newListTitle = ""
-    @State private var newListNote = ""
-    @State private var followReferralInput = ""
-    @State private var isFollowingReferral = false
-    @State private var followReferralMessage: String?
-    @State private var followedFriendsSearchQuery = ""
-    @State private var pendingUnfollowFriend: SaveFollowedFriend?
-    @State private var unfollowingFriendID: String?
-    @State private var unfollowFriendMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -437,14 +368,10 @@ struct AIDrawerView: View {
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
 
         switch request.target {
         case .ask:
-            viewModel.activeCommandTab = .saved
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
@@ -466,7 +393,6 @@ struct AIDrawerView: View {
             if !isImportingURL {
                 linkAnalysisState = .idle
             }
-            viewModel.activeCommandTab = .review
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
@@ -475,12 +401,10 @@ struct AIDrawerView: View {
                 searchFocused = true
             }
         case .saved:
-            viewModel.activeCommandTab = .saved
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
         case .review:
-            viewModel.activeCommandTab = .review
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .large
             }
@@ -506,9 +430,6 @@ struct AIDrawerView: View {
         } else if !viewModel.query.isEmpty {
             Button(action: {
                 viewModel.returnToCommands()
-                showSavedCategories = false
-                showReviewInbox = false
-                showLists = false
                 searchFocused = true
                 withAnimation { drawerDetent = .medium }
             }) {
@@ -688,9 +609,6 @@ struct AIDrawerView: View {
                 HStack(spacing: 12) {
                     Button(languageSettings.text(.back)) {
                         viewModel.returnToCommands()
-                        showSavedCategories = false
-                        showReviewInbox = false
-                        showLists = false
                         withAnimation { drawerDetent = .medium }
                     }
                     .font(.caption)
@@ -791,9 +709,6 @@ struct AIDrawerView: View {
         HStack(spacing: SaveTheme.Spacing.sm) {
             Button(action: {
                 viewModel.returnToCommands()
-                showSavedCategories = false
-                showReviewInbox = false
-                showLists = false
                 searchFocused = false
                 withAnimation { drawerDetent = .medium }
             }) {
@@ -825,9 +740,6 @@ struct AIDrawerView: View {
 
             Button(action: {
                 viewModel.reset()
-                showSavedCategories = false
-                showReviewInbox = false
-                showLists = false
                 searchFocused = false
                 withAnimation { drawerDetent = collapsedDrawerDetent }
             }) {
@@ -963,115 +875,6 @@ struct AIDrawerView: View {
         suggestionsView
     }
 
-    private var commandTabBar: some View {
-        HStack(spacing: SaveTheme.Spacing.sm) {
-            ForEach(CommandDrawerTab.publicTestCases, id: \.self) { tab in
-                Button {
-                    guard viewModel.activeCommandTab != tab else { return }
-                    SaveHaptics.select()
-                    viewModel.activeCommandTab = tab
-                    showSavedCategories = false
-                    showReviewInbox = false
-                    showLists = false
-                    searchFocused = false
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: tab.systemImage)
-                            .font(.caption2.weight(.bold))
-                        Text(tab.title(language: languageSettings.language))
-                            .font(.caption.weight(.bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.76)
-                    }
-                    .foregroundColor(viewModel.activeCommandTab == tab ? .saveInk : .saveCocoa.opacity(0.76))
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 38)
-                    .padding(.vertical, 2)
-                    .background(viewModel.activeCommandTab == tab ? SaveAtlasPalette.kraft.opacity(0.62) : Color.white.opacity(colorScheme == .dark ? 0.08 : 0.18))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(viewModel.activeCommandTab == tab ? 0.56 : 0.22), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("drawer.tab.\(tab.rawValue)")
-            }
-        }
-    }
-
-    private var friendsTabView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(languageSettings.localized(
-                    english: "Follow people you trust, then save only the places they choose to share.",
-                    traditionalChinese: "追蹤你信任的人，只保存他們主動選擇分享的地點。"
-                ))
-                .font(.subheadline)
-                .foregroundColor(.saveCocoa.opacity(0.76))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-
-                followingFriendsSection
-                followFriendForm
-                friendSharedPlacesSection
-                if let addSpotStatus {
-                    Text(addSpotStatus)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, SaveTheme.Spacing.lg)
-                }
-            }
-            .padding(.top, SaveTheme.Spacing.lg)
-            .padding(.bottom, 24)
-        }
-        .refreshable {
-            await onRefreshFollowedFriends()
-            onSelectSocialLens(.friends)
-        }
-        .task {
-            onSelectSocialLens(.friends)
-        }
-        .task(id: followedFriendsSearchQuery) {
-            if !followedFriendsSearchQuery.isEmpty {
-                do {
-                    try await Task.sleep(nanoseconds: 250_000_000)
-                } catch {
-                    return
-                }
-            }
-            guard !Task.isCancelled else { return }
-            await onSearchFollowedFriends(followedFriendsSearchQuery)
-        }
-        .confirmationDialog(
-            languageSettings.localized(english: "Stop following?", traditionalChinese: "停止追蹤？"),
-            isPresented: Binding(
-                get: { pendingUnfollowFriend != nil },
-                set: { if !$0 { pendingUnfollowFriend = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: pendingUnfollowFriend
-        ) { friend in
-            Button(
-                languageSettings.localized(
-                    english: "Unfollow \(friend.displayName)",
-                    traditionalChinese: "取消追蹤 \(friend.displayName)"
-                ),
-                role: .destructive
-            ) {
-                Task { await unfollow(friend) }
-            }
-            Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
-        } message: { _ in
-            Text(languageSettings.localized(
-                english: "Their shared places will stop appearing in your Friends view. Your private Map Stamps stay unchanged.",
-                traditionalChinese: "對方分享的地點將不再顯示於朋友頁面；你的私人地圖章不會受到影響。"
-            ))
-        }
-        .accessibilityIdentifier("drawer.friends.root")
-    }
-
     private var suggestionsView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -1172,562 +975,6 @@ struct AIDrawerView: View {
         }
     }
 
-    private var followingFriendsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                NotebookBandLabel(languageSettings.localized(english: "Following", traditionalChinese: "追蹤中"))
-                Spacer(minLength: 8)
-                Text("\(followedFriends.count)\(hasMoreFollowedFriends ? "+" : "")")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveCocoa)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(SaveAtlasPalette.kraft.opacity(0.48), in: Capsule())
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.62))
-                TextField(
-                    languageSettings.localized(english: "Search people you follow", traditionalChinese: "搜尋追蹤中的人"),
-                    text: $followedFriendsSearchQuery
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .font(.caption.weight(.semibold))
-                .accessibilityIdentifier("drawer.friends.search")
-                .onChange(of: followedFriendsSearchQuery) { _, value in
-                    if value.count > 64 {
-                        followedFriendsSearchQuery = String(value.prefix(64))
-                    }
-                }
-                if !followedFriendsSearchQuery.isEmpty {
-                    Button {
-                        followedFriendsSearchQuery = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.saveCocoa.opacity(0.58))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(languageSettings.localized(english: "Clear Following search", traditionalChinese: "清除追蹤搜尋"))
-                }
-            }
-            .padding(.horizontal, 11)
-            .frame(minHeight: 40)
-            .background(SaveAtlasPalette.paper.opacity(0.58))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
-            )
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            if isLoadingFollowedFriends && followedFriends.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(languageSettings.localized(english: "Loading people you follow…", traditionalChinese: "正在載入追蹤中的朋友…"))
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.72))
-                }
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-            } else if followedFriends.isEmpty {
-                Text(languageSettings.localized(
-                    english: followedFriendsSearchQuery.isEmpty
-                        ? "You are not following anyone yet. Add a referral code or SAV-E profile link below."
-                        : "No one you follow matches this search.",
-                    traditionalChinese: followedFriendsSearchQuery.isEmpty
-                        ? "你還沒有追蹤任何人。可在下方貼上推薦碼或 SAV-E 個人連結。"
-                        : "追蹤名單中沒有符合搜尋的人。"
-                ))
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.72))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-            } else {
-                ForEach(followedFriends) { friend in
-                    FollowedFriendRow(
-                        friend: friend,
-                        isUnfollowing: unfollowingFriendID == friend.id,
-                        onUnfollow: { pendingUnfollowFriend = friend }
-                    )
-                    .padding(.horizontal, SaveTheme.Spacing.lg)
-                }
-            }
-
-            if hasMoreFollowedFriends || isLoadingMoreFollowedFriends || followedFriendsLoadMoreFailed {
-                Button {
-                    Task { await onLoadMoreFollowedFriends() }
-                } label: {
-                    HStack(spacing: 7) {
-                        if isLoadingMoreFollowedFriends {
-                            ProgressView().controlSize(.mini)
-                        }
-                        Text(languageSettings.localized(
-                            english: followedFriendsLoadMoreFailed ? "Try loading more again" : "Load more",
-                            traditionalChinese: followedFriendsLoadMoreFailed ? "再次載入更多" : "載入更多"
-                        ))
-                            .font(.caption.weight(.bold))
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 38)
-                }
-                .foregroundColor(.saveInk)
-                .background(SaveAtlasPalette.kraft.opacity(0.58))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .buttonStyle(.plain)
-                .disabled(isLoadingMoreFollowedFriends)
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-                .accessibilityIdentifier("drawer.friends.loadMore")
-            }
-
-            if followedFriendsLoadFailed {
-                HStack(spacing: 8) {
-                    Text(languageSettings.localized(english: "Could not refresh this list.", traditionalChinese: "無法更新追蹤名單。"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.saveCocoa.opacity(0.78))
-                    Button(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次")) {
-                        Task { await onRefreshFollowedFriends() }
-                    }
-                    .font(.caption2.weight(.bold))
-                    .buttonStyle(.plain)
-                    .foregroundColor(.saveCoral)
-                }
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-            }
-
-            if let unfollowFriendMessage {
-                Text(unfollowFriendMessage)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, SaveTheme.Spacing.lg)
-            }
-        }
-        .accessibilityIdentifier("drawer.friends.following")
-    }
-
-    private func unfollow(_ friend: SaveFollowedFriend) async {
-        guard unfollowingFriendID == nil else { return }
-        pendingUnfollowFriend = nil
-        unfollowingFriendID = friend.id
-        unfollowFriendMessage = nil
-        defer { unfollowingFriendID = nil }
-
-        do {
-            try await onUnfollowFriend(friend)
-            unfollowFriendMessage = languageSettings.localized(
-                english: "Unfollowed \(friend.displayName).",
-                traditionalChinese: "已取消追蹤 \(friend.displayName)。"
-            )
-        } catch {
-            unfollowFriendMessage = languageSettings.localized(
-                english: "Could not unfollow \(friend.displayName). Try again.",
-                traditionalChinese: "無法取消追蹤 \(friend.displayName)，請再試一次。"
-            )
-        }
-    }
-
-    private var followFriendForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            NotebookBandLabel(languageSettings.localized(english: "Add a friend", traditionalChinese: "新增朋友"))
-
-            Text(languageSettings.localized(
-                english: "Paste their referral code or SAV-E profile link. Following is one-way and does not expose either private map.",
-                traditionalChinese: "貼上對方的推薦碼或 SAV-E 個人連結。追蹤是單向的，不會公開任何一方的私人地圖。"
-            ))
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.72))
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                TextField(languageSettings.localized(english: "Paste referral code or link", traditionalChinese: "貼上推薦碼或連結"), text: $followReferralInput)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 38)
-                    .background(SaveAtlasPalette.paper.opacity(0.58))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
-                    )
-                    .accessibilityIdentifier("drawer.friends.referral")
-
-                Button {
-                    Task { await followFriend() }
-                } label: {
-                    if isFollowingReferral {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .frame(width: 74, height: 38)
-                    } else {
-                        Text(languageSettings.localized(english: "Follow", traditionalChinese: "追蹤"))
-                            .font(.caption.weight(.bold))
-                            .frame(width: 74, height: 38)
-                    }
-                }
-                .foregroundColor(.saveInk)
-                .background(SaveAtlasPalette.kraft.opacity(canFollowReferral ? 0.78 : 0.28))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(SaveAtlasPalette.line.opacity(0.44), lineWidth: 1)
-                )
-                .disabled(!canFollowReferral || isFollowingReferral)
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("drawer.friends.follow")
-            }
-
-            if let followReferralMessage {
-                Text(followReferralMessage)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(isFollowReferralSuccessMessage(followReferralMessage) ? .saveMint : .saveCocoa.opacity(0.78))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, SaveTheme.Spacing.lg)
-    }
-
-    private var friendSharedPlacesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            NotebookBandLabel(languageSettings.localized(english: "Friend-shared places", traditionalChinese: "朋友分享的地點"))
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            Text(languageSettings.localized(
-                english: "Only opted-in friend places appear here. Saving creates your own private Map Stamp.",
-                traditionalChinese: "這裡只顯示朋友主動開放的地點；保存後會成為你自己的私人地圖章。"
-            ))
-            .font(.caption)
-            .foregroundColor(.saveCocoa.opacity(0.72))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-
-            if socialPlaces.isEmpty {
-                Text(languageSettings.localized(
-                    english: "No shared friend places yet.",
-                    traditionalChinese: "目前還沒有朋友分享的地點。"
-                ))
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.72))
-                .padding(.horizontal, SaveTheme.Spacing.lg)
-            } else {
-                ForEach(socialPlaces.prefix(6)) { place in
-                    SocialPlaceRow(place: place) {
-                        Task { await saveSocialPlace(place) }
-                    }
-                    .padding(.horizontal, SaveTheme.Spacing.lg)
-                }
-            }
-        }
-        .accessibilityIdentifier("drawer.friends.sharedPlaces")
-    }
-
-    private var canFollowReferral: Bool {
-        !followReferralInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func isFollowReferralSuccessMessage(_ message: String) -> Bool {
-        message.localizedCaseInsensitiveContains("followed") || message.contains("已追蹤")
-    }
-
-    private func followFriend() async {
-        guard canFollowReferral, !isFollowingReferral else { return }
-        isFollowingReferral = true
-        followReferralMessage = nil
-        defer { isFollowingReferral = false }
-
-        do {
-            try await onFollowReferral(followReferralInput)
-            followReferralInput = ""
-            followReferralMessage = languageSettings.localized(
-                english: "Followed. Friends' saved places will appear here when shared.",
-                traditionalChinese: "已追蹤。朋友分享已保存地點後，會出現在這裡。"
-            )
-            onSelectSocialLens(.friends)
-            withAnimation { drawerDetent = .medium }
-        } catch {
-            followReferralMessage = languageSettings.localized(english: "Could not follow that code or link.", traditionalChinese: "無法追蹤這個推薦碼或連結。")
-        }
-    }
-
-    private var savedPlacesView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if viewModel.places.isEmpty && reviewCandidates.isEmpty {
-                    EmptyStateView(
-                        icon: "mappin.and.ellipse",
-                        title: languageSettings.localized(english: "No Map Stamps yet", traditionalChinese: "還沒有地圖章"),
-                        subtitle: languageSettings.localized(
-                            english: "Paste a link from Instagram, Maps, or a friend's message — SAV-E finds the place for you.",
-                            traditionalChinese: "貼上 Instagram、地圖或朋友訊息裡的連結，SAV-E 會幫你找出地點。"
-                        ),
-                        actionTitle: languageSettings.localized(english: "Paste a link", traditionalChinese: "貼上連結"),
-                        action: { searchFocused = true }
-                    )
-                } else {
-                MemoryFlowCTA(
-                    reviewCount: reviewCandidates.count,
-                    stampCount: viewModel.places.count,
-                    onReview: openReviewInbox,
-                    onAsk: askFromSavedMemory
-                )
-
-                if !savedCategoryCounts.isEmpty {
-                    SavedCategoryGrid(
-                        categories: savedCategoryCounts,
-                        selectedCategories: selectedCategories,
-                        onToggle: onToggleCategory,
-                        onClear: clearSelectedCategories
-                    )
-                }
-
-                SavedPlacesSection(
-                    places: savedPlacesForDrawer,
-                    totalCount: viewModel.places.count,
-                    isFiltered: !selectedCategories.isEmpty,
-                    suggestions: suggestions,
-                    onSelect: openSavedPlace,
-                    onReview: openReviewInbox,
-                    onAsk: askFromSavedMemory,
-                    onSuggestion: runSuggestion
-                )
-
-                if let addSpotStatus {
-                    Text(addSpotStatus)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                }
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-            .padding(.top, SaveTheme.Spacing.lg)
-            .padding(.bottom, 24)
-        }
-    }
-
-    private func clearSelectedCategories() {
-        Array(selectedCategories).forEach { onToggleCategory($0) }
-    }
-
-    private var savedCategoryCounts: [(category: PlaceCategory, count: Int)] {
-        PlaceCategory.allCases.compactMap { category in
-            let count = viewModel.places.filter { $0.category == category }.count
-            return count > 0 ? (category, count) : nil
-        }
-    }
-
-    private var savedPlacesForDrawer: [Place] {
-        var places = viewModel.places
-        if !selectedCategories.isEmpty {
-            places = places.filter { selectedCategories.contains($0.category) }
-        }
-        return places.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var reviewInboxView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let captureTripName = normalizedCaptureTripName {
-                    CaptureTripContextCard(tripName: captureTripName)
-                }
-                linkAnalysisPrivacyNotice
-                linkAnalysisStatusCard
-
-                if reviewCandidates.isEmpty {
-                    EmptyStateView(
-                        icon: "checklist.unchecked",
-                        title: languageSettings.localized(english: "Nothing to review", traditionalChinese: "沒有待確認的地點"),
-                        subtitle: languageSettings.localized(
-                            english: "When SAV-E isn't sure about a place, it waits here for your confirmation — your map never fills up with guesses.",
-                            traditionalChinese: "SAV-E 不確定的地點會先在這裡等你確認，你的地圖不會被亂猜的地點塞滿。"
-                        ),
-                        actionTitle: languageSettings.localized(english: "Paste a link", traditionalChinese: "貼上連結"),
-                        action: { searchFocused = true }
-                    )
-                } else {
-                    if !latestLinkCandidates.isEmpty {
-                        ReviewCandidatesSection(
-                            title: languageSettings.localized(english: "From this link", traditionalChinese: "這次連結的結果"),
-                            candidates: latestLinkCandidates,
-                            limit: nil,
-                            onSelect: openReviewCandidateDetail
-                        )
-                    }
-                    if !remainingNeedsReviewCandidates.isEmpty {
-                        ReviewCandidatesSection(
-                            title: languageSettings.localized(english: "Needs Review", traditionalChinese: "需要確認"),
-                            candidates: remainingNeedsReviewCandidates,
-                            limit: nil,
-                            onSelect: openReviewCandidateDetail
-                        )
-                    }
-                    if !remainingSourceOnlyCandidates.isEmpty {
-                        ReviewCandidatesSection(
-                            title: languageSettings.localized(english: "Source-only Clues", traditionalChinese: "只留來源的線索"),
-                            candidates: remainingSourceOnlyCandidates,
-                            limit: nil,
-                            onSelect: openReviewCandidateDetail
-                        )
-                    }
-                }
-
-                if let addSpotStatus {
-                    Text(addSpotStatus)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-            .padding(.top, SaveTheme.Spacing.lg)
-            .padding(.bottom, 24)
-        }
-        .accessibilityIdentifier("drawer.review.root")
-    }
-
-    private var normalizedCaptureTripName: String? {
-        guard let captureTripName else { return nil }
-        let trimmed = captureTripName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private var linkAnalysisPrivacyNotice: some View {
-        Label {
-            Text(languageSettings.localized(
-                english: "Supported social shares use the cleaned caption and link. Other links send only the URL. Evidence stays in your private Review, and no place is saved until you confirm.",
-                traditionalChinese: "支援的社群分享會分析清理後的貼文說明與連結；其他連結只送出網址。線索只留在你的私人待確認區，必須由你確認才會收藏地點。"
-            ))
-            .fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: "lock.shield.fill")
-        }
-        .font(.caption)
-        .foregroundStyle(Color.saveCocoa.opacity(0.78))
-        .padding(12)
-        .saveAtlasPaper(radius: 14)
-        .accessibilityIdentifier("drawer.linkAnalysis.privacy")
-    }
-
-    private var latestLinkCandidateIDs: Set<UUID> {
-        guard case .ready(let candidateIDs) = linkAnalysisState else { return [] }
-        return candidateIDs
-    }
-
-    private var latestLinkCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.filter { latestLinkCandidateIDs.contains($0.id) }
-    }
-
-    private var needsReviewCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.filter { $0.status != "source_only" }
-    }
-
-    private var sourceOnlyCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.filter { $0.status == "source_only" }
-    }
-
-    private var remainingNeedsReviewCandidates: [PlaceReviewCandidate] {
-        needsReviewCandidates.filter { !latestLinkCandidateIDs.contains($0.id) }
-    }
-
-    private var remainingSourceOnlyCandidates: [PlaceReviewCandidate] {
-        sourceOnlyCandidates.filter { !latestLinkCandidateIDs.contains($0.id) }
-    }
-
-    private var collaborativeListsView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 9) {
-                    NotebookBandLabel(languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"))
-                    TextField(languageSettings.localized(english: "Tokyo cafes, OC weekend, NYC food", traditionalChinese: "東京咖啡、OC 週末、紐約美食"), text: $newListTitle)
-                        .textFieldStyle(.plain)
-                        .font(.subheadline)
-                        .foregroundColor(.saveInk)
-                        .padding(10)
-                        .background(SaveAtlasPalette.paper.opacity(0.72))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(SaveAtlasPalette.line.opacity(0.5), lineWidth: 1.2)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-                    TextField(languageSettings.localized(english: "Optional note", traditionalChinese: "選填備註"), text: $newListNote)
-                        .textFieldStyle(.plain)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa)
-                        .padding(10)
-                        .background(SaveAtlasPalette.paper.opacity(0.54))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-                    Button(action: createCollaborativeList) {
-                        Label(languageSettings.localized(english: "Create list", traditionalChinese: "建立清單"), systemImage: "plus")
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(SaveAtlasPalette.kraft.opacity(0.88))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(12)
-                .background(SaveAtlasPalette.canvas.opacity(0.32))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                if collaborativeLists.isEmpty {
-                    Text(languageSettings.localized(
-                        english: "Create a list, then add saved Map Stamps or unsaved map results from their detail cards.",
-                        traditionalChinese: "先建立清單，再從地點詳情卡加入已保存地圖章或未保存的地圖結果。"
-                    ))
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(collaborativeLists) { list in
-                        CollaborativeListCard(
-                            list: list,
-                            isSelected: selectedListID == list.id,
-                            existingPlaces: viewModel.places,
-                            viewerURL: onShareListURL(list, .viewer),
-                            editorURL: onShareListURL(list, .editor),
-                            onSelect: {
-                                selectedListID = selectedListID == list.id ? nil : list.id
-                            },
-                            onSaveItem: { item in
-                                saveListItem(item)
-                            },
-                            onPlan: {
-                                planCollaborativeList(list)
-                            }
-                        )
-                    }
-                }
-
-                if let addSpotStatus {
-                    Text(addSpotStatus)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-            .padding(.top, SaveTheme.Spacing.lg)
-            .padding(.bottom, 24)
-        }
-    }
-
     private func performCandidateAction(
         _ candidate: PlaceReviewCandidate,
         successMessage: String,
@@ -1779,23 +1026,6 @@ struct AIDrawerView: View {
         }
     }
 
-    private func focusAgentPrompt(_ prompt: String) {
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
-        viewModel.startNewConversation()
-        viewModel.query = singleLinePrompt(prompt)
-        withAnimation { drawerDetent = .medium }
-        searchFocused = true
-    }
-
-    private func singleLinePrompt(_ prompt: String) -> String {
-        prompt
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-    }
-
     private func firstURL(in text: String) -> URL? {
         if let normalizedURL = SocialShareTextNormalizer.normalize(text).primaryURL {
             return normalizedURL
@@ -1815,19 +1045,8 @@ struct AIDrawerView: View {
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
-        viewModel.activeCommandTab = .review
         searchFocused = false
         withAnimation { drawerDetent = .large }
-    }
-
-    private func askFromSavedMemory() {
-        focusAgentPrompt("What should I pick from my saved places first?")
-    }
-
-    /// Prefills the search field with a suggestion chip and submits it.
-    private func runSuggestion(_ suggestion: String) {
-        viewModel.query = suggestion
-        submitSearchField()
     }
 
     private func openSavedPlace(_ place: Place) {
@@ -1858,9 +1077,6 @@ struct AIDrawerView: View {
     }
 
     private func prepareMapDetailOpening() {
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
     }
 
@@ -1990,9 +1206,6 @@ struct AIDrawerView: View {
             return
         }
         mapDetailDrawerItem = nil
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
         viewModel.query = query
         addSpotStatus = languageSettings.localized(
@@ -2043,9 +1256,6 @@ struct AIDrawerView: View {
         if shouldClearMapSearch {
             onClearMapSearchResults()
         }
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
     }
@@ -2054,9 +1264,6 @@ struct AIDrawerView: View {
         voiceQuery.stop()
         viewModel.reset()
         onClearMapSearchResults()
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
         addSpotStatus = nil
         withAnimation { drawerDetent = collapsedDrawerDetent }
@@ -2072,15 +1279,11 @@ struct AIDrawerView: View {
 
     private func importSharedTextToReviewCandidates(_ sharedText: String) {
         guard !isImportingURL else { return }
-        showSavedCategories = false
-        showReviewInbox = false
-        showLists = false
         searchFocused = false
         isImportingURL = true
         linkAnalysisState = .analyzing
         addSpotStatus = nil
         viewModel.returnToCommands()
-        viewModel.activeCommandTab = .review
         withAnimation { drawerDetent = .medium }
 
         Task {
@@ -2091,7 +1294,6 @@ struct AIDrawerView: View {
             } catch {
                 linkAnalysisState = .failed(error.localizedDescription)
                 viewModel.returnToCommands()
-                viewModel.activeCommandTab = .review
                 withAnimation { drawerDetent = .medium }
             }
             isImportingURL = false
@@ -2155,10 +1357,6 @@ struct AIDrawerView: View {
     private func addMoreClue(for candidate: PlaceReviewCandidate) {
         mapDetailDrawerItem = nil
         viewModel.returnToCommands()
-        viewModel.activeCommandTab = .review
-        showSavedCategories = false
-        showReviewInbox = true
-        showLists = false
         viewModel.query = languageSettings.localized(
             english: "Add more clue for \(candidate.name): ",
             traditionalChinese: "替「\(candidate.name)」補更多線索："
@@ -2171,43 +1369,8 @@ struct AIDrawerView: View {
         withAnimation { drawerDetent = .medium }
     }
 
-    private func createCollaborativeList() {
-        let list = onCreateList(newListTitle, newListNote)
-        selectedListID = list.id
-        newListTitle = ""
-        newListNote = ""
-        addSpotStatus = "Created \(list.title)."
-    }
-
     private func createListForPicker() -> SaveCollaborativeList {
-        let title = newListTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Trip ideas"
-            : newListTitle
-        let list = onCreateList(title, newListNote)
-        selectedListID = list.id
-        newListTitle = ""
-        newListNote = ""
-        return list
-    }
-
-    private func saveListItem(_ item: SaveListItem) {
-        Task {
-            do {
-                try await onSaveListItem(item)
-                addSpotStatus = "Saved \(item.title) to your SAV-E."
-            } catch {
-                addSpotStatus = error.localizedDescription
-            }
-        }
-    }
-
-    private func planCollaborativeList(_ list: SaveCollaborativeList) {
-        Task {
-            await onPlanList(list)
-            viewModel.showCollaborativeListPlan(list)
-            viewModel.activeCommandTab = .lists
-            withAnimation { drawerDetent = .large }
-        }
+        onCreateList("Trip ideas", "")
     }
 }
 
@@ -2250,50 +1413,6 @@ private struct LinkAnalysisStatusCard: View {
         .saveAtlasPaper(radius: 14)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("drawer.linkAnalysis.status")
-    }
-}
-
-private struct CaptureTripContextCard: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let tripName: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "suitcase.rolling.fill")
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveInk)
-                .frame(width: 34, height: 34)
-                .background(Color.saveCoral.opacity(0.78))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(languageSettings.localized(
-                    english: "Collecting for \(tripName)",
-                    traditionalChinese: "正在為「\(tripName)」收集"
-                ))
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveInk)
-
-                Text(languageSettings.localized(
-                    english: "Review the place first. SAV-E will ask before adding the confirmed Map Stamp to this Trip.",
-                    traditionalChinese: "先確認地點；成為地圖章後，SAV-E 才會詢問是否加入這個行程。"
-                ))
-                .font(.caption)
-                .foregroundColor(.saveCocoa.opacity(0.78))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .saveAtlasPaper(radius: 14)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveCoral.opacity(0.48), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("drawer.capture.tripContext")
     }
 }
 
@@ -2984,143 +2103,6 @@ private extension MapDetailDrawerItem {
         case .unsavedCandidate(let candidate):
             return .mapCandidate(candidate)
         }
-    }
-}
-
-private struct FollowedFriendRow: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let friend: SaveFollowedFriend
-    let isUnfollowing: Bool
-    let onUnfollow: () -> Void
-
-    var body: some View {
-        HStack(spacing: 11) {
-            Group {
-                if let avatarURL {
-                    CachedAsyncImage(url: avatarURL) { phase in
-                        if case .success(let image) = phase {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            avatarFallback
-                        }
-                    }
-                } else {
-                    avatarFallback
-                }
-            }
-            .frame(width: 42, height: 42)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(friend.displayName)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(1)
-
-                if let handleLabel = friend.handleLabel {
-                    Text(handleLabel)
-                        .font(.caption)
-                        .foregroundColor(.saveCocoa.opacity(0.72))
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            Button(role: .destructive, action: onUnfollow) {
-                Group {
-                    if isUnfollowing {
-                        ProgressView()
-                            .controlSize(.mini)
-                    } else {
-                        Image(systemName: "person.badge.minus")
-                    }
-                }
-                .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundColor(.saveCoral)
-            .disabled(isUnfollowing)
-            .accessibilityLabel(languageSettings.localized(
-                english: "Unfollow \(friend.displayName)",
-                traditionalChinese: "取消追蹤 \(friend.displayName)"
-            ))
-            .accessibilityIdentifier("drawer.friends.unfollow.\(friend.id)")
-        }
-        .padding(11)
-        .saveAtlasPaper(radius: 14)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("drawer.friends.following.\(friend.id)")
-    }
-
-    private var avatarURL: URL? {
-        guard let avatarUrl = friend.avatarUrl,
-              let url = URL(string: avatarUrl),
-              !url.isFileURL else { return nil }
-        return url
-    }
-
-    private var avatarFallback: some View {
-        Image(systemName: "person.crop.circle.fill")
-            .resizable()
-            .scaledToFit()
-            .foregroundColor(.saveCocoa.opacity(0.68))
-            .padding(5)
-    }
-}
-
-private struct SocialPlaceRow: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let place: Place
-    let onSave: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            SaveMemoryBadge(state: .ready, size: 38)
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(place.name)
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(.saveInk)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(place.category.displayName(language: languageSettings.language))
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.74))
-                }
-
-                Text(place.address)
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-                    .lineLimit(1)
-
-                if let signal = place.socialSignal {
-                    Label(signal.displayText, systemImage: signal.kind.pinSystemImage)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.saveCocoa)
-                        .lineLimit(1)
-                }
-            }
-
-            Button(action: onSave) {
-                Text(languageSettings.localized(english: "Save", traditionalChinese: "保存"))
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
-                    .background(SaveAtlasPalette.kraft.opacity(0.78))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Save \(place.name) to my SAV-E", traditionalChinese: "保存 \(place.name) 到我的 SAV-E"))
-        }
-        .padding(12)
-        .saveAtlasPaper(radius: 14)
     }
 }
 
@@ -3879,172 +2861,6 @@ private struct AddToListPanel: View {
     }
 }
 
-private struct CollaborativeListCard: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let list: SaveCollaborativeList
-    let isSelected: Bool
-    let existingPlaces: [Place]
-    let viewerURL: URL?
-    let editorURL: URL?
-    let onSelect: () -> Void
-    let onSaveItem: (SaveListItem) -> Void
-    let onPlan: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Button(action: onSelect) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "list.bullet.rectangle.portrait.fill")
-                        .font(.title3)
-                        .foregroundColor(.saveInk)
-                        .frame(width: 32, height: 32)
-                        .background(SaveAtlasPalette.canvas.opacity(0.76))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(list.title)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .lineLimit(2)
-                        Text("\(list.placeCountLabel) · \(list.viewerRole.displayName)")
-                            .font(.caption)
-                            .foregroundColor(.saveCocoa.opacity(0.72))
-                        if let note = list.note, !note.isEmpty {
-                            Text(note)
-                                .font(.caption2)
-                                .foregroundColor(.saveCocoa.opacity(0.68))
-                                .lineLimit(2)
-                        }
-                    }
-
-                    Spacer()
-                    Image(systemName: isSelected ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.64))
-                }
-            }
-            .buttonStyle(.plain)
-
-            if isSelected {
-                listActions
-                listItems
-            }
-        }
-        .padding(12)
-        .background(SaveAtlasPalette.paper.opacity(0.62))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1.2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var listActions: some View {
-        HStack(spacing: 8) {
-            Button(action: onPlan) {
-                Label(languageSettings.localized(english: "Plan", traditionalChinese: "規劃"), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(SaveAtlasPalette.kraft.opacity(0.56))
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(list.items.isEmpty)
-
-            if let viewerURL {
-                ShareLink(item: viewerURL) {
-                    Label(languageSettings.localized(english: "Viewer", traditionalChinese: "檢視者"), systemImage: "square.and.arrow.up")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveInk)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(SaveAtlasPalette.paper.opacity(0.72))
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-            }
-
-            if list.canEdit, let editorURL {
-                ShareLink(item: editorURL) {
-                    Label(languageSettings.localized(english: "Editor", traditionalChinese: "編輯者"), systemImage: "person.badge.plus")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveInk)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(SaveAtlasPalette.paper.opacity(0.72))
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-            }
-        }
-    }
-
-    private var listItems: some View {
-        VStack(spacing: 8) {
-            if list.items.isEmpty {
-                Text(languageSettings.localized(
-                    english: "Open a place or map result, then add it to this list.",
-                    traditionalChinese: "打開地點或地圖結果後，就能加入這個清單。"
-                ))
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ForEach(list.items) { item in
-                    HStack(alignment: .top, spacing: 10) {
-                        CachedAsyncImage(url: item.photoURLs.first.flatMap(URL.init(string:))) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Image(systemName: item.source == .savedPlace ? "mappin.circle.fill" : "map")
-                                    .font(.subheadline)
-                                    .foregroundColor(.saveCocoa)
-                            }
-                        }
-                        .frame(width: 42, height: 42)
-                        .background(SaveAtlasPalette.canvas.opacity(0.8))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.title)
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(.saveInk)
-                                .lineLimit(2)
-                            Text(item.subtitle)
-                                .font(.caption2)
-                                .foregroundColor(.saveCocoa.opacity(0.72))
-                                .lineLimit(2)
-                            Text(item.source.label)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(item.source == .savedPlace ? .saveCocoa : .saveCoral)
-                        }
-
-                        Spacer()
-
-                        if item.alreadySaved(in: existingPlaces) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.subheadline)
-                                .foregroundColor(.saveMint)
-                                .accessibilityLabel(languageSettings.localized(english: "Already saved", traditionalChinese: "已保存"))
-                        } else {
-                            Button(action: { onSaveItem(item) }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title3)
-                                    .foregroundColor(.saveInk)
-                            }
-                            .accessibilityLabel(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"))
-                        }
-                    }
-                    .padding(9)
-                    .background(SaveAtlasPalette.canvas.opacity(0.34))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-            }
-        }
-    }
-}
-
 @MainActor
 private final class VoiceQueryController: NSObject, ObservableObject {
     enum VoiceState: Equatable {
@@ -4192,26 +3008,6 @@ extension VoiceQueryController: SFSpeechRecognizerDelegate {
     }
 }
 
-private struct NotebookSpine: View {
-    var color: Color
-    var opacity: Double = 0.58
-
-    var body: some View {
-        VStack(spacing: 11) {
-            ForEach(0..<4, id: \.self) { _ in
-                Circle()
-                    .fill(SaveAtlasPalette.paper)
-                    .frame(width: 7, height: 7)
-                    .overlay(Circle().stroke(Color.saveCocoa.opacity(0.16), lineWidth: 1))
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(width: 24)
-        .padding(.top, 18)
-        .background(color.opacity(opacity))
-    }
-}
-
 private struct NotebookBandLabel: View {
     var title: String
 
@@ -4237,464 +3033,6 @@ private struct NotebookBandLabel: View {
                 .frame(height: 1)
         }
         .padding(.top, 2)
-    }
-}
-
-private struct SavedPlacesSection: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
-    var places: [Place]
-    var totalCount: Int
-    var isFiltered: Bool
-    var suggestions: [String] = []
-    var onSelect: (Place) -> Void
-    var onReview: () -> Void
-    var onAsk: () -> Void
-    var onSuggestion: (String) -> Void = { _ in }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            savedHeader
-
-            if places.isEmpty {
-                SavedPlacesEmptyState(
-                    isFiltered: isFiltered,
-                    suggestions: suggestions,
-                    onReview: onReview,
-                    onAsk: onAsk,
-                    onSuggestion: onSuggestion
-                )
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(sectionedPlaces, id: \.category) { section in
-                        VStack(alignment: .leading, spacing: 8) {
-                            SavedCategorySectionHeader(category: section.category, count: section.places.count)
-
-                            VStack(spacing: 0) {
-                                ForEach(Array(section.places.enumerated()), id: \.element.id) { index, place in
-                                    SavedPlaceRow(place: place) {
-                                        onSelect(place)
-                                    }
-
-                                    if index < section.places.count - 1 {
-                                        Divider()
-                                            .padding(.leading, 64)
-                                    }
-                                }
-                            }
-                            .background {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .fill(.regularMaterial)
-                                    .overlay(groupTint)
-                            }
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(SaveAtlasPalette.line.opacity(0.12), lineWidth: 1)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var sectionedPlaces: [(category: PlaceCategory, places: [Place])] {
-        PlaceCategory.allCases.compactMap { category in
-            let categoryPlaces = places.filter { $0.category == category }
-            return categoryPlaces.isEmpty ? nil : (category, categoryPlaces)
-        }
-    }
-
-    private var savedHeader: some View {
-        HStack(spacing: 5) {
-            Text(languageSettings.localized(english: "Saved", traditionalChinese: "已保存"))
-                .font(.title3.weight(.bold))
-                .foregroundColor(.saveInk)
-            Image(systemName: "chevron.right")
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.55))
-
-            Spacer()
-
-            Text("\(isFiltered ? places.count : totalCount)")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundColor(.saveCocoa.opacity(0.78))
-        }
-        .padding(.horizontal, 2)
-    }
-
-    private var groupTint: Color {
-        colorScheme == .dark ? SaveAtlasPalette.paper.opacity(0.58) : Color.white.opacity(0.30)
-    }
-}
-
-private struct SavedCategorySectionHeader: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var category: PlaceCategory
-    var count: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: category.iconName)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.white)
-                .frame(width: 24, height: 24)
-                .background(category.poiIconColor)
-                .clipShape(Circle())
-
-            Text(category.displayName(language: languageSettings.language))
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
-
-            Spacer(minLength: 0)
-
-            Text("\(count)")
-                .font(.caption2.monospacedDigit().weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.78))
-        }
-        .padding(.horizontal, 4)
-    }
-}
-
-private struct SavedPlaceRow: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var place: Place
-    var onSelect: () -> Void
-
-    private var addressText: String {
-        let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        return address.isEmpty ? languageSettings.localized(english: "Selected on map", traditionalChinese: "從地圖選取") : address
-    }
-
-    private var statusText: String {
-        place.status == .visited
-            ? languageSettings.localized(english: "Tried Map Stamp", traditionalChinese: "去過的地圖章")
-            : languageSettings.localized(english: "Saved Map Stamp", traditionalChinese: "已保存地圖章")
-    }
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 12) {
-                Image(systemName: place.category.iconName)
-                    .font(.system(size: 18, weight: .black))
-                    .foregroundColor(.white)
-                    .frame(width: 42, height: 42)
-                    .background(place.category.poiIconColor)
-                    .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(place.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.saveInk)
-                        .lineLimit(1)
-
-                    Text(addressText)
-                        .font(.subheadline)
-                        .foregroundColor(.saveMutedText)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "ellipsis")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 34, height: 34)
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(place.name), \(statusText)")
-        .accessibilityHint(languageSettings.localized(english: "Open Map Stamp details", traditionalChinese: "打開地圖章詳情"))
-    }
-
-}
-
-private extension PlaceCategory {
-    var poiIconColor: Color {
-        switch self {
-        case .food: return .saveCocoa
-        case .cafe: return .saveCocoa
-        case .bar: return .saveCocoa
-        case .attraction: return .saveCocoa
-        case .stay: return .saveCocoa
-        case .shopping: return .saveCocoa
-        }
-    }
-}
-
-private struct SavedPlacesEmptyState: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var isFiltered: Bool
-    var suggestions: [String] = []
-    var onReview: () -> Void
-    var onAsk: () -> Void
-    var onSuggestion: (String) -> Void = { _ in }
-
-    private var chipSuggestions: [String] {
-        Array(suggestions.prefix(2))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
-            HStack(alignment: .center, spacing: SaveTheme.Spacing.md) {
-                if isFiltered {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.system(size: 18, weight: .black))
-                        .foregroundColor(SaveTheme.Colors.nearBlack)
-                        .frame(width: 42, height: 42)
-                        .background(SaveTheme.Colors.cream)
-                        .clipShape(Circle())
-                } else {
-                    MemoMascotMark(size: 52)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(isFiltered
-                         ? languageSettings.localized(english: "No matching Map Stamps", traditionalChinese: "沒有符合條件的地圖章")
-                         : languageSettings.localized(english: "Memo is ready to start your map", traditionalChinese: "Memo 準備好開始你的地圖了"))
-                        .font(.headline.weight(.bold))
-                        .foregroundColor(SaveTheme.Colors.cream)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(isFiltered
-                         ? languageSettings.localized(english: "Clear filters to show every saved place.", traditionalChinese: "清除篩選即可顯示所有已保存地點。")
-                         : languageSettings.localized(english: "Share a post, map link, screenshot, or message. SAV-E keeps it in Review before saving a Map Stamp.", traditionalChinese: "分享貼文、地圖連結、截圖或訊息。SAV-E 會先放進 Review，再確認成地圖章。"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(SaveTheme.Colors.cream.opacity(0.72))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            if !isFiltered {
-                if !chipSuggestions.isEmpty {
-                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                        Text(languageSettings.localized(english: "Try asking Memo", traditionalChinese: "試著問 Memo"))
-                            .font(SaveTheme.Typography.eyebrow)
-                            .foregroundColor(SaveTheme.Colors.cream.opacity(0.6))
-
-                        ForEach(chipSuggestions, id: \.self) { suggestion in
-                            Button {
-                                SaveHaptics.tap()
-                                onSuggestion(suggestion)
-                            } label: {
-                                HStack(spacing: SaveTheme.Spacing.sm) {
-                                    Image(systemName: "sparkle")
-                                        .font(.caption2.weight(.bold))
-                                    Text(suggestion)
-                                        .font(.caption.weight(.semibold))
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.82)
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "arrow.up.left")
-                                        .font(.caption2.weight(.bold))
-                                        .foregroundColor(SaveTheme.Colors.cream.opacity(0.6))
-                                }
-                                .foregroundColor(SaveTheme.Colors.cream)
-                                .padding(.horizontal, SaveTheme.Spacing.md)
-                                .padding(.vertical, SaveTheme.Spacing.sm)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.white.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(SaveTheme.Colors.cream.opacity(0.16), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-
-                HStack(spacing: SaveTheme.Spacing.sm) {
-                    Button(action: onReview) {
-                        Label(languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認"), systemImage: "checklist.unchecked")
-                    }
-                    .buttonStyle(SaveBrandPrimaryButtonStyle())
-
-                    Button(action: onAsk) {
-                        Label(languageSettings.localized(english: "Ask saved", traditionalChinese: "問已保存"), systemImage: "sparkles")
-                            .font(SaveTheme.Typography.cta)
-                            .foregroundColor(SaveTheme.Colors.cream)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 38)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(SaveTheme.Colors.cream.opacity(0.18), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(SaveTheme.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveTheme.Colors.nearBlack.opacity(0.90))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(SaveTheme.Colors.cream.opacity(0.16), lineWidth: 1)
-        )
-    }
-}
-
-private struct ReviewCandidatesSection: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var title: String? = nil
-    var candidates: [PlaceReviewCandidate]
-    var limit: Int? = 4
-    var onSelect: (PlaceReviewCandidate) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            reviewHeader
-
-            if candidates.isEmpty {
-                ReviewCandidatesEmptyState()
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(displayedCandidates.enumerated()), id: \.element.id) { index, candidate in
-                        ReviewCandidatePlaceRow(candidate: candidate) {
-                            onSelect(candidate)
-                        }
-
-                        if index < displayedCandidates.count - 1 {
-                            Divider()
-                                .padding(.leading, 64)
-                        }
-                    }
-                }
-                .saveAtlasPaper(radius: 22)
-            }
-        }
-    }
-
-    private var reviewHeader: some View {
-        HStack(spacing: 5) {
-            Text(title ?? languageSettings.localized(english: "Review", traditionalChinese: "待確認"))
-                .font(.title3.weight(.bold))
-                .foregroundColor(.saveInk)
-            Image(systemName: "chevron.right")
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.55))
-
-            Spacer()
-
-            Text("\(candidates.count)")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundColor(.saveCocoa.opacity(0.78))
-        }
-        .padding(.horizontal, 2)
-    }
-
-    private var displayedCandidates: [PlaceReviewCandidate] {
-        guard let limit else { return candidates }
-        return Array(candidates.prefix(limit))
-    }
-}
-
-private struct ReviewCandidatePlaceRow: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    var candidate: PlaceReviewCandidate
-    var onSelect: () -> Void
-
-    private var addressText: String {
-        if !candidate.address.isEmpty { return candidate.address }
-        if let city = candidate.city, !city.isEmpty { return city }
-        return languageSettings.localized(english: "Needs address confirmation", traditionalChinese: "需要確認地址")
-    }
-
-    private var statusText: String {
-        if candidate.status == "source_only" {
-            return languageSettings.localized(english: "Source kept", traditionalChinese: "已保留來源")
-        }
-        return candidate.hasReliableCoordinates
-            ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
-            : languageSettings.localized(english: "Needs info", traditionalChinese: "需要更多資訊")
-    }
-
-    var body: some View {
-        Button(action: onSelect) {
-            HStack(spacing: 12) {
-                SaveMemoryBadge(
-                    state: candidate.status == "source_only" ? .clue : .ready,
-                    size: 42
-                )
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(candidate.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundColor(.saveInk)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-
-                    Text(addressText)
-                        .font(.subheadline)
-                        .foregroundColor(.saveMutedText)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "ellipsis")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 34, height: 34)
-            }
-            .padding(.horizontal, SaveTheme.Spacing.lg)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(candidate.name), \(addressText), \(statusText)")
-        .accessibilityHint(languageSettings.localized(english: "Open review details before saving", traditionalChinese: "保存前先打開確認詳情"))
-        .accessibilityIdentifier("drawer.review.candidate.\(candidate.status == "source_only" ? "source" : "place").\(candidate.id.uuidString)")
-    }
-
-}
-
-private struct ReviewCandidatesEmptyState: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.saveInk)
-                .frame(width: 34, height: 34)
-                .background(SaveAtlasPalette.canvas.opacity(0.54))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(SaveAtlasPalette.line, lineWidth: 1.2)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(languageSettings.localized(english: "No clues waiting", traditionalChinese: "沒有等待確認的線索"))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.saveInk)
-
-                Text(languageSettings.localized(
-                    english: "Share a post, screenshot, or map link for SAV-E to investigate. Uncertain places wait here as Review Candidates until you save them as Map Stamps.",
-                    traditionalChinese: "分享貼文、截圖或地圖連結給 SAV-E 調查。不確定的地點會先留在待確認，直到你保存成地圖章。"
-                ))
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.74))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .saveAtlasPaper(radius: 14)
     }
 }
 
@@ -5734,238 +4072,6 @@ private struct PassportDrawerButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel(languageSettings.localized(english: "Open SAV-E Passport", traditionalChinese: "打開 SAV-E 護照"))
         .accessibilityIdentifier("drawer.profile")
-    }
-}
-
-private struct MemoryFlowCTA: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.colorScheme) private var colorScheme
-    var reviewCount: Int
-    var stampCount: Int
-    var onReview: () -> Void
-    var onAsk: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(languageSettings.localized(english: "PLACE MEMORY", traditionalChinese: "地點記憶"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(SaveAtlasPalette.kraft.opacity(colorScheme == .dark ? 0.34 : 0.50))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1))
-
-                Text(languageSettings.localized(
-                    english: "Save what friends send. Ask when it matters.",
-                    traditionalChinese: "存下朋友傳來的地點，需要時再問。"
-                ))
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(languageSettings.localized(
-                    english: "New places wait in Review first. Confirm them into Map Stamps, then SAV-E answers from what you saved.",
-                    traditionalChinese: "新地點會先進待確認。確認成地圖章後，SAV-E 才會用你存過的內容回答。"
-                ))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.74))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: 8) {
-                flowStep(number: "1", title: languageSettings.localized(english: "Review", traditionalChinese: "確認"), count: reviewCount, tint: SaveAtlasPalette.kraft)
-                flowStep(number: "2", title: languageSettings.localized(english: "Stamp", traditionalChinese: "地圖章"), count: stampCount, tint: .saveMint)
-                flowStep(number: "3", title: languageSettings.localized(english: "Ask", traditionalChinese: "詢問"), count: nil, tint: SaveAtlasPalette.canvas)
-            }
-
-            HStack(spacing: 10) {
-                Button(action: onReview) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "checklist.unchecked")
-                            .font(.caption.weight(.bold))
-                        Text(reviewButtonTitle)
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundColor(.saveInk)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(SaveAtlasPalette.kraft.opacity(colorScheme == .dark ? 0.42 : 0.58))
-                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.30), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onAsk) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "sparkles")
-                            .font(.caption.weight(.bold))
-                        Text(languageSettings.localized(english: "Ask saved", traditionalChinese: "問已保存"))
-                            .font(.caption.weight(.bold))
-                    }
-                    .foregroundColor(.saveInk)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 38)
-                    .background(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.24))
-                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(SaveTheme.Spacing.lg)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(colorScheme == .dark ? .regularMaterial : .ultraThinMaterial)
-                .overlay(SaveAtlasPalette.paper.opacity(colorScheme == .dark ? 0.30 : 0.18))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(colorScheme == .dark ? 0.30 : 0.20), lineWidth: 1.1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(languageSettings.localized(
-            english: "Review clues, save Map Stamps, ask your saved memory",
-            traditionalChinese: "確認線索，保存地圖章，再詢問你的地點記憶"
-        ))
-    }
-
-    private var reviewButtonTitle: String {
-        if reviewCount > 0 {
-            return languageSettings.localized(english: "Review \(reviewCount)", traditionalChinese: "確認 \(reviewCount)")
-        }
-        return languageSettings.localized(english: "Open Review", traditionalChinese: "打開待確認")
-    }
-
-    private func flowStep(number: String, title: String, count: Int?, tint: Color) -> some View {
-        HStack(spacing: 6) {
-            Text(number)
-                .font(.caption2.monospacedDigit().weight(.bold))
-                .foregroundColor(.saveInk)
-                .frame(width: 18, height: 18)
-                .background(tint.opacity(colorScheme == .dark ? 0.34 : 0.52))
-                .clipShape(Circle())
-
-            Text(title)
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveCocoa.opacity(0.78))
-                .lineLimit(1)
-
-            if let count, count > 0 {
-                Text("\(count)")
-                    .font(.caption2.monospacedDigit().weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(1)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 30)
-        .background(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.20))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
-private struct SavedCategoryGrid: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let categories: [(category: PlaceCategory, count: Int)]
-    let selectedCategories: Set<PlaceCategory>
-    let onToggle: (PlaceCategory) -> Void
-    let onClear: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(languageSettings.localized(english: "Categories", traditionalChinese: "分類"))
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-
-                Spacer()
-
-                if !selectedCategories.isEmpty {
-                    Button(action: onClear) {
-                        Text(languageSettings.localized(english: "All", traditionalChinese: "全部"))
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(SaveAtlasPalette.kraft.opacity(0.56))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.32), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(languageSettings.localized(english: "Show all saved categories", traditionalChinese: "顯示所有已保存分類"))
-                }
-            }
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(categories, id: \.category) { bucket in
-                    SavedCategoryGridButton(
-                        category: bucket.category,
-                        count: bucket.count,
-                        isSelected: selectedCategories.contains(bucket.category)
-                    ) {
-                        onToggle(bucket.category)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct SavedCategoryGridButton: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var category: PlaceCategory
-    var count: Int
-    var isSelected: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: category.iconName)
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
-                    .background(category.poiIconColor.opacity(isSelected ? 1 : 0.72))
-                    .clipShape(Circle())
-
-                Text(category.displayName(language: languageSettings.language))
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-
-                Spacer(minLength: 4)
-
-                Text("\(count)")
-                    .font(.caption2.monospacedDigit().weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.74))
-            }
-            .frame(height: 38)
-            .padding(.horizontal, 9)
-            .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? SaveAtlasPalette.kraft.opacity(0.42) : SaveAtlasPalette.paper.opacity(0.72))
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(SaveAtlasPalette.line.opacity(isSelected ? 0.50 : 0.20), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(languageSettings.localized(
-            english: "\(category.displayName(language: .english)), \(count) saved",
-            traditionalChinese: "\(category.displayName(language: .traditionalChinese))，已保存 \(count) 個"
-        ))
     }
 }
 

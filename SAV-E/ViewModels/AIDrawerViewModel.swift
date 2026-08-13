@@ -26,7 +26,6 @@ final class AIDrawerViewModel: ObservableObject {
     @Published var query = ""
     @Published var mapAction: MapActionData?
     @Published var chatHistory: [ChatEntry] = []
-    @Published var activeCommandTab: CommandDrawerTab = .review
 
     struct ChatEntry: Identifiable, Equatable {
         let id = UUID()
@@ -302,10 +301,6 @@ final class AIDrawerViewModel: ObservableObject {
 
     func shouldSearchExactMapCandidates(for query: String) -> Bool {
         saveSearchController.exactMapCandidateQuery(for: query) != nil
-    }
-
-    func showCollaborativeListPlan(_ list: SaveCollaborativeList) {
-        drawerState = .displaying(list.itineraryResponse())
     }
 
     func showFoodPlaceAnalysis(for place: Place, outputLanguage: AppLanguage = .english) {
