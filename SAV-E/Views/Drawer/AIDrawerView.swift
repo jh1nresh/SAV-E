@@ -121,6 +121,9 @@ struct AIDrawerView: View {
     var onAddPlaceToTrip: (Place) -> Void = { _ in }
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
     var onPrepareMapSearch: (String) async -> [SaveMapCandidate] = { _ in [] }
+    /// Links exact-place map results to the Review clue they resolve, so
+    /// saving one retires the clue from the queue.
+    var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
     var onClearMapSearchResults: () -> Void = {}
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
@@ -2010,6 +2013,9 @@ struct AIDrawerView: View {
             } else {
                 viewModel.mapCandidates = candidates
                 addSpotStatus = nil
+                // Saving one of these pins resolves the clue itself, so the
+                // item leaves Review instead of lingering there.
+                onBeginExactSearchResolution(candidate)
                 // Take the user to the map itself: the camera has focused the
                 // candidate pins, so close the drawer instead of covering the
                 // map with a results list. Tapping a pin opens its receipt.

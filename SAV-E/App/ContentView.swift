@@ -627,6 +627,9 @@ struct ContentView: View {
             onPrepareMapSearch: { query in
                 await mapVM.prepareMapCandidatesForDrawerQuery(query)
             },
+            onBeginExactSearchResolution: { candidate in
+                mapVM.beginExactSearchResolution(for: candidate)
+            },
             onClearMapSearchResults: {
                 mapVM.clearMapSearchResults()
             },
