@@ -1,5 +1,10 @@
 import SwiftUI
 
+#if DEBUG
+import DebugBridgeCore
+import DebugBridgeUI
+#endif
+
 private struct DeferredAccountScopedLink: Equatable {
     let id: UUID
     let url: URL
@@ -59,6 +64,11 @@ struct SaveApp: App {
             diskCapacity: 200 * 1024 * 1024
         )
 #if DEBUG
+        DebugBridgeUIWiring.installAll()
+        DebugBridgeManager.shared.start(
+            appState: DebugQAState.shared,
+            register: DebugQAStateAccessor.register
+        )
         ReviewDemoStorage.resetUITestStorageIfRequested()
         // UI tests cannot use "-hasCompletedOnboarding NO": NSArgumentDomain outranks
         // the persistent domain, so the in-app write back to true would never be read.
