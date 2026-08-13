@@ -314,23 +314,15 @@ final class AIDrawerViewModel: ObservableObject {
         mapAction = response.mapAction
     }
 
+    /// "Plan around this Map Stamp" is the trip planner anchored on one saved
+    /// place: same deterministic selection, route optimization, travel legs,
+    /// hours annotation, and save-as-trip rail as a typed planning question.
     func showPlanAround(
         anchor place: Place,
         reviewCandidates: [PlaceReviewCandidate] = [],
-        outputLanguage: AppLanguage = .english,
-        duration: SavePlanDuration = .halfDay,
-        intent: SavePlanIntent = .balanced
+        outputLanguage: AppLanguage = .english
     ) async {
-        let response = saveSearchController.search(
-            query: "",
-            places: places,
-            localRecords: [],
-            reviewCandidates: reviewCandidates,
-            mapCandidates: mapCandidates
-        )
-        let allSavedResults = response.fromYourSave.results + response.additionalSections.flatMap(\.results)
-        let anchorID = "place-\(place.id.uuidString)"
-        guard let anchor = allSavedResults.first(where: { $0.id == anchorID }) else {
+        guard places.contains(where: { $0.id == place.id }) else {
             showMessage(
                 title: outputLanguage.localized(english: "Need saved place", traditionalChinese: "需要已保存地點"),
                 message: outputLanguage.localized(
@@ -341,53 +333,19 @@ final class AIDrawerViewModel: ObservableObject {
             return
         }
 
-        let requestID = UUID()
-        activeRequestID = requestID
-        drawerState = .loading
-        mapAction = nil
-
-        let request = SavePlanAroundRequest(anchorResultID: anchor.id, duration: duration, intent: intent)
-        let result = SavePlanAroundController().planAround(
-            anchor: anchor,
-            savedResults: allSavedResults,
-            mapCandidates: mapCandidates,
-            request: request
+        let query = outputLanguage.localized(
+            english: "Plan a day around \(place.name)",
+            traditionalChinese: "以「\(place.name)」規劃一天行程"
         )
-        switch result {
-        case .draft(let draft):
-            let prompt = planAroundPrompt(for: draft, outputLanguage: outputLanguage)
-            let deterministicResponse = SaveAIResponse.planAroundDraft(draft, outputLanguage: outputLanguage)
-            let savedRoutePlaceIDs = Set(draft.routeStops.compactMap(\.savedPlaceUUIDString).compactMap(UUID.init(uuidString:)))
-            let routePlaces = places.filter { savedRoutePlaceIDs.contains($0.id) }
-            let routePublicCandidates = SaveAIResponse.planAroundPublicCandidates(
-                mapCandidates,
-                acceptedBy: draft
-            )
-            let polishedResponse = await aiService.polishItineraryDraft(
-                deterministicResponse,
-                userMessage: prompt,
-                places: routePlaces,
-                publicCandidates: routePublicCandidates,
-                outputLanguage: outputLanguage,
-                requiredPlaceIDs: [place.id.uuidString],
-                maxStopsPerDay: duration.maxStops,
-                dailyCategoryCaps: nil
-            )
-            guard activeRequestID == requestID else { return }
-            activeRequestID = nil
-            drawerState = .displaying(polishedResponse)
-            mapAction = polishedResponse.mapAction
-
-            let responseJSON = aiService.encodeResponse(polishedResponse)
-            conversationTurns.append(ConversationTurn(userMessage: prompt, assistantResponse: responseJSON))
-            if conversationTurns.count > 5 {
-                conversationTurns.removeFirst()
-            }
-        case .blocked(let state):
-            guard activeRequestID == requestID else { return }
-            activeRequestID = nil
-            showMessage(title: state.title, message: state.message)
-        }
+        // The raw message carries the anchor's name, which the deterministic
+        // planner scores as the primary anchor and fills the day with saved
+        // places nearby. No search terms: nothing else is being requested.
+        let intent = TripPlanningIntent(days: 1, searchTerms: [], rawMessage: query)
+        await showTripPlanningResponse(
+            query: query,
+            outputLanguage: outputLanguage,
+            intentOverride: intent
+        )
     }
 
     func resolvePlaces(from ids: [String]) -> [Place] {
@@ -539,7 +497,11 @@ final class AIDrawerViewModel: ObservableObject {
             .map(\.key)
     }
 
-    private func showTripPlanningResponse(query: String, outputLanguage: AppLanguage) async {
+    private func showTripPlanningResponse(
+        query: String,
+        outputLanguage: AppLanguage,
+        intentOverride: TripPlanningIntent? = nil
+    ) async {
         let requestID = UUID()
         activeRequestID = requestID
         drawerState = .loading
@@ -548,7 +510,12 @@ final class AIDrawerViewModel: ObservableObject {
 
         do {
             let planner = DeterministicTripPlanner()
-            let intent = await tripPlanningIntent(for: query, planner: planner)
+            let intent: TripPlanningIntent
+            if let intentOverride {
+                intent = intentOverride
+            } else {
+                intent = await tripPlanningIntent(for: query, planner: planner)
+            }
             let deterministicDraft = await planner.routeEnhancedPlan(
                 intent: intent,
                 places: places,
@@ -765,36 +732,6 @@ final class AIDrawerViewModel: ObservableObject {
             return outputLanguage == .traditionalChinese ? "週末" : "weekend"
         }
         return outputLanguage == .traditionalChinese ? "1 天" : "1 day"
-    }
-
-    private func planAroundPrompt(for draft: SavePlanAroundDraft, outputLanguage: AppLanguage) -> String {
-        let stops = draft.routeStops.enumerated().map { index, stop in
-            let marker = stop.sourceLabel
-            let distance = stop.distanceLabel.map { ", \($0) from anchor" } ?? ""
-            let filler = stop.fillerSlot.map { ", fills \($0.displayName)" } ?? ""
-            let placeID = stop.savedPlaceUUIDString ?? "null"
-            return "\(index + 1). \(stop.title) (placeId: \(placeID), source: \(marker)\(distance)\(filler))"
-        }.joined(separator: "\n")
-        let gaps = draft.unfilledGaps.isEmpty
-            ? "none"
-            : draft.unfilledGaps.map(\.displayName).joined(separator: ", ")
-
-        return outputLanguage.localized(
-            english: """
-            Plan a \(draft.request.duration.displayName.lowercased()) \(draft.request.intent.displayName.lowercased()) route around \(draft.anchor.title).
-            Turn these approved candidates into a useful itinerary. You may reorder stops, assign smarter time slots, regroup by day, and drop optional non-anchor stops if the route would be unrealistic. Keep the anchor and every non-null placeId valid. Public recommendations must keep placeId null, source "New recommendation", and their exact candidate name.
-            Unfilled gaps: \(gaps).
-            Retrieval receipt: \(draft.retrievalReceipt.querySelector)
-            \(stops)
-            """,
-            traditionalChinese: """
-            請用「\(draft.anchor.title)」周邊規劃一個\(draft.request.duration.displayName.lowercased())、\(draft.request.intent.displayName.lowercased())行程。
-            請把這些已核准候選整理成實用行程。你可以調整順序、安排更合理的時間、重新分天，也可以刪掉非錨點的 optional stop，避免路線不合理。必須保留錨點，所有非 null placeId 都必須有效。公開推薦必須維持 placeId null、來源維持「New recommendation」，並使用精確候選名稱。
-            尚未補上的空缺：\(gaps)。
-            檢索 receipt：\(draft.retrievalReceipt.querySelector)
-            \(stops)
-            """
-        )
     }
 
     private func publicDiscoveryCandidates(for query: String, scopedPlaces: [Place]) async -> [SaveMapCandidate] {

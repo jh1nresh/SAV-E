@@ -143,7 +143,6 @@ enum SaveAtlasPresentationFactory {
         store: TripPackStore,
         savedPlaces: [Place] = [],
         language: AppLanguage = .english,
-        onCapture: @escaping () -> Void,
         onOpenAssistant: @escaping () -> Void,
         onAskSubmit: @escaping (String) -> Void,
         onCreateTrip: @escaping () -> Void,
@@ -164,7 +163,6 @@ enum SaveAtlasPresentationFactory {
                 .map { recommendationPresentation($0, language: language) }
         }
 
-        presentation.onCapture = onCapture
         presentation.onOpenAssistant = onOpenAssistant
         presentation.onAskSubmit = onAskSubmit
         // A recommendation runs the same ask path a typed question does, so

@@ -297,6 +297,9 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }
+            // A save/import only aims the camera; opening the detail again
+            // would stack a drawer on top of a flow the user just finished.
+            guard !mapVM.consumeCameraOnlySelection() else { return }
             guard selectedRootTab != .map else { return }
             openMapDetail(.savedPlace(place))
         }
@@ -382,7 +385,6 @@ struct ContentView: View {
                             TripsHomeView(
                                 store: tripStore,
                                 savedPlaces: mapVM.places,
-                                onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenAssistant: { openDrawer(.ask, tripID: nil) },
                                 onAskSubmit: { query in
                                     openDrawer(.ask, tripID: nil, initialQuery: query)
@@ -448,6 +450,7 @@ struct ContentView: View {
         if isMapPanelExpanded || (selectedRootTab == .map && rootPath.isEmpty) {
             SaveMapDrawerPanel(
                 isExpanded: $isMapPanelExpanded,
+                detent: $drawerDetent,
                 mapStampCount: mapVM.places.count,
                 showsCollapsedShelf: mapVM.selectedPlace == nil
                     && selectedRootTab == .map
@@ -521,7 +524,6 @@ struct ContentView: View {
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
                 onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
-                onMarkCandidateWrongBranch: markFullScreenCandidateWrongBranch,
                 onInvestigateCandidateMore: investigateFullScreenCandidate,
                 onSaveMapCandidate: saveFullScreenMapCandidate,
                 onSaveSocialPlace: saveFullScreenSocialPlace,
@@ -588,17 +590,13 @@ struct ContentView: View {
                 try await mapVM.deletePlace(place)
             },
             onSaveCandidate: { candidate, nameOverride in
-                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                requestTripAssignment(for: place)
+                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
             },
             onRejectCandidate: { candidate in
                 try await mapVM.rejectReviewCandidate(candidate)
             },
             onSaveCandidateAsSourceOnly: { candidate in
                 try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
-            },
-            onMarkCandidateWrongBranch: { candidate in
-                try await mapVM.markReviewCandidateWrongBranch(candidate)
             },
             onInvestigateCandidateMore: { candidate in
                 try await mapVM.investigateReviewCandidateMore(candidate)
@@ -803,8 +801,8 @@ struct ContentView: View {
         Task {
             defer { fullScreenCandidateActionID = nil }
             do {
-                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                requestFullScreenTripAssignment(for: place)
+                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                fullScreenRoute = nil
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
@@ -822,13 +820,6 @@ struct ContentView: View {
         performFullScreenCandidateAction(candidate) {
             try await mapVM.saveReviewCandidateAsSourceOnly(candidate)
             fullScreenRoute = nil
-        }
-    }
-
-    private func markFullScreenCandidateWrongBranch(_ candidate: PlaceReviewCandidate) {
-        performFullScreenCandidateAction(candidate) {
-            try await mapVM.markReviewCandidateWrongBranch(candidate)
-            openExactSearch(candidate)
         }
     }
 
@@ -910,6 +901,9 @@ struct ContentView: View {
                 // empty map.
                 openDrawer(.ask, tripID: nil, initialQuery: query)
             } else {
+                // Saving one of these pins resolves the clue itself, so the
+                // item leaves Review instead of lingering there.
+                mapVM.beginExactSearchResolution(for: candidate)
                 drawerVM.mapCandidates = candidates
                 showMapCandidatesOnMap()
             }

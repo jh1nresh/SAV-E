@@ -5,7 +5,6 @@ struct TripsHomeView: View {
     @ObservedObject var store: TripPackStore
     /// Confirmed Map Stamps, used to recommend what to plan next.
     var savedPlaces: [Place] = []
-    let onCapture: () -> Void
     let onOpenAssistant: () -> Void
     let onAskSubmit: (String) -> Void
     let onOpenTrip: (UUID) -> Void
@@ -61,7 +60,6 @@ struct TripsHomeView: View {
             store: store,
             savedPlaces: savedPlaces,
             language: languageSettings.language,
-            onCapture: onCapture,
             onOpenAssistant: onOpenAssistant,
             onAskSubmit: onAskSubmit,
             onCreateTrip: { showsCreateTrip = true },
@@ -109,7 +107,7 @@ struct NewTripPackView: View {
                         TripAtlasFieldCard(title: localized("Trip identity", "行程資訊")) {
                             TripAtlasTextField(
                                 title: localized("Trip name", "行程名稱"),
-                                placeholder: localized("Tokyo weekend", "東京週末"),
+                                placeholder: localized("Taipei weekend", "台北週末"),
                                 text: $name
                             )
                             .accessibilityIdentifier("trip.create.name")
@@ -118,7 +116,7 @@ struct NewTripPackView: View {
 
                             TripAtlasTextField(
                                 title: localized("City or area", "城市或區域"),
-                                placeholder: localized("Tokyo", "東京"),
+                                placeholder: localized("Taipei", "台北"),
                                 text: $city
                             )
                             .accessibilityIdentifier("trip.create.city")

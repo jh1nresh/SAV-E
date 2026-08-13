@@ -109,7 +109,6 @@ struct AIDrawerView: View {
     var onSaveCandidate: (PlaceReviewCandidate, String?) async throws -> Void = { _, _ in }
     var onRejectCandidate: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) async throws -> Void = { _ in }
-    var onMarkCandidateWrongBranch: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onInvestigateCandidateMore: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
@@ -305,15 +304,6 @@ struct AIDrawerView: View {
                     try await onSaveCandidateAsSourceOnly(candidate)
                     closeMapDetail()
                     openReviewInbox()
-                }
-            },
-            onMarkCandidateWrongBranch: { candidate in
-                performCandidateAction(
-                    candidate,
-                    successMessage: languageSettings.localized(english: "Marked as the wrong branch. Add the right city or address next.", traditionalChinese: "已標記為錯誤分店，接著請補上正確城市或地址。")
-                ) {
-                    try await onMarkCandidateWrongBranch(candidate)
-                    findExactPlace(for: candidate)
                 }
             },
             onInvestigateCandidateMore: { candidate in
@@ -1916,6 +1906,14 @@ struct AIDrawerView: View {
         searchFocused = false
         if firstURL(in: viewModel.query) != nil {
             importSharedTextToReviewCandidates(viewModel.query)
+        } else if DeterministicTripPlanner().isItineraryRequest(
+            viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        ) {
+            // Planning questions outrank place search: "plan a day in Taipei"
+            // must reach the trip planner, not the map-candidate rail.
+            Task {
+                await submitDrawerQuery()
+            }
         } else if viewModel.shouldSearchNearbyUnsavedCandidates(for: viewModel.query) {
             searchNearbyUnsavedCandidates(for: viewModel.query)
         } else if viewModel.shouldSearchExactMapCandidates(for: viewModel.query) {
@@ -2121,10 +2119,10 @@ struct AIDrawerView: View {
                 message: languageSettings.localized(
                     english: count == 0
                         ? "No new place could be isolated. Try a map link, address, or clearer caption; no place was saved."
-                        : "Found \(count) possible place\(count == 1 ? "" : "s"). Open each receipt, then confirm only the exact places you want to save.",
+                        : "Found \(count) possible place\(count == 1 ? "" : "s"). Open each one, then confirm only the exact places you want to save.",
                     traditionalChinese: count == 0
                         ? "目前無法辨識出新地點。請補上地圖連結、地址或更清楚的貼文說明；尚未收藏任何地點。"
-                        : "找到 \(count) 個可能地點。請先打開分析憑證，只確認你要收藏的精確地點。"
+                        : "找到 \(count) 個可能地點。請逐一打開檢查，只確認你要收藏的精確地點。"
                 ),
                 isLoading: false,
                 tone: count == 0 ? SaveAtlasPalette.kraft : SaveAtlasPalette.mint
@@ -2310,7 +2308,6 @@ struct MapDetailDrawerView: View {
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onRejectCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) -> Void
-    let onMarkCandidateWrongBranch: (PlaceReviewCandidate) -> Void
     let onInvestigateCandidateMore: (PlaceReviewCandidate) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
@@ -2577,7 +2574,6 @@ struct MapDetailDrawerView: View {
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
                         onReject: { onRejectCandidate(candidate) },
                         onSaveSourceOnly: { onSaveCandidateAsSourceOnly(candidate) },
-                        onWrongBranch: { onMarkCandidateWrongBranch(candidate) },
                         onInvestigateMore: { onInvestigateCandidateMore(candidate) }
                     )
                     .id(candidate.id)
@@ -4705,7 +4701,6 @@ private struct ReviewCandidateDetailCard: View {
     var onSave: (String?) -> Void
     var onReject: () -> Void
     var onSaveSourceOnly: () -> Void
-    var onWrongBranch: () -> Void
     var onInvestigateMore: () -> Void
     @State private var displayNameDraft: String
 
@@ -4717,7 +4712,6 @@ private struct ReviewCandidateDetailCard: View {
         onSave: @escaping (String?) -> Void,
         onReject: @escaping () -> Void,
         onSaveSourceOnly: @escaping () -> Void,
-        onWrongBranch: @escaping () -> Void,
         onInvestigateMore: @escaping () -> Void
     ) {
         self.candidate = candidate
@@ -4727,7 +4721,6 @@ private struct ReviewCandidateDetailCard: View {
         self.onSave = onSave
         self.onReject = onReject
         self.onSaveSourceOnly = onSaveSourceOnly
-        self.onWrongBranch = onWrongBranch
         self.onInvestigateMore = onInvestigateMore
         _displayNameDraft = State(initialValue: candidate.name)
     }
@@ -4743,24 +4736,13 @@ private struct ReviewCandidateDetailCard: View {
                     captureTripName: captureTripName,
                     eyebrow: presentationEyebrow,
                     title: presentation.title,
-                    contextLine: presentationContextLine
+                    contextLine: presentationContextLine,
+                    // Tapping the hero map jumps straight to the live map with
+                    // this clue's candidates pinned.
+                    onOpenOnMap: onFindExactPlace
                 )
 
                 ReviewCandidateNextStepPanel(candidate: candidate)
-
-                DisclosureGroup {
-                    ReviewCandidateProofPanel(candidate: candidate)
-                        .padding(.top, 6)
-                } label: {
-                    Label(
-                        languageSettings.localized(english: "Analysis receipt", traditionalChinese: "分析憑證"),
-                        systemImage: "doc.text.magnifyingglass"
-                    )
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveInk)
-                }
-                .tint(.saveInk)
-                .accessibilityIdentifier("drawer.review.analysisReceipt")
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
@@ -4809,9 +4791,6 @@ private struct ReviewCandidateDetailCard: View {
                         Button(action: onFindExactPlace) {
                             Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
                         }
-                    }
-                    Button(action: onWrongBranch) {
-                        Label(languageSettings.localized(english: "Wrong branch", traditionalChinese: "分店錯了"), systemImage: "arrow.triangle.branch")
                     }
                     Button(action: onSaveSourceOnly) {
                         Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
@@ -4980,15 +4959,31 @@ private struct ReviewCandidateContextHero: View {
     let eyebrow: String
     let title: String
     let contextLine: String
+    var onOpenOnMap: (() -> Void)? = nil
 
     var body: some View {
         Group {
             if coordinate != nil {
                 ZStack(alignment: .bottomLeading) {
-                    contextCanvas
-                        .frame(minHeight: mapHeroHeight)
+                    if let onOpenOnMap {
+                        Button(action: onOpenOnMap) {
+                            contextCanvas
+                                .frame(minHeight: mapHeroHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(languageSettings.localized(
+                            english: "Open on the map",
+                            traditionalChinese: "在地圖上打開"
+                        ))
+                        .accessibilityIdentifier("drawer.review.heroMap")
+                    } else {
+                        contextCanvas
+                            .frame(minHeight: mapHeroHeight)
+                    }
                     contextDetails
                         .padding(10)
+                        .allowsHitTesting(false)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -5012,9 +5007,9 @@ private struct ReviewCandidateContextHero: View {
                         : SaveAtlasPalette.coral,
                     style: StrokeStyle(lineWidth: 1.1, dash: [2.5, 2.5])
                 )
+                .allowsHitTesting(false)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.review.contextHero")
     }
 
@@ -5368,212 +5363,6 @@ private struct ReviewCandidateNextStepPanel: View {
                 let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "<>()[]{}.,;\"'"))
                 if token.hasPrefix("http://") || token.hasPrefix("https://") {
                     return URL(string: token)
-                }
-                return nil
-            }
-            .first
-    }
-}
-
-private struct ReviewCandidateProofPanel: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    var candidate: PlaceReviewCandidate
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        PostcardReceiptSection(
-            title: languageSettings.localized(english: "Verification receipt", traditionalChinese: "確認憑證"),
-            systemImage: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass",
-            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
-        ) {
-            HStack(spacing: 7) {
-                Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "doc.text.magnifyingglass")
-                    .font(.caption.weight(.bold))
-                Text(candidate.hasReliableCoordinates
-                     ? languageSettings.localized(english: "Ready to review", traditionalChinese: "可以確認")
-                     : languageSettings.localized(english: "Needs one more clue", traditionalChinese: "還需要一個線索"))
-                    .font(.caption.weight(.bold))
-                Spacer(minLength: 0)
-                if let sourceURL {
-                    Button {
-                        openURL(sourceURL)
-                    } label: {
-                        Text(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"))
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(SaveAtlasPalette.kraft.opacity(0.72))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(languageSettings.localized(english: "Open review candidate source", traditionalChinese: "打開待確認地點來源"))
-                }
-            }
-            .foregroundColor(.saveInk)
-
-            proofSection(title: languageSettings.localized(english: "Found", traditionalChinese: "找到"), systemImage: "checkmark.circle.fill", items: foundItems, tone: .saveMint)
-            proofSection(title: languageSettings.localized(english: "Missing", traditionalChinese: "還缺"), systemImage: "exclamationmark.triangle.fill", items: missingItems, tone: .saveCoral)
-            proofSection(title: languageSettings.localized(english: "Tried", traditionalChinese: "查過"), systemImage: "text.magnifyingglass", items: triedItems, tone: SaveAtlasPalette.canvas)
-            nextActionRow
-        }
-    }
-
-    private func proofSection(title: String, systemImage: String, items: [String], tone: Color) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 18, height: 18)
-                    .background(tone.opacity(0.64))
-                    .clipShape(Circle())
-                Text(title)
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-            }
-
-            ForEach(items.prefix(3), id: \.self) { item in
-                Text(item)
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.84))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var nextActionRow: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: candidate.hasReliableCoordinates ? "checkmark.seal" : "sparkle.magnifyingglass")
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
-                .frame(width: 22, height: 22)
-                .background(SaveAtlasPalette.kraft.opacity(0.72))
-                .clipShape(Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(languageSettings.localized(english: "Next action", traditionalChinese: "下一步"))
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.saveCocoa.opacity(0.72))
-                Text(nextActionText)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.86))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var foundItems: [String] {
-        var items: [String] = []
-        items.append(languageSettings.localized(english: "Candidate: \(candidate.name)", traditionalChinese: "候選地點：\(candidate.name)"))
-        if !candidate.address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            items.append(languageSettings.localized(english: "Address: \(candidate.address)", traditionalChinese: "地址：\(candidate.address)"))
-        } else if let city = candidate.city, !city.isEmpty {
-            items.append(languageSettings.localized(english: "Area: \(city)", traditionalChinese: "區域：\(city)"))
-        }
-        if candidate.hasReliableCoordinates {
-            items.append(languageSettings.localized(english: "Coordinates verified", traditionalChinese: "座標已確認"))
-        }
-        if let sourceHandle = candidate.sourceHandle, !sourceHandle.isEmpty {
-            items.append(languageSettings.localized(english: "Source handle: @\(sourceHandle)", traditionalChinese: "來源帳號：@\(sourceHandle)"))
-        }
-        if items.count < 3 {
-            items.append(contentsOf: cleanEvidenceLines(excluding: ["missing", "checked", "prepared", "next best clue"]))
-        }
-        return Array(unique(items).prefix(3))
-    }
-
-    private var missingItems: [String] {
-        var items = candidate.missingInfo
-            .map(cleanEvidenceLine)
-            .filter { !$0.isEmpty }
-        if !candidate.hasReliableCoordinates {
-            if candidate.address.isEmpty {
-                items.append(languageSettings.localized(english: "Exact address", traditionalChinese: "精確地址"))
-            }
-            items.append(languageSettings.localized(english: "Verified coordinates", traditionalChinese: "已確認座標"))
-        }
-        if items.isEmpty {
-            items.append(contentsOf: cleanEvidenceLines(including: ["required proof"]))
-        }
-        if items.isEmpty {
-            items.append(languageSettings.localized(english: "Nothing obvious; check the place before confirming", traditionalChinese: "沒有明顯缺漏；確認前仍請檢查地點"))
-        }
-        return Array(unique(items).prefix(3))
-    }
-
-    private var triedItems: [String] {
-        let tried = cleanEvidenceLines(including: ["checked", "prepared", "google places", "public search", "ocr", "metadata", "caption", "recovery decision", "rejected evidence", "rejected clue type"])
-        if !tried.isEmpty { return Array(tried.prefix(3)) }
-        if sourceURL != nil {
-            return [languageSettings.localized(english: "Checked shared source", traditionalChinese: "已檢查分享來源")]
-        }
-        return [languageSettings.localized(english: "Saved source evidence for review", traditionalChinese: "已保存來源證據，等待確認")]
-    }
-
-    private var nextActionText: String {
-        if candidate.hasReliableCoordinates {
-            return languageSettings.localized(
-                english: "Confirm Map Stamp after checking the name and address.",
-                traditionalChinese: "確認名稱和地址後，再存成地圖章。"
-            )
-        }
-        return languageSettings.localized(
-            english: "Find exact place, or add more clue if SAV-E still needs address or coordinates.",
-            traditionalChinese: "先找精確地點；如果 SAV-E 還缺地址或座標，就再補一個線索。"
-        )
-    }
-
-    private var sourceURL: URL? {
-        candidate.evidence.compactMap(Self.firstURL(in:)).first
-    }
-
-    private func cleanEvidenceLines(including keywords: [String]) -> [String] {
-        cleanEvidenceLines { line in
-            let lowered = line.lowercased()
-            return keywords.contains { lowered.contains($0) }
-        }
-    }
-
-    private func cleanEvidenceLines(excluding keywords: [String]) -> [String] {
-        cleanEvidenceLines { line in
-            let lowered = line.lowercased()
-            return !keywords.contains { lowered.contains($0) }
-        }
-    }
-
-    private func cleanEvidenceLines(where predicate: (String) -> Bool) -> [String] {
-        candidate.evidence
-            .map(cleanEvidenceLine)
-            .filter { !$0.isEmpty && predicate($0) }
-    }
-
-    private func cleanEvidenceLine(_ line: String) -> String {
-        line
-            .replacingOccurrences(of: "Evidence tier:", with: "")
-            .replacingOccurrences(of: "Next best clue:", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func unique(_ values: [String]) -> [String] {
-        var seen = Set<String>()
-        return values.filter { seen.insert($0).inserted }
-    }
-
-    private static func firstURL(in line: String) -> URL? {
-        line
-            .split(whereSeparator: \.isWhitespace)
-            .compactMap { rawToken -> URL? in
-                let token = rawToken.trimmingCharacters(in: CharacterSet(charactersIn: "<>()[]{}.,;\"'"))
-                if token.hasPrefix("http://") || token.hasPrefix("https://") {
-                    return URL(string: token)
-                }
-                if token.contains("."),
-                   !token.contains(" "),
-                   !token.contains("@"),
-                   !token.hasPrefix("#"),
-                   let normalized = URL(string: "https://\(token)") {
-                    return normalized
                 }
                 return nil
             }

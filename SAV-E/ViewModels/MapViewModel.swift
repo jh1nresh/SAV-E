@@ -389,6 +389,14 @@ final class MapViewModel: ObservableObject {
     @Published private(set) var showsSocialMapLayer = false
     /// Set when a place is saved so the map can celebrate the clue -> Map Stamp moment.
     @Published var stampMoment: SaveStampMoment?
+    /// Set when a save/import focuses the map on the new place. The root view
+    /// consumes it to skip opening the detail surface — saving ends the flow,
+    /// the stamp toast is the confirmation.
+    private var selectionIsCameraOnly = false
+    /// The Review clue an exact-place map search is resolving. Saving one of
+    /// the resulting map candidates retires this clue from the Review queue;
+    /// without the link the clue would stay in Review forever.
+    private var exactSearchResolutionCandidate: PlaceReviewCandidate?
     /// Spec P4: shown when a locate tap fails because location permission is
     /// denied or restricted; offers the Open Settings recovery path.
     @Published var showsLocationDeniedNotice = false
@@ -855,14 +863,6 @@ final class MapViewModel: ObservableObject {
         updateLocalCandidate(candidate.id, status: "source_only")
     }
 
-    func markReviewCandidateWrongBranch(_ candidate: PlaceReviewCandidate) async throws {
-        try await markReviewCandidateNeedsMoreEvidence(
-            candidate,
-            eventType: .wrongBranch,
-            reason: "User marked the suggested branch as incorrect."
-        )
-    }
-
     func investigateReviewCandidateMore(_ candidate: PlaceReviewCandidate) async throws {
         try await markReviewCandidateNeedsMoreEvidence(
             candidate,
@@ -996,6 +996,7 @@ final class MapViewModel: ObservableObject {
         if let existing = existingSavedPlace(matching: place) {
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
+            await resolveExactSearchClueIfNeeded(to: existing)
             focusSavedPlace(existing, showStampMoment: false)
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
@@ -1015,7 +1016,43 @@ final class MapViewModel: ObservableObject {
         }
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
+        await resolveExactSearchClueIfNeeded(to: place)
         revealImportedPlaces([place])
+    }
+
+    /// After an exact-place search saves a map candidate, the originating
+    /// Review clue is resolved: drop it from the queue everywhere and record
+    /// the correction so the backend row leaves "review" too.
+    private func resolveExactSearchClueIfNeeded(to place: Place) async {
+        guard let clue = exactSearchResolutionCandidate else { return }
+        exactSearchResolutionCandidate = nil
+
+        try? saveLocalVaultService.removeReviewCandidate(clue.id)
+        reviewCandidates.removeAll { $0.id == clue.id }
+        if selectedReviewCandidate?.id == clue.id {
+            selectedReviewCandidate = nil
+        }
+
+        guard usesRemotePersistence else { return }
+        var updatedClue = clue
+        updatedClue.name = place.name
+        updatedClue.address = place.address
+        updatedClue.latitude = place.latitude
+        updatedClue.longitude = place.longitude
+        updatedClue.status = "saved"
+        do {
+            // The place row is already saved above; only the id travels with
+            // the decision so the backend never inserts it a second time.
+            try await recordCorrectionEvent(
+                for: clue,
+                eventType: .confirmCandidate,
+                afterCandidate: updatedClue,
+                userFinalPlaceId: place.id,
+                reason: "User resolved review candidate to an exact map place."
+            )
+        } catch {
+            print("MapViewModel: failed to record exact-search resolution for \(clue.name): \(error)")
+        }
     }
 
     @discardableResult
@@ -1085,8 +1122,7 @@ final class MapViewModel: ObservableObject {
             place.matchesMapFeature(title: socialPlace.name, coordinate: socialPlace.coordinate) ||
                 place.name.localizedCaseInsensitiveCompare(socialPlace.name) == .orderedSame
         }) {
-            selectedPlace = existing
-            selectedSocialPlace = nil
+            focusSavedPlace(existing, showStampMoment: false)
             return existing
         }
 
@@ -1180,7 +1216,7 @@ final class MapViewModel: ObservableObject {
             place.matchesMapFeature(title: item.title, coordinate: item.coordinate) ||
                 place.name.localizedCaseInsensitiveCompare(item.title) == .orderedSame
         }) {
-            selectPlace(existing)
+            focusSavedPlace(existing, showStampMoment: false)
             return existing
         }
 
@@ -1413,6 +1449,7 @@ final class MapViewModel: ObservableObject {
     private func focusSavedPlace(_ place: Place, extraCount: Int = 0, showStampMoment: Bool = true) {
         activeFilter = nil
         selectedCategories.removeAll()
+        selectionIsCameraOnly = true
         selectedPlace = place
         selectedSocialPlace = nil
         selectedMapCandidate = nil
@@ -1660,6 +1697,9 @@ final class MapViewModel: ObservableObject {
 
     func prepareMapCandidatesForDrawerQuery(_ query: String) async -> [SaveMapCandidate] {
         guard saveSearchController.shouldPrepareMapCandidates(for: query) else { return mapCandidates }
+        // A fresh search invalidates any clue link; the exact-search caller
+        // re-links via beginExactSearchResolution after this returns.
+        exactSearchResolutionCandidate = nil
         if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
             let candidates = await mapCandidateSearchService.searchCandidates(
                 matching: exactQuery,
@@ -1754,7 +1794,14 @@ final class MapViewModel: ObservableObject {
         return CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
     }
 
+    /// True exactly once after a save/import focused the map; resets on read.
+    func consumeCameraOnlySelection() -> Bool {
+        defer { selectionIsCameraOnly = false }
+        return selectionIsCameraOnly
+    }
+
     func selectPlace(_ place: Place) {
+        selectionIsCameraOnly = false
         selectedPlace = place
         selectedReviewCandidate = nil
         selectedMapCandidate = nil
@@ -1836,7 +1883,14 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
         selectedCategories = []
         activeFilter = nil
+        exactSearchResolutionCandidate = nil
         clearRoute()
+    }
+
+    /// Links the current map-candidate results to the Review clue they came
+    /// from, so saving a candidate also retires that clue.
+    func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
+        exactSearchResolutionCandidate = candidate
     }
 
     func selectMapFeature(_ feature: MapFeature?) {
@@ -1897,6 +1951,7 @@ final class MapViewModel: ObservableObject {
     }
 
     private func selectSavedPlaceFromMapFeature(_ place: Place) {
+        selectionIsCameraOnly = false
         selectedPlace = place
         selectedReviewCandidate = nil
         selectedMapCandidate = nil

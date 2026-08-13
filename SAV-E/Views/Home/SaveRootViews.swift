@@ -981,15 +981,17 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Button(action: onOpenPassport) {
-                HStack(spacing: 8) {
-                    MemoMascotMark(size: 32, framed: false)
+                // Same mark, size, and person badge as the prototype
+                // BrandHeader so every tab's profile entry matches.
+                HStack(spacing: 9) {
+                    MemoMascotMark(size: 40, framed: false)
                         .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "book.closed.fill")
-                                .font(.system(size: 7, weight: .bold))
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(SaveAtlasPalette.forest)
-                                .frame(width: 14, height: 14)
+                                .frame(width: 17, height: 17)
                                 .background(SaveAtlasPalette.mint, in: Circle())
                                 .overlay {
                                     Circle().stroke(SaveAtlasPalette.paper, lineWidth: 1.5)
@@ -998,7 +1000,7 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
                         }
 
                     Text("SAV-E")
-                        .font(SaveAtlasType.strong(22, relativeTo: .title3))
+                        .font(SaveAtlasType.strong(24, relativeTo: .title3))
                         .tracking(1.1)
                         .foregroundStyle(SaveAtlasPalette.forest)
                 }
