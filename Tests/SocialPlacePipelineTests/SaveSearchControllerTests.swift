@@ -2116,9 +2116,207 @@ final class SaveSearchControllerTests: XCTestCase {
         let results = await map.prepareMapCandidatesForDrawerQuery("date night")
         try await map.saveMapCandidateAsPlace(oldCandidate)
 
-        XCTAssertTrue(results.isEmpty)
+        XCTAssertTrue(results.candidates?.isEmpty == true)
         XCTAssertTrue(map.mapCandidates.isEmpty)
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionUsesCurrentClueWithTheSameID() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-current-clue-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let clueID = UUID()
+        let staleClue = PlaceReviewCandidate(
+            id: clueID,
+            captureId: nil,
+            name: "Stale clue name",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [],
+            confidence: 0.4,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        var currentClue = staleClue
+        currentClue.name = "Current clue name"
+        let candidate = SaveMapCandidate(
+            id: "same-id-candidate",
+            title: "Current clue result",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        map.reviewCandidates = [currentClue]
+        map.mapCandidates = [candidate]
+
+        map.beginExactSearchResolution(for: staleClue)
+        try await map.saveMapCandidateAsPlace(candidate)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clueID })
+    }
+
+    @MainActor
+    func testOlderMapSearchCannotOverwriteNewerResultsOrResolution() async throws {
+        let search = ControlledMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("map-search-generation-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let oldCandidate = SaveMapCandidate(
+            id: "old-result",
+            title: "Old Search Result",
+            subtitle: "Taipei",
+            latitude: 25.03,
+            longitude: 121.56,
+            category: .cafe
+        )
+        let newCandidate = SaveMapCandidate(
+            id: "new-result",
+            title: "New Search Result",
+            subtitle: "Taipei",
+            latitude: 25.04,
+            longitude: 121.57,
+            category: .cafe
+        )
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "New Search Result",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+
+        let oldTask = Task { @MainActor in
+            await map.prepareMapCandidatesForDrawerQuery("A Cheng Goose")
+        }
+        await search.waitUntilRequested("A Cheng Goose")
+        let newTask = Task { @MainActor in
+            await map.prepareMapCandidatesForDrawerQuery("Aki matcha bar")
+        }
+        await search.waitUntilRequested("Aki matcha bar")
+
+        search.complete(query: "Aki matcha bar", with: [newCandidate])
+        guard case .current(let currentCandidates) = await newTask.value else {
+            return XCTFail("The newest search must remain current")
+        }
+        XCTAssertEqual(currentCandidates.map(\.id), [newCandidate.id])
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        search.complete(query: "A Cheng Goose", with: [oldCandidate])
+        guard case .superseded = await oldTask.value else {
+            return XCTFail("The older response must be marked superseded")
+        }
+        XCTAssertEqual(map.mapCandidates.map(\.id), [newCandidate.id])
+
+        try await map.saveMapCandidateAsPlace(newCandidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSaveFailureStaysFailClosedAfterSearchIsInvalidated() async throws {
+        let saver = SuspendedMapCandidatePlaceSaver()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-save-failure-\(UUID().uuidString).json")
+        let correctionURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-save-failure-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: correctionURL)
+        }
+        let map = MapViewModel(
+            mapCandidatePlaceSaver: { place, userID in
+                try await saver.save(place: place, userID: userID)
+            },
+            mapCandidateUserIDProvider: { "exact-save-test" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: correctionURL),
+            usesRemotePersistence: true
+        )
+        let fixture = exactSaveFixture()
+        map.reviewCandidates = [fixture.clue]
+        map.mapCandidates = [fixture.candidate]
+        map.beginExactSearchResolution(for: fixture.clue)
+
+        let saveTask = Task { @MainActor in
+            try await map.saveMapCandidateAsPlace(fixture.candidate)
+        }
+        await saver.waitUntilStarted()
+        map.clearMapSearchResults()
+        saver.fail()
+
+        do {
+            try await saveTask.value
+            XCTFail("The remote failure must reach the caller")
+        } catch is SuspendedMapCandidatePlaceSaver.Failure {
+            // Expected.
+        }
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == fixture.clue.id })
+        XCTAssertTrue(map.places.isEmpty)
+    }
+
+    @MainActor
+    func testExactSaveSuccessUsesEntrySnapshotAfterSearchIsInvalidated() async throws {
+        let saver = SuspendedMapCandidatePlaceSaver()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-save-success-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            mapCandidatePlaceSaver: { place, userID in
+                try await saver.save(place: place, userID: userID)
+            },
+            mapCandidateUserIDProvider: { "exact-save-test" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let fixture = exactSaveFixture()
+        map.reviewCandidates = [fixture.clue]
+        map.mapCandidates = [fixture.candidate]
+        map.beginExactSearchResolution(for: fixture.clue)
+
+        let saveTask = Task { @MainActor in
+            try await map.saveMapCandidateAsPlace(fixture.candidate)
+        }
+        await saver.waitUntilStarted()
+        map.clearMapSearchResults()
+        saver.succeed()
+        try await saveTask.value
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == fixture.clue.id })
+        XCTAssertEqual(map.places.first?.name, fixture.candidate.title)
+    }
+
+    @MainActor
+    func testDrawerMapSearchGateRejectsOlderAndCancelledRequests() {
+        var gate = MapSearchRequestGate()
+        let first = gate.begin()
+        let second = gate.begin()
+
+        XCTAssertFalse(gate.isCurrent(first))
+        XCTAssertTrue(gate.isCurrent(second))
+
+        gate.cancel()
+        XCTAssertFalse(gate.isCurrent(second))
     }
 
     @MainActor
@@ -3575,6 +3773,34 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    private func exactSaveFixture() -> (clue: PlaceReviewCandidate, candidate: SaveMapCandidate) {
+        (
+            PlaceReviewCandidate(
+                id: UUID(),
+                captureId: nil,
+                name: "Snapshot Coffee",
+                address: "Taipei",
+                city: "Taipei",
+                latitude: nil,
+                longitude: nil,
+                evidence: ["User requested an exact branch"],
+                confidence: 0.7,
+                missingInfo: ["Exact coordinates"],
+                status: "pending",
+                createdAt: Date()
+            ),
+            SaveMapCandidate(
+                id: "snapshot-candidate",
+                title: "Snapshot Coffee Xinyi",
+                subtitle: "Taipei",
+                latitude: 25.033,
+                longitude: 121.565,
+                category: .cafe
+            )
+        )
+    }
+
+    @MainActor
     private func groundedRequest(
         result: SaveSearchResult,
         allowedIDs: [String],
@@ -3726,5 +3952,103 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
     ) async -> [SaveMapCandidate] {
         matchingRequests.append(MatchingRequest(query: query, coordinate: coordinate))
         return candidates
+    }
+}
+
+private final class ControlledMapCandidateSearchService: MapCandidateSearchServiceProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var searches: [String: CheckedContinuation<[SaveMapCandidate], Never>] = [:]
+    private var requestWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+
+    func searchCandidates(
+        near coordinate: CLLocationCoordinate2D,
+        span: MKCoordinateSpan,
+        excluding savedPlaces: [Place],
+        categories: Set<PlaceCategory>
+    ) async -> [SaveMapCandidate] {
+        []
+    }
+
+    func searchCandidates(
+        matching query: String,
+        near coordinate: CLLocationCoordinate2D?,
+        span: MKCoordinateSpan?,
+        excluding savedPlaces: [Place]
+    ) async -> [SaveMapCandidate] {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            searches[query] = continuation
+            let waiters = requestWaiters.removeValue(forKey: query) ?? []
+            lock.unlock()
+            waiters.forEach { $0.resume() }
+        }
+    }
+
+    func waitUntilRequested(_ query: String) async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if searches[query] != nil {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                requestWaiters[query, default: []].append(continuation)
+                lock.unlock()
+            }
+        }
+    }
+
+    func complete(query: String, with candidates: [SaveMapCandidate]) {
+        lock.lock()
+        let continuation = searches.removeValue(forKey: query)
+        lock.unlock()
+        continuation?.resume(returning: candidates)
+    }
+}
+
+private final class SuspendedMapCandidatePlaceSaver: @unchecked Sendable {
+    struct Failure: Error, Sendable {}
+
+    private let lock = NSLock()
+    private var saveContinuation: CheckedContinuation<Void, Error>?
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func save(place: Place, userID: String) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            saveContinuation = continuation
+            let waiters = startWaiters
+            startWaiters = []
+            lock.unlock()
+            waiters.forEach { $0.resume() }
+        }
+    }
+
+    func waitUntilStarted() async {
+        await withCheckedContinuation { continuation in
+            lock.lock()
+            if saveContinuation != nil {
+                lock.unlock()
+                continuation.resume()
+            } else {
+                startWaiters.append(continuation)
+                lock.unlock()
+            }
+        }
+    }
+
+    func succeed() {
+        takeSaveContinuation()?.resume()
+    }
+
+    func fail() {
+        takeSaveContinuation()?.resume(throwing: Failure())
+    }
+
+    private func takeSaveContinuation() -> CheckedContinuation<Void, Error>? {
+        lock.lock()
+        let continuation = saveContinuation
+        saveContinuation = nil
+        lock.unlock()
+        return continuation
     }
 }
