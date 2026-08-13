@@ -111,6 +111,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.core
+        CURRENT_PROJECT_VERSION: "99"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
@@ -125,6 +126,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.touch
+        CURRENT_PROJECT_VERSION: "99"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
@@ -140,6 +142,7 @@ targets:
       base:
         DEFINES_MODULE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.debugbridge.ui
+        CURRENT_PROJECT_VERSION: "99"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
 
