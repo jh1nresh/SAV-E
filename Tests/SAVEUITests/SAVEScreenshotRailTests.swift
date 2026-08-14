@@ -1367,6 +1367,138 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
+    /// Focused App Store capture rail for the place-memory promise.
+    ///
+    /// These attachments deliberately exclude Trips while planning remains a
+    /// beta surface. Every frame comes from the production SwiftUI hierarchy;
+    /// the marketing board only adds the outer headline treatment.
+    @MainActor
+    func testCaptureAppStoreCoreScreensV5() throws {
+        let seededApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-home-region-taipei",
+                "-save.appLanguage", "en",
+            ]
+        )
+
+        addUIInterruptionMonitor(withDescription: "Location permission") { alert in
+            for label in ["Allow While Using App", "Allow Once", "Don't Allow"] {
+                let button = alert.buttons[label]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+
+        launch(seededApp)
+        try signInViaReviewDemo(app: seededApp)
+        XCTAssertTrue(
+            seededApp.descendants(matching: .any)["home.root"]
+                .waitForExistence(timeout: launchTimeout)
+        )
+        attach(seededApp, name: "v5-01-home-place-memory")
+
+        seededApp.buttons["home.capture"].tap()
+        XCTAssertTrue(
+            seededApp.descendants(matching: .any)["capture.flow"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        let previewInput = seededApp.textViews["capture.input"]
+        typeText(
+            "https://maps.google.com/?q=Fuhang+Soy+Milk+Taipei",
+            into: previewInput
+        )
+        let captureKeyboardDone = seededApp.buttons["capture.keyboardDone"]
+        XCTAssertTrue(captureKeyboardDone.waitForExistence(timeout: stepTimeout))
+        captureKeyboardDone.tap()
+        XCTAssertTrue(seededApp.buttons["capture.analyze"].isHittable)
+        attach(seededApp, name: "v5-02-capture-link")
+        seededApp.buttons["Close capture"].tap()
+
+        XCTAssertTrue(
+            seededApp.buttons["root.passport"].waitForExistence(timeout: stepTimeout)
+        )
+        seededApp.buttons["root.passport"].tap()
+        XCTAssertTrue(
+            seededApp.descendants(matching: .any)["profile.root"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            seededApp.descendants(matching: .any)["profile.cover"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertFalse(seededApp.staticTexts["User not authenticated"].exists)
+        XCTAssertFalse(seededApp.staticTexts["Reviewer demo session has no auth token"].exists)
+        attach(seededApp, name: "v5-05-private-passport")
+        seededApp.buttons["profile.close"].tap()
+
+        openRootTab("Map", app: seededApp)
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(
+            seededApp.descendants(matching: .any)["map.root"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        sleep(10)
+        attach(seededApp, name: "v5-04-private-map")
+        terminate(seededApp)
+
+        let storageID = UUID().uuidString.lowercased()
+        let reviewApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
+        )
+
+        launch(reviewApp)
+        try signInViaReviewDemoRequired(app: reviewApp)
+        XCTAssertTrue(
+            reviewApp.descendants(matching: .any)["home.root"]
+                .waitForExistence(timeout: launchTimeout)
+        )
+
+        reviewApp.buttons["home.capture"].tap()
+        let captureInput = reviewApp.textViews["capture.input"]
+        XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
+        typeText(
+            "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1",
+            into: captureInput
+        )
+        let reviewKeyboardDone = reviewApp.buttons["capture.keyboardDone"]
+        XCTAssertTrue(reviewKeyboardDone.waitForExistence(timeout: stepTimeout))
+        reviewKeyboardDone.tap()
+        XCTAssertTrue(reviewApp.buttons["capture.analyze"].isHittable)
+        reviewApp.buttons["capture.analyze"].tap()
+
+        XCTAssertTrue(
+            reviewApp.descendants(matching: .any)["saves.root"]
+                .waitForExistence(timeout: timeout(20))
+        )
+        let candidate = reviewApp.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
+        ).firstMatch
+        XCTAssertTrue(candidate.waitForExistence(timeout: timeout(20)))
+        candidate.tap()
+        XCTAssertTrue(
+            reviewApp.descendants(matching: .any)["place.detail.root"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            reviewApp.descendants(matching: .any)["drawer.review.postcardBody"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        attach(reviewApp, name: "v5-03-review-before-map")
+    }
+
     // MARK: - Demo sign-in
 
     /// Types the App Review demo email + code (native SwiftUI fields — the
