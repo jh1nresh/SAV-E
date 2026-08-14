@@ -1313,6 +1313,7 @@ private struct SaveCaptureFlowView: View {
     @State private var sharedText = ""
     @State private var isAnalyzing = false
     @State private var errorMessage: String?
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -1377,6 +1378,16 @@ private struct SaveCaptureFlowView: View {
                                         )
                                 }
                                 .accessibilityIdentifier("capture.input")
+                                .focused($isInputFocused)
+                                .toolbar {
+                                    ToolbarItemGroup(placement: .keyboard) {
+                                        Spacer()
+                                        Button(localized("Done", "完成")) {
+                                            isInputFocused = false
+                                        }
+                                        .accessibilityIdentifier("capture.keyboardDone")
+                                    }
+                                }
 
                             HStack(spacing: 10) {
                                 PasteButton(payloadType: String.self) { values in

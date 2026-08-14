@@ -17,6 +17,10 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func loadProfile() async {
+        if authService.isReviewerDemo {
+            errorMessage = nil
+            return
+        }
         guard let userId = authService.currentUserId else { return }
         isLoading = true
         errorMessage = nil

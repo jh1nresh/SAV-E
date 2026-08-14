@@ -5,39 +5,32 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const boardPath = path.join(__dirname, "app-store-screenshot-board.html");
-const outputDir = path.join(__dirname, "app-store-screenshots", "v3");
-const chromePath =
-  process.env.CHROME_PATH ||
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-
-const width = 1242;
-const height = 2688;
-const ipadWidth = 2048;
-const ipadHeight = 2732;
+const specDir = path.dirname(fileURLToPath(import.meta.url));
+const boardPath = path.join(specDir, "app-store-screenshot-board-v5.html");
+const chromePath = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const outputDir = path.join(specDir, "app-store-screenshots", "v5");
+const iphone69OutputDir = path.join(specDir, "app-store-screenshots", "v5-iphone-69");
+const ipadOutputDir = path.join(specDir, "app-store-screenshots", "v5-ipad-13");
 const contactOnly = process.argv.includes("--contact-only");
 
-// v3 — UI-fidelity pass: warm App Store frame with faithful in-phone SAV-E states.
 const shots = [
-  ["shot-01-hook", "01-stop-losing-restaurants.png"],
-  ["shot-02-paste-link", "02-review-before-map-stamp.png"],
-  ["shot-03-confirm", "03-private-food-travel-map.png"],
-  ["shot-04-ask-your-map", "04-ask-saved-places-first.png"],
-  ["shot-05-passport", "05-share-place-card.png"],
+  ["shot-01-home", "01-stop-losing-places.png"],
+  ["shot-02-capture", "02-paste-a-link.png"],
+  ["shot-03-review", "03-confirm-before-map.png"],
+  ["shot-04-map", "04-private-map-stamps.png"],
+  ["shot-05-passport", "05-place-passport.png"],
 ];
 
 function run(command, args) {
   const result = spawnSync(command, args, { encoding: "utf8" });
   if (result.status !== 0) {
-    const details = [result.stdout, result.stderr].filter(Boolean).join("\n");
-    throw new Error(`${command} failed\n${details}`);
+    throw new Error([`${command} failed`, result.stdout, result.stderr].filter(Boolean).join("\n"));
   }
   return result.stdout.trim();
 }
 
-function chromeScreenshot(url, outputPath, viewportHeight = height) {
-  const args = [
+function screenshot(url, outputPath, width, height, userDataDir) {
+  const result = spawnSync(chromePath, [
     "--headless=new",
     "--disable-gpu",
     "--hide-scrollbars",
@@ -46,199 +39,82 @@ function chromeScreenshot(url, outputPath, viewportHeight = height) {
     "--no-default-browser-check",
     "--allow-file-access-from-files",
     "--run-all-compositor-stages-before-draw",
-    "--virtual-time-budget=1200",
+    "--virtual-time-budget=1600",
     "--force-device-scale-factor=1",
     `--user-data-dir=${userDataDir}`,
-    `--window-size=${width},${viewportHeight}`,
+    `--window-size=${width},${height}`,
     `--screenshot=${outputPath}`,
     url,
-  ];
-  const result = spawnSync(chromePath, args, {
-    encoding: "utf8",
-    timeout: 12000,
-    killSignal: "SIGKILL",
-  });
-  if (result.status !== 0 && !fs.existsSync(outputPath)) {
-    const details = [result.stdout, result.stderr].filter(Boolean).join("\n");
-    throw new Error(`${chromePath} failed\n${details}`);
-  }
-}
+  ], { encoding: "utf8", timeout: 15000, killSignal: "SIGKILL" });
 
-function chromeScreenshotAtSize(url, outputPath, screenshotWidth, screenshotHeight) {
-  const args = [
-    "--headless=new",
-    "--disable-gpu",
-    "--hide-scrollbars",
-    "--disable-background-networking",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--allow-file-access-from-files",
-    "--run-all-compositor-stages-before-draw",
-    "--virtual-time-budget=1200",
-    "--force-device-scale-factor=1",
-    `--user-data-dir=${userDataDir}`,
-    `--window-size=${screenshotWidth},${screenshotHeight}`,
-    `--screenshot=${outputPath}`,
-    url,
-  ];
-  const result = spawnSync(chromePath, args, {
-    encoding: "utf8",
-    timeout: 12000,
-    killSignal: "SIGKILL",
-  });
   if (result.status !== 0 && !fs.existsSync(outputPath)) {
-    const details = [result.stdout, result.stderr].filter(Boolean).join("\n");
-    throw new Error(`${chromePath} failed\n${details}`);
+    throw new Error(["Chrome screenshot failed", result.stdout, result.stderr].filter(Boolean).join("\n"));
   }
 }
 
 function dimensions(filePath) {
   const output = run("sips", ["-g", "pixelWidth", "-g", "pixelHeight", filePath]);
-  const widthMatch = output.match(/pixelWidth:\s*(\d+)/);
-  const heightMatch = output.match(/pixelHeight:\s*(\d+)/);
-  if (!widthMatch || !heightMatch) {
-    throw new Error(`Failed to parse dimensions for ${filePath} from sips output:\n${output}`);
-  }
-  const pixelWidth = Number(widthMatch[1]);
-  const pixelHeight = Number(heightMatch[1]);
-  return { pixelWidth, pixelHeight };
+  return {
+    width: Number(output.match(/pixelWidth:\s*(\d+)/)?.[1]),
+    height: Number(output.match(/pixelHeight:\s*(\d+)/)?.[1]),
+  };
 }
 
-function assertDimensions(filePath, expectedWidth, expectedHeight) {
+function assertDimensions(filePath, width, height) {
   const actual = dimensions(filePath);
-  if (actual.pixelWidth !== expectedWidth || actual.pixelHeight !== expectedHeight) {
-    throw new Error(
-      `${path.basename(filePath)} is ${actual.pixelWidth}x${actual.pixelHeight}, expected ${expectedWidth}x${expectedHeight}`,
-    );
+  if (actual.width !== width || actual.height !== height) {
+    throw new Error(`${path.basename(filePath)} is ${actual.width}x${actual.height}; expected ${width}x${height}`);
   }
 }
 
-if (!fs.existsSync(chromePath)) {
-  throw new Error(`Chrome not found at ${chromePath}. Set CHROME_PATH to override.`);
+function writeContactSheet(outputPath, imageDir, userDataDir, imageWidth, imageHeight, sheetHeight) {
+  const htmlPath = path.join(userDataDir, `${path.basename(imageDir)}-contact-sheet.html`);
+  const cards = shots.map(([id, fileName], index) => {
+    const source = pathToFileURL(path.join(imageDir, fileName)).href;
+    const label = `${String(index + 1).padStart(2, "0")} ${id.replace(/^shot-\d+-/, "")}`;
+    return `<figure><img src="${source}"><figcaption>${label}</figcaption></figure>`;
+  }).join("");
+  fs.writeFileSync(htmlPath, `<!doctype html><meta charset="utf-8"><style>
+    *{box-sizing:border-box}html,body{margin:0;width:1500px;height:${sheetHeight}px;overflow:hidden}body{padding:42px;background:#fff9ef;color:#3a2415;font-family:system-ui,-apple-system,sans-serif}main{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}figure{margin:0}img{display:block;width:100%;aspect-ratio:${imageWidth}/${imageHeight};object-fit:contain;border-radius:22px;box-shadow:0 14px 30px rgba(58,36,21,.18)}figcaption{padding-top:12px;font-size:21px;font-weight:800;text-transform:capitalize}
+  </style><main>${cards}</main>`);
+  screenshot(pathToFileURL(htmlPath).href, outputPath, 1500, sheetHeight, userDataDir);
 }
+
+if (!fs.existsSync(chromePath)) throw new Error(`Chrome not found at ${chromePath}`);
+if (!fs.existsSync(boardPath)) throw new Error(`Board not found at ${boardPath}`);
 
 fs.mkdirSync(outputDir, { recursive: true });
-
-const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "save-app-store-shots-"));
+fs.mkdirSync(iphone69OutputDir, { recursive: true });
+fs.mkdirSync(ipadOutputDir, { recursive: true });
+const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "save-app-store-v5-"));
 const boardUrl = pathToFileURL(boardPath).href;
-// Keep Chrome profile data and generated contact sheet temp files in the same per-run directory.
-process.env.TMPDIR = userDataDir;
 
-if (!contactOnly) {
-  for (const [id, fileName] of shots) {
-    const outputPath = path.join(outputDir, fileName);
-    chromeScreenshot(`${boardUrl}?shot=${id}`, outputPath);
-    assertDimensions(outputPath, width, height);
-    console.log(`wrote ${path.relative(process.cwd(), outputPath)}`);
+try {
+  if (!contactOnly) {
+    for (const [id, fileName] of shots) {
+      const iphonePath = path.join(outputDir, fileName);
+      screenshot(`${boardUrl}?shot=${id}`, iphonePath, 1242, 2688, userDataDir);
+      assertDimensions(iphonePath, 1242, 2688);
+      console.log(`wrote ${path.relative(process.cwd(), iphonePath)}`);
+
+      const iphone69Path = path.join(iphone69OutputDir, fileName);
+      screenshot(`${boardUrl}?shot=${id}&platform=iphone69`, iphone69Path, 1260, 2736, userDataDir);
+      assertDimensions(iphone69Path, 1260, 2736);
+      console.log(`wrote ${path.relative(process.cwd(), iphone69Path)}`);
+
+      const ipadPath = path.join(ipadOutputDir, fileName);
+      screenshot(`${boardUrl}?shot=${id}&platform=ipad`, ipadPath, 2048, 2732, userDataDir);
+      assertDimensions(ipadPath, 2048, 2732);
+      console.log(`wrote ${path.relative(process.cwd(), ipadPath)}`);
+    }
   }
 
-  const ipadOutputDir = path.join(__dirname, "app-store-screenshots", "v3-ipad-13");
-  fs.mkdirSync(ipadOutputDir, { recursive: true });
-
-  for (const [, fileName] of shots) {
-    const sourcePath = path.join(outputDir, fileName);
-    const outputPath = path.join(ipadOutputDir, fileName);
-    const wrapperPath = path.join(userDataDir, `ipad-${fileName}.html`);
-    const sourceUrl = pathToFileURL(sourcePath).href;
-
-    fs.writeFileSync(
-      wrapperPath,
-      `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; width: ${ipadWidth}px; height: ${ipadHeight}px; overflow: hidden; }
-    body {
-      display: grid;
-      place-items: center;
-      background:
-        radial-gradient(1200px 780px at 88% -8%, rgba(226,169,59,.26) 0%, rgba(226,169,59,0) 62%),
-        radial-gradient(900px 640px at -8% 32%, rgba(122,139,92,.10) 0%, rgba(122,139,92,0) 60%),
-        linear-gradient(180deg, #FFFCF4 0%, #FFF8EC 46%, #F2E2C4 100%);
-    }
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background-image: radial-gradient(rgba(58,36,21,.065) 2.4px, transparent 2.4px);
-      background-size: 46px 46px;
-      pointer-events: none;
-    }
-    img {
-      position: relative;
-      z-index: 1;
-      display: block;
-      width: 1262px;
-      height: 2732px;
-      object-fit: cover;
-      object-position: center top;
-      box-shadow: 0 24px 58px rgba(58, 36, 21, .14);
-    }
-  </style>
-</head>
-<body><img src="${sourceUrl}" alt=""></body>
-</html>
-`,
-    );
-
-    chromeScreenshotAtSize(pathToFileURL(wrapperPath).href, outputPath, ipadWidth, ipadHeight);
-    assertDimensions(outputPath, ipadWidth, ipadHeight);
-    console.log(`wrote ${path.relative(process.cwd(), outputPath)}`);
-  }
+  writeContactSheet(path.join(outputDir, "contact-sheet.png"), outputDir, userDataDir, 1242, 2688, 2200);
+  console.log(`wrote ${path.relative(process.cwd(), path.join(outputDir, "contact-sheet.png"))}`);
+  writeContactSheet(path.join(iphone69OutputDir, "contact-sheet.png"), iphone69OutputDir, userDataDir, 1260, 2736, 2200);
+  console.log(`wrote ${path.relative(process.cwd(), path.join(iphone69OutputDir, "contact-sheet.png"))}`);
+  writeContactSheet(path.join(ipadOutputDir, "contact-sheet.png"), ipadOutputDir, userDataDir, 2048, 2732, 1550);
+  console.log(`wrote ${path.relative(process.cwd(), path.join(ipadOutputDir, "contact-sheet.png"))}`);
+} finally {
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 }
-
-const contactSheetPath = path.join(userDataDir, "contact-sheet.html");
-const contactSheetPng = path.join(outputDir, "contact-sheet.png");
-const imageTags = shots
-  .map(([id, fileName], index) => {
-    const src = pathToFileURL(path.join(outputDir, fileName)).href;
-    const label = `${String(index + 1).padStart(2, "0")} ${id.replace(/^shot-\d+-/, "").replaceAll("-", " ")}`;
-    return `<figure><img src="${src}" alt=""><figcaption>${label}</figcaption></figure>`;
-  })
-  .join("");
-
-fs.writeFileSync(
-  contactSheetPath,
-  `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      width: ${width}px;
-      margin: 0;
-      padding: 28px;
-      background: #fff8ef;
-      color: #3a2415;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-    }
-    main { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-    figure { margin: 0; }
-    img {
-      display: block;
-      width: 100%;
-      aspect-ratio: ${width} / ${height};
-      object-fit: cover;
-      border-radius: 18px;
-      box-shadow: 0 10px 24px rgba(58, 36, 21, .14);
-    }
-    figcaption {
-      margin-top: 10px;
-      font-size: 17px;
-      line-height: 1.12;
-      font-weight: 760;
-      letter-spacing: 0;
-      text-transform: capitalize;
-    }
-  </style>
-</head>
-<body><main>${imageTags}</main></body>
-</html>
-`,
-);
-
-chromeScreenshot(pathToFileURL(contactSheetPath).href, contactSheetPng, 1900);
-console.log(`wrote ${path.relative(process.cwd(), contactSheetPng)}`);
