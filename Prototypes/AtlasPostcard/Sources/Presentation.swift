@@ -378,6 +378,8 @@ struct AtlasPresentation: @unchecked Sendable {
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
     var tripSummaries: [AtlasTripSummaryPresentation]
+    var tripsBetaLabel: String
+    var tripsBetaDetail: String
     var onCapture: () -> Void
     var onReviewAll: () -> Void
     var onOpenHomeHero: () -> Void
@@ -502,6 +504,8 @@ struct AtlasPresentation: @unchecked Sendable {
                 timing: "PLANNING"
             ),
         ],
+        tripsBetaLabel: "BETA",
+        tripsBetaDetail: "Free during Beta while planning gets better.",
         onCapture: {},
         onReviewAll: {},
         onOpenHomeHero: {},
