@@ -694,12 +694,24 @@ struct TripsAtlasScreen: View {
                         .font(AtlasType.display(11))
                         .tracking(1.1)
                         .foregroundStyle(AtlasPalette.muted)
-                    Text("Trips")
-                        .font(AtlasType.strong(30))
-                        .foregroundStyle(AtlasPalette.forest)
-                    Text("Confirmed Map Stamps, arranged into journeys.")
+                    HStack(spacing: 9) {
+                        Text("Trips")
+                            .font(AtlasType.strong(30))
+                            .foregroundStyle(AtlasPalette.forest)
+
+                        Text(presentation.tripsBetaLabel)
+                            .font(AtlasType.display(10))
+                            .tracking(0.8)
+                            .foregroundStyle(AtlasPalette.forest)
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 24)
+                            .background(AtlasPalette.mint.opacity(0.72), in: Capsule())
+                            .accessibilityIdentifier("trips.beta.badge")
+                    }
+                    Text(presentation.tripsBetaDetail)
                         .font(AtlasType.regular(14))
                         .foregroundStyle(AtlasPalette.muted)
+                        .accessibilityIdentifier("trips.beta.detail")
                 }
                 .padding(.horizontal, 13)
                 .padding(.top, 7)

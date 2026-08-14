@@ -2,6 +2,13 @@ import XCTest
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
+    func testCurrentMonetizationBoundaryKeepsActivationAndTripsBetaFree() {
+        XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
+        XCTAssertFalse(SAVEProAccessPolicy.firstMapStampRequiresPurchase)
+        XCTAssertTrue(SAVEProAccessPolicy.tripsBetaIsFree)
+        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
+    }
+
     @MainActor
     func testTemplatesUseSaveKeysForProductionConfig() throws {
         let mainTemplate = try plistTemplate(at: "SAV-E/Resources/Secrets.plist.template")

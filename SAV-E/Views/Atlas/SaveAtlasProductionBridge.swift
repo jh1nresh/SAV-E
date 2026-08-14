@@ -150,6 +150,14 @@ enum SaveAtlasPresentationFactory {
         onOpenPassport: @escaping () -> Void
     ) -> AtlasPresentation {
         var presentation = AtlasPresentation.reference
+        presentation.tripsBetaLabel = language.localized(
+            english: "BETA",
+            traditionalChinese: "測試版"
+        )
+        presentation.tripsBetaDetail = language.localized(
+            english: "Free during Beta while planning gets better.",
+            traditionalChinese: "規劃功能持續優化中，測試期間免費使用。"
+        )
 
         if !SaveAtlasRuntime.usesParityFixture {
             presentation.tripSummaries = (

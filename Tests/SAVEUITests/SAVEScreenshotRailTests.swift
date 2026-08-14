@@ -11,6 +11,49 @@ import XCTest
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testTripsBetaAndSoftPaywallPreviewStayHonest() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+
+        openRootTab("Trips", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["BETA"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Free during Beta while planning gets better."].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        attach(app, name: "trips-beta-free")
+
+        openRootTab("Home", app: app)
+        app.buttons["root.passport"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+
+        let proPreview = app.buttons["profile.proPreview"]
+        XCTAssertTrue(
+            scrollUntilHittable(proPreview, in: app.scrollViews.firstMatch, maxSwipes: 12),
+            "Passport should expose the optional Memo Pro preview."
+        )
+        proPreview.tap()
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Your place memory stays free."].exists)
+        XCTAssertTrue(app.staticTexts["Trips Beta"].exists)
+        XCTAssertTrue(app.staticTexts["Purchases are not available yet. SAV-E will show the price and terms before any payment."].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'subscribe'")).firstMatch.exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'trial'")).firstMatch.exists)
+        attach(app, name: "memo-pro-preview-no-purchase")
+    }
+
+    @MainActor
     func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
         let app = makeApp(
             launchArguments: [
