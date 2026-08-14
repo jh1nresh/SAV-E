@@ -1,9 +1,10 @@
 #!/bin/bash
 # Repeatable real-UI App Store screenshot rail.
 #
-# Runs the SAVEScreenshotRailTests UI test (review-demo session: seeded
-# places, no real network) on the pinned simulator, then extracts the
-# XCTAttachment screenshots as PNGs into specs/app-store-screenshots/real-ui/.
+# Runs the focused App Store core screenshot rail (review-demo session: seeded
+# places plus one isolated offline review candidate) on the pinned simulator,
+# then extracts the XCTAttachment screenshots as PNGs into
+# specs/app-store-screenshots/real-ui-v5/.
 #
 # Usage: specs/capture-app-screenshots.sh
 set -euo pipefail
@@ -11,28 +12,33 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIM_ID="${SAVE_SHOTS_SIM_ID:-53A8DA29-D4F6-43AF-A81E-47929D1DF97D}"
 RESULT_BUNDLE="${SAVE_SHOTS_RESULT_BUNDLE:-/tmp/save-shots.xcresult}"
-OUT_DIR="$REPO_ROOT/specs/app-store-screenshots/real-ui"
+OUT_DIR="${SAVE_SHOTS_OUT_DIR:-$REPO_ROOT/specs/app-store-screenshots/real-ui-v5}"
+TEST_FILTER="${SAVE_SHOTS_TEST_FILTER:-SAVEUITests/SAVEScreenshotRailTests/testCaptureAppStoreCoreScreensV5}"
+DERIVED_DATA="${SAVE_SHOTS_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex}"
 
-rm -rf "$RESULT_BUNDLE"
 mkdir -p "$OUT_DIR"
 
-echo "==> Booting simulator $SIM_ID (ok if already booted)"
-xcrun simctl boot "$SIM_ID" 2>/dev/null || true
+if [[ "${SAVE_SHOTS_EXTRACT_ONLY:-0}" != "1" ]]; then
+  rm -rf "$RESULT_BUNDLE"
+  echo "==> Booting simulator $SIM_ID (ok if already booted)"
+  xcrun simctl boot "$SIM_ID" 2>/dev/null || true
 
-# Fresh install every run: the review-demo seeding is skipped when the local
-# vault already has places, so stale app state would yield non-demo screenshots.
-echo "==> Uninstalling com.wanderly.app for a clean demo-seeded run"
-xcrun simctl uninstall "$SIM_ID" com.wanderly.app 2>/dev/null || true
+  # Fresh install every run: the review-demo seeding is skipped when the local
+  # vault already has places, so stale app state would yield non-demo screenshots.
+  echo "==> Uninstalling com.wanderly.app for a clean demo-seeded run"
+  xcrun simctl uninstall "$SIM_ID" com.wanderly.app 2>/dev/null || true
 
-echo "==> Running screenshot rail UI test"
-xcodebuild test \
-  -project "$REPO_ROOT/SAV-E.xcodeproj" \
-  -scheme SAV-E \
-  -destination "platform=iOS Simulator,id=$SIM_ID" \
-  -only-testing:SAVEUITests/SAVEScreenshotRailTests \
-  -resultBundlePath "$RESULT_BUNDLE" || {
-    echo "warning: xcodebuild test exited non-zero (an XCTSkip mid-rail still leaves partial screenshots)" >&2
-  }
+  echo "==> Running screenshot rail UI test"
+  xcodebuild test \
+    -project "$REPO_ROOT/SAV-E.xcodeproj" \
+    -scheme SAV-E \
+    -destination "platform=iOS Simulator,id=$SIM_ID" \
+    -derivedDataPath "$DERIVED_DATA" \
+    -only-testing:"$TEST_FILTER" \
+    -resultBundlePath "$RESULT_BUNDLE" || {
+      echo "warning: xcodebuild test exited non-zero (an XCTSkip mid-rail still leaves partial screenshots)" >&2
+    }
+fi
 
 echo "==> Extracting attachment PNGs to $OUT_DIR"
 EXPORT_DIR="$(mktemp -d /tmp/save-shots-export.XXXXXX)"
@@ -56,10 +62,13 @@ if manifest_path.exists():
         for att in test.get("attachments", []):
             exported = export_dir / att["exportedFileName"]
             human = att.get("suggestedHumanReadableName") or att["exportedFileName"]
+            if not human.startswith("v5-"):
+                continue
             if not exported.exists():
                 continue
             suffix = exported.suffix or ".png"
-            name = human if human.endswith(suffix) else human + suffix
+            stable_name = human.split("_0_", 1)[0]
+            name = stable_name if stable_name.endswith(suffix) else stable_name + suffix
             if not name.lower().endswith(".png"):
                 continue
             dest = out_dir / name
