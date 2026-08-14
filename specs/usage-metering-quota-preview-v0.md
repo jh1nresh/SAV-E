@@ -1,5 +1,9 @@
 # Usage Metering + Quota Preview v0
 
+> Launch update: `launch-without-paywall.md` supersedes the visible iOS quota
+> preview. Backend metering remains non-enforcing and invisible while launch
+> usage is measured.
+
 ## Required brief
 
 - Paid user job / observed failure: SAV-E has a Memo Pro preview but no reliable, server-authoritative measurement of expensive AI usage. Any paywall or quota decision made now would therefore be arbitrary.

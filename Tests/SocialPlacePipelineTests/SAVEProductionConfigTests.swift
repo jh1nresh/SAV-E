@@ -2,64 +2,23 @@ import XCTest
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
-    func testCurrentMonetizationBoundaryKeepsActivationAndTripsBetaFree() {
-        XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
-        XCTAssertFalse(SAVEProAccessPolicy.firstMapStampRequiresPurchase)
-        XCTAssertTrue(SAVEProAccessPolicy.tripsBetaIsFree)
-        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
-    }
+    func testLaunchSourcesContainNoPaywallWhileBackendMeteringRemains() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        let sharedConfig = try source(at: "SAV-EShared/SAVEProductionConfig.swift")
+        let trips = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let backend = try source(at: "backend/src/server.ts")
 
-    @MainActor
-    func testUsageQuotaPreviewDecodesAsNonEnforcingBetaTelemetry() throws {
-        let data = Data("""
-        {
-          "policy_version":"ai-assists-beta-v0",
-          "period_start":"2026-08-01T00:00:00.000Z",
-          "period_end":"2026-09-01T00:00:00.000Z",
-          "limit_units":20,
-          "warning_threshold_units":15,
-          "used_units":15,
-          "remaining_units":5,
-          "state":"warning",
-          "enforced":false,
-          "metering_available":true,
-          "beta_access_continues":true
+        for forbidden in ["Memo Pro", "profile.proPreview", "paywall.", "SaveProPreviewView"] {
+            XCTAssertFalse(profile.contains(forbidden), "Launch Passport must not contain \(forbidden)")
         }
-        """.utf8)
-
-        let preview = try JSONDecoder.supabase.decode(SaveUsageQuotaPreview.self, from: data)
-
-        XCTAssertEqual(preview.policyVersion, "ai-assists-beta-v0")
-        XCTAssertEqual(preview.usedUnits, 15)
-        XCTAssertEqual(preview.remainingUnits, 5)
-        XCTAssertEqual(preview.progress, 0.75)
-        XCTAssertFalse(preview.enforced)
-        XCTAssertTrue(preview.betaAccessContinues)
-    }
-
-    @MainActor
-    func testUsageQuotaPreviewClampsProgressWithoutCreatingAnEntitlement() throws {
-        let data = Data("""
-        {
-          "policy_version":"ai-assists-beta-v0",
-          "period_start":"2026-08-01T00:00:00.000Z",
-          "period_end":"2026-09-01T00:00:00.000Z",
-          "limit_units":20,
-          "warning_threshold_units":15,
-          "used_units":24,
-          "remaining_units":0,
-          "state":"preview_limit_reached",
-          "enforced":false,
-          "metering_available":true,
-          "beta_access_continues":true
-        }
-        """.utf8)
-
-        let preview = try JSONDecoder.supabase.decode(SaveUsageQuotaPreview.self, from: data)
-
-        XCTAssertEqual(preview.progress, 1)
-        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
-        XCTAssertTrue(SAVEProAccessPolicy.tripsBetaIsFree)
+        XCTAssertFalse(supabase.contains("fetchUsageQuotaPreview"))
+        XCTAssertFalse(supabase.contains("SaveUsageQuotaPreview"))
+        XCTAssertFalse(sharedConfig.contains("SAVEProAccessPolicy"))
+        XCTAssertFalse(trips.contains("Free during Beta"))
+        XCTAssertTrue(trips.contains("Trip planning is still improving."))
+        XCTAssertTrue(backend.contains("recordAIUsageEvent"))
+        XCTAssertTrue(backend.contains("buildGeminiUsageEvent"))
     }
 
     @MainActor
@@ -142,12 +101,19 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     private func plistTemplate(at relativePath: String) throws -> [String: Any] {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = root.appendingPathComponent(relativePath)
+        let url = repositoryRoot.appendingPathComponent(relativePath)
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }

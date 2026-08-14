@@ -71,18 +71,6 @@ enum SAVEProductionConfig {
     }
 }
 
-/// Release-time monetization boundaries for the current public build.
-///
-/// These constants deliberately keep UI claims separate from a future
-/// StoreKit entitlement implementation. Flip them only in the same change that
-/// adds verified products, transaction handling, and backend entitlement state.
-enum SAVEProAccessPolicy {
-    nonisolated static let showsAutomaticLaunchPaywall = false
-    nonisolated static let firstMapStampRequiresPurchase = false
-    nonisolated static let tripsBetaIsFree = true
-    nonisolated static let purchasingIsAvailable = false
-}
-
 struct SAVEGeminiTransport {
     var modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks
     var session: URLSession = .shared

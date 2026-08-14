@@ -113,12 +113,6 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         apiBaseURL != nil
     }
 
-    func fetchUsageQuotaPreview() async throws -> SaveUsageQuotaPreview {
-        guard isConfigured else { throw SupabaseError.notConfigured }
-        let data = try await request(path: "/v0/usage/quota")
-        return try JSONDecoder.supabase.decode(SaveUsageQuotaPreview.self, from: data)
-    }
-
     // MARK: - Places
 
     func fetchPlaces(for userId: String) async throws -> [Place] {
@@ -939,39 +933,6 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 }
 
 // MARK: - Row DTOs (snake_case ↔ Swift models)
-
-struct SaveUsageQuotaPreview: Codable, Equatable {
-    let policyVersion: String
-    let periodStart: String
-    let periodEnd: String
-    let limitUnits: Int
-    let warningThresholdUnits: Int
-    let usedUnits: Int?
-    let remainingUnits: Int?
-    let state: String
-    let enforced: Bool
-    let meteringAvailable: Bool
-    let betaAccessContinues: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case policyVersion = "policy_version"
-        case periodStart = "period_start"
-        case periodEnd = "period_end"
-        case limitUnits = "limit_units"
-        case warningThresholdUnits = "warning_threshold_units"
-        case usedUnits = "used_units"
-        case remainingUnits = "remaining_units"
-        case state
-        case enforced
-        case meteringAvailable = "metering_available"
-        case betaAccessContinues = "beta_access_continues"
-    }
-
-    var progress: Double {
-        guard let usedUnits, limitUnits > 0 else { return 0 }
-        return min(max(Double(usedUnits) / Double(limitUnits), 0), 1)
-    }
-}
 
 struct VerifiedPlaceClaim: Codable, Identifiable, Equatable {
     let claimId: UUID

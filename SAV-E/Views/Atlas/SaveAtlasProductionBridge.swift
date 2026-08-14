@@ -155,8 +155,8 @@ enum SaveAtlasPresentationFactory {
             traditionalChinese: "測試版"
         )
         presentation.tripsBetaDetail = language.localized(
-            english: "Free during Beta while planning gets better.",
-            traditionalChinese: "規劃功能持續優化中，測試期間免費使用。"
+            english: "Trip planning is still improving.",
+            traditionalChinese: "行程規劃品質仍在持續改善。"
         )
 
         if !SaveAtlasRuntime.usesParityFixture {

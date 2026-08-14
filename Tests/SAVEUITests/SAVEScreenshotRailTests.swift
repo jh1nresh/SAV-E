@@ -11,7 +11,7 @@ import XCTest
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
-    func testTripsBetaAndSoftPaywallPreviewStayHonest() throws {
+    func testLaunchKeepsPaywallAbsentAndTripsInBeta() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -29,30 +29,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Trips", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["BETA"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["Free during Beta while planning gets better."].exists)
+        XCTAssertTrue(app.staticTexts["Trip planning is still improving."].exists)
+        XCTAssertFalse(app.staticTexts["Free during Beta while planning gets better."].exists)
         XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
-        attach(app, name: "trips-beta-free")
+        attach(app, name: "trips-beta-no-paywall")
 
         openRootTab("Home", app: app)
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
-
-        let proPreview = app.buttons["profile.proPreview"]
-        XCTAssertTrue(
-            scrollUntilHittable(proPreview, in: app.scrollViews.firstMatch, maxSwipes: 12),
-            "Passport should expose the optional Memo Pro preview."
-        )
-        proPreview.tap()
-
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["Your place memory stays free."].exists)
-        XCTAssertTrue(app.staticTexts["Trips Beta"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.usagePreview"].exists)
-        XCTAssertTrue(app.staticTexts["20 AI assists is a TestFlight hypothesis. This preview does not charge you or lock features."].exists)
-        XCTAssertTrue(app.staticTexts["Purchases are not available yet. SAV-E will show the price and terms before any payment."].exists)
+        XCTAssertFalse(app.buttons["profile.proPreview"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.staticTexts["Memo Pro preview"].exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'subscribe'")).firstMatch.exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'trial'")).firstMatch.exists)
-        attach(app, name: "memo-pro-preview-no-purchase")
+        attach(app, name: "passport-no-paywall")
     }
 
     @MainActor
