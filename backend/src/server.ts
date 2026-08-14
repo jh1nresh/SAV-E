@@ -189,6 +189,12 @@ import {
   type NormalizedTripStopSnapshot,
   type OwnedTripPlaceRow,
 } from "./tripPersistence.js";
+import {
+  buildGeminiUsageEvent,
+  buildUsageQuotaPreview,
+  type AIUsageEvent,
+  type UsageEventOutcome,
+} from "./usageQuota.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -997,8 +1003,11 @@ createServer(async (request, response) => {
     if (isV0 && resource === "exports" && id === "trek-kml") {
       return await handleTrekKmlExport(request, response, userId);
     }
+    if (isV0 && resource === "usage" && id === "quota" && segments.length === 2) {
+      return await handleUsageQuotaPreview(request, response, userId);
+    }
     if (isV0 && resource === "llm") {
-      return await handleLLMProxy(request, response, segments.slice(1));
+      return await handleLLMProxy(request, response, segments.slice(1), userId);
     }
     if (isV0 && resource === "places" && id && segments[2] === "verified-claims") {
       return await handlePlaceVerifiedClaims(request, response, id, segments[3], url, userId);
@@ -2148,6 +2157,7 @@ async function handleLLMProxy(
   request: IncomingMessage,
   response: ServerResponse,
   segments: string[],
+  userId: string,
 ): Promise<void> {
   const [providerAction] = segments;
   if (providerAction !== "gemini-generate-content") {
@@ -2163,29 +2173,135 @@ async function handleLLMProxy(
   const body = await readJson(request, geminiProxyRequestMaxBytes);
   const model = geminiProxyModel(body.model);
   const geminiBody = geminiProxyBody(body);
-  const upstream = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "SAV-E backend Gemini proxy/1.0",
+  const startedAt = Date.now();
+  let upstream: Response;
+  try {
+    upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "SAV-E backend Gemini proxy/1.0",
+        },
+        body: JSON.stringify(geminiBody),
+        redirect: "manual",
+        signal: AbortSignal.timeout(20_000),
       },
-      body: JSON.stringify(geminiBody),
-      redirect: "manual",
-      signal: AbortSignal.timeout(20_000),
-    },
-  );
+    );
+  } catch (error) {
+    await recordAIUsageEvent(userId, buildGeminiUsageEvent({
+      model,
+      outcome: "transport_failure",
+      latencyMs: Date.now() - startedAt,
+    }));
+    throw error;
+  }
 
   if (upstream.status >= 300 && upstream.status < 400) {
+    await recordGeminiFailure(userId, model, "upstream_failure", upstream.status, startedAt);
     throw new ApiError(502, "Gemini proxy blocked redirect response");
   }
-  const raw = await boundedResponseBuffer(upstream, geminiProxyResponseMaxBytes);
+  let raw: Uint8Array;
+  try {
+    raw = await boundedResponseBuffer(upstream, geminiProxyResponseMaxBytes);
+  } catch (error) {
+    await recordGeminiFailure(userId, model, "invalid_response", upstream.status, startedAt);
+    throw error;
+  }
   if (!upstream.ok) {
+    await recordGeminiFailure(userId, model, "upstream_failure", upstream.status, startedAt);
     return sendJson(response, { error: "Gemini upstream request failed", status: upstream.status }, 502);
   }
-  const parsed = JSON.parse(new TextDecoder().decode(raw));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(raw));
+  } catch {
+    await recordGeminiFailure(userId, model, "invalid_response", upstream.status, startedAt);
+    throw new ApiError(502, "Gemini upstream returned invalid JSON");
+  }
+  await recordAIUsageEvent(userId, buildGeminiUsageEvent({
+    model,
+    outcome: "success",
+    upstreamStatus: upstream.status,
+    latencyMs: Date.now() - startedAt,
+    responseBody: parsed,
+  }));
   return sendJson(response, parsed);
+}
+
+async function handleUsageQuotaPreview(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "GET") {
+    return sendJson(response, { error: "Unsupported usage quota route" }, 405);
+  }
+  response.setHeader("Cache-Control", "private, no-store");
+
+  try {
+    const { rows } = await pool.query(
+      `select coalesce(sum(units), 0)::int as used_units
+       from ai_usage_events
+       where user_id = $1
+         and created_at >= (date_trunc('month', now() at time zone 'UTC') at time zone 'UTC')
+         and created_at < ((date_trunc('month', now() at time zone 'UTC') + interval '1 month') at time zone 'UTC')`,
+      [userId],
+    );
+    return sendJson(response, buildUsageQuotaPreview({
+      usedUnits: asObject(rows[0]).used_units,
+      meteringAvailable: true,
+    }));
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+    console.warn("AI usage table is missing; returning a non-enforcing warming-up preview.");
+    return sendJson(response, buildUsageQuotaPreview({ meteringAvailable: false }));
+  }
+}
+
+async function recordGeminiFailure(
+  userId: string,
+  model: string,
+  outcome: UsageEventOutcome,
+  upstreamStatus: number,
+  startedAt: number,
+): Promise<void> {
+  await recordAIUsageEvent(userId, buildGeminiUsageEvent({
+    model,
+    outcome,
+    upstreamStatus,
+    latencyMs: Date.now() - startedAt,
+  }));
+}
+
+async function recordAIUsageEvent(userId: string, event: AIUsageEvent): Promise<void> {
+  try {
+    await pool.query(
+      `insert into ai_usage_events (
+         user_id, operation, provider, model, outcome, units, upstream_status,
+         latency_ms, input_tokens, output_tokens, total_tokens
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        userId,
+        event.operation,
+        event.provider,
+        event.model,
+        event.outcome,
+        event.units,
+        event.upstreamStatus,
+        event.latencyMs,
+        event.inputTokens,
+        event.outputTokens,
+        event.totalTokens,
+      ],
+    );
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code ?? "unknown")
+      : "unknown";
+    console.warn(`AI usage telemetry unavailable; request remains fail-open (code=${code}).`);
+  }
 }
 
 function geminiProxyModel(value: unknown): string {

@@ -85,6 +85,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `POST /v0/exports/trek-kml` — exports 1–100 explicitly selected, owner-scoped Map Stamps as a private/no-store KML attachment compatible with [TREK](https://github.com/mauriceboe/TREK). The request body is `{ "place_ids": ["<uuid>"] }`; the export includes only place ID, name, address, category, status, and coordinates, and excludes notes, source URLs, photos, and evidence.
 - `GET /profile`
 - `PATCH /profile`
+- `GET /v0/usage/quota` — returns the authenticated user's current UTC-month AI-assist usage preview. The v0 policy is a non-enforcing TestFlight hypothesis (`20` monthly units, warning at `15`); missing telemetry schema returns `metering_available=false` and never blocks Beta access.
 - `POST /memory/captures/:id/search-recovery` — runs public search recovery for source-only captures and writes search-derived results back as review-only place candidates.
 - `POST /v0/places/:id/related-sources` — Privy bearer-only and owner-rate-limited; re-verifies an owned Google-confirmed public venue through a bounded cache, then searches a bounded public index for likely same-place Instagram, TikTok, YouTube, Xiaohongshu, Douyin, Threads, or X links. The owner-scoped response contains candidate-only sources plus per-platform coverage and a private retrieval receipt; it performs no place, claim, Trip, or source-edge writes.
 - `GET /v0/places/:id/verified-claims` — returns owner-scoped place claims; raw evidence refs are omitted unless `includePrivateEvidence=true`.
