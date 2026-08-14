@@ -47,6 +47,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Your place memory stays free."].exists)
         XCTAssertTrue(app.staticTexts["Trips Beta"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.usagePreview"].exists)
+        XCTAssertTrue(app.staticTexts["20 AI assists is a TestFlight hypothesis. This preview does not charge you or lock features."].exists)
         XCTAssertTrue(app.staticTexts["Purchases are not available yet. SAV-E will show the price and terms before any payment."].exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'subscribe'")).firstMatch.exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'trial'")).firstMatch.exists)

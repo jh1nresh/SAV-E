@@ -22,6 +22,40 @@ create unique index if not exists idx_profiles_handle on profiles(lower(handle))
 create unique index if not exists idx_profiles_referral_code on profiles(referral_code) where referral_code is not null;
 create unique index if not exists idx_profiles_privy_user_id on profiles(privy_user_id) where privy_user_id is not null;
 
+-- User-facing usage telemetry is intentionally separate from credit_ledger.
+-- This table stores bounded operational metadata only: never prompts, model
+-- output, source URLs, place names, or private notes.
+create table if not exists ai_usage_events (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    operation text not null,
+    provider text not null,
+    model text not null,
+    outcome text not null,
+    units integer not null default 0,
+    upstream_status integer,
+    latency_ms integer not null default 0,
+    input_tokens integer,
+    output_tokens integer,
+    total_tokens integer,
+    created_at timestamptz not null default now(),
+    constraint ai_usage_events_operation_check check (operation in ('gemini_generate_content')),
+    constraint ai_usage_events_provider_check check (provider in ('google_gemini')),
+    constraint ai_usage_events_outcome_check check (
+        outcome in ('success', 'upstream_failure', 'transport_failure', 'invalid_response')
+    ),
+    constraint ai_usage_events_units_check check (units between 0 and 1),
+    constraint ai_usage_events_latency_check check (latency_ms >= 0),
+    constraint ai_usage_events_token_counts_check check (
+        coalesce(input_tokens, 0) >= 0
+        and coalesce(output_tokens, 0) >= 0
+        and coalesce(total_tokens, 0) >= 0
+    )
+);
+
+create index if not exists idx_ai_usage_events_user_created
+    on ai_usage_events(user_id, created_at desc);
+
 create table if not exists user_channels (
     id uuid primary key default gen_random_uuid(),
     profile_id text references profiles(id) on delete cascade not null,

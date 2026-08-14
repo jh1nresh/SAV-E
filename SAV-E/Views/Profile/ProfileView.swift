@@ -41,6 +41,9 @@ struct ProfileView: View {
     var onSearchFollowedFriends: (String) async -> Void = { _ in }
     var onLoadMoreFollowedFriends: () async -> Void = {}
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
+    var onLoadUsageQuotaPreview: () async -> SaveUsageQuotaPreview? = {
+        try? await SupabaseService.shared.fetchUsageQuotaPreview()
+    }
 
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -272,7 +275,7 @@ struct ProfileView: View {
             )
         }
         .sheet(isPresented: $showProPreview) {
-            SaveProPreviewView()
+            SaveProPreviewView(onLoadUsageQuotaPreview: onLoadUsageQuotaPreview)
         }
     }
 
@@ -301,6 +304,9 @@ struct ProfileView: View {
 private struct SaveProPreviewView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var usageQuotaPreview: SaveUsageQuotaPreview?
+    @State private var didLoadUsageQuota = false
+    let onLoadUsageQuotaPreview: () async -> SaveUsageQuotaPreview?
 
     var body: some View {
         NavigationStack {
@@ -348,6 +354,8 @@ private struct SaveProPreviewView: View {
                         ]
                     )
 
+                    usagePreviewCard
+
                     Text(localized(
                         "Trips is free during Beta while planning quality improves.",
                         "規劃品質持續改善中，Trips 在測試期間免費使用。"
@@ -383,6 +391,60 @@ private struct SaveProPreviewView: View {
             }
         }
         .accessibilityIdentifier("paywall.root")
+        .task {
+            guard !didLoadUsageQuota else { return }
+            didLoadUsageQuota = true
+            usageQuotaPreview = await onLoadUsageQuotaPreview()
+        }
+    }
+
+    private var usagePreviewCard: some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack {
+                Text(localized("AI assists this month", "本月 AI 協助次數"))
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Spacer()
+                Text(localized("PREVIEW", "預覽"))
+                    .font(SaveTheme.Typography.eyebrow)
+                    .foregroundStyle(SaveAtlasPalette.coral)
+            }
+
+            if let preview = usageQuotaPreview,
+               preview.meteringAvailable,
+               let usedUnits = preview.usedUnits,
+               let remainingUnits = preview.remainingUnits {
+                ProgressView(value: preview.progress)
+                    .tint(SaveAtlasPalette.coral)
+
+                Text(localized(
+                    "\(usedUnits) of \(preview.limitUnits) used · \(remainingUnits) remaining",
+                    "已使用 \(usedUnits) / \(preview.limitUnits) 次 · 剩餘 \(remainingUnits) 次"
+                ))
+                .font(SaveAtlasType.strong(14))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .accessibilityIdentifier("paywall.usageCount")
+            } else {
+                Text(localized(
+                    "Usage tracking is warming up. Your Beta access continues.",
+                    "使用量追蹤準備中；你的測試版使用權不受影響。"
+                ))
+                .font(SaveAtlasType.strong(14))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .accessibilityIdentifier("paywall.usageWarmingUp")
+            }
+
+            Text(localized(
+                "20 AI assists is a TestFlight hypothesis. This preview does not charge you or lock features.",
+                "每月 20 次 AI 協助是 TestFlight 測試假設；此預覽不會收費，也不會鎖住功能。"
+            ))
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.muted)
+        }
+        .padding(SaveTheme.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SaveAtlasPalette.coral.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityIdentifier("paywall.usagePreview")
     }
 
     private func proSection(title: String, tint: Color, rows: [String]) -> some View {
