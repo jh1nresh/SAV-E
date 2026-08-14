@@ -9,7 +9,6 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
     @State private var showGoogleTakeoutImport = false
-    @State private var showProPreview = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
     @State private var localSavedPlaces: [Place] = []
@@ -41,10 +40,6 @@ struct ProfileView: View {
     var onSearchFollowedFriends: (String) async -> Void = { _ in }
     var onLoadMoreFollowedFriends: () async -> Void = {}
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
-    var onLoadUsageQuotaPreview: () async -> SaveUsageQuotaPreview? = {
-        try? await SupabaseService.shared.fetchUsageQuotaPreview()
-    }
-
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
@@ -169,23 +164,6 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.connections")
 
                         SettingsRow(
-                            icon: "sparkles",
-                            title: languageSettings.localized(
-                                english: "Memo Pro preview",
-                                traditionalChinese: "Memo Pro 預告"
-                            ),
-                            detail: languageSettings.localized(
-                                english: "Core place memory stays free",
-                                traditionalChinese: "核心地點記憶維持免費"
-                            ),
-                            color: SaveAtlasPalette.lavender,
-                            accessibilityIdentifier: "profile.proPreview"
-                        ) {
-                            SaveHaptics.tap()
-                            showProPreview = true
-                        }
-
-                        SettingsRow(
                             icon: "shippingbox.and.arrow.backward.fill",
                             title: languageSettings.localized(
                                 english: "Import Google Takeout",
@@ -274,9 +252,6 @@ struct ProfileView: View {
                 onSave: onSaveGoogleTakeoutImport
             )
         }
-        .sheet(isPresented: $showProPreview) {
-            SaveProPreviewView(onLoadUsageQuotaPreview: onLoadUsageQuotaPreview)
-        }
     }
 
     private var localMemoryTitle: String {
@@ -298,178 +273,6 @@ struct ProfileView: View {
         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
             localSavedPlaces[index].visibility = visibility
         }
-    }
-}
-
-private struct SaveProPreviewView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var usageQuotaPreview: SaveUsageQuotaPreview?
-    @State private var didLoadUsageQuota = false
-    let onLoadUsageQuotaPreview: () async -> SaveUsageQuotaPreview?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: SaveTheme.Spacing.lg) {
-                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                        Text(localized("MEMO PRO", "MEMO PRO"))
-                            .font(SaveTheme.Typography.eyebrow)
-                            .foregroundStyle(SaveAtlasPalette.coral)
-
-                        Text(localized(
-                            "Your place memory stays free.",
-                            "你的地點記憶維持免費。"
-                        ))
-                        .font(SaveAtlasType.strong(30))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-
-                        Text(localized(
-                            "Capture clues, review matches, save Map Stamps, and use your private map without a subscription.",
-                            "不需訂閱，也能捕捉線索、確認地點、保存地圖章並使用私人地圖。"
-                        ))
-                        .font(SaveAtlasType.body(15))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                    }
-
-                    proSection(
-                        title: localized("Free now", "目前免費"),
-                        tint: SaveAtlasPalette.mint,
-                        rows: [
-                            localized("Capture and Review", "捕捉與確認"),
-                            localized("Map Stamps and private map", "地圖章與私人地圖"),
-                            SAVEProAccessPolicy.tripsBetaIsFree
-                                ? localized("Trips Beta", "Trips 測試版")
-                                : localized("Trips", "Trips")
-                        ]
-                    )
-
-                    proSection(
-                        title: localized("Planned for Pro", "Pro 預計提供"),
-                        tint: SaveAtlasPalette.lavender,
-                        rows: [
-                            localized("Higher monthly AI limits", "更高的每月 AI 使用額度"),
-                            localized("Batch imports", "批次匯入"),
-                            localized("Advanced source recovery", "進階來源復原")
-                        ]
-                    )
-
-                    usagePreviewCard
-
-                    Text(localized(
-                        "Trips is free during Beta while planning quality improves.",
-                        "規劃品質持續改善中，Trips 在測試期間免費使用。"
-                    ))
-                    .font(SaveAtlasType.strong(14))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .padding(SaveTheme.Spacing.md)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(SaveAtlasPalette.mint.opacity(0.42), in: RoundedRectangle(cornerRadius: 16))
-                    .accessibilityIdentifier("paywall.tripsBeta")
-
-                    if !SAVEProAccessPolicy.purchasingIsAvailable {
-                        Text(localized(
-                            "Purchases are not available yet. SAV-E will show the price and terms before any payment.",
-                            "目前尚未開放購買。任何付款前，SAV-E 都會清楚顯示價格與條款。"
-                        ))
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .accessibilityIdentifier("paywall.unavailable")
-                    }
-                }
-                .padding(20)
-                .padding(.bottom, 32)
-            }
-            .background(SaveDottedBackground().ignoresSafeArea())
-            .navigationTitle(localized("Memo Pro preview", "Memo Pro 預告"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(localized("Done", "完成")) { dismiss() }
-                        .accessibilityIdentifier("paywall.done")
-                }
-            }
-        }
-        .accessibilityIdentifier("paywall.root")
-        .task {
-            guard !didLoadUsageQuota else { return }
-            didLoadUsageQuota = true
-            usageQuotaPreview = await onLoadUsageQuotaPreview()
-        }
-    }
-
-    private var usagePreviewCard: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            HStack {
-                Text(localized("AI assists this month", "本月 AI 協助次數"))
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                Spacer()
-                Text(localized("PREVIEW", "預覽"))
-                    .font(SaveTheme.Typography.eyebrow)
-                    .foregroundStyle(SaveAtlasPalette.coral)
-            }
-
-            if let preview = usageQuotaPreview,
-               preview.meteringAvailable,
-               let usedUnits = preview.usedUnits,
-               let remainingUnits = preview.remainingUnits {
-                ProgressView(value: preview.progress)
-                    .tint(SaveAtlasPalette.coral)
-
-                Text(localized(
-                    "\(usedUnits) of \(preview.limitUnits) used · \(remainingUnits) remaining",
-                    "已使用 \(usedUnits) / \(preview.limitUnits) 次 · 剩餘 \(remainingUnits) 次"
-                ))
-                .font(SaveAtlasType.strong(14))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .accessibilityIdentifier("paywall.usageCount")
-            } else {
-                Text(localized(
-                    "Usage tracking is warming up. Your Beta access continues.",
-                    "使用量追蹤準備中；你的測試版使用權不受影響。"
-                ))
-                .font(SaveAtlasType.strong(14))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .accessibilityIdentifier("paywall.usageWarmingUp")
-            }
-
-            Text(localized(
-                "20 AI assists is a TestFlight hypothesis. This preview does not charge you or lock features.",
-                "每月 20 次 AI 協助是 TestFlight 測試假設；此預覽不會收費，也不會鎖住功能。"
-            ))
-            .font(SaveAtlasType.body(13))
-            .foregroundStyle(SaveAtlasPalette.muted)
-        }
-        .padding(SaveTheme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.coral.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
-        .accessibilityIdentifier("paywall.usagePreview")
-    }
-
-    private func proSection(title: String, tint: Color, rows: [String]) -> some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
-            Text(title)
-                .font(SaveAtlasType.strong(17))
-                .foregroundStyle(SaveAtlasPalette.forest)
-
-            ForEach(rows, id: \.self) { row in
-                HStack(spacing: SaveTheme.Spacing.sm) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(row)
-                        .font(SaveAtlasType.body(14))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                }
-            }
-        }
-        .padding(SaveTheme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.35), in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 
