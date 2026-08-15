@@ -3387,8 +3387,17 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     @MainActor
     func testExactMapCandidateSearchUsesRecoveredPlaceNameAndAddress() async {
+        final class EmptyChinaResolver: PlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                []
+            }
+        }
+
         let google = StubGooglePlacesService()
-        let service = MapCandidateSearchService(googlePlacesService: google)
+        let service = MapCandidateSearchService(
+            googlePlacesService: google,
+            placeResolverService: EmptyChinaResolver()
+        )
 
         let candidates = await service.searchCandidates(
             matching: "A Cheng Goose No. 105號 Jilin Rd Zhongshan District",
