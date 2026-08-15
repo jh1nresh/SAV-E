@@ -2848,7 +2848,14 @@ final class SocialLinkReviewCandidateService {
                     .replacingOccurrences(of: #"(?i)^(?:Title|og:title|Dianping title)\s*[:：]\s*"#, with: "", options: .regularExpression)
             }
             .map(cleanDianpingBusinessName)
-        return titleCandidates.first(where: isLikelyDianpingBusinessName)
+        if let titleCandidate = titleCandidates.first(where: isLikelyDianpingBusinessName) {
+            return titleCandidate
+        }
+        return evidenceText
+            .components(separatedBy: .newlines)
+            .map(cleanHTMLText)
+            .map(cleanDianpingBusinessName)
+            .first(where: isLikelyDianpingBusinessName)
     }
 
     private func dianpingKeywords(in evidenceText: String) -> String? {

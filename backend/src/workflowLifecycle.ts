@@ -119,6 +119,15 @@ export type DecisionTransitionPlan =
     nextAttemptNo: number;
   };
 
+export function isPendingInvestigateReplay(input: {
+  action: UserDecisionAction;
+  currentAttemptNo: number;
+  currentAnalysisAttemptNo: number;
+}): boolean {
+  return input.action === "investigate_more"
+    && input.currentAttemptNo === input.currentAnalysisAttemptNo + 1;
+}
+
 export function planDecisionTransition(input: DecisionTransitionInput): DecisionTransitionPlan {
   const existing = input.existingDecision;
   if (existing) {

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   WorkflowConflictError,
   clearingEligibility,
   decisionSettlementPolicy,
+  isPendingInvestigateReplay,
   planDecisionTransition,
   planResultTransition,
   reconcileReputation,
@@ -252,6 +254,41 @@ test("investigate-more advances the attempt while preserving the reservation", (
     nextStatus: "running",
     nextAttemptNo: 2,
   });
+});
+
+test("repeated investigate-more while the next attempt is pending is an idempotent replay", () => {
+  assert.equal(isPendingInvestigateReplay({
+    action: "investigate_more",
+    currentAttemptNo: 2,
+    currentAnalysisAttemptNo: 1,
+  }), true);
+  assert.equal(isPendingInvestigateReplay({
+    action: "investigate_more",
+    currentAttemptNo: 2,
+    currentAnalysisAttemptNo: 2,
+  }), false);
+  assert.equal(isPendingInvestigateReplay({
+    action: "needs_more_evidence",
+    currentAttemptNo: 2,
+    currentAnalysisAttemptNo: 1,
+  }), false);
+});
+
+test("pending investigate replay lookup stays owner-scoped and requires the same decision body", () => {
+  const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const replayStart = serverSource.indexOf("if (!existing\n      && decision.decisionId === undefined");
+  const replayEnd = serverSource.indexOf("const plan = planDecisionTransition", replayStart);
+  const replayBlock = serverSource.slice(replayStart, replayEnd);
+
+  assert.ok(replayStart >= 0 && replayEnd > replayStart);
+  assert.match(replayBlock, /ud\.run_id = \$1/);
+  assert.match(replayBlock, /ud\.user_id = \$2/);
+  assert.match(replayBlock, /ud\.attempt_no = \$3/);
+  assert.match(replayBlock, /ud\.candidate_id is not distinct from \$4::uuid/);
+  assert.match(replayBlock, /ud\.reason_code is not distinct from \$5/);
+  assert.match(replayBlock, /ud\.edited_payload = \$6::jsonb/);
+  assert.match(replayBlock, /ud\.reason is not distinct from \$7/);
+  assert.match(replayBlock, /created: false/);
 });
 
 test("reputation counters use only current settled outcomes", () => {
