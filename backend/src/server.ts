@@ -138,6 +138,7 @@ import {
 } from "./workflowContracts.js";
 import {
   WorkflowConflictError,
+  isPendingInvestigateReplay,
   planDecisionTransition,
   planResultTransition,
   reconcileReputation,
@@ -4905,6 +4906,54 @@ async function recordPlaceRecoveryDecision(
       throw new WorkflowConflictError("Decision id and idempotency key refer to different decisions");
     }
     const existing = existingRows[0] ? asObject(existingRows[0]) : undefined;
+    if (!existing
+      && decision.decisionId === undefined
+      && decisionInput.idempotencyKey === undefined
+      && finalPlaceId === undefined
+      && decision.finalPlace === undefined
+      && isPendingInvestigateReplay({
+        action: decision.action,
+        currentAttemptNo,
+        currentAnalysisAttemptNo: receiptAttemptNo,
+      })) {
+      const { rows: pendingReplayRows } = await client.query(
+        `select ud.*, wr.id as receipt_id
+         from user_decisions ud
+         join workflow_receipts wr on wr.decision_id = ud.id
+         where ud.run_id = $1
+           and ud.user_id = $2
+           and ud.attempt_no = $3
+           and ud.action = 'investigate_more'
+           and ud.candidate_id is not distinct from $4::uuid
+           and ud.reason_code is not distinct from $5
+           and ud.edited_payload = $6::jsonb
+           and ud.reason is not distinct from $7
+         order by ud.created_at desc, ud.id desc
+         limit 1`,
+        [
+          runId,
+          userId,
+          receiptAttemptNo,
+          candidateId ?? null,
+          decision.reasonCode ?? null,
+          decision.editedPayload,
+          decision.reason ?? null,
+        ],
+      );
+      if (pendingReplayRows[0]) {
+        const replay = asObject(pendingReplayRows[0]);
+        const { rows: receiptRows } = await client.query(
+          "select * from workflow_receipts where id = $1",
+          [replay.receipt_id],
+        );
+        await client.query("commit");
+        return {
+          created: false,
+          run: formatDates(run),
+          receipt: workflowReceiptResponse(receiptRows[0]),
+        };
+      }
+    }
     const plan = planDecisionTransition({
       currentAttemptNo,
       currentCreditSettlement: parseCreditSettlement(run.credit_settlement),

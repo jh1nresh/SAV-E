@@ -1627,6 +1627,28 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testDianpingShopShareTextCreatesOneCleanReviewCandidate() throws {
+        let service = SocialLinkReviewCandidateService(googlePlacesService: StubGooglePlacesService())
+        let sourceURL = "https://m.dianping.com/shopinfo/k31cCOw9ffiLDwzW?msource=Appshare2021&cityid=21"
+        let candidates = service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            柳州肥姨妈大骨螺蛳粉(青大店)
+            ★★★★☆ 4.2
+            ¥26/人
+            青岛大学麦岛 米粉
+            金家岭街道香港东路18号6号楼3号1层
+            """,
+            sourceURL: sourceURL
+        )
+
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidate.candidateName, "柳州肥姨妈大骨螺蛳粉(青大店)")
+        XCTAssertEqual(candidate.address, "金家岭街道香港东路18号6号楼3号1层")
+        XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Dianping feed id: k31cCOw9ffiLDwzW") == true)
+    }
+
+    @MainActor
     func testDianpingKeywordOutranksGenericTitleAndRefinementUsesAppleMaps() async throws {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
