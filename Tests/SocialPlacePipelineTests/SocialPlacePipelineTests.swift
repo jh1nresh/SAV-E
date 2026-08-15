@@ -1649,6 +1649,78 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testDianpingShopKeepsExactAmapFallbackWithoutUsingGCJ02AsMapKitCoordinates() async throws {
+        final class QingdaoAmapResolver: PlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                [PlaceProviderMatch(
+                    provider: .amap,
+                    id: "B0FFFAKEQINGDAO",
+                    name: "柳州肥姨妈大骨螺蛳粉(青大店)",
+                    address: "金家岭街道香港东路18号6号楼3号1层",
+                    latitude: 36.064812,
+                    longitude: 120.421421,
+                    rating: nil,
+                    reviewCount: nil,
+                    priceLevel: nil,
+                    types: ["餐饮服务"],
+                    coordinateSystem: .gcj02,
+                    mapURL: "https://uri.amap.com/marker?position=120.421421,36.064812&name=%E6%9F%B3%E5%B7%9E%E8%82%A5%E5%A7%A8%E5%A6%88%E5%A4%A7%E9%AA%A8%E8%9E%BA%E8%9B%B3%E7%B2%89(%E9%9D%92%E5%A4%A7%E5%BA%97)&src=save"
+                )]
+            }
+        }
+
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            placeResolverService: QingdaoAmapResolver()
+        )
+        let sourceURL = "https://m.dianping.com/shopinfo/k31cCOw9ffiLDwzW"
+        let initial = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: """
+            柳州肥姨妈大骨螺蛳粉(青大店)
+            ★★★★☆ 4.2
+            金家岭街道香港东路18号6号楼3号1层
+            """,
+            sourceURL: sourceURL
+        ).first)
+
+        let refined = await service.refineCandidate(initial)
+
+        XCTAssertEqual(refined.reviewState, "provider_map_ready")
+        XCTAssertEqual(refined.candidateName, "柳州肥姨妈大骨螺蛳粉(青大店)")
+        XCTAssertEqual(refined.address, "金家岭街道香港东路18号6号楼3号1层")
+        XCTAssertNil(refined.latitude)
+        XCTAssertNil(refined.longitude)
+        XCTAssertTrue(refined.evidence.contains("Amap POI id: B0FFFAKEQINGDAO"))
+        XCTAssertTrue(refined.evidence.contains { $0.hasPrefix("Provider map URL: https://uri.amap.com/marker?") })
+        XCTAssertEqual(refined.missingInfo, ["WGS84 coordinates for the unified Atlas map"])
+        let reviewCandidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            workflowRunId: nil,
+            name: refined.candidateName,
+            address: refined.address,
+            city: nil,
+            latitude: refined.latitude,
+            longitude: refined.longitude,
+            evidence: refined.evidence,
+            confidence: refined.confidence,
+            missingInfo: refined.missingInfo,
+            status: "pending",
+            createdAt: Date()
+        )
+        XCTAssertTrue(reviewCandidate.hasSavableLocation)
+        let place = Place.from(reviewCandidate)
+        XCTAssertEqual(SavePlaceActionResolution(candidate: reviewCandidate).kind, .confirmMapStamp)
+        XCTAssertEqual(place.coordinateSystem, .gcj02)
+        XCTAssertEqual(place.locationProvider, .amap)
+        XCTAssertEqual(place.providerPlaceId, "B0FFFAKEQINGDAO")
+        XCTAssertEqual(place.latitude, 36.064812)
+        XCTAssertEqual(place.longitude, 120.421421)
+        XCTAssertFalse(place.isMapKitMappable)
+        XCTAssertNotNil(place.providerMapDestinationURL)
+    }
+
+    @MainActor
     func testDianpingKeywordOutranksGenericTitleAndRefinementUsesAppleMaps() async throws {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
@@ -3333,6 +3405,46 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(result?.longitude, 121.5301)
         XCTAssertNil(result?.distanceMeters)
         XCTAssertTrue(result?.evidence.contains("Google Places result") == true)
+    }
+
+    @MainActor
+    func testExactChinaMapSearchUsesAmapWGS84ResultOnUnifiedMap() async {
+        final class QingdaoWGS84Resolver: PlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                [PlaceProviderMatch(
+                    provider: .amap,
+                    id: "B0FFFAKEQINGDAO",
+                    name: "柳州肥姨妈大骨螺蛳粉(青大店)",
+                    address: "金家岭街道香港东路18号6号楼3号1层",
+                    latitude: 36.064812,
+                    longitude: 120.421421,
+                    rating: nil,
+                    reviewCount: nil,
+                    priceLevel: nil,
+                    types: ["餐饮服务"],
+                    coordinateSystem: .wgs84,
+                    mapURL: "https://uri.amap.com/marker?position=120.421421,36.064812&name=qingdao&src=save"
+                )]
+            }
+        }
+        let service = MapCandidateSearchService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            placeResolverService: QingdaoWGS84Resolver()
+        )
+
+        let candidates = await service.searchCandidates(
+            matching: "柳州肥姨妈大骨螺蛳粉(青大店) 金家岭街道香港东路18号6号楼3号1层",
+            near: nil,
+            span: nil,
+            excluding: []
+        )
+
+        let result = candidates.first
+        XCTAssertEqual(result?.id, "amap:B0FFFAKEQINGDAO")
+        XCTAssertEqual(result?.sourcePlatform, .amap)
+        XCTAssertEqual(result?.latitude, 36.064812)
+        XCTAssertEqual(result?.longitude, 120.421421)
+        XCTAssertTrue(result?.evidence.contains("Coordinate system: WGS84") == true)
     }
 
     @MainActor

@@ -86,6 +86,7 @@ struct PlaceProviderMatch: Identifiable, Codable, Hashable {
     var priceLevel: Int?
     var types: [String]
     var coordinateSystem: PlaceCoordinateSystem
+    var mapURL: String? = nil
 
     var coordinateEvidenceLabel: String {
         switch coordinateSystem {

@@ -401,7 +401,7 @@ final class SocialLinkReviewCandidateService {
         // never be second-guessed by the LLM. An `unresolved_place_candidate` is
         // only a *stem*, though — and when that stem is itself prose noise
         // ("shop in LA") with no address/coordinates, it's an unreliable fragment.
-        let confirmedStates: Set<String> = ["source_recovered_candidate", "map_match_ready"]
+        let confirmedStates: Set<String> = ["source_recovered_candidate", "map_match_ready", "provider_map_ready"]
         return !candidates.isEmpty && candidates.allSatisfy { candidate in
             // A real venue stem off a caption pin ("📍Ulaman" → "Ulaman") is a
             // legitimate place anchor, not prose noise — never treat it as a
@@ -680,36 +680,38 @@ final class SocialLinkReviewCandidateService {
 
         do {
             let matches = try await placeResolverMatches(for: candidate, evidenceText: evidenceText ?? candidate.sourceText ?? "")
-            guard let match = bestAcceptableRefinement(in: matches, for: candidate) else {
-                return candidate
+            if let match = bestAcceptableRefinement(in: matches, for: candidate) {
+                var refined = candidate
+                refined.candidateName = match.name.isEmpty ? refined.candidateName : match.name
+                refined.address = match.address
+                refined.latitude = match.latitude
+                refined.longitude = match.longitude
+                refined.confidence = max(refined.confidence, 0.74)
+                refined.evidence = appendUnique(
+                    refined.evidence,
+                    [
+                        "Evidence tier: \(SocialPlaceEvidenceTier.likely.rawValue)",
+                        "\(match.provider.displayName) refined match: \(match.name)",
+                        "\(match.provider.displayName) address: \(match.address)",
+                        "\(match.coordinateEvidenceLabel): \(match.latitude), \(match.longitude)"
+                    ]
+                )
+                refined.missingInfo = SocialPlaceEvidenceScorer.missingInfo(
+                    tier: .likely,
+                    hasAddress: !match.address.isEmpty,
+                    source: "\(match.provider.displayName) refined; user must confirm before saving"
+                )
+                refined.evidenceDiagnostic = refinedDiagnosticAfterPlacesMatch(
+                    existing: refined.evidenceDiagnostic,
+                    match: match
+                )
+                refined.reviewState = "map_match_ready"
+                return refined
             }
-
-            var refined = candidate
-            refined.candidateName = match.name.isEmpty ? refined.candidateName : match.name
-            refined.address = match.address
-            refined.latitude = match.latitude
-            refined.longitude = match.longitude
-            refined.confidence = max(refined.confidence, 0.74)
-            refined.evidence = appendUnique(
-                refined.evidence,
-                [
-                    "Evidence tier: \(SocialPlaceEvidenceTier.likely.rawValue)",
-                    "\(match.provider.displayName) refined match: \(match.name)",
-                    "\(match.provider.displayName) address: \(match.address)",
-                    "\(match.coordinateEvidenceLabel): \(match.latitude), \(match.longitude)"
-                ]
-            )
-            refined.missingInfo = SocialPlaceEvidenceScorer.missingInfo(
-                tier: .likely,
-                hasAddress: !match.address.isEmpty,
-                source: "\(match.provider.displayName) refined; user must confirm before saving"
-            )
-            refined.evidenceDiagnostic = refinedDiagnosticAfterPlacesMatch(
-                existing: refined.evidenceDiagnostic,
-                match: match
-            )
-            refined.reviewState = "map_match_ready"
-            return refined
+            if let providerMatch = bestProviderBackedRefinement(in: matches, for: candidate) {
+                return providerBackedCandidate(candidate, match: providerMatch)
+            }
+            return candidate
         } catch {
             var unresolved = candidate
             let failureMessages = containsCJK(query)
@@ -2102,6 +2104,65 @@ final class SocialLinkReviewCandidateService {
             .first?.match
     }
 
+    private func bestProviderBackedRefinement(
+        in matches: [PlaceProviderMatch],
+        for candidate: PendingReviewCandidate
+    ) -> PlaceProviderMatch? {
+        var best: (match: PlaceProviderMatch, score: Double)?
+        for match in matches {
+            guard match.provider == .amap,
+                  match.coordinateSystem == .gcj02,
+                  isValidMapCoordinate(latitude: match.latitude, longitude: match.longitude),
+                  safeAmapURL(match.mapURL) != nil else {
+                continue
+            }
+            let score = refinementScore(match, for: candidate)
+            guard score >= 0.62, score > (best?.score ?? -.infinity) else { continue }
+            best = (match, score)
+        }
+        return best?.match
+    }
+
+    private func providerBackedCandidate(
+        _ candidate: PendingReviewCandidate,
+        match: PlaceProviderMatch
+    ) -> PendingReviewCandidate {
+        guard let mapURL = safeAmapURL(match.mapURL) else { return candidate }
+        var refined = candidate
+        refined.candidateName = match.name.isEmpty ? refined.candidateName : match.name
+        refined.address = match.address.isEmpty ? refined.address : match.address
+        refined.confidence = max(refined.confidence, 0.70)
+        refined.evidence = appendUnique(
+            refined.evidence,
+            [
+                "Evidence tier: \(SocialPlaceEvidenceTier.likely.rawValue)",
+                "Amap POI id: \(match.id)",
+                "Amap refined match: \(match.name)",
+                "Amap address: \(match.address)",
+                "Amap reference coordinates (GCJ-02): \(match.latitude), \(match.longitude)",
+                "Provider map URL: \(mapURL.absoluteString)"
+            ]
+        )
+        refined.missingInfo = ["WGS84 coordinates for the unified Atlas map"]
+        refined.evidenceDiagnostic = providerBackedDiagnostic(
+            existing: refined.evidenceDiagnostic,
+            match: match,
+            mapURL: mapURL
+        )
+        refined.reviewState = "provider_map_ready"
+        return refined
+    }
+
+    private func safeAmapURL(_ rawValue: String?) -> URL? {
+        guard let rawValue,
+              let url = URL(string: rawValue),
+              url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == "uri.amap.com" else {
+            return nil
+        }
+        return url
+    }
+
     private func refinementScore(_ match: PlaceProviderMatch, for candidate: PendingReviewCandidate) -> Double {
         guard match.latitude != 0 || match.longitude != 0 else { return 0 }
         var score = 0.0
@@ -3105,6 +3166,36 @@ final class SocialLinkReviewCandidateService {
             attempts: attempts,
             missingFields: appendUnique([], missing),
             nextBestClue: "Confirm this \(match.provider.displayName) match before saving it as a Map Stamp."
+        )
+    }
+
+    private func providerBackedDiagnostic(
+        existing: SocialPlaceEvidenceDiagnostic?,
+        match: PlaceProviderMatch,
+        mapURL: URL
+    ) -> SocialPlaceEvidenceDiagnostic {
+        let base = existing ?? SocialPlaceEvidenceDiagnostic(found: [], attempts: [], missingFields: [], nextBestClue: "")
+        let found = appendUnique(
+            base.found,
+            [
+                "Amap POI match: \(match.name)",
+                "Amap address: \(match.address)",
+                "Amap coordinates preserved as GCJ-02: \(match.latitude), \(match.longitude)",
+                "Amap map link: \(mapURL.absoluteString)"
+            ]
+        )
+        let attempts = appendUnique(
+            base.attempts,
+            [
+                "Checked Amap for a matching place record",
+                "Kept GCJ-02 out of the WGS84 MapKit surface"
+            ]
+        )
+        return SocialPlaceEvidenceDiagnostic(
+            found: found,
+            attempts: attempts,
+            missingFields: ["WGS84 coordinates for the unified Atlas map"],
+            nextBestClue: "Open the exact Amap place now; add a WGS84 match later to show it on the unified Atlas map."
         )
     }
 

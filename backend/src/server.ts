@@ -37,6 +37,12 @@ import {
 } from "./relatedPlaceSources.js";
 import { createCachedGooglePublicVenueVerifier } from "./googlePublicVenueVerifier.js";
 import {
+  ChinaPlaceResolverConfigurationError,
+  ChinaPlaceResolverInputError,
+  normalizeChinaPlaceResolveRequest,
+  resolveChinaPlace,
+} from "./chinaPlaceResolver.js";
+import {
   executeRelatedPlaceSourcesEndpoint,
   hasAccountBearerAuthorization,
   RelatedPlaceSourcesOwnerRateLimiter,
@@ -457,6 +463,10 @@ const placeFields = [
   "note",
   "source_url",
   "source_platform",
+  "coordinate_system",
+  "location_provider",
+  "provider_place_id",
+  "provider_map_url",
   "source_image_url",
   "business_photo_urls",
   "extracted_dishes",
@@ -979,6 +989,10 @@ createServer(async (request, response) => {
     const userId = await resolveUserId(request);
     await ensureProfile(userId);
 
+    if (!isV0 && resource === "place-resolve") {
+      return await handlePlaceResolve(request, response);
+    }
+
     if (isV0 && resource === "user-channels") {
       return await handleUserChannels(request, response, id, userId);
     }
@@ -1085,6 +1099,30 @@ createServer(async (request, response) => {
     console.log(`[sendblue] sllr recurring notifier every ${Math.round(SLLR_NOTIFY_INTERVAL_MS / 1000)}s`);
   }
 });
+
+async function handlePlaceResolve(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported place resolver route" }, 405);
+  }
+  response.setHeader("Cache-Control", "private, no-store");
+  try {
+    const body = normalizeChinaPlaceResolveRequest(await readJson(request, 4_096));
+    const result = await resolveChinaPlace(body, {
+      usageAuthorized: process.env.AMAP_USAGE_AUTHORIZED === "true",
+      internationalApiKey: process.env.AMAP_INTERNATIONAL_WEB_SERVICE_KEY,
+      domesticApiKey: process.env.AMAP_WEB_SERVICE_KEY,
+    });
+    return sendJson(response, result);
+  } catch (error) {
+    if (error instanceof ChinaPlaceResolverInputError) {
+      return sendJson(response, { error: error.message }, 400);
+    }
+    if (error instanceof ChinaPlaceResolverConfigurationError) {
+      return sendJson(response, { error: error.message }, 503);
+    }
+    throw error;
+  }
+}
 
 async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
   const normalized = normalizeChannelUserId(fromNumber);
@@ -1319,6 +1357,8 @@ async function handlePlaces(
 
   if (request.method === "POST" && !placeId) {
     const rawBody = await readJson(request);
+    const providerFieldError = providerCoordinateFieldError(rawBody);
+    if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
     let friendShareCode: string | undefined;
     try {
       friendShareCode = friendShareCodeFromPlaceCreate(rawBody);
@@ -1403,7 +1443,10 @@ async function handlePlaces(
   }
 
   if (request.method === "PATCH" && placeId) {
-    const body = writableFields(await readJson(request), ["id", "user_id", "created_at", "updated_at"]);
+    const rawBody = await readJson(request);
+    const providerFieldError = providerCoordinateFieldError(rawBody);
+    if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+    const body = writableFields(rawBody, ["id", "user_id", "created_at", "updated_at"]);
     const update = buildUpdate("places", body, placeFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
@@ -1426,6 +1469,36 @@ async function handlePlaces(
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+function providerCoordinateFieldError(body: JsonBody): string | undefined {
+  const coordinateSystem = body.coordinate_system;
+  const provider = body.location_provider;
+  const providerPlaceId = body.provider_place_id;
+  const providerMapURL = body.provider_map_url;
+
+  if (coordinateSystem !== undefined && !["WGS84", "GCJ-02", "BD-09"].includes(String(coordinateSystem))) {
+    return "Unsupported coordinate_system";
+  }
+  if (provider !== undefined && !["apple_maps", "google_places", "amap", "baidu"].includes(String(provider))) {
+    return "Unsupported location_provider";
+  }
+  if (providerPlaceId !== undefined && (typeof providerPlaceId !== "string" || providerPlaceId.length > 255)) {
+    return "Invalid provider_place_id";
+  }
+  if (providerMapURL !== undefined) {
+    if (typeof providerMapURL !== "string" || providerMapURL.length > 1_000) return "Invalid provider_map_url";
+    try {
+      const url = new URL(providerMapURL);
+      if (url.protocol !== "https:" || url.hostname !== "uri.amap.com") return "Invalid provider_map_url";
+    } catch {
+      return "Invalid provider_map_url";
+    }
+  }
+  if (coordinateSystem === "GCJ-02" && (provider !== "amap" || !providerPlaceId || !providerMapURL)) {
+    return "GCJ-02 places require an Amap provider reference";
+  }
+  return undefined;
 }
 
 async function handlePlaceRelatedSources(

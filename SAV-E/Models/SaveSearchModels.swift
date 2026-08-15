@@ -262,7 +262,7 @@ struct SavePlaceActionResolution: Hashable {
     }
 
     init(candidate: PlaceReviewCandidate) {
-        self.init(kind: candidate.hasReliableCoordinates ? .confirmMapStamp : .runRecovery)
+        self.init(kind: candidate.hasSavableLocation ? .confirmMapStamp : .runRecovery)
     }
 
     init(place: Place) {
