@@ -1591,6 +1591,10 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.rating { payload["rating"] = value }
         if let value = finalPlace.note { payload["note"] = value }
         if let value = finalPlace.sourceUrl { payload["source_url"] = value }
+        if let value = finalPlace.coordinateSystem { payload["coordinate_system"] = value.rawValue }
+        if let value = finalPlace.locationProvider { payload["location_provider"] = value.rawValue }
+        if let value = finalPlace.providerPlaceId { payload["provider_place_id"] = value }
+        if let value = finalPlace.providerMapUrl { payload["provider_map_url"] = value }
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
@@ -1678,6 +1682,10 @@ private struct PlaceRow: Codable {
     let note: String?
     let source_url: String?
     let source_platform: String
+    let coordinate_system: String?
+    let location_provider: String?
+    let provider_place_id: String?
+    let provider_map_url: String?
     let source_image_url: String?
     let business_photo_urls: [String]?
     let extracted_dishes: [String]?
@@ -1705,6 +1713,10 @@ private struct PlaceRow: Codable {
             note: note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
+            coordinateSystem: coordinate_system.flatMap(PlaceCoordinateSystem.init(rawValue:)),
+            locationProvider: location_provider.flatMap(PlaceMatchProvider.init(rawValue:)),
+            providerPlaceId: provider_place_id,
+            providerMapUrl: provider_map_url,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
             extractedDishes: extracted_dishes,
@@ -1734,6 +1746,10 @@ private struct PlaceRow: Codable {
             note: place.note,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
+            coordinate_system: place.coordinateSystem?.rawValue,
+            location_provider: place.locationProvider?.rawValue,
+            provider_place_id: place.providerPlaceId,
+            provider_map_url: place.providerMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
             business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,

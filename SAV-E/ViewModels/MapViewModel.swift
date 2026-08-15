@@ -72,9 +72,16 @@ struct MapCandidateSearchService: MapCandidateSearchServiceProtocol {
         ],
     ]
     private let googlePlacesService: GooglePlacesServiceProtocol
+    private let placeResolverService: PlaceResolverServiceProtocol
 
-    init(googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared) {
+    init(
+        googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
+        placeResolverService: PlaceResolverServiceProtocol? = nil
+    ) {
         self.googlePlacesService = googlePlacesService
+        self.placeResolverService = placeResolverService ?? PlaceResolverService(
+            googlePlacesService: googlePlacesService
+        )
     }
 
     func searchCandidates(
@@ -112,6 +119,13 @@ struct MapCandidateSearchService: MapCandidateSearchServiceProtocol {
         guard !trimmed.isEmpty else { return [] }
 
         let seed = SearchSeed(query: trimmed, category: PlaceCategory.inferred(from: trimmed))
+        if Self.containsCJK(trimmed) {
+            let providerResults = await chinaProviderSearch(seed: seed, near: coordinate)
+            let usableProviderResults = providerResults.filter { !isAlreadySaved($0, in: savedPlaces) }
+            if !usableProviderResults.isEmpty {
+                return Array(usableProviderResults.prefix(12))
+            }
+        }
         let googleResults = await googleSearch(seed: seed, near: coordinate)
         let appleResults: [SaveMapCandidate]
         if googleResults.isEmpty {
@@ -163,6 +177,54 @@ struct MapCandidateSearchService: MapCandidateSearchServiceProtocol {
         } catch {
             return []
         }
+    }
+
+    private func chinaProviderSearch(seed: SearchSeed, near coordinate: CLLocationCoordinate2D?) async -> [SaveMapCandidate] {
+        do {
+            return try await placeResolverService.searchPlace(query: seed.query, near: coordinate)
+                .filter { $0.coordinateSystem == .wgs84 }
+                .map { makeCandidate(from: $0, seed: seed, searchCenter: coordinate) }
+        } catch {
+            return []
+        }
+    }
+
+    private func makeCandidate(
+        from match: PlaceProviderMatch,
+        seed: SearchSeed,
+        searchCenter: CLLocationCoordinate2D?
+    ) -> SaveMapCandidate {
+        let coordinate = CLLocationCoordinate2D(latitude: match.latitude, longitude: match.longitude)
+        let distance = searchCenter.map { distanceMeters(from: $0, to: coordinate) }
+        var evidence = [
+            "\(match.provider.displayName) result",
+            "Coordinate system: \(match.coordinateSystem.rawValue)",
+            "Search: \(seed.query)"
+        ]
+        if let distance {
+            evidence.append("Distance: \(distanceLabel(distance))")
+        }
+        let sourcePlatform: SourcePlatform? = switch match.provider {
+        case .amap: .amap
+        case .appleMaps: .appleMaps
+        case .googlePlaces: .googleMaps
+        case .baidu: .baidu
+        }
+        return SaveMapCandidate(
+            id: "\(match.provider.rawValue):\(match.id)",
+            title: match.name,
+            subtitle: match.address.isEmpty ? "China place" : match.address,
+            latitude: match.latitude,
+            longitude: match.longitude,
+            category: PlaceCategory.from(googleTypes: match.types) ??
+                PlaceCategory.inferred(from: "\(match.name) \(match.address)", fallback: seed.category),
+            rating: match.rating,
+            reviewCount: match.reviewCount,
+            sourceURL: match.mapURL,
+            sourcePlatform: sourcePlatform,
+            distanceMeters: distance,
+            evidence: evidence
+        )
     }
 
     private func makeCandidate(from item: MKMapItem, seed: SearchSeed, searchCenter: CLLocationCoordinate2D?) -> SaveMapCandidate? {
@@ -320,6 +382,13 @@ struct MapCandidateSearchService: MapCandidateSearchServiceProtocol {
             return String(format: "%.1f km away", meters / 1_000)
         }
         return "\(Int(meters.rounded())) m away"
+    }
+
+    private static func containsCJK(_ value: String) -> Bool {
+        value.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value)) ||
+                (0x3400...0x4DBF).contains(Int(scalar.value))
+        }
     }
 }
 
@@ -504,7 +573,7 @@ final class MapViewModel: ObservableObject {
 
     func placesForRoute(placeIDs: [UUID]) -> [Place] {
         let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
-        return placeIDs.compactMap { placeByID[$0] }
+        return placeIDs.compactMap { placeByID[$0] }.filter(\.isMapKitMappable)
     }
 
     var routePolyline: MKPolyline? {
@@ -956,7 +1025,7 @@ final class MapViewModel: ObservableObject {
         }
         let place = Place.from(candidate, refinedMatch: refinedMatch, nameOverride: nameOverride)
 
-        guard place.latitude != 0 || place.longitude != 0 else {
+        guard place.hasValidCoordinate else {
             throw ReviewCandidateError.needsReliableCoordinates
         }
 
@@ -1530,7 +1599,7 @@ final class MapViewModel: ObservableObject {
     }
 
     private func refinedMatchIfNeeded(for candidate: PlaceReviewCandidate) async throws -> GooglePlaceMatch? {
-        guard !candidate.hasReliableCoordinates else { return nil }
+        guard !candidate.hasReliableCoordinates, candidate.providerLocation == nil else { return nil }
 
         let query = candidate.refinementQuery
         guard !query.isEmpty else {
@@ -1726,7 +1795,7 @@ final class MapViewModel: ObservableObject {
         selectedSocialPlace = nil
         selectedMapCandidate = nil
         selectedReviewCandidate = nil
-        if place.latitude != 0 || place.longitude != 0 {
+        if place.isMapKitMappable {
             cameraPosition = .region(MKCoordinateRegion(
                 center: place.coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
@@ -2073,10 +2142,10 @@ final class MapViewModel: ObservableObject {
     }
 
     private func mapCandidateSearchCenter() -> CLLocationCoordinate2D {
-        if let selectedPlace, selectedPlace.latitude != 0 || selectedPlace.longitude != 0 {
+        if let selectedPlace, selectedPlace.isMapKitMappable {
             return selectedPlace.coordinate
         }
-        if let firstPlace = places.first(where: { $0.latitude != 0 || $0.longitude != 0 }) {
+        if let firstPlace = places.first(where: \.isMapKitMappable) {
             return firstPlace.coordinate
         }
         return CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)

@@ -2,6 +2,7 @@ import SwiftUI
 import MapKit
 
 struct NavigationCardComponent: View {
+    @Environment(\.openURL) private var openURL
     let place: Place
     let mode: SaveAIResponse.TransportMode
 
@@ -90,6 +91,10 @@ struct NavigationCardComponent: View {
     }
 
     private func openInMaps() {
+        if let providerURL = place.providerMapDestinationURL {
+            openURL(providerURL)
+            return
+        }
         let navMode: NavigationService.Mode = switch mode {
         case .walking: .walking
         case .transit: .transit

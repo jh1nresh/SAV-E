@@ -2,6 +2,7 @@ import SwiftUI
 import MapKit
 
 struct MapView: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var viewModel: MapViewModel
     let shouldFocusOnUserLocationOnLaunch: Bool
     let displayedPlaces: [Place]?
@@ -31,7 +32,7 @@ struct MapView: View {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
                     UserAnnotation()
 
-                    ForEach(displayedPlaces ?? viewModel.filteredPlaces) { place in
+                    ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(\.isMapKitMappable)) { place in
                         Annotation("", coordinate: place.coordinate) {
                             PlaceMapPin(
                                 place: place,
@@ -145,6 +146,33 @@ struct MapView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .accessibilityIdentifier("map.currentLocation")
 
+                if let providerPlace = providerBackedPlaces.first {
+                    Button {
+                        viewModel.selectPlace(providerPlace)
+                    } label: {
+                        Label(
+                            languageSettings.localized(
+                                english: providerBackedPlaces.count == 1
+                                    ? "1 saved Amap place"
+                                    : "\(providerBackedPlaces.count) saved Amap places",
+                                traditionalChinese: "已保存 \(providerBackedPlaces.count) 個高德地點"
+                            ),
+                            systemImage: "map.fill"
+                        )
+                        .font(SaveAtlasType.strong(11))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(SaveAtlasPalette.paper.opacity(0.96), in: Capsule())
+                        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 16)
+                    .padding(.bottom, 18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .accessibilityIdentifier("map.providerBackedPlaces")
+                }
+
                 if let moment = viewModel.stampMoment {
                     VStack {
                         SaveStampMomentView(moment: moment)
@@ -210,6 +238,12 @@ struct MapView: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    private var providerBackedPlaces: [Place] {
+        (displayedPlaces ?? viewModel.filteredPlaces).filter {
+            !$0.isMapKitMappable && $0.providerMapDestinationURL != nil
+        }
     }
 }
 

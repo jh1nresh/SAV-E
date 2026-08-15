@@ -1885,7 +1885,7 @@ private struct SelectedPlaceCapsule: View {
                 languageSettings.localized(english: "Social signal", traditionalChinese: "社群訊號")
             ].joined(separator: " · ")
         case .reviewCandidate(let candidate):
-            if candidate.hasReliableCoordinates {
+            if candidate.hasSavableLocation {
                 let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
                 return address.isEmpty
                     ? languageSettings.localized(english: "Likely match", traditionalChinese: "可能符合")
@@ -1911,7 +1911,7 @@ private func localizedEyebrow(for item: MapDetailDrawerItem, language: AppLangua
     case .savedPlace:
         return language.localized(english: "Map Stamp · From your SAV-E", traditionalChinese: "地圖章 · 來自你的 SAV-E")
     case .reviewCandidate(let candidate):
-        return candidate.hasReliableCoordinates
+        return candidate.hasSavableLocation
             ? language.localized(english: "Review Candidate · Check before saving", traditionalChinese: "待確認地點 · 保存前請先檢查")
             : language.localized(english: "Clue · Needs exact place", traditionalChinese: "線索 · 需要精確地點")
     case .unsavedCandidate, .socialPlace:
@@ -2310,10 +2310,16 @@ private struct SavedMapDetailDrawerContent: View {
                 }
 
                 Button {
-                    NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name)
+                    if let providerURL = detailPlace.providerMapDestinationURL {
+                        openURL(providerURL)
+                    } else {
+                        NavigationService.navigate(to: detailPlace.coordinate, name: detailPlace.name)
+                    }
                 } label: {
                     PlaceDetailActionLabel(
-                        title: languageSettings.localized(english: "Maps", traditionalChinese: "地圖"),
+                        title: detailPlace.providerMapDestinationURL == nil
+                            ? languageSettings.localized(english: "Maps", traditionalChinese: "地圖")
+                            : languageSettings.localized(english: "Amap", traditionalChinese: "高德地圖"),
                         systemImage: "map.fill",
                         fill: SaveAtlasPalette.paper
                     )
@@ -3117,7 +3123,7 @@ private struct ReviewCandidateDetailCard: View {
 
     var body: some View {
         PostcardDetailPaper(
-            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral,
+            tint: candidate.hasSavableLocation ? SaveAtlasPalette.sky : SaveAtlasPalette.coral,
             accessibilityIdentifier: "drawer.review.postcardBody"
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -3228,13 +3234,13 @@ private struct ReviewCandidateDetailCard: View {
         if candidate.status == "source_only" {
             return languageSettings.localized(english: "Source-only clue · Not on your map", traditionalChinese: "只留來源的線索 · 不會出現在地圖")
         }
-        return candidate.hasReliableCoordinates
+        return candidate.hasSavableLocation
             ? languageSettings.localized(english: "Review Candidate · Check before saving", traditionalChinese: "待確認地點 · 保存前請先檢查")
             : languageSettings.localized(english: "Clue · Needs exact place", traditionalChinese: "線索 · 需要精確地點")
     }
 
     private var presentationContextLine: String {
-        if candidate.hasReliableCoordinates {
+        if candidate.hasSavableLocation {
             let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
             return address.isEmpty
                 ? languageSettings.localized(english: "Likely match", traditionalChinese: "可能符合")
@@ -3245,7 +3251,7 @@ private struct ReviewCandidateDetailCard: View {
     }
 
     private var presentationTrustLine: String {
-        candidate.hasReliableCoordinates
+        candidate.hasSavableLocation
             ? languageSettings.localized(
                 english: "SAV-E found a likely place. Review the evidence before stamping it to your map.",
                 traditionalChinese: "SAV-E 找到可能的地點。存成地圖章前，請先確認證據。"
@@ -3603,9 +3609,13 @@ private struct ReviewCandidateContextHero: View {
     }
 
     private var statusText: String {
-        candidate.hasReliableCoordinates
-            ? languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
-            : languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點")
+        if candidate.hasReliableCoordinates {
+            return languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
+        }
+        if candidate.hasProviderMap {
+            return languageSettings.localized(english: "Amap ready", traditionalChinese: "高德地點已就緒")
+        }
+        return languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點")
     }
 
     private var confidenceText: String? {
@@ -3666,8 +3676,8 @@ private struct ReviewCandidateNextStepPanel: View {
     var body: some View {
         PostcardReceiptSection(
             title: languageSettings.localized(english: "Next step", traditionalChinese: "下一步"),
-            systemImage: candidate.hasReliableCoordinates ? "checkmark.seal.fill" : "sparkle.magnifyingglass",
-            tint: candidate.hasReliableCoordinates ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
+            systemImage: candidate.hasReliableCoordinates || candidate.hasProviderMap ? "checkmark.seal.fill" : "sparkle.magnifyingglass",
+            tint: candidate.hasReliableCoordinates || candidate.hasProviderMap ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
         ) {
             Text(nextStepText)
                 .font(SaveAtlasType.strong(13))
@@ -3678,11 +3688,11 @@ private struct ReviewCandidateNextStepPanel: View {
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let sourceURL {
+            if let actionURL {
                 Button {
-                    openURL(sourceURL)
+                    openURL(actionURL)
                 } label: {
-                    Label(languageSettings.localized(english: "Open source", traditionalChinese: "打開來源"), systemImage: "link")
+                    Label(actionTitle, systemImage: candidate.hasProviderMap ? "map.fill" : "link")
                         .font(SaveAtlasType.strong(11))
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .padding(.horizontal, 9)
@@ -3702,6 +3712,12 @@ private struct ReviewCandidateNextStepPanel: View {
             return languageSettings.localized(
                 english: "Check the name/address. If it is correct, tap Save Map Stamp.",
                 traditionalChinese: "確認名稱和地址正確後，點「存成地圖章」。"
+            )
+        }
+        if candidate.hasProviderMap {
+            return languageSettings.localized(
+                english: "Open the exact Amap place to verify it, then confirm to save this Map Stamp.",
+                traditionalChinese: "先開啟精確的高德地點確認，正確後即可確認並保存這個地圖章。"
             )
         }
         return languageSettings.localized(
@@ -3724,6 +3740,12 @@ private struct ReviewCandidateNextStepPanel: View {
                 traditionalChinese: "SAV-E 找到「\(candidate.name)」的可能地圖結果。"
             )
         }
+        if candidate.hasProviderMap {
+            return languageSettings.localized(
+                english: "The exact Amap location is ready to save without being mislabeled as an Apple Map pin.",
+                traditionalChinese: "精確高德位置已可保存；SAV-E 不會把它錯標成 Apple 地圖座標。"
+            )
+        }
 
         let missing = candidate.missingInfo
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -3744,6 +3766,17 @@ private struct ReviewCandidateNextStepPanel: View {
 
     private var sourceURL: URL? {
         candidate.evidence.compactMap(Self.firstURL(in:)).first
+    }
+
+    private var actionURL: URL? {
+        candidate.providerMapURL ?? sourceURL
+    }
+
+    private var actionTitle: String {
+        if candidate.hasProviderMap {
+            return languageSettings.localized(english: "Open in Amap", traditionalChinese: "用高德地圖開啟")
+        }
+        return languageSettings.localized(english: "Open source", traditionalChinese: "打開來源")
     }
 
     private static func firstURL(in line: String) -> URL? {

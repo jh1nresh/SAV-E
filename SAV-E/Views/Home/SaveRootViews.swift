@@ -1024,12 +1024,12 @@ private struct SaveAtlasMapPreview: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if let anchor = places.first {
+            if let anchor = places.first(where: \.isMapKitMappable) {
                 Map(
                     initialPosition: .region(region(centeredOn: anchor)),
                     interactionModes: []
                 ) {
-                    ForEach(visiblePlaces(around: anchor)) { place in
+                    ForEach(visiblePlaces(around: anchor).filter(\.isMapKitMappable)) { place in
                         Annotation("", coordinate: place.coordinate, anchor: .bottom) {
                             VStack(spacing: 3) {
                                 Image(systemName: "star.fill")

@@ -16,6 +16,10 @@ struct Place: Identifiable, Codable, Hashable {
     var note: String?
     var sourceUrl: String?
     var sourcePlatform: SourcePlatform
+    var coordinateSystem: PlaceCoordinateSystem? = nil
+    var locationProvider: PlaceMatchProvider? = nil
+    var providerPlaceId: String? = nil
+    var providerMapUrl: String? = nil
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]? = nil
     var extractedDishes: [String]?
@@ -45,6 +49,30 @@ struct Place: Identifiable, Codable, Hashable {
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var resolvedCoordinateSystem: PlaceCoordinateSystem {
+        coordinateSystem ?? .wgs84
+    }
+
+    var hasValidCoordinate: Bool {
+        latitude.isFinite && longitude.isFinite &&
+            (-90...90).contains(latitude) && (-180...180).contains(longitude) &&
+            (latitude != 0 || longitude != 0)
+    }
+
+    var isMapKitMappable: Bool {
+        hasValidCoordinate && resolvedCoordinateSystem == .wgs84
+    }
+
+    var providerMapDestinationURL: URL? {
+        guard let rawValue = providerMapUrl,
+              let url = URL(string: rawValue),
+              url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == "uri.amap.com" else {
+            return nil
+        }
+        return url
     }
 
     var sourceEvidence: [String] {
@@ -132,6 +160,7 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     var appleMapsURL: URL? {
+        guard isMapKitMappable else { return nil }
         var components = URLComponents(string: "https://maps.apple.com/")
         components?.queryItems = [
             URLQueryItem(name: "q", value: name),
@@ -141,6 +170,7 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     func matchesMapFeature(title: String, coordinate: CLLocationCoordinate2D) -> Bool {
+        guard isMapKitMappable else { return false }
         let distance = CLLocation(latitude: latitude, longitude: longitude)
             .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
         guard distance < 120 else { return false }

@@ -435,6 +435,10 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         return latitude != 0 || longitude != 0
     }
 
+    var hasSavableLocation: Bool {
+        hasReliableCoordinates || providerLocation != nil
+    }
+
     var refinementQuery: String {
         let directParts = [name, address, city]
             .compactMap(Self.nonEmptyTrimmed)
@@ -555,6 +559,66 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         ]
         return components?.url
     }
+
+    var providerMapURL: URL? {
+        for line in evidence {
+            let prefix = "Provider map URL:"
+            guard let range = line.range(of: prefix, options: .caseInsensitive) else { continue }
+            let rawValue = line[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: rawValue),
+                  url.scheme?.lowercased() == "https",
+                  url.host?.lowercased() == "uri.amap.com" else {
+                continue
+            }
+            return url
+        }
+        return nil
+    }
+
+    var hasProviderMap: Bool {
+        providerMapURL != nil
+    }
+
+    var providerLocation: ProviderPlaceLocation? {
+        guard let mapURL = providerMapURL,
+              let providerID = evidence.compactMap({ Self.value(after: "Amap POI id:", in: $0) }).first,
+              let rawCoordinate = evidence.compactMap({
+                  Self.value(after: "Amap reference coordinates (GCJ-02):", in: $0)
+              }).first else {
+            return nil
+        }
+        let components = rawCoordinate.split(separator: ",", maxSplits: 1).map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard components.count == 2,
+              let latitude = Double(components[0]),
+              let longitude = Double(components[1]),
+              latitude.isFinite,
+              longitude.isFinite,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude),
+              latitude != 0 || longitude != 0 else {
+            return nil
+        }
+        return ProviderPlaceLocation(
+            provider: .amap,
+            providerPlaceID: providerID,
+            coordinateSystem: .gcj02,
+            latitude: latitude,
+            longitude: longitude,
+            mapURL: mapURL
+        )
+    }
+
+}
+
+struct ProviderPlaceLocation: Hashable {
+    var provider: PlaceMatchProvider
+    var providerPlaceID: String
+    var coordinateSystem: PlaceCoordinateSystem
+    var latitude: Double
+    var longitude: Double
+    var mapURL: URL
 }
 
 final class PendingPlaceImportService {
@@ -682,12 +746,18 @@ extension Place {
         }
 
         let sourceURL = sourceURL(from: candidate.evidence)
+        let providerLocation = candidate.providerLocation
+        let latitude = refinedMatch?.latitude ?? candidate.latitude ?? providerLocation?.latitude ?? 0
+        let longitude = refinedMatch?.longitude ?? candidate.longitude ?? providerLocation?.longitude ?? 0
+        let coordinateSystem: PlaceCoordinateSystem = refinedMatch != nil || candidate.hasReliableCoordinates
+            ? .wgs84
+            : (providerLocation?.coordinateSystem ?? .wgs84)
         return Place(
             id: UUID(),
             name: displayName,
             address: refinedMatch?.address ?? candidate.address,
-            latitude: refinedMatch?.latitude ?? candidate.latitude ?? 0,
-            longitude: refinedMatch?.longitude ?? candidate.longitude ?? 0,
+            latitude: latitude,
+            longitude: longitude,
             googlePlaceId: refinedMatch?.id,
             category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ??
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
@@ -696,6 +766,10 @@ extension Place {
             note: candidate.evidence.joined(separator: "\n"),
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
+            coordinateSystem: coordinateSystem,
+            locationProvider: providerLocation?.provider,
+            providerPlaceId: providerLocation?.providerPlaceID,
+            providerMapUrl: providerLocation?.mapURL.absoluteString,
             sourceImageUrl: nil,
             extractedDishes: candidate.recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
@@ -730,8 +804,16 @@ extension Place {
     }
 
     func matches(_ other: Place) -> Bool {
-        // Strongest signal: a shared Google Place ID is the same venue, no matter how
-        // each copy was captured (social link vs. map pin vs. confirmed candidate).
+        if let lhsProvider = locationProvider,
+           lhsProvider == other.locationProvider,
+           let lhsID = providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !lhsID.isEmpty,
+           let rhsID = other.providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           lhsID == rhsID {
+            return true
+        }
+        // A shared Google Place ID is the same venue, no matter how each copy was
+        // captured (social link vs. map pin vs. confirmed candidate).
         if let lhsID = googlePlaceId?.trimmingCharacters(in: .whitespacesAndNewlines), !lhsID.isEmpty,
            let rhsID = other.googlePlaceId?.trimmingCharacters(in: .whitespacesAndNewlines), lhsID == rhsID {
             return true
