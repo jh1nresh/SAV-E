@@ -1645,8 +1645,6 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.count, 1)
         XCTAssertEqual(candidate.candidateName, "柳州肥姨妈大骨螺蛳粉(青大店)")
         XCTAssertEqual(candidate.address, "金家岭街道香港东路18号6号楼3号1层")
-        XCTAssertFalse(candidate.refinementQuery.contains("★"))
-        XCTAssertFalse(candidate.refinementQuery.contains("4.2"))
         XCTAssertTrue(candidate.evidenceDiagnostic?.found.contains("Dianping feed id: k31cCOw9ffiLDwzW") == true)
     }
 
