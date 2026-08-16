@@ -2051,6 +2051,7 @@ final class SocialLinkReviewCandidateService {
             cityAddress(in: evidenceText),
             chineseCityClue(in: evidenceText)
         ]
+        let sourceRegionClue = requiresMainlandChinaMatch(candidate) ? "中国" : nil
         let categoryClue = category(from: "\(candidate.category) \(evidenceText)")
         guard !candidate.candidateName.isEmpty,
               !SocialPlaceEvidenceScorer.isRejectedTitle(candidate.candidateName) else {
@@ -2063,11 +2064,14 @@ final class SocialLinkReviewCandidateService {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        let seeds: [[String?]] = [
+        var seeds: [[String?]] = [
             [candidate.candidateName, candidate.address, cityText, categoryClue],
             [candidate.candidateName, cityText, categoryClue],
             [candidate.candidateName, candidate.address]
         ]
+        if sourceRegionClue != nil {
+            seeds.insert([candidate.candidateName, candidate.address, cityText, sourceRegionClue], at: 0)
+        }
         var seen = Set<String>()
         return seeds.compactMap { parts in
             let query = parts
@@ -2097,9 +2101,10 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func bestAcceptableRefinement(in matches: [PlaceProviderMatch], for candidate: PendingReviewCandidate) -> PlaceProviderMatch? {
-        matches
+        let minimumScore = requiresMainlandChinaMatch(candidate) ? 0.35 : 0.62
+        return matches
             .map { (match: $0, score: refinementScore($0, for: candidate)) }
-            .filter { $0.score >= 0.62 && isAcceptableRefinement($0.match, for: candidate) }
+            .filter { $0.score >= minimumScore && isAcceptableRefinement($0.match, for: candidate) }
             .sorted { $0.score > $1.score }
             .first?.match
     }
@@ -2109,6 +2114,7 @@ final class SocialLinkReviewCandidateService {
         for candidate: PendingReviewCandidate
     ) -> PlaceProviderMatch? {
         var best: (match: PlaceProviderMatch, score: Double)?
+        let minimumScore = requiresMainlandChinaMatch(candidate) ? 0.35 : 0.62
         for match in matches {
             guard match.provider == .amap,
                   match.coordinateSystem == .gcj02,
@@ -2117,7 +2123,11 @@ final class SocialLinkReviewCandidateService {
                 continue
             }
             let score = refinementScore(match, for: candidate)
-            guard score >= 0.62, score > (best?.score ?? -.infinity) else { continue }
+            // Dianping sometimes exposes a translated full name while Amap keeps
+            // a shorter local listing (for example, "Ciao! Grill, Gyros & Pizza
+            // Bar" versus "CIAO grill&pizza"). Keep a meaningful name-overlap
+            // floor, but do not require an exact translated-title match.
+            guard score >= minimumScore, score > (best?.score ?? -.infinity) else { continue }
             best = (match, score)
         }
         return best?.match
@@ -2202,6 +2212,10 @@ final class SocialLinkReviewCandidateService {
               isValidMapCoordinate(latitude: match.latitude, longitude: match.longitude) else {
             return false
         }
+        if requiresMainlandChinaMatch(candidate),
+           !isMainlandChinaCoordinate(latitude: match.latitude, longitude: match.longitude) {
+            return false
+        }
 
         // Refinement still requires similarity; address evidence may support a
         // match, but it must not accept the first non-zero Places result.
@@ -2240,6 +2254,22 @@ final class SocialLinkReviewCandidateService {
         guard !candidateAddressTokens.isEmpty else { return false }
         let addressOverlap = candidateAddressTokens.intersection(matchAddressTokens).count
         return Double(addressOverlap) / Double(candidateAddressTokens.count) >= addressTokenOverlapThreshold
+    }
+
+    private func requiresMainlandChinaMatch(_ candidate: PendingReviewCandidate) -> Bool {
+        guard let sourceURL = candidate.sourceURL,
+              let components = URLComponents(string: sourceURL),
+              let host = components.host?.lowercased(),
+              host.matchesSocialDomain("dianping.com") else {
+            return false
+        }
+        return components.queryItems?.contains {
+            $0.name.lowercased() == "isoversea" && $0.value == "0"
+        } == true
+    }
+
+    private func isMainlandChinaCoordinate(latitude: Double, longitude: Double) -> Bool {
+        (18...54).contains(latitude) && (73...135).contains(longitude)
     }
 
     private func normalizedName(_ value: String) -> String {

@@ -1721,6 +1721,107 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testDomesticDianpingLatinNameRejectsOverseasMapMatchAndUsesAmapListing() async throws {
+        final class CiaoResolver: PlaceResolverServiceProtocol {
+            var queries: [String] = []
+
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                queries.append(query)
+                return [
+                    PlaceProviderMatch(
+                        provider: .appleMaps,
+                        id: "wrong-hungary",
+                        name: "Ciao! Grill, Gyros & Pizza Bar",
+                        address: "Vámospércs, Debreceni u. 1/a, 4287 Hungary",
+                        latitude: 47.5251,
+                        longitude: 21.8976,
+                        rating: nil,
+                        reviewCount: nil,
+                        priceLevel: nil,
+                        types: ["restaurant"],
+                        coordinateSystem: .wgs84
+                    ),
+                    PlaceProviderMatch(
+                        provider: .amap,
+                        id: "B0IUASZ83J",
+                        name: "CIAO grill&pizza",
+                        address: "漳州二路35号(麦凯乐西北门对面)",
+                        latitude: 36.066718,
+                        longitude: 120.402122,
+                        rating: nil,
+                        reviewCount: nil,
+                        priceLevel: nil,
+                        types: ["餐饮服务"],
+                        coordinateSystem: .gcj02,
+                        mapURL: "https://uri.amap.com/marker?position=120.402122,36.066718&name=CIAO%20grill%26pizza&src=save"
+                    )
+                ]
+            }
+        }
+
+        let resolver = CiaoResolver()
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            placeResolverService: resolver
+        )
+        let sourceURL = "https://m.dianping.com/shopinfo/l7QzNXEwpr2F1OeH?msource=Appshare2021&shoptype=10&shopcategoryid=116&cityid=21&isoversea=0"
+        let initial = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "Ciao! Grill, Gyros & Pizza Bar",
+            sourceURL: sourceURL
+        ).first)
+
+        let refined = await service.refineCandidate(initial)
+
+        XCTAssertTrue(resolver.queries.contains { $0.contains("中国") })
+        XCTAssertEqual(refined.reviewState, "provider_map_ready")
+        XCTAssertEqual(refined.candidateName, "CIAO grill&pizza")
+        XCTAssertEqual(refined.address, "漳州二路35号(麦凯乐西北门对面)")
+        XCTAssertNil(refined.latitude)
+        XCTAssertNil(refined.longitude)
+        XCTAssertTrue(refined.evidence.contains("Amap POI id: B0IUASZ83J"))
+        XCTAssertFalse(refined.evidence.contains { $0.contains("Vámospércs") })
+    }
+
+    @MainActor
+    func testDomesticDianpingLatinNameDoesNotPromoteOverseasOnlyMatch() async throws {
+        final class OverseasOnlyResolver: PlaceResolverServiceProtocol {
+            func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+                [PlaceProviderMatch(
+                    provider: .appleMaps,
+                    id: "wrong-hungary",
+                    name: "Ciao! Grill, Gyros & Pizza Bar",
+                    address: "Vámospércs, Debreceni u. 1/a, 4287 Hungary",
+                    latitude: 47.5251,
+                    longitude: 21.8976,
+                    rating: nil,
+                    reviewCount: nil,
+                    priceLevel: nil,
+                    types: ["restaurant"],
+                    coordinateSystem: .wgs84
+                )]
+            }
+        }
+
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            placeResolverService: OverseasOnlyResolver()
+        )
+        let sourceURL = "https://m.dianping.com/shopinfo/l7QzNXEwpr2F1OeH?msource=Appshare2021&shoptype=10&shopcategoryid=116&cityid=21&isoversea=0"
+        let initial = try XCTUnwrap(service.reviewCandidatesOrSourceOnly(
+            fromEvidenceText: "Ciao! Grill, Gyros & Pizza Bar",
+            sourceURL: sourceURL
+        ).first)
+
+        let refined = await service.refineCandidate(initial)
+
+        XCTAssertEqual(refined.reviewState, "review_candidate")
+        XCTAssertEqual(refined.candidateName, "Ciao! Grill, Gyros & Pizza Bar")
+        XCTAssertTrue(refined.address.isEmpty)
+        XCTAssertNil(refined.latitude)
+        XCTAssertNil(refined.longitude)
+    }
+
+    @MainActor
     func testDianpingKeywordOutranksGenericTitleAndRefinementUsesAppleMaps() async throws {
         let resolver = StubPlaceResolverService()
         let service = SocialLinkReviewCandidateService(
