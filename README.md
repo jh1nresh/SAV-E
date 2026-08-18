@@ -51,7 +51,7 @@ The core judgment is conservative: SAV-E should not pretend a clue is a real pla
 | iOS app | SwiftUI, MapKit, App Intents, Speech/AVFoundation voice input |
 | Auth | Privy iOS SDK |
 | Backend | Railway Node/TypeScript API + Railway Postgres |
-| Place intelligence | Deterministic parsers, Google Places API, Gemini via backend, public source recovery |
+| Place intelligence | Deterministic parsers, Google Places API, Gemini through the backend, public source recovery |
 | Share surfaces | iOS Share Extension, App Clip, Expo/React Native web fallback |
 | Web | Expo 54 / React Native Web / Vercel |
 | Tests | Swift unit/UI tests, Node backend tests, parser fixture scripts |
@@ -102,11 +102,11 @@ Fill local values in `SAV-E/Resources/Secrets.plist` and `SAV-EShareExtension/Se
 | Key | Purpose |
 |---|---|
 | `GOOGLE_PLACES_API_KEY` | Google Places lookup/details |
-| `SAVE_API_URL` | Railway backend URL, currently `https://wanderly-api-production.up.railway.app` |
-| `SAVE_PLACE_SHARE_BASE_URL` | Place share route, currently `https://sav-e-app.vercel.app/p` |
-| `SAVE_TRIP_SHARE_BASE_URL` | Trip share route, currently `https://sav-e-app.vercel.app/trip` |
-| `SAVE_SHARE_BASE_URL` | Legacy trip fallback, currently `https://sav-e-app.vercel.app/trip` |
-| `SAVE_LIST_SHARE_BASE_URL` | Collaborative list route, currently `https://sav-e-app.vercel.app/list` |
+| `SAVE_API_URL` | Railway backend URL — for example, `https://wanderly-api-production.up.railway.app` |
+| `SAVE_PLACE_SHARE_BASE_URL` | Place share route — for example, `https://sav-e-app.vercel.app/p` |
+| `SAVE_TRIP_SHARE_BASE_URL` | Trip share route — for example, `https://sav-e-app.vercel.app/trip` |
+| `SAVE_SHARE_BASE_URL` | Legacy trip fallback — for example, `https://sav-e-app.vercel.app/trip` |
+| `SAVE_LIST_SHARE_BASE_URL` | Collaborative list route — for example, `https://sav-e-app.vercel.app/list` |
 | `PRIVY_APP_ID` | Privy Dashboard → App Settings → Basics |
 | `PRIVY_APP_CLIENT_ID` | Privy iOS client. Must allow bundle id `com.wanderly.app` and URL scheme `wanderly`. |
 
