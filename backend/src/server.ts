@@ -202,6 +202,13 @@ import {
   type AIUsageEvent,
   type UsageEventOutcome,
 } from "./usageQuota.js";
+import {
+  monthlyLimitUnits,
+  resolveTier,
+  statusFor,
+  verifyAppleSignedTransaction,
+  type ProEntitlementStatus,
+} from "./proEntitlement.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1020,6 +1027,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "usage" && id === "quota" && segments.length === 2) {
       return await handleUsageQuotaPreview(request, response, userId);
+    }
+    if (isV0 && resource === "entitlements" && id === "apple" && segments.length === 2) {
+      return await handleAppleEntitlement(request, response, userId);
     }
     if (isV0 && resource === "llm") {
       return await handleLLMProxy(request, response, segments.slice(1), userId);
@@ -2314,6 +2324,8 @@ async function handleUsageQuotaPreview(
   }
   response.setHeader("Cache-Control", "private, no-store");
 
+  const tier = await currentEntitlementTier(userId);
+
   try {
     const { rows } = await pool.query(
       `select coalesce(sum(units), 0)::int as used_units
@@ -2326,12 +2338,117 @@ async function handleUsageQuotaPreview(
     return sendJson(response, buildUsageQuotaPreview({
       usedUnits: asObject(rows[0]).used_units,
       meteringAvailable: true,
+      tier,
+      limitUnits: monthlyLimitUnits(tier),
     }));
   } catch (error) {
     if (!isMissingRelationError(error)) throw error;
     console.warn("AI usage table is missing; returning a non-enforcing warming-up preview.");
-    return sendJson(response, buildUsageQuotaPreview({ meteringAvailable: false }));
+    return sendJson(response, buildUsageQuotaPreview({
+      meteringAvailable: false,
+      tier,
+      limitUnits: monthlyLimitUnits(tier),
+    }));
   }
+}
+
+/// Resolve the caller's tier from verified entitlement state.
+///
+/// Fails to `free` on any storage error. That is the safe direction: a database
+/// hiccup must not silently hand out Pro, and because enforcement is off it
+/// cannot lock anyone out either.
+async function currentEntitlementTier(userId: string): Promise<"free" | "pro"> {
+  try {
+    const { rows } = await pool.query(
+      `select status, expires_at
+       from subscription_entitlements
+       where user_id = $1
+       order by expires_at desc nulls first
+       limit 1`,
+      [userId],
+    );
+    const row = rows[0] as { status: ProEntitlementStatus; expires_at: string | null } | undefined;
+    return resolveTier(row);
+  } catch (error) {
+    if (!isMissingRelationError(error)) {
+      console.warn("Entitlement lookup failed; treating the caller as free.");
+    }
+    return "free";
+  }
+}
+
+/// Record a StoreKit 2 signed transaction against the authenticated user.
+///
+/// The client sends only the opaque signed JWS. Everything that matters —
+/// product, expiry, revocation, environment — is read from Apple's signature,
+/// never from the request body, so a crafted payload cannot grant Pro.
+async function handleAppleEntitlement(
+  request: IncomingMessage,
+  response: ServerResponse,
+  userId: string,
+): Promise<void> {
+  if (request.method !== "POST") {
+    return sendJson(response, { error: "Unsupported entitlement route" }, 405);
+  }
+  response.setHeader("Cache-Control", "private, no-store");
+
+  const body = await readJson(request);
+  const signedTransaction = typeof body.signed_transaction === "string"
+    ? body.signed_transaction.trim()
+    : "";
+  if (!signedTransaction) {
+    return sendJson(response, { error: "signed_transaction is required" }, 400);
+  }
+
+  const transaction = await verifyAppleSignedTransaction(signedTransaction);
+  if (!transaction) {
+    // Deliberately vague: do not tell a prober which check failed.
+    return sendJson(response, { error: "Transaction could not be verified" }, 400);
+  }
+
+  const status = statusFor(transaction);
+  const expiresAt = transaction.expiresDateMs === null
+    ? null
+    : new Date(transaction.expiresDateMs).toISOString();
+
+  try {
+    await pool.query(
+      `insert into subscription_entitlements (
+         user_id, original_transaction_id, product_id, status, environment,
+         expires_at, last_verified_at
+       ) values ($1, $2, $3, $4, $5, $6, now())
+       on conflict (original_transaction_id) do update set
+         user_id = excluded.user_id,
+         product_id = excluded.product_id,
+         status = excluded.status,
+         environment = excluded.environment,
+         expires_at = excluded.expires_at,
+         last_verified_at = now()`,
+      [
+        userId,
+        transaction.originalTransactionId,
+        transaction.productId,
+        status,
+        transaction.environment,
+        expiresAt,
+      ],
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+    // Schema not applied yet. Report honestly rather than implying the
+    // entitlement was stored.
+    console.warn("subscription_entitlements is missing; entitlement was not persisted.");
+    return sendJson(response, { error: "Entitlement storage is unavailable" }, 503);
+  }
+
+  const tier = resolveTier({ status, expires_at: expiresAt });
+  return sendJson(response, {
+    tier,
+    status,
+    product_id: transaction.productId,
+    expires_at: expiresAt,
+    environment: transaction.environment,
+  });
 }
 
 async function recordGeminiFailure(

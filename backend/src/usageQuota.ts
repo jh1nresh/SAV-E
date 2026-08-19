@@ -36,6 +36,8 @@ export type UsageQuotaPreview = {
   enforced: false;
   metering_available: boolean;
   beta_access_continues: true;
+  /// Verified entitlement tier. Server-decided; the client cannot set it.
+  tier: "free" | "pro";
 };
 
 export function buildGeminiUsageEvent(input: {
@@ -64,19 +66,31 @@ export function buildUsageQuotaPreview(input: {
   usedUnits?: unknown;
   now?: Date;
   meteringAvailable: boolean;
+  /// Defaults keep this backward compatible with callers that predate
+  /// entitlements, so an un-migrated deployment still returns a valid preview.
+  tier?: "free" | "pro";
+  limitUnits?: number;
 }): UsageQuotaPreview {
   const now = input.now ?? new Date();
+  const tier = input.tier ?? "free";
+  const limitUnits = input.limitUnits ?? betaUsageQuotaPolicy.monthlyLimitUnits;
+  // Keep the warning proportional to the tier's own allowance instead of
+  // warning a Pro user at the free threshold.
+  const warningThresholdUnits = limitUnits === betaUsageQuotaPolicy.monthlyLimitUnits
+    ? betaUsageQuotaPolicy.warningThresholdUnits
+    : Math.max(1, Math.floor(limitUnits * 0.75));
+
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const usedUnits = input.meteringAvailable ? Math.max(0, finiteInteger(input.usedUnits) ?? 0) : null;
   const remainingUnits = usedUnits === null
     ? null
-    : Math.max(0, betaUsageQuotaPolicy.monthlyLimitUnits - usedUnits);
+    : Math.max(0, limitUnits - usedUnits);
 
   let state: UsageQuotaPreview["state"] = "warming_up";
   if (usedUnits !== null) {
-    if (usedUnits >= betaUsageQuotaPolicy.monthlyLimitUnits) state = "preview_limit_reached";
-    else if (usedUnits >= betaUsageQuotaPolicy.warningThresholdUnits) state = "warning";
+    if (usedUnits >= limitUnits) state = "preview_limit_reached";
+    else if (usedUnits >= warningThresholdUnits) state = "warning";
     else state = "available";
   }
 
@@ -84,14 +98,15 @@ export function buildUsageQuotaPreview(input: {
     policy_version: betaUsageQuotaPolicy.policyVersion,
     period_start: periodStart.toISOString(),
     period_end: periodEnd.toISOString(),
-    limit_units: betaUsageQuotaPolicy.monthlyLimitUnits,
-    warning_threshold_units: betaUsageQuotaPolicy.warningThresholdUnits,
+    limit_units: limitUnits,
+    warning_threshold_units: warningThresholdUnits,
     used_units: usedUnits,
     remaining_units: remainingUnits,
     state,
     enforced: false,
     metering_available: input.meteringAvailable,
     beta_access_continues: true,
+    tier,
   };
 }
 
