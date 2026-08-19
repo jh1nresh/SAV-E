@@ -19,16 +19,30 @@ final class SaveStoreKitService {
     private(set) var isLoadingProducts = false
     private(set) var lastError: String?
 
+    /// Tier confirmed by the backend for the most recent registered
+    /// transaction. `nil` means no server confirmation is available yet, which
+    /// must be read as "not proven Pro" rather than "free forever".
+    private(set) var serverVerifiedTier: SaveProTier?
+
     private var updatesTask: Task<Void, Never>?
 
-    /// Locally observed entitlement. Slice 2 replaces this with the verified
-    /// server response; the property is intentionally not named `isPro` so no
-    /// caller mistakes a client signal for granted access.
+    /// Injected so tests can observe registration without a network call.
+    private let registerTransaction: (String) async throws -> SaveEntitlementResponse
+
+    /// Locally observed entitlement. This is a UI hint only; the server
+    /// response in `SaveEntitlementStore` is what actually grants access. The
+    /// property is intentionally not named `isPro` so no caller mistakes a
+    /// client signal for granted access.
     var locallyObservedTier: SaveProTier {
         purchasedProductIDs.isEmpty ? .free : .pro
     }
 
-    init() {
+    init(
+        registerTransaction: @escaping (String) async throws -> SaveEntitlementResponse = { jws in
+            try await SupabaseService.shared.registerAppleTransaction(signedTransaction: jws)
+        }
+    ) {
+        self.registerTransaction = registerTransaction
         // Transaction updates must be observed for the whole app lifetime,
         // including renewals and purchases made on another device. This is a
         // singleton that outlives every screen, so the task is never cancelled;
@@ -131,6 +145,27 @@ final class SaveStoreKitService {
             // rather than guessing.
             return
         }
+
+        // Forward the signed JWS so the server can verify it against Apple's
+        // certificate chain. Apple's local check proves the payload was not
+        // tampered with on-device; only the server round-trip turns that into
+        // entitlement.
+        let jws = verificationResult.jwsRepresentation
+        do {
+            let response = try await registerTransaction(jws)
+            serverVerifiedTier = response.resolvedTier
+            lastError = nil
+        } catch {
+            // Registration failed (offline, backend down, schema not applied).
+            // Do NOT grant Pro from the local signal — but do not lose the
+            // transaction either: it stays unfinished so StoreKit redelivers it
+            // on the next launch.
+            serverVerifiedTier = nil
+            lastError = "Purchase saved. It will finish activating shortly."
+            await refreshEntitlements()
+            return
+        }
+
         await refreshEntitlements()
         await transaction.finish()
     }
