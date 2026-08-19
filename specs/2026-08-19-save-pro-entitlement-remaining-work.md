@@ -24,118 +24,88 @@ Two properties must survive every item below:
 
 ---
 
-## A. Production schema + deploy — human-only, blocks everything
+## A. Production schema + deploy — DONE 2026-08-19
 
-Owner: JhiNResH. No agent may run these.
+Applied and verified. Recorded here because the instruction originally written
+in this spec was wrong and would have been risky.
 
-`subscription_entitlements` exists in `backend/sql/schema.sql` but has not been
-applied to production. Until it is, `/v0/entitlements/apple` returns 503 and the
-quota endpoint reports every caller as `free`.
+**The mistake:** this spec first said to run `psql -f backend/sql/schema.sql`.
+That file is 1558 lines; re-running it in production would replay 8 backfill
+`UPDATE`s, 3 constraint rebuilds, and 1 column type change — a large blast
+radius for adding one table.
 
-Order matters: schema first, then deploy. A deployed backend hitting a missing
-table logs warnings on every request.
-
-```bash
-# 1. inspect first — never apply blind
-psql "$DATABASE_URL" -c "\d subscription_entitlements"
-
-# 2. apply (idempotent: create table if not exists)
-psql "$DATABASE_URL" -f backend/sql/schema.sql
-
-# 3. deploy
-railway up
-```
-
-Verification after deploy:
+**What was actually done:** extracted only the `subscription_entitlements` DDL
+into a fragment, scanned it for destructive statements (0 found), and applied it
+in a single transaction with `ON_ERROR_STOP=1`.
 
 ```bash
-# expect 200 with tier:"free" for a normal user
-curl -H "Authorization: Bearer $TOKEN" https://<api>/v0/usage/quota
+# read-only check first
+railway run --service save-backend -- bash -c \
+  'PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -tAc \
+   "select to_regclass('"'"'public.subscription_entitlements'"'"') is not null;"'
+# -> f   (confirmed missing)
 
-# expect 400 "Transaction could not be verified", NOT 503
-curl -X POST -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"signed_transaction":"garbage"}' https://<api>/v0/entitlements/apple
+railway run --service save-backend -- bash -c \
+  'PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 \
+   -f /tmp/save-entitlements-migration.sql'
+# -> CREATE TABLE / CREATE INDEX / CREATE TRIGGER
 ```
 
-A 503 on the second call means the schema did not apply. A 500 means something
-else broke and the deploy should be rolled back.
+Note: the Supabase pooler URL carries `sslmode=no-verify`, which `psql` rejects.
+Strip the query string and set `PGSSLMODE=require` instead.
 
-Acceptance: quota returns `tier` for authenticated callers; the entitlement
-route rejects a bad transaction with 400 rather than 503; no new error rate on
-existing routes.
+Verified in production: table present with the unique key on
+`original_transaction_id`, FK cascade to `profiles`, both check constraints, and
+the `updated_at` trigger. The tier-resolution query the server runs returns
+empty without error.
+
+Deployed commit `490e723` via `railway up`; deployment reached SUCCESS and
+`/health/source-recovery` returns 200.
+
+### A trap worth recording
+
+Auth runs **before** routing, so a nonexistent path returns the same 401 as a
+real one. Probing `/v0/entitlements/apple` without credentials proves nothing
+about whether the route exists — the verification step originally written in
+this spec was therefore useless, and briefly led to the wrong conclusion that
+the route was already deployed. Confirm deployment by checking the deployed
+commit and the compiled bundle, not by curling an authenticated route.
 
 ---
 
-## B. App Store Server Notifications v2 — the real gap
+## B. App Store Server Notifications v2 — DONE 2026-08-19 (PR #143)
 
-Without this, entitlement only refreshes when the client posts a transaction. A
-user who cancels, is refunded, or whose renewal fails keeps their stored
-`active` row until the app happens to send something.
+Implemented in `backend/src/appleNotifications.ts` plus the
+`POST /v0/notifications/apple` route. 16 new tests; 413/413 backend tests pass.
 
-Time-based tier resolution (#141) is what makes this gap *safe* rather than
-dangerous — an expired row resolves to `free` on read regardless of its stored
-status. So this is a correctness and latency fix, not a security hole. It does
-not block launch, but it should land before enforcement.
+Design notes worth keeping:
 
-### Scope
+- Apple's payload is two layers of JWS — the outer notification, and
+  `data.signedTransactionInfo` nested inside it. Both are verified against the
+  same pinned chain from `proEntitlement.ts`; no second verification path.
+- The route is matched *before* the bearer-token gate, because Apple has no user
+  session. The signature is the authentication.
+- The handler updates, never inserts. A test asserts the absence of
+  `insert into` in that function: if a webhook could insert, a forged delivery
+  could mint entitlement against an arbitrary `user_id`.
+- An unverified payload returns 400, not 200 — acknowledging unsigned input
+  would invite replay. Everything *after* successful verification returns 200 so
+  Apple stops retrying.
+- `DID_FAIL_TO_RENEW` is ignored rather than revoked: a billing retry is not yet
+  a cancellation, and Apple sends `EXPIRED` / `GRACE_PERIOD_EXPIRED` if it
+  ultimately fails. Revoking early would cut off a paying user over a transient
+  card decline.
+- `DID_CHANGE_RENEWAL_STATUS` keeps access until the period ends. The user paid
+  for it.
 
-New route `POST /v0/notifications/apple`, unauthenticated by session but
-authenticated by signature.
+Remaining human steps before this does anything:
 
-```text
-Apple -> signedPayload (JWS)
-      -> verify with the SAME pinned chain path as proEntitlement.ts
-      -> decode notificationType + subtype + renewalInfo/transactionInfo
-      -> update subscription_entitlements by original_transaction_id
-      -> 200 OK
-```
-
-Reuse `verifyCertificateChain` and the fingerprint pin. Do not write a second
-verification path — a weaker one here would undo the strength of the first.
-
-Notification types that must change stored state:
-
-| Type | Effect |
-|---|---|
-| `DID_RENEW` | extend `expires_at`, status `active` |
-| `EXPIRED` | status `expired` |
-| `DID_CHANGE_RENEWAL_STATUS` (auto-renew off) | keep `active`, do not extend |
-| `REVOKE` | status `revoked` |
-| `REFUND` | status `revoked` |
-| `GRACE_PERIOD_EXPIRED` | status `expired` |
-
-Everything else: log the type, return 200, change nothing. An unrecognized
-notification must not throw and must not be retried forever by Apple.
-
-### Hard requirements
-
-- **Always return 200** once the signature verifies, even if the row is unknown.
-  Apple retries non-2xx for days; a 500 loop on one stale transaction is worse
-  than a no-op.
-- **Idempotent.** Apple can deliver the same notification more than once. Key on
-  `original_transaction_id` and never append.
-- A notification for an `original_transaction_id` with no matching row is a
-  no-op, not an insert. Entitlement is only ever created by an authenticated
-  user posting their own transaction; a webhook must not be able to conjure a
-  row against an arbitrary user.
-- Store no new fields beyond what the table already holds.
-
-### Verification
-
-Extend `proEntitlement.test.ts` using the existing openssl-generated chain:
-
-- a validly signed `DID_RENEW` extends expiry
-- a validly signed `REFUND` sets `revoked`
-- an unpinned-root notification is rejected
-- a duplicate delivery is a no-op (idempotency)
-- an unknown `notificationType` returns 200 and changes nothing
-- an unknown `original_transaction_id` does not create a row
-
-Sandbox proof before calling it done: trigger a real renewal in the App Store
-sandbox and confirm the row updated without the app being opened.
-
-Human approval: adding the webhook URL in App Store Connect, deploy.
+1. Register the URL in App Store Connect → App Information → App Store Server
+   Notifications (Production and Sandbox URLs, **V2**).
+2. Deploy.
+3. Sandbox proof: trigger a renewal and confirm the row updates **without the
+   app being opened**. Until that is observed, treat this as untested against
+   real Apple traffic — every test so far uses a locally generated chain.
 
 ---
 
@@ -239,9 +209,9 @@ Carried from the v0 spec because it is cheap to lose:
 ## Dependency order
 
 ```text
-A (schema + deploy)          <- blocks everything, human-only
+A (schema + deploy)          <- DONE 2026-08-19
+B (ASSN webhook)             <- DONE, PR #143; needs App Store Connect URL + deploy
   -> #142 merge
-  -> B (ASSN webhook)        <- before enforcement, not before launch
   -> [entry gate: 100 installs + 1 month data]
   -> C1 read distribution
   -> C2 choose allowance
