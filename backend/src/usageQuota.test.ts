@@ -96,3 +96,60 @@ test("usage schema and route stay owner-scoped, server-authored, and payload-fre
   assert.match(server, /where user_id = \$1[\s\S]*created_at >=/);
   assert.match(server, /AI usage telemetry unavailable; request remains fail-open/);
 });
+
+test("the preview defaults to the free tier for callers that predate entitlements", () => {
+  const preview = buildUsageQuotaPreview({ usedUnits: 4, meteringAvailable: true });
+
+  assert.equal(preview.tier, "free");
+  assert.equal(preview.limit_units, betaUsageQuotaPolicy.monthlyLimitUnits);
+  assert.equal(preview.warning_threshold_units, betaUsageQuotaPolicy.warningThresholdUnits);
+});
+
+test("a Pro caller gets the larger allowance and a proportional warning threshold", () => {
+  const preview = buildUsageQuotaPreview({
+    usedUnits: 30,
+    meteringAvailable: true,
+    tier: "pro",
+    limitUnits: 500,
+  });
+
+  assert.equal(preview.tier, "pro");
+  assert.equal(preview.limit_units, 500);
+  assert.equal(preview.remaining_units, 470);
+  // A Pro user must not be warned at the free threshold of 15.
+  assert.equal(preview.warning_threshold_units, 375);
+  assert.equal(preview.state, "available");
+});
+
+test("enforcement stays off regardless of tier or exhaustion", () => {
+  const exhaustedFree = buildUsageQuotaPreview({ usedUnits: 999, meteringAvailable: true });
+  const exhaustedPro = buildUsageQuotaPreview({
+    usedUnits: 999, meteringAvailable: true, tier: "pro", limitUnits: 500,
+  });
+
+  assert.equal(exhaustedFree.enforced, false);
+  assert.equal(exhaustedPro.enforced, false);
+  assert.equal(exhaustedFree.beta_access_continues, true);
+  assert.equal(exhaustedPro.beta_access_continues, true);
+});
+
+test("entitlement route is authenticated, server-authored, and stores no payment data", () => {
+  const schema = readFileSync(new URL("../sql/schema.sql", import.meta.url), "utf8");
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+
+  const tableStart = schema.indexOf("create table if not exists subscription_entitlements");
+  assert.notEqual(tableStart, -1, "subscription_entitlements must exist");
+  const table = schema.slice(tableStart, schema.indexOf("create index if not exists idx_subscription_entitlements_user"));
+
+  assert.match(table, /user_id text references profiles\(id\)/);
+  // Never store payment instruments, prices, receipts, or Apple account IDs.
+  assert.doesNotMatch(table, /price|amount|currency|receipt_data|apple_account|payment/i);
+
+  const authStart = server.indexOf("const userId = await resolveUserId(request)");
+  const entitlementRoute = server.indexOf('resource === "entitlements" && id === "apple"');
+  assert.ok(entitlementRoute > authStart, "entitlement route must stay behind authentication");
+
+  // Tier must be derived from the verified transaction, never from the body.
+  assert.match(server, /verifyAppleSignedTransaction\(signedTransaction\)/);
+  assert.doesNotMatch(server, /body\.tier|body\.is_pro|body\.product_id/);
+});

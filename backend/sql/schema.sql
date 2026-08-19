@@ -1522,3 +1522,37 @@ create index if not exists idx_list_share_codes_list on list_share_codes(list_id
 drop trigger if exists update_lists_updated_at on lists;
 create trigger update_lists_updated_at before update on lists
     for each row execute procedure update_updated_at();
+
+-- Verified Apple subscription entitlements.
+--
+-- Written only from a signature-verified StoreKit transaction or an App Store
+-- Server Notification; never from a client claim. `original_transaction_id` is
+-- the stable subscription identity across renewals, so it is the natural key.
+--
+-- Stores no payment instrument, price, receipt blob, or Apple account
+-- identifier -- only what is needed to answer "is this user Pro right now".
+create table if not exists subscription_entitlements (
+    id uuid primary key default gen_random_uuid(),
+    user_id text references profiles(id) on delete cascade not null,
+    original_transaction_id text not null unique,
+    product_id text not null,
+    status text not null,
+    environment text not null default 'Production',
+    expires_at timestamptz,
+    last_verified_at timestamptz not null default now(),
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint subscription_entitlements_status_check check (
+        status in ('active', 'expired', 'revoked', 'none')
+    ),
+    constraint subscription_entitlements_environment_check check (
+        environment in ('Production', 'Sandbox', 'Xcode')
+    )
+);
+
+create index if not exists idx_subscription_entitlements_user
+    on subscription_entitlements(user_id, status);
+
+drop trigger if exists update_subscription_entitlements_updated_at on subscription_entitlements;
+create trigger update_subscription_entitlements_updated_at before update on subscription_entitlements
+    for each row execute procedure update_updated_at();
