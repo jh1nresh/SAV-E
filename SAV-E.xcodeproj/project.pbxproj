@@ -14,6 +14,7 @@
 		14D588EF1A7ACCAD3ED9A0A7 /* DebugQAState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 628182911DB12E7F80806BA7 /* DebugQAState.swift */; };
 		1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */; };
 		1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */; };
+		1D6E5C96BBB9574AE9A78211 /* SaveProPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF357924A8D4048E256F214E /* SaveProPaywallView.swift */; };
 		1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */; };
 		1FD4E4A282E15C3348A91111 /* SaveRootViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EB51FCB4905E86D751E570C /* SaveRootViews.swift */; };
 		20EE991C2D2D42E045F23CA5 /* SavePlanAroundControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */; };
@@ -41,6 +42,7 @@
 		430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */; };
 		45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */; };
 		47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85E674763445F956B8660707 /* Color+Theme.swift */; };
+		4B3A5A9E6B264207FA98A5D9 /* SaveEntitlementStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FAC1D2AB36A47D8EFAC61A /* SaveEntitlementStore.swift */; };
 		4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */; };
 		4CF65DAE4673D60F28E20D77 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */; };
 		4E0E17A42FE83F382BEA166C /* TripHoursAnnotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */; };
@@ -49,11 +51,13 @@
 		4F96A8556DEC1BDEE2074F27 /* MessagesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0263F2B88706E83B518B1B7 /* MessagesViewController.swift */; };
 		52F3150AD3808E4B701E6268 /* TripKMLExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D034AFB62E7C2C1C777B0FF0 /* TripKMLExportService.swift */; };
 		53366272BA57D223332D803E /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0CF4C9AB8BF5F3EFEA8857C /* SupabaseService.swift */; };
+		5391C822BB6EB26048D13148 /* SAVEProAccessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */; };
 		57E8DF73087D818758660998 /* SocialCaptionVenueExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D874F1D0FD76DECBCE8398FF /* SocialCaptionVenueExtractor.swift */; };
 		593FC6C62882D1342C78C1FF /* SaveMemoryDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6BCBA8DC934BBB3AEEACF81 /* SaveMemoryDebugView.swift */; };
 		5DC6D396754B382C5E106D3C /* GoogleMapsListPlaceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD47697053E087BC8D7F914 /* GoogleMapsListPlaceExtractor.swift */; };
 		5EE4A497DC36DECB61368061 /* SocialPlaceParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B1CB9442676082D76FDEC15 /* SocialPlaceParser.swift */; };
 		60EF7529D992954D48573948 /* SaveCollaborativeListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */; };
+		620EFD4BCF446FCB18A843DA /* SaveStoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */; };
 		6515494E8A967D44A7D2DA63 /* SaveSearchResultsComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9480F422F149ABC3338A1C7 /* SaveSearchResultsComponent.swift */; };
 		667EBE401889BD9FF4AC9837 /* AccountReferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7713D4B597C4062FFE2C08C /* AccountReferenceStore.swift */; };
 		66F4520897870F795E6E3FD7 /* SaveGuideCustomizationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7341CE0888D59F87FF9795A /* SaveGuideCustomizationControllerTests.swift */; };
@@ -66,6 +70,7 @@
 		6D25496E2E4B1EA7B949E82E /* OnboardingSampleClueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D106F6003E9C0CD87F7B2E0 /* OnboardingSampleClueTests.swift */; };
 		6F07949E22AA506EE5A64CD7 /* SaveLocalVaultService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5A7F09B9AE3F2129C605FE /* SaveLocalVaultService.swift */; };
 		6F9A7F7D67162AAFC701986F /* SAVEProductionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */; };
+		70578CBC1911C1C35349AF47 /* SAVEProAccessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */; };
 		72FD92B78E9DFCC613820369 /* Bridges.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10320E4FA8FFBD73F0C7287F /* Bridges.swift */; };
 		733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */; };
 		76FC5BA1F7C59B7D0436B3B5 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54876D21CED56B8E43591F6E /* StatsView.swift */; };
@@ -317,6 +322,7 @@
 		54876D21CED56B8E43591F6E /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanSaveTests.swift; sourceTree = "<group>"; };
 		5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveSearchController.swift; sourceTree = "<group>"; };
+		576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveStoreKitService.swift; sourceTree = "<group>"; };
 		5A198B6BD4C58B1A684E5B8B /* DebugBridgeTouch.framework */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.framework; path = DebugBridgeTouch.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasHomeHeroPresentationTests.swift; sourceTree = "<group>"; };
 		5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialPlaceEvidence.swift; sourceTree = "<group>"; };
@@ -376,10 +382,12 @@
 		A7713D4B597C4062FFE2C08C /* AccountReferenceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountReferenceStore.swift; sourceTree = "<group>"; };
 		A78E2B528C610D14058FBFF5 /* PendingPlaceImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingPlaceImportService.swift; sourceTree = "<group>"; };
 		A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceListComponent.swift; sourceTree = "<group>"; };
+		A7FAC1D2AB36A47D8EFAC61A /* SaveEntitlementStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveEntitlementStore.swift; sourceTree = "<group>"; };
 		A8238D841A80D8B370120F95 /* SAVEClip.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SAVEClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		ADEE6459A6B4A626FB23B914 /* PlacePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacePickerView.swift; sourceTree = "<group>"; };
 		AE69ED6357CE024B8F32D332 /* SaveCollaborativeListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCollaborativeListTests.swift; sourceTree = "<group>"; };
 		AFFD7B1C83A35F044C68D42D /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
+		B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEProAccessPolicy.swift; sourceTree = "<group>"; };
 		B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoMascotMark.swift; sourceTree = "<group>"; };
 		B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotatorTests.swift; sourceTree = "<group>"; };
 		B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapDrawerPanel.swift; sourceTree = "<group>"; };
@@ -428,6 +436,7 @@
 		F7E75F1477A312E985B4F1AD /* TripRouteServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripRouteServiceTests.swift; sourceTree = "<group>"; };
 		F87B768452BF9BDDF78FCE00 /* AppLanguageSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettings.swift; sourceTree = "<group>"; };
 		FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEiMessageExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF357924A8D4048E256F214E /* SaveProPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProPaywallView.swift; sourceTree = "<group>"; };
 		FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -639,6 +648,7 @@
 				BF1F2705D6D9ECEFEFE4D199 /* ReviewDemoService.swift */,
 				51DF55BE93F14D29CE673F5D /* SaveAIService.swift */,
 				6BFC17A59739B006535A4794 /* SavedPlaceTripRecommender.swift */,
+				A7FAC1D2AB36A47D8EFAC61A /* SaveEntitlementStore.swift */,
 				83B1A866047516CB0F0279B4 /* SaveGuideCustomizationController.swift */,
 				DFC9BC0C7A83CBF9C8941D35 /* SaveLLMClient.swift */,
 				2D5A7F09B9AE3F2129C605FE /* SaveLocalVaultService.swift */,
@@ -646,6 +656,7 @@
 				A6C366D3712F5DE04F5EEC40 /* SavePlanAroundController.swift */,
 				5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */,
 				6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */,
+				576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */,
 				D874F1D0FD76DECBCE8398FF /* SocialCaptionVenueExtractor.swift */,
 				EFA0C8D8324DF32424B5147A /* SocialLinkReviewCandidateService.swift */,
 				C0CF4C9AB8BF5F3EFEA8857C /* SupabaseService.swift */,
@@ -783,6 +794,7 @@
 			children = (
 				BCD47697053E087BC8D7F914 /* GoogleMapsListPlaceExtractor.swift */,
 				6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */,
+				B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */,
 				82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */,
 				14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */,
 				5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */,
@@ -874,6 +886,7 @@
 			children = (
 				5E1CAB36A11288E7007AEBF7 /* ProfileView.swift */,
 				E6BCBA8DC934BBB3AEEACF81 /* SaveMemoryDebugView.swift */,
+				FF357924A8D4048E256F214E /* SaveProPaywallView.swift */,
 				54876D21CED56B8E43591F6E /* StatsView.swift */,
 			);
 			path = Profile;
@@ -1328,6 +1341,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4082CE633C9619E79F2C0AD3 /* GoogleMapsListPlaceExtractor.swift in Sources */,
+				70578CBC1911C1C35349AF47 /* SAVEProAccessPolicy.swift in Sources */,
 				45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */,
 				EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */,
 				A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */,
@@ -1409,12 +1423,14 @@
 				C89917420BEA87BFA892B556 /* RelatedPlaceSourcesPanel.swift in Sources */,
 				E0A5663B068E5D2C3AD4D762 /* ReviewDemoService.swift in Sources */,
 				A2F1E48BF387C064B3B4F4E6 /* SAVEAppShortcuts.swift in Sources */,
+				5391C822BB6EB26048D13148 /* SAVEProAccessPolicy.swift in Sources */,
 				A3A281B054D6E430627F8352 /* SAVEProductionConfig.swift in Sources */,
 				38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */,
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
 				F89CCBC9CA4B249D1C5B7BDC /* SaveAtlasProductionBridge.swift in Sources */,
 				8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */,
 				1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */,
+				4B3A5A9E6B264207FA98A5D9 /* SaveEntitlementStore.swift in Sources */,
 				D6A7E1A1FA84E376E5DED98D /* SaveGuideCustomizationController.swift in Sources */,
 				B76C75E6A77E56F866167BA1 /* SaveGuideModels.swift in Sources */,
 				8F19E2D31087563F35CA0A16 /* SaveLLMClient.swift in Sources */,
@@ -1430,12 +1446,14 @@
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,
 				11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */,
 				4EF9CBE70CD4A87789905A9B /* SavePlanAroundModels.swift in Sources */,
+				1D6E5C96BBB9574AE9A78211 /* SaveProPaywallView.swift in Sources */,
 				1FD4E4A282E15C3348A91111 /* SaveRootViews.swift in Sources */,
 				FD27CCBFEDABF6FCDAF3AB57 /* SaveSearchController.swift in Sources */,
 				2CB40725EFEDED4A9B1275C9 /* SaveSearchIntentParser.swift in Sources */,
 				362D688B8CC9DEA7219CBC87 /* SaveSearchModels.swift in Sources */,
 				6515494E8A967D44A7D2DA63 /* SaveSearchResultsComponent.swift in Sources */,
 				82B81EF68AE9F7C892CC0BDC /* SaveSmokeHarnessView.swift in Sources */,
+				620EFD4BCF446FCB18A843DA /* SaveStoreKitService.swift in Sources */,
 				D84C166D8B51EAB41CCD7F23 /* SavedPlaceTripRecommender.swift in Sources */,
 				885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */,
 				6BC478C8D4778B2BE248D315 /* SharedTripData.swift in Sources */,

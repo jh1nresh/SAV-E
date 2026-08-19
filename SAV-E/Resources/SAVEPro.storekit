@@ -1,0 +1,73 @@
+{
+  "identifier" : "A1B2C3D4",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "6753000000",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21500000",
+      "localizations" : [],
+      "name" : "SAV-E Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "39.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6753000001",
+          "introductoryOffer" : {
+            "internalID" : "6753000010",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P3D"
+          },
+          "localizations" : [
+            {
+              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
+              "displayName" : "SAV-E Pro Annual",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.wanderly.app.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "SAV-E Pro Annual",
+          "subscriptionGroupID" : "21500000",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6753000002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
+              "displayName" : "SAV-E Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.wanderly.app.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "SAV-E Pro Monthly",
+          "subscriptionGroupID" : "21500000",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

@@ -113,6 +113,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         apiBaseURL != nil
     }
 
+    func fetchUsageQuotaPreview() async throws -> SaveUsageQuotaPreview {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let data = try await request(path: "/v0/usage/quota")
+        return try JSONDecoder.supabase.decode(SaveUsageQuotaPreview.self, from: data)
+    }
+
     // MARK: - Places
 
     func fetchPlaces(for userId: String) async throws -> [Place] {

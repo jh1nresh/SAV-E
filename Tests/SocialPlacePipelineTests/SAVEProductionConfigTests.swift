@@ -2,23 +2,99 @@ import XCTest
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
-    func testLaunchSourcesContainNoPaywallWhileBackendMeteringRemains() throws {
-        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
-        let sharedConfig = try source(at: "SAV-EShared/SAVEProductionConfig.swift")
-        let trips = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+    /// Regrades the PR #131 no-paywall guard. A paywall now exists, but the
+    /// launch-surface promises it replaced must still hold: no automatic
+    /// launch paywall, core memory loop free, enforcement off until Slice 3.
+    func testPaywallExistsButNeverPresentsAutomaticallyAtLaunch() throws {
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
         let backend = try source(at: "backend/src/server.ts")
 
-        for forbidden in ["Memo Pro", "profile.proPreview", "paywall.", "SaveProPreviewView"] {
-            XCTAssertFalse(profile.contains(forbidden), "Launch Passport must not contain \(forbidden)")
+        XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
+        XCTAssertFalse(SAVEProAccessPolicy.firstMapStampRequiresPurchase)
+        XCTAssertTrue(SAVEProAccessPolicy.coreMemoryLoopIsFree)
+        // Slice 1 must not be able to refuse anyone.
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
+        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
+
+        // App Store review requirements must live on the paywall itself.
+        for required in ["paywall.restore", "paywall.terms", "paywall.privacy", "paywall.close"] {
+            XCTAssertTrue(paywall.contains(required), "Paywall must expose \(required)")
         }
-        XCTAssertFalse(supabase.contains("fetchUsageQuotaPreview"))
-        XCTAssertFalse(supabase.contains("SaveUsageQuotaPreview"))
-        XCTAssertFalse(sharedConfig.contains("SAVEProAccessPolicy"))
-        XCTAssertFalse(trips.contains("Free during Beta"))
-        XCTAssertTrue(trips.contains("Trip planning is still improving."))
+        XCTAssertTrue(policy.contains("enforcementEnabled"))
+
+        // Backend metering stays intact and untouched by this slice.
         XCTAssertTrue(backend.contains("recordAIUsageEvent"))
         XCTAssertTrue(backend.contains("buildGeminiUsageEvent"))
+    }
+
+    /// The gate is the only thing allowed to refuse an AI assist, so its truth
+    /// table is pinned here.
+    func testAIAssistGateFailsOpenAndRespectsEnforcementSwitch() {
+        // Pro is unmetered regardless of usage.
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(tier: .pro, usedUnits: 999, limitUnits: 20, warningThresholdUnits: 15),
+            .allowed
+        )
+
+        // Metering unavailable: fail open rather than guess.
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(tier: .free, usedUnits: nil, limitUnits: 20, warningThresholdUnits: 15),
+            .allowed
+        )
+
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(tier: .free, usedUnits: 3, limitUnits: 20, warningThresholdUnits: 15),
+            .allowed
+        )
+
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(tier: .free, usedUnits: 16, limitUnits: 20, warningThresholdUnits: 15),
+            .allowedWarningNearLimit(remaining: 4)
+        )
+
+        // Exhausted while enforcement is off: served anyway, but recorded.
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(
+                tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+                enforcementEnabled: false
+            ),
+            .allowedEnforcementDisabled
+        )
+
+        // Only with enforcement explicitly on may a refusal happen.
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(
+                tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+                enforcementEnabled: true
+            ),
+            .refusedAllowanceExhausted
+        )
+    }
+
+    /// A missing `tier` field must resolve to free, so this build stays
+    /// compatible with the currently deployed backend.
+    func testQuotaPreviewWithoutTierFieldResolvesToFree() throws {
+        let json = """
+        {
+          "policy_version": "ai-assists-beta-v0",
+          "period_start": "2026-08-01T00:00:00.000Z",
+          "period_end": "2026-09-01T00:00:00.000Z",
+          "limit_units": 20,
+          "warning_threshold_units": 15,
+          "used_units": 4,
+          "remaining_units": 16,
+          "state": "available",
+          "enforced": false,
+          "metering_available": true,
+          "beta_access_continues": true
+        }
+        """.data(using: .utf8)!
+
+        let preview = try JSONDecoder().decode(SaveUsageQuotaPreview.self, from: json)
+        XCTAssertEqual(preview.resolvedTier, .free)
+        XCTAssertEqual(preview.usedUnits, 4)
+        XCTAssertFalse(preview.enforced)
     }
 
     @MainActor

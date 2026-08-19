@@ -36,6 +36,7 @@ targets:
           - DebugBridge
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
+          - Resources/SAVEPro.storekit
       - path: SAV-EShared
       - path: Prototypes/AtlasPostcard/Sources
         excludes:
