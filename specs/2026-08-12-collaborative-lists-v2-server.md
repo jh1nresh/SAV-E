@@ -1,6 +1,7 @@
 # Collaborative Lists v2 — Server-backed lists + ACL, and closing the friend-invite loop
 
-> Status: in progress (branch `claude/lists-server-acl`)
+> Status: implemented 2026-08-13 (#122). `/v0/lists`, `/v0/lists/:id/share-codes`,
+> `/v0/list-joins`, and `/v0/me/referral` are live in `backend/src/server.ts`.
 > Supersedes the sharing section of `2026-05-26-collaborative-lists-v1.md` (local base64 links stay as offline fallback).
 
 ## Problem

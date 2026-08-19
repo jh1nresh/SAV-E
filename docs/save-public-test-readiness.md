@@ -1,6 +1,6 @@
 # SAV-E Public Test Readiness
 
-Generated: 2026-06-23
+Generated: 2026-06-23 · Reviewed: 2026-08-18 (build 101)
 
 This checklist tracks the seven readiness gaps that must stay separate from
 "the app builds locally." Local code can prove client behavior; Apple,
@@ -9,20 +9,21 @@ proof.
 
 ## 1. TestFlight and device smoke proof
 
-Current local proof:
+Current in-repo proof:
 
-- Archive exists at `build/SAV-E-1.0.0-78.xcarchive`.
-- Archive metadata shows bundle `com.wanderly.app`, version `1.0.0`, build `78`,
-  team `JC6858UYM9`, App Store id `6769216556`.
-- Export log `build/logs/export-1.0.0-78-api-4VLSK3YL3V.log` contains
-  `Upload succeeded` and `** EXPORT SUCCEEDED **`.
+- Bundle `com.wanderly.app`, version `1.0.0`, build `101`, team `JC6858UYM9`,
+  App Store id `6769216556`. Build numbers come from `project.yml`.
 - `Tests/SAVEUITests/SAVEUISmokeHarnessTests.swift` covers the five required
   smoke paths: auth, location, nearby restaurants/cafes, share IG/Maps link,
   review candidate confirm/save.
 
+Archives and export logs live under the untracked `build/` directory, so no
+upload receipt can be read from this repo. The earlier build-78 archive and its
+`Upload succeeded` export log were local-only evidence.
+
 Still required before public TestFlight:
 
-- Confirm build 78 is visible and processed in App Store Connect.
+- Confirm the current build is visible and processed in App Store Connect.
 - Run the five-path smoke harness on a real iPhone with the TestFlight build,
   not only simulator/local debug.
 - Save a screenshot or text receipt with device, build number, and pass/fail.
@@ -74,6 +75,15 @@ Production checks:
 
 - `GEMINI_API_KEY` exists where backend AI analysis runs.
 - Google Places key exists where place details are fetched.
+- `SAVE_GUEST_SESSION_SECRET` and `SAVE_MY_SAVES_SECRET` are set. Both fall back
+  to a random per-process value, which drops guest sessions and `/my/` links on
+  every restart or deploy.
+- Amap is intentionally on or off: `POST /place-resolve` needs
+  `AMAP_USAGE_AUTHORIZED=true` plus a domestic or international key, and answers
+  503 otherwise. China places then resolve through Apple Maps.
+- `ai_usage_events` from `backend/sql/schema.sql` is applied. Without the table
+  the usage route reports `warming_up` and records nothing; it never blocks a
+  request, so a missing table is invisible to users and to you.
 - Public web enrichment flag is intentionally enabled or intentionally disabled.
 - Privy configuration works for full app and iMessage-created identities.
 - Failed AI/place details requests expose a specific status, not only generic
@@ -91,35 +101,40 @@ Client behavior:
 
 In-repo coverage:
 
-- `testPlaceListNearestSortUsesCurrentLocation`
+- The `testPlaceListNearestSortUsesCurrentLocation` case named here in June no
+  longer exists. The closest current coverage is
+  `SaveSearchControllerTests.testUnsavedMapCandidatesSortByDistanceWhenScoresTie`,
+  which only pins the tie-break. A regression test for nearest-sort against the
+  current device location is still missing — see section 7.
 
 ## 6. Trip and itinerary planning
 
-Current split:
-
-- `DeterministicTripPlanner` handles coordinate-aware itinerary planning from
-  saved Map Stamps.
-- `TripViewModel` legacy route action only owns stored trip timelines, whose
-  `TripStop` records do not contain coordinates.
+Trip planner V2 landed in #116: save-as-trip, Routes API waypoint
+optimization, travel legs, and opening-hours annotation. See
+`specs/deterministic-trip-planner-v2.md`.
 
 Client behavior:
 
-- Do not fake Google Directions/Gemini optimization from `TripViewModel`.
+- Do not fake Google Directions/Gemini optimization anywhere in the trip UI.
 - Normalize stored timelines deterministically.
 - Use the drawer/detail itinerary planner for coordinate-aware route drafts and
-  LLM polish.
+  LLM polish, and fall back to the unoptimized order when the route service
+  fails rather than inventing one.
 
 In-repo coverage:
 
-- `testTripRouteOptimizationNormalizesTimelineWithoutFakeDelay`
+- `Tests/SocialPlacePipelineTests/TripRouteServiceTests.swift`, including
+  `testRouteEnhancedPlanFallsBackWhenServiceThrows` and
+  `testRouteEnhancedPlanIgnoresServiceThatDropsPlaces`.
 
 ## 7. Backlog and QA ownership
 
 Track as a single public-test gate until all boxes are green:
 
-- Device smoke proof for build 78.
+- Device smoke proof for the current TestFlight build.
 - App Clip/shared-link iPhone proof.
-- Production Gemini/Google Places/Privy config proof.
+- Production Gemini/Google Places/Privy config proof, plus the stable session
+  secrets and the applied `ai_usage_events` table from section 4.
 - Social parser golden fixtures for multi-place and handle-only venues.
 - Nearby recommendation/list sort regression.
 - Itinerary polish path proof from detail page to LLM-polished route.

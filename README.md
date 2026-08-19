@@ -2,7 +2,10 @@
 
 SAV-E is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
 
-Current app version in this repo: **1.0.0 (build 81)**.
+Current app version in this repo: **1.0.0 (build 101)**.
+
+Build numbers live in `project.yml`. `SAV-E.xcodeproj` is generated from it, so a
+bump applied only to the generated project is undone by the next `xcodegen generate`.
 
 ## Current product shape
 
@@ -130,9 +133,27 @@ PRIVY_APP_ID=...
 PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
 PRIVY_APP_SECRET=...                 # needed for Privy user provisioning flows
 SAVE_GUEST_SESSION_SECRET=...        # stable guest sessions across restarts
+SAVE_MY_SAVES_SECRET=...             # stable /my/<token> links across restarts
 GEMINI_API_KEY=...                   # backend-only AI parsing/analysis
 GOOGLE_PLACES_API_KEY=...            # backend source recovery / place enrichment
 ```
+
+`SAVE_GUEST_SESSION_SECRET` and `SAVE_MY_SAVES_SECRET` fall back to a random
+per-process value, which invalidates guest sessions and `/my/` links on every
+restart or deploy. Set both on Railway.
+
+Mainland-China POI resolution through `POST /place-resolve` is optional. It needs
+the explicit opt-in plus at least one key; otherwise the route answers 503 and the
+app resolves China places through Apple Maps instead:
+
+```bash
+AMAP_USAGE_AUTHORIZED=true              # explicit opt-in; the route stays off otherwise
+AMAP_INTERNATIONAL_WEB_SERVICE_KEY=...  # tried first, returns WGS84
+AMAP_WEB_SERVICE_KEY=...                # 高德开放平台 domestic key, returns GCJ-02
+```
+
+Amap keys are backend-only. The iOS `Secrets.plist` templates must not carry
+them; `SAVEProductionConfigTests` asserts that.
 
 Apply/update the schema against Railway Postgres when migrations/schema change:
 
@@ -282,7 +303,7 @@ Current public route shapes:
 
 The full app handles installed-app Universal Links and `wanderly://` deep links. The App Clip target can preview SAV-E place payloads and private/share cards. Full trip import, full list previews, and full referral previews are later surfaces unless a newer release explicitly changes that boundary.
 
-For build 81 / first App Review:
+For App Review:
 
 - keep `applinks:sav-e-app.vercel.app` in the app entitlement
 - keep `appclips:sav-e-app.vercel.app` in the App Clip entitlement
