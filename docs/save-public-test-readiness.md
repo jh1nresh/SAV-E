@@ -73,11 +73,23 @@ Required regression behavior:
 
 Production checks:
 
-- `GEMINI_API_KEY` exists where backend AI analysis runs.
+- `GEMINI_API_KEY` exists where backend AI analysis runs. Without it
+  `/v0/llm/gemini-generate-content` answers 503, which takes down every
+  backend-proxied AI feature at once — link analysis, review analysis, the ask
+  drawer, `maatPublicWebAnalysis`, and Sendblue venue extraction.
+- `SAVE_GEMINI_PROXY_MODELS` lists every model the app may fall back to. It
+  defaults to `gemini-3.5-flash` alone, while the client walks
+  `SAVEProductionConfig.defaultGeminiModelFallbacks`, so an unlisted fallback
+  answers 400 `Unsupported Gemini model` and the app has no working second
+  choice exactly when the first model is failing. Keep this variable and that
+  Swift constant in step.
 - Google Places key exists where place details are fetched.
-- `SAVE_GUEST_SESSION_SECRET` and `SAVE_MY_SAVES_SECRET` are set. Both fall back
-  to a random per-process value, which drops guest sessions and `/my/` links on
-  every restart or deploy.
+- `SAVE_GUEST_SESSION_SECRET` is set. It falls back to a random per-process
+  value, which would drop guest sessions on every restart or deploy.
+- `SAVE_MY_SAVES_SECRET` is deliberately allowed to stay unset: it falls back to
+  the guest-session secret, so `/my/` links are already stable. Introducing a
+  separate value invalidates every existing `/my/` link and feeds
+  `previousAccountRefSecrets`, so only set it as a considered rotation.
 - Amap is intentionally on or off: `POST /place-resolve` needs
   `AMAP_USAGE_AUTHORIZED=true` plus a domestic or international key, and answers
   503 otherwise. China places then resolve through Apple Maps.
