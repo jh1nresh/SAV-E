@@ -9,6 +9,7 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
     @State private var showGoogleTakeoutImport = false
+    @State private var showProPaywall = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
     @State private var localSavedPlaces: [Place] = []
@@ -164,6 +165,23 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.connections")
 
                         SettingsRow(
+                            icon: "sparkles",
+                            title: languageSettings.localized(
+                                english: "SAV-E Pro",
+                                traditionalChinese: "SAV-E Pro"
+                            ),
+                            detail: languageSettings.localized(
+                                english: "Core place memory stays free",
+                                traditionalChinese: "核心地點記憶維持免費"
+                            ),
+                            color: SaveAtlasPalette.lavender,
+                            accessibilityIdentifier: "profile.pro"
+                        ) {
+                            SaveHaptics.tap()
+                            showProPaywall = true
+                        }
+
+                        SettingsRow(
                             icon: "shippingbox.and.arrow.backward.fill",
                             title: languageSettings.localized(
                                 english: "Import Google Takeout",
@@ -251,6 +269,9 @@ struct ProfileView: View {
                 existingPlaces: passportPlaces,
                 onSave: onSaveGoogleTakeoutImport
             )
+        }
+        .sheet(isPresented: $showProPaywall) {
+            SaveProPaywallView(trigger: .passport)
         }
     }
 
