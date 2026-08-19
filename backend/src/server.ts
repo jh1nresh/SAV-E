@@ -209,6 +209,10 @@ import {
   verifyAppleSignedTransaction,
   type ProEntitlementStatus,
 } from "./proEntitlement.js";
+import {
+  notificationEffect,
+  verifyAppleNotification,
+} from "./appleNotifications.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -885,6 +889,12 @@ createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/health/source-recovery") {
       const status = await readSourceRecoveryConfigStatus();
       return sendJson(response, status, status.ready ? 200 : 503);
+    }
+    // Apple posts server notifications with no user session. Authentication is
+    // the JWS signature itself, verified against the pinned Apple root, so this
+    // route is matched before the bearer-token gate.
+    if (request.method === "POST" && url.pathname === "/v0/notifications/apple") {
+      return await handleAppleServerNotification(request, response);
     }
 
     const rawSegments = url.pathname.split("/").filter(Boolean);
@@ -2449,6 +2459,84 @@ async function handleAppleEntitlement(
     expires_at: expiresAt,
     environment: transaction.environment,
   });
+}
+
+/// Handle an App Store Server Notification v2.
+///
+/// Three rules govern this handler, each protecting against a specific failure:
+///
+/// 1. Once the signature verifies, always return 200. Apple retries non-2xx for
+///    days, so a 500 loop on one odd notification is worse than a no-op.
+/// 2. Never insert. Entitlement rows are only ever created by an authenticated
+///    user posting their own transaction; if a webhook could insert, anyone who
+///    could forge a delivery would mint entitlement against an arbitrary user.
+/// 3. Update by `original_transaction_id` only, so repeated deliveries of the
+///    same notification converge instead of accumulating.
+async function handleAppleServerNotification(
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+
+  let signedPayload = "";
+  try {
+    const body = await readJson(request);
+    signedPayload = typeof body.signedPayload === "string" ? body.signedPayload.trim() : "";
+  } catch {
+    return sendJson(response, { error: "Malformed notification body" }, 400);
+  }
+  if (!signedPayload) {
+    return sendJson(response, { error: "signedPayload is required" }, 400);
+  }
+
+  const notification = await verifyAppleNotification(signedPayload);
+  if (!notification) {
+    // Unverified: reject. This is the one case that must NOT return 200,
+    // because acknowledging an unsigned payload would invite replay.
+    return sendJson(response, { error: "Notification could not be verified" }, 400);
+  }
+
+  const effect = notificationEffect(notification);
+  if (effect.kind === "ignore") {
+    console.log(
+      `[apple-notifications] ignoring ${notification.notificationType}: ${effect.reason}`,
+    );
+    return sendJson(response, { received: true, applied: false });
+  }
+
+  try {
+    const { rowCount } = await pool.query(
+      `update subscription_entitlements
+       set status = $2,
+           expires_at = $3,
+           product_id = $4,
+           environment = $5,
+           last_verified_at = now()
+       where original_transaction_id = $1`,
+      [
+        notification.transaction.originalTransactionId,
+        effect.status,
+        effect.expiresAt,
+        notification.transaction.productId,
+        notification.transaction.environment,
+      ],
+    );
+
+    if (rowCount === 0) {
+      // No local row for this subscription. Acknowledge so Apple stops
+      // retrying, but do not create one -- see rule 2 above.
+      console.log(
+        `[apple-notifications] ${notification.notificationType} for unknown subscription; ignored`,
+      );
+      return sendJson(response, { received: true, applied: false });
+    }
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+    console.warn("subscription_entitlements is missing; notification was not applied.");
+    return sendJson(response, { received: true, applied: false });
+  }
+
+  return sendJson(response, { received: true, applied: true });
 }
 
 async function recordGeminiFailure(
