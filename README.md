@@ -135,8 +135,13 @@ PRIVY_APP_SECRET=...                 # needed for Privy user provisioning flows
 SAVE_GUEST_SESSION_SECRET=...        # stable guest sessions across restarts
 SAVE_MY_SAVES_SECRET=...             # stable /my/<token> links across restarts
 GEMINI_API_KEY=...                   # backend-only AI parsing/analysis
+SAVE_GEMINI_PROXY_MODELS=...         # comma-separated model allowlist for the proxy
 GOOGLE_PLACES_API_KEY=...            # backend source recovery / place enrichment
 ```
+
+`SAVE_GEMINI_PROXY_MODELS` defaults to `gemini-3.5-flash` alone. The app walks
+`SAVEProductionConfig.defaultGeminiModelFallbacks`, so every model in that Swift
+constant must appear here or the fallback leg answers 400.
 
 `SAVE_GUEST_SESSION_SECRET` and `SAVE_MY_SAVES_SECRET` fall back to a random
 per-process value, which invalidates guest sessions and `/my/` links on every
