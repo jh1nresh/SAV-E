@@ -1,6 +1,15 @@
 # Trips / Ask Surface Rework v0
 
-> Status: SPEC — approved direction, not yet implemented
+> Status: partially implemented as of 2026-08-18.
+> - P1 ask-in-place: landed. `trips.assistant.input` / `trips.assistant.submit`
+>   in `Prototypes/AtlasPostcard/Sources/Screens.swift`, covered by
+>   `SAVEUITests/SAVEScreenshotRailTests`.
+> - P4 location-denied recovery: landed. `map.locationNotice.openSettings` in
+>   `SAV-E/Views/Map/MapView.swift`.
+> - P2 drawer visual convergence and P2b one-card Map selection: open.
+>   `SavePlaceDrawerPresentation` still lives in `SAV-E/Views/Drawer/AIDrawerView.swift`.
+> - P3 Trips layout de-clutter: open. The fixed `402×874` canvas and `.placed()`
+>   coordinates are still in `Screens.swift`.
 > Owner: JhiNResH · Drafted: 2026-08-04
 > Evidence: 2026-08-03 simulator QA session (SAV-E-Envelope-QA, 402×874)
 

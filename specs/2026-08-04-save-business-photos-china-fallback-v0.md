@@ -1,6 +1,10 @@
 # Business Photos: China Fallback v0
 
-> Status: SPEC — diagnosed 2026-08-04; slice A implementable now, slice B blocked on Amap key
+> Status as of 2026-08-18: slice A source-image fallback landed
+> (`Place.businessPhotoURLStrings` puts `sourceImageUrl` in front of the Google
+> photos); the empty case renders `PlaceBusinessPhotoCarousel`'s designed
+> fallback visual instead of hiding the section, so the "no photo area at all"
+> acceptance line is still open. Slice B stays blocked on an Amap key.
 > Owner: JhiNResH
 
 ## Problem
