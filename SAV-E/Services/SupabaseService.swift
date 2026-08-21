@@ -119,6 +119,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return try JSONDecoder.supabase.decode(SaveUsageQuotaPreview.self, from: data)
     }
 
+    /// Submit a StoreKit 2 signed transaction for server-side verification.
+    ///
+    /// Only the opaque JWS is sent. The server reads product, expiry, and
+    /// revocation out of Apple's signature, so nothing this client asserts
+    /// about its own tier is trusted.
+    func registerAppleTransaction(signedTransaction: String) async throws -> SaveEntitlementResponse {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try Self.jsonBody(["signed_transaction": signedTransaction])
+        let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
+        return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+    }
+
     // MARK: - Places
 
     func fetchPlaces(for userId: String) async throws -> [Place] {

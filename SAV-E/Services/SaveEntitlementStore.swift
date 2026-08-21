@@ -52,8 +52,11 @@ final class SaveEntitlementStore {
         } catch {
             // No server truth available. Keep working; do not downgrade a user
             // who may legitimately be Pro, and do not upgrade one who is not.
+            //
+            // A tier confirmed by the backend during this session is still
+            // evidence, so it outranks the purely local StoreKit signal.
             quota = nil
-            tier = storeKit.locallyObservedTier
+            tier = storeKit.serverVerifiedTier ?? storeKit.locallyObservedTier
             isFailingOpen = true
         }
     }
@@ -126,5 +129,29 @@ nonisolated struct SaveUsageQuotaPreview: Codable, Equatable, Sendable {
     var progress: Double {
         guard let usedUnits, limitUnits > 0 else { return 0 }
         return min(max(Double(usedUnits) / Double(limitUnits), 0), 1)
+    }
+}
+
+/// Result of server-side Apple transaction verification.
+///
+/// Mirrors the `/v0/entitlements/apple` response. Every field is server-decided;
+/// the client sent only the opaque signed transaction.
+nonisolated struct SaveEntitlementResponse: Codable, Equatable, Sendable {
+    let tier: String
+    let status: String
+    let productID: String
+    let expiresAt: String?
+    let environment: String
+
+    enum CodingKeys: String, CodingKey {
+        case tier
+        case status
+        case productID = "product_id"
+        case expiresAt = "expires_at"
+        case environment
+    }
+
+    var resolvedTier: SaveProTier {
+        SaveProTier(rawValue: tier) ?? .free
     }
 }
