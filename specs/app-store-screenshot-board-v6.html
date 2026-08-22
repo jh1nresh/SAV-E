@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAV-E App Store Screenshots v6</title>
+<style>
+  :root {
+    --cream: #fff9ef;
+    --paper: #fffdf8;
+    --cocoa: #3a2415;
+    --muted: #755f50;
+    --forest: #07583d;
+    --coral: #ff6b4a;
+    --mint: #dceecb;
+    --sky: #d8f3fb;
+    --honey: #ffd66b;
+    --lavender: #e7d8ff;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #25170f;
+    color: var(--cocoa);
+    font-family: "Avenir Next Condensed", "Arial Narrow", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .workspace { display: grid; justify-items: center; }
+  .shot {
+    --wash: var(--mint);
+    position: relative;
+    width: 1242px;
+    height: 2688px;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+      radial-gradient(900px 760px at 105% 8%, color-mix(in srgb, var(--wash) 74%, transparent), transparent 68%),
+      radial-gradient(760px 620px at -10% 36%, rgba(216,243,251,.72), transparent 70%),
+      linear-gradient(180deg, #fffdf8 0%, var(--cream) 70%, #f6ead2 100%);
+  }
+  .shot::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image: radial-gradient(rgba(58,36,21,.075) 2.2px, transparent 2.2px);
+    background-size: 42px 42px;
+  }
+  .shot::after {
+    content: "";
+    position: absolute;
+    width: 410px;
+    height: 410px;
+    right: -185px;
+    top: 360px;
+    z-index: -1;
+    border: 5px dashed rgba(7,88,61,.16);
+    border-radius: 50%;
+  }
+  .shot[data-wash="coral"] { --wash: #ffd9ce; }
+  .shot[data-wash="sky"] { --wash: var(--sky); }
+  .shot[data-wash="honey"] { --wash: #ffedb4; }
+  .shot[data-wash="lavender"] { --wash: var(--lavender); }
+
+  .masthead {
+    position: absolute;
+    top: 68px;
+    left: 94px;
+    right: 94px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 3;
+  }
+  .lockup { display: flex; align-items: center; gap: 18px; }
+  .memo {
+    width: 78px;
+    height: 78px;
+    object-fit: contain;
+    filter: drop-shadow(0 6px 0 rgba(58,36,21,.10));
+  }
+  .wordmark {
+    color: var(--forest);
+    font-size: 47px;
+    font-weight: 900;
+    letter-spacing: .08em;
+  }
+  .number {
+    min-width: 76px;
+    height: 76px;
+    display: grid;
+    place-items: center;
+    border: 3px solid rgba(58,36,21,.16);
+    border-radius: 50%;
+    background: rgba(255,253,248,.72);
+    color: var(--muted);
+    font-size: 30px;
+    font-weight: 900;
+  }
+  .copy {
+    position: absolute;
+    top: 178px;
+    left: 94px;
+    right: 94px;
+    z-index: 3;
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 8px 22px 6px;
+    border: 2px dashed rgba(7,88,61,.30);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--wash) 58%, white);
+    color: var(--forest);
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: .18em;
+  }
+  h1 {
+    margin: 20px 0 0;
+    color: var(--forest);
+    font-size: 91px;
+    font-weight: 900;
+    letter-spacing: -.025em;
+    line-height: .97;
+  }
+  h1 span {
+    position: relative;
+    white-space: nowrap;
+  }
+  h1 span::after {
+    content: "";
+    position: absolute;
+    left: -8px;
+    right: -8px;
+    bottom: 3px;
+    height: 21px;
+    z-index: -1;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--wash) 82%, transparent);
+    transform: rotate(-.7deg);
+  }
+  .sub {
+    margin: 19px 0 0;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    font-size: 34px;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+  .app-frame {
+    position: absolute;
+    top: 586px;
+    left: 50%;
+    width: 984px;
+    padding: 12px;
+    transform: translateX(-50%);
+    z-index: 2;
+    overflow: hidden;
+    border: 3px solid rgba(58,36,21,.20);
+    border-radius: 80px 80px 0 0;
+    background: var(--paper);
+    box-shadow:
+      24px 24px 0 color-mix(in srgb, var(--wash) 76%, transparent),
+      0 42px 82px rgba(58,36,21,.26);
+  }
+  .app-frame::before {
+    content: "";
+    position: absolute;
+    top: 134px;
+    left: -1px;
+    width: 30px;
+    height: 430px;
+    z-index: 2;
+    background: radial-gradient(circle at 0 15px, transparent 11px, var(--paper) 12px) 0 0 / 30px 54px repeat-y;
+    opacity: .92;
+  }
+  .app-frame img {
+    display: block;
+    width: 960px;
+    height: auto;
+    border-radius: 66px 66px 0 0;
+  }
+  .human-cue,
+  .trust-seal {
+    position: absolute;
+    z-index: 5;
+  }
+  .human-cue {
+    top: 510px;
+    right: 76px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 392px;
+    padding: 17px 22px 17px 18px;
+    border: 2px solid rgba(58,36,21,.14);
+    border-radius: 26px 34px 22px 30px;
+    background: rgba(255,253,248,.96);
+    box-shadow: 0 13px 28px rgba(58,36,21,.07);
+    transform: rotate(1.2deg);
+  }
+  .human-cue::after {
+    content: "";
+    position: absolute;
+    right: 42px;
+    bottom: -18px;
+    width: 34px;
+    height: 34px;
+    border-right: 2px solid rgba(58,36,21,.14);
+    border-bottom: 2px solid rgba(58,36,21,.14);
+    background: var(--paper);
+    transform: rotate(45deg);
+  }
+  .avatar {
+    position: relative;
+    flex: 0 0 58px;
+    width: 58px;
+    height: 58px;
+    overflow: hidden;
+    border: 3px solid rgba(7,88,61,.18);
+    border-radius: 50%;
+    background: var(--honey);
+  }
+  .avatar::before,
+  .avatar::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    background: var(--forest);
+    transform: translateX(-50%);
+  }
+  .avatar::before {
+    top: 11px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+  }
+  .avatar::after {
+    bottom: -8px;
+    width: 42px;
+    height: 30px;
+    border-radius: 50% 50% 0 0;
+  }
+  .human-cue strong,
+  .human-cue span {
+    display: block;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  }
+  .human-cue strong {
+    color: var(--forest);
+    font-size: 24px;
+    font-weight: 800;
+  }
+  .human-cue span {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 20px;
+    font-weight: 650;
+  }
+  .trust-seal {
+    top: 500px;
+    right: 82px;
+    display: grid;
+    place-items: center;
+    width: 154px;
+    height: 154px;
+    padding: 20px;
+    border: 4px double rgba(7,88,61,.58);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--mint) 56%, white);
+    color: var(--forest);
+    font-size: 21px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: .07em;
+    text-align: center;
+    transform: rotate(5deg);
+  }
+  .promise-chip {
+    display: none;
+  }
+
+  body[data-shot] .shot { display: none; }
+  body[data-shot="shot-01-home"] #shot-01-home,
+  body[data-shot="shot-02-capture"] #shot-02-capture,
+  body[data-shot="shot-03-review"] #shot-03-review,
+  body[data-shot="shot-04-map"] #shot-04-map,
+  body[data-shot="shot-05-passport"] #shot-05-passport { display: block; }
+
+  body[data-platform="iphone69"] .shot {
+    width: 1260px;
+    height: 2736px;
+  }
+
+  body[data-platform="ipad"] .shot {
+    width: 2064px;
+    height: 2752px;
+  }
+  body[data-platform="ipad"] .shot::after {
+    width: 720px;
+    height: 720px;
+    right: auto;
+    left: -300px;
+    top: 1420px;
+  }
+  body[data-platform="ipad"] .masthead {
+    top: 92px;
+    left: 150px;
+    right: 150px;
+  }
+  body[data-platform="ipad"] .memo { width: 96px; height: 96px; }
+  body[data-platform="ipad"] .wordmark { font-size: 62px; }
+  body[data-platform="ipad"] .number { min-width: 92px; height: 92px; font-size: 36px; }
+  body[data-platform="ipad"] .copy {
+    top: 440px;
+    left: 150px;
+    right: auto;
+    width: 730px;
+  }
+  body[data-platform="ipad"] .eyebrow { font-size: 30px; padding: 12px 28px 10px; }
+  body[data-platform="ipad"] h1 { margin-top: 34px; font-size: 112px; line-height: 1.01; }
+  body[data-platform="ipad"] h1 span { white-space: normal; }
+  body[data-platform="ipad"] .sub { margin-top: 34px; font-size: 42px; line-height: 1.35; }
+  body[data-platform="ipad"] .app-frame {
+    top: 278px;
+    left: auto;
+    right: 112px;
+    width: 1044px;
+    padding: 12px;
+    transform: none;
+    border-radius: 86px;
+  }
+  body[data-platform="ipad"] .app-frame img {
+    width: 1020px;
+    border-radius: 72px;
+  }
+  body[data-platform="ipad"] .promise-chip {
+    position: absolute;
+    left: 150px;
+    bottom: 170px;
+    display: block;
+    width: 680px;
+    padding: 28px 34px;
+    border: 3px dashed rgba(7,88,61,.28);
+    border-radius: 28px;
+    background: rgba(255,253,248,.72);
+    color: var(--forest);
+    font-size: 31px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+  body[data-platform="ipad"] .human-cue {
+    top: 1160px;
+    left: 150px;
+    right: auto;
+    width: 650px;
+    gap: 24px;
+    padding: 26px 32px 26px 26px;
+  }
+  body[data-platform="ipad"] .avatar {
+    flex-basis: 76px;
+    width: 76px;
+    height: 76px;
+  }
+  body[data-platform="ipad"] .avatar::before { top: 14px; width: 24px; height: 24px; }
+  body[data-platform="ipad"] .avatar::after { width: 54px; height: 38px; }
+  body[data-platform="ipad"] .human-cue strong { font-size: 31px; }
+  body[data-platform="ipad"] .human-cue span { font-size: 26px; }
+  body[data-platform="ipad"] .trust-seal {
+    top: 1200px;
+    left: 160px;
+    right: auto;
+    width: 210px;
+    height: 210px;
+    font-size: 28px;
+  }
+</style>
+</head>
+<body>
+<main class="workspace">
+  <section class="shot" id="shot-01-home" data-wash="honey">
+    <header class="masthead"><div class="lockup"><img class="memo" src="../SAV-E/Resources/Assets.xcassets/MemoMascot.imageset/memo-mascot.png"><div class="wordmark">SAV-E</div></div><div class="number">01</div></header>
+    <div class="copy"><div class="eyebrow">PLACE MEMORY</div><h1>Never lose a place<br><span>worth remembering.</span></h1><p class="sub">Private place memory, built from clues you choose.</p></div>
+    <div class="app-frame"><img src="app-store-screenshots/real-ui-v5/v5-01-home-place-memory.png"></div>
+    <div class="promise-chip">Keep the clue now. Decide what matters later.</div>
+  </section>
+
+  <section class="shot" id="shot-02-capture" data-wash="sky">
+    <header class="masthead"><div class="lockup"><img class="memo" src="../SAV-E/Resources/Assets.xcassets/MemoMascot.imageset/memo-mascot.png"><div class="wordmark">SAV-E</div></div><div class="number">02</div></header>
+    <div class="copy"><div class="eyebrow">SENT BY A FRIEND</div><h1>Save the clue.<br><span>Find the place later.</span></h1><p class="sub">Paste a map link, caption, or message.</p></div>
+    <div class="human-cue"><div class="avatar"></div><div><strong>Maya shared a place</strong><span>Save it before it disappears.</span></div></div>
+    <div class="app-frame"><img src="app-store-screenshots/real-ui-v5/v5-02-capture-link.png"></div>
+    <div class="promise-chip">A shared clue becomes something you can return to.</div>
+  </section>
+
+  <section class="shot" id="shot-03-review" data-wash="coral">
+    <header class="masthead"><div class="lockup"><img class="memo" src="../SAV-E/Resources/Assets.xcassets/MemoMascot.imageset/memo-mascot.png"><div class="wordmark">SAV-E</div></div><div class="number">03</div></header>
+    <div class="copy"><div class="eyebrow">YOU STAY IN CONTROL</div><h1 style="font-size:82px">Nothing hits your map<br><span>until you confirm it.</span></h1><p class="sub">Check the source, name, and match.</p></div>
+    <div class="trust-seal">PRIVATE<br>BY DEFAULT</div>
+    <div class="app-frame"><img src="app-store-screenshots/real-ui-v5/v5-03-review-before-map.png"></div>
+    <div class="promise-chip">SAV-E suggests. You confirm every place.</div>
+  </section>
+
+  <section class="shot" id="shot-04-map" data-wash="mint">
+    <header class="masthead"><div class="lockup"><img class="memo" src="../SAV-E/Resources/Assets.xcassets/MemoMascot.imageset/memo-mascot.png"><div class="wordmark">SAV-E</div></div><div class="number">04</div></header>
+    <div class="copy"><div class="eyebrow">YOUR PRIVATE ATLAS</div><h1>Find every place<br><span>you chose to remember.</span></h1><p class="sub">Search your confirmed Map Stamps in one private map.</p></div>
+    <div class="app-frame"><img src="app-store-screenshots/real-ui-v5/v5-04-private-map.png"></div>
+    <div class="promise-chip">Your map contains only places you confirmed.</div>
+  </section>
+
+  <section class="shot" id="shot-05-passport" data-wash="lavender">
+    <header class="masthead"><div class="lockup"><img class="memo" src="../SAV-E/Resources/Assets.xcassets/MemoMascot.imageset/memo-mascot.png"><div class="wordmark">SAV-E</div></div><div class="number">05</div></header>
+    <div class="copy"><div class="eyebrow">YOUR PLACE PASSPORT</div><h1>Watch your place<br><span>memory grow.</span></h1><p class="sub">Map Stamps, cities, and visits become your private passport.</p></div>
+    <div class="app-frame"><img src="app-store-screenshots/real-ui-v5/v5-05-private-passport.png"></div>
+    <div class="promise-chip">Every confirmed stamp adds to your private story.</div>
+  </section>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  if (params.get("shot")) document.body.dataset.shot = params.get("shot");
+  if (params.get("platform")) document.body.dataset.platform = params.get("platform");
+</script>
+</body>
+</html>
