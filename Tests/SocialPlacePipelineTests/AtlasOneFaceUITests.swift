@@ -6,15 +6,15 @@ final class AtlasOneFaceUITests: XCTestCase {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
 
-        for hex in ["FFF8EE", "FFFDF7", "174E37", "F27D5C", "D9EACB", "CDEDF4", "EFD0A5"] {
+        for hex in ["FDF8F3", "FFFDF7", "0E4A33", "F26B4A", "D6E8C4", "B5E3F5", "F0CFA1"] {
             XCTAssertTrue(theme.contains(hex), "SaveAtlasPalette is missing \(hex)")
         }
-        XCTAssertTrue(prototype.contains("0xFFF8EE"))
-        XCTAssertTrue(prototype.contains("0x174E37"))
-        XCTAssertTrue(prototype.contains("0xF27D5C"))
-        XCTAssertTrue(prototype.contains("0xD9EACB"))
-        XCTAssertTrue(prototype.contains("0xCDEDF4"))
-        XCTAssertTrue(prototype.contains("0xEFD0A5"))
+        XCTAssertTrue(prototype.contains("0xFDF8F3"))
+        XCTAssertTrue(prototype.contains("0x0E4A33"))
+        XCTAssertTrue(prototype.contains("0xF26B4A"))
+        XCTAssertTrue(prototype.contains("0xD6E8C4"))
+        XCTAssertTrue(prototype.contains("0xB5E3F5"))
+        XCTAssertTrue(prototype.contains("0xF0CFA1"))
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {
