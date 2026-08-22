@@ -311,41 +311,67 @@ struct ClipContentView: View {
     private func placeContentView(_ receipt: SharedPlaceReceipt) -> some View {
         let place = receipt.payload
         return ScrollView {
-            VStack(spacing: 18) {
+            VStack(spacing: 14) {
                 Map(position: $cameraPosition) {
                     Marker(place.name, coordinate: place.coordinate)
-                        .tint(Color.saveCoral)
+                        .tint(ClipAtlasPalette.coral)
                 }
-                .frame(height: 190)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        if let sender = receipt.verifiedSenderLabel {
-                            Label("Shared by \(sender)", systemImage: "person.crop.circle")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(Color.saveCoral)
-                        } else {
-                            Label("Shared place", systemImage: "square.and.arrow.down")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(.secondary)
+                .frame(height: 176)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    Label("Shared place", systemImage: "paperplane.fill")
+                        .font(ClipAtlasType.strong(12))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(ClipAtlasPalette.paper.opacity(0.94), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(ClipAtlasPalette.line.opacity(0.38), lineWidth: 1)
                         }
+                        .padding(12)
+                }
 
-                        Text(place.name)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color.saveInk)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(ClipAtlasPalette.forest)
+                            .frame(width: 42, height: 42)
+                            .background(ClipAtlasPalette.sky, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .stroke(
+                                        ClipAtlasPalette.forest.opacity(0.34),
+                                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                                    )
+                                    .padding(2)
+                            }
 
-                        Text(place.category)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("PLACE PREVIEW")
+                                .font(ClipAtlasType.strong(11))
+                                .tracking(0.7)
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                            Text(receipt.verifiedSenderLabel.map { "Shared by \($0)" } ?? "Ready for your review")
+                                .font(ClipAtlasType.body(13))
+                                .foregroundStyle(ClipAtlasPalette.muted)
+                        }
                     }
 
-                    VStack(spacing: 10) {
+                    Text(place.name)
+                        .font(ClipAtlasType.display(27, relativeTo: .title))
+                        .foregroundStyle(ClipAtlasPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        ClipAtlasChip(text: place.category, systemImage: "fork.knife")
                         if let ratingText = ratingLine(for: place) {
-                            detailRow(icon: "star.fill", title: "Rating", value: ratingText)
+                            ClipAtlasChip(text: ratingText, systemImage: "star.fill")
                         }
+                    }
+
+                    VStack(spacing: 9) {
                         if let hours = place.hours, !hours.isEmpty {
                             detailRow(icon: "clock", title: "Hours", value: hours)
                         }
@@ -354,60 +380,91 @@ struct ClipContentView: View {
                         }
                         detailRow(icon: "link", title: "Source", value: place.sourceLabel)
                     }
+                    .padding(.top, 10)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .stroke(
+                                ClipAtlasPalette.line.opacity(0.45),
+                                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                            )
+                            .frame(height: 1)
+                    }
 
                     if let note = place.note, !note.isEmpty {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundColor(Color.saveCoral)
-                            .padding(.top, 2)
-                    }
-                }
-                .padding(16)
-                .background(Color.savePaper)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: 2)
-                )
-                .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
-                .padding(.horizontal)
-
-                VStack(spacing: 12) {
-                    Button(action: openInFullApp) {
-                        Text("Save to my SAV-E")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.saveHoney)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
-                    }
-
-                    if let mapsURL = place.appleMapsURL {
-                        Link(destination: mapsURL) {
-                            Label("Open in Maps", systemImage: "map")
-                                .font(.headline)
-                                .foregroundColor(Color.saveInk)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(Color.savePaper)
-                                .cornerRadius(16)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(Color.saveNotebookLine, lineWidth: 2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("WHY IT WAS SHARED")
+                                .font(ClipAtlasType.strong(10))
+                                .tracking(0.55)
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                            Text(note)
+                                .font(ClipAtlasType.body(14))
+                                .foregroundStyle(ClipAtlasPalette.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(11)
+                        .background(ClipAtlasPalette.sky.opacity(0.36))
+                        .overlay {
+                            Rectangle()
+                                .stroke(
+                                    ClipAtlasPalette.sky,
+                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
                                 )
                         }
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 32)
+                .padding(16)
+                .background {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .fill(ClipAtlasPalette.paper)
+                }
+                .overlay {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .stroke(
+                            ClipAtlasPalette.sky,
+                            style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2.5])
+                        )
+                }
+                .shadow(color: ClipAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
+
+                VStack(spacing: 10) {
+                    Button(action: openInFullApp) {
+                        Label("Save to my SAV-E", systemImage: "plus.circle.fill")
+                            .font(ClipAtlasType.strong(16))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 13)
+                            .background(ClipAtlasPalette.coral)
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .stroke(ClipAtlasPalette.ink.opacity(0.16), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+
+                    if let mapsURL = place.appleMapsURL {
+                        Link(destination: mapsURL) {
+                            Label("Open in Maps", systemImage: "map")
+                                .font(ClipAtlasType.strong(15))
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(ClipAtlasPalette.paper)
+                                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                        .stroke(ClipAtlasPalette.line.opacity(0.48), lineWidth: 1)
+                                }
+                        }
+                    }
+                }
+                .padding(.bottom, 24)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
+        .background(ClipAtlasPalette.canvas)
     }
 
     // MARK: - Trip Content
@@ -907,7 +964,7 @@ struct ClipContentView: View {
         if mySavesData != nil { return "My SAV-E" }
         if referralData != nil { return "Referral Preview" }
         if listData != nil { return "List Preview" }
-        if placeReceipt != nil { return "Place Preview" }
+        if placeReceipt != nil { return "SAV-E" }
         return "Trip Preview"
     }
 
@@ -988,17 +1045,20 @@ struct ClipContentView: View {
     }
 
     private func detailRow(icon: String, title: String, value: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 9) {
             Image(systemName: icon)
-                .frame(width: 18)
-                .foregroundColor(Color.saveCoral)
-            VStack(alignment: .leading, spacing: 2) {
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 16)
+                .foregroundStyle(ClipAtlasPalette.coral)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(ClipAtlasType.strong(10))
+                    .tracking(0.45)
+                    .textCase(.uppercase)
+                    .foregroundStyle(ClipAtlasPalette.muted)
                 Text(value)
-                    .font(.caption)
-                    .foregroundColor(Color.saveInk)
+                    .font(ClipAtlasType.body(13))
+                    .foregroundStyle(ClipAtlasPalette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -1098,19 +1158,104 @@ extension Color {
 
 private struct ClipDottedBackground: View {
     var body: some View {
-        Color.saveCream
+        ClipAtlasPalette.canvas
+    }
+}
+
+private enum ClipAtlasPalette {
+    static let canvas = Color(hex: "FFF8EE")
+    static let paper = Color(hex: "FFFDF7")
+    static let forest = Color(hex: "174E37")
+    static let ink = Color(hex: "3F281A")
+    static let muted = Color(hex: "80664F")
+    static let coral = Color(hex: "F27D5C")
+    static let sky = Color(hex: "CDEDF4")
+    static let line = Color(hex: "A68F78")
+}
+
+private enum ClipAtlasType {
+    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+    }
+
+    static func strong(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+    }
+
+    static func body(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+    }
+}
+
+private struct ClipAtlasChip: View {
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(ClipAtlasType.strong(11))
+            .foregroundStyle(ClipAtlasPalette.forest)
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(ClipAtlasPalette.sky.opacity(0.44), in: Capsule())
             .overlay {
-                Canvas { context, size in
-                    let spacing: CGFloat = 18
-                    for x in stride(from: CGFloat(8), through: size.width, by: spacing) {
-                        for y in stride(from: CGFloat(8), through: size.height, by: spacing) {
-                            let rect = CGRect(x: x, y: y, width: 2, height: 2)
-                            context.fill(Path(ellipseIn: rect), with: .color(Color.saveNotebookLine.opacity(0.08)))
-                        }
-                    }
-                }
-                .allowsHitTesting(false)
+                Capsule()
+                    .stroke(ClipAtlasPalette.line.opacity(0.32), lineWidth: 1)
             }
+    }
+}
+
+private struct ClipScallopedRectangle: Shape {
+    var depth: CGFloat = 4
+    var pitch: CGFloat = 11
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = pitch / 2
+        path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY + depth))
+
+        var x = rect.minX + radius
+        while x < rect.maxX - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x + pitch, y: rect.minY + depth),
+                control: CGPoint(x: x + radius, y: rect.minY - depth)
+            )
+            x += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - depth, y: rect.minY + radius))
+        var y = rect.minY + radius
+        while y < rect.maxY - radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX - depth, y: y + pitch),
+                control: CGPoint(x: rect.maxX + depth, y: y + radius)
+            )
+            y += pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY - depth))
+        x = rect.maxX - radius
+        while x > rect.minX + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: x - pitch, y: rect.maxY - depth),
+                control: CGPoint(x: x - radius, y: rect.maxY + depth)
+            )
+            x -= pitch
+        }
+
+        path.addLine(to: CGPoint(x: rect.minX + depth, y: rect.maxY - radius))
+        y = rect.maxY - radius
+        while y > rect.minY + radius {
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX + depth, y: y - pitch),
+                control: CGPoint(x: rect.minX - depth, y: y - radius)
+            )
+            y -= pitch
+        }
+
+        path.closeSubpath()
+        return path
     }
 }
 
