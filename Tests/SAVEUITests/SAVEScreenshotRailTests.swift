@@ -35,6 +35,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "trips-beta-no-paywall")
 
         openRootTab("Home", app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.trip.beta"].waitForExistence(timeout: stepTimeout),
+            "Home trip card should show Beta."
+        )
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["profile.proPreview"].exists)
@@ -65,6 +69,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Production Home should render the illustrated Taipei city atlas."
         )
         XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            app.staticTexts["Tokyo Weekend"].exists,
+            "Home tells one city story: Taipei hero must not pair with Tokyo Weekend."
+        )
         XCTAssertFalse(
             app.descendants(matching: .any)["prototype.home.atlas"].exists,
             "Production Home must not keep the static Tokyo reference hero."
@@ -325,7 +333,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testAtlasHomeAndSavesRenderPersistedPlaceData() throws {
         let storageID = UUID().uuidString.lowercased()
-        let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -368,7 +376,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.staticTexts["1 clue needs your help"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'clue' AND label CONTAINS[c] 'help'"))
+                .firstMatch.waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertFalse(app.staticTexts["Quarter Sheets Pizza Club"].exists)
         attach(app, name: "atlas-production-home")
 
         openRootTab("Saves", app: app)
@@ -376,10 +388,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let savedCandidate = app.buttons.matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
-                "Quarter Sheets Pizza Club"
+                "Harbor Oven Pizza"
             )
         ).firstMatch
         XCTAssertTrue(savedCandidate.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", "Quarter Sheets Pizza Club")
+            ).firstMatch.exists
+        )
         attach(app, name: "atlas-production-saves")
 
         savedCandidate.tap()
@@ -402,6 +419,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["drawer.postcard.ticketHeader"].waitForExistence(timeout: stepTimeout),
             "Every place detail should use the shared Postcard ticket header."
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.review.memoPeek"].waitForExistence(timeout: stepTimeout),
+            "Review uses the Memo peek on the shared Postcard ticket."
+        )
+        XCTAssertFalse(app.staticTexts["map ready"].exists)
+        XCTAssertFalse(app.staticTexts["MAP READY"].exists)
+        XCTAssertFalse(app.staticTexts["84%"].exists)
+        XCTAssertFalse(app.staticTexts["84% confidence"].exists)
         attach(app, name: "atlas-postcard-review-drawer")
     }
 
@@ -1255,8 +1280,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch() throws {
         let storageID = UUID().uuidString.lowercased()
         let tripName = "Link Trip \(storageID.prefix(8))"
-        let placeName = "Quarter Sheets Pizza Club"
-        let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
+        let placeName = "Harbor Oven Pizza"
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -1462,7 +1487,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let captureInput = reviewApp.textViews["capture.input"]
         XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
         typeText(
-            "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1",
+            "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
             into: captureInput
         )
         let reviewKeyboardDone = reviewApp.buttons["capture.keyboardDone"]

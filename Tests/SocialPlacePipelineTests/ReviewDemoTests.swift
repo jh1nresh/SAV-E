@@ -44,6 +44,16 @@ final class ReviewDemoTests: XCTestCase {
     }
 
     @MainActor
+    func testReviewFixtureIsHarborOvenPizzaNeverQuarterSheets() {
+        let candidates = ReviewDemoSeed.reviewCandidates()
+        XCTAssertEqual(candidates.map(\.candidateName), [ReviewDemoSeed.harborOvenPizzaName])
+        XCTAssertFalse(candidates.contains { $0.candidateName.localizedCaseInsensitiveContains("Quarter Sheets") })
+        XCTAssertEqual(candidates.first?.address.isEmpty, false)
+        XCTAssertNotNil(candidates.first?.latitude)
+        XCTAssertNotNil(candidates.first?.longitude)
+    }
+
+    @MainActor
     func testMissingSeedPlacesRepairsPartialVaultWithoutDuplicatingExistingSeeds() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let seeds = ReviewDemoSeed.places(now: now)

@@ -538,6 +538,17 @@ private struct HomePriorityCard: View {
 
                 Spacer(minLength: 6)
 
+                if showsTripBeta {
+                    Text(presentation.tripsBetaLabel)
+                        .font(AtlasType.display(10))
+                        .tracking(0.8)
+                        .foregroundStyle(AtlasPalette.forest)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .background(AtlasPalette.mint.opacity(0.72), in: Capsule())
+                        .accessibilityIdentifier("home.trip.beta")
+                }
+
                 if let badge = priority.badge {
                     Text(badge)
                         .font(AtlasType.display(12))
@@ -577,12 +588,21 @@ private struct HomePriorityCard: View {
         .accessibilityIdentifier(accessibilityIdentifier)
     }
 
+    private var showsTripBeta: Bool {
+        switch presentation.homePriority.kind {
+        case .currentTrip, .upcomingTrip:
+            true
+        case .planFromStamps, .capture:
+            false
+        }
+    }
+
     private var priorityBadgeColor: Color {
         switch presentation.homePriority.kind {
         case .currentTrip:
             AtlasPalette.lavender
         case .upcomingTrip:
-            AtlasPalette.honey.opacity(0.72)
+            AtlasPalette.kraft.opacity(0.86)
         case .planFromStamps, .capture:
             AtlasPalette.mint
         }
@@ -1105,9 +1125,9 @@ struct SavesPocketScreen: View {
                 Button(action: presentation.onCapture) {
                     Image(systemName: "link")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(AtlasPalette.ink)
+                        .foregroundStyle(.white)
                         .frame(width: 40, height: 40)
-                        .background(AtlasPalette.honey.opacity(0.78), in: RoundedRectangle(cornerRadius: 13))
+                        .background(AtlasPalette.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 13))
                         .overlay {
                             RoundedRectangle(cornerRadius: 13)
                                 .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)

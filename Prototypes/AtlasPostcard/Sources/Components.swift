@@ -21,7 +21,7 @@ struct BrandHeader<Trailing: View>: View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
                 HStack(spacing: 9) {
-                    MemoMark(size: 40)
+                    MemoMascotMark(size: 40, framed: false)
                         .overlay(alignment: .bottomTrailing) {
                             // A person badge, not a book: this is the profile
                             // entry and has to read as one at a glance.

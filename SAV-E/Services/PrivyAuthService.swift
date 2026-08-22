@@ -228,17 +228,20 @@ final class PrivyAuthService: ObservableObject {
 #endif
         let vault = ReviewDemoStorage.localVaultService
         let existingPlaces = (try? vault.confirmedPlaces(limit: 500)) ?? []
+        let existingReviewCandidates = (try? vault.reviewCandidates(limit: 500)) ?? []
         let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
-        guard ReviewDemoSeed.shouldSeedVault(
+        if ReviewDemoSeed.shouldSeedVault(
             existingPlaces: existingPlaces,
             wasSeeded: wasSeeded,
             repairForUITests: shouldRepairForUITests
-        ) else {
-            defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
-            return
+        ) {
+            for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
+                _ = try? vault.saveConfirmedPlace(place)
+            }
         }
-        for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
-            _ = try? vault.saveConfirmedPlace(place)
+        // Isolated demo vault only. Harbor Oven is the Review fixture.
+        for candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
+            _ = try? vault.saveReviewCandidate(candidate)
         }
         defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
     }

@@ -166,16 +166,17 @@ extension Color {
 }
 
 enum SaveAtlasPalette {
-    static let canvas = Color(light: "FDF8F3", dark: "11161C")
+    // Light column matches Prototypes/AtlasPostcard/design.md.
+    static let canvas = Color(light: "FFF8EE", dark: "11161C")
     static let paper = Color(light: "FFFDF7", dark: "1B2027")
-    static let forest = Color(light: "0E4A33", dark: "B9E0C9")
-    static let ink = Color(light: "2E2117", dark: "FFF8ED")
-    static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
-    static let mint = Color(light: "D6E8C4", dark: "4F7258")
-    static let sky = Color(light: "B5E3F5", dark: "3F758B")
-    static let lavender = Color(light: "E3D6F7", dark: "57466F")
-    static let kraft = Color(light: "F0CFA1", dark: "71543C")
+    static let forest = Color(light: "174E37", dark: "B9E0C9")
+    static let ink = Color(light: "3F281A", dark: "FFF8ED")
+    static let muted = Color(light: "80664F", dark: "CFC4B8")
+    static let coral = Color(light: "F27D5C", dark: "D97861")
+    static let mint = Color(light: "D9EACB", dark: "4F7258")
+    static let sky = Color(light: "CDEDF4", dark: "3F758B")
+    static let lavender = Color(light: "E8DEF7", dark: "57466F")
+    static let kraft = Color(light: "EFD0A5", dark: "71543C")
     static let honey = Color(light: "FFCC4F", dark: "A87328")
     static let line = Color(light: "A68F78", dark: "807365")
 }

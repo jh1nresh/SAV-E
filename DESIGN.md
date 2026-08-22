@@ -1,6 +1,6 @@
 # SAV-E Design System
 
-> Last updated: 2026-08-05
+> Last updated: 2026-08-22
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
@@ -192,16 +192,16 @@ table ever disagree, fix whichever one drifted in the same PR.
 
 | Role | Token | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
-| Canvas | `SaveAtlasPalette.canvas` | `#FDF8F3` | `#11161C` | Full-screen Atlas background |
+| Canvas | `SaveAtlasPalette.canvas` | `#FFF8EE` | `#11161C` | Full-screen Atlas background |
 | Paper | `SaveAtlasPalette.paper` | `#FFFDF7` | `#1B2027` | Cards, panels, drawer sheets (`saveAtlasPaper`) |
-| Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
-| Ink | `SaveAtlasPalette.ink` | `#2E2117` | `#FFF8ED` | Primary text, shadows at low opacity |
-| Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
-| Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state |
-| Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
-| Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
-| Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
-| Kraft | `SaveAtlasPalette.kraft` | `#F0CFA1` | `#71543C` | Chips, tags, Passport spine, neutral fills |
+| Forest | `SaveAtlasPalette.forest` | `#174E37` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
+| Ink | `SaveAtlasPalette.ink` | `#3F281A` | `#FFF8ED` | Primary text, shadows at low opacity |
+| Muted | `SaveAtlasPalette.muted` | `#80664F` | `#CFC4B8` | Supporting and secondary copy |
+| Coral | `SaveAtlasPalette.coral` | `#F27D5C` | `#D97861` | Postage accent: primary CTA, source-clue state |
+| Mint | `SaveAtlasPalette.mint` | `#D9EACB` | `#4F7258` | Confirmed / saved state fills |
+| Sky | `SaveAtlasPalette.sky` | `#CDEDF4` | `#3F758B` | Review state fills |
+| Lavender | `SaveAtlasPalette.lavender` | `#E8DEF7` | `#57466F` | Premium and soft brand accent |
+| Kraft | `SaveAtlasPalette.kraft` | `#EFD0A5` | `#71543C` | Chips, tags, Passport spine, neutral fills |
 | Honey | `SaveAtlasPalette.honey` | `#FFCC4F` | `#A87328` | Stamp emphasis, highlights |
 | Line | `SaveAtlasPalette.line` | `#A68F78` | `#807365` | Hairline strokes, postmark linework |
 

@@ -1526,7 +1526,9 @@ struct MapDetailDrawerView: View {
         switch item {
         case .savedPlace(let place):
             liftedPostcardHeader(place)
-        case .reviewCandidate, .unsavedCandidate, .socialPlace:
+        case .reviewCandidate(let candidate):
+            reviewPostcardHeader(candidate)
+        case .unsavedCandidate, .socialPlace:
             compactHeader
         }
     }
@@ -1602,6 +1604,94 @@ struct MapDetailDrawerView: View {
         .padding(.bottom, 27)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.liftedPostcard")
+    }
+
+    private func reviewPostcardHeader(_ candidate: PlaceReviewCandidate) -> some View {
+        let isSkyTicket = candidate.hasSavableLocation
+        let fill = isSkyTicket ? SaveAtlasPalette.sky : SaveAtlasPalette.coral
+        let edge = isSkyTicket ? SaveAtlasPalette.forest.opacity(0.46) : SaveAtlasPalette.coral
+
+        return ZStack(alignment: .bottomTrailing) {
+            HStack(spacing: 10) {
+                SavePostcardPerforatedMedallion(
+                    systemName: isSkyTicket ? "camera.fill" : "questionmark",
+                    tint: isSkyTicket ? SaveAtlasPalette.sky : SaveAtlasPalette.coral.opacity(0.42),
+                    edge: edge
+                )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(isSkyTicket
+                        ? languageSettings.localized(english: "Review Candidate", traditionalChinese: "待確認地點")
+                        : languageSettings.localized(english: "Source Clue", traditionalChinese: "來源線索")
+                    )
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.65)
+                    .foregroundStyle(isSkyTicket ? SaveAtlasPalette.forest : SaveAtlasPalette.coral)
+
+                    Text(candidate.name)
+                        .font(SaveAtlasType.strong(19, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+
+                    Text(reviewHeaderDetail(candidate))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("place.detail.postcardChrome")
+                }
+
+                Spacer(minLength: 4)
+
+                shareAction
+                    .frame(width: 38, height: 38)
+
+                Button(action: onClose) {
+                    SelectedPlaceCapsuleIcon(systemImage: "xmark")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Close place detail",
+                    traditionalChinese: "關閉地點詳情"
+                ))
+                .accessibilityIdentifier("drawer.place.close")
+                .frame(width: 38, height: 38)
+            }
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 82)
+            .background(SaveAtlasPalette.paper.opacity(0.98))
+            .padding(5)
+            .background {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .fill(fill.opacity(isSkyTicket ? 0.56 : 0.28))
+            }
+            .overlay {
+                SavePostcardScallopedRectangle(depth: 3, pitch: 10)
+                    .stroke(
+                        edge,
+                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
+                    )
+            }
+
+            SavePostcardMemoPeek(width: 72)
+                .offset(x: -20, y: 31)
+                .accessibilityIdentifier("drawer.review.memoPeek")
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 9)
+        .padding(.bottom, 27)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.postcard.ticketHeader")
+    }
+
+    private func reviewHeaderDetail(_ candidate: PlaceReviewCandidate) -> String {
+        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !address.isEmpty { return address }
+        if let handle = candidate.sourceHandle, !handle.isEmpty {
+            return handle.hasPrefix("@") ? handle : "@\(handle)"
+        }
+        if let city = candidate.city, !city.isEmpty { return city }
+        return languageSettings.localized(english: "Needs your review", traditionalChinese: "需要你確認")
     }
 
     private func savedPlaceLocation(_ place: Place) -> String {
@@ -3142,8 +3232,9 @@ private struct ReviewCandidateDetailCard: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.74))
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.45)
+                        .foregroundStyle(SaveAtlasPalette.muted)
                     TextField(candidate.name, text: $displayNameDraft)
                         .textFieldStyle(.plain)
                         .font(SaveAtlasType.body(15))
@@ -3153,10 +3244,7 @@ private struct ReviewCandidateDetailCard: View {
                         .background(SaveAtlasPalette.paper)
                         .overlay(
                             Rectangle()
-                                .stroke(
-                                    SaveAtlasPalette.sky.opacity(0.92),
-                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                                )
+                                .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
                         )
                 }
 
@@ -3203,10 +3291,7 @@ private struct ReviewCandidateDetailCard: View {
                         .background(SaveAtlasPalette.paper)
                         .overlay(
                             Rectangle()
-                                .stroke(
-                                    SaveAtlasPalette.line.opacity(0.42),
-                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                                )
+                                .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
                         )
                 }
                 .disabled(isWorking)
@@ -3225,7 +3310,7 @@ private struct ReviewCandidateDetailCard: View {
 
     private var primaryActionTitle: String {
         if primaryAction.confirmsMapStamp {
-            return languageSettings.localized(english: "Confirm candidate", traditionalChinese: "確認地點")
+            return languageSettings.localized(english: "Confirm", traditionalChinese: "確認")
         }
         return primaryAction.kind.displayName(language: languageSettings.language)
     }
@@ -3358,76 +3443,18 @@ private struct ReviewCandidateContextHero: View {
     var onOpenOnMap: (() -> Void)? = nil
 
     var body: some View {
-        Group {
-            if coordinate != nil {
-                ZStack(alignment: .bottomLeading) {
-                    if let onOpenOnMap {
-                        Button(action: onOpenOnMap) {
-                            contextCanvas
-                                .frame(minHeight: mapHeroHeight)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(languageSettings.localized(
-                            english: "Open on the map",
-                            traditionalChinese: "在地圖上打開"
-                        ))
-                        .accessibilityIdentifier("drawer.review.heroMap")
-                    } else {
-                        contextCanvas
-                            .frame(minHeight: mapHeroHeight)
-                    }
-                    contextDetails
-                        .padding(10)
-                        .allowsHitTesting(false)
-                }
-            } else {
-                VStack(spacing: 0) {
-                    sourceReceiptCanvas
-                    contextDetails
-                        .padding(10)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .background {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .fill(SaveAtlasPalette.paper)
-        }
-        .clipShape(SavePostcardScallopedRectangle(depth: 3, pitch: 10))
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 3, pitch: 10)
-                .stroke(
-                    candidate.hasReliableCoordinates
-                        ? SaveAtlasPalette.sky
-                        : SaveAtlasPalette.coral,
-                    style: StrokeStyle(lineWidth: 1.1, dash: [2.5, 2.5])
-                )
-                .allowsHitTesting(false)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("drawer.review.contextHero")
-    }
-
-    private var contextDetails: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
             if let captureTripName = normalizedCaptureTripName {
-                Label(
-                    languageSettings.localized(
-                        english: "Collecting for \(captureTripName)",
-                        traditionalChinese: "為「\(captureTripName)」收集"
-                    ),
-                    systemImage: "suitcase.rolling.fill"
-                )
-                .font(.caption2.weight(.bold))
-                .foregroundColor(.saveInk)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                Text(languageSettings.localized(
+                    english: "Collecting for \(captureTripName)",
+                    traditionalChinese: "為「\(captureTripName)」收集"
+                ))
+                .font(SaveAtlasType.strong(10))
+                .tracking(0.45)
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(
-                    Color.saveCoral.opacity(0.82),
-                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                )
+                .background(SaveAtlasPalette.kraft.opacity(0.58), in: Capsule())
             }
 
             Text(eyebrow)
@@ -3446,69 +3473,61 @@ private struct ReviewCandidateContextHero: View {
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
 
-            statusChips
+            sourceReceiptCanvas
+
+            if let onOpenOnMap, coordinate != nil {
+                Button(action: onOpenOnMap) {
+                    Text(languageSettings.localized(
+                        english: "Open on the map",
+                        traditionalChinese: "在地圖上打開"
+                    ))
+                    .font(SaveAtlasType.strong(12))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(SaveAtlasPalette.paper)
+                    .overlay {
+                        Rectangle()
+                            .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.review.heroMap")
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.paper.opacity(0.96))
+        .background(SaveAtlasPalette.paper)
         .overlay {
             Rectangle()
-                .stroke(
-                    SaveAtlasPalette.line.opacity(0.36),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
+                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
-    }
-
-    @ViewBuilder
-    private var contextCanvas: some View {
-        if let coordinate {
-            Map(
-                position: .constant(.region(MKCoordinateRegion(
-                    center: coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
-                ))),
-                interactionModes: []
-            ) {
-                Marker(title, coordinate: coordinate)
-                    .tint(Color.saveCoral)
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        } else {
-            sourceReceiptCanvas
-        }
-    }
-
-    private var mapHeroHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 300 : 220
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawer.review.contextHero")
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var sourceReceiptCanvas: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Label(sourcePlatformLabel, systemImage: sourcePlatformSymbol)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(11))
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 6)
-                .background(
-                    Color.saveCoral.opacity(0.82),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-                )
+                .background(SaveAtlasPalette.sky.opacity(0.62), in: Capsule())
 
             if let handle = sourceReceipt.handle {
                 Text(languageSettings.localized(
                     english: "Source account \(handle)",
                     traditionalChinese: "來源帳號 \(handle)"
                 ))
-                .font(.title3.weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(15, relativeTo: .headline))
+                .foregroundStyle(SaveAtlasPalette.ink)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             } else if let domain = sourceReceipt.domain {
                 Text(domain)
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(15, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.ink)
                     .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             }
 
@@ -3516,25 +3535,18 @@ private struct ReviewCandidateContextHero: View {
                 english: "Source preserved. Add an address, map link, or clearer caption to identify the exact place.",
                 traditionalChinese: "來源已保留。補上地址、地圖連結或更清楚的貼文說明，才能找到精確地點。"
             ))
-            .font(.caption.weight(.medium))
-            .foregroundColor(.saveCocoa.opacity(0.82))
+            .font(SaveAtlasType.body(12))
+            .foregroundStyle(SaveAtlasPalette.muted)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 3)
             .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.saveBlush,
-                    Color.saveSky.opacity(0.62),
-                    Color.saveNotebookSpine.opacity(0.72)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .accessibilityHidden(true)
+        .background(SaveAtlasPalette.canvas.opacity(0.72))
+        .overlay {
+            Rectangle()
+                .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
+        }
     }
 
     private var sourceReceipt: ReviewSourceReceiptPresentation {
@@ -3582,50 +3594,6 @@ private struct ReviewCandidateContextHero: View {
         }
     }
 
-    @ViewBuilder
-    private var statusChips: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 6) {
-                statusChip
-                confidenceChip
-            }
-        } else {
-            HStack(spacing: 6) {
-                statusChip
-                confidenceChip
-            }
-        }
-    }
-
-    private var statusChip: some View {
-        StampChip(text: statusText, color: .saveCoral)
-    }
-
-    @ViewBuilder
-    private var confidenceChip: some View {
-        if let confidenceText {
-            StampChip(text: confidenceText, color: .saveCocoa)
-        }
-    }
-
-    private var statusText: String {
-        if candidate.hasReliableCoordinates {
-            return languageSettings.localized(english: "map ready", traditionalChinese: "地圖已就緒")
-        }
-        if candidate.hasProviderMap {
-            return languageSettings.localized(english: "Amap ready", traditionalChinese: "高德地點已就緒")
-        }
-        return languageSettings.localized(english: "needs exact place", traditionalChinese: "需要精確地點")
-    }
-
-    private var confidenceText: String? {
-        guard let confidence = candidate.confidence else { return nil }
-        return languageSettings.localized(
-            english: "\(Int(confidence * 100))% confidence",
-            traditionalChinese: "\(Int(confidence * 100))% 信心"
-        )
-    }
-
     private var coordinate: CLLocationCoordinate2D? {
         guard candidate.hasReliableCoordinates,
               let latitude = candidate.latitude,
@@ -3643,20 +3611,14 @@ private struct ReviewCandidateContextHero: View {
     }
 
     private var accessibilityLabel: String {
-        var parts = [eyebrow, title, contextLine, statusText]
-        if coordinate == nil {
-            parts.append(sourcePlatformLabel)
-            if let handle = sourceReceipt.handle {
-                parts.append(handle)
-            } else if let domain = sourceReceipt.domain {
-                parts.append(domain)
-            }
-            if let summary = sourceReceipt.summary {
-                parts.append(summary)
-            }
+        var parts = [eyebrow, title, contextLine, sourcePlatformLabel]
+        if let handle = sourceReceipt.handle {
+            parts.append(handle)
+        } else if let domain = sourceReceipt.domain {
+            parts.append(domain)
         }
-        if let confidenceText {
-            parts.append(confidenceText)
+        if let summary = sourceReceipt.summary {
+            parts.append(summary)
         }
         if let normalizedCaptureTripName {
             parts.append(languageSettings.localized(

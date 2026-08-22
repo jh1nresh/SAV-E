@@ -90,4 +90,20 @@ final class AtlasHomeHeroPresentationTests: XCTestCase {
             XCTAssertEqual(hero.scene, .regionalMap)
         }
     }
+
+    @MainActor
+    func testOwnedScenesExposeOneStoryCity() {
+        XCTAssertEqual(
+            AtlasHomeHeroPresentation.currentRegion(
+                title: "Taipei",
+                subtitle: "Taiwan",
+                countryCode: "TW",
+                latitude: 25.033,
+                longitude: 121.5654
+            ).storyCity,
+            "Taipei"
+        )
+        XCTAssertEqual(AtlasHomeHeroPresentation.referenceTokyo.storyCity, "Tokyo")
+        XCTAssertNil(AtlasHomeHeroPresentation.neutral.storyCity)
+    }
 }

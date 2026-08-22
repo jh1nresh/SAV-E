@@ -116,29 +116,55 @@ final class TripPackStore: ObservableObject {
     }
 
     var homeTripPriority: HomeTripPriority? {
+        homeTripPriority(matchingStoryCity: nil)
+    }
+
+    /// Home tells one city story. A Taipei atlas never shows Tokyo Weekend.
+    func homeTripPriority(matchingStoryCity city: String?) -> HomeTripPriority? {
         let now = nowProvider()
         let today = calendar.startOfDay(for: now)
+        let story = city?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         if let trip = currentTrips.first(where: {
             isActiveHomeTrip($0, today: today)
+                && (story.isEmpty || $0.matchesHomeStoryCity(story))
         }) {
-            let currentDay = homeDay(for: trip, today: today)
-            let nextStop = nextRemainingStop(
-                in: trip,
-                from: currentDay,
-                now: now
-            )
-            return HomeTripPriority(
-                trip: trip,
-                timing: .current,
-                selectedDay: nextStop?.day ?? currentDay,
-                nextStop: nextStop,
-                nextStopIsToday: nextStop?.day == currentDay,
-                daysUntilStart: nil
-            )
+            return currentPriority(for: trip, now: now, today: today)
         }
 
-        guard let trip = upcomingTrips.first,
+        if let match = upcomingPriority(
+            in: upcomingTrips.filter { story.isEmpty || $0.matchesHomeStoryCity(story) },
+            today: today
+        ) {
+            return match
+        }
+
+        if story.isEmpty {
+            return nil
+        }
+
+        return nil
+    }
+
+    private func currentPriority(for trip: Trip, now: Date, today: Date) -> HomeTripPriority {
+        let currentDay = homeDay(for: trip, today: today)
+        let nextStop = nextRemainingStop(
+            in: trip,
+            from: currentDay,
+            now: now
+        )
+        return HomeTripPriority(
+            trip: trip,
+            timing: .current,
+            selectedDay: nextStop?.day ?? currentDay,
+            nextStop: nextStop,
+            nextStopIsToday: nextStop?.day == currentDay,
+            daysUntilStart: nil
+        )
+    }
+
+    private func upcomingPriority(in trips: [Trip], today: Date) -> HomeTripPriority? {
+        guard let trip = trips.first,
               let startDate = trip.startDate
         else {
             return nil

@@ -445,7 +445,7 @@ struct SaveFirstRunBrandLockup: View {
 
     var body: some View {
         HStack(spacing: compact ? 6 : 8) {
-            MemoMark(size: compact ? 28 : 36)
+            MemoMascotMark(size: compact ? 28 : 36, framed: false)
 
             Text("SAV-E")
                 .font(SaveAtlasType.strong(compact ? 20 : 25))
