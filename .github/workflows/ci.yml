@@ -320,6 +320,7 @@ jobs:
         run: |
           npm run check:import-links
           npm run check:friend-share
+          npm run check:app-clip-invoke
           npm run check:save-cards
           npm run check:save-actions
 

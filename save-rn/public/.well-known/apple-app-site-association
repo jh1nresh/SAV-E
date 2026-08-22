@@ -1,0 +1,46 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "JC6858UYM9.com.wanderly.app"
+        ],
+        "components": [
+          {
+            "/": "/p/*",
+            "comment": "SAV-E shared place preview links"
+          },
+          {
+            "/": "/trip/*",
+            "comment": "SAV-E shared trip preview links"
+          },
+          {
+            "/": "/trip",
+            "comment": "Legacy SAV-E shared trip query links"
+          },
+          {
+            "/": "/list",
+            "comment": "SAV-E collaborative list preview links"
+          },
+          {
+            "/": "/r/*",
+            "comment": "SAV-E referral code preview links"
+          },
+          {
+            "/": "/u/*",
+            "comment": "SAV-E referral profile preview links"
+          },
+          {
+            "/": "/my/*",
+            "comment": "Private My SAV-E token links"
+          }
+        ]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": [
+      "JC6858UYM9.com.wanderly.app.Clip"
+    ]
+  }
+}

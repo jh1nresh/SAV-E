@@ -10,6 +10,7 @@
     "export:web": "expo export -p web && node scripts/patch-web-bundle.js",
     "check:import-links": "node scripts/check-import-link-fixtures.js",
     "check:friend-share": "node scripts/check-friend-share-fixtures.js",
+    "check:app-clip-invoke": "node scripts/check-app-clip-invoke.js",
     "check:save-cards": "node scripts/check-save-card-fixtures.js",
     "check:save-actions": "node scripts/check-save-action-fixtures.js",
     "audit:production": "node scripts/check-production-audit.js"
