@@ -1163,13 +1163,13 @@ private struct ClipDottedBackground: View {
 }
 
 private enum ClipAtlasPalette {
-    static let canvas = Color(hex: "FFF8EE")
+    static let canvas = Color(hex: "FDF8F3")
     static let paper = Color(hex: "FFFDF7")
-    static let forest = Color(hex: "174E37")
-    static let ink = Color(hex: "3F281A")
+    static let forest = Color(hex: "0E4A33")
+    static let ink = Color(hex: "2E2117")
     static let muted = Color(hex: "80664F")
-    static let coral = Color(hex: "F27D5C")
-    static let sky = Color(hex: "CDEDF4")
+    static let coral = Color(hex: "F26B4A")
+    static let sky = Color(hex: "B5E3F5")
     static let line = Color(hex: "A68F78")
 }
 
