@@ -5,16 +5,20 @@ final class AtlasOneFaceUITests: XCTestCase {
     func testDesignTokensMatchLockedOneFacePalette() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        let spec = try source(at: "Prototypes/AtlasPostcard/design.md")
+        let productionHexes = ["FDF8F3", "0E4A33", "F26B4A", "B5E3F5", "2E2117", "62594F"]
+        let retiredDraftHexes = ["FFF8EE", "174E37", "F27D5C", "CDEDF4", "3F281A", "80664F"]
 
-        for hex in ["FDF8F3", "FFFDF7", "0E4A33", "F26B4A", "D6E8C4", "B5E3F5", "F0CFA1"] {
+        for hex in productionHexes {
             XCTAssertTrue(theme.contains(hex), "SaveAtlasPalette is missing \(hex)")
+            XCTAssertTrue(prototype.contains("0x\(hex)"), "AtlasPalette is missing 0x\(hex)")
+            XCTAssertTrue(spec.contains("#\(hex)"), "design.md is missing #\(hex)")
         }
-        XCTAssertTrue(prototype.contains("0xFDF8F3"))
-        XCTAssertTrue(prototype.contains("0x0E4A33"))
-        XCTAssertTrue(prototype.contains("0xF26B4A"))
-        XCTAssertTrue(prototype.contains("0xD6E8C4"))
-        XCTAssertTrue(prototype.contains("0xB5E3F5"))
-        XCTAssertTrue(prototype.contains("0xF0CFA1"))
+        for hex in retiredDraftHexes {
+            XCTAssertFalse(theme.contains(hex), "SaveAtlasPalette restored retired draft hex \(hex)")
+            XCTAssertFalse(prototype.contains(hex), "AtlasPalette restored retired draft hex \(hex)")
+            XCTAssertFalse(spec.contains(hex), "design.md restored retired draft hex \(hex)")
+        }
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {
