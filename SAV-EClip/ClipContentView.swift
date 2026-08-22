@@ -1167,7 +1167,7 @@ private enum ClipAtlasPalette {
     static let paper = Color(hex: "FFFDF7")
     static let forest = Color(hex: "0E4A33")
     static let ink = Color(hex: "2E2117")
-    static let muted = Color(hex: "80664F")
+    static let muted = Color(hex: "62594F")
     static let coral = Color(hex: "F26B4A")
     static let sky = Color(hex: "B5E3F5")
     static let line = Color(hex: "A68F78")
