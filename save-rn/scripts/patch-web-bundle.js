@@ -105,22 +105,48 @@ function writeAppleAppSiteAssociation() {
   const wellKnownDir = path.join(distRoot, ".well-known");
   fs.mkdirSync(wellKnownDir, { recursive: true });
 
-  const association = teamId
-    ? buildEnabledAssociation(teamId)
-    : {
-        applinks: { details: [] },
-        appclips: { apps: [] },
-      };
-
-  fs.writeFileSync(
-    path.join(wellKnownDir, "apple-app-site-association"),
-    JSON.stringify(association, null, 2),
+  const wellKnownPath = path.join(wellKnownDir, "apple-app-site-association");
+  const rootPath = path.join(distRoot, "apple-app-site-association");
+  const publicWellKnownPath = path.join(
+    publicDir,
+    ".well-known",
+    "apple-app-site-association",
   );
+
   if (teamId) {
+    writeAssociationFiles(wellKnownPath, rootPath, buildEnabledAssociation(teamId));
     console.log(`Wrote apple-app-site-association for ${associatedDomain}`);
-  } else if (!rawTeamId) {
+    return;
+  }
+
+  // copyPublicAssets already copied save-rn/public. Do not replace that live
+  // AASA with an empty placeholder when APPLE_TEAM_ID is missing.
+  if (fs.existsSync(wellKnownPath) || fs.existsSync(publicWellKnownPath)) {
+    if (!fs.existsSync(wellKnownPath) && fs.existsSync(publicWellKnownPath)) {
+      fs.copyFileSync(publicWellKnownPath, wellKnownPath);
+    }
+    if (!fs.existsSync(rootPath) && fs.existsSync(wellKnownPath)) {
+      fs.copyFileSync(wellKnownPath, rootPath);
+    }
+    if (!rawTeamId) {
+      console.warn("APPLE_TEAM_ID is not set; kept committed apple-app-site-association");
+    }
+    return;
+  }
+
+  writeAssociationFiles(wellKnownPath, rootPath, {
+    applinks: { details: [] },
+    appclips: { apps: [] },
+  });
+  if (!rawTeamId) {
     console.warn("APPLE_TEAM_ID is not set; wrote disabled apple-app-site-association placeholder");
   }
+}
+
+function writeAssociationFiles(wellKnownPath, rootPath, association) {
+  const body = `${JSON.stringify(association, null, 2)}\n`;
+  fs.writeFileSync(wellKnownPath, body);
+  fs.writeFileSync(rootPath, body);
 }
 
 function normalizedAppleTeamId(value) {

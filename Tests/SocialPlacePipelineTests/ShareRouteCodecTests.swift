@@ -11,6 +11,35 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
+    func testDemoPlacePathIsNeitherShortCodeNorEmbeddedPayload() throws {
+        let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/demo"))
+
+        XCTAssertNil(SharedPlaceData.shortCode(from: url))
+        XCTAssertNil(SharedPlaceData.from(url: url))
+    }
+
+    @MainActor
+    func testSAVEClipLocalInvokeURLDecodesQuarterSheetsPlace() throws {
+        let url = try XCTUnwrap(URL(string: Self.saveClipLocalInvokeURL))
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: url))
+
+        XCTAssertNil(SharedPlaceData.shortCode(from: url))
+        XCTAssertEqual(decoded.id, "quarter-sheets-pizza-club")
+        XCTAssertEqual(decoded.name, "Quarter Sheets Pizza Club")
+        XCTAssertEqual(decoded.address, "1305 Portia St, Los Angeles, CA 90026")
+        XCTAssertEqual(decoded.lat, 34.0779)
+        XCTAssertEqual(decoded.lng, -118.2543)
+        XCTAssertEqual(decoded.category, "Food")
+        XCTAssertEqual(decoded.rating, 4.6)
+        XCTAssertEqual(decoded.reviewCount, 412)
+        XCTAssertEqual(decoded.priceRange, "$$")
+        XCTAssertEqual(decoded.hours, "Wed-Sun dinner")
+        XCTAssertEqual(decoded.sourceLabel, "Google")
+        XCTAssertEqual(decoded.sourceURL, "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club")
+        XCTAssertEqual(decoded.note, "Save this for a slow dinner night")
+    }
+
+    @MainActor
     func testEmbeddedSharedPlacePayloadStillRoundTrips() throws {
         let payload = SharedPlaceData(
             id: "place_1",
@@ -280,6 +309,9 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(receipt.verifiedSenderLabel)
         XCTAssertNil(receipt.privatePlace().recommender)
     }
+
+    private static let saveClipLocalInvokeURL =
+        "https://sav-e-app.vercel.app/p/eyJpZCI6InF1YXJ0ZXItc2hlZXRzLXBpenphLWNsdWIiLCJuYW1lIjoiUXVhcnRlciBTaGVldHMgUGl6emEgQ2x1YiIsImFkZHJlc3MiOiIxMzA1IFBvcnRpYSBTdCwgTG9zIEFuZ2VsZXMsIENBIDkwMDI2IiwibGF0IjozNC4wNzc5LCJsbmciOi0xMTguMjU0MywiY2F0ZWdvcnkiOiJGb29kIiwicmF0aW5nIjo0LjYsInJldmlld0NvdW50Ijo0MTIsInByaWNlUmFuZ2UiOiIkJCIsImhvdXJzIjoiV2VkLVN1biBkaW5uZXIiLCJzb3VyY2VMYWJlbCI6Ikdvb2dsZSIsInNvdXJjZVVSTCI6Imh0dHBzOi8vd3d3Lmdvb2dsZS5jb20vbWFwcy9wbGFjZS9RdWFydGVyK1NoZWV0cytQaXp6YStDbHViIiwicGhvdG9VUkxzIjpbXSwibm90ZSI6IlNhdmUgdGhpcyBmb3IgYSBzbG93IGRpbm5lciBuaWdodCJ9"
 
     private static let verifiedReceiptJSON = #"""
     {
