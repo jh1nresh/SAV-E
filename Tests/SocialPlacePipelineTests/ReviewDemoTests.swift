@@ -105,6 +105,28 @@ final class ReviewDemoTests: XCTestCase {
     }
 
     @MainActor
+    func testIsolatedOfflineUITestDoesNotSeedReviewFaceWithoutRepairFlag() {
+        XCTAssertFalse(
+            ReviewDemoSeed.shouldSeedReviewFace(
+                repairForUITests: false,
+                isolatedOfflineUITest: true
+            )
+        )
+        XCTAssertTrue(
+            ReviewDemoSeed.shouldSeedReviewFace(
+                repairForUITests: true,
+                isolatedOfflineUITest: true
+            )
+        )
+        XCTAssertTrue(
+            ReviewDemoSeed.shouldSeedReviewFace(
+                repairForUITests: false,
+                isolatedOfflineUITest: false
+            )
+        )
+    }
+
+    @MainActor
     func testGuestTokenHolderRoundTrips() {
         let holder = ReviewDemoGuestTokenHolder()
         XCTAssertNil(holder.current)

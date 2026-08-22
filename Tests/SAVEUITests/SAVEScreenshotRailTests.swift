@@ -1308,13 +1308,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
 
+        XCTAssertTrue(
+            app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: timeout(20)),
+            "Capture should dismiss after Analyze into Review."
+        )
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
         let candidate = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                placeName
+            )
         ).firstMatch
         XCTAssertTrue(
             candidate.waitForExistence(timeout: timeout(20)),
-            "Expected a map-ready Review Candidate.\n\(app.debugDescription)"
+            "Expected the captured map link as a Review Candidate.\n\(app.debugDescription)"
         )
         candidate.tap()
 

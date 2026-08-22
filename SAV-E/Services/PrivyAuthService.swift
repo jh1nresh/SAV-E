@@ -239,9 +239,16 @@ final class PrivyAuthService: ObservableObject {
                 _ = try? vault.saveConfirmedPlace(place)
             }
         }
-        // Isolated demo vault only. Harbor Oven is the Review fixture.
-        for candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
-            _ = try? vault.saveReviewCandidate(candidate)
+        // Isolated demo vault only. Harbor Oven is the Review fixture, but
+        // offline capture UI tests need an empty queue unless they ask to
+        // repair the Review face.
+        if ReviewDemoSeed.shouldSeedReviewFace(
+            repairForUITests: shouldRepairForUITests,
+            isolatedOfflineUITest: ReviewDemo.isOfflineUITestMode
+        ) {
+            for candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
+                _ = try? vault.saveReviewCandidate(candidate)
+            }
         }
         defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
     }

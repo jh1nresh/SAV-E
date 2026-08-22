@@ -321,4 +321,14 @@ enum ReviewDemoSeed {
     ) -> Bool {
         repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
     }
+
+    /// Harbor Oven is the Review demo face. Isolated offline UI tests that
+    /// capture a map link must start with an empty Review queue so Confirm
+    /// persists that captured place instead of the seed.
+    static func shouldSeedReviewFace(
+        repairForUITests: Bool,
+        isolatedOfflineUITest: Bool
+    ) -> Bool {
+        repairForUITests || !isolatedOfflineUITest
+    }
 }
