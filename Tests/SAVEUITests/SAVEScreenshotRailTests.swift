@@ -1280,8 +1280,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch() throws {
         let storageID = UUID().uuidString.lowercased()
         let tripName = "Link Trip \(storageID.prefix(8))"
-        let placeName = "Harbor Oven Pizza"
-        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        let placeName = "Quarter Sheets Pizza Club"
+        let mapURL = "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club/@34.0779,-118.2543,17z/data=!3m1"
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
