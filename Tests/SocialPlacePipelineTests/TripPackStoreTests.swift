@@ -151,6 +151,41 @@ final class TripPackStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testHomePriorityMatchingStoryCityRejectsTaipeiHeroPlusTokyoWeekend() async throws {
+        let calendar = utcCalendar
+        let now = date(2026, 7, 19, hour: 12, calendar: calendar)
+        let tokyo = trip(
+            name: "Tokyo Weekend",
+            start: date(2026, 7, 19, calendar: calendar),
+            end: date(2026, 7, 21, calendar: calendar)
+        )
+        let taipei = trip(
+            name: "Taipei Escape",
+            start: date(2026, 8, 2, calendar: calendar),
+            end: date(2026, 8, 5, calendar: calendar)
+        )
+        let store = TripPackStore(
+            userID: "user-1",
+            persistence: FakeTripPersistence(trips: [tokyo, taipei]),
+            calendar: calendar,
+            nowProvider: { now }
+        )
+
+        await store.load()
+
+        XCTAssertEqual(store.homeTripPriority?.trip.name, "Tokyo Weekend")
+        XCTAssertEqual(
+            store.homeTripPriority(matchingStoryCity: "Taipei")?.trip.name,
+            "Taipei Escape"
+        )
+        XCTAssertEqual(
+            store.homeTripPriority(matchingStoryCity: "Tokyo")?.trip.name,
+            "Tokyo Weekend"
+        )
+        XCTAssertNil(store.homeTripPriority(matchingStoryCity: "Seoul"))
+    }
+
+    @MainActor
     func testAddsConfirmedPlaceOnceAndPersistsAcceptedMutation() async throws {
         let initial = trip(name: "Taipei", places: [])
         let persistence = FakeTripPersistence(trips: [initial])

@@ -167,18 +167,22 @@ Opening    = Postcard Pocket transition
 
 ## Tokens
 
+Light hexes match the production `SaveAtlasPalette` light column in
+`SAV-E/Extensions/Color+Theme.swift`. If this list and production disagree,
+production wins.
+
 ```text
-canvas      #FFF8EE
+canvas      #FDF8F3
 paper       #FFFDF7
-forest      #174E37
-ink         #3F281A
-muted       #80664F
-coral       #F27D5C
-mint        #D9EACB
-sky         #CDEDF4
-lavender    #E8DEF7
-kraft       #EFD0A5
-route ink   #4D4339
+forest      #0E4A33
+ink         #2E2117
+muted       #62594F
+coral       #F26B4A
+mint        #D6E8C4
+sky         #B5E3F5
+lavender    #E3D6F7
+kraft       #F0CFA1
+route ink   #403B33
 ```
 
 Coral is the only action accent. Mint, sky, and lavender may describe state or

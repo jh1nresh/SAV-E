@@ -267,6 +267,44 @@ enum ReviewDemoSeed {
         ]
     }
 
+    /// App Review fixture for the unresolved Postcard. Never Quarter Sheets.
+    static let harborOvenPizzaName = "Harbor Oven Pizza"
+
+    static func reviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
+        [
+            PendingReviewCandidate(
+                candidateName: harborOvenPizzaName,
+                address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+                category: "food",
+                latitude: 33.7405,
+                longitude: -118.2807,
+                sourceURL: "https://www.instagram.com/p/harborovenpizza/",
+                sourceText: "Harbor Oven Pizza — waterfront pie after the harbor walk.",
+                evidence: [
+                    "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                    "Caption: Harbor Oven Pizza. Save this for a slow harbor dinner.",
+                    "Creator handle: @la.harbor.eats",
+                    "Source handle: @la.harbor.eats"
+                ],
+                confidence: 0.84,
+                missingInfo: ["User confirmation required"],
+                savedAt: now.addingTimeInterval(-3 * 3600),
+                sourceHandle: "la.harbor.eats"
+            )
+        ]
+    }
+
+    static func missingReviewCandidates(
+        from existingCandidates: [PlaceReviewCandidate],
+        now: Date = Date()
+    ) -> [PendingReviewCandidate] {
+        reviewCandidates(now: now).filter { seed in
+            !existingCandidates.contains { existing in
+                existing.name.localizedCaseInsensitiveCompare(seed.candidateName) == .orderedSame
+            }
+        }
+    }
+
     /// Repairs partial or stale demo vaults without duplicating existing seeds.
     static func missingPlaces(from existingPlaces: [Place], now: Date = Date()) -> [Place] {
         places(now: now).filter { seed in
@@ -282,5 +320,15 @@ enum ReviewDemoSeed {
         repairForUITests: Bool
     ) -> Bool {
         repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
+    }
+
+    /// Harbor Oven is the Review demo face. Isolated offline UI tests that
+    /// capture a map link must start with an empty Review queue so Confirm
+    /// persists that captured place instead of the seed.
+    static func shouldSeedReviewFace(
+        repairForUITests: Bool,
+        isolatedOfflineUITest: Bool
+    ) -> Bool {
+        repairForUITests || !isolatedOfflineUITest
     }
 }

@@ -10,12 +10,12 @@ struct MemoMascotMark: View {
             .scaledToFit()
             .frame(width: size, height: size)
             .padding(framed ? max(4, size * 0.08) : 0)
-            .background(framed ? Color.saveCream.opacity(0.96) : Color.clear)
+            .background(framed ? SaveAtlasPalette.paper.opacity(0.96) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: max(12, size * 0.22), style: .continuous))
             .overlay {
                 if framed {
                     RoundedRectangle(cornerRadius: max(12, size * 0.22), style: .continuous)
-                        .stroke(Color.saveNotebookLine, lineWidth: max(1.4, size * 0.022))
+                        .stroke(SaveAtlasPalette.line, lineWidth: max(1.4, size * 0.022))
                 }
             }
             .accessibilityHidden(true)

@@ -36,6 +36,7 @@ enum SaveAtlasPresentationFactory {
                 tripPriority: tripPriority,
                 mapStampCount: mapViewModel.places.count
             )
+            presentation.tripsBetaLabel = "BETA"
         }
 
         presentation.onCapture = onCapture
@@ -262,6 +263,16 @@ enum SaveAtlasPresentationFactory {
             presentation.tripStops = []
         }
         return presentation
+    }
+
+    static func homePriority(
+        tripPriority: HomeTripPriority?,
+        mapStampCount: Int
+    ) -> AtlasHomePriorityPresentation {
+        homePriorityPresentation(
+            tripPriority: tripPriority,
+            mapStampCount: mapStampCount
+        )
     }
 
     private static func homePriorityPresentation(
@@ -728,7 +739,7 @@ private struct SaveAtlasLivePlaceCard: View {
                         .font(AtlasType.display(12))
                         .padding(.horizontal, 9)
                         .frame(minHeight: 27)
-                        .background(AtlasPalette.honey.opacity(0.82), in: Capsule())
+                        .background(AtlasPalette.kraft.opacity(0.82), in: Capsule())
                 }
 
                 Spacer(minLength: 0)
@@ -760,7 +771,7 @@ private struct SaveAtlasLivePlaceCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(AtlasPalette.ink)
                         .frame(width: 42, height: 42)
-                        .background(AtlasPalette.honey.opacity(0.82), in: RoundedRectangle(cornerRadius: 11))
+                        .background(AtlasPalette.kraft.opacity(0.82), in: RoundedRectangle(cornerRadius: 11))
                         .overlay {
                             RoundedRectangle(cornerRadius: 11)
                                 .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)

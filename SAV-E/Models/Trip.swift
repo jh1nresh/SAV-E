@@ -16,6 +16,34 @@ struct Trip: Identifiable, Codable, Hashable {
         formatter.dateFormat = "MMM d"
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
+
+    func matchesHomeStoryCity(_ city: String) -> Bool {
+        let needle = city.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: .current
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return true }
+
+        let haystack = "\(name) \(self.city)".folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: .current
+        )
+
+        if haystack.contains(needle) { return true }
+        if needle.contains("taipei") && (haystack.contains("台北") || haystack.contains("臺北")) {
+            return true
+        }
+        if needle.contains("tokyo") && haystack.contains("東京") {
+            return true
+        }
+        if needle.contains("los angeles")
+            && (haystack.contains("los angeles")
+                || haystack.contains("orange county")
+                || haystack.contains(" la ")) {
+            return true
+        }
+        return false
+    }
 }
 
 struct TripStop: Identifiable, Codable, Hashable {

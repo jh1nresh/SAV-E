@@ -1003,9 +1003,9 @@ struct AuthLoadingView: View {
 
     private var loadingSteps: [SaveOpeningStep] {
         [
-            SaveOpeningStep(icon: "link", label: openingStepClues, tint: .saveSignal),
-            SaveOpeningStep(icon: "checklist", label: languageSettings.text(.review), tint: .saveHoney),
-            SaveOpeningStep(icon: "mappin.and.ellipse", label: openingStepMap, tint: .saveMint)
+            SaveOpeningStep(icon: "link", label: openingStepClues, tint: SaveAtlasPalette.coral),
+            SaveOpeningStep(icon: "checklist", label: languageSettings.text(.review), tint: SaveAtlasPalette.sky),
+            SaveOpeningStep(icon: "mappin.and.ellipse", label: openingStepMap, tint: SaveAtlasPalette.mint)
         ]
     }
 
@@ -1415,7 +1415,7 @@ struct SignInView: View {
             }
             .foregroundColor(.saveInk)
             .padding(14)
-            .background(Color.saveHoney.opacity(0.50))
+            .background(SaveAtlasPalette.kraft.opacity(0.72))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.saveNotebookLine, lineWidth: 1.4)
@@ -1520,18 +1520,18 @@ private struct SignInHero: View {
 
             VStack(spacing: isCompactHeight ? 5 : 8) {
                 Text(languageSettings.text(.appName))
-                    .font(.system(size: isCompactHeight ? 34 : 38, weight: .black, design: .rounded))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
+                    .foregroundStyle(SaveAtlasPalette.forest)
 
                 Text(languageSettings.text(.signInTagline))
-                    .font(isCompactHeight ? .headline.weight(.bold) : .title3.weight(.semibold))
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(isCompactHeight ? 16 : 18, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                     .multilineTextAlignment(.center)
 
                 Text(languageSettings.text(.signInDescription))
-                    .font(isCompactHeight ? .caption.weight(.semibold) : .subheadline)
+                    .font(SaveAtlasType.body(isCompactHeight ? 12 : 14))
                     .lineSpacing(2)
-                    .foregroundColor(.saveInk.opacity(0.66))
+                    .foregroundStyle(SaveAtlasPalette.ink.opacity(0.66))
                     .multilineTextAlignment(.center)
                     .lineLimit(isCompactHeight ? 3 : nil)
                     .minimumScaleFactor(0.84)
@@ -1553,7 +1553,7 @@ private struct SignInProofMark: View {
                 .rotationEffect(.degrees(-4))
 
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.saveHoney.opacity(0.22))
+                .fill(SaveAtlasPalette.kraft.opacity(0.38))
                 .frame(width: isCompactHeight ? 114 : 138, height: isCompactHeight ? 84 : 100)
                 .offset(x: 22, y: 12)
 
@@ -1561,13 +1561,13 @@ private struct SignInProofMark: View {
                 .offset(y: isCompactHeight ? -3 : -5)
 
             Label(label, systemImage: "link")
-                .font((isCompactHeight ? Font.caption2 : Font.caption).weight(.bold))
-                .foregroundColor(.saveInk)
+                .font(SaveAtlasType.strong(isCompactHeight ? 10 : 11))
+                .foregroundStyle(SaveAtlasPalette.paper)
                 .padding(.horizontal, isCompactHeight ? 9 : 11)
                 .padding(.vertical, isCompactHeight ? 6 : 7)
-                .background(Color.saveHoney.opacity(0.92))
+                .background(SaveAtlasPalette.coral.opacity(0.92))
                 .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.saveNotebookLine.opacity(0.52), lineWidth: 1))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1))
                 .offset(x: isCompactHeight ? 54 : 66, y: isCompactHeight ? 44 : 52)
         }
         .frame(height: isCompactHeight ? 126 : 152)
@@ -1581,9 +1581,9 @@ private struct SignInWorkflowStrip: View {
 
     private var steps: [(String, String, Color)] {
         [
-            (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), .saveHoney),
-            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), .saveSignal),
-            (languageSettings.text(.save), languageSettings.text(.saveSubtitle), .saveMint),
+            (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), SaveAtlasPalette.coral),
+            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), SaveAtlasPalette.sky),
+            (languageSettings.text(.save), languageSettings.text(.saveSubtitle), SaveAtlasPalette.mint),
         ]
     }
 
@@ -1686,11 +1686,11 @@ private struct SignInInputRow: View {
 
             Button(buttonTitle, action: action)
                 .accessibilityIdentifier(buttonAccessibilityID)
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(isDisabled ? Color.saveCocoa.opacity(0.42) : .saveInk)
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(isDisabled ? SaveAtlasPalette.muted.opacity(0.42) : SaveAtlasPalette.paper)
                 .padding(.horizontal, 10)
                 .frame(height: 34)
-                .background(isDisabled ? Color.clear : Color.saveHoney)
+                .background(isDisabled ? Color.clear : SaveAtlasPalette.coral)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .disabled(isDisabled)
         }

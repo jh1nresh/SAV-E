@@ -141,13 +141,14 @@ struct MapCoachmarkTour: View {
 
                 VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
                     Text(stepCounter)
-                        .font(SaveTheme.Typography.eyebrow)
-                        .foregroundColor(.saveMutedText)
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.6)
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .accessibilityHidden(true)
 
                     Text(step.title)
-                        .font(SaveTheme.Typography.cardTitle)
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(18, relativeTo: .headline))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -155,8 +156,8 @@ struct MapCoachmarkTour: View {
             }
 
             Text(step.body)
-                .font(SaveTheme.Typography.supporting)
-                .foregroundColor(.saveInk.opacity(0.78))
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.ink.opacity(0.78))
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -168,8 +169,8 @@ struct MapCoachmarkTour: View {
 
                 Button(action: skip) {
                     Text(languageSettings.localized(english: "Skip", traditionalChinese: "跳過"))
-                        .font(SaveTheme.Typography.cta)
-                        .foregroundColor(.saveMutedText)
+                        .font(SaveAtlasType.strong(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .padding(.horizontal, SaveTheme.Spacing.md)
                         .frame(height: 38)
                 }
@@ -181,14 +182,14 @@ struct MapCoachmarkTour: View {
 
                 Button(action: advance) {
                     Text(nextButtonTitle)
-                        .font(SaveTheme.Typography.cta)
-                        .foregroundColor(.saveInk)
+                        .font(SaveAtlasType.strong(13))
+                        .foregroundStyle(SaveAtlasPalette.paper)
                         .padding(.horizontal, SaveTheme.Spacing.lg)
                         .frame(height: 38)
-                        .background(Color.saveHoney)
+                        .background(SaveAtlasPalette.coral)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                                .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
@@ -254,7 +255,7 @@ private struct CoachmarkArrow: View {
     var body: some View {
         Image(systemName: systemName)
             .font(.system(size: 30, weight: .black))
-            .foregroundColor(.saveHoney)
+            .foregroundStyle(SaveAtlasPalette.coral)
             .padding(10)
             .background(
                 Circle()
@@ -287,7 +288,7 @@ private struct StepDots: View {
         HStack(spacing: 6) {
             ForEach(0..<count, id: \.self) { index in
                 Circle()
-                    .fill(index == activeIndex ? Color.saveHoney : Color.saveDisabled.opacity(0.6))
+                    .fill(index == activeIndex ? SaveAtlasPalette.coral : SaveAtlasPalette.kraft.opacity(0.6))
                     .frame(width: 7, height: 7)
                     .overlay(
                         Circle().stroke(Color.saveNotebookLine.opacity(index == activeIndex ? 0.6 : 0.25), lineWidth: 1)

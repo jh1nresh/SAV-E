@@ -268,6 +268,44 @@ struct AtlasHomeHeroPresentation: Equatable {
 
         return .regionalMap
     }
+
+    /// One Home story uses this city to pick the trip card. Taipei hero never
+    /// pairs with a Tokyo Weekend row.
+    var storyCity: String? {
+        switch scene {
+        case .tokyo: return "Tokyo"
+        case .taipei: return "Taipei"
+        case .newYork: return "New York"
+        case .shanghai: return "Shanghai"
+        case .beijing: return "Beijing"
+        case .guangzhou: return "Guangzhou"
+        case .shenzhen: return "Shenzhen"
+        case .chengdu: return "Chengdu"
+        case .chongqing: return "Chongqing"
+        case .tianjin: return "Tianjin"
+        case .hangzhou: return "Hangzhou"
+        case .nanjing: return "Nanjing"
+        case .wuhan: return "Wuhan"
+        case .xian: return "Xi'an"
+        case .suzhou: return "Suzhou"
+        case .qingdao: return "Qingdao"
+        case .xiamen: return "Xiamen"
+        case .changsha: return "Changsha"
+        case .seoul: return "Seoul"
+        case .southernCalifornia: return "Los Angeles"
+        case .regionalMap:
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return nil }
+            let folded = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: .current
+            )
+            if folded == "your place atlas" || folded == "around you" {
+                return nil
+            }
+            return trimmed
+        }
+    }
 }
 
 struct AtlasPlacePresentation: Identifiable, Equatable {

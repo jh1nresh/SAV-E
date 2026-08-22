@@ -43,6 +43,16 @@ struct SaveHomeView: View {
             ? presentation.homeHero
             : resolvedHomeHero ?? savedPlaceHero ?? .neutral
         presentation.homeHero = hero
+        if !SaveAtlasRuntime.usesParityFixture {
+            presentation.homePriority = SaveAtlasPresentationFactory.homePriority(
+                tripPriority: store.homeTripPriority(matchingStoryCity: hero.storyCity),
+                mapStampCount: mapViewModel.places.count
+            )
+            presentation.tripsBetaLabel = languageSettings.localized(
+                english: "BETA",
+                traditionalChinese: "測試版"
+            )
+        }
         presentation.onOpenHomeHero = {
             openMap(for: hero)
         }
