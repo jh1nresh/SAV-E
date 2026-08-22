@@ -47,12 +47,47 @@ final class AtlasOneFaceUITests: XCTestCase {
     }
 
     func testOneFaceDiffDoesNotTouchGrantPath() throws {
-        let entitlement = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
-        XCTAssertFalse(entitlement.contains("serverVerifiedTier ?? locallyObservedTier"))
+        let grantPathFiles: Set<String> = [
+            "SAV-E/Services/SaveEntitlementStore.swift",
+        ]
+        let changed = try changedPathsVersusDefaultBranch()
+        let touched = grantPathFiles.intersection(changed)
+        XCTAssertTrue(
+            touched.isEmpty,
+            "One-Face PR must not touch grant-path files: \(touched.sorted().joined(separator: ", "))"
+        )
     }
 
     private func source(at relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func changedPathsVersusDefaultBranch() throws -> Set<String> {
+        var lastError = "git diff failed"
+        for base in ["origin/main", "main"] {
+            let proc = Process()
+            proc.currentDirectoryURL = repositoryRoot
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            proc.arguments = ["diff", "--name-only", "\(base)...HEAD"]
+            let stdout = Pipe()
+            let stderr = Pipe()
+            proc.standardOutput = stdout
+            proc.standardError = stderr
+            try proc.run()
+            proc.waitUntilExit()
+            let out = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            if proc.terminationStatus == 0 {
+                return Set(
+                    out.split(whereSeparator: \.isNewline).map(String.init).filter { !$0.isEmpty }
+                )
+            }
+            lastError = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? lastError
+        }
+        throw NSError(
+            domain: "AtlasOneFaceUITests",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: lastError]
+        )
     }
 
     private var repositoryRoot: URL {
