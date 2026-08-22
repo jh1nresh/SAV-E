@@ -10,6 +10,7 @@ struct ProfileView: View {
     @State private var showLanguageSettings = false
     @State private var showGoogleTakeoutImport = false
     @State private var showProPaywall = false
+    @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
     @State private var localSavedPlaces: [Place] = []
@@ -164,21 +165,23 @@ struct ProfileView: View {
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.connections")
 
-                        SettingsRow(
-                            icon: "sparkles",
-                            title: languageSettings.localized(
-                                english: "SAV-E Pro",
-                                traditionalChinese: "SAV-E Pro"
-                            ),
-                            detail: languageSettings.localized(
-                                english: "Core place memory stays free",
-                                traditionalChinese: "核心地點記憶維持免費"
-                            ),
-                            color: SaveAtlasPalette.lavender,
-                            accessibilityIdentifier: "profile.pro"
-                        ) {
-                            SaveHaptics.tap()
-                            showProPaywall = true
+                        if SAVEProAccessPolicy.purchasingIsAvailable {
+                            SettingsRow(
+                                icon: "sparkles",
+                                title: languageSettings.localized(
+                                    english: "SAV-E Pro",
+                                    traditionalChinese: "SAV-E Pro"
+                                ),
+                                detail: languageSettings.localized(
+                                    english: "Core place memory stays free",
+                                    traditionalChinese: "核心地點記憶維持免費"
+                                ),
+                                color: SaveAtlasPalette.lavender,
+                                accessibilityIdentifier: "profile.pro"
+                            ) {
+                                SaveHaptics.tap()
+                                showProPaywall = true
+                            }
                         }
 
                         SettingsRow(
@@ -206,6 +209,26 @@ struct ProfileView: View {
                         ) {
                             SaveHaptics.tap()
                             Task { await viewModel.signOut() }
+                        }
+
+                        if !PrivyAuthService.shared.isReviewerDemo {
+                            SettingsRow(
+                                icon: "trash.fill",
+                                title: languageSettings.localized(
+                                    english: "Delete Account",
+                                    traditionalChinese: "刪除帳號"
+                                ),
+                                detail: languageSettings.localized(
+                                    english: "Permanently delete your account and saved data",
+                                    traditionalChinese: "永久刪除帳號與已儲存資料"
+                                ),
+                                color: .saveError,
+                                accessibilityIdentifier: "profile.deleteAccount"
+                            ) {
+                                SaveHaptics.tap()
+                                showDeleteAccountConfirmation = true
+                            }
+                            .disabled(viewModel.isDeletingAccount)
                         }
                     }
                     .padding(.horizontal, SaveTheme.Spacing.md)
@@ -272,6 +295,27 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
+        }
+        .confirmationDialog(
+            languageSettings.localized(
+                english: "Permanently delete your account?",
+                traditionalChinese: "要永久刪除帳號嗎？"
+            ),
+            isPresented: $showDeleteAccountConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(
+                languageSettings.localized(english: "Delete Account", traditionalChinese: "刪除帳號"),
+                role: .destructive
+            ) {
+                Task { _ = await viewModel.deleteAccount() }
+            }
+            Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
+        } message: {
+            Text(languageSettings.localized(
+                english: "This deletes your SAV-E account and saved places. This cannot be undone.",
+                traditionalChinese: "這會刪除你的 SAV-E 帳號與已儲存地點，而且無法復原。"
+            ))
         }
     }
 

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAV-E Support</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #fff8ec;
+      --ink: #34251a;
+      --muted: #6f5642;
+      --line: rgba(52, 37, 26, .18);
+      --card: rgba(255, 255, 255, .68);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(900px 560px at 88% -8%, rgba(226, 169, 59, .22), transparent 62%),
+        linear-gradient(180deg, #fffdf8 0%, var(--page) 100%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.58;
+    }
+    main { max-width: 820px; margin: 0 auto; padding: 56px 24px 72px; }
+    header { margin-bottom: 28px; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+    h1 { margin: 0 0 8px; font-size: clamp(36px, 7vw, 58px); line-height: 1.02; }
+    h2 { margin: 0 0 10px; font-size: 24px; line-height: 1.15; }
+    p, li { font-size: 17px; }
+    .lede { margin: 0; color: var(--muted); font-weight: 600; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px 22px;
+      margin-top: 18px;
+    }
+    a { color: inherit; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>SAV-E Support</h1>
+      <p class="lede">Help with your private place memory.</p>
+    </header>
+
+    <section>
+      <h2>Saving a place</h2>
+      <p>Paste a place link, screenshot, or note into SAV-E. If the place is
+        uncertain, it stays in Review until you confirm it. Confirmed places
+        appear on your private map.</p>
+    </section>
+
+    <section>
+      <h2>Location access</h2>
+      <p>Location permission is optional. It helps SAV-E show nearby places.
+        You can change access at any time in iOS Settings under Privacy &amp;
+        Security, then Location Services.</p>
+    </section>
+
+    <section>
+      <h2>Delete your account</h2>
+      <p>In SAV-E, open Passport, choose Delete Account, and confirm. This
+        permanently deletes your SAV-E account and its saved data.</p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>For help or privacy questions, email
+        <a href="mailto:support@sav-e.app">support@sav-e.app</a>.</p>
+      <p>Read the <a href="/privacy">SAV-E Privacy Policy</a>.</p>
+    </section>
+  </main>
+</body>
+</html>

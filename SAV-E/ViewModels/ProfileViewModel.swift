@@ -6,13 +6,19 @@ final class ProfileViewModel: ObservableObject {
     @Published var profile: UserProfile = .empty
     @Published var isLoading = false
     @Published var isSaving = false
+    @Published var isDeletingAccount = false
     @Published var errorMessage: String?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
+    private let accountDeletionService: AccountDeletionProviding
 
-    init(supabaseService: SupabaseServiceProtocol = SupabaseService.shared) {
+    init(
+        supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
+        accountDeletionService: AccountDeletionProviding = SupabaseService.shared
+    ) {
         self.supabaseService = supabaseService
+        self.accountDeletionService = accountDeletionService
         self.authService = PrivyAuthService.shared
     }
 
@@ -81,6 +87,24 @@ final class ProfileViewModel: ObservableObject {
 
     func signOut() async {
         await authService.signOut()
+    }
+
+    func deleteAccount() async -> Bool {
+        guard !authService.isReviewerDemo else { return false }
+        isDeletingAccount = true
+        errorMessage = nil
+        defer { isDeletingAccount = false }
+
+        do {
+            try await accountDeletionService.deleteAccount()
+            try? SaveLocalVaultService.shared.deleteAllRecords()
+            try? KeychainAccountReferenceStore.shared.clear()
+            await authService.signOut()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     private func saveAvatarImage(_ data: Data) throws -> String {

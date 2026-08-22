@@ -213,6 +213,7 @@ import {
   notificationEffect,
   verifyAppleNotification,
 } from "./appleNotifications.js";
+import { deleteAccount } from "./accountDeletion.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1004,6 +1005,29 @@ createServer(async (request, response) => {
     }
 
     const userId = await resolveUserId(request);
+
+    if (isV0 && resource === "account" && !id) {
+      if (request.method !== "DELETE") {
+        return sendJson(response, { error: "Method not allowed" }, 405);
+      }
+      if (!privyUserProvisioner) {
+        return sendJson(response, { error: "Account deletion is temporarily unavailable" }, 503);
+      }
+      const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
+      const privyUserId = await verifiedPrivySubject(token);
+      await deleteAccount({
+        deleteProfile: async () => {
+          await pool.query(
+            "delete from profiles where id = $1 returning id",
+            [userId],
+          );
+        },
+        deletePrivyUser: () => privyUserProvisioner.deleteUser(privyUserId),
+      });
+      return sendJson(response, null, 204);
+    }
+
     await ensureProfile(userId);
 
     if (!isV0 && resource === "place-resolve") {

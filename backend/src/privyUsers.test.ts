@@ -64,3 +64,55 @@ test("ensureUserForPhone imports a missing phone user with SAV-E metadata", asyn
     },
   });
 });
+
+test("deleteUser removes the exact Privy user with server credentials", async () => {
+  const calls: Array<{ url: string; method: string | undefined; auth: string | null }> = [];
+  const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: url.toString(),
+      method: init?.method,
+      auth: new Headers(init?.headers).get("authorization"),
+    });
+    return new Response(null, { status: 204 });
+  };
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    endpoint: "https://privy.test",
+    fetchImpl,
+  });
+  assert.ok(provisioner);
+
+  await provisioner.deleteUser("did:privy:user/one");
+
+  assert.deepEqual(calls, [{
+    url: "https://privy.test/v1/users/did%3Aprivy%3Auser%2Fone",
+    method: "DELETE",
+    auth: `Basic ${Buffer.from("app_123:secret_456").toString("base64")}`,
+  }]);
+});
+
+test("deleteUser treats an already-missing Privy user as deleted", async () => {
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    fetchImpl: async () => new Response(null, { status: 404 }),
+  });
+  assert.ok(provisioner);
+
+  await assert.doesNotReject(() => provisioner.deleteUser("did:privy:missing"));
+});
+
+test("deleteUser rejects upstream failures", async () => {
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    fetchImpl: async () => new Response(null, { status: 503 }),
+  });
+  assert.ok(provisioner);
+
+  await assert.rejects(
+    () => provisioner.deleteUser("did:privy:user"),
+    /Privy user deletion failed: HTTP 503/,
+  );
+});

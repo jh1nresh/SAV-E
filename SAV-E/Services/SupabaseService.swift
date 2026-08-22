@@ -72,6 +72,10 @@ protocol RelatedPlaceSourcesProviding {
     ) async throws -> RelatedPlaceSourcePack
 }
 
+protocol AccountDeletionProviding {
+    func deleteAccount() async throws
+}
+
 // MARK: - Errors
 
 enum SupabaseError: LocalizedError {
@@ -96,7 +100,7 @@ enum SupabaseError: LocalizedError {
 
 // MARK: - Implementation
 
-final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProviding, AccountStatusProviding {
+final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProviding, AccountStatusProviding, AccountDeletionProviding {
     static let shared = SupabaseService()
 
     private let apiBaseURL: String?
@@ -129,6 +133,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let body = try Self.jsonBody(["signed_transaction": signedTransaction])
         let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
         return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+    }
+
+    func deleteAccount() async throws {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        try await request(path: "/v0/account", method: "DELETE")
     }
 
     // MARK: - Places

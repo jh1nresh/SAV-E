@@ -1,6 +1,6 @@
-# SAV-E — App Store Launch Checklist (1.0.0 / build 101)
+# SAV-E — App Store Launch Checklist (1.0.0 / build 103)
 
-Reviewed 2026-08-18. What's done in-repo vs. what only **you** can do (anything
+Reviewed 2026-08-22. What's done in-repo vs. what only **you** can do (anything
 needing your Apple ID, passwords, or App Store Connect — Claude can't sign in on
 your behalf).
 
@@ -13,7 +13,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 ---
 
 ## 1. Build & signing
-- ✅ Version `1.0.0`, build `101`, bundle `com.wanderly.app`, team `JC6858UYM9`.
+- ✅ Version `1.0.0`, build `103`, bundle `com.wanderly.app`, team `JC6858UYM9`.
 - ✅ App icon present (`Assets.xcassets/AppIcon`).
 - ✅ Release configuration compiles (CI builds an unsigned release candidate on every push to `main`).
 - 🟡 **Xcode account** → Settings → Accounts must hold the Apple ID that owns team `JC6858UYM9`. This was the original upload blocker; re-confirm before archiving.
@@ -23,7 +23,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 2. Product → **Archive** (Release).
 3. In the **Organizer**, select the archive → **Distribute App** → **App Store Connect** → **Upload**.
 4. Wait for the build to finish **processing** in App Store Connect (a few min–1 hr).
-   - If you re-archive, bump `CURRENT_PROJECT_VERSION` in `project.yml` (>101) and re-run `xcodegen generate` first. Editing only the generated `SAV-E.xcodeproj` is undone by the next generate.
+   - If you re-archive, bump `CURRENT_PROJECT_VERSION` in `project.yml` (>103) and re-run `xcodegen generate` first. Editing only the generated `SAV-E.xcodeproj` is undone by the next generate.
 
 ## 3. App Store Connect — create the app record (you)
 - 🟡 apps → **+** → New App → Platform iOS, Name **SAV-E**, Primary language English (U.S.), Bundle ID `com.wanderly.app`, SKU `save-1`.
@@ -31,7 +31,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 ## 4. Listing metadata — paste from `app-store-listing.md`
 - 🟡 Name, Subtitle, Promotional Text, Description, Keywords (en-US **and** zh-Hant).
 - 🟡 Categories: Primary **Travel**, Secondary **Lifestyle**.
-- 🟡 Support URL + Privacy Policy URL — **must be live pages before submit** (placeholders in listing doc). This is a common rejection cause if missing.
+- 🟡 Verify `https://sav-e-app.vercel.app/support` and `/privacy` after the release web deploy.
 
 ## 5. Screenshots & icon
 - ✅ v5 sets rendered from current app captures (#128): `specs/app-store-screenshots/v5/` (1242×2688), `v5-iphone-69/` (1260×2736), `v5-ipad-13/` (2048×2732), plus the raw simulator captures in `real-ui-v5/`. See `specs/app-store-screenshot-brief-v5.md`.
@@ -49,11 +49,11 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 
 ## 8. Pricing & release
 - 🟡 Price: **Free**, all territories (or limit to your launch regions).
-- ✅ No in-app purchases to declare. The launch paywall preview was removed (#131) and the app ships no StoreKit, product, or entitlement path; `SAVEProductionConfigTests` and the screenshot rail keep it that way.
+- ✅ The app is free. StoreKit code is present for a later Pro launch, but purchasing and enforcement remain disabled and the Pro entry is hidden in this build. No IAP is attached to v1.
 - 🟡 Release: **Manually release** for v1 (so you control the moment), or phased automatic.
 
 ## 9. Submit
-- 🟡 Attach the processed build (currently 101) → **Add for Review** → **Submit**.
+- 🟡 Attach processed build `103` → **Add for Review** → **Submit for Review**.
 
 ---
 

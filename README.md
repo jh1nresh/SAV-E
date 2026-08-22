@@ -2,7 +2,7 @@
 
 SAV-E is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
 
-Current app version in this repo: **1.0.0 (build 101)**.
+Current app version in this repo: **1.0.0 (build 103)**.
 
 Build numbers live in `project.yml`. `SAV-E.xcodeproj` is generated from it, so a
 bump applied only to the generated project is undone by the next `xcodegen generate`.

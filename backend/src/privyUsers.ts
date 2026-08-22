@@ -4,6 +4,7 @@ export type PrivyUser = {
 
 export type PrivyUserProvisioner = {
   ensureUserForPhone(phoneE164: string): Promise<PrivyUser | null>;
+  deleteUser(userId: string): Promise<void>;
 };
 
 export type PrivyUserProvisionerConfig = {
@@ -65,6 +66,17 @@ export function createPrivyUserProvisioner(
       }
 
       throw new Error(`Privy user import failed: HTTP ${created.status}`);
+    },
+    async deleteUser(userId: string): Promise<void> {
+      const response = await fetchImpl(`${endpoint}/v1/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Basic ${auth}`,
+          "privy-app-id": appId,
+        },
+      });
+      if (response.ok || response.status === 404) return;
+      throw new Error(`Privy user deletion failed: HTTP ${response.status}`);
     },
   };
 }

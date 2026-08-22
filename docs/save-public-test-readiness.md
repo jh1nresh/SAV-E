@@ -1,6 +1,6 @@
 # SAV-E Public Test Readiness
 
-Generated: 2026-06-23 · Reviewed: 2026-08-18 (build 101)
+Generated: 2026-06-23 · Reviewed: 2026-08-22 (build 103)
 
 This checklist tracks the seven readiness gaps that must stay separate from
 "the app builds locally." Local code can prove client behavior; Apple,
@@ -11,7 +11,7 @@ proof.
 
 Current in-repo proof:
 
-- Bundle `com.wanderly.app`, version `1.0.0`, build `101`, team `JC6858UYM9`,
+- Bundle `com.wanderly.app`, version `1.0.0`, build `103`, team `JC6858UYM9`,
   App Store id `6769216556`. Build numbers come from `project.yml`.
 - `Tests/SAVEUITests/SAVEUISmokeHarnessTests.swift` covers the five required
   smoke paths: auth, location, nearby restaurants/cafes, share IG/Maps link,

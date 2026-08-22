@@ -58,6 +58,26 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testDeleteAllRecordsClearsEveryLocalMemoryState() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("save-memory-records.json")
+        )
+
+        _ = try service.saveSourceOnly(url: URL(string: "https://example.com/place")!)
+        _ = try service.saveConfirmedPlace(
+            makePlace(id: UUID(), name: "Memory Cafe", address: "1 Test Way", googlePlaceId: nil)
+        )
+
+        try service.deleteAllRecords()
+
+        XCTAssertTrue(try service.recentRecords().isEmpty)
+        XCTAssertTrue(try service.confirmedPlaces().isEmpty)
+        XCTAssertTrue(try service.reviewCandidates().isEmpty)
+    }
+
+    @MainActor
     private func makePlace(
         id: UUID,
         name: String,

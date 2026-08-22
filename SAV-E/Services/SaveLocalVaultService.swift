@@ -64,6 +64,14 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
+    func deleteAllRecords() throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                try save([], to: url)
+            }
+        }
+    }
+
     func saveSourceOnly(url: URL, note: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(
