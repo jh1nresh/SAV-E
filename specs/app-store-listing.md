@@ -137,4 +137,4 @@ iPad portrait screenshots (2048×2732):
 `01-stop-losing-friend-places` · `02-paste-link-save-place` ·
 `03-confirm-before-counts` · `04-ask-your-private-map` ·
 `05-private-place-passport`.
-App icon: `specs/app-store-screenshots/v2/logo-icon.png`.
+App icon: `SAV-E/Resources/Assets.xcassets/AppIcon.appiconset/SaveAppIcon.png`.
