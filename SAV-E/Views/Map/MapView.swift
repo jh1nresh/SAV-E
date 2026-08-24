@@ -28,6 +28,9 @@ struct MapView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let topChromeInset = max(geo.safeAreaInsets.top + 55, 108)
+            let bottomChromeInset = max(geo.safeAreaInsets.bottom + 86, 98)
+
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
                     UserAnnotation()
@@ -49,7 +52,8 @@ struct MapView: View {
                             if let coordinate = candidate.coordinate {
                                 Annotation("", coordinate: coordinate) {
                                     ReviewCandidateMapPin(
-                                        candidate: candidate
+                                        candidate: candidate,
+                                        isSelected: viewModel.selectedReviewCandidate?.id == candidate.id
                                     ) {
                                         viewModel.selectReviewCandidate(candidate)
                                     }
@@ -71,7 +75,8 @@ struct MapView: View {
                         ForEach(viewModel.visibleSocialPlaces) { place in
                             Annotation("", coordinate: place.coordinate) {
                                 SocialPlaceMapPin(
-                                    place: place
+                                    place: place,
+                                    isSelected: viewModel.selectedSocialPlace?.id == place.id
                                 ) {
                                     viewModel.selectSocialPlace(place)
                                 }
@@ -95,7 +100,14 @@ struct MapView: View {
                 .mapStyle(
                     .standard(
                         elevation: .flat,
-                        emphasis: .muted,
+                        // Was `.muted` + `.saturation(0.78)` + `.contrast(0.96)`
+                        // + a 0.06 canvas scrim on top. Those four greying
+                        // layers multiplied, so parks, retail districts and POI
+                        // glyphs all washed out to the same beige and the map
+                        // read as one flat heavy block. Apple's own emphasis is
+                        // the only tint layer now; brand tone comes from the
+                        // markers and chrome, not from desaturating the basemap.
+                        emphasis: .automatic,
                         // Native Apple Maps POIs stay visible: tapping one is
                         // the primary "save a place you can see" entry, and
                         // selectMapFeature depends on selectable POI features.
@@ -103,8 +115,11 @@ struct MapView: View {
                         showsTraffic: false
                     )
                 )
-                .saturation(0.78)
-                .contrast(0.96)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear
+                        .frame(height: bottomChromeInset)
+                        .allowsHitTesting(false)
+                }
                 .mapFeatureSelectionDisabled { feature in
                     feature.kind != .pointOfInterest
                 }
@@ -116,15 +131,11 @@ struct MapView: View {
                 }
                 .accessibilityIdentifier("map.liveSurface")
 
-                AtlasPalette.canvas
-                    .opacity(0.06)
-                    .allowsHitTesting(false)
-
                 if let contextBadgeText {
                     VStack {
                         AtlasMapContextBadge(text: contextBadgeText)
                             .accessibilityIdentifier("map.contextBadge")
-                            .padding(.top, 12)
+                            .padding(.top, topChromeInset)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
@@ -142,7 +153,7 @@ struct MapView: View {
                 // Top-trailing: the bottom edge of every map surface is
                 // covered by a shelf/drawer or place card, which buried the
                 // button when it sat bottom-trailing.
-                .padding(.top, 14)
+                .padding(.top, topChromeInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .accessibilityIdentifier("map.currentLocation")
 
@@ -168,7 +179,7 @@ struct MapView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.leading, 16)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, bottomChromeInset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .accessibilityIdentifier("map.providerBackedPlaces")
                 }
@@ -176,7 +187,7 @@ struct MapView: View {
                 if let moment = viewModel.stampMoment {
                     VStack {
                         SaveStampMomentView(moment: moment)
-                            .padding(.top, geo.safeAreaInsets.top + 18)
+                            .padding(.top, topChromeInset)
                             .padding(.horizontal, 24)
                         Spacer()
                     }
@@ -213,7 +224,7 @@ struct MapView: View {
                                 }
                             }
                         )
-                        .padding(.top, geo.safeAreaInsets.top + 18)
+                        .padding(.top, topChromeInset)
                         .padding(.horizontal, 24)
                         Spacer()
                     }
@@ -342,14 +353,6 @@ private struct CurrentLocationButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(controlFill)
-                    .frame(width: 54, height: 54)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(controlStroke, lineWidth: 1)
-                    )
-
                 if isLocating {
                     ProgressView()
                         .tint(controlForeground)
@@ -359,15 +362,17 @@ private struct CurrentLocationButton: View {
                         .foregroundColor(controlForeground)
                 }
             }
+            .frame(width: 54, height: 54)
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(controlStroke, lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isLocating)
         .accessibilityLabel(languageSettings.localized(english: "Center map on current location", traditionalChinese: "將地圖移到目前位置"))
         .accessibilityHint(languageSettings.localized(english: "Moves the map back to where you are now", traditionalChinese: "把地圖移回你現在所在的位置"))
-    }
-
-    private var controlFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.52) : Color.white.opacity(0.72)
     }
 
     private var controlStroke: Color {
@@ -400,7 +405,9 @@ struct PlaceMapPin: View {
                     DefaultPOIMarker(
                         systemName: "star.fill",
                         tint: SaveAtlasPalette.forest,
-                        state: .saved
+                        state: .saved,
+                        isSelected: isSelected,
+                        unselectedTint: place.category.mapMarkerTint
                     )
                 }
             }
@@ -427,6 +434,7 @@ struct PlaceMapPin: View {
 private struct SocialPlaceMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
+    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
@@ -437,7 +445,8 @@ private struct SocialPlaceMapPin: View {
             DefaultPOIMarker(
                 systemName: place.category.iconName,
                 tint: place.category.mapMarkerTint,
-                state: .shared
+                state: .shared,
+                isSelected: isSelected
             )
         }
         .buttonStyle(.plain)
@@ -450,6 +459,7 @@ private struct SocialPlaceMapPin: View {
 private struct ReviewCandidateMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: PlaceReviewCandidate
+    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
@@ -460,7 +470,9 @@ private struct ReviewCandidateMapPin: View {
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
                 tint: .saveSignal,
-                state: .review
+                state: .review,
+                isSelected: isSelected,
+                unselectedTint: candidate.inferredCategory.mapMarkerTint
             )
         }
         .buttonStyle(.plain)
@@ -484,7 +496,8 @@ private struct UnsavedMapCandidatePin: View {
             DefaultPOIMarker(
                 systemName: candidate.category?.iconName ?? "mappin.circle.fill",
                 tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
-                state: .publicResult
+                state: .publicResult,
+                isSelected: isSelected
             )
             .scaleEffect(isSelected ? 1.18 : 1)
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
@@ -542,30 +555,41 @@ private struct DefaultPOIMarker: View {
     var systemName: String
     var tint: Color
     var state: MapMarkerState
+    var isSelected: Bool
+    var unselectedTint: Color? = nil
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(.regularMaterial)
-                .overlay(Circle().fill(tint.opacity(0.18)))
-                .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
-                .frame(width: 30, height: 30)
+        Group {
+            if isSelected {
+                ZStack {
+                    Circle()
+                        .fill(.regularMaterial)
+                        .overlay(Circle().fill(tint.opacity(0.18)))
+                        .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
+                        .frame(width: 30, height: 30)
 
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(tint)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if let badgeSystemName = state.badgeSystemName {
-                Image(systemName: badgeSystemName)
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(state.badgeColor)
-                    .background(Circle().fill(Color.white.opacity(0.94)))
-                    .offset(x: 2, y: 2)
+                    Image(systemName: systemName)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if let badgeSystemName = state.badgeSystemName {
+                        Image(systemName: badgeSystemName)
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(state.badgeColor)
+                            .background(Circle().fill(Color.white.opacity(0.94)))
+                            .offset(x: 2, y: 2)
+                    }
+                }
+                .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
+            } else {
+                Circle()
+                    .fill(unselectedTint ?? tint)
+                    .frame(width: 10, height: 10)
             }
         }
-        .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
-        // Keep the 30 pt marker visual, but guarantee a >= 44 pt touch target.
+        // The selected marker is 30 pt and the unselected dot is 10 pt, but
+        // both retain the same >= 44 pt touch target.
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
     }
