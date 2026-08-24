@@ -164,7 +164,7 @@ function buildSocialPlace(url: URL, sourcePlatform: SourcePlatform): Place {
     category: inferCategory(name),
     sourcePlatform,
     sourceUrl: url.toString(),
-    note: `Draft imported from ${sourcePlatformLabel(sourcePlatform)}. SAV-E needs a confirmed map link, address, or candidate investigation before this can become a saved place.`,
+    note: `Draft imported from ${sourcePlatformLabel(sourcePlatform)}. Savvy needs a confirmed map link, address, or candidate investigation before this can become a saved place.`,
     importKind: "draft",
   });
 }

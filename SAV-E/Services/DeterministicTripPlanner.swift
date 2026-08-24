@@ -337,8 +337,8 @@ struct DeterministicTripPlanner {
                     duration: item.duration,
                     note: item.note,
                     sourceSummary: outputLanguage.localized(
-                        english: "Confirmed Map Stamp from your SAV-E memory.",
-                        traditionalChinese: "來自你的 SAV-E 記憶，已確認為地圖章。"
+                        english: "Confirmed Map Stamp from your Savvy memory.",
+                        traditionalChinese: "來自你的 Savvy 記憶，已確認為地圖章。"
                     ),
                     risks: [.hoursUnknown, .bookingUnknown]
                 )
@@ -710,7 +710,7 @@ struct DeterministicTripPlanner {
         }
     }
 
-    /// SAV-E's own nouns, removed before tokenizing.
+    /// Savvy's own nouns, removed before tokenizing.
     ///
     /// Every token that survives tokenizing is treated as a filter a place must
     /// match, so "plan a day from my Map Stamps" — the vocabulary this app
@@ -857,13 +857,13 @@ struct DeterministicTripPlanner {
     private func title(for message: String, dayCount: Int, outputLanguage: AppLanguage) -> String {
         if dayCount == 1 {
             return outputLanguage.localized(
-                english: "SAV-E Day Plan",
-                traditionalChinese: "SAV-E 一日行程"
+                english: "Savvy Day Plan",
+                traditionalChinese: "Savvy 一日行程"
             )
         }
         return outputLanguage.localized(
-            english: "SAV-E \(dayCount)-Day Plan",
-            traditionalChinese: "SAV-E \(dayCount) 天行程"
+            english: "Savvy \(dayCount)-Day Plan",
+            traditionalChinese: "Savvy \(dayCount) 天行程"
         )
     }
 

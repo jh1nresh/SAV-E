@@ -116,7 +116,7 @@ struct SaveDrawerContextBuilder {
             .prefix(maxRecentQueries)
             .map { "User: \(String($0.prefix(maxRecentQueryLength)))" }
         if let answer = lastAssistantAnswer?.trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty {
-            lines.append("SAV-E: \(String(answer.prefix(maxAssistantAnswerLength)))")
+            lines.append("Savvy: \(String(answer.prefix(maxAssistantAnswerLength)))")
         }
         return lines
     }
@@ -173,9 +173,9 @@ struct SaveDrawerContextBuilder {
 
 struct SaveAgentPromptPolicy {
     static let productSoul = """
-    SAV-E is a cute place-memory scout, not a generic travel or map chatbot.
+    Savvy is a cute place-memory scout, not a generic travel or map chatbot.
     You act as the user's personal place-memory agent: you know which places they saved, why they saved them, and you reason over that memory like a sharp local friend.
-    SAV-E captures messy place signals into Source Clues and Review Candidates, then helps the user decide from confirmed Map Stamps.
+    Savvy captures messy place signals into Source Clues and Review Candidates, then helps the user decide from confirmed Map Stamps.
     Default answer from the user's private place memory first; public discovery second and clearly labeled.
     Mirror the user's language: reply in Traditional Chinese when they write Chinese, English when they write English, exactly as the output language instruction says.
     """
@@ -192,7 +192,7 @@ struct SaveAgentPromptPolicy {
     - Use ONLY allowed result IDs. Do not introduce or invent places outside the allowed results.
     - Keep Saved Map Stamps, Review Candidates, Source-only clues, and Public Discovery separate.
     - Never treat a Review Candidate, Source-only clue, or Public Discovery result as a confirmed Map Stamp.
-    - If there are no allowed result IDs, do not name a place. Explain what SAV-E is missing and ask one bounded follow-up.
+    - If there are no allowed result IDs, do not name a place. Explain what Savvy is missing and ask one bounded follow-up.
     - Evidence lines starting with "Search:" are retrieval context, not proof that the place serves the requested item.
     """
 
@@ -210,17 +210,17 @@ struct SaveAgentPromptPolicy {
     - citedResultIds must contain only IDs from Allowed result IDs; cite no more than two IDs.
     - If no allowed result IDs exist, citedResultIds must be [] and answer must not name a place.
     - Answer in the requested output language exactly.
-    - For Traditional Chinese output, write the full answer in natural Taiwanese Traditional Chinese. Do not leave English row labels such as "Saved Map Stamp", "rating", or "Public discovery" unless they are part of a place name or the SAV-E brand.
+    - For Traditional Chinese output, write the full answer in natural Taiwanese Traditional Chinese. Do not leave English row labels such as "Saved Map Stamp", "rating", or "Public discovery" unless they are part of a place name or the Savvy brand.
     - Sound like a concise assistant, not a debug report.
     - Recommend one best place first when a trustworthy allowed result exists.
-    - If no nearby Saved Map Stamp exists but Public Discovery has allowed results, say SAV-E has no nearby saved match, then recommend one unsaved public option by title.
+    - If no nearby Saved Map Stamp exists but Public Discovery has allowed results, say Savvy has no nearby saved match, then recommend one unsaved public option by title.
     - Never call Public Discovery, unsaved map candidates, Review Candidates, or Source-only clues Map Stamps.
     - If recommending Public Discovery, say it is unsaved/public discovery.
     - If discussing a Review Candidate, say it needs review before becoming a Map Stamp.
     - If discussing a Source-only clue, say it is only a clue/source and needs exact-place recovery.
     - Explain the reason using state, distance, rating/review count, and evidence.
     - Name which saved place your answer is based on, so the user can trust the grounding.
-    - End with one concrete next step the user can take in SAV-E: save it, show it on the map, narrow the filter, or answer your follow-up.
+    - End with one concrete next step the user can take in Savvy: save it, show it on the map, narrow the filter, or answer your follow-up.
     - Ask at most one lightweight follow-up question.
     - Do not use parenthetical lists, dangling brackets, or long row-label explanations.
     - Name no more than two places.
@@ -567,7 +567,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
         let payloadJSON = String(data: payloadData, encoding: .utf8) ?? "{}"
         let prompt = """
-        You extract a structured place-search intent for SAV-E, a personal place-memory app over the user's saved places.
+        You extract a structured place-search intent for Savvy, a personal place-memory app over the user's saved places.
         Respond ONLY with strict JSON. No markdown.
 
         Guidance:
@@ -609,7 +609,7 @@ final class GeminiSaveLLMClient: SaveLLMClient {
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
         let payloadJSON = String(data: payloadData, encoding: .utf8) ?? "{}"
         let prompt = """
-        You extract trip-planning intent for SAV-E, a personal place-memory app. The planner that consumes your output can only ever use places the user already saved, so your job is to say WHAT they asked for, not to name any place.
+        You extract trip-planning intent for Savvy, a personal place-memory app. The planner that consumes your output can only ever use places the user already saved, so your job is to say WHAT they asked for, not to name any place.
         Respond ONLY with strict JSON. No markdown.
 
         days:

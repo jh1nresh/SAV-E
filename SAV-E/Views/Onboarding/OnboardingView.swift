@@ -392,8 +392,8 @@ enum OnboardingStep: Int, CaseIterable {
         guard self == .mapStamp else { return "" }
         return hasOwnClue
             ? language.localized(
-                english: "Your clue is ready. Open SAV-E, then analyze it into Review when you're ready.",
-                traditionalChinese: "你的線索已準備好。打開 SAV-E 後，由你決定何時分析並送進待確認。"
+                english: "Your clue is ready. Open Savvy, then analyze it into Review when you're ready.",
+                traditionalChinese: "你的線索已準備好。打開 Savvy 後，由你決定何時分析並送進待確認。"
             )
             : language.localized(
                 english: "Paste a link any time and I'll work out the place.",
@@ -410,7 +410,7 @@ enum OnboardingStep: Int, CaseIterable {
         case .candidate:
             return language.localized(english: "Confirm this place", traditionalChinese: "確認這個地點")
         case .mapStamp:
-            return language.localized(english: "Open SAV-E", traditionalChinese: "打開 SAV-E")
+            return language.localized(english: "Open Savvy", traditionalChinese: "打開 Savvy")
         }
     }
 
@@ -431,7 +431,7 @@ enum OnboardingStep: Int, CaseIterable {
     func skipTitle(language: AppLanguage) -> String {
         switch self {
         case .mapStamp:
-            return language.localized(english: "Skip and open SAV-E", traditionalChinese: "跳過，直接打開")
+            return language.localized(english: "Skip and open Savvy", traditionalChinese: "跳過，直接打開")
         default:
             return language.localized(english: "Skip this step", traditionalChinese: "跳過這一步")
         }
@@ -447,13 +447,13 @@ struct SaveFirstRunBrandLockup: View {
         HStack(spacing: compact ? 6 : 8) {
             MemoMascotMark(size: compact ? 28 : 36, framed: false)
 
-            Text("SAV-E")
+            Text("Savvy")
                 .font(SaveAtlasType.strong(compact ? 20 : 25))
                 .tracking(1)
                 .foregroundStyle(SaveAtlasPalette.forest)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("SAV-E")
+        .accessibilityLabel("Savvy")
     }
 }
 

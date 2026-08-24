@@ -35,7 +35,7 @@ final class SavePlanAroundControllerTests: XCTestCase {
         XCTAssertEqual(draft.newSuggestions.map(\.title), ["The Geffen Contemporary at MOCA"])
         XCTAssertTrue(draft.routeStops.map(\.title).contains("Maru Coffee"))
         XCTAssertTrue(draft.routeStops.map(\.title).contains("The Geffen Contemporary at MOCA"))
-        XCTAssertEqual(draft.routeStops.first?.sourceLabel, "From your SAV-E")
+        XCTAssertEqual(draft.routeStops.first?.sourceLabel, "From your Savvy")
         XCTAssertEqual(draft.newSuggestions.first?.sourceLabel, "New recommendation")
         XCTAssertEqual(draft.retrievalReceipt.candidateCount, 1)
         XCTAssertTrue(draft.explanation.contains("Map Stamp"))

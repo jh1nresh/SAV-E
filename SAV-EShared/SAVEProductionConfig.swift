@@ -4,6 +4,8 @@ enum SAVEProductionConfig {
     // Existing App Store identifiers stay on com.wanderly until a separate app migration is planned.
     static let legacyProductionBundleID = "com.wanderly.app"
     nonisolated static let appGroupSuiteName = "group.com.wanderly.app"
+    nonisolated static let currentCustomURLScheme = "savvy"
+    nonisolated static let legacyCustomURLScheme = "wanderly"
     static let pendingPlacesFileName = "pending-places.json"
     static let pendingReviewCandidatesFileName = "pending-review-candidates.json"
 
@@ -17,6 +19,10 @@ enum SAVEProductionConfig {
 
     static func geminiGenerateContentURL(apiKey: String, model: String) -> URL {
         URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(apiKey)")!
+    }
+
+    nonisolated static func supportsCustomURLScheme(_ url: URL) -> Bool {
+        url.scheme == currentCustomURLScheme || url.scheme == legacyCustomURLScheme
     }
 
     static func allowsClientGeminiFallback(bundle: Bundle = .main) -> Bool {

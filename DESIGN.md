@@ -1,4 +1,4 @@
-# SAV-E Design System
+# Savvy Design System
 
 > Last updated: 2026-08-05
 > Status: source of truth for native iOS design work
@@ -8,8 +8,8 @@
 
 ## Product Frame
 
-SAV-E is a personal place-memory agent. Users send messy place signals: links, posts,
-screenshots, notes, maps, imports. SAV-E preserves the source, identifies the real
+Savvy is a personal place-memory agent. Users send messy place signals: links, posts,
+screenshots, notes, maps, imports. Savvy preserves the source, identifies the real
 place when it can, asks before saving uncertain matches, and turns confirmed places
 into a map-ready memory.
 
@@ -23,11 +23,11 @@ Assumptions locked by current code:
 - `MemoMascotMark` owns the Memo elephant mark.
 - `SaveMemoryBadge`, `PlaceMapPin`, and `ReviewCandidateMapPin` define the current
   visual split between clues, review candidates, and Map Stamps.
-- `ProfileView` is the SAV-E Passport, not a generic settings page.
+- `ProfileView` is the Savvy Passport, not a generic settings page.
 
 ## Design Thesis
 
-SAV-E should feel like a cream field notebook that happens to have a map inside it.
+Savvy should feel like a cream field notebook that happens to have a map inside it.
 
 The interface language is:
 
@@ -40,19 +40,19 @@ an item is a clue, a candidate, or a saved place in five seconds, the UI failed.
 
 ## Platform Boundary
 
-Borrow Apple Maps for spatial navigation. Own SAV-E semantics for memory, source
+Borrow Apple Maps for spatial navigation. Own Savvy semantics for memory, source
 evidence, saved state, review candidates, lists, and AI actions.
 
-Apple Maps is the reference for map literacy, not the product identity. SAV-E can
+Apple Maps is the reference for map literacy, not the product identity. Savvy can
 reuse platform-native patterns such as map gestures, current-location placement,
 bottom drawer mechanics, selected-place focus, and compact place information because
 those reduce learning cost on iOS.
 
-SAV-E must diverge wherever the user is deciding what a place means in their own
+Savvy must diverge wherever the user is deciding what a place means in their own
 memory. The drawer, detail actions, social/referral surfaces, review queue, and AI
 recommendations should make saved memory, unsaved candidates, source evidence,
 lists, and planning actions explicit. The map shell may feel familiar; the memory
-layer must feel like SAV-E.
+layer must feel like Savvy.
 
 ## Core Metaphors
 
@@ -98,12 +98,12 @@ Rules:
 
 ### Review Clue
 
-A Review Clue is evidence that SAV-E has not promoted into a confirmed memory.
+A Review Clue is evidence that Savvy has not promoted into a confirmed memory.
 
 Rules:
 
 - A clue is not a saved place.
-- A clue can become a Review Candidate when SAV-E has a likely place match.
+- A clue can become a Review Candidate when Savvy has a likely place match.
 - A source-only clue must stay out of map-pin state unless it gains reliable
   coordinates.
 - Review UI should say what is known, what is missing, and the next action.
@@ -118,7 +118,7 @@ Rules:
   proof-backed count, cities, waiting clues, and account controls.
 - Do not label a self-marked visited place as proof-verified. Real-world
   verification requires receipt, photo, or location evidence.
-- Proof-backed count stays `0` until SAV-E has user-attached proof evidence.
+- Proof-backed count stays `0` until Savvy has user-attached proof evidence.
   Public map metadata, friend-saved places, and self-marked Visited status do
   not count as proof.
 - Do not call it a profile unless referring to the implementation file.
@@ -126,7 +126,7 @@ Rules:
 
 ### Evidence Receipt
 
-An Evidence Receipt shows why SAV-E believes an item is what it says it is.
+An Evidence Receipt shows why Savvy believes an item is what it says it is.
 
 Rules:
 
@@ -141,7 +141,7 @@ Rules:
 
 Use these product nouns:
 
-- SAV-E
+- Savvy
 - Memo
 - Map Stamp
 - Visited Map Stamp
@@ -167,7 +167,7 @@ Avoid these in user-facing UI:
 
 ## Atlas Postcard Tokens
 
-Atlas Postcard is the current visual system for SAV-E's primary surfaces. It
+Atlas Postcard is the current visual system for Savvy's primary surfaces. It
 reads as an illustrated travel atlas: warm paper panels, condensed editorial
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
@@ -340,7 +340,7 @@ Palette rules:
 > Legacy: system typography applies to legacy cream-notebook surfaces only.
 > Atlas surfaces use `SaveAtlasType` (see "Atlas Typography" above).
 
-SAV-E uses native system typography.
+Savvy uses native system typography.
 
 Rules:
 
@@ -407,7 +407,7 @@ Do not introduce new badge states without updating this document first.
 
 Source: `SAV-E/Extensions/Color+Theme.swift`.
 
-- Use `saveNotebookSurface` for drawer/detail panels that belong to SAV-E's
+- Use `saveNotebookSurface` for drawer/detail panels that belong to Savvy's
   memory layer.
 - Use `SaveIconTile` for small icon-only controls and row icons.
 - Avoid ad hoc circular icon buttons inside Passport, detail drawers, and
@@ -461,7 +461,7 @@ A Source Clue preserves weak evidence without pretending it is a place.
 Required hierarchy:
 
 1. Source platform or source label.
-2. What SAV-E extracted.
+2. What Savvy extracted.
 3. Missing exact place.
 4. Action: Find exact place or keep as clue.
 
@@ -501,7 +501,7 @@ Every UI object must map to one of these states:
 
 | State | Meaning | Can show on map? | Primary action |
 | --- | --- | --- | --- |
-| Source Clue | SAV-E preserved source evidence but lacks a confirmed place | No | Find exact place |
+| Source Clue | Savvy preserved source evidence but lacks a confirmed place | No | Find exact place |
 | Review Candidate | Likely place match, user confirmation needed | Only with reliable coordinates | Confirm or reject |
 | Unsaved Candidate | Recommendation or visible map object not saved | Optional if map-originated | Save or inspect |
 | Map Stamp | Confirmed saved place | Yes | Navigate or plan |
@@ -518,7 +518,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 First impression:
 
 - Memo elephant as clear brand anchor.
-- SAV-E name prominent.
+- Savvy name prominent.
 - One sentence: "Your personal place agent."
 - Workflow strip: Capture, Review, Save.
 - Cream notebook background.
@@ -551,7 +551,7 @@ Rules:
 
 ### Drawer
 
-The drawer is SAV-E's command and memory workbench.
+The drawer is Savvy's command and memory workbench.
 
 Rules:
 
@@ -566,7 +566,7 @@ Rules:
 - Idle drawer content should use an Apple Maps-like hierarchy: command bar, quick
   action rows, filters, recent items, and suggestions. Do not show the full agent
   command console by default.
-- Separate "From your SAV-E" from "New / Unsaved".
+- Separate "From your Savvy" from "New / Unsaved".
 - Confirmed memory must visually beat recommendations.
 - Empty states need a next action.
 - Disabled rows must look disabled, not broken.
@@ -603,7 +603,7 @@ Rules:
 - Local Memory debug surfaces must not dominate the default Passport.
 - Waiting clues should be visible but not alarming.
 - Cities come from saved place addresses.
-- Visited comes from places the user marked as visited; do not imply SAV-E has
+- Visited comes from places the user marked as visited; do not imply Savvy has
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.

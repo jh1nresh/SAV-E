@@ -138,7 +138,7 @@ export function sanitizeSharedPlaceData(value: unknown): SharedPlaceData | null 
     reviewCount: nullableNonnegativeInteger(payload.reviewCount),
     priceRange: nullableText(payload.priceRange),
     hours: nullableText(payload.hours),
-    sourceLabel: normalizedTextValue(payload.sourceLabel) ?? "SAV-E",
+    sourceLabel: normalizedTextValue(payload.sourceLabel) ?? "Savvy",
     sourceURL: safeHTTPURL(payload.sourceURL),
     photoURLs: Array.isArray(payload.photoURLs)
       ? payload.photoURLs.map(safeHTTPURL).filter(isString).slice(0, 1)
@@ -179,7 +179,7 @@ export function decodeTripLink(link: string): SharedTripData | null {
 export function sharedPlaceToBookmark(shared: SharedPlaceData, recommender?: string): Place {
   return {
     id: shared.id || `shared_${Date.now()}`,
-    name: shared.name || "Shared SAV-E place",
+    name: shared.name || "Shared Savvy place",
     address: shared.address || "",
     latitude: Number.isFinite(shared.lat) ? shared.lat : 0,
     longitude: Number.isFinite(shared.lng) ? shared.lng : 0,

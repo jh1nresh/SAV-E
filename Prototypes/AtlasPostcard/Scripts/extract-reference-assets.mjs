@@ -363,8 +363,8 @@ const memoMascot = previousManifest.assets.find(
   (asset) => asset.name === "MemoMascot",
 ) ?? {
   name: "MemoMascot",
-  role: "existing SAV-E brand mark",
-  source: "production SAV-E asset copied unchanged",
+  role: "existing Savvy brand mark",
+  source: "production Savvy asset copied unchanged",
 };
 
 const manifest = {

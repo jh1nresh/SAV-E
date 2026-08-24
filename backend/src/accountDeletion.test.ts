@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { deleteAccount } from "./accountDeletion.js";
 
-test("deleteAccount removes SAV-E data before the external identity", async () => {
+test("deleteAccount removes Savvy data before the external identity", async () => {
   const events: string[] = [];
 
   await deleteAccount({

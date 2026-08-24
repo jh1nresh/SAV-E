@@ -514,7 +514,7 @@ test("buildMaatPlaceAnalysis scopes analysis to selected place evidence and excl
   }]);
   assert.deepEqual(details.critical_reviews, [{
     issue: "Great casual date dinner with spicy noodles. Expect a line at peak dinner.",
-    source: "SAV-E evidence",
+    source: "Savvy evidence",
     frequency: "mentioned",
   }]);
   const receipt = output.analysis_receipt as Record<string, unknown>;

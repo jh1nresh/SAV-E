@@ -617,7 +617,7 @@ function deterministicEvidenceRubricEvaluator(input: EvidenceRubricInput): Evide
   if (hasMetadata || hasMediaText || hasSearch || evidenceText) {
     return {
       evidenceTier: "weak",
-      confidenceReason: "SAV-E found place-bearing clues, but not enough proof for a map-ready candidate",
+      confidenceReason: "Savvy found place-bearing clues, but not enough proof for a map-ready candidate",
       missingInfo: ["Verified address", "Verified coordinates", "User confirmation before saving as Map Stamp"],
     };
   }
@@ -641,7 +641,7 @@ async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Prom
     const response = await fetch(url.toString(), {
       method: "POST",
       headers: {
-        "User-Agent": "SAV-E evidence rubric/1.0",
+        "User-Agent": "Savvy evidence rubric/1.0",
         "Accept": "application/json",
         "Content-Type": "application/json",
         ...(process.env.SAVE_EVIDENCE_RUBRIC_TOKEN
@@ -739,7 +739,7 @@ async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Prom
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "SAV-E Places corroborator/1.0",
+      "User-Agent": "Savvy Places corroborator/1.0",
       "Accept": "application/json",
     },
     redirect: "manual",
@@ -1044,7 +1044,7 @@ export async function defaultFetchText(url: string, signal?: AbortSignal): Promi
   try {
     const response = await fetch(parsed.toString(), {
       headers: {
-        "User-Agent": "SAV-E source recovery worker/1.0",
+        "User-Agent": "Savvy source recovery worker/1.0",
         "Accept": "text/html,application/xhtml+xml",
       },
       redirect: "manual",
@@ -1090,7 +1090,7 @@ export async function resolveSourceDocument(
     for (let redirectCount = 0; redirectCount <= maxMetadataRedirects; redirectCount += 1) {
       response = await fetchImpl(parsed.toString(), {
         headers: {
-          "User-Agent": "SAV-E social metadata fetcher/1.0",
+          "User-Agent": "Savvy social metadata fetcher/1.0",
           "Accept": "text/html,application/xhtml+xml",
         },
         redirect: "manual",
@@ -1547,7 +1547,7 @@ async function fetchBoundedMedia(url: string, maxBytes: number): Promise<{ data:
   try {
     const response = await fetch(parsed.toString(), {
       headers: {
-        "User-Agent": "SAV-E source recovery media fetcher/1.0",
+        "User-Agent": "Savvy source recovery media fetcher/1.0",
         "Accept": "image/avif,image/webp,image/apng,image/*,video/*,*/*;q=0.8",
       },
       redirect: "manual",

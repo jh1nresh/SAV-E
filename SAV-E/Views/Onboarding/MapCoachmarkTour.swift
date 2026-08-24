@@ -74,12 +74,12 @@ struct MapCoachmarkTour: View {
             MapCoachmarkStep(
                 id: 1,
                 title: languageSettings.localized(
-                    english: "Ask SAV-E down here",
-                    traditionalChinese: "在這裡問 SAV-E"
+                    english: "Ask Savvy down here",
+                    traditionalChinese: "在這裡問 Savvy"
                 ),
                 body: languageSettings.localized(
-                    english: "Paste an Instagram, TikTok or 小紅書 link — or just ask. SAV-E finds the place and adds it.",
-                    traditionalChinese: "貼上 Instagram、TikTok 或小紅書連結，或直接問。SAV-E 會找到地點並加進來。"
+                    english: "Paste an Instagram, TikTok or 小紅書 link — or just ask. Savvy finds the place and adds it.",
+                    traditionalChinese: "貼上 Instagram、TikTok 或小紅書連結，或直接問。Savvy 會找到地點並加進來。"
                 ),
                 target: .drawer,
                 showsMascot: false

@@ -1,6 +1,6 @@
 # App Store Screenshot Refresh v5
 
-- Paid user job / observed failure: Help travelers understand that SAV-E turns loose place clues into private, confirmed place memory. The existing App Store screenshots no longer matched the live product UI.
+- Paid user job / observed failure: Help travelers understand that Savvy turns loose place clues into private, confirmed place memory. The existing App Store screenshots no longer matched the live product UI.
 - Acceptance criteria: Ship five English screenshots built from current app captures for Home, Capture, Review, Map, and Passport; keep Trips out of the primary promise while it remains Beta; export opaque PNGs at 1260×2736, 1242×2688, and 2048×2732; verify the focused screenshot rail passes.
 - Failure fixture: A Capture screenshot with the keyboard covering the action, a Passport screenshot showing reviewer-auth errors, a missing Review candidate, a cropped composition, or any wrong-size/alpha output fails the task.
 - Classification: Conversion loop and release marketing maintenance; no new paid product capability.

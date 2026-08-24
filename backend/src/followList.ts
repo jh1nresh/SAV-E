@@ -97,7 +97,7 @@ export async function listFollowedFriendsPage(
     return [{
       friend: {
         id,
-        displayName: stringValue(row.display_name) ?? stringValue(row.handle) ?? "SAV-E User",
+        displayName: stringValue(row.display_name) ?? stringValue(row.handle) ?? "Savvy User",
         handle: stringValue(row.handle) ?? null,
         avatarUrl: stringValue(row.avatar_url) ?? null,
       },

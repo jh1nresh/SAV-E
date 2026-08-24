@@ -1,7 +1,7 @@
 import StoreKit
 import SwiftUI
 
-/// SAV-E Pro paywall.
+/// Savvy Pro paywall.
 ///
 /// Presented only as a reaction to a refused AI assist, or pulled up
 /// deliberately from Passport. Never automatic, never at launch, never before
@@ -78,7 +78,7 @@ struct SaveProPaywallView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            Text(languageSettings.localized(english: "SAV-E PRO", traditionalChinese: "SAV-E PRO"))
+            Text(languageSettings.localized(english: "Savvy PRO", traditionalChinese: "Savvy PRO"))
                 .font(SaveTheme.Typography.eyebrow)
                 .foregroundStyle(SaveAtlasPalette.muted)
 
@@ -135,7 +135,7 @@ struct SaveProPaywallView: View {
                 title: languageSettings.localized(english: "Counts as an AI assist", traditionalChinese: "計入 AI 協助"),
                 tint: SaveAtlasPalette.lavender,
                 items: [
-                    languageSettings.localized(english: "Ask SAV-E answers that need a model", traditionalChinese: "需要模型回答的 Ask SAV-E"),
+                    languageSettings.localized(english: "Ask Savvy answers that need a model", traditionalChinese: "需要模型回答的 Ask Savvy"),
                     languageSettings.localized(english: "Generating a trip or gap suggestions", traditionalChinese: "生成行程或補齊建議"),
                     languageSettings.localized(english: "Link parsing that can't be resolved locally", traditionalChinese: "無法在本機解析的連結")
                 ]
@@ -187,8 +187,8 @@ struct SaveProPaywallView: View {
                 .foregroundStyle(SaveAtlasPalette.forest)
 
                 Text(languageSettings.localized(
-                    english: "Everything above is free while SAV-E is in TestFlight. Nothing is charged and no allowance is enforced.",
-                    traditionalChinese: "SAV-E 在 TestFlight 期間以上功能全部免費，不會收費，也不會限制額度。"
+                    english: "Everything above is free while Savvy is in TestFlight. Nothing is charged and no allowance is enforced.",
+                    traditionalChinese: "Savvy 在 TestFlight 期間以上功能全部免費，不會收費，也不會限制額度。"
                 ))
                 .font(SaveAtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)

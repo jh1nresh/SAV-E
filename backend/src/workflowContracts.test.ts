@@ -60,7 +60,7 @@ test("weak confirmed map stamp is downgraded to review candidate", () => {
 
   assert.equal(result.resultType, "review_candidate");
   assert.equal(result.evidenceTier, "likely");
-  assert.equal(result.agentId, "SAV-E");
+  assert.equal(result.agentId, "Savvy");
   assert.deepEqual(result.modelProvenance, {
     claimedProvider: "unknown",
     claimedModel: "unknown",
@@ -79,7 +79,7 @@ test("worker result keeps bounded metadata but treats identity and provenance as
     evidence_tier: "likely",
     confidence: 0.74,
     job_id: "job_123",
-    agent_id: "SAV-E",
+    agent_id: "Savvy",
     operator_id: "save-worker",
     requester_id: "00000000-0000-0000-0000-000000000001",
     input_hash: "input_hash_123",
@@ -101,7 +101,7 @@ test("worker result keeps bounded metadata but treats identity and provenance as
   });
 
   assert.equal(result.jobId, "job_123");
-  assert.equal(result.agentId, "SAV-E");
+  assert.equal(result.agentId, "Savvy");
   assert.equal(result.operatorId, "save-client");
   assert.equal("requesterId" in result, false);
   assert.equal("inputHash" in result, false);
@@ -130,7 +130,7 @@ test("analysis receipt records review candidate before user decision", () => {
     confidence: 0.74,
     candidate_refs: ["candidate_1"],
     job_id: "job_123",
-    agent_id: "SAV-E",
+    agent_id: "Savvy",
     model: {
       claimedProvider: "google",
       claimedModel: "gemini-3.5-flash",
@@ -144,7 +144,7 @@ test("analysis receipt records review candidate before user decision", () => {
   assert.equal(receipt.settlement, "manual_review");
   assert.equal(receipt.creditSettlement, "pending");
   assert.equal(receipt.jobId, "job_123");
-  assert.equal(receipt.agentId, "SAV-E");
+  assert.equal(receipt.agentId, "Savvy");
   assert.deepEqual(receipt.candidateRefs, ["candidate_1"]);
 });
 

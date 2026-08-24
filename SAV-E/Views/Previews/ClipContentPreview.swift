@@ -67,7 +67,7 @@ private struct PreviewClipStop: Identifiable {
 
                 VStack(spacing: 12) {
                     Button(action: {}) {
-                        Text("Open in SAV-E")
+                        Text("Open in Savvy")
                             .font(.headline)
                             .foregroundColor(Color.saveInk)
                             .frame(maxWidth: .infinity)

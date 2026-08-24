@@ -180,8 +180,8 @@ struct AIDrawerView: View {
             switch state {
             case .denied:
                 addSpotStatus = languageSettings.localized(
-                    english: "Microphone or speech permission is off. Enable it in Settings to talk to SAV-E.",
-                    traditionalChinese: "麥克風或語音辨識權限已關閉。請到設定開啟後再和 SAV-E 說話。"
+                    english: "Microphone or speech permission is off. Enable it in Settings to talk to Savvy.",
+                    traditionalChinese: "麥克風或語音辨識權限已關閉。請到設定開啟後再和 Savvy 說話。"
                 )
             case .unavailable:
                 addSpotStatus = languageSettings.localized(
@@ -466,7 +466,7 @@ struct AIDrawerView: View {
                     .font(.title3.weight(.bold))
                     .foregroundColor(commandBarTextColor)
             }
-            .accessibilityLabel(languageSettings.localized(english: "Ask SAV-E", traditionalChinese: "詢問 SAV-E"))
+            .accessibilityLabel(languageSettings.localized(english: "Ask Savvy", traditionalChinese: "詢問 Savvy"))
             .accessibilityIdentifier("drawer.submitCommand")
         } else {
             Button(action: toggleVoiceInput) {
@@ -485,7 +485,7 @@ struct AIDrawerView: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel(voiceQuery.isListening ? "Stop talking to SAV-E" : "Talk to SAV-E")
+            .accessibilityLabel(voiceQuery.isListening ? "Stop talking to Savvy" : "Talk to Savvy")
 
             PassportDrawerButton(
                 fill: commandIconFill,
@@ -810,7 +810,7 @@ struct AIDrawerView: View {
         case .displaying(let response):
             return response.title ?? languageSettings.text(.answer)
         case .saveSearchResults:
-            return "SAV-E results"
+            return "Savvy results"
         case .error:
             return languageSettings.text(.couldntFinish)
         }
@@ -851,8 +851,8 @@ struct AIDrawerView: View {
             normalized.contains("ai didn't return") ||
             normalized.contains("ai is busy") {
             return languageSettings.localized(
-                english: "SAV-E could not finish that request. Try again in a moment.",
-                traditionalChinese: "SAV-E 剛剛沒完成這個請求，請稍後再試一次。"
+                english: "Savvy could not finish that request. Try again in a moment.",
+                traditionalChinese: "Savvy 剛剛沒完成這個請求，請稍後再試一次。"
             )
         }
         return message
@@ -905,8 +905,8 @@ struct AIDrawerView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(languageSettings.localized(
-                            english: "Search places or ask SAV-E",
-                            traditionalChinese: "搜尋地點或詢問 SAV-E"
+                            english: "Search places or ask Savvy",
+                            traditionalChinese: "搜尋地點或詢問 Savvy"
                         ))
                         .font(SaveAtlasType.strong(17))
                         .foregroundStyle(SaveAtlasPalette.forest)
@@ -1039,8 +1039,8 @@ struct AIDrawerView: View {
         do {
             try await onSaveSocialPlace(place)
             addSpotStatus = languageSettings.localized(
-                english: "Saved \(place.name) to your SAV-E.",
-                traditionalChinese: "已將「\(place.name)」保存到你的 SAV-E。"
+                english: "Saved \(place.name) to your Savvy.",
+                traditionalChinese: "已將「\(place.name)」保存到你的 Savvy。"
             )
             closeMapDetail()
         } catch {
@@ -1200,8 +1200,8 @@ struct AIDrawerView: View {
         addSpotStatus = isExactSearch
             ? languageSettings.localized(english: "Looking for exact map matches. Review the result before saving.", traditionalChinese: "正在找精確地圖結果。保存前請先確認結果。")
             : isExplicitPublicSearch
-                ? languageSettings.localized(english: "Looking for nearby unsaved candidates. Your SAV-E results stay separate.", traditionalChinese: "正在找附近未保存地點。這些會和你的 SAV-E 記憶分開。")
-                : languageSettings.localized(english: "Looking for nearby public options. SAV-E memory still stays first.", traditionalChinese: "正在找附近公開候選地點。SAV-E 記憶仍會優先。")
+                ? languageSettings.localized(english: "Looking for nearby unsaved candidates. Your Savvy results stay separate.", traditionalChinese: "正在找附近未保存地點。這些會和你的 Savvy 記憶分開。")
+                : languageSettings.localized(english: "Looking for nearby public options. Savvy memory still stays first.", traditionalChinese: "正在找附近公開候選地點。Savvy 記憶仍會優先。")
         withAnimation { drawerDetent = .medium }
 
         startMapSearch { requestID in
@@ -1356,8 +1356,8 @@ struct AIDrawerView: View {
                 systemImage: "link.badge.plus",
                 title: languageSettings.localized(english: "Analyzing link", traditionalChinese: "正在分析連結"),
                 message: languageSettings.localized(
-                    english: "SAV-E is checking the source and extracting possible places. Nothing is saved to your map yet.",
-                    traditionalChinese: "SAV-E 正在檢查來源並找出可能地點；目前還不會存進你的地圖。"
+                    english: "Savvy is checking the source and extracting possible places. Nothing is saved to your map yet.",
+                    traditionalChinese: "Savvy 正在檢查來源並找出可能地點；目前還不會存進你的地圖。"
                 ),
                 isLoading: true,
                 tone: SaveAtlasPalette.kraft
@@ -1408,8 +1408,8 @@ struct AIDrawerView: View {
             traditionalChinese: "替「\(candidate.name)」補更多線索："
         )
         addSpotStatus = languageSettings.localized(
-            english: "Paste a caption, address, map link, or visible OCR text. SAV-E will keep it in Review until the exact place is clear.",
-            traditionalChinese: "貼上貼文說明、地址、地圖連結或看得到的 OCR 文字。SAV-E 會先把它留在待確認，直到精確地點夠清楚。"
+            english: "Paste a caption, address, map link, or visible OCR text. Savvy will keep it in Review until the exact place is clear.",
+            traditionalChinese: "貼上貼文說明、地址、地圖連結或看得到的 OCR 文字。Savvy 會先把它留在待確認，直到精確地點夠清楚。"
         )
         searchFocused = true
         withAnimation { drawerDetent = .medium }
@@ -1701,7 +1701,7 @@ struct MapDetailDrawerView: View {
         if !area.isEmpty { return area }
         let address = place.address.trimmingCharacters(in: .whitespacesAndNewlines)
         return address.isEmpty
-            ? languageSettings.localized(english: "Saved in your SAV-E", traditionalChinese: "已收藏到 SAV-E")
+            ? languageSettings.localized(english: "Saved in your Savvy", traditionalChinese: "已收藏到 Savvy")
             : address
     }
 
@@ -2001,7 +2001,7 @@ private struct SelectedPlaceCapsule: View {
 private func localizedEyebrow(for item: MapDetailDrawerItem, language: AppLanguage) -> String {
     switch item {
     case .savedPlace:
-        return language.localized(english: "Map Stamp · From your SAV-E", traditionalChinese: "地圖章 · 來自你的 SAV-E")
+        return language.localized(english: "Map Stamp · From your Savvy", traditionalChinese: "地圖章 · 來自你的 Savvy")
     case .reviewCandidate(let candidate):
         return candidate.hasSavableLocation
             ? language.localized(english: "Review Candidate · Check before saving", traditionalChinese: "待確認地點 · 保存前請先檢查")
@@ -2178,7 +2178,7 @@ private extension MapDetailDrawerItem {
             return .unsavedMapCandidate(
                 title: place.name,
                 contextLine: "\(place.category.displayName) · \(place.socialSignal?.displayText ?? "Social signal")",
-                trustLine: "Social signal, not saved in your SAV-E yet."
+                trustLine: "Social signal, not saved in your Savvy yet."
             )
         }
     }
@@ -2535,7 +2535,7 @@ private struct SavedMapDetailDrawerContent: View {
             }
             Button(languageSettings.text(.cancel), role: .cancel) {}
         } message: {
-            Text(languageSettings.localized(english: "This removes the Map Stamp from SAV-E.", traditionalChinese: "這會從 SAV-E 移除這個地圖章。"))
+            Text(languageSettings.localized(english: "This removes the Map Stamp from Savvy.", traditionalChinese: "這會從 Savvy 移除這個地圖章。"))
         }
         .task(id: place.id) {
             await enrichBusinessDetails()
@@ -2552,8 +2552,8 @@ private struct SavedMapDetailDrawerContent: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(languageSettings.localized(
-                        english: "TO YOUR SAV-E",
-                        traditionalChinese: "寄給你的 SAV-E"
+                        english: "TO YOUR Savvy",
+                        traditionalChinese: "寄給你的 Savvy"
                     ))
                     .font(SaveAtlasType.strong(10))
                     .tracking(0.75)
@@ -2895,7 +2895,7 @@ private struct SocialPlaceDetailCard: View {
             }
 
             Button(action: onSave) {
-                Label(languageSettings.localized(english: "Save to my SAV-E", traditionalChinese: "保存到我的 SAV-E"), systemImage: "plus.circle.fill")
+                Label(languageSettings.localized(english: "Save to my Savvy", traditionalChinese: "保存到我的 Savvy"), systemImage: "plus.circle.fill")
                     .font(SaveAtlasType.strong(14))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -3347,12 +3347,12 @@ private struct ReviewCandidateDetailCard: View {
     private var presentationTrustLine: String {
         candidate.hasSavableLocation
             ? languageSettings.localized(
-                english: "SAV-E found a likely place. Review the evidence before stamping it to your map.",
-                traditionalChinese: "SAV-E 找到可能的地點。存成地圖章前，請先確認證據。"
+                english: "Savvy found a likely place. Review the evidence before stamping it to your map.",
+                traditionalChinese: "Savvy 找到可能的地點。存成地圖章前，請先確認證據。"
             )
             : languageSettings.localized(
-                english: "SAV-E found a source, but not enough proof for a place yet.",
-                traditionalChinese: "SAV-E 找到來源，但還沒有足夠證據確認成地點。"
+                english: "Savvy found a source, but not enough proof for a place yet.",
+                traditionalChinese: "Savvy 找到來源，但還沒有足夠證據確認成地點。"
             )
     }
 
@@ -3702,19 +3702,19 @@ private struct ReviewCandidateNextStepPanel: View {
             let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
             if !address.isEmpty {
                 return languageSettings.localized(
-                    english: "SAV-E found \(candidate.name) at \(address).",
-                    traditionalChinese: "SAV-E 找到「\(candidate.name)」：\(address)。"
+                    english: "Savvy found \(candidate.name) at \(address).",
+                    traditionalChinese: "Savvy 找到「\(candidate.name)」：\(address)。"
                 )
             }
             return languageSettings.localized(
-                english: "SAV-E found a likely map match for \(candidate.name).",
-                traditionalChinese: "SAV-E 找到「\(candidate.name)」的可能地圖結果。"
+                english: "Savvy found a likely map match for \(candidate.name).",
+                traditionalChinese: "Savvy 找到「\(candidate.name)」的可能地圖結果。"
             )
         }
         if candidate.hasProviderMap {
             return languageSettings.localized(
                 english: "The exact Amap location is ready to save without being mislabeled as an Apple Map pin.",
-                traditionalChinese: "精確高德位置已可保存；SAV-E 不會把它錯標成 Apple 地圖座標。"
+                traditionalChinese: "精確高德位置已可保存；Savvy 不會把它錯標成 Apple 地圖座標。"
             )
         }
 
@@ -3730,8 +3730,8 @@ private struct ReviewCandidateNextStepPanel: View {
             )
         }
         return languageSettings.localized(
-            english: "SAV-E saved the source clue, but still needs an exact place before saving.",
-            traditionalChinese: "SAV-E 已保存來源線索，但保存前仍需要精確地點。"
+            english: "Savvy saved the source clue, but still needs an exact place before saving.",
+            traditionalChinese: "Savvy 已保存來源線索，但保存前仍需要精確地點。"
         )
     }
 
@@ -4120,7 +4120,7 @@ private struct PassportDrawerButton: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(languageSettings.localized(english: "Open SAV-E Passport", traditionalChinese: "打開 SAV-E 護照"))
+        .accessibilityLabel(languageSettings.localized(english: "Open Savvy Passport", traditionalChinese: "打開 Savvy 護照"))
         .accessibilityIdentifier("drawer.profile")
     }
 }

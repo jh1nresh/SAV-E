@@ -57,7 +57,7 @@ export async function evaluateRubric(input, { geminiKey, model = defaultModel, f
           role: "user",
           parts: [{
             text: [
-              "You are SAV-E's evidence rubric evaluator for place source recovery.",
+              "You are Savvy's evidence rubric evaluator for place source recovery.",
               "Return only a conservative JSON verdict.",
               "Do not invent addresses, coordinates, place IDs, or facts not present in the supplied evidence.",
               "Use corroborated only when cited evidence already includes verified address and coordinates.",
@@ -101,7 +101,7 @@ export async function evaluateRubric(input, { geminiKey, model = defaultModel, f
       systemInstruction: {
         parts: [{
           text: [
-            "You are SAV-E's evidence rubric evaluator for place source recovery.",
+            "You are Savvy's evidence rubric evaluator for place source recovery.",
             "Return strict JSON matching the requested schema.",
             "Never invent facts beyond supplied evidence.",
           ].join(" "),
@@ -165,6 +165,6 @@ function sendJson(response, body, status = 200) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = Number(process.env.PORT ?? 3000);
   createEvidenceRubricServer().listen(port, () => {
-    console.log(`SAV-E evidence rubric service listening on ${port}`);
+    console.log(`Savvy evidence rubric service listening on ${port}`);
   });
 }

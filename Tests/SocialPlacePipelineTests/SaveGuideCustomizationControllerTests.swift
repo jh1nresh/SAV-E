@@ -29,7 +29,7 @@ final class SaveGuideCustomizationControllerTests: XCTestCase {
         XCTAssertEqual(draft.keepStops.map(\.state), [.guideOnly, .guideOnly, .guideOnly])
         XCTAssertEqual(Set(draft.swapInSavedPlaces.map(\.title)), Set(["Onibus Coffee", "Ginza Kagari"]))
         XCTAssertEqual(draft.originalGuide.creatorLabel, "@tokyo_creator")
-        XCTAssertTrue(draft.explanation.contains("saved SAV-E"))
+        XCTAssertTrue(draft.explanation.contains("saved Savvy"))
     }
 
     @MainActor

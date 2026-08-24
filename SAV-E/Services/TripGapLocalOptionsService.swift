@@ -11,7 +11,7 @@ import MapKit
 /// and never written to the vault. That pipe was wired to an empty array, so
 /// the capability existed with nothing feeding it.
 ///
-/// This fills it, and nothing more: SAV-E still decides nothing on the user's
+/// This fills it, and nothing more: Savvy still decides nothing on the user's
 /// behalf. A candidate becomes a stop only when the user approves it, and
 /// becomes a Map Stamp only through the normal Review flow.
 @MainActor

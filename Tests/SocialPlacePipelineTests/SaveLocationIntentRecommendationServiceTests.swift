@@ -42,7 +42,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             places: [nearbyCafe, nearbyNonCafe, farCafe],
             currentLocation: currentLocation
         ))
-        XCTAssertEqual(sectioned.fromYourSave.title, "From your SAV-E nearby")
+        XCTAssertEqual(sectioned.fromYourSave.title, "From your Savvy nearby")
         XCTAssertEqual(sectioned.fromYourSave.results.map(\.title), ["Cafe A"])
         XCTAssertEqual(sectioned.additionalSections.first?.title, "Saved but not nearby")
         XCTAssertEqual(sectioned.additionalSections.first?.results.map(\.title), ["Cafe C"])
@@ -117,7 +117,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         XCTAssertFalse(message.contains("Saved Map Stamp"))
         XCTAssertFalse(message.contains("Public discovery"))
         XCTAssertFalse(message.contains("rating"))
-        XCTAssertEqual(response.fromYourSave.title, "來自 SAV-E 的附近記憶")
+        XCTAssertEqual(response.fromYourSave.title, "來自 Savvy 的附近記憶")
         XCTAssertEqual(response.newRecommendations.title, "附近公開探索")
         XCTAssertEqual(response.primaryAnswerDisplaySections.map(\.id), [
             "from-your-save-nearby",
@@ -154,7 +154,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             "nearby-unsaved-candidates"
         ])
         XCTAssertEqual(response.contextDisplaySections.map(\.id), ["saved-but-not-nearby"])
-        XCTAssertTrue(response.assistantMessage?.contains("你的 SAV-E 記憶裡還沒有附近已保存咖啡廳") == true)
+        XCTAssertTrue(response.assistantMessage?.contains("你的 Savvy 記憶裡還沒有附近已保存咖啡廳") == true)
         XCTAssertTrue(response.assistantMessage?.contains("我會先看 Public Coffee") == true)
         XCTAssertTrue(response.assistantMessage?.contains("原因是") == true)
         XCTAssertFalse(response.assistantMessage?.contains("Public discovery") == true)
@@ -182,7 +182,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         let message = try XCTUnwrap(response.assistantMessage)
         XCTAssertTrue(message.contains("I’d start with Bright Coffee Bar"))
         XCTAssertFalse(message.contains("我會先推"))
-        XCTAssertFalse(message.contains("你的 SAV-E"))
+        XCTAssertFalse(message.contains("你的 Savvy"))
     }
 
     @MainActor
@@ -310,7 +310,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
             currentLocation: CLLocation(latitude: 33.6846, longitude: -117.8265)
         ))
 
-        XCTAssertEqual(response.fromYourSave.title, "From your SAV-E nearby")
+        XCTAssertEqual(response.fromYourSave.title, "From your Savvy nearby")
         XCTAssertTrue(response.fromYourSave.results.isEmpty)
         XCTAssertFalse(response.fromYourSave.showsNearbySearchAction)
         XCTAssertTrue(response.newRecommendations.showsNearbySearchAction)
@@ -411,7 +411,7 @@ final class SaveLocationIntentRecommendationServiceTests: XCTestCase {
         let tripStop = searchResult(id: "trip-1", objectType: .tripStop)
         let section = SaveSearchSection(
             id: "from-your-save",
-            title: "From your SAV-E",
+            title: "From your Savvy",
             subtitle: "",
             results: [review, tripStop]
         )

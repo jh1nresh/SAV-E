@@ -16,7 +16,7 @@ enum SaveSmokeHarness {
     }
 
     static func isSmokeURL(_ url: URL) -> Bool {
-        url.scheme == "wanderly" && url.host == "smoke"
+        SAVEProductionConfig.supportsCustomURLScheme(url) && url.host == "smoke"
     }
 }
 
@@ -219,7 +219,7 @@ struct SaveSmokeHarnessView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("SAV-E Smoke Harness")
+            .navigationTitle("Savvy Smoke Harness")
             .accessibilityIdentifier("smoke-harness-root")
             .task {
                 if rows.isEmpty {
