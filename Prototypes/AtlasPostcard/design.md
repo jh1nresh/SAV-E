@@ -67,7 +67,10 @@ Opening    = Postcard Pocket transition
 - The review sheet and `Review clues` action navigate directly to Saves. Home
   never opens a review drawer; selecting a Review Candidate in Saves opens the
   focused Postcard detail and returns to the same Review queue when closed.
-- Below: one Trip preview and exactly two recent Map Stamps.
+- Live Home shows exactly one sheet. If Review is waiting, that sheet is Review
+  clues only. If Review is empty, a same-city trip may appear with no coral.
+  Otherwise Home stays quiet. Map Stamps live on Saves. The trip strip lives
+  on Trips. The locked One-Face Home raster may still show the older stack.
 - Root tabs remain visible.
 
 ### Saves
@@ -92,7 +95,7 @@ Opening    = Postcard Pocket transition
 - Memo + SAV-E lockup, compact title, and the one global link entry.
 - A cropped atlas is the background for one featured current or next Trip
   postcard; it is not a generic dashboard hero.
-- At most two upcoming or planning Trip tickets are visible in the fixed
+- At most one upcoming or planning Trip ticket is visible in the fixed
   viewport.
 - One cream planning chatbar opens the existing SAV-E assistant with focus.
   Chat is an input surface only; Trip cards and Day Plan remain the durable

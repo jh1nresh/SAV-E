@@ -36,8 +36,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Home", app: app)
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.trip.beta"].waitForExistence(timeout: stepTimeout),
-            "Home trip card should show Beta."
+            app.descendants(matching: .any)["home.sheet"].waitForExistence(timeout: stepTimeout),
+            "Live Home should show exactly one sheet."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["home.recentSaves"].exists,
+            "Map Stamps do not live on Home."
         )
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -445,18 +449,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.buttons["home.capture"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.sheet"].exists)
         XCTAssertTrue(app.buttons["home.review"].exists)
-        XCTAssertTrue(app.buttons["home.saves"].exists)
-        let continueTrip = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'home.trip.'")
-        ).firstMatch
-        XCTAssertTrue(continueTrip.waitForExistence(timeout: timeout(20)))
-
-        let recentSaves = app.descendants(matching: .any)["home.recentSaves"]
-        if !recentSaves.waitForExistence(timeout: timeout(1)) {
-            app.swipeUp()
-        }
-        XCTAssertTrue(recentSaves.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["home.recentSaves"].exists)
+        XCTAssertFalse(app.buttons["home.saves"].exists)
 
         for tab in ["Home", "Saves", "Trips", "Map"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")

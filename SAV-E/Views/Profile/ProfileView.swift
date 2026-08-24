@@ -93,21 +93,43 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.stampLedger")
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                        Text(languageSettings.text(.passportControls))
-                            .font(SaveTheme.Typography.eyebrow)
-                            .foregroundColor(.saveCocoa)
-                            .padding(.horizontal, SaveTheme.Spacing.xs)
+                        DisclosureGroup {
+                            SettingsRow(
+                                icon: "globe.asia.australia",
+                                title: languageSettings.text(.language),
+                                detail: languageSettings.language.displayName,
+                                color: .saveCocoa,
+                                accessibilityIdentifier: "profile.language"
+                            ) {
+                                SaveHaptics.tap()
+                                showLanguageSettings = true
+                            }
 
-                        SettingsRow(
-                            icon: "globe.asia.australia",
-                            title: languageSettings.text(.language),
-                            detail: languageSettings.language.displayName,
-                            color: .saveCocoa,
-                            accessibilityIdentifier: "profile.language"
-                        ) {
-                            SaveHaptics.tap()
-                            showLanguageSettings = true
+                            if SAVEProAccessPolicy.purchasingIsAvailable {
+                                SettingsRow(
+                                    icon: "sparkles",
+                                    title: languageSettings.localized(
+                                        english: "SAV-E Pro",
+                                        traditionalChinese: "SAV-E Pro"
+                                    ),
+                                    detail: languageSettings.localized(
+                                        english: "Core place memory stays free",
+                                        traditionalChinese: "核心地點記憶維持免費"
+                                    ),
+                                    color: SaveAtlasPalette.lavender,
+                                    accessibilityIdentifier: "profile.pro"
+                                ) {
+                                    SaveHaptics.tap()
+                                    showProPaywall = true
+                                }
+                            }
+                        } label: {
+                            Text(languageSettings.text(.passportControls))
+                                .font(SaveTheme.Typography.eyebrow)
+                                .foregroundColor(.saveCocoa)
                         }
+                        .padding(.horizontal, SaveTheme.Spacing.xs)
+                        .accessibilityIdentifier("profile.controlsDisclosure")
 
                         NavigationLink {
                             SaveMemoryDebugView(
@@ -164,25 +186,6 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.connections")
-
-                        if SAVEProAccessPolicy.purchasingIsAvailable {
-                            SettingsRow(
-                                icon: "sparkles",
-                                title: languageSettings.localized(
-                                    english: "SAV-E Pro",
-                                    traditionalChinese: "SAV-E Pro"
-                                ),
-                                detail: languageSettings.localized(
-                                    english: "Core place memory stays free",
-                                    traditionalChinese: "核心地點記憶維持免費"
-                                ),
-                                color: SaveAtlasPalette.lavender,
-                                accessibilityIdentifier: "profile.pro"
-                            ) {
-                                SaveHaptics.tap()
-                                showProPaywall = true
-                            }
-                        }
 
                         SettingsRow(
                             icon: "shippingbox.and.arrow.backward.fill",
