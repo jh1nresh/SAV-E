@@ -166,14 +166,19 @@ struct HomeAtlasScreen: View {
             .accessibilityIdentifier("home.hero.openMap")
             .placed(x: 0, y: 99, width: 402, height: 274)
 
-            HomeReviewCard()
-                .placed(x: 5, y: 354, width: 392, height: 182)
+            if presentation.locksOneFaceHomeComposition {
+                HomeReviewCard(showsStatColumns: true)
+                    .placed(x: 5, y: 354, width: 392, height: 182)
 
-            HomePriorityCard()
-                .placed(x: 10, y: 542, width: 382, height: 105)
+                HomePriorityCard()
+                    .placed(x: 10, y: 542, width: 382, height: 105)
 
-            HomeRecentStamps()
-                .placed(x: 10, y: 650, width: 382, height: 133)
+                HomeRecentStamps()
+                    .placed(x: 10, y: 650, width: 382, height: 133)
+            } else {
+                HomeOneJobSheet()
+                    .placed(x: 5, y: 354, width: 392, height: 182)
+            }
         }
         .frame(width: 402, height: 874)
         .clipped()
@@ -412,7 +417,52 @@ private struct AtlasRegionalHomeHero: View {
     }
 }
 
+private struct HomeOneJobSheet: View {
+    @Environment(\.atlasPresentation) private var presentation
+
+    var body: some View {
+        Group {
+            switch presentation.homeSheetKind {
+            case .review:
+                HomeReviewCard(showsStatColumns: false)
+            case .sameCityTrip:
+                HomePriorityCard()
+            case .empty:
+                HomeQuietEmpty()
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.sheet")
+    }
+}
+
+private struct HomeQuietEmpty: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("Your atlas is waiting.")
+                .font(AtlasType.strong(20))
+                .foregroundStyle(AtlasPalette.forest)
+            Text("Share a link when a place is worth keeping.")
+                .font(AtlasType.body(13))
+                .foregroundStyle(AtlasPalette.muted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .background(
+            AtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: 21, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 21, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+        }
+        .accessibilityIdentifier("home.sheet.empty")
+    }
+}
+
 private struct HomeReviewCard: View {
+    var showsStatColumns: Bool = false
     @Environment(\.atlasPresentation) private var presentation
 
     var body: some View {
@@ -428,12 +478,12 @@ private struct HomeReviewCard: View {
             Text(reviewHeadline)
                 .font(AtlasType.strong(24))
                 .foregroundStyle(AtlasPalette.forest)
-                .position(x: 196, y: 32)
+                .position(x: 196, y: showsStatColumns ? 32 : 42)
 
             Text("Review and decide what’s worth saving.")
                 .font(AtlasType.body(13))
                 .foregroundStyle(AtlasPalette.muted)
-                .position(x: 196, y: 58)
+                .position(x: 196, y: showsStatColumns ? 58 : 70)
 
             Button(action: presentation.onReviewAll) {
                 HStack {
@@ -457,31 +507,33 @@ private struct HomeReviewCard: View {
                 )
             }
             .buttonStyle(.plain)
-            .position(x: 196, y: 93)
+            .position(x: 196, y: showsStatColumns ? 93 : 118)
             .accessibilityIdentifier("home.review")
 
-            Rectangle()
-                .fill(AtlasPalette.line.opacity(0.30))
-                .frame(width: 1, height: 39)
-                .position(x: 196, y: 151)
+            if showsStatColumns {
+                Rectangle()
+                    .fill(AtlasPalette.line.opacity(0.30))
+                    .frame(width: 1, height: 39)
+                    .position(x: 196, y: 151)
 
-            HomeMetric(
-                value: "\(presentation.reviewCount)",
-                label: "to review",
-                systemName: "timer",
-                tint: AtlasPalette.lavender
-            )
-            .frame(width: 150, height: 42)
-            .position(x: 121, y: 150)
+                HomeMetric(
+                    value: "\(presentation.reviewCount)",
+                    label: "to review",
+                    systemName: "timer",
+                    tint: AtlasPalette.lavender
+                )
+                .frame(width: 150, height: 42)
+                .position(x: 121, y: 150)
 
-            HomeMetric(
-                value: "\(presentation.mapStampCount)",
-                label: "Map Stamps",
-                systemName: "arrow.up.right",
-                tint: AtlasPalette.mint
-            )
-            .frame(width: 150, height: 42)
-            .position(x: 274, y: 150)
+                HomeMetric(
+                    value: "\(presentation.mapStampCount)",
+                    label: "Map Stamps",
+                    systemName: "arrow.up.right",
+                    tint: AtlasPalette.mint
+                )
+                .frame(width: 150, height: 42)
+                .position(x: 274, y: 150)
+            }
         }
     }
 
@@ -752,17 +804,12 @@ struct TripsAtlasScreen: View {
                 .padding(.horizontal, 17)
                 .padding(.top, 16)
 
-                if !presentation.tripRecommendations.isEmpty {
-                    // Planning suggestions built from the user's own confirmed
-                    // Map Stamps — Trips proposes instead of waiting to be asked.
-                    VStack(spacing: 9) {
-                        ForEach(presentation.tripRecommendations) { recommendation in
-                            TripRecommendationCard(
-                                recommendation: recommendation,
-                                onPlan: { presentation.onPlanRecommendation(recommendation.planningQuery) }
-                            )
-                        }
-                    }
+                if let recommendation = presentation.tripRecommendations.first {
+                    // One secondary ticket. Featured trip already owns the hero.
+                    TripRecommendationCard(
+                        recommendation: recommendation,
+                        onPlan: { presentation.onPlanRecommendation(recommendation.planningQuery) }
+                    )
                     .padding(.horizontal, 17)
                     .padding(.top, 11)
                 } else if presentation.tripSummaries.dropFirst().isEmpty {
@@ -773,15 +820,11 @@ struct TripsAtlasScreen: View {
                         .foregroundStyle(AtlasPalette.muted)
                         .padding(.horizontal, 17)
                         .padding(.top, 10)
-                } else {
-                    VStack(spacing: 11) {
-                        ForEach(Array(presentation.tripSummaries.dropFirst().prefix(2))) { trip in
-                            CompactTripTicket(trip: trip)
-                                .frame(height: 98)
-                        }
-                    }
-                    .padding(.horizontal, 17)
-                    .padding(.top, 12)
+                } else if let trip = presentation.tripSummaries.dropFirst().first {
+                    CompactTripTicket(trip: trip)
+                        .frame(height: 98)
+                        .padding(.horizontal, 17)
+                        .padding(.top, 12)
                 }
 
                 Spacer(minLength: 12)

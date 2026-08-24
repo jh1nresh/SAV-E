@@ -223,6 +223,7 @@ enum SaveAtlasPresentationFactory {
         selectedPlace: Place?
     ) -> AtlasPresentation {
         var presentation = AtlasPresentation.reference
+        presentation.locksOneFaceHomeComposition = false
         presentation.reviewCount = candidates.count
         presentation.mapStampCount = places.count
         presentation.failedCount = candidates.filter {

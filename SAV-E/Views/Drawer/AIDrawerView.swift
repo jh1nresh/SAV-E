@@ -1618,6 +1618,7 @@ struct MapDetailDrawerView: View {
                     tint: isSkyTicket ? SaveAtlasPalette.sky : SaveAtlasPalette.coral.opacity(0.42),
                     edge: edge
                 )
+                .accessibilityIdentifier("drawer.review.seal")
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(isSkyTicket
@@ -1633,12 +1634,13 @@ struct MapDetailDrawerView: View {
                         .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .minimumScaleFactor(0.76)
+                        .accessibilityIdentifier("drawer.review.title")
 
                     Text(reviewHeaderDetail(candidate))
                         .font(SaveAtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
-                        .accessibilityIdentifier("place.detail.postcardChrome")
+                        .accessibilityIdentifier("drawer.review.sourceLine")
                 }
 
                 Spacer(minLength: 4)
@@ -3217,38 +3219,7 @@ private struct ReviewCandidateDetailCard: View {
             accessibilityIdentifier: "drawer.review.postcardBody"
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                ReviewCandidateContextHero(
-                    candidate: candidate,
-                    captureTripName: captureTripName,
-                    eyebrow: presentationEyebrow,
-                    title: presentation.title,
-                    contextLine: presentationContextLine,
-                    // Tapping the hero map jumps straight to the live map with
-                    // this clue's candidates pinned.
-                    onOpenOnMap: onFindExactPlace
-                )
-
-                ReviewCandidateNextStepPanel(candidate: candidate)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
-                        .font(SaveAtlasType.strong(10))
-                        .tracking(0.45)
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                    TextField(candidate.name, text: $displayNameDraft)
-                        .textFieldStyle(.plain)
-                        .font(SaveAtlasType.body(15))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 44)
-                        .background(SaveAtlasPalette.paper)
-                        .overlay(
-                            Rectangle()
-                                .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
-                        )
-                }
-
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     CandidateActionButton(
                         title: primaryActionTitle,
                         systemImage: primaryAction.systemImage,
@@ -3258,6 +3229,42 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     .accessibilityIdentifier("drawer.review.primaryAction")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("drawer.review.firstViewport")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    ReviewCandidateContextHero(
+                        candidate: candidate,
+                        captureTripName: captureTripName,
+                        eyebrow: presentationEyebrow,
+                        title: presentation.title,
+                        contextLine: presentationContextLine,
+                        // Tapping the hero map jumps straight to the live map with
+                        // this clue's candidates pinned.
+                        onOpenOnMap: onFindExactPlace
+                    )
+
+                    ReviewCandidateNextStepPanel(candidate: candidate)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(languageSettings.localized(english: "Place name", traditionalChinese: "地點名稱"))
+                            .font(SaveAtlasType.strong(10))
+                            .tracking(0.45)
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                        TextField(candidate.name, text: $displayNameDraft)
+                            .textFieldStyle(.plain)
+                            .font(SaveAtlasType.body(15))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 44)
+                            .background(SaveAtlasPalette.paper)
+                            .overlay(
+                                Rectangle()
+                                    .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                            )
+                    }
+
                     CandidateActionButton(
                         title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
                         systemImage: "sparkle.magnifyingglass",
@@ -3265,36 +3272,38 @@ private struct ReviewCandidateDetailCard: View {
                         disabled: isWorking,
                         action: onInvestigateMore
                     )
-                }
 
-                Menu {
-                    // When the primary action is Confirm (candidate already
-                    // has coordinates), re-running the exact-place search had
-                    // no entry point — a wrong match left the user stuck.
-                    if primaryAction.confirmsMapStamp {
-                        Button(action: onFindExactPlace) {
-                            Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
+                    Menu {
+                        // When the primary action is Confirm (candidate already
+                        // has coordinates), re-running the exact-place search had
+                        // no entry point — a wrong match left the user stuck.
+                        if primaryAction.confirmsMapStamp {
+                            Button(action: onFindExactPlace) {
+                                Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
+                            }
                         }
+                        Button(action: onSaveSourceOnly) {
+                            Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
+                        }
+                        Button(role: .destructive, action: onReject) {
+                            Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
+                        }
+                    } label: {
+                        Label(languageSettings.localized(english: "More review actions", traditionalChinese: "更多確認動作"), systemImage: "ellipsis.circle")
+                            .font(SaveAtlasType.strong(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(SaveAtlasPalette.paper)
+                            .overlay(
+                                Rectangle()
+                                    .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                            )
                     }
-                    Button(action: onSaveSourceOnly) {
-                        Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
-                    }
-                    Button(role: .destructive, action: onReject) {
-                        Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
-                    }
-                } label: {
-                    Label(languageSettings.localized(english: "More review actions", traditionalChinese: "更多確認動作"), systemImage: "ellipsis.circle")
-                        .font(SaveAtlasType.strong(12))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(SaveAtlasPalette.paper)
-                        .overlay(
-                            Rectangle()
-                                .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
-                        )
+                    .disabled(isWorking)
                 }
-                .disabled(isWorking)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("drawer.review.belowFold")
             }
         }
         .opacity(isWorking ? 0.65 : 1)
