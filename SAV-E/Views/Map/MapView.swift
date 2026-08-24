@@ -95,7 +95,14 @@ struct MapView: View {
                 .mapStyle(
                     .standard(
                         elevation: .flat,
-                        emphasis: .muted,
+                        // Was `.muted` + `.saturation(0.78)` + `.contrast(0.96)`
+                        // + a 0.06 canvas scrim on top. Those four greying
+                        // layers multiplied, so parks, retail districts and POI
+                        // glyphs all washed out to the same beige and the map
+                        // read as one flat heavy block. Apple's own emphasis is
+                        // the only tint layer now; brand tone comes from the
+                        // markers and chrome, not from desaturating the basemap.
+                        emphasis: .automatic,
                         // Native Apple Maps POIs stay visible: tapping one is
                         // the primary "save a place you can see" entry, and
                         // selectMapFeature depends on selectable POI features.
@@ -103,8 +110,6 @@ struct MapView: View {
                         showsTraffic: false
                     )
                 )
-                .saturation(0.78)
-                .contrast(0.96)
                 .mapFeatureSelectionDisabled { feature in
                     feature.kind != .pointOfInterest
                 }
@@ -115,10 +120,6 @@ struct MapView: View {
                     viewModel.selectMapFeature(feature)
                 }
                 .accessibilityIdentifier("map.liveSurface")
-
-                AtlasPalette.canvas
-                    .opacity(0.06)
-                    .allowsHitTesting(false)
 
                 if let contextBadgeText {
                     VStack {
