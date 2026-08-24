@@ -7,6 +7,7 @@ import {
   type OwnedRelatedSourcePlace,
 } from "./relatedPlaceSourcesEndpoint.js";
 import type { RelatedPlaceSourcePack } from "./relatedPlaceSources.js";
+import type { StoredRelatedPlaceSourcePack } from "./relatedPlaceSourcesStore.js";
 
 const ownedPlace: OwnedRelatedSourcePlace = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -27,6 +28,26 @@ const verifiedVenue = {
     longitude: 120.286,
   },
 };
+
+const noStoredPack = async (): Promise<StoredRelatedPlaceSourcePack | undefined> => undefined;
+const ignoreStoredPack = async (): Promise<void> => {};
+
+const emptyPack = (place: Record<string, unknown>, checkedAt = "2026-07-24T12:00:00.000Z"): RelatedPlaceSourcePack => ({
+  place: place as RelatedPlaceSourcePack["place"],
+  sources: [],
+  coverage: [],
+  receipt: {
+    sourceBoundary: "public_web_index",
+    privacy: "owner_private",
+    checkedAt,
+    requestedPlatforms: [],
+    searchedPlatforms: [],
+    failedPlatforms: [],
+    rawResultCount: 0,
+    independentResultCount: 0,
+    missing: [],
+  },
+});
 
 test("related-source discovery requires the already-verified account bearer path", () => {
   assert.equal(hasAccountBearerAuthorization(undefined), false);
@@ -57,6 +78,8 @@ test("an owner lookup failure prevents venue verification and public search", as
           discoveryCount += 1;
           throw new Error("must not run");
         },
+        loadStoredPack: noStoredPack,
+        storePack: ignoreStoredPack,
       },
     ),
     (error) => error === notFound,
@@ -68,23 +91,6 @@ test("an owner lookup failure prevents venue verification and public search", as
 
 test("discovery receives only the authoritative public venue identity", async () => {
   let discoveredPlace: Record<string, unknown> | undefined;
-  const emptyPack = (place: Record<string, unknown>): RelatedPlaceSourcePack => ({
-    place: place as RelatedPlaceSourcePack["place"],
-    sources: [],
-    coverage: [],
-    receipt: {
-      sourceBoundary: "public_web_index",
-      privacy: "owner_private",
-      checkedAt: "2026-07-24T12:00:00.000Z",
-      requestedPlatforms: [],
-      searchedPlatforms: [],
-      failedPlatforms: [],
-      rawResultCount: 0,
-      independentResultCount: 0,
-      missing: [],
-    },
-  });
-
   const result = await executeRelatedPlaceSourcesEndpoint(
     ownedPlace.id,
     "owner-user",
@@ -100,6 +106,9 @@ test("discovery receives only the authoritative public venue identity", async ()
         discoveredPlace = place;
         return emptyPack(place);
       },
+      loadStoredPack: noStoredPack,
+      storePack: ignoreStoredPack,
+      now: () => new Date("2026-07-24T12:00:00.000Z"),
     },
   );
 
@@ -133,6 +142,8 @@ test("failed public-venue verification returns a bounded error without discovery
         discoveryCount += 1;
         throw new Error("must not run");
       },
+      loadStoredPack: noStoredPack,
+      storePack: ignoreStoredPack,
     },
   );
 
@@ -141,6 +152,144 @@ test("failed public-venue verification returns a bounded error without discovery
     body: { error: "Related-source discovery only supports public venues" },
   });
   assert.equal(discoveryCount, 0);
+});
+
+test("a matching owner-scoped pack is re-read without verification, quota, or discovery", async () => {
+  let verificationCount = 0;
+  let discoveryCount = 0;
+  let quotaCount = 0;
+  const storedPack: StoredRelatedPlaceSourcePack = {
+    pack: {
+      place: { id: ownedPlace.id },
+      sources: [],
+      coverage: [{ platform: "instagram", status: "failed", queries: ["stored query"] }],
+      receipt: { checked_at: "2026-08-15T12:00:00.000Z", privacy: "owner_private" },
+    },
+    fetchedAt: "2026-08-15T12:00:00.000Z",
+    requestedPlatforms: ["instagram"],
+    maxResultsPerPlatform: 3,
+    querySet: ["stored query"],
+  };
+
+  const result = await executeRelatedPlaceSourcesEndpoint(
+    ownedPlace.id,
+    "owner-user",
+    { platforms: ["instagram"] },
+    {
+      loadOwnedPlace: async () => ownedPlace,
+      verifyPublicVenue: async () => {
+        verificationCount += 1;
+        return verifiedVenue;
+      },
+      discover: async () => {
+        discoveryCount += 1;
+        throw new Error("must not run");
+      },
+      loadStoredPack: async (placeId, userId) => {
+        assert.equal(placeId, ownedPlace.id);
+        assert.equal(userId, "owner-user");
+        return storedPack;
+      },
+      storePack: ignoreStoredPack,
+      consumeDiscoveryQuota: () => {
+        quotaCount += 1;
+        return { allowed: true };
+      },
+      now: () => new Date("2026-08-23T12:00:00.000Z"),
+    },
+  );
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(verificationCount, 0);
+  assert.equal(discoveryCount, 0);
+  assert.equal(quotaCount, 0);
+  assert.deepEqual(result.body.coverage, storedPack.pack.coverage);
+  assert.deepEqual(result.body.storage, {
+    persistence: "owner_private_backend",
+    fetched_at: "2026-08-15T12:00:00.000Z",
+    stale_after: "2026-08-22T12:00:00.000Z",
+    is_stale: true,
+    query_set: ["stored query"],
+  });
+});
+
+test("force refresh replaces the one current pack and preserves failed coverage", async () => {
+  let saved: StoredRelatedPlaceSourcePack | undefined;
+  const failedPack: RelatedPlaceSourcePack = {
+    ...emptyPack({
+      id: ownedPlace.id,
+      name: verifiedVenue.venue.displayName,
+      address: verifiedVenue.venue.formattedAddress,
+      googlePlaceId: verifiedVenue.venue.googlePlaceId,
+    }, "2026-08-23T12:00:00.000Z"),
+    coverage: [{
+      platform: "instagram",
+      method: "public_index",
+      status: "failed",
+      queries: ["site:instagram.com venue"],
+      inspectedCount: 0,
+      resultCount: 0,
+      blockedReason: "public_search_failed",
+    }],
+  };
+
+  const result = await executeRelatedPlaceSourcesEndpoint(
+    ownedPlace.id,
+    "owner-user",
+    { platforms: ["instagram"], maxResultsPerPlatform: 2, forceRefresh: true },
+    {
+      loadOwnedPlace: async () => ownedPlace,
+      verifyPublicVenue: async () => verifiedVenue,
+      discover: async () => failedPack,
+      loadStoredPack: async () => {
+        throw new Error("force refresh must bypass the stored read");
+      },
+      storePack: async (_placeId, _userId, value) => {
+        saved = value;
+      },
+      consumeDiscoveryQuota: () => ({ allowed: true }),
+      now: () => new Date("2026-08-23T12:00:00.000Z"),
+    },
+  );
+
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(saved?.querySet, ["site:instagram.com venue"]);
+  assert.deepEqual(saved?.requestedPlatforms, ["instagram"]);
+  assert.equal(saved?.maxResultsPerPlatform, 2);
+  assert.deepEqual((saved?.pack.coverage as Array<Record<string, unknown>>)[0]?.status, "failed");
+  assert.deepEqual(result.body.storage, {
+    persistence: "owner_private_backend",
+    fetched_at: "2026-08-23T12:00:00.000Z",
+    stale_after: "2026-08-30T12:00:00.000Z",
+    is_stale: false,
+    query_set: ["site:instagram.com venue"],
+  });
+});
+
+test("a cache miss consumes quota before public venue verification", async () => {
+  let verificationCount = 0;
+  const result = await executeRelatedPlaceSourcesEndpoint(
+    ownedPlace.id,
+    "owner-user",
+    { platforms: ["instagram"] },
+    {
+      loadOwnedPlace: async () => ownedPlace,
+      verifyPublicVenue: async () => {
+        verificationCount += 1;
+        return verifiedVenue;
+      },
+      loadStoredPack: noStoredPack,
+      storePack: ignoreStoredPack,
+      consumeDiscoveryQuota: () => ({ allowed: false, retryAfterSeconds: 12 }),
+    },
+  );
+
+  assert.deepEqual(result, {
+    statusCode: 429,
+    body: { error: "Related-source request limit reached" },
+    retryAfterSeconds: 12,
+  });
+  assert.equal(verificationCount, 0);
 });
 
 test("owner quota blocks repeated discovery and resets after its window", () => {

@@ -28,6 +28,7 @@ test("normalizes a bounded related-source request", () => {
     platforms: ["instagram", "youtube"],
     maxResultsPerPlatform: 4,
   });
+  assert.equal(normalizeRelatedPlaceSourcesRequest({ force_refresh: true }).forceRefresh, true);
 });
 
 test("rejects malformed and unsupported request controls", () => {
@@ -46,6 +47,10 @@ test("rejects malformed and unsupported request controls", () => {
   assert.throws(
     () => normalizeRelatedPlaceSourcesRequest({ max_results_per_platform: 20 }),
     /integer from 1-5/,
+  );
+  assert.throws(
+    () => normalizeRelatedPlaceSourcesRequest({ force_refresh: "yes" }),
+    /must be a boolean/,
   );
 });
 
@@ -450,7 +455,7 @@ test("serializes the agent-callable response without changing candidate status",
   assert.equal(body.receipt.privacy, "owner_private");
 });
 
-test("the server route delegates through the owner-scoped endpoint service and does not persist results", () => {
+test("the server route delegates owner-scoped persistence through the endpoint service", () => {
   const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   const handler = serverSource.slice(
     serverSource.indexOf("async function handlePlaceRelatedSources"),
@@ -464,6 +469,8 @@ test("the server route delegates through the owner-scoped endpoint service and d
   assert.match(handler, /Bearer account required/);
   assert.match(handler, /relatedPlaceSourcesRateLimiter\.consume\(userId\)/);
   assert.match(handler, /verifyPublicVenue: verifyRelatedSourcesPublicVenue/);
+  assert.match(handler, /relatedPlaceSourcesStore\.load\(ownedPlaceId, ownerId\)/);
+  assert.match(handler, /relatedPlaceSourcesStore\.save/);
   assert.doesNotMatch(handler, /\binsert\b|\bupdate\b|\bdelete\b/i);
   assert.match(handler, /Cache-Control", "private, no-store"/);
   assert.match(handler, /Vary", "Authorization"/);

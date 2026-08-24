@@ -540,7 +540,7 @@ struct SaveAtlasInteractiveRootMap: View {
                 shouldFocusOnUserLocationOnLaunch: shouldFocusOnUserLocation
             )
             .clipped()
-            .placed(x: 0, y: 91, width: 402, height: 697)
+            .placed(x: 0, y: 0, width: 402, height: 874)
 
             BrandHeader {
                 HStack(spacing: 7) {
@@ -556,8 +556,13 @@ struct SaveAtlasInteractiveRootMap: View {
                     Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
                 }
             }
-            .background(AtlasPalette.canvas.opacity(0.96))
-            .placed(x: 0, y: 48, width: 402, height: 50)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(AtlasPalette.forest.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 8, y: 3)
+            .placed(x: 11, y: 48, width: 380, height: 50)
 
             if let place = mapViewModel.selectedPlace {
                 SaveAtlasLivePlaceCard(

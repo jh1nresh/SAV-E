@@ -606,8 +606,8 @@ struct ContentView: View {
                 onUpdatePlace: { place in
                     try await mapVM.updatePlace(place)
                 },
-                onFindRelatedSources: { place in
-                    try await mapVM.discoverRelatedSources(for: place)
+                onFindRelatedSources: { place, forceRefresh in
+                    try await mapVM.discoverRelatedSources(for: place, forceRefresh: forceRefresh)
                 },
                 onAddPlaceToTrip: requestFullScreenTripAssignment,
                 onCreateList: {
@@ -683,8 +683,8 @@ struct ContentView: View {
             onUpdatePlace: { place in
                 try await mapVM.updatePlace(place)
             },
-            onFindRelatedSources: { place in
-                try await mapVM.discoverRelatedSources(for: place)
+            onFindRelatedSources: { place, forceRefresh in
+                try await mapVM.discoverRelatedSources(for: place, forceRefresh: forceRefresh)
             },
             onImportSharedTextAsReviewCandidates: { sharedText in
                 try await mapVM.importSharedTextAsReviewCandidates(sharedText)
