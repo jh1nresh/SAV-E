@@ -28,6 +28,9 @@ struct MapView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let topChromeInset = max(geo.safeAreaInsets.top + 55, 108)
+            let bottomChromeInset = max(geo.safeAreaInsets.bottom + 86, 98)
+
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
                     UserAnnotation()
@@ -110,6 +113,11 @@ struct MapView: View {
                         showsTraffic: false
                     )
                 )
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear
+                        .frame(height: bottomChromeInset)
+                        .allowsHitTesting(false)
+                }
                 .mapFeatureSelectionDisabled { feature in
                     feature.kind != .pointOfInterest
                 }
@@ -125,7 +133,7 @@ struct MapView: View {
                     VStack {
                         AtlasMapContextBadge(text: contextBadgeText)
                             .accessibilityIdentifier("map.contextBadge")
-                            .padding(.top, 12)
+                            .padding(.top, topChromeInset)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
@@ -143,7 +151,7 @@ struct MapView: View {
                 // Top-trailing: the bottom edge of every map surface is
                 // covered by a shelf/drawer or place card, which buried the
                 // button when it sat bottom-trailing.
-                .padding(.top, 14)
+                .padding(.top, topChromeInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .accessibilityIdentifier("map.currentLocation")
 
@@ -169,7 +177,7 @@ struct MapView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.leading, 16)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, bottomChromeInset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .accessibilityIdentifier("map.providerBackedPlaces")
                 }
@@ -177,7 +185,7 @@ struct MapView: View {
                 if let moment = viewModel.stampMoment {
                     VStack {
                         SaveStampMomentView(moment: moment)
-                            .padding(.top, geo.safeAreaInsets.top + 18)
+                            .padding(.top, topChromeInset)
                             .padding(.horizontal, 24)
                         Spacer()
                     }
@@ -214,7 +222,7 @@ struct MapView: View {
                                 }
                             }
                         )
-                        .padding(.top, geo.safeAreaInsets.top + 18)
+                        .padding(.top, topChromeInset)
                         .padding(.horizontal, 24)
                         Spacer()
                     }
@@ -343,14 +351,6 @@ private struct CurrentLocationButton: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(controlFill)
-                    .frame(width: 54, height: 54)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(controlStroke, lineWidth: 1)
-                    )
-
                 if isLocating {
                     ProgressView()
                         .tint(controlForeground)
@@ -360,15 +360,17 @@ private struct CurrentLocationButton: View {
                         .foregroundColor(controlForeground)
                 }
             }
+            .frame(width: 54, height: 54)
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(controlStroke, lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
         .disabled(isLocating)
         .accessibilityLabel(languageSettings.localized(english: "Center map on current location", traditionalChinese: "將地圖移到目前位置"))
         .accessibilityHint(languageSettings.localized(english: "Moves the map back to where you are now", traditionalChinese: "把地圖移回你現在所在的位置"))
-    }
-
-    private var controlFill: Color {
-        colorScheme == .dark ? Color.black.opacity(0.52) : Color.white.opacity(0.72)
     }
 
     private var controlStroke: Color {
