@@ -520,6 +520,7 @@ private struct HomeSavedPlacesLibrary: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AtlasPalette.canvas)
         .clipped()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
     }
 

@@ -1522,7 +1522,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
-        if !rootTabButton(title, app: app).exists {
+        if !rootTabButton(title, app: app).isHittable {
             returnToRootBar(app: app)
         }
         let tab = rootTabButton(title, app: app)
