@@ -9,49 +9,25 @@ struct HomeAtlasScreen: View {
             AtlasCanvas()
 
             BrandHeader {
-                HStack(spacing: 8) {
-                    Button(action: presentation.onOpenSaves) {
-                        Image(systemName: "bookmark")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AtlasPalette.ink)
-                            .frame(width: 28, height: 35)
-                    }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Saves")
-                        .accessibilityIdentifier("home.saves")
-
-                    Button(action: presentation.onOpenTrips) {
-                        Image(systemName: "point.3.connected.trianglepath.dotted")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(AtlasPalette.ink)
-                            .frame(width: 28, height: 35)
-                    }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Trips")
-                        .accessibilityIdentifier("home.trips")
-
-                    Button(action: presentation.onCapture) {
-                        HStack(spacing: 7) {
-                            Image(systemName: "link")
-                                .font(.system(size: 15, weight: .medium))
-                            Text("Paste a link")
-                                .font(AtlasType.display(13))
-                        }
+                Button(action: presentation.onOpenTrips) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 19, weight: .medium))
                         .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 120, height: 35)
+                        .frame(width: 42, height: 35)
                         .background(AtlasPalette.paper, in: Capsule())
                         .overlay {
                             Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
                         }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("home.capture")
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Trips")
+                .accessibilityIdentifier("home.trips")
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
 
-            Group {
-                switch presentation.homeHero.scene {
+            if presentation.locksOneFaceHomeComposition {
+                Group {
+                    switch presentation.homeHero.scene {
                 case .tokyo:
                     Image("HomeAtlasScene")
                         .resizable()
@@ -179,14 +155,15 @@ struct HomeAtlasScreen: View {
                     )
                 case .regionalMap:
                     AtlasRegionalHomeHero(hero: presentation.homeHero)
+                    }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture(perform: presentation.onOpenHomeHero)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens this region in Map")
+                .accessibilityIdentifier("home.hero.openMap")
+                .placed(x: 0, y: 99, width: 402, height: 274)
             }
-            .contentShape(Rectangle())
-            .onTapGesture(perform: presentation.onOpenHomeHero)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Opens this region in Map")
-            .accessibilityIdentifier("home.hero.openMap")
-            .placed(x: 0, y: 99, width: 402, height: 274)
 
             if presentation.locksOneFaceHomeComposition {
                 HomeReviewCard(showsStatColumns: true)
@@ -198,8 +175,8 @@ struct HomeAtlasScreen: View {
                 HomeRecentStamps()
                     .placed(x: 10, y: 650, width: 382, height: 133)
             } else {
-                HomeOneJobSheet()
-                    .placed(x: 5, y: 354, width: 392, height: 182)
+                HomeSavedPlacesLibrary()
+                    .placed(x: 0, y: 99, width: 402, height: 687)
             }
         }
         .frame(width: 402, height: 874)
@@ -439,47 +416,206 @@ private struct AtlasRegionalHomeHero: View {
     }
 }
 
-private struct HomeOneJobSheet: View {
+private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        Group {
-            switch presentation.homeSheetKind {
-            case .review:
-                HomeReviewCard(showsStatColumns: false)
-            case .sameCityTrip:
-                HomePriorityCard()
-            case .empty:
-                HomeQuietEmpty()
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localized("Saved places", "已存地點"))
+                        .font(AtlasType.display(25))
+                        .foregroundStyle(AtlasPalette.forest)
+
+                    Text(savedCountText)
+                        .font(AtlasType.body(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                }
+
+                Spacer()
+
+                Button(action: presentation.onOpenSaves) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(localized("Manage", "管理"))
+                            .font(AtlasType.strong(12))
+                    }
+                    .foregroundStyle(AtlasPalette.ink)
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(AtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                    }
+                }
+                .accessibilityIdentifier("home.saves")
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+
+            if presentation.reviewCount > 0 {
+                Button(action: presentation.onReviewAll) {
+                    HStack(spacing: 9) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(reviewText)
+                            .font(AtlasType.strong(13))
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(AtlasPalette.forest)
+                    .padding(.horizontal, 14)
+                    .frame(height: 42)
+                    .background(AtlasPalette.mint.opacity(0.58), in: RoundedRectangle(cornerRadius: 13))
+                }
+                .accessibilityIdentifier("home.review")
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+
+            if presentation.savedPlaces.isEmpty {
+                HomeSavedPlacesEmpty()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(presentation.savedPlaces.enumerated()), id: \.element.id) { index, place in
+                            HomeSavedPlaceRow(place: place) {
+                                presentation.onOpenPlace(place.id)
+                            }
+
+                            if index < presentation.savedPlaces.count - 1 {
+                                Rectangle()
+                                    .fill(AtlasPalette.line.opacity(0.24))
+                                    .frame(height: 1)
+                                    .padding(.leading, 66)
+                            }
+                        }
+                    }
+                    .background(
+                        AtlasPalette.paper,
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 18)
+                }
+                .scrollIndicators(.hidden)
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.sheet")
+        .background(AtlasPalette.canvas)
+        .accessibilityIdentifier("home.savedPlaces")
+    }
+
+    private var savedCountText: String {
+        let count = presentation.savedPlaces.count
+        switch languageSettings.language {
+        case .english:
+            return count == 1 ? "1 confirmed place" : "\(count) confirmed places"
+        case .traditionalChinese:
+            return "\(count) 個已確認地點"
+        }
+    }
+
+    private var reviewText: String {
+        let count = presentation.reviewCount
+        switch languageSettings.language {
+        case .english:
+            return count == 1 ? "Review 1 clue" : "Review \(count) clues"
+        case .traditionalChinese:
+            return "確認 \(count) 個地點線索"
+        }
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 
-private struct HomeQuietEmpty: View {
+private struct HomeSavedPlacesEmpty: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+
     var body: some View {
-        VStack(spacing: 6) {
-            Text("Your atlas is waiting.")
-                .font(AtlasType.strong(20))
+        VStack(spacing: 10) {
+            Image(systemName: "bookmark")
+                .font(.system(size: 28, weight: .regular))
+                .foregroundStyle(AtlasPalette.muted.opacity(0.58))
+
+            Text(localized("No saved places yet", "還沒有已存地點"))
+                .font(AtlasType.strong(18))
                 .foregroundStyle(AtlasPalette.forest)
-            Text("Share a link when a place is worth keeping.")
+
+            Text(localized(
+                "Tap Save when a place is worth keeping.",
+                "遇到想留下的地點時，點一下 Save。"
+            ))
                 .font(AtlasType.body(13))
                 .foregroundStyle(AtlasPalette.muted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-        .background(
-            AtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: 21, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 21, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.30), lineWidth: 1)
+        .padding(.horizontal, 34)
+        .padding(.bottom, 70)
+        .accessibilityIdentifier("home.savedPlaces.empty")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+private struct HomeSavedPlaceRow: View {
+    let place: AtlasPlacePresentation
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .fill(AtlasPalette.mint.opacity(0.48))
+                    .frame(width: 48, height: 48)
+                    .overlay {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 19, weight: .medium))
+                            .foregroundStyle(AtlasPalette.forest)
+                    }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(place.name)
+                        .font(AtlasType.strong(15))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .lineLimit(1)
+
+                    Text(place.area)
+                        .font(AtlasType.body(11))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(place.relativeDay)
+                    .font(AtlasType.regular(10))
+                    .foregroundStyle(AtlasPalette.muted)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.muted.opacity(0.72))
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 72)
+            .contentShape(Rectangle())
         }
-        .accessibilityIdentifier("home.sheet.empty")
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.place.\(place.id)")
     }
 }
 
@@ -714,7 +850,7 @@ private struct HomeRecentStamps: View {
                 .position(x: 354, y: 14)
                 .accessibilityIdentifier("home.saves")
 
-            ForEach(Array(presentation.recentPlaces.prefix(2).enumerated()), id: \.element.id) { index, place in
+            ForEach(Array(presentation.savedPlaces.prefix(2).enumerated()), id: \.element.id) { index, place in
                 HomeStampRow(place: place) {
                     presentation.onOpenPlace(place.id)
                 }

@@ -230,9 +230,8 @@ enum SaveAtlasPresentationFactory {
         presentation.failedCount = candidates.filter {
             ["failed", "rejected"].contains($0.status.lowercased())
         }.count
-        presentation.recentPlaces = places
+        presentation.savedPlaces = places
             .sorted { $0.createdAt > $1.createdAt }
-            .prefix(2)
             .map(placePresentation)
         presentation.reviewItems = candidates
             .sorted { $0.createdAt > $1.createdAt }

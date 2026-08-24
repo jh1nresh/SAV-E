@@ -36,12 +36,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Home", app: app)
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.sheet"].waitForExistence(timeout: stepTimeout),
-            "Live Home should show exactly one sheet."
-        )
-        XCTAssertFalse(
-            app.descendants(matching: .any)["home.recentSaves"].exists,
-            "Map Stamps do not live on Home."
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Live Home should lead with the saved-place library."
         )
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -54,13 +50,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
+    func testHomeLeadsWithSavedPlacesAndUsesSaveTabForCapture() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-taipei",
                 "-save.appLanguage", "en",
             ]
         )
@@ -69,150 +64,26 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.cityAtlas.taipei"].waitForExistence(timeout: stepTimeout),
-            "Production Home should render the illustrated Taipei city atlas."
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Production Home should render confirmed saved places immediately."
         )
-        XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
+        let firstPlace = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).firstMatch
+        XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["Manage"].exists)
+        XCTAssertTrue(app.buttons["home.trips"].exists)
+        XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
-            app.staticTexts["Tokyo Weekend"].exists,
-            "Home tells one city story: Taipei hero must not pair with Tokyo Weekend."
+            app.buttons["home.capture"].exists,
+            "Home should not duplicate the root Save action."
         )
         XCTAssertFalse(
-            app.descendants(matching: .any)["prototype.home.atlas"].exists,
-            "Production Home must not keep the static Tokyo reference hero."
+            app.buttons["home.hero.openMap"].exists,
+            "Live Home should not expose the decorative regional hero."
         )
-        XCTAssertTrue(app.buttons["home.capture"].isHittable)
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
-
-        attach(app, name: "atlas-home-regional-taipei")
-
-        let cityAtlas = app.buttons["home.hero.openMap"]
-        XCTAssertTrue(cityAtlas.waitForExistence(timeout: stepTimeout))
-        cityAtlas.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
-    }
-
-    @MainActor
-    func testHomeUsesOwnedNewYorkShanghaiAndSeoulScenes() throws {
-        let fixtures = [
-            ("--uitest-home-region-new-york", "home.cityAtlas.newYork", "New York", "atlas-home-city-new-york"),
-            ("--uitest-home-region-shanghai", "home.cityAtlas.shanghai", "Shanghai", "atlas-home-city-shanghai"),
-            ("--uitest-home-region-seoul", "home.cityAtlas.seoul", "Seoul", "atlas-home-city-seoul"),
-        ]
-
-        for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding",
-                    "--skip-map-tour",
-                    "--uitest-repair-review-demo-seed",
-                    launchArgument,
-                    "-save.appLanguage", "en",
-                ]
-            )
-            launch(app)
-            try signInViaReviewDemo(app: app)
-
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            XCTAssertTrue(
-                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
-                "Production Home should render the owned \(city) city atlas."
-            )
-            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
-            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
-            attach(app, name: attachmentName)
-            terminate(app)
-        }
-    }
-
-    @MainActor
-    func testHomeUsesOwnedMainlandChinaScenes() throws {
-        let fixtures = [
-            ("--uitest-home-region-beijing", "home.cityAtlas.beijing", "Beijing", "atlas-home-city-beijing"),
-            ("--uitest-home-region-guangzhou", "home.cityAtlas.guangzhou", "Guangzhou", "atlas-home-city-guangzhou"),
-            ("--uitest-home-region-shenzhen", "home.cityAtlas.shenzhen", "Shenzhen", "atlas-home-city-shenzhen"),
-            ("--uitest-home-region-chengdu", "home.cityAtlas.chengdu", "Chengdu", "atlas-home-city-chengdu"),
-            ("--uitest-home-region-chongqing", "home.cityAtlas.chongqing", "Chongqing", "atlas-home-city-chongqing"),
-            ("--uitest-home-region-tianjin", "home.cityAtlas.tianjin", "Tianjin", "atlas-home-city-tianjin"),
-            ("--uitest-home-region-hangzhou", "home.cityAtlas.hangzhou", "Hangzhou", "atlas-home-city-hangzhou"),
-            ("--uitest-home-region-nanjing", "home.cityAtlas.nanjing", "Nanjing", "atlas-home-city-nanjing"),
-            ("--uitest-home-region-wuhan", "home.cityAtlas.wuhan", "Wuhan", "atlas-home-city-wuhan"),
-            ("--uitest-home-region-xian", "home.cityAtlas.xian", "Xi'an", "atlas-home-city-xian"),
-            ("--uitest-home-region-suzhou", "home.cityAtlas.suzhou", "Suzhou", "atlas-home-city-suzhou"),
-            ("--uitest-home-region-qingdao", "home.cityAtlas.qingdao", "Qingdao", "atlas-home-city-qingdao"),
-            ("--uitest-home-region-xiamen", "home.cityAtlas.xiamen", "Xiamen", "atlas-home-city-xiamen"),
-            ("--uitest-home-region-changsha", "home.cityAtlas.changsha", "Changsha", "atlas-home-city-changsha"),
-        ]
-
-        for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding",
-                    "--skip-map-tour",
-                    "--uitest-repair-review-demo-seed",
-                    launchArgument,
-                    "-save.appLanguage", "en",
-                ]
-            )
-            launch(app)
-            try signInViaReviewDemo(app: app)
-
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            XCTAssertTrue(
-                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
-                "Production Home should render the owned \(city) city atlas."
-            )
-            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
-            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
-            attach(app, name: attachmentName)
-            terminate(app)
-        }
-    }
-
-    @MainActor
-    func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
-        let ownedSceneApp = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-tustin",
-                "-save.appLanguage", "en",
-            ]
-        )
-        launch(ownedSceneApp)
-        try signInViaReviewDemo(app: ownedSceneApp)
-
-        XCTAssertTrue(ownedSceneApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(
-            ownedSceneApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"]
-                .waitForExistence(timeout: stepTimeout),
-            "Tustin should use the owned Southern California atlas."
-        )
-        XCTAssertTrue(ownedSceneApp.staticTexts["Tustin"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(ownedSceneApp.descendants(matching: .any)["home.regionalHero"].exists)
-        attach(ownedSceneApp, name: "atlas-home-city-southern-california")
-        terminate(ownedSceneApp)
-        let fallbackApp = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-san-francisco",
-                "-save.appLanguage", "en",
-            ]
-        )
-        launch(fallbackApp)
-        try signInViaReviewDemo(app: fallbackApp)
-
-        XCTAssertTrue(fallbackApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(
-            fallbackApp.descendants(matching: .any)["home.regionalHero"]
-                .waitForExistence(timeout: stepTimeout),
-            "San Francisco should keep the regional live-map fallback."
-        )
-        XCTAssertFalse(fallbackApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"].exists)
+        attach(app, name: "home-saved-places-library")
     }
 
     @MainActor
@@ -337,7 +208,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "debug-after-signin")
             throw XCTSkip("Home never appeared after demo sign-in.")
         }
-        XCTAssertTrue(app.buttons["home.capture"].exists)
+        XCTAssertTrue(rootTabButton("Save", app: app).exists)
         attach(app, name: "screenshot-01-home")
 
         openTripsFromHome(app: app)
@@ -399,7 +270,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        let capture = app.buttons["home.capture"]
+        let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
@@ -498,11 +369,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.buttons["home.capture"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.sheet"].exists)
-        XCTAssertTrue(app.buttons["home.review"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["home.recentSaves"].exists)
-        XCTAssertTrue(app.buttons["home.saves"].exists)
+        XCTAssertTrue(rootTabButton("Save", app: app).exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'"))
+                .firstMatch.exists
+        )
+        XCTAssertTrue(app.buttons["Manage"].exists)
         XCTAssertTrue(app.buttons["home.trips"].exists)
 
         for tab in ["Home", "Map", "Save", "Origin", "Profile"] {
@@ -787,7 +661,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        let reviewClues = app.buttons["home.review"]
+        let reviewClues = app.descendants(matching: .any)["home.review"]
         XCTAssertTrue(reviewClues.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(reviewClues.isHittable)
         reviewClues.tap()
@@ -820,7 +694,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["drawer.launcher"].exists)
 
-        let captureButtons = app.buttons.matching(identifier: "home.capture")
+        let captureButtons = app.buttons.matching(identifier: "root.tab.save")
         XCTAssertEqual(captureButtons.count, 1)
         XCTAssertTrue(captureButtons.firstMatch.isHittable)
         captureButtons.firstMatch.tap()
@@ -1331,7 +1205,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        let capture = app.buttons["home.capture"]
+        let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
@@ -1461,7 +1335,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         attach(seededApp, name: "v5-01-home-place-memory")
 
-        seededApp.buttons["home.capture"].tap()
+        rootTabButton("Save", app: seededApp).tap()
         XCTAssertTrue(
             seededApp.descendants(matching: .any)["capture.flow"]
                 .waitForExistence(timeout: stepTimeout)
@@ -1524,7 +1398,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .waitForExistence(timeout: launchTimeout)
         )
 
-        reviewApp.buttons["home.capture"].tap()
+        rootTabButton("Save", app: reviewApp).tap()
         let captureInput = reviewApp.textViews["capture.input"]
         XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
         typeText(
@@ -1671,7 +1545,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let entry = app.buttons["home.saves"]
+        let entry = app.buttons["Manage"]
         XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Saves entry")
         entry.tap()
         XCTAssertTrue(

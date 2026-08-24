@@ -1,4 +1,3 @@
-import CoreLocation
 import SwiftUI
 
 struct SaveHomeView: View {
@@ -8,21 +7,15 @@ struct SaveHomeView: View {
     let onOpenSavedPlace: (Place) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
-    let onOpenMap: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var resolvedHomeHero: AtlasHomeHeroPresentation?
 
     var body: some View {
         HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
-        .task {
-            await resolveHomeHero()
-        }
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -38,253 +31,13 @@ struct SaveHomeView: View {
             onOpenReview: { _ in onOpenSaves() },
             onOpenPassport: onOpenPassport
         )
-        let hero = SaveAtlasRuntime.usesParityFixture
-            ? presentation.homeHero
-            : resolvedHomeHero ?? savedPlaceHero ?? .neutral
-        presentation.homeHero = hero
         if !SaveAtlasRuntime.usesParityFixture {
-            let tripPriority = store.homeTripPriority(matchingStoryCity: hero.storyCity)
-            presentation.homePriority = SaveAtlasPresentationFactory.homePriority(
-                tripPriority: tripPriority,
-                mapStampCount: mapViewModel.places.count
-            )
             presentation.tripsBetaLabel = languageSettings.localized(
                 english: "BETA",
                 traditionalChinese: "測試版"
             )
-            presentation.onOpenHomePriority = {
-                guard let tripID = tripPriority?.trip.id else { return }
-                onOpenTrip(tripID)
-            }
-        }
-        presentation.onOpenHomeHero = {
-            openMap(for: hero)
         }
         return presentation
-    }
-
-    private func openMap(for hero: AtlasHomeHeroPresentation) {
-        if let latitude = hero.latitude, let longitude = hero.longitude {
-            mapViewModel.focusRegion(latitude: latitude, longitude: longitude)
-        }
-        onOpenMap()
-    }
-
-    private var savedPlaceHero: AtlasHomeHeroPresentation? {
-        guard let place = mapViewModel.places.max(by: { $0.createdAt < $1.createdAt }) else {
-            return nil
-        }
-        let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-        return .savedPlace(
-            title: area.isEmpty ? localized("Recent Map Stamp", "最近的地圖章") : area,
-            subtitle: localized(
-                "Based on \(place.name)",
-                "依據 \(place.name)"
-            ),
-            latitude: place.latitude,
-            longitude: place.longitude
-        )
-    }
-
-    private func resolveHomeHero() async {
-        guard !SaveAtlasRuntime.usesParityFixture else { return }
-
-        if let fixture = homeHeroFixture {
-            resolvedHomeHero = fixture
-            return
-        }
-
-        guard let location = await LocationService.shared.requestCurrentLocation() else {
-            return
-        }
-
-        let placemark = try? await CLGeocoder()
-            .reverseGeocodeLocation(location, preferredLocale: Locale.current)
-            .first
-        let countryCode = placemark?.isoCountryCode
-        let title = [
-            placemark?.locality,
-            placemark?.subAdministrativeArea,
-            placemark?.administrativeArea,
-            placemark?.country,
-        ]
-        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .first(where: { !$0.isEmpty })
-            ?? localized("Around you", "你附近")
-
-        let subtitleParts = [
-            placemark?.administrativeArea,
-            placemark?.country,
-        ]
-        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-        .filter { !$0.isEmpty && $0.localizedCaseInsensitiveCompare(title) != .orderedSame }
-
-        let subtitle = uniqueStrings(subtitleParts).joined(separator: " · ")
-        resolvedHomeHero = .currentRegion(
-            title: title,
-            subtitle: subtitle.isEmpty
-                ? localized("Your current region", "你目前所在區域")
-                : subtitle,
-            countryCode: countryCode,
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude
-        )
-    }
-
-    private var homeHeroFixture: AtlasHomeHeroPresentation? {
-        let fixtures: [String: AtlasHomeHeroPresentation] = [
-            "--uitest-home-region-taipei": .currentRegion(
-                title: "Taipei",
-                subtitle: "Taiwan",
-                countryCode: "TW",
-                latitude: 25.033,
-                longitude: 121.5654
-            ),
-            "--uitest-home-region-new-york": .currentRegion(
-                title: "New York",
-                subtitle: "United States",
-                countryCode: "US",
-                latitude: 40.7128,
-                longitude: -74.0060
-            ),
-            "--uitest-home-region-shanghai": .currentRegion(
-                title: "Shanghai",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 31.2304,
-                longitude: 121.4737
-            ),
-            "--uitest-home-region-beijing": .currentRegion(
-                title: "Beijing",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 39.9042,
-                longitude: 116.4074
-            ),
-            "--uitest-home-region-guangzhou": .currentRegion(
-                title: "Guangzhou",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 23.1291,
-                longitude: 113.2644
-            ),
-            "--uitest-home-region-shenzhen": .currentRegion(
-                title: "Shenzhen",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 22.5431,
-                longitude: 114.0579
-            ),
-            "--uitest-home-region-chengdu": .currentRegion(
-                title: "Chengdu",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 30.5728,
-                longitude: 104.0668
-            ),
-            "--uitest-home-region-chongqing": .currentRegion(
-                title: "Chongqing",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 29.5630,
-                longitude: 106.5516
-            ),
-            "--uitest-home-region-tianjin": .currentRegion(
-                title: "Tianjin",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 39.0851,
-                longitude: 117.1994
-            ),
-            "--uitest-home-region-hangzhou": .currentRegion(
-                title: "Hangzhou",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 30.2741,
-                longitude: 120.1551
-            ),
-            "--uitest-home-region-nanjing": .currentRegion(
-                title: "Nanjing",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 32.0603,
-                longitude: 118.7969
-            ),
-            "--uitest-home-region-wuhan": .currentRegion(
-                title: "Wuhan",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 30.5928,
-                longitude: 114.3055
-            ),
-            "--uitest-home-region-xian": .currentRegion(
-                title: "Xi'an",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 34.3416,
-                longitude: 108.9398
-            ),
-            "--uitest-home-region-suzhou": .currentRegion(
-                title: "Suzhou",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 31.2989,
-                longitude: 120.5853
-            ),
-            "--uitest-home-region-qingdao": .currentRegion(
-                title: "Qingdao",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 36.0671,
-                longitude: 120.3826
-            ),
-            "--uitest-home-region-xiamen": .currentRegion(
-                title: "Xiamen",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 24.4798,
-                longitude: 118.0894
-            ),
-            "--uitest-home-region-changsha": .currentRegion(
-                title: "Changsha",
-                subtitle: "China",
-                countryCode: "CN",
-                latitude: 28.2282,
-                longitude: 112.9388
-            ),
-            "--uitest-home-region-seoul": .currentRegion(
-                title: "Seoul",
-                subtitle: "South Korea",
-                countryCode: "KR",
-                latitude: 37.5665,
-                longitude: 126.9780
-            ),
-            "--uitest-home-region-tustin": .currentRegion(
-                title: "Tustin",
-                subtitle: "California · United States",
-                countryCode: "US",
-                latitude: 33.7459,
-                longitude: -117.8265
-            ),
-            "--uitest-home-region-san-francisco": .currentRegion(
-                title: "San Francisco",
-                subtitle: "California · United States",
-                countryCode: "US",
-                latitude: 37.7749,
-                longitude: -122.4194
-            ),
-        ]
-        let arguments = ProcessInfo.processInfo.arguments
-        return fixtures.first { arguments.contains($0.key) }?.value
-    }
-
-    private func uniqueStrings(_ values: [String]) -> [String] {
-        var seen: Set<String> = []
-        return values.filter { seen.insert($0.lowercased()).inserted }
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

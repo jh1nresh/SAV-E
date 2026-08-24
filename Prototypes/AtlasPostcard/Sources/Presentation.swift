@@ -381,29 +381,6 @@ struct AtlasHomePriorityPresentation: Equatable {
     let systemName: String
 }
 
-enum AtlasHomeSheetKind: Equatable {
-    case review
-    case sameCityTrip
-    case empty
-
-    /// Home tells one job. Review wins. A same-city trip is next. Otherwise
-    /// the atlas stays quiet. Plan-from-stamps and capture are not Home jobs.
-    static func resolve(
-        reviewCount: Int,
-        tripKind: AtlasHomePriorityPresentation.Kind?
-    ) -> AtlasHomeSheetKind {
-        if reviewCount > 0 {
-            return .review
-        }
-        switch tripKind {
-        case .currentTrip, .upcomingTrip:
-            return .sameCityTrip
-        case .planFromStamps, .capture, .none:
-            return .empty
-        }
-    }
-}
-
 struct AtlasTripSummaryPresentation: Identifiable, Equatable {
     let id: String
     let name: String
@@ -435,10 +412,10 @@ struct AtlasPresentation: @unchecked Sendable {
     var tripDateLabel: String
     var tripStops: [AtlasStopPresentation]
     var homePriority: AtlasHomePriorityPresentation
-    /// Locked One-Face Home raster keeps the old three-card stack. Live Home
-    /// uses one sheet.
+    /// Locked One-Face Home raster keeps the old hero and three-card stack.
+    /// Live Home instead leads with the user's saved-place library.
     var locksOneFaceHomeComposition: Bool
-    var recentPlaces: [AtlasPlacePresentation]
+    var savedPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
     var tripSummaries: [AtlasTripSummaryPresentation]
@@ -468,13 +445,6 @@ struct AtlasPresentation: @unchecked Sendable {
     /// One-tap planning suggestions derived from confirmed Map Stamps.
     var tripRecommendations: [AtlasTripRecommendationPresentation] = []
     var onPlanRecommendation: (String) -> Void = { _ in }
-
-    var homeSheetKind: AtlasHomeSheetKind {
-        AtlasHomeSheetKind.resolve(
-            reviewCount: reviewCount,
-            tripKind: homePriority.kind
-        )
-    }
 
     static let reference = AtlasPresentation(
         homeHero: .referenceTokyo,
@@ -529,7 +499,7 @@ struct AtlasPresentation: @unchecked Sendable {
             systemName: "point.3.connected.trianglepath.dotted"
         ),
         locksOneFaceHomeComposition: true,
-        recentPlaces: [.shibuyaBackstreets, .koffeeMameya],
+        savedPlaces: [.shibuyaBackstreets, .koffeeMameya],
         reviewItems: [
             AtlasReviewPresentation(
                 id: "tsukiji",
