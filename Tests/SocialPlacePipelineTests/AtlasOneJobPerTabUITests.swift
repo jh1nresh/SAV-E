@@ -13,6 +13,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("home.savedPlaces"))
         XCTAssertTrue(library.contains("home.saves"))
         XCTAssertTrue(library.contains("home.review"))
+        XCTAssertTrue(
+            library.contains("alignment: .top"),
+            "A tall saved-place list must top-align or it covers BrandHeader."
+        )
+        XCTAssertTrue(library.contains(".clipped()"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
     }

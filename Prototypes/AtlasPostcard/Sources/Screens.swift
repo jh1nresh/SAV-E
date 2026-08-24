@@ -175,6 +175,9 @@ struct HomeAtlasScreen: View {
                 HomeRecentStamps()
                     .placed(x: 10, y: 650, width: 382, height: 133)
             } else {
+                // Top-align inside the placed frame. A tall VStack otherwise
+                // centers and overflows upward, covering BrandHeader (Trips)
+                // and pushing Manage out of the hit/a11y region.
                 HomeSavedPlacesLibrary()
                     .placed(x: 0, y: 99, width: 402, height: 687)
             }
@@ -450,6 +453,7 @@ private struct HomeSavedPlacesLibrary: View {
                         Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
                 }
+                .accessibilityLabel(localized("Manage", "管理"))
                 .accessibilityIdentifier("home.saves")
                 .buttonStyle(.plain)
             }
@@ -481,6 +485,7 @@ private struct HomeSavedPlacesLibrary: View {
 
             if presentation.savedPlaces.isEmpty {
                 HomeSavedPlacesEmpty()
+                Spacer(minLength: 0)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
@@ -509,9 +514,12 @@ private struct HomeSavedPlacesLibrary: View {
                     .padding(.bottom, 18)
                 }
                 .scrollIndicators(.hidden)
+                .frame(maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(AtlasPalette.canvas)
+        .clipped()
         .accessibilityIdentifier("home.savedPlaces")
     }
 

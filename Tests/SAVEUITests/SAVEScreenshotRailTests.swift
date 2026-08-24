@@ -297,12 +297,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        // Live Home leads with the saved-place library. A pending candidate
-        // shows `home.review` ("Review 1 clue"), not the old One-Face
-        // headline "N clues need your help".
+        // Live Home leads with the saved-place library. The pending candidate
+        // is proven on Saves below; do not require the old One-Face
+        // "clues need your help" headline.
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.review"].waitForExistence(timeout: stepTimeout),
-            "Home should surface the pending review clue after relaunch."
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Home should show the saved-place library after relaunch."
         )
         XCTAssertFalse(app.staticTexts["Quarter Sheets Pizza Club"].exists)
         attach(app, name: "atlas-production-home")
@@ -1550,21 +1550,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Home", app: app)
         // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
         // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
-        let liveManage = app.descendants(matching: .any)["home.saves"]
-        let reviewEntry = app.descendants(matching: .any)["home.review"]
-        let entry: XCUIElement
-        if liveManage.waitForExistence(timeout: timeout(2)) {
-            entry = liveManage
-        } else {
-            XCTAssertTrue(
-                reviewEntry.waitForExistence(timeout: stepTimeout),
-                "Missing Home Saves entry"
-            )
-            entry = reviewEntry
-        }
+        let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.saves"],
+            app.buttons["Manage"],
+            app.descendants(matching: .any)["home.review"],
+            app.buttons["Review clues"],
+        ]
+        let entry = firstExisting(candidates, timeout: stepTimeout)
+        XCTAssertTrue(entry.exists, "Missing Home Saves entry")
         tapReachable(entry)
+        let saves = app.descendants(matching: .any)["saves.root"]
+        if !saves.waitForExistence(timeout: timeout(5)) {
+            tapReachable(entry)
+        }
         XCTAssertTrue(
-            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: launchTimeout),
+            saves.waitForExistence(timeout: launchTimeout),
             "Home Saves entry did not open Saves"
         )
     }
@@ -1572,17 +1572,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let entry = app.descendants(matching: .any)["home.trips"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Trips entry")
+        let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.trips"],
+            app.buttons["Trips"],
+        ]
+        let entry = firstExisting(candidates, timeout: stepTimeout)
+        XCTAssertTrue(entry.exists, "Missing Home Trips entry")
         tapReachable(entry)
         let trips = app.descendants(matching: .any)["trips.home"]
         if !trips.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
+            if app.descendants(matching: .any)["profile.root"].exists {
+                openRootTab("Home", app: app)
+            }
+            tapReachable(firstExisting(candidates, timeout: timeout(2)))
         }
         XCTAssertTrue(
             trips.waitForExistence(timeout: launchTimeout),
             "Home Trips entry did not open Trips"
         )
+    }
+
+    @MainActor
+    private func firstExisting(_ elements: [XCUIElement], timeout: TimeInterval) -> XCUIElement {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let found = elements.first(where: \.exists) {
+                return found
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return elements.first(where: \.exists) ?? elements[0]
     }
 
     /// The 402pt Atlas canvas is scaled by `ReferenceViewport`. XCTest can
