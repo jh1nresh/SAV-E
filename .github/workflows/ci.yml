@@ -130,7 +130,10 @@ jobs:
       # genuine regression still fails all three attempts. Any retry that did
       # happen is surfaced by the next step rather than being swallowed.
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
-        timeout-minutes: 35
+        # Job budget is 60. 35 was too tight once -retry-tests-on-failure
+        # spent three attempts on Home child-route flakes (run 32778736280
+        # died here at 35m, exit 64; visual parity never ran).
+        timeout-minutes: 50
         if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log

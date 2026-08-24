@@ -1563,8 +1563,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if !saves.waitForExistence(timeout: timeout(5)) {
             tapReachable(entry)
         }
+        // Cap at stepTimeout, not launchTimeout. A dead navigation used to
+        // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
+        // rail step (CI 32778736280, exit 64).
         XCTAssertTrue(
-            saves.waitForExistence(timeout: launchTimeout),
+            saves.waitForExistence(timeout: stepTimeout),
             "Home Saves entry did not open Saves"
         )
     }
@@ -1587,7 +1590,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             tapReachable(firstExisting(candidates, timeout: timeout(2)))
         }
         XCTAssertTrue(
-            trips.waitForExistence(timeout: launchTimeout),
+            trips.waitForExistence(timeout: stepTimeout),
             "Home Trips entry did not open Trips"
         )
     }
