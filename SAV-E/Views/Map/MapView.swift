@@ -52,7 +52,8 @@ struct MapView: View {
                             if let coordinate = candidate.coordinate {
                                 Annotation("", coordinate: coordinate) {
                                     ReviewCandidateMapPin(
-                                        candidate: candidate
+                                        candidate: candidate,
+                                        isSelected: viewModel.selectedReviewCandidate?.id == candidate.id
                                     ) {
                                         viewModel.selectReviewCandidate(candidate)
                                     }
@@ -74,7 +75,8 @@ struct MapView: View {
                         ForEach(viewModel.visibleSocialPlaces) { place in
                             Annotation("", coordinate: place.coordinate) {
                                 SocialPlaceMapPin(
-                                    place: place
+                                    place: place,
+                                    isSelected: viewModel.selectedSocialPlace?.id == place.id
                                 ) {
                                     viewModel.selectSocialPlace(place)
                                 }
@@ -403,7 +405,9 @@ struct PlaceMapPin: View {
                     DefaultPOIMarker(
                         systemName: "star.fill",
                         tint: SaveAtlasPalette.forest,
-                        state: .saved
+                        state: .saved,
+                        isSelected: isSelected,
+                        unselectedTint: place.category.mapMarkerTint
                     )
                 }
             }
@@ -430,6 +434,7 @@ struct PlaceMapPin: View {
 private struct SocialPlaceMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let place: Place
+    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
@@ -440,7 +445,8 @@ private struct SocialPlaceMapPin: View {
             DefaultPOIMarker(
                 systemName: place.category.iconName,
                 tint: place.category.mapMarkerTint,
-                state: .shared
+                state: .shared,
+                isSelected: isSelected
             )
         }
         .buttonStyle(.plain)
@@ -453,6 +459,7 @@ private struct SocialPlaceMapPin: View {
 private struct ReviewCandidateMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: PlaceReviewCandidate
+    var isSelected = false
     let onTap: () -> Void
 
     var body: some View {
@@ -463,7 +470,9 @@ private struct ReviewCandidateMapPin: View {
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
                 tint: .saveSignal,
-                state: .review
+                state: .review,
+                isSelected: isSelected,
+                unselectedTint: candidate.inferredCategory.mapMarkerTint
             )
         }
         .buttonStyle(.plain)
@@ -487,7 +496,8 @@ private struct UnsavedMapCandidatePin: View {
             DefaultPOIMarker(
                 systemName: candidate.category?.iconName ?? "mappin.circle.fill",
                 tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
-                state: .publicResult
+                state: .publicResult,
+                isSelected: isSelected
             )
             .scaleEffect(isSelected ? 1.18 : 1)
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
@@ -545,30 +555,41 @@ private struct DefaultPOIMarker: View {
     var systemName: String
     var tint: Color
     var state: MapMarkerState
+    var isSelected: Bool
+    var unselectedTint: Color? = nil
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(.regularMaterial)
-                .overlay(Circle().fill(tint.opacity(0.18)))
-                .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
-                .frame(width: 30, height: 30)
+        Group {
+            if isSelected {
+                ZStack {
+                    Circle()
+                        .fill(.regularMaterial)
+                        .overlay(Circle().fill(tint.opacity(0.18)))
+                        .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
+                        .frame(width: 30, height: 30)
 
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(tint)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if let badgeSystemName = state.badgeSystemName {
-                Image(systemName: badgeSystemName)
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundStyle(state.badgeColor)
-                    .background(Circle().fill(Color.white.opacity(0.94)))
-                    .offset(x: 2, y: 2)
+                    Image(systemName: systemName)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(tint)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    if let badgeSystemName = state.badgeSystemName {
+                        Image(systemName: badgeSystemName)
+                            .font(.system(size: 10, weight: .black))
+                            .foregroundStyle(state.badgeColor)
+                            .background(Circle().fill(Color.white.opacity(0.94)))
+                            .offset(x: 2, y: 2)
+                    }
+                }
+                .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
+            } else {
+                Circle()
+                    .fill(unselectedTint ?? tint)
+                    .frame(width: 10, height: 10)
             }
         }
-        .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
-        // Keep the 30 pt marker visual, but guarantee a >= 44 pt touch target.
+        // The selected marker is 30 pt and the unselected dot is 10 pt, but
+        // both retain the same >= 44 pt touch target.
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
     }
