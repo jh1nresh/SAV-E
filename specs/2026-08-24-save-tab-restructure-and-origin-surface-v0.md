@@ -123,6 +123,9 @@ source-pack / #153 map slice, archive / TestFlight.
 Atlas / five-tab visual rasters (`Prototypes/AtlasPostcard/Reference/Targets`)
 must match the five-tab Home / Map / Plan / Saves-from-Home faces or the
 `run-visual-parity.sh` gate fails. A live reshoot needs an iOS simulator.
+The Home target comes from `testCaptureFiveTabLanding`'s `five-tab-home`
+attachment so the gate proves the live saved-place library, not the locked
+One-Face parity fixture.
 
 ## Security and privacy
 

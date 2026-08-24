@@ -22,6 +22,19 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(home.contains("Paste a link"))
     }
 
+    func testVisualParityPrefersTheLiveFiveTabHome() throws {
+        let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
+        let workflow = try source(at: ".github/workflows/ci.yml")
+
+        XCTAssertTrue(script.contains("five-tab-home*)"))
+        XCTAssertTrue(script.contains("priority=1"))
+        XCTAssertTrue(
+            workflow.contains(
+                "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding"
+            )
+        )
+    }
+
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
         let review = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         let card = try typeBody("ReviewCandidateDetailCard", in: review)
