@@ -68,7 +68,8 @@ protocol RelatedPlaceSourcesProviding {
     func discoverRelatedSources(
         for placeId: UUID,
         platforms: [RelatedSourcePlatform],
-        maxResultsPerPlatform: Int
+        maxResultsPerPlatform: Int,
+        forceRefresh: Bool
     ) async throws -> RelatedPlaceSourcePack
 }
 
@@ -303,13 +304,15 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func discoverRelatedSources(
         for placeId: UUID,
         platforms: [RelatedSourcePlatform] = RelatedSourcePlatform.allCases,
-        maxResultsPerPlatform: Int = 3
+        maxResultsPerPlatform: Int = 3,
+        forceRefresh: Bool = false
     ) async throws -> RelatedPlaceSourcePack {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.relatedPlaceSourcesRequestBody(
             platforms: platforms,
-            maxResultsPerPlatform: maxResultsPerPlatform
+            maxResultsPerPlatform: maxResultsPerPlatform,
+            forceRefresh: forceRefresh
         )
         let data = try await request(
             path: "/v0/places/\(placeId.uuidString.lowercased())/related-sources",
@@ -330,7 +333,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     static func relatedPlaceSourcesRequestBody(
         platforms: [RelatedSourcePlatform],
-        maxResultsPerPlatform: Int
+        maxResultsPerPlatform: Int,
+        forceRefresh: Bool = false
     ) throws -> Data {
         var seen = Set<RelatedSourcePlatform>()
         let uniquePlatforms = platforms.filter { seen.insert($0).inserted }
@@ -345,7 +349,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         return try JSONEncoder.supabase.encode(RelatedPlaceSourcesRequestBody(
             platforms: uniquePlatforms.map(\.rawValue),
-            maxResultsPerPlatform: maxResultsPerPlatform
+            maxResultsPerPlatform: maxResultsPerPlatform,
+            forceRefresh: forceRefresh
         ))
     }
 
@@ -2048,10 +2053,12 @@ private struct SharedPlaceLinkCreateBody: Encodable {
 private struct RelatedPlaceSourcesRequestBody: Encodable {
     let platforms: [String]
     let maxResultsPerPlatform: Int
+    let forceRefresh: Bool
 
     private enum CodingKeys: String, CodingKey {
         case platforms
         case maxResultsPerPlatform = "max_results_per_platform"
+        case forceRefresh = "force_refresh"
     }
 }
 

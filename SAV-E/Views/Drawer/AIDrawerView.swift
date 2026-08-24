@@ -91,7 +91,7 @@ struct AIDrawerView: View {
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
-    var onFindRelatedSources: (Place) async throws -> RelatedPlaceSourcePack = { _ in
+    var onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack = { _, _ in
         throw SupabaseError.notConfigured
     }
     var onImportSharedTextAsReviewCandidates: (String) async throws -> [UUID] = { _ in [] }
@@ -284,8 +284,8 @@ struct AIDrawerView: View {
             onUpdatePlace: { place in
                 try await onUpdatePlace(place)
             },
-            onFindRelatedSources: { place in
-                try await onFindRelatedSources(place)
+            onFindRelatedSources: { place, forceRefresh in
+                try await onFindRelatedSources(place, forceRefresh)
             },
             onAddPlaceToTrip: onAddPlaceToTrip,
             onCreateList: createListForPicker,
@@ -1484,7 +1484,7 @@ struct MapDetailDrawerView: View {
     let onSaveSocialPlace: (Place) -> Void
     let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
-    let onFindRelatedSources: (Place) async throws -> RelatedPlaceSourcePack
+    let onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack
     let onAddPlaceToTrip: (Place) -> Void
     let onCreateList: () -> SaveCollaborativeList
     let onAddPlaceToList: (Place, UUID) throws -> Void
@@ -1806,8 +1806,8 @@ struct MapDetailDrawerView: View {
                         onUpdatePlace: { updatedPlace in
                             try await onUpdatePlace(updatedPlace)
                         },
-                        onFindRelatedSources: { selectedPlace in
-                            try await onFindRelatedSources(selectedPlace)
+                        onFindRelatedSources: { selectedPlace, forceRefresh in
+                            try await onFindRelatedSources(selectedPlace, forceRefresh)
                         }
                     )
                     .id(place.id)
@@ -2300,7 +2300,7 @@ private struct SavedMapDetailDrawerContent: View {
     let onDeletePlace: () async throws -> Void
     let onUpdateVisibility: (PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
-    let onFindRelatedSources: (Place) async throws -> RelatedPlaceSourcePack
+    let onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack
     @Environment(\.openURL) private var openURL
     @State private var enrichedPlace: Place?
     @State private var showDeleteConfirmation = false

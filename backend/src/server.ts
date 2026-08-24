@@ -47,6 +47,7 @@ import {
   hasAccountBearerAuthorization,
   RelatedPlaceSourcesOwnerRateLimiter,
 } from "./relatedPlaceSourcesEndpoint.js";
+import { PgRelatedPlaceSourcesStore } from "./relatedPlaceSourcesStore.js";
 import {
   defaultGeminiText,
   defaultPlacesSearch,
@@ -237,6 +238,9 @@ const pool = new Pool({
   connectionString: databaseUrl,
   ssl: databaseSSLConfig(databaseUrl),
 });
+const relatedPlaceSourcesStore = new PgRelatedPlaceSourcesStore(
+  (sql, values) => pool.query(sql, [...values] as QueryValue[]),
+);
 
 let verificationKeyPromise: Promise<KeyLike> | undefined;
 const privyUserProvisioner = createPrivyUserProvisioner({
@@ -1565,11 +1569,6 @@ async function handlePlaceRelatedSources(
 
   try {
     const requestBody = normalizeRelatedPlaceSourcesRequest(body);
-    const quota = relatedPlaceSourcesRateLimiter.consume(userId);
-    if (!quota.allowed) {
-      response.setHeader("Retry-After", String(quota.retryAfterSeconds));
-      return sendJson(response, { error: "Related-source request limit reached" }, 429);
-    }
     const result = await executeRelatedPlaceSourcesEndpoint(
       placeId,
       userId,
@@ -1586,8 +1585,18 @@ async function handlePlaceRelatedSources(
           };
         },
         verifyPublicVenue: verifyRelatedSourcesPublicVenue,
+        loadStoredPack: (ownedPlaceId, ownerId) => relatedPlaceSourcesStore.load(ownedPlaceId, ownerId),
+        storePack: (ownedPlaceId, ownerId, stored) => relatedPlaceSourcesStore.save(
+          ownedPlaceId,
+          ownerId,
+          stored,
+        ),
+        consumeDiscoveryQuota: () => relatedPlaceSourcesRateLimiter.consume(userId),
       },
     );
+    if (result.retryAfterSeconds !== undefined) {
+      response.setHeader("Retry-After", String(result.retryAfterSeconds));
+    }
     return sendJson(response, result.body, result.statusCode);
   } catch (error) {
     if (error instanceof RelatedPlaceSourcesInputError) {

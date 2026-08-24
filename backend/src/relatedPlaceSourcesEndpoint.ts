@@ -1,10 +1,12 @@
 import {
   discoverRelatedPlaceSources,
   relatedPlaceSourcePackResponseBody,
+  resolvedRelatedPlaceSourcesRequest,
   type RelatedPlaceSourcePack,
   type RelatedPlaceSourcesRequest,
   type RelatedSourcePlaceIdentity,
 } from "./relatedPlaceSources.js";
+import type { StoredRelatedPlaceSourcePack } from "./relatedPlaceSourcesStore.js";
 import type {
   GooglePublicVenuePlaceReference,
   GooglePublicVenueVerificationResult,
@@ -16,8 +18,9 @@ export type OwnedRelatedSourcePlace = GooglePublicVenuePlaceReference & {
 };
 
 export type RelatedPlaceSourcesEndpointResult = {
-  statusCode: 200 | 400 | 409 | 503;
+  statusCode: 200 | 400 | 409 | 429 | 503;
   body: Record<string, unknown>;
+  retryAfterSeconds?: number;
 };
 
 export type RelatedPlaceSourcesEndpointDependencies = {
@@ -32,7 +35,20 @@ export type RelatedPlaceSourcesEndpointDependencies = {
     place: RelatedSourcePlaceIdentity,
     request: RelatedPlaceSourcesRequest,
   ) => Promise<RelatedPlaceSourcePack>;
+  loadStoredPack: (
+    placeId: string,
+    userId: string,
+  ) => Promise<StoredRelatedPlaceSourcePack | undefined>;
+  storePack: (
+    placeId: string,
+    userId: string,
+    stored: StoredRelatedPlaceSourcePack,
+  ) => Promise<void>;
+  consumeDiscoveryQuota?: () => RelatedPlaceSourcesQuotaResult;
+  now?: () => Date;
 };
+
+export const relatedPlaceSourcesStalenessWindowMs = 7 * 24 * 60 * 60 * 1_000;
 
 export type RelatedPlaceSourcesQuotaResult =
   | { allowed: true }
@@ -96,6 +112,27 @@ export async function executeRelatedPlaceSourcesEndpoint(
   dependencies: RelatedPlaceSourcesEndpointDependencies,
 ): Promise<RelatedPlaceSourcesEndpointResult> {
   const ownedPlace = await dependencies.loadOwnedPlace(placeId, userId);
+  const resolvedRequest = resolvedRelatedPlaceSourcesRequest(request);
+
+  if (!request.forceRefresh) {
+    const stored = await dependencies.loadStoredPack(placeId, userId);
+    if (stored && storedRequestMatches(stored, resolvedRequest)) {
+      return {
+        statusCode: 200,
+        body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date()),
+      };
+    }
+  }
+
+  const quota = dependencies.consumeDiscoveryQuota?.();
+  if (quota && !quota.allowed) {
+    return {
+      statusCode: 429,
+      body: { error: "Related-source request limit reached" },
+      retryAfterSeconds: quota.retryAfterSeconds,
+    };
+  }
+
   const verification = await dependencies.verifyPublicVenue(ownedPlace);
 
   if (verification.status === "rejected") {
@@ -128,9 +165,55 @@ export async function executeRelatedPlaceSourcesEndpoint(
     googlePlaceId: venue.googlePlaceId,
     sourceUrl: ownedPlace.sourceUrl,
   }, request);
+  const body = relatedPlaceSourcePackResponseBody(pack);
+  const stored: StoredRelatedPlaceSourcePack = {
+    pack: body,
+    fetchedAt: pack.receipt.checkedAt,
+    requestedPlatforms: resolvedRequest.platforms,
+    maxResultsPerPlatform: resolvedRequest.maxResultsPerPlatform,
+    querySet: uniqueStrings(pack.coverage.flatMap((entry) => entry.queries)),
+  };
+  await dependencies.storePack(placeId, userId, stored);
 
   return {
     statusCode: 200,
-    body: relatedPlaceSourcePackResponseBody(pack),
+    body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date()),
   };
+}
+
+function storedRequestMatches(
+  stored: StoredRelatedPlaceSourcePack,
+  request: { platforms: string[]; maxResultsPerPlatform: number },
+): boolean {
+  return stored.maxResultsPerPlatform === request.maxResultsPerPlatform
+    && sortedStrings(stored.requestedPlatforms).join("\n") === sortedStrings(request.platforms).join("\n");
+}
+
+function storedPackResponseBody(
+  stored: StoredRelatedPlaceSourcePack,
+  now: Date,
+): Record<string, unknown> {
+  const fetchedAt = new Date(stored.fetchedAt);
+  if (Number.isNaN(fetchedAt.getTime())) {
+    throw new Error("Stored related-source fetched_at is invalid");
+  }
+  const staleAfter = new Date(fetchedAt.getTime() + relatedPlaceSourcesStalenessWindowMs);
+  return {
+    ...stored.pack,
+    storage: {
+      persistence: "owner_private_backend",
+      fetched_at: fetchedAt.toISOString(),
+      stale_after: staleAfter.toISOString(),
+      is_stale: now.getTime() > staleAfter.getTime(),
+      query_set: stored.querySet,
+    },
+  };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function sortedStrings(values: readonly string[]): string[] {
+  return [...values].sort((left, right) => left.localeCompare(right));
 }

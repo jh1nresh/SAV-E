@@ -56,6 +56,13 @@ final class RelatedPlaceSourcesClientTests: XCTestCase {
             "raw_result_count": 3,
             "independent_result_count": 2,
             "missing": ["x: public search unavailable"]
+          },
+          "storage": {
+            "persistence": "owner_private_backend",
+            "fetched_at": "2026-07-24T08:00:00.000Z",
+            "stale_after": "2026-07-31T08:00:00.000Z",
+            "is_stale": true,
+            "query_set": ["q1", "q2", "q3", "q4", "q5", "q6", "q7"]
           }
         }
         """.data(using: .utf8)!
@@ -73,6 +80,9 @@ final class RelatedPlaceSourcesClientTests: XCTestCase {
         XCTAssertEqual(pack.receipt.failedPlatforms, [.x])
         XCTAssertEqual(pack.receipt.rawResultCount, pack.coverage.reduce(0) { $0 + $1.inspectedCount })
         XCTAssertEqual(pack.receipt.independentResultCount, 2)
+        XCTAssertEqual(pack.storage?.persistence, "owner_private_backend")
+        XCTAssertEqual(pack.storage?.isStale, true)
+        XCTAssertEqual(pack.storage?.querySet.count, 7)
     }
 
     func testRejectsNonAllowlistedOrInsecureSourceURL() throws {
@@ -104,13 +114,15 @@ final class RelatedPlaceSourcesClientTests: XCTestCase {
     func testRequestBodyContainsOnlyBoundedContractFieldsAndDedupesPlatforms() throws {
         let data = try SupabaseService.relatedPlaceSourcesRequestBody(
             platforms: [.instagram, .youtube, .instagram],
-            maxResultsPerPlatform: 3
+            maxResultsPerPlatform: 3,
+            forceRefresh: true
         )
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(Set(object.keys), Set(["platforms", "max_results_per_platform"]))
+        XCTAssertEqual(Set(object.keys), Set(["platforms", "max_results_per_platform", "force_refresh"]))
         XCTAssertEqual(object["platforms"] as? [String], ["instagram", "youtube"])
         XCTAssertEqual(object["max_results_per_platform"] as? Int, 3)
+        XCTAssertEqual(object["force_refresh"] as? Bool, true)
         XCTAssertNil(object["aliases"])
         XCTAssertNil(object["name"])
         XCTAssertNil(object["address"])

@@ -2393,11 +2393,15 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    func discoverRelatedSources(for place: Place) async throws -> RelatedPlaceSourcePack {
+    func discoverRelatedSources(
+        for place: Place,
+        forceRefresh: Bool = false
+    ) async throws -> RelatedPlaceSourcePack {
         try await relatedPlaceSourcesService.discoverRelatedSources(
             for: place.id,
             platforms: RelatedSourcePlatform.allCases,
-            maxResultsPerPlatform: 3
+            maxResultsPerPlatform: 3,
+            forceRefresh: forceRefresh
         )
     }
 
