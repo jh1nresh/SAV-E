@@ -9,22 +9,44 @@ struct HomeAtlasScreen: View {
             AtlasCanvas()
 
             BrandHeader {
-                Button(action: presentation.onCapture) {
-                    HStack(spacing: 7) {
-                        Image(systemName: "link")
-                            .font(.system(size: 15, weight: .medium))
-                        Text("Paste a link")
-                            .font(AtlasType.display(13))
+                HStack(spacing: 8) {
+                    Button(action: presentation.onOpenSaves) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AtlasPalette.ink)
+                            .frame(width: 28, height: 35)
                     }
-                    .foregroundStyle(AtlasPalette.ink)
-                    .frame(width: 120, height: 35)
-                    .background(AtlasPalette.paper, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Saves")
+                        .accessibilityIdentifier("home.saves")
+
+                    Button(action: presentation.onOpenTrips) {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AtlasPalette.ink)
+                            .frame(width: 28, height: 35)
                     }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Trips")
+                        .accessibilityIdentifier("home.trips")
+
+                    Button(action: presentation.onCapture) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "link")
+                                .font(.system(size: 15, weight: .medium))
+                            Text("Paste a link")
+                                .font(AtlasType.display(13))
+                        }
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 120, height: 35)
+                        .background(AtlasPalette.paper, in: Capsule())
+                        .overlay {
+                            Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home.capture")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("home.capture")
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
 

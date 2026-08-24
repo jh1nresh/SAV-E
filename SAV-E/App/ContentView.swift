@@ -1,28 +1,63 @@
 import SwiftUI
 
+/// The five root tabs.
+///
+/// Shape decided 2026-08-23 and specified in
+/// `specs/2026-08-24-save-tab-restructure-and-origin-surface-v0.md` (W2):
+///
+///     [ Home ]  [ Map ]  ( + )  [ Origin ]  [ Profile ]
+///
+/// - `saves` is gone from the root bar: `SaveHomeView` is now its permanent
+///   entry point while the denser `SaveLibraryView` remains a pushed child.
+/// - `trips` is demoted off the root bar. It is a low-frequency surface and did
+///   not earn a permanent slot; it stays reachable from Home and from a place.
+/// - `capture` is the raised centre control, not a screen — selecting it opens
+///   the capture cover and leaves the previous tab selected.
+/// - `origin` is the new fifth face. See W4 in the spec; it is not a social
+///   feed and must never imply other users.
 enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     case home
-    case saves
-    case trips
     case map
+    case capture
+    case origin
+    case profile
 
     var id: Self { self }
+
+    /// `capture` is a control, not a destination. Anything that switches on the
+    /// *displayed* surface should use this instead of `allCases`.
+    static var destinations: [SaveRootTab] {
+        allCases.filter { !$0.isCaptureControl }
+    }
+
+    var isCaptureControl: Bool { self == .capture }
 
     var atlasTitle: String {
         switch self {
         case .home: "Home"
-        case .saves: "Saves"
-        case .trips: "Trips"
         case .map: "Map"
+        case .capture: "Save"
+        case .origin: "Origin"
+        case .profile: "Profile"
         }
     }
 
+    /// Tab bar glyphs. This is the only icon set — the parallel `systemImage`
+    /// property was dead code (nothing read it) and was deleted rather than
+    /// left to drift.
+    ///
+    /// Chosen against the Atlas/Postcard language rather than accepting
+    /// defaults: Home is the notebook cover, Map is a folded paper map (not a
+    /// globe — SAV-E is a city-scale tool), Save is the capture control,
+    /// Origin is the source clipping a place came from, Profile is the
+    /// passport holder.
     var atlasIcon: String {
         switch self {
-        case .home: "house"
-        case .saves: "bookmark"
-        case .trips: "briefcase"
-        case .map: "globe"
+        case .home: "book.closed"
+        case .map: "map"
+        case .capture: "plus"
+        case .origin: "paperclip"
+        case .profile: "person.crop.circle"
         }
     }
 
@@ -30,27 +65,34 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .home:
             return language.localized(english: "Home", traditionalChinese: "首頁")
-        case .saves:
-            return language.localized(english: "Saves", traditionalChinese: "收藏")
-        case .trips:
-            return language.localized(english: "Trips", traditionalChinese: "行程")
         case .map:
             return language.localized(english: "Map", traditionalChinese: "地圖")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .home: return "house.fill"
-        case .saves: return "bookmark.fill"
-        case .trips: return "suitcase.rolling.fill"
-        case .map: return "map.fill"
+        case .capture:
+            return language.localized(english: "Save", traditionalChinese: "收藏")
+        case .origin:
+            return language.localized(english: "Origin", traditionalChinese: "來處")
+        case .profile:
+            return language.localized(english: "Profile", traditionalChinese: "護照")
         }
     }
 }
 
 enum SaveRootRoute: Hashable {
     case trip(UUID)
+    /// The old Saves tab, now a child screen.
+    ///
+    /// W2 removed the Saves *slot* from the root bar but did not merge its
+    /// content into Home — that is still open work. Leaving Home's "Review
+    /// clues" control pointing at nothing would have been a silent regression,
+    /// so the same `SaveLibraryView` is pushed instead. When Home genuinely
+    /// absorbs the pocket, this route and `SaveLibraryView` go away together.
+    case saves
+    /// The old Trips tab, now a child screen for the same reason.
+    ///
+    /// Trips is low-frequency and lost its permanent slot, but the surface
+    /// still exists and is still reachable — from Home's "plan from stamps"
+    /// priority and from a place. Demoting a tab must not delete a feature.
+    case trips
 }
 
 private enum SaveFullScreenRoute: Identifiable {
@@ -235,67 +277,7 @@ struct ContentView: View {
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented) {
-            ProfileView(
-                savedPlaces: mapVM.places,
-                waitingClues: mapVM.reviewCandidates.count,
-                collaborativeLists: mapVM.collaborativeLists,
-                followedFriends: mapVM.followedFriends,
-                isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
-                hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
-                onUpdatePlaceVisibility: { place, visibility in
-                    try await mapVM.updatePlaceVisibility(place, visibility: visibility)
-                },
-                onSaveGoogleTakeoutImport: { drafts in
-                    try await mapVM.saveImportedPlaces(drafts)
-                },
-                onCreateList: { title, note in
-                    _ = mapVM.createCollaborativeList(title: title, note: note)
-                },
-                onShareListURL: { list, role in
-                    mapVM.shareURL(for: list, role: role)
-                },
-                onShareListLink: { list, role in
-                    await mapVM.shareLink(for: list, role: role)
-                },
-                onLoadMyReferralURL: {
-                    await mapVM.myReferralURL()
-                },
-                onOpenListOnMap: openCollaborativeListOnMap,
-                currentUserID: PrivyAuthService.shared.currentUserId,
-                onRefreshLists: {
-                    // Sync entry point that spawns its own server refresh —
-                    // an async wrapper keeps the poll-on-open contract simple.
-                    mapVM.reloadCollaborativeLists()
-                },
-                onLoadListMembers: { list in
-                    await mapVM.listMembers(for: list)
-                },
-                onRemoveListMember: { member, list in
-                    try await mapVM.removeListMember(member, from: list)
-                },
-                onLoadListShareCodes: { list in
-                    await mapVM.listShareCodes(for: list)
-                },
-                onRevokeListShareCode: { code, list in
-                    try await mapVM.revokeListShareCode(code.code, for: list)
-                },
-                onFollowReferral: { value in
-                    try await mapVM.followReferral(value)
-                },
-                onRefreshFollowedFriends: {
-                    await mapVM.refreshFollowedFriends(force: true)
-                },
-                onSearchFollowedFriends: { query in
-                    await mapVM.refreshFollowedFriends(query: query, force: true)
-                },
-                onLoadMoreFollowedFriends: {
-                    await mapVM.loadMoreFollowedFriends()
-                },
-                onUnfollowFriend: { friend in
-                    try await mapVM.unfollowFriend(friend)
-                }
-            )
-            .environment(\.appLanguageSettings, languageSettings)
+            passportView(isRootTab: false)
         }
         .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: finishTripAssignment) {
             NewTripPackView { name, city, startDate, endDate in
@@ -418,6 +400,86 @@ struct ContentView: View {
         openPostcardDrawerUITestFixtureIfNeeded()
     }
 
+    /// Passport. Reachable two ways since the five-tab restructure: as the
+    /// Profile root tab, and as the sheet the older surfaces still push. One
+    /// definition so the two entry points cannot drift apart.
+    @ViewBuilder
+    private func passportView(isRootTab: Bool) -> some View {
+        ProfileView(
+            savedPlaces: mapVM.places,
+            waitingClues: mapVM.reviewCandidates.count,
+            collaborativeLists: mapVM.collaborativeLists,
+            followedFriends: mapVM.followedFriends,
+            isLoadingFollowedFriends: mapVM.isLoadingFollowedFriends,
+            hasMoreFollowedFriends: mapVM.hasMoreFollowedFriends,
+            onUpdatePlaceVisibility: { place, visibility in
+                try await mapVM.updatePlaceVisibility(place, visibility: visibility)
+            },
+            onSaveGoogleTakeoutImport: { drafts in
+                try await mapVM.saveImportedPlaces(drafts)
+            },
+            onCreateList: { title, note in
+                _ = mapVM.createCollaborativeList(title: title, note: note)
+            },
+            onShareListURL: { list, role in
+                mapVM.shareURL(for: list, role: role)
+            },
+            onShareListLink: { list, role in
+                await mapVM.shareLink(for: list, role: role)
+            },
+            onLoadMyReferralURL: {
+                await mapVM.myReferralURL()
+            },
+            onOpenListOnMap: openCollaborativeListOnMap,
+            currentUserID: PrivyAuthService.shared.currentUserId,
+            onRefreshLists: {
+                // Sync entry point that spawns its own server refresh —
+                // an async wrapper keeps the poll-on-open contract simple.
+                mapVM.reloadCollaborativeLists()
+            },
+            onLoadListMembers: { list in
+                await mapVM.listMembers(for: list)
+            },
+            onRemoveListMember: { member, list in
+                try await mapVM.removeListMember(member, from: list)
+            },
+            onLoadListShareCodes: { list in
+                await mapVM.listShareCodes(for: list)
+            },
+            onRevokeListShareCode: { code, list in
+                try await mapVM.revokeListShareCode(code.code, for: list)
+            },
+            onFollowReferral: { value in
+                try await mapVM.followReferral(value)
+            },
+            onRefreshFollowedFriends: {
+                await mapVM.refreshFollowedFriends(force: true)
+            },
+            onSearchFollowedFriends: { query in
+                await mapVM.refreshFollowedFriends(query: query, force: true)
+            },
+            onLoadMoreFollowedFriends: {
+                await mapVM.loadMoreFollowedFriends()
+            },
+            onUnfollowFriend: { friend in
+                try await mapVM.unfollowFriend(friend)
+            },
+            isRootTab: isRootTab
+        )
+        .environment(\.appLanguageSettings, languageSettings)
+    }
+
+    /// Tab bar selection. `.capture` is a control, not a destination: it opens
+    /// the capture cover and leaves the current tab selected, so tapping it and
+    /// cancelling returns the user exactly where they were.
+    private func selectRootTab(_ tab: SaveRootTab) {
+        guard !tab.isCaptureControl else {
+            openDrawer(.addLink, tripID: nil)
+            return
+        }
+        selectedRootTab = tab
+    }
+
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
             ReferenceViewport {
@@ -430,31 +492,12 @@ struct ContentView: View {
                                 mapViewModel: mapVM,
                                 onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                                onOpenSaves: { selectedRootTab = .saves },
-                                onOpenTrips: { selectedRootTab = .trips },
+                                // Trips left the root bar; both it and Saves
+                                // are pushed children now, so neither surface
+                                // is lost by the restructure.
+                                onOpenSaves: { rootPath.append(.saves) },
+                                onOpenTrips: { rootPath.append(.trips) },
                                 onOpenMap: { selectedRootTab = .map },
-                                onOpenTrip: { rootPath.append(.trip($0)) },
-                                onOpenPassport: openPassport
-                            )
-                        case .saves:
-                            SaveLibraryView(
-                                places: mapVM.places,
-                                reviewCandidates: mapVM.reviewCandidates,
-                                onOpenCapture: { openDrawer(.addLink, tripID: nil) },
-                                onOpenReviewCandidate: {
-                                    openReviewCandidate($0, tripID: nil)
-                                },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                                onOpenPassport: openPassport
-                            )
-                        case .trips:
-                            TripsHomeView(
-                                store: tripStore,
-                                savedPlaces: mapVM.places,
-                                onOpenAssistant: { openDrawer(.ask, tripID: nil) },
-                                onAskSubmit: { query in
-                                    openDrawer(.ask, tripID: nil, initialQuery: query)
-                                },
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )
@@ -470,6 +513,21 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+                        case .origin:
+                            // W4 is not implemented. The tab exists so the bar
+                            // shape and layout are verifiable now, but it must
+                            // not pretend to have content: no seeded cards, no
+                            // implied other users. See the spec's W4 rules.
+                            SaveOriginPlaceholderView(onOpenPassport: openPassport)
+                        case .profile:
+                            passportView(isRootTab: true)
+                        case .capture:
+                            // Unreachable: `.capture` is a control, and
+                            // `selectRootTab` opens the cover instead of
+                            // committing the selection. Render the previous
+                            // surface's neighbour rather than crashing if a
+                            // future caller sets it directly.
+                            SaveOriginPlaceholderView(onOpenPassport: openPassport)
                         }
                     }
 
@@ -479,13 +537,14 @@ struct ContentView: View {
                         title: \.atlasTitle,
                         icon: \.atlasIcon,
                         accessibilityPrefix: "root.tab",
-                        onSelect: { selectedRootTab = $0 }
+                        isRaisedControl: { $0.isCaptureControl },
+                        onSelect: selectRootTab
                     )
                     .placed(
                         x: 0,
                         y: selectedRootTab == .map ? 788 : 786,
-                        width: 402,
-                        height: 76
+                        width: AtlasTabBarMetrics.width,
+                        height: AtlasTabBarMetrics.height
                     )
                 }
             }
@@ -502,6 +561,40 @@ struct ContentView: View {
                         onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                         onActiveTripChange: { activeTripID = $0 }
                     )
+                case .saves:
+                    SaveLibraryView(
+                        places: mapVM.places,
+                        reviewCandidates: mapVM.reviewCandidates,
+                        onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+                        onOpenReviewCandidate: {
+                            openReviewCandidate($0, tripID: nil)
+                        },
+                        onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                        onOpenPassport: openPassport
+                    )
+                    .navigationTitle(languageSettings.localized(
+                        english: "Saves",
+                        traditionalChinese: "收藏"
+                    ))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(.visible, for: .navigationBar)
+                case .trips:
+                    TripsHomeView(
+                        store: tripStore,
+                        savedPlaces: mapVM.places,
+                        onOpenAssistant: { openDrawer(.ask, tripID: nil) },
+                        onAskSubmit: { query in
+                            openDrawer(.ask, tripID: nil, initialQuery: query)
+                        },
+                        onOpenTrip: { rootPath.append(.trip($0)) },
+                        onOpenPassport: openPassport
+                    )
+                    .navigationTitle(languageSettings.localized(
+                        english: "Trips",
+                        traditionalChinese: "行程"
+                    ))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar(.visible, for: .navigationBar)
                 }
             }
         }
@@ -566,7 +659,10 @@ struct ContentView: View {
                 onComplete: {
                     pendingOnboardingClue = ""
                     fullScreenRoute = nil
-                    selectedRootTab = .saves
+                    // A finished capture lands in the Saves pocket, which is
+                    // now a child of Home rather than its own root tab.
+                    selectedRootTab = .home
+                    rootPath.append(.saves)
                 },
                 onCancel: {
                     // Closing is not consent to discard a private clue. Keep it
@@ -691,7 +787,8 @@ struct ContentView: View {
             },
             onOpenReview: {
                 isRootSheetPresented = false
-                selectedRootTab = .saves
+                selectedRootTab = .home
+                rootPath.append(.saves)
             },
             onAddPlaceToTrip: requestTripAssignment,
             onSaveTripPlan: { name, city, stops in
@@ -795,15 +892,15 @@ struct ContentView: View {
             fullScreenRoute = .capture
             return
         case .review, .saved:
-            selectedRootTab = .saves
+            // Review and saved clues are the Saves pocket, now a child of Home.
+            selectedRootTab = .home
+            rootPath.append(.saves)
             return
         case .ask:
             rootPath.removeAll()
-            // Trips P1: asking from Trips expands the panel in place — the
-            // user stays on Trips instead of being bounced to Map.
-            if selectedRootTab != .trips {
-                selectedRootTab = .map
-            }
+            // Trips left the root bar, so there is no "stay on Trips" case
+            // left to protect: asking from any root surface goes to Map.
+            selectedRootTab = .map
         }
 
         drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery)

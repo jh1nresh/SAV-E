@@ -42,6 +42,7 @@ struct ProfileView: View {
     var onSearchFollowedFriends: (String) async -> Void = { _ in }
     var onLoadMoreFollowedFriends: () async -> Void = {}
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
+    var isRootTab = false
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
@@ -57,6 +58,7 @@ struct ProfileView: View {
                     PassportTopBar(
                         waitingClues: waitingClues,
                         allowsEditing: !PrivyAuthService.shared.isReviewerDemo,
+                        showsCloseButton: !isRootTab,
                         onClose: { dismiss() },
                         onEdit: {
                             SaveHaptics.tap()
@@ -66,7 +68,12 @@ struct ProfileView: View {
                         }
                     )
                     .padding(.horizontal)
-                    .padding(.top, SaveTheme.Spacing.lg)
+                    .padding(
+                        .top,
+                        isRootTab
+                            ? AtlasMetrics.statusBarHeight + SaveTheme.Spacing.sm
+                            : SaveTheme.Spacing.lg
+                    )
 
                     PassportHero(
                         profile: viewModel.profile
@@ -259,7 +266,12 @@ struct ProfileView: View {
                         onUpdate: updatePlaceVisibility
                     )
                 }
-                .padding(.bottom, SaveTheme.Spacing.xl)
+                .padding(
+                    .bottom,
+                    isRootTab
+                        ? AtlasMetrics.height - 786 + 14
+                        : SaveTheme.Spacing.xl
+                )
                 .padding(.top, 2)
             }
             .background(SaveDottedBackground().ignoresSafeArea())
@@ -1526,13 +1538,16 @@ private struct PassportTopBar: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let waitingClues: Int
     let allowsEditing: Bool
+    let showsCloseButton: Bool
     let onClose: () -> Void
     let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            PassportIconButton(systemName: "xmark", action: onClose)
-                .accessibilityIdentifier("profile.close")
+            if showsCloseButton {
+                PassportIconButton(systemName: "xmark", action: onClose)
+                    .accessibilityIdentifier("profile.close")
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("SAV-E · \(languageSettings.text(.profileTitle).uppercased())")
