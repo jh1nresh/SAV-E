@@ -2,6 +2,12 @@ import XCTest
 @testable import SAVE
 
 final class AtlasOneJobPerTabUITests: XCTestCase {
+    // `AtlasHomeSheetKind` lives in the SAVE target, which builds with
+    // MainActor default isolation; this test target is `nonisolated`. Without
+    // this annotation the file does not compile once it is actually a member of
+    // SAVETests -- which is how it shipped: the file was added to the repo but
+    // never added to project.yml's generated target, so it was never built.
+    @MainActor
     func testHomeSheetResolverPicksReviewThenSameCityTripThenEmpty() {
         XCTAssertEqual(
             AtlasHomeSheetKind.resolve(reviewCount: 2, tripKind: .currentTrip),
@@ -127,7 +133,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(grantPathFiles.isDisjoint(with: oneJobSwiftFiles))
 
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
-        XCTAssertTrue(store.contains("serverVerifiedTier ?? locallyObservedTier"))
+        // The literal here must match the shipped grant path. The original
+        // assertion looked for "serverVerifiedTier ?? locallyObservedTier",
+        // a string that has never existed in this file (the call is qualified
+        // with `storeKit.`), so it could only ever have failed. It never did,
+        // because the file was not a member of any build target.
+        XCTAssertTrue(
+            store.contains("storeKit.serverVerifiedTier ?? storeKit.locallyObservedTier")
+        )
     }
 
     private func typeBody(_ typeName: String, in source: String) throws -> String {
