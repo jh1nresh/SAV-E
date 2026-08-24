@@ -121,10 +121,11 @@ struct RelatedPlaceSourcesPanel: View {
     @Environment(\.openURL) private var openURL
 
     let place: Place
-    let discover: (Place) async throws -> RelatedPlaceSourcePack
+    let discover: (Place, Bool) async throws -> RelatedPlaceSourcePack
 
     @State private var state: RelatedPlaceSourcesLoadState = .idle
     @State private var loadRequestID: UUID?
+    @State private var requestedForceRefresh = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -141,6 +142,7 @@ struct RelatedPlaceSourcesPanel: View {
         }
         .onChange(of: place.id) { _, _ in
             loadRequestID = nil
+            requestedForceRefresh = false
             state = .idle
         }
     }
@@ -190,7 +192,8 @@ struct RelatedPlaceSourcesPanel: View {
                         english: "Find related sources",
                         traditionalChinese: "尋找相關來源"
                     ),
-                    systemImage: "sparkle.magnifyingglass"
+                    systemImage: "sparkle.magnifyingglass",
+                    forceRefresh: false
                 )
             }
 
@@ -219,19 +222,17 @@ struct RelatedPlaceSourcesPanel: View {
 
     private func loadedContent(_ pack: RelatedPlaceSourcePack) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let storage = pack.storage, storage.isStale {
+                staleNotice(storage)
+            }
+
             if pack.sources.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(languageSettings.localized(
-                        english: "No useful public candidates found",
-                        traditionalChinese: "沒有找到可用的公開候選"
-                    ))
+                    Text(emptyStateTitle(pack))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.saveInk)
 
-                    Text(languageSettings.localized(
-                        english: "The searched platforms are listed below. This does not mean no post exists.",
-                        traditionalChinese: "下方列出已搜尋的平台；這不代表網路上完全沒有相關貼文。"
-                    ))
+                    Text(emptyStateMessage(pack))
                     .font(.caption)
                     .foregroundColor(.saveMutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -251,7 +252,7 @@ struct RelatedPlaceSourcesPanel: View {
             coverageView(pack)
 
             Button {
-                startDiscovery()
+                startDiscovery(forceRefresh: true)
             } label: {
                 Label(
                     languageSettings.localized(
@@ -309,15 +310,16 @@ struct RelatedPlaceSourcesPanel: View {
 
             findButton(
                 title: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
-                systemImage: "arrow.clockwise"
+                systemImage: "arrow.clockwise",
+                forceRefresh: true
             )
         }
         .accessibilityIdentifier("drawer.saved.relatedSources.error")
     }
 
-    private func findButton(title: String, systemImage: String) -> some View {
+    private func findButton(title: String, systemImage: String, forceRefresh: Bool) -> some View {
         Button {
-            startDiscovery()
+            startDiscovery(forceRefresh: forceRefresh)
         } label: {
             Label(title, systemImage: systemImage)
         }
@@ -326,16 +328,17 @@ struct RelatedPlaceSourcesPanel: View {
         .accessibilityIdentifier("drawer.saved.relatedSources.find")
     }
 
-    private func startDiscovery() {
+    private func startDiscovery(forceRefresh: Bool) {
         SaveHaptics.tap()
         state = .loading
+        requestedForceRefresh = forceRefresh
         loadRequestID = UUID()
     }
 
     private func loadSources(requestID: UUID) async {
         let requestedPlaceID = place.id
         do {
-            let pack = try await discover(place)
+            let pack = try await discover(place, requestedForceRefresh)
             try Task.checkCancellation()
             guard loadRequestID == requestID,
                   place.id == requestedPlaceID
@@ -349,6 +352,56 @@ struct RelatedPlaceSourcesPanel: View {
             else { return }
             state = .failed(RelatedPlaceSourcesDisplayError.classify(error))
         }
+    }
+
+    @ViewBuilder
+    private func staleNotice(_ storage: RelatedSourcesStorage) -> some View {
+        Label {
+            Text(languageSettings.localized(
+                english: "Saved result may be out of date · Last checked \(staleAgeDays(storage.fetchedAt)) days ago.",
+                traditionalChinese: "已儲存的結果可能已過期 · 上次檢查是 \(staleAgeDays(storage.fetchedAt)) 天前。"
+            ))
+        } icon: {
+            Image(systemName: "clock.badge.exclamationmark")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundColor(.saveCocoa)
+        .accessibilityIdentifier("drawer.saved.relatedSources.stale")
+    }
+
+    private func emptyStateTitle(_ pack: RelatedPlaceSourcePack) -> String {
+        if pack.coverage.contains(where: { $0.status != .searched }) {
+            return languageSettings.localized(
+                english: "Search coverage incomplete",
+                traditionalChinese: "搜尋範圍不完整"
+            )
+        }
+        return languageSettings.localized(
+            english: "No useful public candidates found",
+            traditionalChinese: "沒有找到可用的公開候選"
+        )
+    }
+
+    private func emptyStateMessage(_ pack: RelatedPlaceSourcePack) -> String {
+        if pack.coverage.contains(where: { $0.status != .searched }) {
+            return languageSettings.localized(
+                english: "Some requested platforms failed or returned partial coverage. Use the receipt below before drawing any conclusion.",
+                traditionalChinese: "部分指定平台搜尋失敗或只取得部分範圍；請先查看下方收據再判斷。"
+            )
+        }
+        return languageSettings.localized(
+            english: "The searched platforms are listed below. This does not mean no post exists.",
+            traditionalChinese: "下方列出已搜尋的平台；這不代表網路上完全沒有相關貼文。"
+        )
+    }
+
+    private func staleAgeDays(_ fetchedAt: String) -> Int {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = fractionalFormatter.date(from: fetchedAt)
+            ?? ISO8601DateFormatter().date(from: fetchedAt)
+        guard let date else { return 7 }
+        return max(7, Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 7)
     }
 
     private func receiptSummary(_ pack: RelatedPlaceSourcePack) -> String {

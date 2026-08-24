@@ -199,11 +199,28 @@ struct RelatedSourcesReceipt: Codable, Equatable, Sendable {
     }
 }
 
+struct RelatedSourcesStorage: Codable, Equatable, Sendable {
+    let persistence: String
+    let fetchedAt: String
+    let staleAfter: String
+    let isStale: Bool
+    let querySet: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case persistence
+        case fetchedAt = "fetched_at"
+        case staleAfter = "stale_after"
+        case isStale = "is_stale"
+        case querySet = "query_set"
+    }
+}
+
 struct RelatedPlaceSourcePack: Codable, Equatable, Sendable {
     let place: RelatedSourcePlaceIdentity
     let sources: [RelatedPlaceSource]
     let coverage: [RelatedSourceCoverage]
     let receipt: RelatedSourcesReceipt
+    let storage: RelatedSourcesStorage?
 }
 
 enum RelatedPlaceSourcesClientError: LocalizedError, Equatable {

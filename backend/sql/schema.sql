@@ -110,6 +110,30 @@ create index if not exists idx_places_fts on places
 alter table places add column if not exists business_photo_urls text[] default '{}';
 alter table places add column if not exists origin_shared_place_link_id uuid;
 
+-- One current owner-private discovery receipt per saved place. Re-searching
+-- replaces the row so storage growth remains bounded by the user's place count.
+create unique index if not exists idx_places_id_user_id on places(id, user_id);
+
+create table if not exists related_place_source_packs (
+    place_id uuid primary key,
+    user_id text not null,
+    pack jsonb not null,
+    fetched_at timestamptz not null,
+    requested_platforms text[] not null,
+    max_results_per_platform integer not null,
+    query_set text[] not null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint related_place_source_packs_owner_fk
+        foreign key (place_id, user_id) references places(id, user_id) on delete cascade,
+    constraint related_place_source_packs_pack_check check (jsonb_typeof(pack) = 'object'),
+    constraint related_place_source_packs_platforms_check check (cardinality(requested_platforms) between 1 and 7),
+    constraint related_place_source_packs_result_limit_check check (max_results_per_platform between 1 and 5)
+);
+
+create index if not exists idx_related_place_source_packs_user
+    on related_place_source_packs(user_id, fetched_at desc);
+
 create table if not exists follows (
     id uuid primary key default gen_random_uuid(),
     follower_id text references profiles(id) on delete cascade not null,

@@ -31,6 +31,7 @@ export type RelatedSourcePlaceIdentity = {
 export type RelatedPlaceSourcesRequest = {
   platforms?: RelatedSourcePlatform[];
   maxResultsPerPlatform?: number;
+  forceRefresh?: boolean;
 };
 
 export type RelatedPlaceSource = {
@@ -128,7 +129,7 @@ const platformDefinitions: Record<RelatedSourcePlatform, PlatformDefinition> = {
   },
 };
 
-const defaultPlatforms: RelatedSourcePlatform[] = [
+export const defaultRelatedSourcePlatforms: RelatedSourcePlatform[] = [
   "instagram",
   "tiktok",
   "youtube",
@@ -220,7 +221,30 @@ export function normalizeRelatedPlaceSourcesRequest(
     maxResultsPerPlatform = Number(value);
   }
 
-  return { platforms, maxResultsPerPlatform };
+  let forceRefresh: boolean | undefined;
+  if (body.force_refresh !== undefined) {
+    if (typeof body.force_refresh !== "boolean") {
+      throw new RelatedPlaceSourcesInputError("force_refresh must be a boolean");
+    }
+    forceRefresh = body.force_refresh;
+  }
+
+  return {
+    platforms,
+    maxResultsPerPlatform,
+    ...(forceRefresh === undefined ? {} : { forceRefresh }),
+  };
+}
+
+export function resolvedRelatedPlaceSourcesRequest(
+  request: RelatedPlaceSourcesRequest,
+): { platforms: RelatedSourcePlatform[]; maxResultsPerPlatform: number } {
+  return {
+    platforms: request.platforms?.length
+      ? uniquePlatforms(request.platforms)
+      : [...defaultRelatedSourcePlatforms],
+    maxResultsPerPlatform: request.maxResultsPerPlatform ?? 3,
+  };
 }
 
 export async function discoverRelatedPlaceSources(
@@ -229,10 +253,9 @@ export async function discoverRelatedPlaceSources(
   options: RelatedPlaceSourcesOptions = {},
 ): Promise<RelatedPlaceSourcePack> {
   const place = normalizePlaceIdentity(rawPlace);
-  const platforms = request.platforms?.length
-    ? uniquePlatforms(request.platforms)
-    : [...defaultPlatforms];
-  const maxResultsPerPlatform = request.maxResultsPerPlatform ?? 3;
+  const resolvedRequest = resolvedRelatedPlaceSourcesRequest(request);
+  const platforms = resolvedRequest.platforms;
+  const maxResultsPerPlatform = resolvedRequest.maxResultsPerPlatform;
   if (
     !Number.isInteger(maxResultsPerPlatform) ||
     maxResultsPerPlatform < 1 ||

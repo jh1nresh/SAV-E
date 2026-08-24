@@ -31,7 +31,7 @@ struct SaveRelatedSourcesHarnessView: View {
 
                 RelatedPlaceSourcesPanel(
                     place: samplePlace,
-                    discover: { _ in
+                    discover: { _, _ in
                         try await Task.sleep(for: .milliseconds(120))
                         return fixturePack
                     }
