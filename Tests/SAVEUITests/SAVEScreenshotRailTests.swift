@@ -71,8 +71,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["Manage"].exists)
-        XCTAssertTrue(app.buttons["home.trips"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
             app.buttons["home.capture"].exists,
@@ -297,9 +297,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        // Live Home leads with the saved-place library. A pending candidate
+        // shows `home.review` ("Review 1 clue"), not the old One-Face
+        // headline "N clues need your help".
         XCTAssertTrue(
-            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'clue' AND label CONTAINS[c] 'help'"))
-                .firstMatch.waitForExistence(timeout: stepTimeout)
+            app.descendants(matching: .any)["home.review"].waitForExistence(timeout: stepTimeout),
+            "Home should surface the pending review clue after relaunch."
         )
         XCTAssertFalse(app.staticTexts["Quarter Sheets Pizza Club"].exists)
         attach(app, name: "atlas-production-home")
@@ -376,8 +379,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'"))
                 .firstMatch.exists
         )
-        XCTAssertTrue(app.buttons["Manage"].exists)
-        XCTAssertTrue(app.buttons["home.trips"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
 
         for tab in ["Home", "Map", "Save", "Origin", "Profile"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
@@ -1545,23 +1548,53 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let entry = app.buttons["Manage"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Saves entry")
-        entry.tap()
+        // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
+        // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
+        let liveManage = app.descendants(matching: .any)["home.saves"]
+        let reviewEntry = app.descendants(matching: .any)["home.review"]
+        let entry: XCUIElement
+        if liveManage.waitForExistence(timeout: timeout(2)) {
+            entry = liveManage
+        } else {
+            XCTAssertTrue(
+                reviewEntry.waitForExistence(timeout: stepTimeout),
+                "Missing Home Saves entry"
+            )
+            entry = reviewEntry
+        }
+        tapReachable(entry)
         XCTAssertTrue(
-            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout)
+            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: launchTimeout),
+            "Home Saves entry did not open Saves"
         )
     }
 
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let entry = app.buttons["home.trips"]
+        let entry = app.descendants(matching: .any)["home.trips"]
         XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Trips entry")
-        entry.tap()
+        tapReachable(entry)
+        let trips = app.descendants(matching: .any)["trips.home"]
+        if !trips.waitForExistence(timeout: timeout(5)) {
+            tapReachable(entry)
+        }
         XCTAssertTrue(
-            app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout)
+            trips.waitForExistence(timeout: launchTimeout),
+            "Home Trips entry did not open Trips"
         )
+    }
+
+    /// The 402pt Atlas canvas is scaled by `ReferenceViewport`. XCTest can
+    /// report `exists` while `isHittable` is false; a center coordinate tap
+    /// still hits the control.
+    @MainActor
+    private func tapReachable(_ element: XCUIElement) {
+        if element.exists, element.isHittable {
+            element.tap()
+            return
+        }
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor
