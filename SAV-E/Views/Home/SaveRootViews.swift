@@ -18,7 +18,6 @@ struct SaveHomeView: View {
     var body: some View {
         HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
-        .toolbar(.hidden, for: .navigationBar)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
         .task {
@@ -1140,4 +1139,3 @@ private struct SaveAtlasSealShape: Shape {
         return path
     }
 }
-

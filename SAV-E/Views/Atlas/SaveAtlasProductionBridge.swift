@@ -60,6 +60,7 @@ enum SaveAtlasPresentationFactory {
             }
         }
         presentation.onOpenSaves = onOpenSaves
+        presentation.onOpenTrips = onOpenTrips
         presentation.onOpenPlace = { id in
             guard let place = mapViewModel.places.first(where: { $0.id.uuidString == id }) else {
                 return

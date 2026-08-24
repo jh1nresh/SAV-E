@@ -450,6 +450,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var onOpenHomePriority: () -> Void
     var onOpenTrip: () -> Void
     var onOpenSaves: () -> Void
+    var onOpenTrips: () -> Void
     var onOpenPlace: (String) -> Void
     var onOpenReview: (String) -> Void
     var onSelectReview: () -> Void
@@ -584,6 +585,7 @@ struct AtlasPresentation: @unchecked Sendable {
         onOpenHomePriority: {},
         onOpenTrip: {},
         onOpenSaves: {},
+        onOpenTrips: {},
         onOpenPlace: { _ in },
         onOpenReview: { _ in },
         onSelectReview: {},
