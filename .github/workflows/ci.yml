@@ -143,6 +143,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily \
