@@ -1,7 +1,7 @@
 // Durable per-number SLL-R buyer identity + recurring-run notification dedup.
 //
 // SLL-R binds a buyer's orders / receipts / saved card to a buyerId via a session
-// token. SAV-E must reuse the SAME token for a given phone across restarts, or
+// token. Savvy must reuse the SAME token for a given phone across restarts, or
 // recurring (which polls + confirms per buyer) loses the identity. This replaces
 // the previous in-memory Map with Postgres, mirroring sendbluePlaceStore: an
 // injected pg-pool-like `query` so tests can fake it and there's no circular

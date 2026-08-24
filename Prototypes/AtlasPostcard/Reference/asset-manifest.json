@@ -21,8 +21,8 @@
   "assets": [
     {
       "name": "MemoMascot",
-      "role": "existing SAV-E brand mark",
-      "source": "production SAV-E asset copied unchanged",
+      "role": "existing Savvy brand mark",
+      "source": "production Savvy asset copied unchanged",
       "status": "complete",
       "output": {
         "imageset": "MemoMascot.imageset",

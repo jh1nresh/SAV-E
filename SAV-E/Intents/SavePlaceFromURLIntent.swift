@@ -2,8 +2,8 @@ import AppIntents
 import Foundation
 
 struct SavePlaceFromURLIntent: AppIntent {
-    static let title: LocalizedStringResource = "Save URL to SAV-E"
-    static let description = IntentDescription("Save a place, event, or social URL into SAV-E local memory for later review.")
+    static let title: LocalizedStringResource = "Save URL to Savvy"
+    static let description = IntentDescription("Save a place, event, or social URL into Savvy local memory for later review.")
     static let openAppWhenRun = false
 
     @Parameter(title: "URL")
@@ -22,7 +22,7 @@ struct SavePlaceFromURLIntent: AppIntent {
                 url: url,
                 note: note.trimmingCharacters(in: .whitespacesAndNewlines)
             )
-            return .result(dialog: "Saved \(record.displayTitle) as a SAV-E source clue. Open SAV-E to review it.")
+            return .result(dialog: "Saved \(record.displayTitle) as a Savvy source clue. Open Savvy to review it.")
         }
 
         var savedCount = 0
@@ -38,13 +38,13 @@ struct SavePlaceFromURLIntent: AppIntent {
 
         if failedCount == 0 {
             let countLabel = candidates.count == 1 ? "1 review candidate" : "\(candidates.count) review candidates"
-            return .result(dialog: "Saved \(countLabel) to SAV-E Review.")
+            return .result(dialog: "Saved \(countLabel) to Savvy Review.")
         }
 
         if savedCount > 0 {
-            return .result(dialog: "Saved \(savedCount) review candidates to SAV-E Review. \(failedCount) could not be saved.")
+            return .result(dialog: "Saved \(savedCount) review candidates to Savvy Review. \(failedCount) could not be saved.")
         }
 
-        return .result(dialog: "SAV-E found review candidates but could not save them. Open SAV-E and try again.")
+        return .result(dialog: "Savvy found review candidates but could not save them. Open Savvy and try again.")
     }
 }

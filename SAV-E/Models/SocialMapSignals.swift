@@ -168,14 +168,14 @@ struct PlaceSocialSignal: Codable, Hashable {
             }
             return "\(saveCount) saves nearby"
         case .referralGuide:
-            return "From \(sourceLabel)'s SAV-E"
+            return "From \(sourceLabel)'s Savvy"
         }
     }
 
     var detailText: String {
         switch kind {
         case .friendSaved:
-            return "Friend signal from your SAV-E graph."
+            return "Friend signal from your Savvy graph."
         case .trending:
             return "Trending signal from public Map Stamps in this category."
         case .referralGuide:
@@ -237,7 +237,7 @@ struct SaveReferralHandoff: Codable, Hashable {
     var createdAt: Date
 
     var completionMessage: String {
-        "Follow \(handle.map { "@\($0)" } ?? "this SAV-E guide") to unlock their starter map pack and first AI itinerary."
+        "Follow \(handle.map { "@\($0)" } ?? "this Savvy guide") to unlock their starter map pack and first AI itinerary."
     }
 }
 
@@ -276,7 +276,7 @@ enum SaveReferralLink {
         if pathParts.first == "u", let handle = pathParts.dropFirst().first {
             return SaveReferralTarget(referralCode: code, handle: handle, lens: lens)
         }
-        if url.scheme == "wanderly", url.host == "referral" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "referral" {
             let handle = components?.queryItems?.first(where: { $0.name == "handle" })?.value
             return SaveReferralTarget(referralCode: code, handle: handle, lens: lens)
         }
@@ -300,7 +300,7 @@ enum SaveReferralLink {
     }
 
     static func isReferralLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "referral" { return true }
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "referral" { return true }
         guard url.scheme == "https", ["sav-e-app.vercel.app"].contains(url.host ?? "") else { return false }
         return url.path.hasPrefix("/r/") || url.path.hasPrefix("/u/")
     }

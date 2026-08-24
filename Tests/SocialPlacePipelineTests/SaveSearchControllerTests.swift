@@ -218,7 +218,7 @@ final class SaveSearchControllerTests: XCTestCase {
         let savedPresentation = SavePlaceDrawerPresentation(place: savedPlace)
 
         XCTAssertEqual(savedPresentation.state, .mapStamp)
-        XCTAssertEqual(savedPresentation.eyebrow, "Map Stamp · From your SAV-E")
+        XCTAssertEqual(savedPresentation.eyebrow, "Map Stamp · From your Savvy")
         XCTAssertEqual(savedPresentation.trustLine, "Saved to your place memory.")
         XCTAssertEqual(savedPresentation.primaryActionTitle, "What should I order?")
 
@@ -240,7 +240,7 @@ final class SaveSearchControllerTests: XCTestCase {
 
         XCTAssertEqual(reviewPresentation.state, .reviewCandidate)
         XCTAssertEqual(reviewPresentation.eyebrow, "Review Candidate · Check before saving")
-        XCTAssertEqual(reviewPresentation.trustLine, "SAV-E found a likely place. Review the evidence before stamping it to your map.")
+        XCTAssertEqual(reviewPresentation.trustLine, "Savvy found a likely place. Review the evidence before stamping it to your map.")
         XCTAssertEqual(reviewPresentation.primaryActionTitle, "Confirm Map Stamp")
 
         let sourceClue = PlaceReviewCandidate(
@@ -261,7 +261,7 @@ final class SaveSearchControllerTests: XCTestCase {
 
         XCTAssertEqual(cluePresentation.state, .clue)
         XCTAssertEqual(cluePresentation.eyebrow, "Clue · Needs exact place")
-        XCTAssertEqual(cluePresentation.trustLine, "SAV-E found a source, but not enough proof for a place yet.")
+        XCTAssertEqual(cluePresentation.trustLine, "Savvy found a source, but not enough proof for a place yet.")
         XCTAssertEqual(cluePresentation.primaryActionTitle, "Find exact place")
 
         let orderDraftPresentation = SavePlaceDrawerPresentation.menuOrderDraft(
@@ -270,7 +270,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
 
         XCTAssertEqual(orderDraftPresentation.state, .menuOrderDraft)
-        XCTAssertEqual(orderDraftPresentation.eyebrow, "Order draft · From your SAV-E")
+        XCTAssertEqual(orderDraftPresentation.eyebrow, "Order draft · From your Savvy")
         XCTAssertEqual(orderDraftPresentation.primaryActionTitle, "Draft order idea")
     }
 
@@ -791,7 +791,7 @@ final class SaveSearchControllerTests: XCTestCase {
             categoryNeedles: ["brunch"]
         )
         let client = StubGroundedAnswerClient(
-            answer: "I would pick Saved Brunch because it is nearby and already in your SAV-E memory.",
+            answer: "I would pick Saved Brunch because it is nearby and already in your Savvy memory.",
             parsedIntent: parsedIntent
         )
         let drawer = AIDrawerViewModel(
@@ -1169,8 +1169,8 @@ final class SaveSearchControllerTests: XCTestCase {
             sections: [
                 SaveSearchSection(
                     id: "from-your-save-nearby",
-                    label: "FROM YOUR SAV-E",
-                    title: "From your SAV-E nearby",
+                    label: "FROM YOUR Savvy",
+                    title: "From your Savvy nearby",
                     subtitle: "Memory first",
                     results: [result]
                 )
@@ -1179,7 +1179,7 @@ final class SaveSearchControllerTests: XCTestCase {
             context: GroundedAnswerContext(
                 localityHint: "Irvine",
                 savedPlaceDigest: ["Happy Lamb Hot Pot — Food, Irvine"],
-                recentConversation: ["User: 附近有什麼好吃的", "SAV-E: 我會先看 Happy Lamb Hot Pot。"]
+                recentConversation: ["User: 附近有什麼好吃的", "Savvy: 我會先看 Happy Lamb Hot Pot。"]
             )
         )
 
@@ -1279,10 +1279,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(conversation.count, SaveDrawerContextBuilder.maxRecentQueries + 1)
         XCTAssertEqual(conversation.first, "User: 奶茶")
         XCTAssertFalse(conversation.contains { $0.contains("fourth query is dropped") })
-        XCTAssertTrue(conversation.last?.hasPrefix("SAV-E: ") == true)
+        XCTAssertTrue(conversation.last?.hasPrefix("Savvy: ") == true)
         XCTAssertLessThanOrEqual(
             conversation.last?.count ?? 0,
-            SaveDrawerContextBuilder.maxAssistantAnswerLength + "SAV-E: ".count
+            SaveDrawerContextBuilder.maxAssistantAnswerLength + "Savvy: ".count
         )
     }
 
@@ -1458,7 +1458,7 @@ final class SaveSearchControllerTests: XCTestCase {
             assistantMessage: "我會先看 Nearby Japanese。",
             fromYourSave: SaveSearchSection(
                 id: "from-your-save-nearby",
-                title: "From your SAV-E nearby",
+                title: "From your Savvy nearby",
                 subtitle: "No nearby saved places.",
                 results: []
             ),
@@ -1649,7 +1649,7 @@ final class SaveSearchControllerTests: XCTestCase {
                     title: "Public nearby options",
                     subtitle: "Public discovery is explicit fallback only.",
                     results: [],
-                    emptyMessage: "Search public nearby options only if you want places outside your SAV-E memory.",
+                    emptyMessage: "Search public nearby options only if you want places outside your Savvy memory.",
                     showsNearbySearchAction: true
                 )
             ],
@@ -1696,7 +1696,7 @@ final class SaveSearchControllerTests: XCTestCase {
 
     @MainActor
     func testDrawerSearchFollowUpUsesPreviousGroundedResults() async {
-        let client = StubGroundedAnswerClient(answer: "我會先選 Bright Coffee，因為最近、評分高，而且還沒有存進 SAV-E。你想要安靜坐一下還是快速外帶？")
+        let client = StubGroundedAnswerClient(answer: "我會先選 Bright Coffee，因為最近、評分高，而且還沒有存進 Savvy。你想要安靜坐一下還是快速外帶？")
         let drawer = AIDrawerViewModel(groundedAnswerClient: client)
         let candidate = SaveMapCandidate(
             title: "Bright Coffee",
@@ -1724,7 +1724,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(client.requests.count, 2)
         XCTAssertEqual(client.requests.last?.allowedPlaceIds, ["map-candidate-\(candidate.id)"])
         XCTAssertTrue(client.requests.last?.query.contains("Follow-up question: 為什麼推薦這些") == true)
-        XCTAssertTrue(client.requests.last?.query.contains("Previous SAV-E query: coffee") == true)
+        XCTAssertTrue(client.requests.last?.query.contains("Previous Savvy query: coffee") == true)
         XCTAssertEqual(client.requests.last?.sections.flatMap(\.results).first?.rating, 4.8)
         XCTAssertEqual(client.requests.last?.sections.flatMap(\.results).first?.reviewCount, 1200)
     }
@@ -1759,7 +1759,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(client.requests.count, 2)
         XCTAssertEqual(client.requests.last?.allowedPlaceIds, ["map-candidate-\(candidate.id)"])
         XCTAssertTrue(client.requests.last?.query.contains("Follow-up question: 幫我比較") == true)
-        XCTAssertTrue(client.requests.last?.query.contains("Previous SAV-E query: coffee") == true)
+        XCTAssertTrue(client.requests.last?.query.contains("Previous Savvy query: coffee") == true)
     }
 
     @MainActor
@@ -2949,7 +2949,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(sourceOnly.objectType.displayName, "Clue")
         XCTAssertEqual(sourceOnly.agentDrawer.primaryAction.kind, .runRecovery)
         XCTAssertEqual(sourceOnly.agentDrawer.heading, "Source clue")
-        XCTAssertEqual(sourceOnly.agentDrawer.contextLine, "SAV-E found a source, but not enough proof for a place yet.")
+        XCTAssertEqual(sourceOnly.agentDrawer.contextLine, "Savvy found a source, but not enough proof for a place yet.")
         XCTAssertTrue(sourceOnly.agentDrawer.secondaryActions.map(\.kind).contains(.openSource))
         XCTAssertTrue(sourceOnly.agentDrawer.secondaryActions.map(\.kind).contains(.addNote))
         XCTAssertTrue(sourceOnly.agentDrawer.secondaryActions.map(\.kind).contains(.saveClue))
@@ -2999,7 +2999,7 @@ final class SaveSearchControllerTests: XCTestCase {
                     title: "Best pasta reel",
                     evidence: [
                         "Caption says best pasta in LA",
-                        "Confidence reason: Raw source was preserved, but SAV-E found no verified place identity yet."
+                        "Confidence reason: Raw source was preserved, but Savvy found no verified place identity yet."
                     ],
                     evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
                         found: ["Source URL: https://www.instagram.com/reel/pasta/"],
@@ -3019,7 +3019,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(drawer.sourcePlatform, .instagram)
         XCTAssertEqual(drawer.missingFields, ["exact venue", "address", "coordinates"])
         XCTAssertEqual(drawer.recoveryQueries, ["best pasta LA instagram reel"])
-        XCTAssertEqual(drawer.candidateExplanation, "Why SAV-E guessed this: Raw source was preserved, but SAV-E found no verified place identity yet.")
+        XCTAssertEqual(drawer.candidateExplanation, "Why Savvy guessed this: Raw source was preserved, but Savvy found no verified place identity yet.")
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value.contains("best pasta in LA") })
     }
 
@@ -3046,7 +3046,7 @@ final class SaveSearchControllerTests: XCTestCase {
                             "Readable Xiaohongshu caption or screenshot OCR",
                             "Xiaohongshu map link or copied place address"
                         ],
-                        nextBestClue: "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.",
+                        nextBestClue: "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so Savvy can turn this source into a Review Candidate.",
                         suggestedSearchQueries: ["xiaohongshu 65abc123 place"]
                     )
                 )
@@ -3128,7 +3128,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(result.objectType, .sourceOnlyClue)
         XCTAssertEqual(drawer.missingFields, ["exact venue", "address", "coordinates"])
         XCTAssertEqual(drawer.recoveryQueries, ["pasta midline LA instagram reel"])
-        XCTAssertEqual(drawer.candidateExplanation, "SAV-E is preserving the source clue without creating a Map Stamp.")
+        XCTAssertEqual(drawer.candidateExplanation, "Savvy is preserving the source clue without creating a Map Stamp.")
         XCTAssertFalse(drawer.candidateExplanation?.contains("Confidence reason:") == true)
         XCTAssertTrue(drawer.evidenceAtoms.contains { $0.kind == .caption && $0.value == midLineEvidence })
     }
@@ -3234,11 +3234,11 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let shareText = savedPlace.shareText
 
-        XCTAssertTrue(shareText.contains("SAV-E Map Stamp"))
+        XCTAssertTrue(shareText.contains("Savvy Map Stamp"))
         XCTAssertTrue(shareText.contains("Kato"))
         XCTAssertTrue(shareText.contains("777 S Alameda St, Los Angeles, CA"))
         XCTAssertTrue(shareText.contains("Source: https://www.instagram.com/reel/kato/"))
-        XCTAssertTrue(shareText.contains("Open in SAV-E: https://sav-e-app.vercel.app/p/"))
+        XCTAssertTrue(shareText.contains("Open in Savvy: https://sav-e-app.vercel.app/p/"))
         XCTAssertFalse(shareText.contains("Map fallback: https://maps.apple.com"))
         XCTAssertEqual(savedPlace.saveShareURL?.host, "sav-e-app.vercel.app")
         XCTAssertTrue(savedPlace.saveShareURL?.path.hasPrefix("/p/") == true)
@@ -3294,14 +3294,14 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let shareText = candidate.shareText
 
-        XCTAssertTrue(shareText.contains("SAV-E Map Result"))
+        XCTAssertTrue(shareText.contains("Savvy Map Result"))
         XCTAssertTrue(shareText.contains("Bright Coffee Bar"))
         XCTAssertTrue(shareText.contains("Rating: 4.8"))
         XCTAssertTrue(shareText.contains("Reviews: 1200"))
         XCTAssertTrue(shareText.contains("Source: https://maps.google.com/"))
         XCTAssertFalse(shareText.contains("token=private"))
         XCTAssertFalse(candidate.saveShareURL?.absoluteString.contains("token=private") == true)
-        XCTAssertTrue(shareText.contains("Open in SAV-E: https://sav-e-app.vercel.app/p/"))
+        XCTAssertTrue(shareText.contains("Open in Savvy: https://sav-e-app.vercel.app/p/"))
         XCTAssertFalse(shareText.contains("Map fallback: https://maps.apple.com"))
         XCTAssertEqual(candidate.saveShareURL?.host, "sav-e-app.vercel.app")
         XCTAssertTrue(candidate.saveShareURL?.path.hasPrefix("/p/") == true)
@@ -3580,7 +3580,7 @@ final class SaveSearchControllerTests: XCTestCase {
             request: request
         ))
         let answer = try GroundedAnswerJSONValidator().parseAndValidate(
-            "{\"answer\":\"SAV-E has no nearby saved Map Stamp, but Bright Coffee Bar is an unsaved Public Discovery option.\",\"citedResultIds\":[\"\(id)\"]}",
+            "{\"answer\":\"Savvy has no nearby saved Map Stamp, but Bright Coffee Bar is an unsaved Public Discovery option.\",\"citedResultIds\":[\"\(id)\"]}",
             request: request
         )
         XCTAssertEqual(answer.citedResultIds, [id])

@@ -75,8 +75,8 @@ struct TripItineraryComponent: View {
                     Button(action: shareSaveLink) {
                         Label(
                             languageSettings.localized(
-                                english: "Share SAV-E Link",
-                                traditionalChinese: "分享 SAV-E 連結"
+                                english: "Share Savvy Link",
+                                traditionalChinese: "分享 Savvy 連結"
                             ),
                             systemImage: "link"
                         )
@@ -369,8 +369,8 @@ struct TripItineraryComponent: View {
                         traditionalChinese: "無法儲存旅程"
                     ),
                     message: languageSettings.localized(
-                        english: "SAV-E could not save this plan as a trip. Try again.",
-                        traditionalChinese: "SAV-E 無法把這份行程存成旅程，請再試一次。"
+                        english: "Savvy could not save this plan as a trip. Try again.",
+                        traditionalChinese: "Savvy 無法把這份行程存成旅程，請再試一次。"
                     )
                 )
             }
@@ -381,8 +381,8 @@ struct TripItineraryComponent: View {
         let message: String
         if case TripItineraryExportError.temporaryFileCleanupFailed = error {
             message = languageSettings.localized(
-                english: "SAV-E could not remove its temporary KML file. Close the share sheet and try again.",
-                traditionalChinese: "SAV-E 無法移除暫存 KML 檔案。請關閉分享畫面後再試一次。"
+                english: "Savvy could not remove its temporary KML file. Close the share sheet and try again.",
+                traditionalChinese: "Savvy 無法移除暫存 KML 檔案。請關閉分享畫面後再試一次。"
             )
         } else if let selectionError = error as? TripKmlExportSelectionError {
             message = selectionMessage(for: selectionError)
@@ -390,8 +390,8 @@ struct TripItineraryComponent: View {
             switch serviceError {
             case .notConfigured:
                 message = languageSettings.localized(
-                    english: "Connect SAV-E to its backend before exporting KML.",
-                    traditionalChinese: "請先連接 SAV-E 後端，再匯出 KML。"
+                    english: "Connect Savvy to its backend before exporting KML.",
+                    traditionalChinese: "請先連接 Savvy 後端，再匯出 KML。"
                 )
             case .notAuthenticated:
                 message = languageSettings.localized(
@@ -405,14 +405,14 @@ struct TripItineraryComponent: View {
                 )
             case .recordNotFound, .apiError, .invalidResponse:
                 message = languageSettings.localized(
-                    english: "SAV-E could not prepare a valid KML file. Try again later.",
-                    traditionalChinese: "SAV-E 無法準備有效的 KML 檔案，請稍後再試。"
+                    english: "Savvy could not prepare a valid KML file. Try again later.",
+                    traditionalChinese: "Savvy 無法準備有效的 KML 檔案，請稍後再試。"
                 )
             }
         } else {
             message = languageSettings.localized(
-                english: "SAV-E could not create the KML file. Try again.",
-                traditionalChinese: "SAV-E 無法建立 KML 檔案，請再試一次。"
+                english: "Savvy could not create the KML file. Try again.",
+                traditionalChinese: "Savvy 無法建立 KML 檔案，請再試一次。"
             )
         }
         return TripItineraryExportAlert(

@@ -155,7 +155,7 @@ struct SaveSearchController {
             newRecommendations: SaveSearchSection(
                 id: "new-recommendations",
                 title: "Recommendations",
-                subtitle: "Contextual answers from SAV-E. Unsaved candidates stay separate from Map Stamps.",
+                subtitle: "Contextual answers from Savvy. Unsaved candidates stay separate from Map Stamps.",
                 results: recommendationResults,
                 emptyMessage: "Type “recommend new cafe in LA” to ask the drawer for a contextual answer."
             ),
@@ -369,7 +369,7 @@ struct SaveSearchController {
             objectType: .newRecommendation,
             userState: .unsaved,
             title: "Search new places for “\(query.rawValue)”",
-            subtitle: "SAV-E will keep recommendations separate from confirmed Map Stamps.",
+            subtitle: "Savvy will keep recommendations separate from confirmed Map Stamps.",
             statusLabel: "Recommendation · unsaved",
             sourceURL: nil,
             sourcePlatform: nil,

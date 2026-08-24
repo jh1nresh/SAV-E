@@ -12,7 +12,7 @@ enum SocialLinkReviewCandidateError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noUsableCandidates:
-            return "SAV-E could not find reviewable place evidence in this link. Add a caption, screenshot, or map link."
+            return "Savvy could not find reviewable place evidence in this link. Add a caption, screenshot, or map link."
         }
     }
 }
@@ -255,7 +255,7 @@ final class SocialLinkReviewCandidateService {
     }
 
     /// Entry point for messy pasted share text (caption + URLs + app-open
-    /// boilerplate). Never hard-fails: a paste SAV-E cannot resolve degrades to
+    /// boilerplate). Never hard-fails: a paste Savvy cannot resolve degrades to
     /// a source-only receipt with a next action instead of throwing.
     func reviewCandidates(fromSharedText rawShareText: String) async -> [PendingReviewCandidate] {
         let bundle = SocialShareTextNormalizer.normalize(rawShareText)
@@ -548,7 +548,7 @@ final class SocialLinkReviewCandidateService {
             [
                 "Source URL: \(sourceURL)",
                 "Evidence tier: \(SocialPlaceEvidenceTier.weakCandidate.rawValue)",
-                "Extracted by SAV-E from caption: \(name)",
+                "Extracted by Savvy from caption: \(name)",
                 area.map { "Caption area clue: \($0)" } ?? "",
                 captionSnippet.isEmpty ? "" : "Caption snippet: \(captionSnippet)"
             ]
@@ -558,7 +558,7 @@ final class SocialLinkReviewCandidateService {
                 [],
                 [
                     "Source URL: \(sourceURL)",
-                    "Extracted by SAV-E from caption: \(name)",
+                    "Extracted by Savvy from caption: \(name)",
                     area.map { "Caption area clue: \($0)" } ?? ""
                 ]
             ),
@@ -567,7 +567,7 @@ final class SocialLinkReviewCandidateService {
                 [
                     "Deterministic marker parser found no venue in prose caption",
                     "Ran public web search recovery (no confirming match)",
-                    "Extracted venue name from caption via SAV-E LLM fallback",
+                    "Extracted venue name from caption via Savvy LLM fallback",
                     "Verified the extracted name appears literally in the caption",
                     "Did not use logged-in social scraping"
                 ]
@@ -799,7 +799,7 @@ final class SocialLinkReviewCandidateService {
             let reason = analysis.placeBearingReason ?? "source has place-bearing caption/tag/location clues"
             return "\(reason); kept as Review Candidate until address/coordinates are verified."
         case .sourceOnly:
-            return "Raw source was preserved, but SAV-E found no verified place identity yet."
+            return "Raw source was preserved, but Savvy found no verified place identity yet."
         }
     }
 
@@ -2451,7 +2451,7 @@ final class SocialLinkReviewCandidateService {
             "Analysis method: rejects creator profiles, hashtags, marketing headlines, menu/price items, operating hours, transit/access lines, review metrics, and generic social shells as venue names",
             "Analysis method: falls back to source-only when readable metadata is missing/blocked, only a creator handle exists, only OCR/headline text exists, only menu/items exist, multiple list places need selection, or no address/map-provider match is available",
             "Analysis method: requires a place name plus address or map-provider match before saving directly; otherwise keeps it in Review",
-            "Analysis method: records unresolved details internally so SAV-E can keep trying instead of guessing"
+            "Analysis method: records unresolved details internally so Savvy can keep trying instead of guessing"
         ]
     }
 
@@ -2500,7 +2500,7 @@ final class SocialLinkReviewCandidateService {
                 "Readable Xiaohongshu caption or screenshot OCR",
                 "Xiaohongshu map link or copied place address"
             ])
-            nextBestClue = "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate."
+            nextBestClue = "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so Savvy can turn this source into a Review Candidate."
         }
 
         let searchQueries = sourceRecoverySearchQueries(evidenceText: evidenceText, sourceURL: sourceURL)

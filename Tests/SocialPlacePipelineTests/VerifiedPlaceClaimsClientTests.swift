@@ -130,7 +130,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
             "output_hash": "output_hash_123",
             "private_payload_ref": "save://receipts/recommendation_analysis/receipt_123",
             "public_summary": {
-              "summary": "SAV-E analyzed owner-scoped saved places and kept public discovery separate.",
+              "summary": "Savvy analyzed owner-scoped saved places and kept public discovery separate.",
               "capability": "place_claim_recommendation",
               "result_count": 1,
               "saved_result_count": 1,
@@ -173,7 +173,7 @@ final class VerifiedPlaceClaimsClientTests: XCTestCase {
             outputHash: "output_hash_123",
             privatePayloadRef: "save://receipts/recommendation_analysis/\(receiptId.uuidString)",
             publicSummary: RecommendationAnalysisPublicSummary(
-                summary: "SAV-E analyzed owner-scoped saved places and kept public discovery separate.",
+                summary: "Savvy analyzed owner-scoped saved places and kept public discovery separate.",
                 capability: "place_claim_recommendation",
                 resultCount: 1,
                 savedResultCount: 1,

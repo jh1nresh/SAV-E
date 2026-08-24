@@ -613,7 +613,7 @@ struct SaveAtlasMapCommandShelf: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AtlasPalette.forest)
 
-                    Text("Search places or ask SAV-E")
+                    Text("Search places or ask Savvy")
                         .font(AtlasType.strong(16))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
@@ -651,8 +651,8 @@ struct SaveAtlasMapCommandShelf: View {
             .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Search places or ask SAV-E")
-        .accessibilityHint("Opens the SAV-E assistant")
+        .accessibilityLabel("Search places or ask Savvy")
+        .accessibilityHint("Opens the Savvy assistant")
         .accessibilityIdentifier("map.command.search")
     }
 }

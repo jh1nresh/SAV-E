@@ -184,7 +184,7 @@ function publicSummaryFor(request: JsonObject, output: JsonObject): Recommendati
   const publicResultCount = countResultsBySource(results, "public");
 
   return {
-    summary: "SAV-E analyzed owner-scoped saved places and kept public discovery separate.",
+    summary: "Savvy analyzed owner-scoped saved places and kept public discovery separate.",
     capability: recommendationAnalysisCapability,
     result_count: results.length,
     saved_result_count: savedResultCount ?? results.length,
@@ -311,7 +311,7 @@ function canonicalValue(value: unknown): unknown {
 function asPublicSummary(value: unknown): RecommendationAnalysisPublicSummary {
   const object = objectValue(value) ?? {};
   return {
-    summary: cleanText(object.summary) ?? "SAV-E analyzed a recommendation request.",
+    summary: cleanText(object.summary) ?? "Savvy analyzed a recommendation request.",
     capability: recommendationAnalysisCapability,
     result_count: numberValue(object.result_count),
     saved_result_count: numberValue(object.saved_result_count),

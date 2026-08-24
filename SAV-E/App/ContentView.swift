@@ -48,7 +48,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     ///
     /// Chosen against the Atlas/Postcard language rather than accepting
     /// defaults: Home is the notebook cover, Map is a folded paper map (not a
-    /// globe — SAV-E is a city-scale tool), Save is the capture control,
+    /// globe — Savvy is a city-scale tool), Save is the capture control,
     /// Origin is the source clipping a place came from, Profile is the
     /// passport holder.
     var atlasIcon: String {
@@ -1332,8 +1332,8 @@ struct ContentView: View {
         .accessibilityIdentifier("saved.addToTrip.create")
         Button(
             languageSettings.localized(
-                english: "Keep in SAV-E only",
-                traditionalChinese: "只存到 SAV-E"
+                english: "Keep in Savvy only",
+                traditionalChinese: "只存到 Savvy"
             ),
             role: .cancel
         ) {
@@ -1428,8 +1428,8 @@ private struct SaveCaptureFlowView: View {
                                     .font(SaveAtlasType.strong(29, relativeTo: .title))
                                     .foregroundStyle(SaveAtlasPalette.forest)
                                 Text(localized(
-                                    "SAV-E will analyze it, then place every uncertain result in Review.",
-                                    "SAV-E 會先分析；任何不確定結果都只會進入待確認。"
+                                    "Savvy will analyze it, then place every uncertain result in Review.",
+                                    "Savvy 會先分析；任何不確定結果都只會進入待確認。"
                                 ))
                                 .font(SaveAtlasType.body(14))
                                 .foregroundStyle(SaveAtlasPalette.muted)
@@ -1736,7 +1736,7 @@ private struct FriendShareReceiptView: View {
 
                 if receipt.verifiedSenderLabel != nil {
                     Label(
-                        localized("Share record verified by SAV-E. Saving stays private.", "分享紀錄已由 SAV-E 驗證；儲存後仍是私人記憶。"),
+                        localized("Share record verified by Savvy. Saving stays private.", "分享紀錄已由 Savvy 驗證；儲存後仍是私人記憶。"),
                         systemImage: "checkmark.shield"
                     )
                     .font(.caption)
@@ -1799,7 +1799,7 @@ private struct FriendShareReceiptView: View {
 
     private var saveButtonTitle: String {
         switch saveState {
-        case .idle: return localized("Save to my SAV-E", "存到我的 SAV-E")
+        case .idle: return localized("Save to my Savvy", "存到我的 Savvy")
         case .saving: return localized("Saving…", "儲存中…")
         case .saved: return localized("Saved privately", "已私人儲存")
         case .alreadySaved: return localized("Already saved", "已經存過")
@@ -1911,11 +1911,11 @@ private struct FriendShareReceiptView: View {
     private func errorMessage(_ error: SharedPlaceReceiptError) -> String {
         switch error {
         case .malformedLink: return "這個分享連結格式不正確。"
-        case .missingAPIConfiguration: return "SAV-E 尚未設定好這個分享服務。"
+        case .missingAPIConfiguration: return "Savvy 尚未設定好這個分享服務。"
         case .networkUnavailable: return "請檢查網路後再試一次。"
         case .missingOrExpired: return "這個分享連結不存在或已過期。"
         case .serverUnavailable: return "分享收據暫時無法使用。"
-        case .invalidResponse: return "SAV-E 無法驗證這張分享收據。"
+        case .invalidResponse: return "Savvy 無法驗證這張分享收據。"
         }
     }
 }

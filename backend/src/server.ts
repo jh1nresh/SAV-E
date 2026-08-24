@@ -305,7 +305,7 @@ async function getOrCreateSllrBuyer(fromNumber: string): Promise<SllrBuyer> {
   const inFlight = sllrBuyerCreations.get(fromNumber);
   if (inFlight) return inFlight;
   const creation = (async () => {
-    const buyer = await issueBuyerSession(`SAV-E ${fromNumber}`);
+    const buyer = await issueBuyerSession(`Savvy ${fromNumber}`);
     await sllrBuyers.set(fromNumber, buyer);
     return buyer;
   })();
@@ -330,7 +330,7 @@ async function placeSllrOrder(query: string, fromNumber: string, location?: Stor
     }
   }
   try {
-    const order = await placeOrder(merchantId, query, buyer, { customerLabel: "SAV-E" });
+    const order = await placeOrder(merchantId, query, buyer, { customerLabel: "Savvy" });
     // Post-check: the reply may not claim more than the order's real state.
     let reply = guardReply(
       `✅ Ordered ${order.item.name} ($${order.item.subtotalUsd}) at ${order.merchantName ?? "the merchant"}. I'll text you when it's confirmed.`,
@@ -405,7 +405,7 @@ async function confirmSllrRecurring(fromNumber: string): Promise<string> {
   }
 }
 
-// Recurring notifier: SLL-R's cron opens confirm prompts (pending runs); SAV-E
+// Recurring notifier: SLL-R's cron opens confirm prompts (pending runs); Savvy
 // polls each known buyer and iMessages the prompt once per run (atomic dedup via
 // markNotified). The buyer replies "confirm my usual" → confirmSllrRecurring.
 const SLLR_NOTIFY_INTERVAL_MS = Number(process.env.SLLR_NOTIFY_INTERVAL_MS ?? 300_000);
@@ -947,7 +947,7 @@ createServer(async (request, response) => {
       return await handleSendblueWebhook(request, response);
     }
 
-    // Tokenized "my SAV-E" read: a signed link lets a phone see ITS OWN saved
+    // Tokenized "my Savvy" read: a signed link lets a phone see ITS OWN saved
     // places / verified visits / reviews — no Privy login (the number IS the
     // account, see auto-account). The data layer a web view / app consumes.
     if (isV0 && request.method === "GET" && resource === "my" && id) {
@@ -980,7 +980,7 @@ createServer(async (request, response) => {
             createProfile: async (subject) => {
               await client.query(
                 `insert into profiles (id, display_name)
-                 select $1, 'SAV-E User'
+                 select $1, 'Savvy User'
                  where not exists (
                    select 1 from profiles where privy_user_id = $1
                  )
@@ -1131,7 +1131,7 @@ createServer(async (request, response) => {
     return sendJson(response, { error: message }, status);
   }
 }).listen(Number(process.env.PORT ?? 3000), () => {
-  console.log(`SAV-E backend listening on ${process.env.PORT ?? 3000}`);
+  console.log(`Savvy backend listening on ${process.env.PORT ?? 3000}`);
   void ensureSendblueTable();
   // Recurring confirm-prompt notifier (in-process v0). Set SLLR_NOTIFY_INTERVAL_MS=0
   // to disable (e.g. when an external cron drives it instead).
@@ -1175,7 +1175,7 @@ async function handlePlaceResolve(request: IncomingMessage, response: ServerResp
 async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
   const normalized = normalizeChannelUserId(fromNumber);
   if (!normalized) return fromNumber;
-  // 1. Already bound to a SAV-E profile? Use it.
+  // 1. Already bound to a Savvy profile? Use it.
   const { rows } = await pool.query(
     `select uc.profile_id, p.privy_user_id
      from user_channels uc
@@ -1193,7 +1193,7 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
   }
 
   // 2. First time this number texts us → texting IS registration. Auto-create a
-  //    SAV-E profile + a VERIFIED iMessage binding (the message was delivered
+  //    Savvy profile + a VERIFIED iMessage binding (the message was delivered
   //    FROM this number via Sendblue, so the channel is verified by possession).
   //    The profile id is the normalized phone, so the memory key is UNCHANGED
   //    (no re-keying of existing sendblue_* data) — we just give the number a
@@ -1209,7 +1209,7 @@ async function resolveSendblueMemoryKey(fromNumber: string): Promise<string> {
       [normalized],
     );
     await ensurePrivyPhoneProfile(normalized, normalized, null);
-    console.log(`[sendblue] auto-created SAV-E account for inbound number`);
+    console.log(`[sendblue] auto-created Savvy account for inbound number`);
   } catch (error) {
     console.error(`[sendblue] auto-create account failed kind=${safeErrorKind(error)}`);
   }
@@ -1222,7 +1222,7 @@ function normalizeChannelUserId(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-// Signed private link for a phone's own SAV-E data. A stable secret keeps the
+// Signed private link for a phone's own Savvy data. A stable secret keeps the
 // link valid across deploys (set SAVE_MY_SAVES_SECRET on Railway).
 const mySavesSecret = process.env.SAVE_MY_SAVES_SECRET?.trim() || guestSessionSecret;
 
@@ -1248,7 +1248,7 @@ function verifyMyToken(token: string): string | null {
 }
 
 /**
- * Read-only "my SAV-E" payload for a tokenized phone link: the account's saved
+ * Read-only "my Savvy" payload for a tokenized phone link: the account's saved
  * places + verified visits + reviews. This is the unified data layer a web view
  * or the app reads (step 3) — everything is keyed by the phone (= the account).
  */
@@ -1275,7 +1275,7 @@ async function readMySavesPayload(phone: string): Promise<MySavesPayload> {
 async function handleMySavesPage(response: ServerResponse, token: string): Promise<void> {
   const phone = verifyMyToken(token);
   if (!phone) {
-    return sendHtml(response, "<!doctype html><title>Invalid SAV-E link</title><p>Invalid or expired SAV-E link.</p>", 403);
+    return sendHtml(response, "<!doctype html><title>Invalid Savvy link</title><p>Invalid or expired Savvy link.</p>", 403);
   }
   return sendHtml(response, renderMySavesPage(await readMySavesPayload(phone)), 200);
 }
@@ -2309,7 +2309,7 @@ async function handleLLMProxy(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "SAV-E backend Gemini proxy/1.0",
+          "User-Agent": "Savvy backend Gemini proxy/1.0",
         },
         body: JSON.stringify(geminiBody),
         redirect: "manual",
@@ -4599,7 +4599,7 @@ async function trendingSignalPlaces(userId: string, limit: number): Promise<Json
       saveCount: numberValue(value.save_count) ?? 0,
       trendingRank: categoryRank,
       categoryRank,
-      sourceLabel: stringValue(value.source_label) ?? "Trending in SAV-E",
+      sourceLabel: stringValue(value.source_label) ?? "Trending in Savvy",
       referrerId: stringValue(value.referrer_id) ?? null,
       referralCode: stringValue(value.referral_code) ?? null,
     });
@@ -4668,7 +4668,7 @@ function formatPublicProfile(row: JsonBody): JsonBody {
 }
 
 function displayName(row: JsonBody): string {
-  return stringValue(row.display_name) ?? stringValue(row.handle) ?? "SAV-E User";
+  return stringValue(row.display_name) ?? stringValue(row.handle) ?? "Savvy User";
 }
 
 function numberValue(value: unknown): number | undefined {
@@ -5975,7 +5975,7 @@ async function ensureCapabilityEnabled(capabilityId: string): Promise<void> {
 async function ensureProfile(userId: string): Promise<void> {
   await pool.query(
     `insert into profiles (id, display_name)
-     values ($1, 'SAV-E User')
+     values ($1, 'Savvy User')
      on conflict (id) do nothing`,
     [userId],
   );
@@ -6079,7 +6079,7 @@ async function profileIdForPrivySubject(privySubject: string): Promise<string> {
 
     await client.query(
       `insert into profiles (id, display_name)
-       values ($1, 'SAV-E User')
+       values ($1, 'Savvy User')
        on conflict (id) do nothing`,
       [resolution.profileId],
     );

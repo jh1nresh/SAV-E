@@ -121,7 +121,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
             outputLanguage: .traditionalChinese
         ))
 
-        XCTAssertEqual(response.title, "SAV-E 2 天行程")
+        XCTAssertEqual(response.title, "Savvy 2 天行程")
         XCTAssertEqual(response.itineraryDays.first?.label, "第 1 天")
         XCTAssertTrue(response.aiMessage?.contains("地圖章") == true)
         XCTAssertFalse(response.aiMessage?.contains("Map Stamps") == true)
@@ -255,7 +255,7 @@ final class DeterministicTripPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(response.componentType, .tripItinerary)
-        XCTAssertEqual(response.title, "SAV-E 2 天行程")
+        XCTAssertEqual(response.title, "Savvy 2 天行程")
         XCTAssertEqual(response.itineraryDays.first?.label, "第 1 天")
         XCTAssertTrue(response.aiMessage?.contains("地圖章") == true)
         XCTAssertFalse(response.aiMessage?.contains("Map Stamps") == true)

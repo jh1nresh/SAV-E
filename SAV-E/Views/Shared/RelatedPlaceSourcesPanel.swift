@@ -74,8 +74,8 @@ enum RelatedPlaceSourcesDisplayError: Equatable {
         switch self {
         case .signInRequired:
             return language.localized(
-                english: "Sign in with your SAV-E account to search sources for this private Map Stamp.",
-                traditionalChinese: "請登入 SAV-E 帳號，才能為這個私人地圖章搜尋來源。"
+                english: "Sign in with your Savvy account to search sources for this private Map Stamp.",
+                traditionalChinese: "請登入 Savvy 帳號，才能為這個私人地圖章搜尋來源。"
             )
         case .mapStampUnavailable:
             return language.localized(
@@ -109,8 +109,8 @@ enum RelatedPlaceSourcesDisplayError: Equatable {
             )
         case .invalidResponse:
             return language.localized(
-                english: "SAV-E did not receive a valid source receipt. Nothing was saved.",
-                traditionalChinese: "SAV-E 沒有收到有效的來源收據，也沒有儲存任何內容。"
+                english: "Savvy did not receive a valid source receipt. Nothing was saved.",
+                traditionalChinese: "Savvy 沒有收到有效的來源收據，也沒有儲存任何內容。"
             )
         }
     }

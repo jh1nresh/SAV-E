@@ -463,8 +463,8 @@ struct SaveApp: App {
         }
         guard let profile else {
             linkErrorMessage = languageSettings.localized(
-                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new SAV-E profile link.",
-                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 SAV-E 個人連結。"
+                english: "This friend profile could not be loaded right now. Check your connection and try again. If it keeps failing, ask your friend to share a new Savvy profile link.",
+                traditionalChinese: "目前無法載入這位朋友的資料。請檢查網路後再試一次；若持續失敗，再請朋友重新分享 Savvy 個人連結。"
             )
             deferredAccountScopedLink = nil
             return
@@ -503,8 +503,8 @@ struct SaveApp: App {
         }
         if openedList != nil {
             switch languageSettings.language {
-            case .english: return "SAV-E list ready"
-            case .traditionalChinese: return "SAV-E 清單準備好了"
+            case .english: return "Savvy list ready"
+            case .traditionalChinese: return "Savvy 清單準備好了"
             }
         }
         return languageSettings.text(.tripLinkReady)
@@ -513,9 +513,9 @@ struct SaveApp: App {
     private func referralReadyMessage(_ profile: SaveReferralProfile) -> String {
         switch languageSettings.language {
         case .english:
-            return "\(profile.displayName)'s starter map pack is ready. SAV-E will finish the follow after install/open and unlock your first AI itinerary from their places."
+            return "\(profile.displayName)'s starter map pack is ready. Savvy will finish the follow after install/open and unlock your first AI itinerary from their places."
         case .traditionalChinese:
-            return "\(profile.displayName) 的入門地圖包準備好了。安裝或打開後，SAV-E 會完成追蹤，並用這些地點解鎖你的第一份 AI 行程。"
+            return "\(profile.displayName) 的入門地圖包準備好了。安裝或打開後，Savvy 會完成追蹤，並用這些地點解鎖你的第一份 AI 行程。"
         }
     }
 
@@ -529,7 +529,7 @@ struct SaveApp: App {
     }
 
     private func isPlaceLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "p" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "p" {
             return true
         }
         guard url.scheme == "https",
@@ -538,7 +538,7 @@ struct SaveApp: App {
     }
 
     private func isTripLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "trip" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "trip" {
             return true
         }
         guard url.scheme == "https",
@@ -727,12 +727,12 @@ private struct AuthenticatedRootView: View {
         AccountAccessView(
             icon: "key.horizontal.fill",
             title: languageSettings.localized(
-                english: "Verify your SAV-E account",
-                traditionalChinese: "重新驗證 SAV-E 帳號"
+                english: "Verify your Savvy account",
+                traditionalChinese: "重新驗證 Savvy 帳號"
             ),
             message: languageSettings.localized(
-                english: "Your saved data is unchanged. Sign in again with the exact method and account you used for SAV-E.",
-                traditionalChinese: "你的已存資料沒有被刪除。請用原本的登入方式與同一個帳號重新登入 SAV-E。"
+                english: "Your saved data is unchanged. Sign in again with the exact method and account you used for Savvy.",
+                traditionalChinese: "你的已存資料沒有被刪除。請用原本的登入方式與同一個帳號重新登入 Savvy。"
             ),
             primaryTitle: languageSettings.localized(
                 english: "Continue to sign-in",
@@ -754,8 +754,8 @@ private struct AuthenticatedRootView: View {
                 traditionalChinese: "目前無法確認你的帳號"
             ),
             message: languageSettings.localized(
-                english: "SAV-E kept the map locked so data from two accounts cannot mix. Check your connection and try again.",
-                traditionalChinese: "SAV-E 已先鎖住地圖，避免兩個帳號的資料混在一起。請檢查網路後再試一次。"
+                english: "Savvy kept the map locked so data from two accounts cannot mix. Check your connection and try again.",
+                traditionalChinese: "Savvy 已先鎖住地圖，避免兩個帳號的資料混在一起。請檢查網路後再試一次。"
             ),
             primaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
             primaryAccessibilityID: "accountGate.retry",
@@ -786,8 +786,8 @@ private struct AuthenticatedRootView: View {
         switch reason {
         case .emptyRestoredAccount, .differentAccount:
             return languageSettings.localized(
-                english: "This isn’t your saved SAV-E account",
-                traditionalChinese: "這不是你原本有資料的 SAV-E 帳號"
+                english: "This isn’t your saved Savvy account",
+                traditionalChinese: "這不是你原本有資料的 Savvy 帳號"
             )
         case .unconfirmedRestoredAccount:
             return languageSettings.localized(
@@ -811,8 +811,8 @@ private struct AuthenticatedRootView: View {
             )
         case .differentAccount:
             return languageSettings.localized(
-                english: "SAV-E stopped before opening a different account, so saved and local data cannot mix. Use your original sign-in and account.",
-                traditionalChinese: "SAV-E 已在打開不同帳號前停止，避免已存與本機資料混在一起。請使用原本的登入方式與帳號。"
+                english: "Savvy stopped before opening a different account, so saved and local data cannot mix. Use your original sign-in and account.",
+                traditionalChinese: "Savvy 已在打開不同帳號前停止，避免已存與本機資料混在一起。請使用原本的登入方式與帳號。"
             )
         case .unconfirmedRestoredAccount:
             return languageSettings.localized(
@@ -821,13 +821,13 @@ private struct AuthenticatedRootView: View {
             )
         case .splitProfileBinding, .conflictingProfileBinding:
             return languageSettings.localized(
-                english: "SAV-E found conflicting account records and did not choose one. Your data is unchanged; verify the original sign-in and account before continuing.",
-                traditionalChinese: "SAV-E 發現互相衝突的帳號紀錄，因此沒有擅自選擇。你的資料未被更動；請先驗證原本的登入方式與帳號。"
+                english: "Savvy found conflicting account records and did not choose one. Your data is unchanged; verify the original sign-in and account before continuing.",
+                traditionalChinese: "Savvy 發現互相衝突的帳號紀錄，因此沒有擅自選擇。你的資料未被更動；請先驗證原本的登入方式與帳號。"
             )
         case .missingConfirmedProfile:
             return languageSettings.localized(
-                english: "The previously confirmed account record is unavailable. SAV-E stopped before loading or syncing any data.",
-                traditionalChinese: "先前已確認的帳號紀錄目前不存在。SAV-E 已在載入或同步任何資料前停止。"
+                english: "The previously confirmed account record is unavailable. Savvy stopped before loading or syncing any data.",
+                traditionalChinese: "先前已確認的帳號紀錄目前不存在。Savvy 已在載入或同步任何資料前停止。"
             )
         }
     }
@@ -836,18 +836,18 @@ private struct AuthenticatedRootView: View {
         switch kind {
         case .newAccount:
             return languageSettings.localized(
-                english: "Start a new SAV-E account?",
-                traditionalChinese: "要建立新的 SAV-E 帳號嗎？"
+                english: "Start a new Savvy account?",
+                traditionalChinese: "要建立新的 Savvy 帳號嗎？"
             )
         case .existingAccount:
             return languageSettings.localized(
-                english: "Is this your original SAV-E account?",
-                traditionalChinese: "這是你原本的 SAV-E 帳號嗎？"
+                english: "Is this your original Savvy account?",
+                traditionalChinese: "這是你原本的 Savvy 帳號嗎？"
             )
         case .emptyAccount:
             return languageSettings.localized(
-                english: "Use this empty SAV-E account?",
-                traditionalChinese: "要使用這個空白 SAV-E 帳號嗎？"
+                english: "Use this empty Savvy account?",
+                traditionalChinese: "要使用這個空白 Savvy 帳號嗎？"
             )
         }
     }
@@ -856,13 +856,13 @@ private struct AuthenticatedRootView: View {
         switch kind {
         case .newAccount:
             return languageSettings.localized(
-                english: "This sign-in has no SAV-E profile yet. Continue only if this is the account you want to bind to this phone’s map.",
-                traditionalChinese: "這個登入帳號尚未有 SAV-E 資料。只有在你確定要把這支手機的地圖連結到此帳號時才繼續。"
+                english: "This sign-in has no Savvy profile yet. Continue only if this is the account you want to bind to this phone’s map.",
+                traditionalChinese: "這個登入帳號尚未有 Savvy 資料。只有在你確定要把這支手機的地圖連結到此帳號時才繼續。"
             )
         case .existingAccount(let stamps, let reviewItems):
             return languageSettings.localized(
-                english: "SAV-E found \(stamps) Map Stamps and \(reviewItems) Review items. Confirm once before this phone’s local map is attached.",
-                traditionalChinese: "SAV-E 找到 \(stamps) 個地圖章與 \(reviewItems) 筆 Review。請先確認一次，才會連結這支手機上的本機地圖。"
+                english: "Savvy found \(stamps) Map Stamps and \(reviewItems) Review items. Confirm once before this phone’s local map is attached.",
+                traditionalChinese: "Savvy 找到 \(stamps) 個地圖章與 \(reviewItems) 筆 Review。請先確認一次，才會連結這支手機上的本機地圖。"
             )
         case .emptyAccount:
             return languageSettings.localized(
@@ -1322,7 +1322,7 @@ struct SignInView: View {
 
     private func presentAuthError(_ error: Error) {
         let rawMessage = error.localizedDescription
-        print("SAV-E sign-in failed: \(rawMessage)")
+        print("Savvy sign-in failed: \(rawMessage)")
 
         if rawMessage.contains("disallowed_login_method") || rawMessage.contains("not allowed") {
             errorTitle = languageSettings.text(.googleNotEnabled)

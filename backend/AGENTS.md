@@ -1,11 +1,11 @@
-# AGENTS — SAV-E backend
+# AGENTS — Savvy backend
 
 ## The one rule that matters: the memory-quality loop
 
-SAV-E gets better by turning every real user correction into a permanent
+Savvy gets better by turning every real user correction into a permanent
 regression test. That loop is our moat, not any single answer.
 
-**Rule:** when a user reports a SAV-E bot bug — a screenshot complaint, "wrong
+**Rule:** when a user reports a Savvy bot bug — a screenshot complaint, "wrong
 place", "it forgot what I said", "too vague", "saved as a place not a receipt",
 etc. — add a FAILING test to `src/sendblueBot.test.ts` that reproduces it
 *before* you fix it. The bug is fixed when that test passes and the full suite is

@@ -1,4 +1,4 @@
-# SAV-E Public Test Readiness
+# Savvy Public Test Readiness
 
 Generated: 2026-06-23 · Reviewed: 2026-08-22 (build 103)
 
@@ -11,7 +11,8 @@ proof.
 
 Current in-repo proof:
 
-- Bundle `com.wanderly.app`, version `1.0.0`, build `103`, team `JC6858UYM9`,
+- App Store name `Savvy: Save Places`; installed display name `Savvy`.
+- Bundle `com.wanderly.app`, version `1.0.0`, build `104`, team `JC6858UYM9`,
   App Store id `6769216556`. Build numbers come from `project.yml`.
 - `Tests/SAVEUITests/SAVEUISmokeHarnessTests.swift` covers the five required
   smoke paths: auth, location, nearby restaurants/cafes, share IG/Maps link,
@@ -46,7 +47,7 @@ Required proof:
 - App Store Connect has an App Clip Experience for
   `https://sav-e-app.vercel.app/p/*`.
 - iPhone checks:
-  - app installed: link opens full SAV-E app.
+  - app installed: link opens full Savvy app.
   - app not installed: link surfaces App Clip or install CTA.
 
 Do not touch Privy auth/session config for this checklist.

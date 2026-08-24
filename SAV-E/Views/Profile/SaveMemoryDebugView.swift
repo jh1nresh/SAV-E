@@ -28,7 +28,7 @@ struct SaveMemoryDebugView: View {
                 ContentUnavailableView(
                     "No Memory Yet",
                     systemImage: "tray",
-                    description: Text("Save a place or add an explicit preference. SAV-E will not silently turn one action into a durable preference.")
+                    description: Text("Save a place or add an explicit preference. Savvy will not silently turn one action into a durable preference.")
                 )
             }
 
@@ -272,7 +272,7 @@ private struct SavePreferenceEditor: View {
                     }
                 }
                 Section("Privacy") {
-                    Text("SAV-E stores the normalized preference and concise evidence references—not your private note, message, or source payload.")
+                    Text("Savvy stores the normalized preference and concise evidence references—not your private note, message, or source payload.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

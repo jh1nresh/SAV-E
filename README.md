@@ -1,6 +1,6 @@
-# SAV-E iOS
+# Savvy iOS
 
-SAV-E is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
+Savvy is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
 
 Current app version in this repo: **1.0.0 (build 103)**.
 
@@ -9,13 +9,13 @@ bump applied only to the generated project is undone by the next `xcodegen gener
 
 ## Current product shape
 
-SAV-E is no longer a generic map/list/trip app. The current app is:
+Savvy is no longer a generic map/list/trip app. The current app is:
 
 ```text
 source clue → Review receipt → confirmed Map Stamp → private passport / shareable proof / plan
 ```
 
-The core judgment is conservative: SAV-E should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
+The core judgment is conservative: Savvy should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
 
 ## What ships in the iOS app
 
@@ -28,13 +28,13 @@ The core judgment is conservative: SAV-E should not pretend a clue is a real pla
 - **Collaborative lists** — create lists, add places, share viewer/editor list links, join list links, and plan from list items.
 - **Referral/friends layer** — referral/profile links can hand off starter map packs and complete follow intent after install/open.
 - **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, and receipt-style progress surfaces.
-- **App Intents / shortcuts** — local app intents for saving a URL and asking SAV-E memory.
+- **App Intents / shortcuts** — local app intents for saving a URL and asking Savvy memory.
 - **Bilingual UI path** — English and Traditional Chinese app-language settings for user-visible surfaces.
 
 ## Companion surfaces
 
 - **Share Extension** (`SAVEShareExtension`) accepts URLs/text from other apps and queues review candidates.
-- **App Clip** (`SAVEClip`) previews SAV-E place links and private/share links on `sav-e-app.vercel.app` when Apple App Clip Experience + Associated Domains are configured.
+- **App Clip** (`SAVEClip`) previews Savvy place links and private/share links on `sav-e-app.vercel.app` when Apple App Clip Experience + Associated Domains are configured.
 - **Web fallback** (`save-rn/`) serves public share previews, referral/list routes, and Apple association files through Vercel.
 - **Railway backend** (`backend/`) stores places/profiles/receipts/share links, verifies Privy auth, resolves short links, runs source recovery, and powers Sendblue/SLL-R experiments.
 - **iMessage extension** (`SAVEiMessageExtension`) exists as a parked spike. It is not embedded in shipping builds until icons and validation are complete.
@@ -173,7 +173,7 @@ xcodegen generate
 open SAV-E.xcodeproj
 ```
 
-Use the **SAV-E** scheme for the shipping app. The app target is named `SAVE`; bundle IDs stay under `com.wanderly.*` for production compatibility.
+Use the **SAV-E** scheme for the shipping app. The installed display name is **Savvy**; the internal app target remains `SAVE`, and bundle IDs stay under `com.wanderly.*` for production compatibility.
 
 ## Local verification
 
@@ -273,7 +273,7 @@ xcodebuild \
 
 ## First TestFlight boundary
 
-Ship the native iOS app, Share Extension, and embedded App Clip for SAV-E share links.
+Ship the native iOS app, Share Extension, and embedded App Clip for Savvy share links.
 
 Before upload:
 
@@ -283,13 +283,13 @@ Before upload:
 - confirm App Store icon and privacy manifest are included
 - keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
 
-These Apple identifiers are the existing production compatibility layer. User-facing naming, target display names, release config keys, and share URLs should use SAV-E / SAVE naming.
+These Apple identifiers are the existing production compatibility layer. User-facing naming, target display names, release config keys, and share URLs should use Savvy / SAVE naming.
 
 ## Share, App Clip, and Universal Link routes
 
-SAV-E separates share actions from map actions:
+Savvy separates share actions from map actions:
 
-- Share = SAV-E link
+- Share = Savvy link
 - Maps = Apple Maps / Google Maps link
 
 Production host: `sav-e-app.vercel.app`.
@@ -306,7 +306,7 @@ Current public route shapes:
 /my/{signedToken}
 ```
 
-The full app handles installed-app Universal Links and `wanderly://` deep links. The App Clip target can preview SAV-E place payloads and private/share cards. Full trip import, full list previews, and full referral previews are later surfaces unless a newer release explicitly changes that boundary.
+The full app handles installed-app Universal Links and new `savvy://` deep links while continuing to accept legacy `wanderly://` links. The App Clip target can preview Savvy place payloads and private/share cards. Full trip import, full list previews, and full referral previews are later surfaces unless a newer release explicitly changes that boundary.
 
 For App Review:
 
@@ -323,7 +323,7 @@ Without those Apple/domain steps, the same URL still opens the web app, but iOS 
 
 ## Design direction
 
-SAV-E should feel like a warm private travel notebook, not a generic data table:
+Savvy should feel like a warm private travel notebook, not a generic data table:
 
 | Token | Light | Dark |
 |---|---|---|

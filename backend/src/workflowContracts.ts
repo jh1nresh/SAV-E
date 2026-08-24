@@ -230,7 +230,7 @@ export function normalizePlaceRecoveryWorkerResult(body: JsonObject): PlaceRecov
     failedStep,
     retryable,
     jobId: boundedString(body.job_id ?? body.jobId, 128),
-    agentId: "SAV-E",
+    agentId: "Savvy",
     operatorId: "save-client",
     permissionSnapshot: { scopes: ["place_recovery.result.submit"] },
     toolTraceRefs: boundedStringArray(body.tool_trace_refs ?? body.toolTraceRefs, 32, 256),

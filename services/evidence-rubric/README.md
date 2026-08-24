@@ -1,4 +1,4 @@
-# SAV-E Evidence Rubric Service
+# Savvy Evidence Rubric Service
 
 Small Railway service used by `wanderly-api` as `SAVE_EVIDENCE_RUBRIC_URL`.
 

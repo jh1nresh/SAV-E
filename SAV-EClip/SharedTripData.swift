@@ -227,9 +227,9 @@ struct SharedPlaceReceipt {
 
     var fullAppURL: URL? {
         if let code {
-            return URL(string: "wanderly://p/\(code)")
+            return URL(string: "savvy://p/\(code)")
         }
-        return payload.toURL(baseURL: "wanderly://p")
+        return payload.toURL(baseURL: "savvy://p")
     }
 }
 
@@ -304,7 +304,7 @@ struct SharedTripData: Codable {
 
     // MARK: - URL Encoding
 
-    /// Decode from a SAV-E route token, with legacy `?d=` support.
+    /// Decode from a Savvy route token, with legacy `?d=` support.
     static func from(url: URL) -> SharedTripData? {
         guard let payload = ShareRouteCodec.decode(
             SharedTripData.self,
@@ -420,7 +420,7 @@ enum ShareRouteCodec {
            pathParts.indices.contains(routeIndex + 1) {
             return pathParts[routeIndex + 1]
         }
-        if url.scheme == "wanderly", url.host == route {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == route {
             return pathParts.first ?? legacyQueryToken(from: url)
         }
         return legacyQueryToken(from: url)
@@ -510,7 +510,7 @@ struct SharedMySavesData: Codable {
     }
 
     static func isMySavesLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "my" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "my" {
             return token(from: url) != nil
         }
         guard url.scheme == "https",
@@ -526,7 +526,7 @@ struct SharedMySavesData: Codable {
            pathParts.indices.contains(routeIndex + 1) {
             return pathParts[routeIndex + 1]
         }
-        if url.scheme == "wanderly", url.host == "my" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "my" {
             return pathParts.first
         }
         return nil
@@ -581,7 +581,7 @@ struct SharedListPayload: Codable {
     }
 
     static func isListLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "list" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "list" {
             return true
         }
         return url.scheme == "https" &&
@@ -668,7 +668,7 @@ struct SharedReferralProfile: Codable, Hashable {
     }
 
     func fullAppURL() -> URL? {
-        URL(string: "wanderly://referral?code=\(referralCode)&handle=\(handle)&lens=\(lens)")
+        URL(string: "savvy://referral?code=\(referralCode)&handle=\(handle)&lens=\(lens)")
     }
 
     private static func preview(handle: String, code: String, lens: String) -> SharedReferralProfile {

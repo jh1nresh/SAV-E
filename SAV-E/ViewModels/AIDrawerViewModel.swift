@@ -46,7 +46,7 @@ final class AIDrawerViewModel: ObservableObject {
     private let persistenceService: SupabaseServiceProtocol
     private let tripRouteService: TripRouteServiceProtocol
     private let tripHoursAnnotator: TripHoursAnnotator
-    private let logger = Logger(subsystem: "SAV-E", category: "RecommendationAnalysisReceipt")
+    private let logger = Logger(subsystem: "Savvy", category: "RecommendationAnalysisReceipt")
 
     /// Multi-turn conversation context for the current session.
     private var conversationTurns: [ConversationTurn] = []
@@ -423,7 +423,7 @@ final class AIDrawerViewModel: ObservableObject {
         )
         let followUpQuery = """
         Follow-up question: \(query)
-        Previous SAV-E query: \(previousResponse.query)
+        Previous Savvy query: \(previousResponse.query)
         Explain or narrow only the previous visible results.
         """
         let groundedResponse = await previousResponse.withGroundedAnswer(
@@ -613,12 +613,12 @@ final class AIDrawerViewModel: ObservableObject {
     ) -> SaveAIResponse {
         let message = hasPlaces
             ? outputLanguage.localized(
-                english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask SAV-E to search public discovery separately.",
-                traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 SAV-E 搜尋公開探索。"
+                english: "I could not find matching saved Map Stamps for that trip. Add a city, choose saved places, or ask Savvy to search public discovery separately.",
+                traditionalChinese: "我找不到符合這趟行程的已存地圖章。可以補城市、選幾個已存地點，或另外請 Savvy 搜尋公開探索。"
             )
             : outputLanguage.localized(
-                english: "Save or import a few Map Stamps first, then ask SAV-E to plan from them.",
-                traditionalChinese: "先保存或匯入幾個地圖章，再請 SAV-E 從你的地點開始規劃。"
+                english: "Save or import a few Map Stamps first, then ask Savvy to plan from them.",
+                traditionalChinese: "先保存或匯入幾個地圖章，再請 Savvy 從你的地點開始規劃。"
             )
         return SaveAIResponse(
             componentType: .message,
@@ -868,9 +868,9 @@ private extension SaveSearchResponse {
         if savedOrReviewContext { return true }
 
         // Public-only nearby discovery needs deterministic copy: first tell the user
-        // SAV-E has no matching memory, then show unsaved public candidates as a list.
+        // Savvy has no matching memory, then show unsaved public candidates as a list.
         // Letting Gemini rewrite this case repeatedly caused awkward one-place answers
-        // and made public results feel like SAV-E memories.
+        // and made public results feel like Savvy memories.
         let publicOnlyResultCount = newRecommendations.results.filter { result in
             result.objectType == .mapVisibleUnsavedPlace || result.objectType == .newRecommendation
         }.count
@@ -943,8 +943,8 @@ extension SaveAIResponse {
             traditionalChinese: "用「\(draft.anchor.title)」規劃"
         )
         let publicNote = draft.newSuggestions.isEmpty ? "" : outputLanguage.localized(
-            english: " New recommendations are clearly marked and are not saved to SAV-E unless you confirm them.",
-            traditionalChinese: " New recommendation 會清楚標示；只有你確認後才會保存到 SAV-E。"
+            english: " New recommendations are clearly marked and are not saved to Savvy unless you confirm them.",
+            traditionalChinese: " New recommendation 會清楚標示；只有你確認後才會保存到 Savvy。"
         )
         let gapNote = draft.unfilledGaps.isEmpty ? "" : outputLanguage.localized(
             english: " Public discovery could not fill: \(draft.unfilledGaps.map(\.displayName).joined(separator: ", ")).",
@@ -1024,7 +1024,7 @@ private extension SavePlanStop {
     func itinerarySourceSummary(outputLanguage: AppLanguage) -> String {
         switch source {
         case .anchor, .userSaved:
-            return outputLanguage.localized(english: "From your SAV-E", traditionalChinese: "來自你的 SAV-E")
+            return outputLanguage.localized(english: "From your Savvy", traditionalChinese: "來自你的 Savvy")
         case .pendingCandidate:
             return outputLanguage.localized(english: "Review candidate", traditionalChinese: "待確認候選")
         case .unsavedMapCandidate:

@@ -1127,7 +1127,7 @@ private struct TripsAskField: View {
                 if query.isEmpty {
                     // Short enough to fit the 402pt row without truncating;
                     // the accessibility label keeps the full sentence.
-                    Text("Ask SAV-E to plan a trip")
+                    Text("Ask Savvy to plan a trip")
                         .font(AtlasType.strong(14))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
@@ -1141,7 +1141,7 @@ private struct TripsAskField: View {
                     .focused($focused)
                     .submitLabel(.send)
                     .onSubmit(submit)
-                    .accessibilityLabel("Ask SAV-E to plan from your Map Stamps")
+                    .accessibilityLabel("Ask Savvy to plan from your Map Stamps")
                     .accessibilityIdentifier("trips.assistant.input")
             }
 
@@ -1155,7 +1155,7 @@ private struct TripsAskField: View {
                     .background(AtlasPalette.coral, in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Ask SAV-E")
+            .accessibilityLabel("Ask Savvy")
             .accessibilityIdentifier("trips.assistant.submit")
         }
         .padding(.horizontal, 13)
@@ -2012,7 +2012,7 @@ struct TripSharePlaceholderScreen: View {
             icon: "square.and.arrow.up",
             eyebrow: "TRIP SHARE",
             title: "Share this Trip",
-            message: "SAV-E link and KML export will appear here.",
+            message: "Savvy link and KML export will appear here.",
             note: "Not wired in this visual prototype",
             tint: AtlasPalette.lavender,
             identifier: "prototype.trip.share"

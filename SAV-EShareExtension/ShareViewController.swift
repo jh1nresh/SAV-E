@@ -296,7 +296,7 @@ private struct ShareFlatSticker: View {
 }
 
 private struct ShareCaptureFooter: View {
-    var text: String = "SAV-E Review · Open the app to finish"
+    var text: String = "Savvy Review · Open the app to finish"
 
     var body: some View {
         HStack(spacing: 9) {
@@ -377,10 +377,10 @@ private struct SocialPlaceEvidenceDiagnostic: Codable {
     }
 
     var consumerSummary: String {
-        if canSaveAsMapStamp { return "SAV-E matched this to a place. Review it once, then save it to your map." }
-        if statusLabel == "Possible place" { return "SAV-E found a likely place in this share. Pick or confirm the place before saving." }
-        if statusLabel == "Saved for later" { return "SAV-E saved this share. Add a caption, screenshot, or map link when you want it turned into a place." }
-        return "SAV-E found a possible place. Confirm the details before saving it to your map."
+        if canSaveAsMapStamp { return "Savvy matched this to a place. Review it once, then save it to your map." }
+        if statusLabel == "Possible place" { return "Savvy found a likely place in this share. Pick or confirm the place before saving." }
+        if statusLabel == "Saved for later" { return "Savvy saved this share. Add a caption, screenshot, or map link when you want it turned into a place." }
+        return "Savvy found a possible place. Confirm the details before saving it to your map."
     }
 
     var canSaveAsMapStamp: Bool {
@@ -462,7 +462,7 @@ struct ShareExtensionView: View {
                     VStack(spacing: 16) {
                         Text("🧸")
                             .font(.system(size: 46))
-                        Text("SAV-E needs one more clue")
+                        Text("Savvy needs one more clue")
                             .font(.title3.weight(.semibold))
                             .foregroundColor(SaveTheme.ink)
                         Text(error)
@@ -495,7 +495,7 @@ struct ShareExtensionView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(ShareScrapbookBackground().ignoresSafeArea())
-            .navigationTitle("SAV-E ✨")
+            .navigationTitle("Savvy ✨")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -515,7 +515,7 @@ struct ShareExtensionView: View {
     private var checkingPlaceCluesView: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("SAV-E ✨")
+                Text("Savvy ✨")
                     .font(.title3.weight(.black))
                     .foregroundColor(SaveTheme.ink)
                 Spacer()
@@ -533,7 +533,7 @@ struct ShareExtensionView: View {
                             .foregroundColor(SaveTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        Text("SAV-E is looking for a real place name before it creates a review card.")
+                        Text("Savvy is looking for a real place name before it creates a review card.")
                             .font(.subheadline)
                             .foregroundColor(SaveTheme.ink.opacity(0.76))
                             .lineSpacing(3)
@@ -610,7 +610,7 @@ struct ShareExtensionView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ShareEvidenceRow(text: "Source saved", isComplete: true)
                     ShareEvidenceRow(text: savedReviewCandidateCount == nil ? "Map pin ready" : "Waiting in Review", isComplete: true)
-                    ShareEvidenceRow(text: "Open SAV-E to confirm", isComplete: savedReviewCandidateCount != nil)
+                    ShareEvidenceRow(text: "Open Savvy to confirm", isComplete: savedReviewCandidateCount != nil)
                 }
                 .padding(12)
                 .background(SaveTheme.yellow.opacity(0.18))
@@ -643,7 +643,7 @@ struct ShareExtensionView: View {
 
     private var savedConfirmationTitle: String {
         guard let count = savedReviewCandidateCount else {
-            return "Saved to SAV-E"
+            return "Saved to Savvy"
         }
         return count == 1 ? "Review Candidate added" : "\(count) Review Candidates added"
     }
@@ -653,8 +653,8 @@ struct ShareExtensionView: View {
             return "Open the app to see it on your map."
         }
         return count == 1
-            ? "It will wait in SAV-E Review before becoming a Map Stamp."
-            : "They will wait in SAV-E Review before becoming Map Stamps."
+            ? "It will wait in Savvy Review before becoming a Map Stamp."
+            : "They will wait in Savvy Review before becoming Map Stamps."
     }
 
     // MARK: - Place Preview
@@ -662,7 +662,7 @@ struct ShareExtensionView: View {
     private func placePreview(_ place: ParsedPlace) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("SAV-E ✨")
+                Text("Savvy ✨")
                     .font(.title3.weight(.black))
                     .foregroundColor(SaveTheme.ink)
                 Spacer()
@@ -763,7 +763,7 @@ struct ShareExtensionView: View {
 
         return VStack(spacing: 14) {
             HStack {
-                Text("SAV-E ✨")
+                Text("Savvy ✨")
                     .font(.title3.weight(.black))
                     .foregroundColor(SaveTheme.ink)
                 Spacer()
@@ -855,7 +855,7 @@ struct ShareExtensionView: View {
                     .font(.title3.weight(.black))
                     .foregroundColor(SaveTheme.ink)
 
-                Text("SAV-E found a few possible places. They will wait in Review before becoming map pins.")
+                Text("Savvy found a few possible places. They will wait in Review before becoming map pins.")
                     .font(.subheadline)
                     .foregroundColor(SaveTheme.ink.opacity(0.76))
 
@@ -945,12 +945,12 @@ struct ShareExtensionView: View {
         if candidate.address.isEmpty {
             return "I found the likely place, but I still need the exact address before saving it as a map pin."
         }
-        return "I found a likely place with an address. Confirm it before SAV-E saves it as a Map Stamp."
+        return "I found a likely place with an address. Confirm it before Savvy saves it as a Map Stamp."
     }
 
     private func candidateSubtitle(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
-            return "Review each candidate in SAV-E before saving."
+            return "Review each candidate in Savvy before saving."
         }
         if candidate.isUnresolvedPlaceCandidate { return "Review Candidate from shared source" }
         if candidate.isSourceOnly { return "Saved for later" }
@@ -960,18 +960,18 @@ struct ShareExtensionView: View {
 
     private func candidateIntro(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
-            return "SAV-E found a few possible places. Pick what you want to save."
+            return "Savvy found a few possible places. Pick what you want to save."
         }
         if candidate.isSourceOnly {
-            return "SAV-E saved this share. Add a caption, screenshot, or map link when you want it turned into a place."
+            return "Savvy saved this share. Add a caption, screenshot, or map link when you want it turned into a place."
         }
         if candidate.isUnresolvedPlaceCandidate {
-            return "SAV-E found a possible place. Confirm the address before saving it to your map."
+            return "Savvy found a possible place. Confirm the address before saving it to your map."
         }
         if candidate.isPlaceBearingSource {
             return "This looks place-related. Confirm the exact place before saving it."
         }
-        return "SAV-E found a possible place. Check it before saving."
+        return "Savvy found a possible place. Check it before saving."
     }
 
     private func candidateActionTitle(_ candidate: PendingReviewCandidate) -> String {
@@ -1018,7 +1018,7 @@ struct ShareExtensionView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let queries = diagnostic.suggestedSearchQueries, !queries.isEmpty {
-                shareDiagnosticSection("Places SAV-E can check", items: queries)
+                shareDiagnosticSection("Places Savvy can check", items: queries)
             }
 
             DisclosureGroup("Technical details") {
@@ -1118,7 +1118,7 @@ struct ShareExtensionView: View {
                 isParsing = false
                 return
             }
-            parseError = "SAV-E could not read enough place text from this screenshot. Try sharing a clearer screenshot, caption, or map link."
+            parseError = "Savvy could not read enough place text from this screenshot. Try sharing a clearer screenshot, caption, or map link."
             isParsing = false
             return
         }
@@ -1240,7 +1240,7 @@ struct ShareExtensionView: View {
         // Parse with Gemini only when the shared URL does not contain usable map coordinates.
         do {
             guard hasMeaningfulPlaceContext(aiContent, sourceURLString: parseContent) else {
-                throw NSError(domain: "save", code: 4, userInfo: [NSLocalizedDescriptionKey: "Share a map link or a post with a visible place name so SAV-E does not guess the wrong city."])
+                throw NSError(domain: "save", code: 4, userInfo: [NSLocalizedDescriptionKey: "Share a map link or a post with a visible place name so Savvy does not guess the wrong city."])
             }
             let aiPlace = try await parseWithGemini(content: aiContent, sourceURLString: parseContent)
             if hasReliableCoordinates(aiPlace) {
@@ -1250,7 +1250,7 @@ struct ShareExtensionView: View {
                 reviewCandidate = candidate
                 selectedCategory = candidate.category
             } else {
-                throw NSError(domain: "save", code: 5, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this post. Share the map link or include the place name."])
+                throw NSError(domain: "save", code: 5, userInfo: [NSLocalizedDescriptionKey: "Savvy could not identify one exact place from this post. Share the map link or include the place name."])
             }
         } catch {
             if saveSourceOnlyMemory(parseContent, reason: error.localizedDescription) {
@@ -2132,7 +2132,7 @@ struct ShareExtensionView: View {
             [
                 "Source URL: \(sourceURLString)",
                 "Evidence tier: \(SocialPlaceEvidenceTier.weakCandidate.rawValue)",
-                "Extracted by SAV-E from caption: \(name)",
+                "Extracted by Savvy from caption: \(name)",
                 area.map { "Caption area clue: \($0)" } ?? "",
                 captionSnippet.isEmpty ? "" : "Caption snippet: \(captionSnippet)"
             ]
@@ -2142,7 +2142,7 @@ struct ShareExtensionView: View {
                 [],
                 [
                     "Source URL: \(sourceURLString)",
-                    "Extracted by SAV-E from caption: \(name)",
+                    "Extracted by Savvy from caption: \(name)",
                     area.map { "Caption area clue: \($0)" } ?? ""
                 ]
             ),
@@ -3074,7 +3074,7 @@ struct ShareExtensionView: View {
         }
 
         if let url = URL(string: sourceURLString), isSocialURL(url), place.name == "Unknown Place" {
-            throw NSError(domain: "save", code: 8, userInfo: [NSLocalizedDescriptionKey: "SAV-E could not identify one exact place from this social post."])
+            throw NSError(domain: "save", code: 8, userInfo: [NSLocalizedDescriptionKey: "Savvy could not identify one exact place from this social post."])
         }
     }
 
@@ -3184,11 +3184,11 @@ struct ShareExtensionView: View {
             : ["Apple Maps match", "WGS84 coordinates", "User confirmation required"]
         let diagnostic = SocialPlaceEvidenceDiagnostic(
             found: evidence,
-            attempts: ["Parsed the shared China map link with the same parser used by the SAV-E app"],
+            attempts: ["Parsed the shared China map link with the same parser used by the Savvy app"],
             missingFields: missingFields,
             nextBestClue: hasAppleCompatibleCoordinates
-                ? "Open SAV-E Review and confirm this map match before saving it as a Map Stamp."
-                : "Open SAV-E Review and confirm the Apple Maps match before saving this as a Map Stamp."
+                ? "Open Savvy Review and confirm this map match before saving it as a Map Stamp."
+                : "Open Savvy Review and confirm the Apple Maps match before saving this as a Map Stamp."
         )
         let sourceText = [title, text]
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -3232,7 +3232,7 @@ struct ShareExtensionView: View {
             found: evidence,
             attempts: ["Parsed map q/search text without Gemini direct fallback"],
             missingFields: ["Verified coordinates", "User confirmation required"],
-            nextBestClue: "Open SAV-E Review to confirm the address or match Google Places before saving this as a Map Stamp."
+            nextBestClue: "Open Savvy Review to confirm the address or match Google Places before saving this as a Map Stamp."
         )
         let category = fallbackCategory(from: [name, address, text].joined(separator: " "))
 
@@ -3447,7 +3447,7 @@ struct ShareExtensionView: View {
                 parsedPlace = nil
                 return
             }
-            parseError = "SAV-E needs reliable coordinates before saving a Map Stamp."
+            parseError = "Savvy needs reliable coordinates before saving a Map Stamp."
             return
         }
 

@@ -116,8 +116,8 @@ struct ProfileView: View {
                                 SettingsRow(
                                     icon: "sparkles",
                                     title: languageSettings.localized(
-                                        english: "SAV-E Pro",
-                                        traditionalChinese: "SAV-E Pro"
+                                        english: "Savvy Pro",
+                                        traditionalChinese: "Savvy Pro"
                                     ),
                                     detail: languageSettings.localized(
                                         english: "Core place memory stays free",
@@ -148,7 +148,7 @@ struct ProfileView: View {
                             SettingsRow(
                                 icon: "brain.head.profile",
                                 title: languageSettings.localized(english: "Memory & Preferences", traditionalChinese: "記憶與偏好"),
-                                detail: languageSettings.localized(english: "Inspect and control what SAV-E remembers", traditionalChinese: "查看並控制 SAV-E 記住的內容"),
+                                detail: languageSettings.localized(english: "Inspect and control what Savvy remembers", traditionalChinese: "查看並控制 Savvy 記住的內容"),
                                 color: .saveCocoa
                             )
                         }
@@ -201,8 +201,8 @@ struct ProfileView: View {
                                 traditionalChinese: "匯入 Google Takeout"
                             ),
                             detail: languageSettings.localized(
-                                english: "Deliver historical place exports to SAV-E",
-                                traditionalChinese: "把歷史地點匯出檔送進 SAV-E"
+                                english: "Deliver historical place exports to Savvy",
+                                traditionalChinese: "把歷史地點匯出檔送進 Savvy"
                             ),
                             color: SaveAtlasPalette.kraft,
                             accessibilityIdentifier: "profile.importGoogleTakeout"
@@ -328,8 +328,8 @@ struct ProfileView: View {
             Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
         } message: {
             Text(languageSettings.localized(
-                english: "This deletes your SAV-E account and saved places. This cannot be undone.",
-                traditionalChinese: "這會刪除你的 SAV-E 帳號與已儲存地點，而且無法復原。"
+                english: "This deletes your Savvy account and saved places. This cannot be undone.",
+                traditionalChinese: "這會刪除你的 Savvy 帳號與已儲存地點，而且無法復原。"
             ))
         }
     }
@@ -558,7 +558,7 @@ private struct PassportConnectionsView: View {
 
             postcardPocket(
                 eyebrow: languageSettings.localized(english: "FOLLOW A FRIEND", traditionalChinese: "追蹤朋友"),
-                title: languageSettings.localized(english: "Paste their SAV-E link", traditionalChinese: "貼上對方的 SAV-E 連結")
+                title: languageSettings.localized(english: "Paste their Savvy link", traditionalChinese: "貼上對方的 Savvy 連結")
             ) {
                 TextField(
                     languageSettings.localized(english: "Referral link or code", traditionalChinese: "邀請連結或代碼"),
@@ -964,7 +964,7 @@ private struct ListShareLinkControl: View {
 
 /// Member + share-code management for one server-backed collaborative list.
 /// Owners remove members and revoke share codes; everyone else can only
-/// leave the list. All mutations round-trip through the SAV-E backend.
+/// leave the list. All mutations round-trip through the Savvy backend.
 private struct ListManageView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dismiss) private var dismiss
@@ -1550,7 +1550,7 @@ private struct PassportTopBar: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("SAV-E · \(languageSettings.text(.profileTitle).uppercased())")
+                Text("Savvy · \(languageSettings.text(.profileTitle).uppercased())")
                     .font(SaveAtlasType.strong(12))
                     .tracking(1.2)
                     .foregroundStyle(SaveAtlasPalette.forest)
@@ -1611,7 +1611,7 @@ private struct PassportHero: View {
 
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
                 HStack {
-                    Text("SAV-E MEMORY PASSPORT")
+                    Text("Savvy MEMORY PASSPORT")
                         .font(SaveAtlasType.strong(10))
                         .tracking(1.15)
                         .foregroundStyle(SaveAtlasPalette.mint)
@@ -1901,21 +1901,21 @@ private struct PassportStampSection: View {
 
     private var mapStampDetail: String {
         switch languageSettings.language {
-        case .english: return "Saved places in your SAV-E map."
-        case .traditionalChinese: return "你存進 SAV-E 地圖的地點。"
+        case .english: return "Saved places in your Savvy map."
+        case .traditionalChinese: return "你存進 Savvy 地圖的地點。"
         }
     }
 
     private var visitedDetail: String {
         switch languageSettings.language {
-        case .english: return "Places you marked visited in SAV-E."
+        case .english: return "Places you marked visited in Savvy."
         case .traditionalChinese: return "你自己標記為去過的地點。"
         }
     }
 
     private var citiesDetail: String {
         switch languageSettings.language {
-        case .english: return stats.usesSavedPlaces ? "City-level stamps parsed from saved place addresses." : "Appears after SAV-E has saved place addresses."
+        case .english: return stats.usesSavedPlaces ? "City-level stamps parsed from saved place addresses." : "Appears after Savvy has saved place addresses."
         case .traditionalChinese: return stats.usesSavedPlaces ? "從已存地點地址整理出的城市級地區。" : "存下帶地址的地點後就會出現。"
         }
     }
@@ -2052,7 +2052,7 @@ private struct PassportCountingRulesPanel: View {
 
     private var visitedRule: String {
         switch languageSettings.language {
-        case .english: return "Visited counts places you marked visited in SAV-E."
+        case .english: return "Visited counts places you marked visited in Savvy."
         case .traditionalChinese: return "去過數量只計算你自己標記為去過的地點。"
         }
     }

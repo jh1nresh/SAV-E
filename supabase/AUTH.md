@@ -1,4 +1,4 @@
-# SAV-E Supabase Auth Notes
+# Savvy Supabase Auth Notes
 
 > Superseded on 2026-04-27 by the Railway backend migration. Keep this file only as legacy context for why direct Supabase Auth/RLS access was removed.
 

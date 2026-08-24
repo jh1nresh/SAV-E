@@ -84,7 +84,7 @@ struct PlaceCollection: Identifiable, Codable, Hashable {
 extension UserProfile {
     static let empty = UserProfile(
         id: "local-user",
-        displayName: "SAV-E User",
+        displayName: "Savvy User",
         email: nil,
         avatarUrl: nil,
         savedCount: 0,
@@ -97,7 +97,7 @@ extension UserProfile {
 
     static let mock = UserProfile(
         id: "mock-user",
-        displayName: "SAV-E User",
+        displayName: "Savvy User",
         email: "user@example.com",
         avatarUrl: nil,
         savedCount: 42,

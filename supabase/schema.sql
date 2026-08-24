@@ -1,4 +1,4 @@
--- SAV-E Supabase Schema
+-- Savvy Supabase Schema
 -- Run this in Supabase SQL Editor (Dashboard → SQL Editor → New Query)
 
 -- Enable UUID extension

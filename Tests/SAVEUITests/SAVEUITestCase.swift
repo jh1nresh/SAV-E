@@ -1,6 +1,6 @@
 import XCTest
 
-/// Shared lifecycle for the SAV-E UI suite.
+/// Shared lifecycle for the Savvy UI suite.
 ///
 /// Everything here exists because of one property of the CI runner: it is
 /// shared hardware, and its speed varies by several multiples between runs. The
