@@ -97,7 +97,7 @@ export function buildTrekKml(places: TrekKmlPlaceRow[]): string {
       place.address ? `Address: ${place.address}` : undefined,
       place.category ? `Category: ${place.category}` : undefined,
       place.status ? `Status: ${place.status}` : undefined,
-      `SAV-E place ID: ${place.id}`,
+      `Savvy place ID: ${place.id}`,
     ].filter((line): line is string => Boolean(line)).join("\n");
 
     return [
@@ -115,9 +115,9 @@ export function buildTrekKml(places: TrekKmlPlaceRow[]): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<kml xmlns="http://www.opengis.net/kml/2.2">',
     "  <Document>",
-    "    <name>SAV-E Map Stamps</name>",
+    "    <name>Savvy Map Stamps</name>",
     "    <Folder>",
-    "      <name>SAV-E Map Stamps</name>",
+    "      <name>Savvy Map Stamps</name>",
     placemarks,
     "    </Folder>",
     "  </Document>",

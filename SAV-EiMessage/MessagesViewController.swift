@@ -100,7 +100,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         return parts.joined(separator: " · ")
     }
 
-    /// A `wanderly://` deep link so tapping the card can open the place in SAV-E.
+    /// A `wanderly://` deep link so tapping the card can open the place in Savvy.
     private func deepLinkURL(for place: MessagesPlace) -> URL? {
         var components = URLComponents()
         components.scheme = "wanderly"

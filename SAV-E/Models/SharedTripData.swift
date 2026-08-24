@@ -78,7 +78,7 @@ struct SharedPlaceData: Codable {
             reviewCount: place.externalReviewCount,
             priceRange: place.priceRange,
             hours: place.openingHours,
-            sourceLabel: place.sourcePlatform == .other ? "SAV-E" : place.sourcePlatform.displayName,
+            sourceLabel: place.sourcePlatform == .other ? "Savvy" : place.sourcePlatform.displayName,
             sourceURL: place.publicShareSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(place.businessPhotoURLStrings),
             note: nil
@@ -181,7 +181,7 @@ struct SharedPlaceData: Codable {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E Review",
+            sourceLabel: "Savvy Review",
             sourceURL: candidate.evidence
                 .compactMap(Self.firstURLString(in:))
                 .compactMap { ShareRoutePayloadSanitizer.publicURL(from: $0)?.absoluteString }
@@ -296,9 +296,9 @@ struct SharedPlaceReceipt: Identifiable {
 
     var fullAppURL: URL? {
         if let code {
-            return URL(string: "wanderly://p/\(code)")
+            return URL(string: "savvy://p/\(code)")
         }
-        return payload.toURL(baseURL: "wanderly://p")
+        return payload.toURL(baseURL: "savvy://p")
     }
 
     func privatePlace() -> Place {
@@ -368,7 +368,7 @@ enum SharedPlaceReceiptError: Error, LocalizedError, Equatable {
         case .malformedLink:
             return "This share link is malformed."
         case .missingAPIConfiguration:
-            return "SAV-E is not configured to open this link."
+            return "Savvy is not configured to open this link."
         case .networkUnavailable:
             return "Check your connection and try again."
         case .missingOrExpired:
@@ -376,7 +376,7 @@ enum SharedPlaceReceiptError: Error, LocalizedError, Equatable {
         case .serverUnavailable:
             return "The share receipt is temporarily unavailable."
         case .invalidResponse:
-            return "SAV-E could not verify this share receipt."
+            return "Savvy could not verify this share receipt."
         }
     }
 }
@@ -706,7 +706,7 @@ enum ShareRouteCodec {
            pathParts.indices.contains(routeIndex + 1) {
             return pathParts[routeIndex + 1]
         }
-        if url.scheme == "wanderly", url.host == route {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == route {
             return pathParts.first ?? legacyQueryToken(from: url)
         }
         return legacyQueryToken(from: url)
@@ -718,6 +718,7 @@ enum ShareRouteCodec {
             .first(where: { $0.name == "d" })?
             .value
     }
+
 }
 
 private struct SharedPlaceLinkResponse: Codable {

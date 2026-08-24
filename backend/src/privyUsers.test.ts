@@ -34,7 +34,7 @@ test("ensureUserForPhone returns an existing Privy phone user", async () => {
   assert.equal(calls[0]?.appId, "app_123");
 });
 
-test("ensureUserForPhone imports a missing phone user with SAV-E metadata", async () => {
+test("ensureUserForPhone imports a missing phone user with Savvy metadata", async () => {
   const calls: Array<{ url: string; body: unknown }> = [];
   const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
     const value = url.toString();

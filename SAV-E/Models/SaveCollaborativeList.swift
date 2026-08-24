@@ -146,7 +146,7 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
     var items: [SaveListItem]
     var createdAt: Date
     var updatedAt: Date
-    /// True when this list exists on the SAV-E backend (loaded from or created
+    /// True when this list exists on the Savvy backend (loaded from or created
     /// against `/v0/lists`). Local-only lists stay false until their create
     /// sync succeeds.
     var serverBacked: Bool
@@ -194,7 +194,7 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
     }
 
     var shareSubject: String {
-        "SAV-E List: \(title)"
+        "Savvy List: \(title)"
     }
 
     var placeCountLabel: String {
@@ -243,7 +243,7 @@ struct SaveCollaborativeList: Identifiable, Codable, Hashable {
             itineraryDays: [ItineraryDay(dayNumber: 1, label: "List plan", stops: stops)],
             messageText: nil,
             mapAction: nil,
-            aiMessage: "Built from this shared SAV-E list. Unsaved map results stay separate until you save them."
+            aiMessage: "Built from this shared Savvy list. Unsaved map results stay separate until you save them."
         )
     }
 
@@ -287,7 +287,7 @@ struct SaveSharedListPayload: Codable, Hashable {
     }
 
     static func isListLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "list" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "list" {
             return true
         }
         return url.scheme == "https" &&
@@ -450,7 +450,7 @@ enum SaveCollaborativeListError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidLink:
-            return "This SAV-E list link is invalid or expired."
+            return "This Savvy list link is invalid or expired."
         case .listNotFound:
             return "Choose a list first."
         case .viewerCannotEdit:

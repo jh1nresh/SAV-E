@@ -14,7 +14,7 @@ struct SavePlanAroundController {
             return .blocked(
                 SavePlanBlockedState(
                     title: "Exact place needed",
-                    message: "SAV-E needs a confirmed map place before it can plan nearby stops.",
+                    message: "Savvy needs a confirmed map place before it can plan nearby stops.",
                     missingInfo: ["place coordinates"],
                     allowedActions: [.runRecovery, .openSource]
                 )
@@ -25,7 +25,7 @@ struct SavePlanAroundController {
             return .blocked(
                 SavePlanBlockedState(
                     title: "Location needed",
-                    message: "This place needs coordinates before SAV-E can order nearby stops.",
+                    message: "This place needs coordinates before Savvy can order nearby stops.",
                     missingInfo: ["coordinates"],
                     allowedActions: [.runRecovery, .showNearby]
                 )
@@ -95,7 +95,7 @@ struct SavePlanAroundController {
             return .blocked(
                 SavePlanBlockedState(
                     title: "Not enough saved places",
-                    message: "SAV-E needs at least one nearby Map Stamp or a clearly labeled public recommendation candidate before building this plan.",
+                    message: "Savvy needs at least one nearby Map Stamp or a clearly labeled public recommendation candidate before building this plan.",
                     missingInfo: desiredGaps.map(\.displayName),
                     allowedActions: [.showNearby, .savePlace]
                 )
@@ -254,7 +254,7 @@ struct SavePlanAroundController {
 
     private func routeNotes(for stops: [SavePlanStop]) -> [String] {
         guard stops.count > 1 else {
-            return ["Start with the anchor. Add nearby Map Stamps once SAV-E has routeable matches."]
+            return ["Start with the anchor. Add nearby Map Stamps once Savvy has routeable matches."]
         }
         return stops.dropFirst().map { stop in
             let distance = stop.distanceLabel ?? "nearby"
@@ -326,7 +326,7 @@ struct SavePlanAroundController {
             return "Nearby review clue; confirm before treating it as saved."
         case .unsavedMapCandidate:
             if let fillerSlot {
-                return "Public filler for missing \(fillerSlot.displayName); not saved to SAV-E."
+                return "Public filler for missing \(fillerSlot.displayName); not saved to Savvy."
             }
             if category == .attraction {
                 return "Adds a non-food unsaved candidate between Map Stamps."

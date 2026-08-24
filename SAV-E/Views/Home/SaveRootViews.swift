@@ -208,7 +208,7 @@ struct SaveLibraryView: View {
                         .foregroundStyle(SaveAtlasPalette.forest)
                     Text(localized(
                         "Share a link whenever you find a place worth remembering.",
-                        "看到值得記住的地點時，分享連結給 SAV-E。"
+                        "看到值得記住的地點時，分享連結給 Savvy。"
                     ))
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.muted)
@@ -278,8 +278,8 @@ struct SaveLibraryView: View {
                     .foregroundStyle(SaveAtlasPalette.forest)
 
                     Text(localized(
-                        "Add a link first. SAV-E keeps uncertain clues in Review instead of placing guesses on your map.",
-                        "先加入連結。SAV-E 會把不確定的線索留在待確認，不會把猜測直接放上地圖。"
+                        "Add a link first. Savvy keeps uncertain clues in Review instead of placing guesses on your map.",
+                        "先加入連結。Savvy 會把不確定的線索留在待確認，不會把猜測直接放上地圖。"
                     ))
                     .font(SaveAtlasType.body(14))
                     .foregroundStyle(SaveAtlasPalette.muted)
@@ -541,7 +541,7 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
                                 .offset(x: 3, y: 2)
                         }
 
-                    Text("SAV-E")
+                    Text("Savvy")
                         .font(SaveAtlasType.strong(24, relativeTo: .title3))
                         .tracking(1.1)
                         .foregroundStyle(SaveAtlasPalette.forest)
@@ -549,7 +549,7 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open SAV-E Passport")
+            .accessibilityLabel("Open Savvy Passport")
             .accessibilityIdentifier("root.passport")
 
             Spacer(minLength: 8)

@@ -89,11 +89,11 @@ enum SupabaseError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notConfigured: return "SAV-E API not configured"
+        case .notConfigured: return "Savvy API not configured"
         case .notAuthenticated: return "User not authenticated"
         case .recordNotFound: return "Record not found"
         case .networkError(let error): return "Network error: \(error.localizedDescription)"
-        case .apiError(let code, let msg): return "SAV-E API error \(code): \(msg)"
+        case .apiError(let code, let msg): return "Savvy API error \(code): \(msg)"
         case .invalidResponse(let message): return message
         }
     }
@@ -173,7 +173,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/places", method: "POST", body: body)
         let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
         guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
-            throw SupabaseError.invalidResponse("SAV-E returned an invalid friend share save outcome")
+            throw SupabaseError.invalidResponse("Savvy returned an invalid friend share save outcome")
         }
         return FriendSharedPlaceSaveResult(place: response.place.toPlace(), outcome: outcome)
     }
@@ -266,7 +266,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             body: body
         )
         guard Self.isValidTrekKmlResponse(data, mimeType: response.mimeType) else {
-            throw SupabaseError.invalidResponse("SAV-E returned an invalid KML file")
+            throw SupabaseError.invalidResponse("Savvy returned an invalid KML file")
         }
         return data
     }
@@ -323,10 +323,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         do {
             pack = try JSONDecoder.supabase.decode(RelatedPlaceSourcePack.self, from: data)
         } catch {
-            throw SupabaseError.invalidResponse("SAV-E returned an invalid related-source receipt")
+            throw SupabaseError.invalidResponse("Savvy returned an invalid related-source receipt")
         }
         guard pack.place.id == placeId else {
-            throw SupabaseError.invalidResponse("SAV-E returned a related-source receipt for another place")
+            throw SupabaseError.invalidResponse("Savvy returned a related-source receipt for another place")
         }
         return pack
     }
@@ -778,7 +778,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         )
         let row = try JSONDecoder.supabase.decode(ListShareCodeRow.self, from: data)
         guard let url = URL(string: row.url) else {
-            throw SupabaseError.invalidResponse("SAV-E returned an invalid list share link")
+            throw SupabaseError.invalidResponse("Savvy returned an invalid list share link")
         }
         return (row.code, url)
     }
@@ -841,7 +841,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/v0/me/referral")
         let row = try JSONDecoder.supabase.decode(MyReferralRow.self, from: data)
         guard let url = URL(string: row.url) else {
-            throw SupabaseError.invalidResponse("SAV-E returned an invalid referral link")
+            throw SupabaseError.invalidResponse("Savvy returned an invalid referral link")
         }
         return (row.code, url)
     }
@@ -943,7 +943,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw SupabaseError.invalidResponse("SAV-E returned a non-HTTP response")
+            throw SupabaseError.invalidResponse("Savvy returned a non-HTTP response")
         }
         if !(200..<300).contains(http.statusCode) {
             let body = String(data: data, encoding: .utf8) ?? ""
@@ -1819,7 +1819,7 @@ private struct PlaceSocialSignalRow: Codable {
             saveCount: saveCount ?? 0,
             trendingRank: trendingRank,
             categoryRank: categoryRank,
-            sourceLabel: sourceLabel ?? "SAV-E",
+            sourceLabel: sourceLabel ?? "Savvy",
             referrerId: referrerId,
             referralCode: referralCode
         )

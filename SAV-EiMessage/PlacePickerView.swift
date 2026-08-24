@@ -35,7 +35,7 @@ struct PlacePickerView: View {
             Text("No saved places yet")
                 .font(.headline)
                 .foregroundStyle(MessagesTheme.ink)
-            Text("Open SAV-E to save places first, then share them here.")
+            Text("Open Savvy to save places first, then share them here.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(MessagesTheme.secondaryInk)

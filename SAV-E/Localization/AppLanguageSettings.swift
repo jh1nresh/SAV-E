@@ -32,7 +32,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         case .english:
             return "English"
         case .traditionalChinese:
-            return "Traditional Chinese (zh-Hant). Use natural Taiwanese Traditional Chinese. Keep the SAV-E brand name unchanged, but translate product concepts such as Map Stamp into natural Traditional Chinese."
+            return "Traditional Chinese (zh-Hant). Use natural Taiwanese Traditional Chinese. Keep the Savvy brand name unchanged, but translate product concepts such as Map Stamp into natural Traditional Chinese."
         }
     }
 }
@@ -69,9 +69,9 @@ final class AppLanguageSettings: ObservableObject {
     func memoWaitingText(_ count: Int) -> String {
         switch language {
         case .english:
-            return count == 1 ? "SAV-E has 1 clue waiting" : "SAV-E has \(count) clues waiting"
+            return count == 1 ? "Savvy has 1 clue waiting" : "Savvy has \(count) clues waiting"
         case .traditionalChinese:
-            return count == 1 ? "SAV-E 有 1 個線索等你確認" : "SAV-E 有 \(count) 個線索等你確認"
+            return count == 1 ? "Savvy 有 1 個線索等你確認" : "Savvy 有 \(count) 個線索等你確認"
         }
     }
 
@@ -207,9 +207,9 @@ enum SaveText {
     static func text(_ key: SaveTextKey, language: AppLanguage) -> String {
         switch key {
         case .appName:
-            return "SAV-E"
+            return "Savvy"
         case .opening:
-            return localized(english: "Opening SAV-E", traditionalChinese: "正在打開 SAV-E", language: language)
+            return localized(english: "Opening Savvy", traditionalChinese: "正在打開 Savvy", language: language)
         case .openingHint:
             return localized(english: "Waking up your place memory", traditionalChinese: "整理你的地點記憶", language: language)
         case .tripLinkReady:
@@ -247,7 +247,7 @@ enum SaveText {
         case .signInTagline:
             return localized(english: "Your private place memory.", traditionalChinese: "你的私人地點記憶。", language: language)
         case .signInDescription:
-            return localized(english: "Drop in a place clue. SAV-E keeps the source, asks before saving, then helps you decide later.", traditionalChinese: "丟進一個地點線索。SAV-E 會保留來源、先讓你確認，之後再幫你做決定。", language: language)
+            return localized(english: "Drop in a place clue. Savvy keeps the source, asks before saving, then helps you decide later.", traditionalChinese: "丟進一個地點線索。Savvy 會保留來源、先讓你確認，之後再幫你做決定。", language: language)
         case .capture:
             return localized(english: "Capture", traditionalChinese: "收進來", language: language)
         case .captureSubtitle:
@@ -261,13 +261,13 @@ enum SaveText {
         case .saveSubtitle:
             return localized(english: "Map Stamps", traditionalChinese: "變成地圖章", language: language)
         case .profileTitle:
-            return localized(english: "SAV-E Passport", traditionalChinese: "SAV-E 護照", language: language)
+            return localized(english: "Savvy Passport", traditionalChinese: "Savvy 護照", language: language)
         case .edit:
             return localized(english: "Edit", traditionalChinese: "編輯", language: language)
         case .editPassport:
             return localized(english: "Edit Passport", traditionalChinese: "編輯護照", language: language)
         case .editPassportDescription:
-            return localized(english: "This is how SAV-E labels your memory book.", traditionalChinese: "這個名稱會顯示在你的 SAV-E 記憶本上。", language: language)
+            return localized(english: "This is how Savvy labels your memory book.", traditionalChinese: "這個名稱會顯示在你的 Savvy 記憶本上。", language: language)
         case .saving:
             return localized(english: "Saving...", traditionalChinese: "儲存中...", language: language)
         case .passportName:
@@ -309,7 +309,7 @@ enum SaveText {
         case .chooseLanguage:
             return localized(english: "Choose Language", traditionalChinese: "選擇語言", language: language)
         case .languageDescription:
-            return localized(english: "SAV-E will use this language inside the app.", traditionalChinese: "SAV-E 會在 app 內使用你選的語言。", language: language)
+            return localized(english: "Savvy will use this language inside the app.", traditionalChinese: "Savvy 會在 app 內使用你選的語言。", language: language)
         case .signOut:
             return localized(english: "Sign Out", traditionalChinese: "登出", language: language)
         case .askPlaceholder:
@@ -317,7 +317,7 @@ enum SaveText {
         case .openReviewCandidates:
             return localized(english: "Open review candidates", traditionalChinese: "查看待確認地點", language: language)
         case .memoSorting:
-            return localized(english: "SAV-E is sorting the clues...", traditionalChinese: "SAV-E 正在整理線索...", language: language)
+            return localized(english: "Savvy is sorting the clues...", traditionalChinese: "Savvy 正在整理線索...", language: language)
         case .cancel:
             return localized(english: "Cancel", traditionalChinese: "取消", language: language)
         case .back:
@@ -337,7 +337,7 @@ enum SaveText {
         case .commands:
             return localized(english: "Commands", traditionalChinese: "指令", language: language)
         case .loadingSubtitle:
-            return localized(english: "You can cancel and keep using SAV-E.", traditionalChinese: "你可以取消，繼續使用 SAV-E。", language: language)
+            return localized(english: "You can cancel and keep using Savvy.", traditionalChinese: "你可以取消，繼續使用 Savvy。", language: language)
         case .answerSubtitle:
             return localized(english: "Back returns to commands.", traditionalChinese: "返回會回到指令列表。", language: language)
         case .errorSubtitle:

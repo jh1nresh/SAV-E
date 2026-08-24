@@ -1,7 +1,7 @@
-# SAV-E Atlas + Postcard Prototype
+# Savvy Atlas + Postcard Prototype
 
 This is an isolated, disposable iOS visual prototype. It does not import or
-modify the production SAV-E views, navigation, models, persistence, auth, or
+modify the production Savvy views, navigation, models, persistence, auth, or
 networking.
 
 The prototype exists to answer one question before production implementation:
@@ -54,7 +54,7 @@ that viewport and rejects other dimensions.
 ## Boundaries
 
 - Seeded display data only.
-- Existing `MemoMascot` artwork is copied unchanged from SAV-E.
+- Existing `MemoMascot` artwork is copied unchanged from Savvy.
 - No production source file is linked into this target.
 - No shipping decision should be made from code alone; review all four
   screenshots against `design.md`.

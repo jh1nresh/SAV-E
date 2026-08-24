@@ -60,7 +60,7 @@ export const accountStatusSql = `
 select
   p.id as profile_id,
   (
-    (btrim(coalesce(p.display_name, '')) not in ('', 'SAV-E User'))
+    (btrim(coalesce(p.display_name, '')) not in ('', 'Savvy User'))
     or nullif(btrim(coalesce(p.email, '')), '') is not null
     or nullif(btrim(coalesce(p.avatar_url, '')), '') is not null
     or nullif(btrim(coalesce(p.handle, '')), '') is not null

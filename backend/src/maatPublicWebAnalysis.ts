@@ -538,7 +538,7 @@ function publicWebPrompt(input: MaatPublicWebInput): string {
       visibility: clippedString(claim.visibility, 40),
     }));
 
-  return `You are Ma'at, a strict restaurant research agent for SAV-E.
+  return `You are Ma'at, a strict restaurant research agent for Savvy.
 
 Search the public web for this exact place and return JSON only. Use English and Chinese queries when helpful.
 
@@ -561,7 +561,7 @@ ${JSON.stringify({
     source_url: clippedString(place.source_url, 240),
   })}
 
-Visible SAV-E claim summaries:
+Visible Savvy claim summaries:
 ${JSON.stringify(visibleClaims)}
 
 Structured source details already found:

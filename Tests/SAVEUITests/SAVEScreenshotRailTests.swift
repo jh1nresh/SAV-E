@@ -1,6 +1,6 @@
 import XCTest
 
-/// App Store screenshot rail for the SAV-E root shell and Trip workspace.
+/// App Store screenshot rail for the Savvy root shell and Trip workspace.
 ///
 /// The review-demo session is local and deterministic. The screenshots cover
 /// Home plus the focused Plan / Map Trip workspace and top-level Share action.
@@ -1080,7 +1080,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             openRootTab(tab, app: app)
             XCTAssertTrue(
                 app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
-                "\(tab) should keep the fixed Passport entry in its SAV-E lockup."
+                "\(tab) should keep the fixed Passport entry in its Savvy lockup."
             )
         }
         openRootTab("Profile", app: app)

@@ -1,4 +1,4 @@
-# SAV-E — App Store Launch Checklist (1.0.0 / build 103)
+# Savvy — App Store Launch Checklist (1.0.0 / build 103)
 
 Reviewed 2026-08-22. What's done in-repo vs. what only **you** can do (anything
 needing your Apple ID, passwords, or App Store Connect — Claude can't sign in on
@@ -25,8 +25,8 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 4. Wait for the build to finish **processing** in App Store Connect (a few min–1 hr).
    - If you re-archive, bump `CURRENT_PROJECT_VERSION` in `project.yml` (>103) and re-run `xcodegen generate` first. Editing only the generated `SAV-E.xcodeproj` is undone by the next generate.
 
-## 3. App Store Connect — create the app record (you)
-- 🟡 apps → **+** → New App → Platform iOS, Name **SAV-E**, Primary language English (U.S.), Bundle ID `com.wanderly.app`, SKU `save-1`.
+## 3. App Store Connect — existing app record
+- ✅ Keep the existing iOS record and bundle ID `com.wanderly.app`. English (U.S.) App Store name is **Savvy: Save Places** because the exact name **Savvy** is unavailable.
 
 ## 4. Listing metadata — paste from `app-store-listing.md`
 - 🟡 Name, Subtitle, Promotional Text, Description, Keywords (en-US **and** zh-Hant).
@@ -44,7 +44,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 
 ## 7. App Review prep
 - 🟡 **Demo account / sign-in:** review needs to get past auth. Provide either a working Apple/Google/email test login in the Review Notes, OR confirm the "Sample Place Clue" path lets a reviewer see the core loop without signing in.
-- 🟡 **Review Notes:** one paragraph — "SAV-E is a private place-memory app. Paste a link → it finds the place → confirm → it lands on a private map. No account purchase, no UGC feed." Mention location is used only for nearby search.
+- 🟡 **Review Notes:** one paragraph — "Savvy is a private place-memory app. Paste a link → it finds the place → confirm → it lands on a private map. No account purchase, no UGC feed." Mention location is used only for nearby search.
 - 🟡 Age rating questionnaire → **4+**.
 
 ## 8. Pricing & release

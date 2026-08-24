@@ -15,7 +15,7 @@
     {
       "id" : "21500000",
       "localizations" : [],
-      "name" : "SAV-E Pro",
+      "name" : "Savvy Pro",
       "subscriptions" : [
         {
           "adHocOffers" : [],
@@ -32,13 +32,13 @@
           "localizations" : [
             {
               "description" : "Higher monthly AI assist allowance. Saved places stay free.",
-              "displayName" : "SAV-E Pro Annual",
+              "displayName" : "Savvy Pro Annual",
               "locale" : "en_US"
             }
           ],
           "productID" : "com.wanderly.app.pro.annual",
           "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "SAV-E Pro Annual",
+          "referenceName" : "Savvy Pro Annual",
           "subscriptionGroupID" : "21500000",
           "type" : "RecurringSubscription"
         },
@@ -53,13 +53,13 @@
           "localizations" : [
             {
               "description" : "Higher monthly AI assist allowance. Saved places stay free.",
-              "displayName" : "SAV-E Pro Monthly",
+              "displayName" : "Savvy Pro Monthly",
               "locale" : "en_US"
             }
           ],
           "productID" : "com.wanderly.app.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "SAV-E Pro Monthly",
+          "referenceName" : "Savvy Pro Monthly",
           "subscriptionGroupID" : "21500000",
           "type" : "RecurringSubscription"
         }

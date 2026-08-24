@@ -62,8 +62,8 @@ struct SaveLocationIntentRecommendationService {
                 query: query,
                 title: outputLanguage.localized(english: "Unsupported category", traditionalChinese: "尚未支援的類別"),
                 message: outputLanguage.localized(
-                    english: "SAV-E doesn't have a \(unsupportedCategoryLabel) category yet, so I won't map this to food or cafe by accident. You can search saved names/notes, or ask to search public nearby places.",
-                    traditionalChinese: "SAV-E 還沒有「\(unsupportedCategoryLabel)」這個類別，所以我不會誤判成餐廳或咖啡廳。你可以搜尋已保存名稱/筆記，或另外搜尋附近公開地點。"
+                    english: "Savvy doesn't have a \(unsupportedCategoryLabel) category yet, so I won't map this to food or cafe by accident. You can search saved names/notes, or ask to search public nearby places.",
+                    traditionalChinese: "Savvy 還沒有「\(unsupportedCategoryLabel)」這個類別，所以我不會誤判成餐廳或咖啡廳。你可以搜尋已保存名稱/筆記，或另外搜尋附近公開地點。"
                 ),
                 outputLanguage: outputLanguage
             )
@@ -132,8 +132,8 @@ struct SaveLocationIntentRecommendationService {
                 return sectionedResponse(
                     query: query,
                     message: outputLanguage.localized(
-                        english: "I do not see a saved nearby \(categoryLabel(for: intent)) in your SAV-E. I did not recommend generic cafes or other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
-                        traditionalChinese: "你的 SAV-E 裡附近沒有\(localizedCategoryLabel(for: intent))。你問的是\(localizedCategoryLabel(for: intent))，所以我不會拿泛用咖啡廳或其他類別亂推。\(farContext)"
+                        english: "I do not see a saved nearby \(categoryLabel(for: intent)) in your Savvy. I did not recommend generic cafes or other categories because you asked for \(categoryLabel(for: intent)).\(farContext)",
+                        traditionalChinese: "你的 Savvy 裡附近沒有\(localizedCategoryLabel(for: intent))。你問的是\(localizedCategoryLabel(for: intent))，所以我不會拿泛用咖啡廳或其他類別亂推。\(farContext)"
                     ),
                     nearby: [],
                     far: far,
@@ -150,8 +150,8 @@ struct SaveLocationIntentRecommendationService {
             return sectionedResponse(
                 query: query,
                 message: outputLanguage.localized(
-                    english: "Found \(nearby.count) saved nearby \(categoryLabel(for: intent)) place\(nearby.count == 1 ? "" : "s") from your SAV-E.",
-                    traditionalChinese: "從你的 SAV-E 找到 \(nearby.count) 個附近已保存\(localizedCategoryLabel(for: intent))。"
+                    english: "Found \(nearby.count) saved nearby \(categoryLabel(for: intent)) place\(nearby.count == 1 ? "" : "s") from your Savvy.",
+                    traditionalChinese: "從你的 Savvy 找到 \(nearby.count) 個附近已保存\(localizedCategoryLabel(for: intent))。"
                 ),
                 nearby: nearby,
                 far: far,
@@ -170,8 +170,8 @@ struct SaveLocationIntentRecommendationService {
                 return sectionedResponse(
                     query: query,
                     message: outputLanguage.localized(
-                        english: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet. Review candidates and public discovery stay separate until you choose what to save.",
-                        traditionalChinese: "你的 SAV-E 還沒有已保存\(localizedCategoryLabel(for: intent))。待確認地點和公開探索會分開，等你決定要不要保存。"
+                        english: "Your Savvy does not have saved \(categoryLabel(for: intent)) places yet. Review candidates and public discovery stay separate until you choose what to save.",
+                        traditionalChinese: "你的 Savvy 還沒有已保存\(localizedCategoryLabel(for: intent))。待確認地點和公開探索會分開，等你決定要不要保存。"
                     ),
                     nearby: [],
                     far: [],
@@ -188,8 +188,8 @@ struct SaveLocationIntentRecommendationService {
                 query: query,
                 title: outputLanguage.localized(english: "No saved \(categoryLabel(for: intent))", traditionalChinese: "沒有已保存\(localizedCategoryLabel(for: intent))"),
                 message: outputLanguage.localized(
-                    english: "Your SAV-E does not have saved \(categoryLabel(for: intent)) places yet.",
-                    traditionalChinese: "你的 SAV-E 還沒有已保存\(localizedCategoryLabel(for: intent))。"
+                    english: "Your Savvy does not have saved \(categoryLabel(for: intent)) places yet.",
+                    traditionalChinese: "你的 Savvy 還沒有已保存\(localizedCategoryLabel(for: intent))。"
                 ),
                 outputLanguage: outputLanguage,
                 showFallbackAction: true
@@ -199,8 +199,8 @@ struct SaveLocationIntentRecommendationService {
         return sectionedResponse(
             query: query,
             message: outputLanguage.localized(
-                english: "Showing saved \(categoryLabel(for: intent)) places from your SAV-E.",
-                traditionalChinese: "顯示你 SAV-E 裡已保存的\(localizedCategoryLabel(for: intent))。"
+                english: "Showing saved \(categoryLabel(for: intent)) places from your Savvy.",
+                traditionalChinese: "顯示你 Savvy 裡已保存的\(localizedCategoryLabel(for: intent))。"
             ),
             nearby: rankedCategoryMatches,
             far: [],
@@ -372,8 +372,8 @@ struct SaveLocationIntentRecommendationService {
         let farResults = searchResults(for: Array(far.prefix(5)), intent: intent, currentLocation: currentLocation, isNearby: false, tasteProfile: tasteProfile, outputLanguage: outputLanguage)
         let nearbySection = SaveSearchSection(
                 id: "from-your-save-nearby",
-                label: "FROM YOUR SAV-E",
-                title: outputLanguage.localized(english: "From your SAV-E nearby", traditionalChinese: "來自 SAV-E 的附近記憶"),
+                label: "FROM YOUR Savvy",
+                title: outputLanguage.localized(english: "From your Savvy nearby", traditionalChinese: "來自 Savvy 的附近記憶"),
                 subtitle: message,
                 results: nearbyResults,
                 emptyMessage: nearby.isEmpty ? message : nil,
@@ -430,12 +430,12 @@ struct SaveLocationIntentRecommendationService {
                 title: outputLanguage.localized(english: "Public nearby options", traditionalChinese: "附近公開探索"),
                 subtitle: outputLanguage.localized(
                     english: "Public discovery stays separate until you explicitly save one.",
-                    traditionalChinese: "公開探索會分開顯示；只有你手動保存後才會進 SAV-E 記憶。"
+                    traditionalChinese: "公開探索會分開顯示；只有你手動保存後才會進 Savvy 記憶。"
                 ),
                 results: mapResults,
                 emptyMessage: canSearchNearby ? outputLanguage.localized(
-                    english: "Search public nearby options only if you want places outside your SAV-E memory.",
-                    traditionalChinese: "如果想看 SAV-E 記憶以外的附近地點，可以搜尋公開探索。"
+                    english: "Search public nearby options only if you want places outside your Savvy memory.",
+                    traditionalChinese: "如果想看 Savvy 記憶以外的附近地點，可以搜尋公開探索。"
                 ) : nil,
                 showsNearbySearchAction: canSearchNearby
             ),
@@ -457,7 +457,7 @@ struct SaveLocationIntentRecommendationService {
             assistantMessage: message,
             fromYourSave: SaveSearchSection(
                 id: "from-your-save-nearby",
-                label: "FROM YOUR SAV-E",
+                label: "FROM YOUR Savvy",
                 title: title,
                 subtitle: message,
                 results: [],
@@ -473,8 +473,8 @@ struct SaveLocationIntentRecommendationService {
                 ),
                 results: [],
                 emptyMessage: showFallbackAction ? outputLanguage.localized(
-                    english: "Search public nearby options only if you want places outside your SAV-E memory.",
-                    traditionalChinese: "如果想看 SAV-E 記憶以外的附近地點，可以搜尋公開探索。"
+                    english: "Search public nearby options only if you want places outside your Savvy memory.",
+                    traditionalChinese: "如果想看 Savvy 記憶以外的附近地點，可以搜尋公開探索。"
                 ) : nil,
                 showsNearbySearchAction: showFallbackAction
             ),
@@ -690,7 +690,7 @@ struct SaveLocationIntentRecommendationService {
         }
         if let top = savedResults.first {
             return agentAnswer(
-                lead: "I’d start with \(top.title) because it is already in your SAV-E memory, not a random Google result.",
+                lead: "I’d start with \(top.title) because it is already in your Savvy memory, not a random Google result.",
                 reason: reasonLine(for: top, fallback: "It is already a Saved Map Stamp in your place memory.", outputLanguage: outputLanguage),
                 caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: [], outputLanguage: outputLanguage))Public discovery stays separate below. If you want, tell me budget, cuisine, or quick vs sit-down and I’ll narrow it."
             )
@@ -699,7 +699,7 @@ struct SaveLocationIntentRecommendationService {
         if let top = reviewResults.first {
             return agentAnswer(
                 lead: "I would not promote an unconfirmed place as a saved recommendation; start by reviewing \(top.title).",
-                reason: reasonLine(for: top, fallback: "It is waiting in Review, so SAV-E has a clue but still needs confirmation.", outputLanguage: outputLanguage),
+                reason: reasonLine(for: top, fallback: "It is waiting in Review, so Savvy has a clue but still needs confirmation.", outputLanguage: outputLanguage),
                 caveat: "Confirm it into a Map Stamp, or add a clue before trusting it as the recommendation."
             )
         }
@@ -712,7 +712,7 @@ struct SaveLocationIntentRecommendationService {
                 outputLanguage: outputLanguage
             )
             return agentAnswer(
-                lead: "I do not see a saved nearby \(categoryLabel) in your SAV-E yet.",
+                lead: "I do not see a saved nearby \(categoryLabel) in your Savvy yet.",
                 reason: "I found \(unsavedResults.count) public nearby option\(unsavedResults.count == 1 ? "" : "s") below; the first one to inspect is \(top.title) because \(topReason)",
                 caveat: "Pick one to save if it looks right, or tell me budget, vibe, or quick vs sit-down and I’ll narrow the list."
             )
@@ -749,8 +749,8 @@ struct SaveLocationIntentRecommendationService {
     ) -> String {
         if let top = savedResults.first {
             return agentAnswer(
-                lead: "我會先推 \(top.title)，因為它已經在你的 SAV-E 記憶裡，不是隨機 Google 結果。",
-                reason: reasonLine(for: top, fallback: "它已經是 SAV-E 裡的地圖章", outputLanguage: .traditionalChinese),
+                lead: "我會先推 \(top.title)，因為它已經在你的 Savvy 記憶裡，不是隨機 Google 結果。",
+                reason: reasonLine(for: top, fallback: "它已經是 Savvy 裡的地圖章", outputLanguage: .traditionalChinese),
                 caveat: "\(supportingSummary(reviewResults: reviewResults, unsavedResults: [], outputLanguage: .traditionalChinese))公開探索會分開列在下面。你可以再補預算、想坐一下或外帶，我再幫你縮小。"
             )
         }
@@ -771,7 +771,7 @@ struct SaveLocationIntentRecommendationService {
                 outputLanguage: .traditionalChinese
             )
             return agentAnswer(
-                lead: "你的 SAV-E 記憶裡還沒有附近已保存\(categoryLabel)。",
+                lead: "你的 Savvy 記憶裡還沒有附近已保存\(categoryLabel)。",
                 reason: "下面找到 \(unsavedResults.count) 個附近公開選項；如果要先看一家，我會先看 \(top.title)，原因是 \(topReason)",
                 caveat: "你可以挑一個保存，或補預算、氛圍、想外帶還是坐一下，我再幫你縮小清單。"
             )

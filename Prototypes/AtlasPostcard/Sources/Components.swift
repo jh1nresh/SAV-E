@@ -37,7 +37,7 @@ struct BrandHeader<Trailing: View>: View {
                                 .offset(x: 3, y: 2)
                         }
 
-                    Text("SAV-E")
+                    Text("Savvy")
                         .font(AtlasType.strong(24))
                         .tracking(1.1)
                         .foregroundStyle(AtlasPalette.forest)
@@ -45,7 +45,7 @@ struct BrandHeader<Trailing: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open SAV-E Passport")
+            .accessibilityLabel("Open Savvy Passport")
             .accessibilityIdentifier("root.passport")
 
             Spacer()

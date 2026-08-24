@@ -1,10 +1,10 @@
-# SAV-E Privacy Policy
+# Savvy Privacy Policy
 
 _Draft — review before publishing. Host at `https://sav-e.app/privacy` (required
 by App Store Connect). Last updated: 2026-06-25._
 
-SAV-E is a private place-memory app. This policy explains what we collect, why,
-and the choices you have. SAV-E is built to be private by default: your saved
+Savvy is a private place-memory app. This policy explains what we collect, why,
+and the choices you have. Savvy is built to be private by default: your saved
 places are yours, and there is no public feed.
 
 ## What we collect
@@ -22,12 +22,12 @@ places and answer "what's near me" style questions. Location is used to serve
 results in the moment; we do not sell it or use it to build an advertising
 profile.
 
-**Search text.** When you ask SAV-E a question or paste a link, that text is
+**Search text.** When you ask Savvy a question or paste a link, that text is
 sent to our place and AI providers (Google Places, Google Gemini) to identify
 the place or answer your query.
 
 We do **not** collect contacts, browsing history, or advertising identifiers,
-and SAV-E has no ads.
+and Savvy has no ads.
 
 ## How we use it
 
@@ -59,7 +59,7 @@ support address below; we will remove it within 30 days.
 
 ## Children
 
-SAV-E is not directed to children under 13 and we do not knowingly collect their
+Savvy is not directed to children under 13 and we do not knowingly collect their
 data.
 
 ## Changes

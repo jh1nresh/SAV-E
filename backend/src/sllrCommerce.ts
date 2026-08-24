@@ -1,9 +1,9 @@
-// SLL-R client — SAV-E's commerce / receipt / redemption rail.
+// SLL-R client — Savvy's commerce / receipt / redemption rail.
 //
-// SAV-E owns consumer memory + recommendation. When a saved intent needs to
+// Savvy owns consumer memory + recommendation. When a saved intent needs to
 // become a real action (order / ticket / voucher) or be verified (receipt →
-// proof), SAV-E calls SLL-R through this module. SLL-R is an external service;
-// this is the only place SAV-E talks to it. Follows the repo's fetch+env pattern
+// proof), Savvy calls SLL-R through this module. SLL-R is an external service;
+// this is the only place Savvy talks to it. Follows the repo's fetch+env pattern
 // (cf. maatPublicWebAnalysis.ts). No DB, no auth surface — pure outbound client.
 //
 // Env:
@@ -35,8 +35,8 @@ async function sllrFetch<T>(path: string, init: RequestInit): Promise<T> {
   return json as T;
 }
 
-// A buyer session binds SLL-R orders + receipts to a stable buyerId. SAV-E mints
-// one per SAV-E user (persist the token on the user; reuse to keep history).
+// A buyer session binds SLL-R orders + receipts to a stable buyerId. Savvy mints
+// one per Savvy user (persist the token on the user; reuse to keep history).
 export type SllrBuyer = { token: string; buyerId: string };
 export async function issueBuyerSession(label: string): Promise<SllrBuyer> {
   return sllrFetch<SllrBuyer>("/buyer/session", { method: "POST", body: JSON.stringify({ label }) });
@@ -69,7 +69,7 @@ export type SllrOrder = {
 };
 // "SLL-R asks": the hint to offer the buyer a recurring version of this order.
 export type SllrRecurringSuggestion = { eligible: boolean; prompt?: string };
-// Place an order bound to a SAV-E buyer. Pass the buyer session so the order +
+// Place an order bound to a Savvy buyer. Pass the buyer session so the order +
 // its receipt accrue to that buyerId (the cross-merchant taste/receipt graph).
 export async function placeOrder(
   merchantId: string,
@@ -113,7 +113,7 @@ export async function nearby(
   return r.merchants ?? [];
 }
 
-// The buyer's cross-merchant order history (SLL-R receipt/taste graph). SAV-E can
+// The buyer's cross-merchant order history (SLL-R receipt/taste graph). Savvy can
 // fold this into its experience memory.
 export async function myOrders(buyer: SllrBuyer): Promise<SllrOrder[]> {
   const r = await sllrFetch<{ orders?: SllrOrder[] }>("/buyer/orders", {
@@ -124,7 +124,7 @@ export async function myOrders(buyer: SllrBuyer): Promise<SllrOrder[]> {
 }
 
 // --- Recurring orders (confirm-each) ----------------------------------------
-// SLL-R owns the schedule + the saved-card charge; SAV-E sets up the "usual" and
+// SLL-R owns the schedule + the saved-card charge; Savvy sets up the "usual" and
 // relays the per-run confirm. The buyer must have a saved card (first checkout)
 // before a run can actually charge.
 

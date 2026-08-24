@@ -1,6 +1,6 @@
-# SAV-E Railway Backend
+# Savvy Railway Backend
 
-Railway-hosted API for SAV-E mobile persistence. It replaces the previous Supabase Edge Function while preserving the iOS API contract.
+Railway-hosted API for Savvy mobile persistence. It replaces the previous Supabase Edge Function while preserving the iOS API contract.
 
 ## Environment
 
@@ -33,13 +33,13 @@ SAVE_MAAT_GEMINI_MODEL=gemini-3.5-flash
 YELP_API_KEY=
 ```
 
-Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get SAV-E backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
+Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get Savvy backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
 
 `SAVE_INTERNAL_AGENT_TOKEN` gates `GET /internal/r8/pilot-metrics?days=30&limit=100`. Generate at least 32 random bytes with an OS cryptographic random generator, store the value only in Railway's secret manager and approved server-side agent runtime, and never ship it to the app or browser. The endpoint is read-only and returns cohort totals plus HMAC-pseudonymous per-user analysis and outcome counts; it never returns raw user IDs or recommendation payloads. If the token is missing or too short, the route fails closed with `503`; invalid bearer credentials return `401`. Successful reads emit a metadata-only audit log with the window, requested limit, and aggregate user counts. Rotating the token also rotates the v0 pseudonymous user references.
 
 Source recovery can run with metadata and public search only. Set `GOOGLE_PLACES_API_KEY` to let the worker corroborate Review Candidates with Places address/coordinates. Set `SAVE_ENABLE_SERVER_KEYFRAME_EXTRACTION=true` to allow bounded public video fetch plus one keyframe sample, and set `SAVE_ENABLE_SERVER_OCR=true` only on workers that have `tesseract` installed. Set `SAVE_ENABLE_SERVER_ASR=true` only on workers that have a local Whisper-compatible CLI available through `SAVE_SERVER_ASR_COMMAND`; transcripts are attached as cited evidence and never used to invent address/coordinates. Set `SAVE_EVIDENCE_RUBRIC_URL` to an HTTPS public rubric service endpoint when you want an external LLM rubric; the worker sends a bounded projection of metadata/candidate/search/media text, validates the response schema, blocks redirects/private hosts, and falls back to the deterministic rubric when unavailable. If these toggles are off or unavailable, recovery keeps the source as a cited clue instead of inventing place details.
 
-Authenticated China place resolution stays server-side. `AMAP_WEB_SERVICE_KEY` enables the domestic GCJ-02 fallback only when `AMAP_USAGE_AUTHORIZED=true`; SAV-E preserves that coordinate system and opens the exact Amap place instead of treating it as a MapKit pin. `AMAP_INTERNATIONAL_WEB_SERVICE_KEY` is optional and must be set only after Amap enables overseas Web Service permission; its WGS84 results can render on the unified MapKit surface. Never put either key in the iOS bundle.
+Authenticated China place resolution stays server-side. `AMAP_WEB_SERVICE_KEY` enables the domestic GCJ-02 fallback only when `AMAP_USAGE_AUTHORIZED=true`; Savvy preserves that coordinate system and opens the exact Amap place instead of treating it as a MapKit pin. `AMAP_INTERNATIONAL_WEB_SERVICE_KEY` is optional and must be set only after Amap enables overseas Web Service permission; its WGS84 results can render on the unified MapKit surface. Never put either key in the iOS bundle.
 
 Ma'at restaurant detail enrichment is deterministic unless the caller opts into public web. When `GET /v0/places/:id/maat-analysis?includePublicWeb=true` is called, the backend first uses structured sources before asking the model: `GOOGLE_PLACES_API_KEY` can fill Google rating, price level, parking options, reservable status, dine-in/takeout traits, and Google source links; `YELP_API_KEY` can optionally add Yelp score, price, categories, and bounded review excerpts through the official Yelp API. When `GEMINI_API_KEY` or `GOOGLE_GEMINI_API_KEY` is configured, the backend then asks Gemini with public web search for remaining restaurant details such as dishes, parking, reservation tips, average cost, and common negative reviews. The same backend key powers authenticated `/v0/llm/gemini-generate-content` proxy calls from the iOS app so Gemini keys do not ship in the app bundle. Set `SAVE_ENABLE_MAAT_PUBLIC_WEB=false` only when this enrichment must be disabled. The prompt only sends bounded place metadata and non-private claim summaries; raw private evidence is never included. If structured sources or the model are unavailable, the route falls back to the selected-place evidence analysis and marks `analysis_receipt.structured_source_status` / `analysis_receipt.public_web_status`.
 
@@ -98,10 +98,10 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `GET /v0/places/:id/trust-summary` — returns a compact agent-readable proof summary for a saved place.
 - `GET /v0/places/:id/maat-analysis` — returns selected-place Ma'at restaurant details. Add `includePublicWeb=true` to opt into Google Places / optional Yelp structured enrichment plus env-gated Gemini public-web enrichment; model output only fills gaps and the receipt records whether structured source, public web, and model enrichment were used.
 - `POST /v0/places/recommend-by-claims` — ranks owner-scoped saved places by verified claims, stores a private recommendation-analysis receipt, and returns a retrieval receipt plus AgentShack-safe envelope.
-- `POST /v0/recommendation-analysis-receipts` — stores an authenticated SAV-E recommendation-analysis receipt from bounded client request/output payloads and returns:
+- `POST /v0/recommendation-analysis-receipts` — stores an authenticated Savvy recommendation-analysis receipt from bounded client request/output payloads and returns:
   - `id` (`string` UUID) — stored `recommendation_analysis_receipts.id`.
   - `envelope` (`object`) — AgentShack-safe receipt envelope projection with hashes, public summary, safe preference signals, evaluator verdict, settlement state, and private payload reference.
-  - `full_payload_json` (`object|string`) — original SAV-E request/output payload stored in `private_payload`; deployments may return the JSON object or a serialized JSON string depending on database driver serialization.
+  - `full_payload_json` (`object|string`) — original Savvy request/output payload stored in `private_payload`; deployments may return the JSON object or a serialized JSON string depending on database driver serialization.
 
   Example response:
 
@@ -118,7 +118,7 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
       "output_hash": "6f4e2a0c3b1d5f708192a3b4c5d6e7f8091a2b3c4d5e6f70817b6c4a0f3b4e5d",
       "private_payload_ref": "save://receipts/recommendation_analysis/8f7f2f50-9c4a-48c1-8f55-8b4d821d7f0e",
       "public_summary": {
-        "summary": "SAV-E analyzed owner-scoped saved places and kept public discovery separate.",
+        "summary": "Savvy analyzed owner-scoped saved places and kept public discovery separate.",
         "capability": "place_claim_recommendation",
         "result_count": 2,
         "saved_result_count": 1,
@@ -151,13 +151,13 @@ Guest clients create a server-issued session with `POST /v0/guest-sessions`; the
 - `POST /v0/claims/usage-receipts` — records authenticated owner-scoped usage receipts.
 - `GET /v0/shared-place-links/:code` — public resolver for `/p/<shortCode>` App Clip/web previews.
 - `POST /v0/shared-place-links` — authenticated creation of a short public place preview link from a sanitized `SharedPlaceData` payload.
-- `GET /v0/workflows/place-recovery/runs` — authenticated list of SAV-E Place Recovery Agent workflow runs.
+- `GET /v0/workflows/place-recovery/runs` — authenticated list of Savvy Place Recovery Agent workflow runs.
 - `GET /v0/workflows/place-recovery/runs/summary` — authenticated aggregate counts for runs, Instagram reels, source URL runs, analysis receipts, decision receipts, and user-feedback receipts.
 - `POST /v0/workflows/place-recovery/runs` — authenticated workflow run creation with internal credit reservation.
 - `POST /v0/workflows/place-recovery/runs/:id/result` — records bounded worker/classifier result type and evidence tier, creates an off-chain **analysis** workflow receipt (`receipt_type=analysis`) with `workflow_version`, `operator_id`, `requester_id`, `agent_id`, optional `job_id`, `model_provenance`, input/output hashes, permission snapshot, tool trace refs, latency/cost/failure fields, then points `workflow_runs.receipt_id` at that receipt.
 - `POST /v0/workflows/place-recovery/runs/:id/decision` — records user confirm/edit/reject and creates an off-chain **decision** workflow receipt with credit settlement plus `user_feedback_action`, `quality_delta`, and `reputation_delta`.
 
-To move selected SAV-E Map Stamps into TREK without copying either product's private data model, request the export with the same Privy or guest authorization used by other persistence routes:
+To move selected Savvy Map Stamps into TREK without copying either product's private data model, request the export with the same Privy or guest authorization used by other persistence routes:
 
 ```bash
 curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
@@ -167,6 +167,6 @@ curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
   --output save-map-stamps.kml
 ```
 
-Import `save-map-stamps.kml` from TREK's planner file-import surface. SAV-E remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
+Import `save-map-stamps.kml` from TREK's planner file-import surface. Savvy remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.

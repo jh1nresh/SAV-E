@@ -992,7 +992,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// STEP 1 repro + STEP 4 acceptance. Age-restricted Instagram reel: the IG
     /// page is login-walled and returns thin/empty metadata (only the creator
     /// handle is visible). Before the fix this degraded to source-only with NO
-    /// public search ever running. SAV-E must instead run public-search recovery
+    /// public search ever running. Savvy must instead run public-search recovery
     /// off the shortcode + creator handle and recover the venue as a Review
     /// Candidate — never an auto Map Stamp (no provider place id / coordinate
     /// provenance yet).
@@ -1111,7 +1111,7 @@ final class SocialPlacePipelineTests: XCTestCase {
     /// STEP 1 repro + STEP 4 acceptance. Instagram reel about Ulaman Eco Luxury
     /// Resort (Bali). The caption IS publicly available (unlike the age-restricted
     /// LS Hotel case): travel prose + hashtags + a place-bearing location marker
-    /// `📍Ulaman, Bali, Indonesia`. SAV-E must (1) treat the 📍 marker + #ulaman as
+    /// `📍Ulaman, Bali, Indonesia`. Savvy must (1) treat the 📍 marker + #ulaman as
     /// place-bearing (NOT source-only), (2) rank the official resort name over
     /// generic labels (Bali / Avatar / Pandora / beautiful destinations), and
     /// (3) produce a Review Candidate — never an auto Map Stamp (no provider place
@@ -1178,7 +1178,7 @@ final class SocialPlacePipelineTests: XCTestCase {
                       "missingInfo must flag coordinate provenance, got: \(candidate.missingInfo)")
     }
 
-    /// Guardrail: without the corroborating public search results, SAV-E must not
+    /// Guardrail: without the corroborating public search results, Savvy must not
     /// fabricate a resort. The 📍 marker keeps it place-bearing (so recovery runs),
     /// but with no usable search hit the candidate must NOT invent coordinates and
     /// must NOT promote a generic hashtag (avatar/pandora/bali) into a venue name.
@@ -1274,13 +1274,13 @@ final class SocialPlacePipelineTests: XCTestCase {
     @MainActor
     func testShareNormalizerKeepsAmapCustomSchemeAsPrimaryURL() {
         let bundle = SocialShareTextNormalizer.normalize(
-            "高德地图 iosamap://viewMap?sourceApplication=SAV-E&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
+            "高德地图 iosamap://viewMap?sourceApplication=Savvy&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
         )
 
         XCTAssertEqual(bundle.platform, .chinaMaps)
         XCTAssertEqual(
             bundle.primaryURLString,
-            "iosamap://viewMap?sourceApplication=SAV-E&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
+            "iosamap://viewMap?sourceApplication=Savvy&poiname=%E8%9F%B9%E5%B0%8A%E8%8B%91&lat=31.2389&lon=121.4962"
         )
     }
 
@@ -1534,7 +1534,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.attempts.contains("Detected blocked or generic Xiaohongshu metadata shell instead of usable caption text"))
         XCTAssertTrue(diagnostic.found.contains("Readable metadata/caption/OCR: present but no verified address/map link"))
         XCTAssertTrue(diagnostic.missingFields.contains("Readable Xiaohongshu caption or screenshot OCR"))
-        XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.")
+        XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so Savvy can turn this source into a Review Candidate.")
         XCTAssertEqual(diagnostic.suggestedSearchQueries?.first, "xiaohongshu 65abc123 place")
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"https://www.xiaohongshu.com/explore/65abc123\"") == true)
     }
@@ -1556,7 +1556,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(diagnostic.found.contains("Xiaohongshu note id: 3zvbJIowbqS"))
         XCTAssertTrue(diagnostic.attempts.contains("Detected Xiaohongshu short link but public redirect did not expose a canonical note id"))
         XCTAssertTrue(diagnostic.missingFields.contains("Readable Xiaohongshu caption or screenshot OCR"))
-        XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so SAV-E can turn this source into a Review Candidate.")
+        XCTAssertEqual(diagnostic.nextBestClue, "Share a Xiaohongshu screenshot/OCR frame, copied caption, or map link so Savvy can turn this source into a Review Candidate.")
         XCTAssertEqual(diagnostic.suggestedSearchQueries?.first, "xiaohongshu short link 3zvbJIowbqS place")
         XCTAssertTrue(diagnostic.suggestedSearchQueries?.contains("\"http://xhslink.com/o/3zvbJIowbqS\"") == true)
     }
@@ -2137,7 +2137,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: classified the shared URL/platform and canonical post id before trusting content"))
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: inspected readable metadata/caption/OCR for venue anchors, address pins, map links, and social handles"))
         XCTAssertTrue(diagnostic.attempts.contains("Analysis method: requires a place name plus address or map-provider match before saving directly; otherwise keeps it in Review"))
-        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records unresolved details internally so SAV-E can keep trying instead of guessing"))
+        XCTAssertTrue(diagnostic.attempts.contains("Analysis method: records unresolved details internally so Savvy can keep trying instead of guessing"))
     }
 
     @MainActor
@@ -4192,7 +4192,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(areaText.localizedCaseInsensitiveContains("Los Angeles") || areaText.localizedCaseInsensitiveContains("LA"),
                       "Expected area to mention LA, got: \(areaText)")
         XCTAssertEqual(candidate.category, "cafe")
-        XCTAssertTrue(candidate.evidence.contains { $0.contains("Extracted by SAV-E from caption") },
+        XCTAssertTrue(candidate.evidence.contains { $0.contains("Extracted by Savvy from caption") },
                       "Evidence must carry the caption-extraction provenance chip")
 
         // GUARDRAIL: Review Candidate only — no coords, no Map Stamp.

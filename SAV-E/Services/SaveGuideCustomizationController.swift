@@ -130,7 +130,7 @@ struct SaveGuideCustomizationController {
         suggestions: [SaveGuidePlanStop]
     ) -> String {
         let recoveryCount = keepStops.filter { $0.state == .needsRecovery }.count
-        return "Customized \(guide.title) with \(savedSwaps.count) saved SAV-E \(savedSwaps.count == 1 ? "place" : "places"), \(suggestions.count) unsaved suggestions, and \(recoveryCount) stops needing recovery."
+        return "Customized \(guide.title) with \(savedSwaps.count) saved Savvy \(savedSwaps.count == 1 ? "place" : "places"), \(suggestions.count) unsaved suggestions, and \(recoveryCount) stops needing recovery."
     }
 
     private func tripNote(for stop: SaveGuideStop, guide: SaveGuide) -> String {

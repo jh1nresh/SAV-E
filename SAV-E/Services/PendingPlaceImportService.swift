@@ -508,7 +508,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     var shareSubject: String {
-        "SAV-E Review Candidate: \(name)"
+        "Savvy Review Candidate: \(name)"
     }
 
     var saveShareURL: URL? {
@@ -518,7 +518,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     var shareText: String {
         var lines = [
-            hasReliableCoordinates ? "SAV-E Review Candidate" : "SAV-E Source Clue",
+            hasReliableCoordinates ? "Savvy Review Candidate" : "Savvy Source Clue",
             name
         ]
 
@@ -535,7 +535,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
             lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
-            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+            lines.append("Open in Savvy: \(saveShareURL.absoluteString)")
         }
 
         return lines.joined(separator: "\n")

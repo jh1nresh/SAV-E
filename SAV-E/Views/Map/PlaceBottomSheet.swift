@@ -247,7 +247,7 @@ extension Place {
         }
         switch status {
         case .visited:
-            return "Marked visited in SAV-E."
+            return "Marked visited in Savvy."
         case .wantToGo:
             return "Saved as a place to try."
         }
@@ -269,7 +269,7 @@ extension Place {
         }
         switch status {
         case .visited:
-            return language.localized(english: "Marked visited in SAV-E.", traditionalChinese: "已在 SAV-E 標記為去過。")
+            return language.localized(english: "Marked visited in Savvy.", traditionalChinese: "已在 Savvy 標記為去過。")
         case .wantToGo:
             return language.localized(english: "Saved as a place to try.", traditionalChinese: "已存成想找時間去的地點。")
         }

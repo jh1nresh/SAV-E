@@ -340,7 +340,7 @@ test("webhook flow: inbound XHS short link saves the place from metadata", async
 });
 
 
-test("webhook flow: linked phone saves and recalls from canonical SAV-E profile key", async () => {
+test("webhook flow: linked phone saves and recalls from canonical Savvy profile key", async () => {
   const client = new FakeSendblueClient();
   const store = new FakeStore();
   const resolveMemoryKey = async (phone: string) => phone === "+155****4567" ? "privy:profile-1" : phone;
@@ -421,7 +421,7 @@ test("webhook flow: 'my places' with private link sends a compact web handoff in
 
   const content = client.calls[0]?.content ?? "";
   assert.match(content, /2 saved places/);
-  assert.match(content, /Open My SAV-E/);
+  assert.match(content, /Open My Savvy/);
   assert.match(content, /https:\/\/save\.example\/my\/token-for-\+15552223333/);
   assert.doesNotMatch(content, /1\. Aquarela/);
   assert.doesNotMatch(content, /2\. Cafe Leon Dore/);
@@ -452,9 +452,9 @@ test("renderMySavesPage escapes saved content and renders counts", () => {
     counts: { places: 1, visits: 1, reviews: 1 },
   });
 
-  assert.match(html, /My SAV-E/);
-  assert.match(html, /<meta property="og:title" content="My SAV-E: 1 place, 1 visit, 1 review"/);
-  assert.match(html, /Open your private SAV-E cards/);
+  assert.match(html, /My Savvy/);
+  assert.match(html, /<meta property="og:title" content="My Savvy: 1 place, 1 visit, 1 review"/);
+  assert.match(html, /Open your private Savvy cards/);
   assert.match(html, /<strong>1<\/strong><span>places<\/span>/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
   assert.doesNotMatch(html, /<script>alert/);

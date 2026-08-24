@@ -1,7 +1,7 @@
 import Foundation
 import StoreKit
 
-/// StoreKit 2 wrapper for SAV-E Pro.
+/// StoreKit 2 wrapper for Savvy Pro.
 ///
 /// Deliberate boundary: this type may *observe* Apple transactions and report
 /// them. It may not decide entitlement on its own. Slice 2 adds

@@ -119,7 +119,7 @@ function requestHeaders({ accessToken, guestToken }: SaveAuth): HeadersInit {
 
   if (!accessToken) {
     if (!guestToken) {
-      throw new Error("Missing SAV-E auth context");
+      throw new Error("Missing Savvy auth context");
     }
 
     return {
@@ -439,7 +439,7 @@ export async function resolveMySaves(token: string): Promise<MySavesPayload> {
   const response = await fetch(`${requireApiBaseUrl()}/v0/my/${encodeURIComponent(token)}`);
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `My SAV-E link failed: ${response.status}`);
+    throw new Error(message || `My Savvy link failed: ${response.status}`);
   }
   return (await response.json()) as MySavesPayload;
 }

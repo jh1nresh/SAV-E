@@ -164,9 +164,9 @@ struct SaveAgentActionDrawerModel: Hashable {
     private static func contextLine(for result: SaveSearchResult) -> String {
         switch result.objectType {
         case .sourceOnlyClue:
-            return "SAV-E found a source, but not enough proof for a place yet."
+            return "Savvy found a source, but not enough proof for a place yet."
         case .pendingCandidate:
-            return "SAV-E found a likely place. Review the evidence before stamping it to your map."
+            return "Savvy found a likely place. Review the evidence before stamping it to your map."
         case .mapVisibleUnsavedPlace:
             return "This is a map-visible suggestion, not a saved memory yet."
         case .savedPlace:
@@ -351,7 +351,7 @@ struct SavePlaceDrawerPresentation: Equatable {
     static func clue(
         title: String,
         contextLine: String,
-        trustLine: String = "SAV-E found a source, but not enough proof for a place yet."
+        trustLine: String = "Savvy found a source, but not enough proof for a place yet."
     ) -> SavePlaceDrawerPresentation {
         let primary = primaryActionFields(SavePlaceActionResolution(kind: .runRecovery))
         return SavePlaceDrawerPresentation(
@@ -369,7 +369,7 @@ struct SavePlaceDrawerPresentation: Equatable {
     static func reviewCandidate(
         title: String,
         contextLine: String,
-        trustLine: String = "SAV-E found a likely place. Review the evidence before stamping it to your map."
+        trustLine: String = "Savvy found a likely place. Review the evidence before stamping it to your map."
     ) -> SavePlaceDrawerPresentation {
         let primary = primaryActionFields(SavePlaceActionResolution(kind: .confirmMapStamp))
         return SavePlaceDrawerPresentation(
@@ -387,7 +387,7 @@ struct SavePlaceDrawerPresentation: Equatable {
     static func unsavedMapCandidate(
         title: String,
         contextLine: String,
-        trustLine: String = "Public discovery result, not one of your SAV-E memories yet."
+        trustLine: String = "Public discovery result, not one of your Savvy memories yet."
     ) -> SavePlaceDrawerPresentation {
         let primary = primaryActionFields(SavePlaceActionResolution(kind: .savePlace))
         return SavePlaceDrawerPresentation(
@@ -410,30 +410,30 @@ struct SavePlaceDrawerPresentation: Equatable {
         let primary = primaryActionFields(SavePlaceActionResolution(kind: .recommendOrder))
         return SavePlaceDrawerPresentation(
             state: .mapStamp,
-            eyebrow: "Map Stamp · From your SAV-E",
+            eyebrow: "Map Stamp · From your Savvy",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
             primaryActionTitle: primary.title,
             primaryActionSystemImage: primary.systemImage,
-            secondaryActionTitles: ["Plan around this", "Add private note", "Share SAV-E Card", "Edit memory"]
+            secondaryActionTitles: ["Plan around this", "Add private note", "Share Savvy Card", "Edit memory"]
         )
     }
 
     static func menuOrderDraft(
         title: String,
         contextLine: String,
-        trustLine: String = "SAV-E can turn this place memory into an order idea before you go."
+        trustLine: String = "Savvy can turn this place memory into an order idea before you go."
     ) -> SavePlaceDrawerPresentation {
         SavePlaceDrawerPresentation(
             state: .menuOrderDraft,
-            eyebrow: "Order draft · From your SAV-E",
+            eyebrow: "Order draft · From your Savvy",
             title: title,
             contextLine: contextLine,
             trustLine: trustLine,
             primaryActionTitle: "Draft order idea",
             primaryActionSystemImage: "fork.knife.circle",
-            secondaryActionTitles: ["View place memory", "Add private note", "Share SAV-E Card"]
+            secondaryActionTitles: ["View place memory", "Add private note", "Share Savvy Card"]
         )
     }
 
@@ -527,7 +527,7 @@ struct SaveEvidenceDrawerModel: Hashable {
         case .mapVisibleUnsavedPlace:
             return "Unsaved candidate; not a Map Stamp"
         case .savedPlace:
-            return "Map Stamp saved in SAV-E"
+            return "Map Stamp saved in Savvy"
         case .triedMemory:
             return "Visited Map Stamp"
         case .review:
@@ -563,17 +563,17 @@ struct SaveEvidenceDrawerModel: Hashable {
 
     private static func candidateExplanation(for result: SaveSearchResult) -> String? {
         if let confidenceReason = prefixedEvidenceValue("Confidence reason:", in: result.evidence) {
-            return "Why SAV-E guessed this: \(confidenceReason)"
+            return "Why Savvy guessed this: \(confidenceReason)"
         }
         switch result.objectType {
         case .sourceOnlyClue:
-            return "SAV-E is preserving the source clue without creating a Map Stamp."
+            return "Savvy is preserving the source clue without creating a Map Stamp."
         case .pendingCandidate:
             return "This can become a Map Stamp only after the place evidence is confirmed."
         case .mapVisibleUnsavedPlace:
             return "This is an unsaved candidate, not a Map Stamp yet."
         case .savedPlace:
-            return "This Map Stamp is already saved in SAV-E."
+            return "This Map Stamp is already saved in Savvy."
         case .newRecommendation:
             return "This is a recommendation, not a saved memory. Choose a concrete place first."
         case .triedMemory, .review, .tripStop:
@@ -774,7 +774,7 @@ extension SaveMapCandidate {
     }
 
     var shareSubject: String {
-        "SAV-E Map Result: \(title)"
+        "Savvy Map Result: \(title)"
     }
 
     var saveShareURL: URL? {
@@ -783,7 +783,7 @@ extension SaveMapCandidate {
 
     var shareText: String {
         var lines = [
-            "SAV-E Map Result",
+            "Savvy Map Result",
             title,
             subtitle
         ]
@@ -804,7 +804,7 @@ extension SaveMapCandidate {
             lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
-            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+            lines.append("Open in Savvy: \(saveShareURL.absoluteString)")
         }
 
         return lines.joined(separator: "\n")
@@ -913,8 +913,8 @@ struct FoodPlaceAnalysisService {
     ) -> FoodPlaceOrderAnalysis {
         guard let insight = insightService.insight(for: place) else {
             let message = outputLanguage.localized(
-                english: "I do not have saved order evidence for \(place.name) yet, so I will not invent a dish. Add a saved note or source clue with the item you want SAV-E to remember.",
-                traditionalChinese: "我目前沒有「\(place.name)」的已保存點餐證據，所以不會編造菜名。可以新增筆記或來源線索，讓 SAV-E 記住推薦品項。"
+                english: "I do not have saved order evidence for \(place.name) yet, so I will not invent a dish. Add a saved note or source clue with the item you want Savvy to remember.",
+                traditionalChinese: "我目前沒有「\(place.name)」的已保存點餐證據，所以不會編造菜名。可以新增筆記或來源線索，讓 Savvy 記住推薦品項。"
             )
             return FoodPlaceOrderAnalysis(
                 title: outputLanguage.localized(english: "No saved order clue yet", traditionalChinese: "尚無已保存點餐線索"),
@@ -938,8 +938,8 @@ struct FoodPlaceAnalysisService {
             let context = supportingContext(from: insight, outputLanguage: outputLanguage)
             let source = sourceLine(from: insight, outputLanguage: outputLanguage)
             let message = outputLanguage.localized(
-                english: "Order \(items).\(context) This is based only on your saved SAV-E evidence\(source).",
-                traditionalChinese: "可以點 \(items)。\(context) 這只根據你已保存的 SAV-E 證據\(source)。"
+                english: "Order \(items).\(context) This is based only on your saved Savvy evidence\(source).",
+                traditionalChinese: "可以點 \(items)。\(context) 這只根據你已保存的 Savvy 證據\(source)。"
             )
             return FoodPlaceOrderAnalysis(
                 title: outputLanguage.localized(english: "What to order at \(insight.title)", traditionalChinese: "在「\(insight.title)」點什麼"),
@@ -1208,7 +1208,7 @@ extension SaveSearchResult {
     }
 
     var shareSubject: String {
-        "SAV-E Place: \(title)"
+        "Savvy Place: \(title)"
     }
 
     var saveShareURL: URL? {
@@ -1217,7 +1217,7 @@ extension SaveSearchResult {
 
     var shareText: String {
         var lines = [
-            "SAV-E Place",
+            "Savvy Place",
             title,
             subtitle,
             "Type: \(objectType.displayName)",
@@ -1237,7 +1237,7 @@ extension SaveSearchResult {
             lines.append("Source: \(safeSourceURL.absoluteString)")
         }
         if let saveShareURL {
-            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+            lines.append("Open in Savvy: \(saveShareURL.absoluteString)")
         }
         if !missingInfo.isEmpty {
             lines.append("Needs: \(missingInfo.joined(separator: ", "))")

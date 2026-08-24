@@ -108,7 +108,7 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     var shareSubject: String {
-        "SAV-E Map Stamp: \(name)"
+        "Savvy Map Stamp: \(name)"
     }
 
     var saveShareURL: URL? {
@@ -117,7 +117,7 @@ struct Place: Identifiable, Codable, Hashable {
 
     var shareText: String {
         var lines = [
-            "SAV-E Map Stamp",
+            "Savvy Map Stamp",
             name,
             address,
             "Category: \(category.displayName)",
@@ -137,7 +137,7 @@ struct Place: Identifiable, Codable, Hashable {
             lines.append("Source: \(sourceURL.absoluteString)")
         }
         if let saveShareURL {
-            lines.append("Open in SAV-E: \(saveShareURL.absoluteString)")
+            lines.append("Open in Savvy: \(saveShareURL.absoluteString)")
         }
         return lines.joined(separator: "\n")
     }
