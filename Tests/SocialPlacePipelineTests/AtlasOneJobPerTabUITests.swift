@@ -2,50 +2,19 @@ import XCTest
 @testable import SAVE
 
 final class AtlasOneJobPerTabUITests: XCTestCase {
-    // `AtlasHomeSheetKind` lives in the SAVE target, which builds with
-    // MainActor default isolation; this test target is `nonisolated`. Without
-    // this annotation the file does not compile once it is actually a member of
-    // SAVETests -- which is how it shipped: the file was added to the repo but
-    // never added to project.yml's generated target, so it was never built.
-    @MainActor
-    func testHomeSheetResolverPicksReviewThenSameCityTripThenEmpty() {
-        XCTAssertEqual(
-            AtlasHomeSheetKind.resolve(reviewCount: 2, tripKind: .currentTrip),
-            .review
-        )
-        XCTAssertEqual(
-            AtlasHomeSheetKind.resolve(reviewCount: 0, tripKind: .upcomingTrip),
-            .sameCityTrip
-        )
-        XCTAssertEqual(
-            AtlasHomeSheetKind.resolve(reviewCount: 0, tripKind: .planFromStamps),
-            .empty
-        )
-        XCTAssertEqual(
-            AtlasHomeSheetKind.resolve(reviewCount: 0, tripKind: .capture),
-            .empty
-        )
-        XCTAssertEqual(
-            AtlasHomeSheetKind.resolve(reviewCount: 0, tripKind: nil),
-            .empty
-        )
-    }
-
-    func testLiveHomeUsesOneSheetAndOmitsStamps() throws {
+    func testLiveHomeLeadsWithSavedPlacesAndKeepsSecondaryManagement() throws {
         let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
-        let oneJob = try typeBody("HomeOneJobSheet", in: screens)
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let library = try typeBody("HomeSavedPlacesLibrary", in: screens)
 
-        XCTAssertTrue(home.contains("HomeOneJobSheet()"))
+        XCTAssertTrue(home.contains("HomeSavedPlacesLibrary()"))
         XCTAssertTrue(home.contains("locksOneFaceHomeComposition"))
-        XCTAssertFalse(oneJob.contains("home.recentSaves"))
-        XCTAssertFalse(oneJob.contains("HomeRecentStamps"))
-        XCTAssertFalse(oneJob.contains("HomeMetric"))
-        XCTAssertFalse(oneJob.contains("showsStatColumns: true"))
-        XCTAssertFalse(root.contains("home.recentSaves"))
-        XCTAssertFalse(root.contains("Recent Map Stamps"))
-        XCTAssertFalse(root.contains("CONTINUE TODAY"))
+        XCTAssertTrue(library.contains("presentation.savedPlaces"))
+        XCTAssertTrue(library.contains("home.savedPlaces"))
+        XCTAssertTrue(library.contains("home.saves"))
+        XCTAssertTrue(library.contains("home.review"))
+        XCTAssertFalse(home.contains("home.capture"))
+        XCTAssertFalse(home.contains("Paste a link"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {

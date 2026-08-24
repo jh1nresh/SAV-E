@@ -497,7 +497,6 @@ struct ContentView: View {
                                 // is lost by the restructure.
                                 onOpenSaves: { rootPath.append(.saves) },
                                 onOpenTrips: { rootPath.append(.trips) },
-                                onOpenMap: { selectedRootTab = .map },
                                 onOpenTrip: { rootPath.append(.trip($0)) },
                                 onOpenPassport: openPassport
                             )
