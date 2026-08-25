@@ -1108,10 +1108,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["profile.connections.back"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
 
-        let importButton = app.buttons["profile.importGoogleTakeout"]
+        XCTAssertFalse(app.buttons["profile.importGoogleTakeout"].exists)
+
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+
+        let importButton = app.buttons["capture.importGoogleTakeout"]
         XCTAssertTrue(
             scrollUntilHittable(importButton, in: app.scrollViews.firstMatch, maxSwipes: 12),
-            "Passport controls should expose Postal Import."
+            "The center Save flow should expose Postal Import."
         )
         importButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["takeout.import.root"].waitForExistence(timeout: stepTimeout))
