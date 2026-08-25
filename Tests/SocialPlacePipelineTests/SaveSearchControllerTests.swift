@@ -2029,10 +2029,13 @@ final class SaveSearchControllerTests: XCTestCase {
         map.mapCandidates = [returnedCandidate]
         map.beginExactSearchResolution(for: clue)
 
+        XCTAssertFalse(map.mapCandidate(unrelatedCandidate, resolvesReviewCandidateID: clue.id))
+        XCTAssertTrue(map.mapCandidate(returnedCandidate, resolvesReviewCandidateID: clue.id))
         try await map.saveMapCandidateAsPlace(unrelatedCandidate)
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
 
-        try await map.saveMapCandidateAsPlace(returnedCandidate)
+        let savedPlace = try await map.saveMapCandidateAsPlace(returnedCandidate)
+        XCTAssertEqual(savedPlace.name, returnedCandidate.title)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 

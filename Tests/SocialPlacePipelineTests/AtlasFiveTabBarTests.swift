@@ -111,11 +111,11 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertEqual(SaveRootTab.origin.title(language: .traditionalChinese), "來處")
     }
 
-    // MARK: - Origin honesty (W4 guardrail, enforced before W4 is built)
+    // MARK: - Origin honesty (W4)
 
     @MainActor
-    func testOriginPlaceholderDoesNotImplyOtherUsers() throws {
-        let source = try source(at: "SAV-E/Views/Origin/SaveOriginPlaceholderView.swift")
+    func testOriginDoesNotImplyOtherUsers() throws {
+        let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
         // Production has one user, zero place_visibility rows and zero
         // place_social_signals rows (measured 2026-08-24). Any of these strings
         // on this surface would be a fabricated social signal.
@@ -125,6 +125,64 @@ final class AtlasFiveTabBarTests: XCTestCase {
                 "Origin must not imply other users: found '\(forbidden)'"
             )
         }
+    }
+
+    @MainActor
+    func testOriginShowsVerbatimSourceAndExactlyTwoBacklogActions() throws {
+        let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+        XCTAssertTrue(source.contains("Text(rawText)"), "Origin must render the stored source text verbatim")
+        XCTAssertTrue(source.contains("Link(destination: url)"), "Origin must link to the original source")
+        XCTAssertTrue(source.contains("Dictionary(grouping:"), "One capture must remain one source card")
+        XCTAssertTrue(source.contains("origin.backlog.plan"))
+        XCTAssertTrue(source.contains("origin.backlog.archive"))
+        let backlogBody = source
+            .components(separatedBy: "private func backlogCard")[1]
+            .components(separatedBy: "private func sectionLabel")[0]
+        XCTAssertEqual(backlogBody.components(separatedBy: "Button").count - 1, 2)
+    }
+
+    @MainActor
+    func testOriginCapturePayloadDecodesOwnerSourceFields() throws {
+        let id = UUID()
+        let payload = """
+        [{
+          "id": "\(id.uuidString)",
+          "source_type": "url",
+          "source_url": "https://example.com/post/1",
+          "raw_text": "Exact original words",
+          "title": "Saved post",
+          "status": "review",
+          "created_at": "2026-08-24T18:00:00.000Z"
+        }]
+        """.data(using: .utf8)!
+
+        let captures = try SupabaseService.decodeOriginCaptures(payload)
+        XCTAssertEqual(captures.count, 1)
+        XCTAssertEqual(captures[0].id, id)
+        XCTAssertEqual(captures[0].rawText, "Exact original words")
+        XCTAssertEqual(captures[0].originalURL?.host, "example.com")
+    }
+
+    @MainActor
+    func testOriginCaptureOnlyOpensHTTPLinks() {
+        let id = UUID()
+        let safe = SaveOriginCapture(
+            id: id,
+            sourceURL: "https://example.com/post/1",
+            rawText: "Original clue",
+            title: nil,
+            createdAt: .distantPast
+        )
+        let unsafe = SaveOriginCapture(
+            id: id,
+            sourceURL: "file:///private/source.txt",
+            rawText: nil,
+            title: nil,
+            createdAt: .distantPast
+        )
+        XCTAssertEqual(safe.originalURL?.absoluteString, "https://example.com/post/1")
+        XCTAssertNil(unsafe.originalURL)
+        XCTAssertFalse(unsafe.hasDisplayableSource)
     }
 
     // MARK: - Helpers

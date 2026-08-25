@@ -532,6 +532,17 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return rows.map { $0.toCandidate() }
     }
 
+    func fetchOriginCaptures() async throws -> [SaveOriginCapture] {
+        guard isConfigured else { return [] }
+
+        let data = try await request(path: "/memory/captures")
+        return try Self.decodeOriginCaptures(data)
+    }
+
+    static func decodeOriginCaptures(_ data: Data) throws -> [SaveOriginCapture] {
+        try JSONDecoder.supabase.decode([MemoryCaptureRow].self, from: data).map { $0.toOriginCapture() }
+    }
+
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID? = nil) async throws {
         guard isConfigured else { return }
 
@@ -1848,6 +1859,20 @@ private struct ReferralProfileRow: Codable {
 
 private struct MemoryCaptureRow: Codable {
     let id: UUID
+    let source_url: String?
+    let raw_text: String?
+    let title: String?
+    let created_at: String?
+
+    func toOriginCapture() -> SaveOriginCapture {
+        SaveOriginCapture(
+            id: id,
+            sourceURL: source_url,
+            rawText: raw_text,
+            title: title,
+            createdAt: SaveCollaborativeList.serverDate(created_at) ?? .distantPast
+        )
+    }
 }
 
 struct SourceSearchRecoveryResult {

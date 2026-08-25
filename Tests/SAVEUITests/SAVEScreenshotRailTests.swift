@@ -157,7 +157,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Origin", app: app)
         XCTAssertTrue(
-            app.descendants(matching: .any)["origin.placeholder"].waitForExistence(timeout: stepTimeout)
+            app.descendants(matching: .any)["origin.root"].waitForExistence(timeout: stepTimeout)
         )
         attach(app, name: "five-tab-origin")
 
@@ -1546,7 +1546,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         switch title {
         case "Home": return "home.root"
         case "Map": return "map.root"
-        case "Origin": return "origin.placeholder"
+        case "Origin": return "origin.root"
         case "Profile": return "profile.root"
         default: return nil
         }
