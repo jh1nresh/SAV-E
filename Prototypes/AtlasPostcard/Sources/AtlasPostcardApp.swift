@@ -99,7 +99,12 @@ private struct PrototypeShell: View {
                         accessibilityPrefix: "prototype.tripTab",
                         onSelect: { trip = $0 }
                     )
-                    .placed(x: 0, y: 786, width: 402, height: 76)
+                    .placed(
+                        x: AtlasTabBarMetrics.leadingInset,
+                        y: AtlasTabBarMetrics.standardY,
+                        width: AtlasTabBarMetrics.width,
+                        height: AtlasTabBarMetrics.height
+                    )
                     .accessibilityIdentifier("prototype.tripTabs")
                 } else {
                     AtlasTabBar(
@@ -111,10 +116,12 @@ private struct PrototypeShell: View {
                         onSelect: { root = $0 }
                     )
                     .placed(
-                        x: 0,
-                        y: root == .map ? 788 : 786,
-                        width: 402,
-                        height: 76
+                        x: AtlasTabBarMetrics.leadingInset,
+                        y: root == .map
+                            ? AtlasTabBarMetrics.mapY
+                            : AtlasTabBarMetrics.standardY,
+                        width: AtlasTabBarMetrics.width,
+                        height: AtlasTabBarMetrics.height
                     )
                     .accessibilityIdentifier("prototype.rootTabs")
                 }

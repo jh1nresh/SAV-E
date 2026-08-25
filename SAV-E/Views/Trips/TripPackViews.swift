@@ -270,7 +270,12 @@ struct TripWorkspaceView: View {
                             accessibilityPrefix: "trip.tab",
                             onSelect: { selectedTab = $0 }
                         )
-                        .placed(x: 0, y: 786, width: 402, height: 76)
+                        .placed(
+                            x: AtlasTabBarMetrics.leadingInset,
+                            y: AtlasTabBarMetrics.standardY,
+                            width: AtlasTabBarMetrics.width,
+                            height: AtlasTabBarMetrics.height
+                        )
                     }
                 }
                 .toolbar(.hidden, for: .navigationBar)

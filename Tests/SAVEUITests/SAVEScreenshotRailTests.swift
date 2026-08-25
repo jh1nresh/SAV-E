@@ -144,7 +144,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(rootTabButton("Save", app: app).exists)
+        let tabs = ["Home", "Map", "Save", "Origin", "Profile"].map {
+            rootTabButton($0, app: app)
+        }
+        for tab in tabs {
+            XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout))
+            XCTAssertGreaterThanOrEqual(tab.frame.height, 44)
+        }
+        let leadingInset = tabs[0].frame.minX - app.frame.minX
+        let trailingInset = app.frame.maxX - tabs[4].frame.maxX
+        XCTAssertGreaterThan(leadingInset, 12, "Root tabs must not touch the leading screen edge.")
+        XCTAssertGreaterThan(trailingInset, 12, "Root tabs must not touch the trailing screen edge.")
+        XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
         attach(app, name: "five-tab-home")
 
         openRootTab("Map", app: app)
