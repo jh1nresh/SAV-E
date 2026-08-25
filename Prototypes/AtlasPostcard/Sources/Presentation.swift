@@ -312,13 +312,51 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
     let id: String
     let name: String
     let area: String
+    let region: String?
+    let photoURL: URL?
     let relativeDay: String
     let note: String
+
+    static func groupedByRegion(
+        _ places: [AtlasPlacePresentation]
+    ) -> [AtlasSavedPlaceGroupPresentation] {
+        var groups: [AtlasSavedPlaceGroupPresentation] = []
+        var groupIndices: [String: Int] = [:]
+
+        for place in places {
+            let trimmedRegion = place.region?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let region = trimmedRegion.flatMap { $0.isEmpty ? nil : $0 }
+            let key = region.map {
+                "region:" + $0.folding(
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    locale: .current
+                ).lowercased()
+            } ?? "region:other"
+
+            if let index = groupIndices[key] {
+                groups[index].places.append(place)
+            } else {
+                groupIndices[key] = groups.count
+                groups.append(
+                    AtlasSavedPlaceGroupPresentation(
+                        id: key,
+                        region: region,
+                        places: [place]
+                    )
+                )
+            }
+        }
+
+        return groups
+    }
 
     static let shibuyaBackstreets = AtlasPlacePresentation(
         id: "shibuya-backstreets",
         name: "Shibuya Backstreets",
         area: "Shibuya",
+        region: "Shibuya",
+        photoURL: nil,
         relativeDay: "Today",
         note: "Laneways, tiny counters, and quiet corners."
     )
@@ -327,9 +365,17 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         id: "koffee-mameya",
         name: "Koffee Mameya",
         area: "Shibuya",
+        region: "Shibuya",
+        photoURL: nil,
         relativeDay: "Yesterday",
         note: "Cozy coffee shop known for house blend and quiet corners."
     )
+}
+
+struct AtlasSavedPlaceGroupPresentation: Identifiable, Equatable {
+    let id: String
+    let region: String?
+    var places: [AtlasPlacePresentation]
 }
 
 struct AtlasReviewPresentation: Identifiable, Equatable {

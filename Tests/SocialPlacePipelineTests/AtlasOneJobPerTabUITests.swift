@@ -13,6 +13,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("home.savedPlaces"))
         XCTAssertTrue(library.contains("home.saves"))
         XCTAssertTrue(library.contains("home.review"))
+        XCTAssertTrue(library.contains("savedPlaceGroups"))
+        XCTAssertTrue(library.contains("regionTitle"))
+        XCTAssertTrue(library.contains("group.places"))
+        XCTAssertFalse(library.contains("ForEach(Array(presentation.savedPlaces.enumerated())"))
         XCTAssertTrue(
             library.contains("alignment: .top"),
             "A tall saved-place list must top-align or it covers BrandHeader."
@@ -20,6 +24,39 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains(".clipped()"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
+    }
+
+    func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
+        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let row = try typeBody("HomeSavedPlaceRow", in: screens)
+        let thumbnail = try typeBody("HomeSavedPlaceThumbnail", in: screens)
+        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+
+        XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail(photoURL: place.photoURL)"))
+        XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
+        XCTAssertTrue(thumbnail.contains("scaledToFill"))
+        XCTAssertTrue(thumbnail.contains("fallback"))
+        XCTAssertTrue(
+            bridge.contains("businessPhotoURLStrings.first.flatMap(URL.init(string:))")
+        )
+    }
+
+    @MainActor
+    func testSavedPlacesGroupByRegionAndPreserveRecencyOrder() {
+        let places = [
+            place(id: "taipei-new", region: "臺北市"),
+            place(id: "la-new", region: "Los Angeles"),
+            place(id: "taipei-old", region: "臺北市"),
+            place(id: "la-old", region: "los angeles"),
+            place(id: "unknown", region: "  "),
+        ]
+
+        let groups = AtlasPlacePresentation.groupedByRegion(places)
+
+        XCTAssertEqual(groups.map(\.region), ["臺北市", "Los Angeles", nil])
+        XCTAssertEqual(groups[0].places.map(\.id), ["taipei-new", "taipei-old"])
+        XCTAssertEqual(groups[1].places.map(\.id), ["la-new", "la-old"])
+        XCTAssertEqual(groups[2].places.map(\.id), ["unknown"])
     }
 
     func testVisualParityPrefersTheLiveFiveTabHome() throws {
@@ -165,6 +202,19 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     private func source(at relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    @MainActor
+    private func place(id: String, region: String?) -> AtlasPlacePresentation {
+        AtlasPlacePresentation(
+            id: id,
+            name: id,
+            area: region ?? "",
+            region: region,
+            photoURL: nil,
+            relativeDay: "Today",
+            note: ""
+        )
     }
 
     private var repositoryRoot: URL {

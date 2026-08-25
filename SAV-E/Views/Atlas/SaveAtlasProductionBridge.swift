@@ -406,6 +406,8 @@ enum SaveAtlasPresentationFactory {
             id: place.id.uuidString,
             name: place.name,
             area: place.shareAreaLabel.nonEmpty ?? place.address,
+            region: SavedPlaceTripRecommender.areaLabel(for: place),
+            photoURL: place.businessPhotoURLStrings.first.flatMap(URL.init(string:)),
             relativeDay: relativeDay(for: place.createdAt),
             note: place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
                 ?? place.address

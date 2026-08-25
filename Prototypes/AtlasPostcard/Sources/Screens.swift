@@ -488,27 +488,49 @@ private struct HomeSavedPlacesLibrary: View {
                 Spacer(minLength: 0)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(Array(presentation.savedPlaces.enumerated()), id: \.element.id) { index, place in
-                            HomeSavedPlaceRow(place: place) {
-                                presentation.onOpenPlace(place.id)
-                            }
+                    LazyVStack(spacing: 12) {
+                        ForEach(savedPlaceGroups) { group in
+                            VStack(spacing: 0) {
+                                HStack(spacing: 8) {
+                                    Text(regionTitle(for: group))
+                                        .font(AtlasType.strong(13))
+                                        .foregroundStyle(AtlasPalette.forest)
 
-                            if index < presentation.savedPlaces.count - 1 {
+                                    Spacer()
+
+                                    Text(placeCountText(group.places.count))
+                                        .font(AtlasType.regular(11))
+                                        .foregroundStyle(AtlasPalette.muted)
+                                }
+                                .padding(.horizontal, 14)
+                                .frame(minHeight: 42)
+
                                 Rectangle()
                                     .fill(AtlasPalette.line.opacity(0.24))
                                     .frame(height: 1)
-                                    .padding(.leading, 66)
+
+                                ForEach(Array(group.places.enumerated()), id: \.element.id) { index, place in
+                                    HomeSavedPlaceRow(place: place) {
+                                        presentation.onOpenPlace(place.id)
+                                    }
+
+                                    if index < group.places.count - 1 {
+                                        Rectangle()
+                                            .fill(AtlasPalette.line.opacity(0.24))
+                                            .frame(height: 1)
+                                            .padding(.leading, 66)
+                                    }
+                                }
+                            }
+                            .background(
+                                AtlasPalette.paper,
+                                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
                             }
                         }
-                    }
-                    .background(
-                        AtlasPalette.paper,
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 18)
@@ -522,6 +544,23 @@ private struct HomeSavedPlacesLibrary: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
+    }
+
+    private var savedPlaceGroups: [AtlasSavedPlaceGroupPresentation] {
+        AtlasPlacePresentation.groupedByRegion(presentation.savedPlaces)
+    }
+
+    private func regionTitle(for group: AtlasSavedPlaceGroupPresentation) -> String {
+        group.region ?? localized("Other areas", "其他地區")
+    }
+
+    private func placeCountText(_ count: Int) -> String {
+        switch languageSettings.language {
+        case .english:
+            return count == 1 ? "1 place" : "\(count) places"
+        case .traditionalChinese:
+            return "\(count) 個地點"
+        }
     }
 
     private var savedCountText: String {
@@ -588,14 +627,7 @@ private struct HomeSavedPlaceRow: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(AtlasPalette.mint.opacity(0.48))
-                    .frame(width: 48, height: 48)
-                    .overlay {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 19, weight: .medium))
-                            .foregroundStyle(AtlasPalette.forest)
-                    }
+                HomeSavedPlaceThumbnail(photoURL: place.photoURL)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
@@ -625,6 +657,43 @@ private struct HomeSavedPlaceRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.place.\(place.id)")
+    }
+}
+
+private struct HomeSavedPlaceThumbnail: View {
+    let photoURL: URL?
+
+    var body: some View {
+        Group {
+            if let photoURL {
+                CachedAsyncImage(url: photoURL) { phase in
+                    if case .success(let image) = phase {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 48, height: 48)
+        .background(AtlasPalette.mint.opacity(0.48))
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var fallback: some View {
+        Image(systemName: "mappin.and.ellipse")
+            .font(.system(size: 19, weight: .medium))
+            .foregroundStyle(AtlasPalette.forest)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
