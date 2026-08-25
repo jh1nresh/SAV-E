@@ -724,6 +724,62 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testMapSearchDrawerResizesThroughThreeStages() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+
+        let collapsed = app.descendants(matching: .any)["map.drawerPanel.collapsed"]
+        XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
+        waitForStableFrame(collapsed)
+        let collapsedTop = collapsed.frame.minY
+        attach(app, name: "map-search-drawer-collapsed")
+
+        collapsed.swipeUp()
+        let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
+        XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
+        waitForStableFrame(medium)
+        let mediumTop = medium.frame.minY
+        XCTAssertLessThan(mediumTop, collapsedTop - 120)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        XCTAssertTrue(app.maps.firstMatch.isHittable)
+        attach(app, name: "map-search-drawer-medium")
+
+        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeUp()
+        let large = app.descendants(matching: .any)["map.drawerPanel.large"]
+        XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
+        waitForStableFrame(large)
+        XCTAssertLessThan(large.frame.minY, mediumTop - 120)
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        attach(app, name: "map-search-drawer-large")
+
+        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
+        XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
+        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
+        XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.maps.firstMatch.exists)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    @MainActor
     func testLocateWithDeniedPermissionShowsRecoveryNotice() throws {
         let app = makeApp(
             launchArguments: [
@@ -1636,6 +1692,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         return elements.first(where: \.exists) ?? elements[0]
+    }
+
+    @MainActor
+    private func waitForStableFrame(
+        _ element: XCUIElement,
+        timeout: TimeInterval = 3
+    ) {
+        let deadline = Date().addingTimeInterval(timeout)
+        var previousFrame = element.frame
+        var stableSamples = 0
+
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            let frame = element.frame
+            let movement = max(
+                abs(frame.minY - previousFrame.minY),
+                abs(frame.height - previousFrame.height)
+            )
+            stableSamples = movement < 1 ? stableSamples + 1 : 0
+            if stableSamples >= 2 { return }
+            previousFrame = frame
+        }
     }
 
     /// The 402pt Atlas canvas is scaled by `ReferenceViewport`. XCTest can
