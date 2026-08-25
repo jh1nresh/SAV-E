@@ -415,9 +415,6 @@ struct ContentView: View {
             onUpdatePlaceVisibility: { place, visibility in
                 try await mapVM.updatePlaceVisibility(place, visibility: visibility)
             },
-            onSaveGoogleTakeoutImport: { drafts in
-                try await mapVM.saveImportedPlaces(drafts)
-            },
             onCreateList: { title, note in
                 _ = mapVM.createCollaborativeList(title: title, note: note)
             },
@@ -655,9 +652,13 @@ struct ContentView: View {
             SaveCaptureFlowView(
                 tripName: captureTripName,
                 initialText: pendingOnboardingClue,
+                existingPlaces: mapVM.places,
                 onDraftChange: { pendingOnboardingClue = $0 },
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
+                },
+                onSaveGoogleTakeoutImport: { drafts in
+                    try await mapVM.saveImportedPlaces(drafts)
                 },
                 onComplete: {
                     pendingOnboardingClue = ""
@@ -1406,13 +1407,16 @@ private struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let tripName: String?
     let initialText: String
+    let existingPlaces: [Place]
     let onDraftChange: (String) -> Void
     let onImport: (String) async throws -> [UUID]
+    let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
     let onComplete: () -> Void
     let onCancel: () -> Void
     @State private var sharedText = ""
     @State private var isAnalyzing = false
     @State private var errorMessage: String?
+    @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -1513,6 +1517,47 @@ private struct SaveCaptureFlowView: View {
                         .padding(16)
                         .saveAtlasPaper(radius: 20, shadow: true)
 
+                        Button {
+                            SaveHaptics.tap()
+                            isInputFocused = false
+                            isGoogleTakeoutPresented = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "shippingbox.and.arrow.backward.fill")
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(SaveAtlasPalette.forest)
+                                    .frame(width: 40, height: 40)
+                                    .background(SaveAtlasPalette.mint, in: Circle())
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(localized("Import Google Takeout", "匯入 Google Takeout"))
+                                        .font(SaveAtlasType.strong(15))
+                                        .foregroundStyle(SaveAtlasPalette.forest)
+                                    Text(localized(
+                                        "Choose a Takeout export with saved places.",
+                                        "選擇包含已儲存地點的 Takeout 匯出檔。"
+                                    ))
+                                    .font(SaveAtlasType.body(12))
+                                    .foregroundStyle(SaveAtlasPalette.muted)
+                                }
+
+                                Spacer(minLength: 0)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(SaveAtlasPalette.muted)
+                            }
+                            .padding(14)
+                            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isAnalyzing)
+                        .accessibilityIdentifier("capture.importGoogleTakeout")
+
                         if let errorMessage {
                             Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                                 .font(SaveAtlasType.body(13))
@@ -1567,6 +1612,12 @@ private struct SaveCaptureFlowView: View {
         }
         .onChange(of: sharedText) { _, draft in
             onDraftChange(draft)
+        }
+        .sheet(isPresented: $isGoogleTakeoutPresented) {
+            GoogleTakeoutImportView(
+                existingPlaces: existingPlaces,
+                onSave: onSaveGoogleTakeoutImport
+            )
         }
     }
 

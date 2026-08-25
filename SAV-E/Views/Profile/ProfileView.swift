@@ -8,7 +8,6 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
-    @State private var showGoogleTakeoutImport = false
     @State private var showProPaywall = false
     @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
@@ -21,9 +20,6 @@ struct ProfileView: View {
     var isLoadingFollowedFriends = false
     var hasMoreFollowedFriends = false
     var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
-    var onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary = { _ in
-        GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
-    }
     var onCreateList: (String, String?) -> Void = { _, _ in }
     var onShareListURL: (SaveCollaborativeList, SaveListRole) -> URL? = { _, _ in nil }
     var onShareListLink: (SaveCollaborativeList, SaveListRole) async -> URL? = { list, role in
@@ -195,23 +191,6 @@ struct ProfileView: View {
                         .accessibilityIdentifier("profile.connections")
 
                         SettingsRow(
-                            icon: "shippingbox.and.arrow.backward.fill",
-                            title: languageSettings.localized(
-                                english: "Import Google Takeout",
-                                traditionalChinese: "匯入 Google Takeout"
-                            ),
-                            detail: languageSettings.localized(
-                                english: "Deliver historical place exports to Savvy",
-                                traditionalChinese: "把歷史地點匯出檔送進 Savvy"
-                            ),
-                            color: SaveAtlasPalette.kraft,
-                            accessibilityIdentifier: "profile.importGoogleTakeout"
-                        ) {
-                            SaveHaptics.tap()
-                            showGoogleTakeoutImport = true
-                        }
-
-                        SettingsRow(
                             icon: "arrow.right.square",
                             title: languageSettings.text(.signOut),
                             color: .saveError,
@@ -301,12 +280,6 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
-        }
-        .sheet(isPresented: $showGoogleTakeoutImport) {
-            GoogleTakeoutImportView(
-                existingPlaces: passportPlaces,
-                onSave: onSaveGoogleTakeoutImport
-            )
         }
         .sheet(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
@@ -2072,8 +2045,8 @@ private struct PassportVisibilityPanel: View {
                     edge: SaveAtlasPalette.forest
                 )
                 Text(languageSettings.localized(
-                    english: "SHARING RECEIPT",
-                    traditionalChinese: "分享收據"
+                    english: "SHARING & PRIVACY",
+                    traditionalChinese: "分享與隱私"
                 ))
                     .font(SaveAtlasType.strong(11))
                     .tracking(0.9)
@@ -2150,6 +2123,23 @@ private struct PassportVisibilityRow: View {
 
             Spacer()
 
+            SavePlaceShareButton(content: .place(place)) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 36, height: 36)
+                    .background(SaveAtlasPalette.sky.opacity(0.72), in: Circle())
+                    .overlay {
+                        Circle()
+                            .stroke(SaveAtlasPalette.forest.opacity(0.20), lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel(languageSettings.localized(
+                english: "Share \(place.name)",
+                traditionalChinese: "分享 \(place.name)"
+            ))
+            .accessibilityIdentifier("profile.share.\(place.id)")
+
             Menu {
                 ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
                     Button {
@@ -2180,6 +2170,7 @@ private struct PassportVisibilityRow: View {
             .accessibilityIdentifier("profile.visibility.\(place.id)")
         }
         .padding(.vertical, SaveTheme.Spacing.sm)
+        .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SaveAtlasPalette.line.opacity(0.22))
@@ -2288,6 +2279,7 @@ struct SettingsRow: View {
                 .foregroundColor(.saveMutedText)
         }
         .padding(.vertical, SaveTheme.Spacing.sm)
+        .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SaveAtlasPalette.kraft.opacity(0.32))
