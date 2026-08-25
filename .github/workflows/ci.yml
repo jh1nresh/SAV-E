@@ -154,6 +154,7 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testRapidChromeTransitionsKeepAppAlive \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
             -only-testing:SAVEUITests/SAVEOnboardingCarouselTests/testProofFirstFlowReachesOpenAppCTA \
             -test-iterations 3 \

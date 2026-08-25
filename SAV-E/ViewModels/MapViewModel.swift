@@ -2231,10 +2231,16 @@ final class MapViewModel: ObservableObject {
         selectedReviewCandidate = nil
         selectedSocialPlace = nil
         selectedMapFeature = nil
-        cameraPosition = .region(MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: candidate.latitude, longitude: candidate.longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        ))
+        let coordinate = CLLocationCoordinate2D(
+            latitude: candidate.latitude,
+            longitude: candidate.longitude
+        )
+        if SaveChromeNavigation.isSafeMapCoordinate(coordinate) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))
+        }
         enrichSelectedMapCandidateAfterSelection(candidate)
     }
 
@@ -2244,10 +2250,12 @@ final class MapViewModel: ObservableObject {
         selectedReviewCandidate = nil
         selectedMapCandidate = nil
         selectedMapFeature = nil
-        cameraPosition = .region(MKCoordinateRegion(
-            center: place.coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        ))
+        if place.isMapKitMappable {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: place.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))
+        }
     }
 
     func clearSelectedMapObject() {
@@ -2305,7 +2313,7 @@ final class MapViewModel: ObservableObject {
         pointOfInterestCategory: String?
     ) {
         let title = (rawTitle ?? "Map place").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty else {
+        guard !title.isEmpty, SaveChromeNavigation.isSafeMapCoordinate(coordinate) else {
             selectedMapFeature = nil
             return
         }
@@ -2570,11 +2578,16 @@ final class MapViewModel: ObservableObject {
             clearRoute()
             guard let lat = action.lat, let lng = action.lng else { return }
             let span = action.span ?? 0.03
+            let center = CLLocationCoordinate2D(latitude: lat, longitude: lng)
             if let candidate = mapCandidate(nearLatitude: lat, longitude: lng) {
                 selectMapCandidate(candidate)
             }
+            guard SaveChromeNavigation.isSafeMapCoordinate(center),
+                  span.isFinite,
+                  span > 0
+            else { return }
             cameraPosition = .region(MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+                center: center,
                 span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
             ))
 
@@ -2623,14 +2636,15 @@ final class MapViewModel: ObservableObject {
     ) async {
         guard calculationID == routeCalculationID else { return }
         calculatedRoute = nil
-        guard places.count >= 2 else { return }
+        let mappablePlaces = places.filter(\.isMapKitMappable)
+        guard mappablePlaces.count >= 2 else { return }
 
         var allCoordinates: [CLLocationCoordinate2D] = []
 
         // Calculate route segments between consecutive places
-        for i in 0..<(places.count - 1) {
-            let source = MKMapItem(placemark: MKPlacemark(coordinate: places[i].coordinate))
-            let destination = MKMapItem(placemark: MKPlacemark(coordinate: places[i + 1].coordinate))
+        for i in 0..<(mappablePlaces.count - 1) {
+            let source = MKMapItem(placemark: MKPlacemark(coordinate: mappablePlaces[i].coordinate))
+            let destination = MKMapItem(placemark: MKPlacemark(coordinate: mappablePlaces[i + 1].coordinate))
 
             let request = MKDirections.Request()
             request.source = source
@@ -2652,8 +2666,8 @@ final class MapViewModel: ObservableObject {
                 guard calculationID == routeCalculationID else { return }
                 print("Route calculation failed for segment \(i): \(error)")
                 // Fallback: add straight line for this segment
-                allCoordinates.append(places[i].coordinate)
-                allCoordinates.append(places[i + 1].coordinate)
+                allCoordinates.append(mappablePlaces[i].coordinate)
+                allCoordinates.append(mappablePlaces[i + 1].coordinate)
             }
         }
 
@@ -2665,16 +2679,23 @@ final class MapViewModel: ObservableObject {
     // MARK: - Helpers
 
     private func regionContaining(_ places: [Place]) -> MKCoordinateRegion? {
-        guard !places.isEmpty else { return nil }
-        let lats = places.map { $0.latitude }
-        let lngs = places.map { $0.longitude }
+        let mapped = places.filter(\.isMapKitMappable)
+        guard !mapped.isEmpty else { return nil }
+        let lats = mapped.map(\.latitude)
+        let lngs = mapped.map(\.longitude)
+        guard let minLat = lats.min(),
+              let maxLat = lats.max(),
+              let minLng = lngs.min(),
+              let maxLng = lngs.max()
+        else { return nil }
         let center = CLLocationCoordinate2D(
-            latitude: (lats.min()! + lats.max()!) / 2,
-            longitude: (lngs.min()! + lngs.max()!) / 2
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2
         )
+        guard SaveChromeNavigation.isSafeMapCoordinate(center) else { return nil }
         let span = MKCoordinateSpan(
-            latitudeDelta: max((lats.max()! - lats.min()!) * 1.4, 0.01),
-            longitudeDelta: max((lngs.max()! - lngs.min()!) * 1.4, 0.01)
+            latitudeDelta: max((maxLat - minLat) * 1.4, 0.01),
+            longitudeDelta: max((maxLng - minLng) * 1.4, 0.01)
         )
         return MKCoordinateRegion(center: center, span: span)
     }
