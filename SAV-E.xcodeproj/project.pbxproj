@@ -79,6 +79,8 @@
 		733CFCEB6A88F61540EBD1A4 /* SAVEOnboardingCarouselTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7966C389379C2C27D0974740 /* SAVEOnboardingCarouselTests.swift */; };
 		76FC5BA1F7C59B7D0436B3B5 /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54876D21CED56B8E43591F6E /* StatsView.swift */; };
 		77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */; };
+		8C1A0B0D0E0F1A2B3C4D5E61 /* SaveChromePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C1A0B0D0E0F1A2B3C4D5E60 /* SaveChromePresentation.swift */; };
+		8C1A0B0D0E0F1A2B3C4D5E63 /* TapCrashP0Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C1A0B0D0E0F1A2B3C4D5E62 /* TapCrashP0Tests.swift */; };
 		7899E606842CE2B045E5E738 /* TripRouteServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7E75F1477A312E985B4F1AD /* TripRouteServiceTests.swift */; };
 		78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EBE852DE7618089938F9421 /* Assets.xcassets */; };
 		793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */; };
@@ -363,6 +365,8 @@
 		7D9407490B019866AC67525E /* TripHoursAnnotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripHoursAnnotator.swift; sourceTree = "<group>"; };
 		7EAE0D2F9B15DB6C5183415B /* SaveLocalVaultServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveLocalVaultServiceTests.swift; sourceTree = "<group>"; };
 		8165C7FCD4C17E50EFFC6532 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		8C1A0B0D0E0F1A2B3C4D5E60 /* SaveChromePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveChromePresentation.swift; sourceTree = "<group>"; };
+		8C1A0B0D0E0F1A2B3C4D5E62 /* TapCrashP0Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapCrashP0Tests.swift; sourceTree = "<group>"; };
 		81A98C2E4AE6FC2ADD4E59E2 /* ReviewDemoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewDemoTests.swift; sourceTree = "<group>"; };
 		82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeterministicTripPlanner.swift; sourceTree = "<group>"; };
 		82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEProductionConfig.swift; sourceTree = "<group>"; };
@@ -831,6 +835,7 @@
 			children = (
 				8165C7FCD4C17E50EFFC6532 /* ContentView.swift */,
 				6791E7A348909E816148107C /* SaveApp.swift */,
+				8C1A0B0D0E0F1A2B3C4D5E60 /* SaveChromePresentation.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -863,6 +868,7 @@
 				2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */,
 				24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */,
 				6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */,
+				8C1A0B0D0E0F1A2B3C4D5E62 /* TapCrashP0Tests.swift */,
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
 				B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */,
 				BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */,
@@ -1353,6 +1359,7 @@
 				D2CF1497F4FD4CC89C23E69A /* SavedPlaceTripRecommenderTests.swift in Sources */,
 				B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */,
 				77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */,
+				8C1A0B0D0E0F1A2B3C4D5E63 /* TapCrashP0Tests.swift in Sources */,
 				C86068410AB6A519BCFA6710 /* TripGapLocalOptionsServiceTests.swift in Sources */,
 				4E0E17A42FE83F382BEA166C /* TripHoursAnnotatorTests.swift in Sources */,
 				80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */,
@@ -1454,6 +1461,7 @@
 				A3A281B054D6E430627F8352 /* SAVEProductionConfig.swift in Sources */,
 				38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */,
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
+				8C1A0B0D0E0F1A2B3C4D5E61 /* SaveChromePresentation.swift in Sources */,
 				F89CCBC9CA4B249D1C5B7BDC /* SaveAtlasProductionBridge.swift in Sources */,
 				8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */,
 				1B5C4B201602ECAE5DBAAC59 /* SaveCollaborativeList.swift in Sources */,

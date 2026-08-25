@@ -118,6 +118,26 @@ private enum SaveFullScreenRoute: Identifiable {
     }
 }
 
+private enum PendingChromePresentation {
+    case rootSheet
+    case passport
+    case cover(SaveFullScreenRoute)
+    case mapDrawer(DrawerLaunchRequest)
+
+    var exclusiveChrome: SaveChromeExclusive {
+        switch self {
+        case .rootSheet:
+            return .rootSheet
+        case .passport:
+            return .passport
+        case .cover:
+            return .cover
+        case .mapDrawer:
+            return .none
+        }
+    }
+}
+
 #if DEBUG
 private struct DebugQARefreshToken: Equatable {
     let rootTab: String
@@ -197,6 +217,10 @@ struct ContentView: View {
     @State private var isLoadingOrigin = false
     @State private var originLoadError: String?
     @State private var pendingOriginPlanCandidateID: UUID?
+    /// True while chrome is swapping one exclusive presentation for another.
+    /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
+    @State private var suppressChromeDismissSideEffects = false
+    @State private var pendingChromePresentation: PendingChromePresentation? = nil
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -281,10 +305,10 @@ struct ContentView: View {
         .fullScreenCover(item: $fullScreenRoute, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
         }
-        .sheet(isPresented: $isPassportPresented) {
+        .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
             passportView(isRootTab: false)
         }
-        .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: finishTripAssignment) {
+        .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: handleTripComposerDismiss) {
             NewTripPackView { name, city, startDate, endDate in
                 guard let place = pendingTripAssignmentPlace else {
                     finishTripAssignment()
@@ -346,7 +370,7 @@ struct ContentView: View {
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .large
             }
-            isRootSheetPresented = true
+            presentExclusiveRootSheet()
         }
         .onChange(of: mapVM.selectedPlace) { _, place in
             guard let place else { return }
@@ -403,6 +427,7 @@ struct ContentView: View {
             await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
         }
         openPostcardDrawerUITestFixtureIfNeeded()
+        runRapidChromeTransitionUITestFixtureIfNeeded()
     }
 
     /// Passport. Reachable two ways since the five-tab restructure: as the
@@ -482,8 +507,11 @@ struct ContentView: View {
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
         // children, so changing only the selection leaves the child visible.
-        rootPath.removeAll()
-        selectedRootTab = tab
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = SaveChromeNavigation.destination(
+            afterSelecting: tab,
+            current: selectedRootTab
+        )
     }
 
     private var rootTabs: some View {
@@ -501,9 +529,24 @@ struct ContentView: View {
                                 // Trips left the root bar; both it and Saves
                                 // are pushed children now, so neither surface
                                 // is lost by the restructure.
-                                onOpenSaves: { rootPath.append(.saves) },
-                                onOpenTrips: { rootPath.append(.trips) },
-                                onOpenTrip: { rootPath.append(.trip($0)) },
+                                onOpenSaves: {
+                                    rootPath = SaveChromeNavigation.pathByOpening(
+                                        .saves,
+                                        currently: rootPath
+                                    )
+                                },
+                                onOpenTrips: {
+                                    rootPath = SaveChromeNavigation.pathByOpening(
+                                        .trips,
+                                        currently: rootPath
+                                    )
+                                },
+                                onOpenTrip: {
+                                    rootPath = SaveChromeNavigation.pathByOpening(
+                                        .trip($0),
+                                        currently: rootPath
+                                    )
+                                },
                                 onOpenPassport: openPassport
                             )
                         case .map:
@@ -587,7 +630,12 @@ struct ContentView: View {
                         onAskSubmit: { query in
                             openDrawer(.ask, tripID: nil, initialQuery: query)
                         },
-                        onOpenTrip: { rootPath.append(.trip($0)) },
+                        onOpenTrip: {
+                            rootPath = SaveChromeNavigation.pathByOpening(
+                                .trip($0),
+                                currently: rootPath
+                            )
+                        },
                         onOpenPassport: openPassport
                     )
                     .navigationTitle(languageSettings.localized(
@@ -666,7 +714,7 @@ struct ContentView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         } else {
-            drawerView
+            presentedDrawerView
         }
     }
 
@@ -691,7 +739,7 @@ struct ContentView: View {
                     // A finished capture lands in the Saves pocket, which is
                     // now a child of Home rather than its own root tab.
                     selectedRootTab = .home
-                    rootPath.append(.saves)
+                    rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
                 },
                 onCancel: {
                     // Closing is not consent to discard a private clue. Keep it
@@ -773,6 +821,20 @@ struct ContentView: View {
         }
     }
 
+    /// Sheet-only presentation modifiers. The Map tab embeds `drawerView`
+    /// in `SaveMapDrawerPanel`; putting detents on that in-tree copy has
+    /// aborted SwiftUI presentation on device.
+    @ViewBuilder
+    private var presentedDrawerView: some View {
+        drawerView
+        .presentationDetents([.height(132), .medium, .large], selection: $drawerDetent)
+        .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.resizes)
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+        .presentationBackground(.clear)
+        .presentationCornerRadius(32)
+    }
+
     private var drawerView: some View {
         AIDrawerView(
             viewModel: drawerVM,
@@ -824,7 +886,7 @@ struct ContentView: View {
             onOpenReview: {
                 isRootSheetPresented = false
                 selectedRootTab = .home
-                rootPath.append(.saves)
+                rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
             },
             onAddPlaceToTrip: requestTripAssignment,
             onSaveTripPlan: { name, city, stops in
@@ -872,12 +934,6 @@ struct ContentView: View {
             onShowMapCandidatesOnMap: showMapCandidatesOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
-        .presentationDetents([.height(132), .medium, .large], selection: $drawerDetent)
-        .presentationDragIndicator(.visible)
-        .presentationContentInteraction(.resizes)
-        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-        .presentationBackground(.clear)
-        .presentationCornerRadius(32)
     }
 
     private func openMapDetail(_ item: MapDetailDrawerItem) {
@@ -887,7 +943,7 @@ struct ContentView: View {
         }
 
         guard selectedRootTab == .map || !rootPath.isEmpty else {
-            fullScreenRoute = .placeDetail(item)
+            presentExclusiveCover(.placeDetail(item))
             return
         }
 
@@ -906,7 +962,7 @@ struct ContentView: View {
             withAnimation(SaveTheme.Motion.standardSpring) {
                 drawerDetent = .medium
             }
-            isRootSheetPresented = true
+            presentExclusiveRootSheet()
         }
     }
 
@@ -925,23 +981,23 @@ struct ContentView: View {
         switch target {
         case .addLink:
             suppressPendingOnboardingCaptureResume = false
-            fullScreenRoute = .capture
+            presentExclusiveCover(.capture)
             return
         case .review, .saved:
             // Review and saved clues are the Saves pocket, now a child of Home.
             selectedRootTab = .home
-            rootPath.append(.saves)
+            rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
             return
         case .ask:
-            rootPath.removeAll()
+            rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
             // Trips left the root bar, so there is no "stay on Trips" case
             // left to protect: asking from any root surface goes to Map.
             selectedRootTab = .map
         }
 
-        drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery)
-        drawerDetent = .large
-        isMapPanelExpanded = true
+        presentAfterClearingExclusiveChrome(.mapDrawer(
+            DrawerLaunchRequest(target: target, initialQuery: initialQuery)
+        ))
     }
 
     private func openPassport() {
@@ -949,16 +1005,90 @@ struct ContentView: View {
         SaveHaptics.tap()
 
         if isMapPanelExpanded {
-            collapseMapPanel()
+            // Collapse the overlay only. handleRootSheetDismiss can queue
+            // capture resume, which would present a cover over this sheet.
+            isMapPanelExpanded = false
         }
-        if isRootSheetPresented {
+        presentAfterClearingExclusiveChrome(.passport)
+    }
+
+    private var occupyingExclusiveChrome: SaveChromeExclusive {
+        SaveChromeNavigation.occupyingExclusive(
+            hasCover: fullScreenRoute != nil,
+            isTripComposerPresented: isCreatingTripForAssignment,
+            isPassportPresented: isPassportPresented,
+            isRootSheetPresented: isRootSheetPresented
+        )
+    }
+
+    private func presentExclusiveCover(_ route: SaveFullScreenRoute) {
+        if fullScreenRoute?.id == route.id { return }
+        presentAfterClearingExclusiveChrome(.cover(route))
+    }
+
+    private func presentExclusiveRootSheet() {
+        if isRootSheetPresented { return }
+        presentAfterClearingExclusiveChrome(.rootSheet)
+    }
+
+    /// UIKit aborts when a second sheet or cover is presented over one that
+    /// is still up. Queue the replacement until SwiftUI confirms dismissal.
+    private func presentAfterClearingExclusiveChrome(_ presentation: PendingChromePresentation) {
+        if suppressChromeDismissSideEffects {
+            pendingChromePresentation = presentation
+            return
+        }
+
+        switch SaveChromeNavigation.transition(
+            from: occupyingExclusiveChrome,
+            to: presentation.exclusiveChrome
+        ) {
+        case .presentNow:
+            activateChromePresentation(presentation)
+        case .dismissThenPresent:
+            pendingChromePresentation = presentation
+            suppressChromeDismissSideEffects = true
             isRootSheetPresented = false
-            Task { @MainActor in
-                await Task.yield()
-                isPassportPresented = true
-            }
-        } else {
+            isPassportPresented = false
+            isCreatingTripForAssignment = false
+            fullScreenRoute = nil
+        }
+    }
+
+    private func activateChromePresentation(_ presentation: PendingChromePresentation) {
+        switch presentation {
+        case .rootSheet:
+            isRootSheetPresented = true
+        case .passport:
             isPassportPresented = true
+        case .cover(let route):
+            fullScreenRoute = route
+        case .mapDrawer(let request):
+            drawerLaunchRequest = request
+            drawerDetent = .large
+            isMapPanelExpanded = true
+        }
+    }
+
+    private func handleExclusiveChromeDismiss() {
+        guard suppressChromeDismissSideEffects,
+              occupyingExclusiveChrome == .none,
+              let pendingChromePresentation
+        else { return }
+
+        self.pendingChromePresentation = nil
+        Task { @MainActor in
+            await Task.yield()
+            suppressChromeDismissSideEffects = false
+            activateChromePresentation(pendingChromePresentation)
+        }
+    }
+
+    private func handleTripComposerDismiss() {
+        if suppressChromeDismissSideEffects {
+            handleExclusiveChromeDismiss()
+        } else {
+            finishTripAssignment()
         }
     }
 
@@ -978,7 +1108,7 @@ struct ContentView: View {
     ) {
         pendingCaptureTripID = tripID
         pendingOriginPlanCandidateID = offerTripAfterConfirmation ? candidate.id : nil
-        fullScreenRoute = .placeDetail(.reviewCandidate(candidate))
+        presentExclusiveCover(.placeDetail(.reviewCandidate(candidate)))
     }
 
     private func saveFullScreenCandidate(_ candidate: PlaceReviewCandidate, nameOverride: String?) {
@@ -1275,7 +1405,29 @@ struct ContentView: View {
 #endif
     }
 
+    private func runRapidChromeTransitionUITestFixtureIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-rapid-chrome-transitions") else {
+            return
+        }
+
+        presentExclusiveRootSheet()
+        Task { @MainActor in
+            // Give the first sheet one frame to begin presentation, then model
+            // the rapid Passport -> Save taps that previously overlapped it.
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            openPassport()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            presentExclusiveCover(.capture)
+        }
+#endif
+    }
+
     private func handleRootSheetDismiss() {
+        if suppressChromeDismissSideEffects {
+            handleExclusiveChromeDismiss()
+            return
+        }
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
         incomingPlaceReceipt = nil
@@ -1307,6 +1459,10 @@ struct ContentView: View {
     }
 
     private func handleFullScreenDismiss() {
+        if suppressChromeDismissSideEffects {
+            handleExclusiveChromeDismiss()
+            return
+        }
         if isTransitioningToTripCreation {
             Task { @MainActor in
                 await Task.yield()

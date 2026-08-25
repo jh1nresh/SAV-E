@@ -25,6 +25,7 @@ enum NavigationService {
 
     /// Opens navigation to a place. Prefers Google Maps if installed, falls back to Apple Maps.
     static func navigate(to coordinate: CLLocationCoordinate2D, name: String, mode: Mode = .driving) {
+        guard SaveChromeNavigation.isSafeMapCoordinate(coordinate) else { return }
         if openGoogleMaps(to: coordinate, name: name, mode: mode) { return }
         openAppleMaps(to: coordinate, name: name, mode: mode)
     }

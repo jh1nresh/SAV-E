@@ -1051,6 +1051,30 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testRapidChromeTransitionsKeepAppAlive() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-rapid-chrome-transitions",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: launchTimeout),
+            "Rapid sheet -> Passport -> Save transitions never settled on the final capture cover."
+        )
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    @MainActor
     func testPassportAndPostalImportSurfacesAreReachable() throws {
         let storageID = UUID().uuidString.lowercased()
         let app = makeApp(
