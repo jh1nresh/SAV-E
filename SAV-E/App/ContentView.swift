@@ -688,7 +688,9 @@ struct ContentView: View {
                     && selectedRootTab == .map
                     && rootPath.isEmpty
                     && incomingPlaceReceipt == nil,
-                onExpand: { openDrawer(.ask, tripID: nil) },
+                onExpand: { focusesSearch in
+                    openDrawer(.ask, tripID: nil, focusesSearch: focusesSearch)
+                },
                 onCollapse: collapseMapPanel
             ) {
                 drawerView
@@ -969,7 +971,8 @@ struct ContentView: View {
     private func openDrawer(
         _ target: DrawerLaunchTarget,
         tripID: UUID?,
-        initialQuery: String? = nil
+        initialQuery: String? = nil,
+        focusesSearch: Bool = true
     ) {
         guard incomingPlaceReceipt == nil else { return }
         invalidateExactSearchRequest()
@@ -996,7 +999,11 @@ struct ContentView: View {
         }
 
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: target, initialQuery: initialQuery)
+            DrawerLaunchRequest(
+                target: target,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch
+            )
         ))
     }
 

@@ -37,11 +37,19 @@ struct DrawerLaunchRequest: Equatable {
     /// Trips P1: a question typed before the drawer opened. When present the
     /// drawer submits it immediately instead of focusing an empty field.
     let initialQuery: String?
+    /// A tap focuses the field; resizing the Map card only reveals it.
+    let focusesSearch: Bool
 
-    init(id: UUID = UUID(), target: DrawerLaunchTarget, initialQuery: String? = nil) {
+    init(
+        id: UUID = UUID(),
+        target: DrawerLaunchTarget,
+        initialQuery: String? = nil,
+        focusesSearch: Bool = true
+    ) {
         self.id = id
         self.target = target
         self.initialQuery = initialQuery
+        self.focusesSearch = focusesSearch
     }
 }
 
@@ -405,7 +413,7 @@ struct AIDrawerView: View {
                     await Task.yield()
                     submitSearchField()
                 }
-            } else {
+            } else if request.focusesSearch {
                 Task { @MainActor in
                     await Task.yield()
                     searchFocused = true

@@ -1,51 +1,37 @@
 import SwiftUI
 
-/// One drawer surface for the Map tab (spec P2: one surface, two states).
+/// One resizable drawer surface for the Map tab.
 ///
-/// The resting command shelf and the expanded ask/search drawer are the same
-/// container morphing in place — expanding never presents a second layer, so
-/// two drawers can never stack. The expanded panel honors the shared
-/// `PresentationDetent` the drawer content already drives (`.medium` when the
-/// search field focuses, `.large` for full content), restoring the staged
-/// drawer heights the presented-sheet design had. Collapse via the grab
-/// handle drag, the scrim, or programmatic dismissal.
+/// The resting search shelf, medium drawer, and large drawer are three stops
+/// of the same surface. The map stays interactive above it, and expanding
+/// never presents a second layer. The embedded drawer intentionally doesn't
+/// use sheet presentation modifiers because those can abort SwiftUI's
+/// presentation coordinator when attached to an in-tree view.
 struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var isExpanded: Bool
     @Binding var detent: PresentationDetent
     let mapStampCount: Int
     let showsCollapsedShelf: Bool
-    let onExpand: () -> Void
+    /// `focusesSearch` is true for a tap and false for a resize drag. Dragging
+    /// the card shouldn't summon the keyboard; tapping the field should.
+    let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
-    /// Keeps the collapsed shelf clear of the tab bar, matching the resting
-    /// shelf position the map canvas used to draw.
+    /// Keeps the collapsed shelf clear of the root tab bar.
     private let collapsedBottomInset: CGFloat = 90
-    @GestureState private var dragOffset: CGFloat = 0
+    private let collapsedHeight: CGFloat = 132
+    @State private var collapsedDragConsumedTap = false
+    @GestureState private var dragTranslation: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .bottom) {
                 if isExpanded {
-                    Color.black.opacity(0.16)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .onTapGesture { collapse() }
-                        .accessibilityIdentifier("map.drawerPanel.scrim")
-                }
-
-                if isExpanded {
                     expandedPanel(totalHeight: proxy.size.height)
                         .transition(.move(edge: .bottom))
                 } else if showsCollapsedShelf {
-                    SaveAtlasMapCommandShelf(
-                        mapStampCount: mapStampCount,
-                        onOpenAssistant: onExpand
-                    )
-                    .frame(height: 112)
-                    .padding(.horizontal, 15)
-                    .padding(.bottom, collapsedBottomInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    collapsedShelf
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -53,6 +39,26 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         .animation(SaveTheme.Motion.standardSpring, value: isExpanded)
         .animation(SaveTheme.Motion.standardSpring, value: showsCollapsedShelf)
         .animation(SaveTheme.Motion.standardSpring, value: detent)
+    }
+
+    private var collapsedShelf: some View {
+        SaveAtlasMapCommandShelf(
+            mapStampCount: mapStampCount,
+            onOpenAssistant: {
+                guard !collapsedDragConsumedTap else { return }
+                onExpand(true)
+            }
+        )
+        .frame(height: 112)
+        .padding(.horizontal, 15)
+        .padding(.bottom, collapsedBottomInset)
+        .offset(y: max(-96, min(0, dragTranslation)))
+        .simultaneousGesture(resizeGesture(stage: .collapsed))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Map search drawer")
+        .accessibilityValue(MapDrawerStage.collapsed.accessibilityValue)
+        .accessibilityIdentifier(MapDrawerStage.collapsed.accessibilityIdentifier)
     }
 
     private func expandedPanel(totalHeight: CGFloat) -> some View {
@@ -64,26 +70,21 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                 .padding(.bottom, 6)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 10)
-                        .updating($dragOffset) { value, state, _ in
-                            state = max(0, value.translation.height)
-                        }
-                        .onEnded { value in
-                            let travel = value.predictedEndTranslation.height
-                            if travel > 80 {
-                                // Step down one stage; below medium the panel
-                                // leaves and the shelf returns.
-                                if detent == .large {
-                                    detent = .medium
-                                } else {
-                                    collapse()
-                                }
-                            } else if travel < -80 {
-                                detent = .large
-                            }
-                        }
-                )
+                .gesture(resizeGesture(stage: expandedStage))
+                .onTapGesture { cycleExpandedStage() }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Resize map search drawer")
+                .accessibilityValue(expandedStage.accessibilityValue)
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment:
+                        moveUp(from: expandedStage)
+                    case .decrement:
+                        moveDown(from: expandedStage)
+                    @unknown default:
+                        break
+                    }
+                }
                 .accessibilityIdentifier("map.drawerPanel.handle")
 
             expandedContent()
@@ -99,27 +100,121 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
             )
         )
         .shadow(color: SaveAtlasPalette.ink.opacity(0.18), radius: 18, y: -4)
-        .offset(y: dragOffset)
         // Container only: the keyboard safe area still applies, so the panel
         // rises with the keyboard instead of letting it cover the content.
         .ignoresSafeArea(.container, edges: .bottom)
-        // No identifier here: the drawer content inside must keep exposing
-        // its own `drawer.root` container to the accessibility tree.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Map search drawer")
+        .accessibilityValue(expandedStage.accessibilityValue)
+        .accessibilityIdentifier(expandedStage.accessibilityIdentifier)
     }
 
-    /// Stage heights mirroring the old sheet detents. `totalHeight` already
-    /// excludes the keyboard, so every stage stays fully visible while typing.
+    /// `totalHeight` already excludes the keyboard, so every stage remains
+    /// visible while typing. During a drag the panel tracks the finger 1:1,
+    /// then settles at the nearest directional stop on release.
     private func panelHeight(totalHeight: CGFloat) -> CGFloat {
-        if detent == .medium {
-            return max(220, totalHeight * 0.55)
+        let largeHeight = max(320, totalHeight - 12)
+        let baseHeight = expandedStage == .large
+            ? largeHeight
+            : max(320, totalHeight * 0.52)
+        return min(largeHeight, max(collapsedHeight, baseHeight - dragTranslation))
+    }
+
+    private var expandedStage: MapDrawerStage {
+        detent == .large ? .large : .medium
+    }
+
+    private func resizeGesture(stage: MapDrawerStage) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($dragTranslation) { value, state, _ in
+                state = value.translation.height
+            }
+            .onChanged { value in
+                guard stage == .collapsed,
+                      abs(value.translation.height) >= 8
+                else { return }
+                collapsedDragConsumedTap = true
+            }
+            .onEnded { value in
+                if stage == .collapsed {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        collapsedDragConsumedTap = false
+                    }
+                }
+
+                let projectedTravel = value.predictedEndTranslation.height
+                let actualTravel = value.translation.height
+                let travel = abs(projectedTravel) > abs(actualTravel)
+                    ? projectedTravel
+                    : actualTravel
+
+                guard abs(travel) >= 44 else { return }
+                if travel < 0 {
+                    moveUp(from: stage)
+                } else {
+                    moveDown(from: stage)
+                }
+            }
+    }
+
+    private func moveUp(from stage: MapDrawerStage) {
+        switch stage {
+        case .collapsed:
+            onExpand(false)
+        case .medium:
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                detent = .large
+            }
+        case .large:
+            break
         }
-        if detent == .height(132) {
-            return 200
+    }
+
+    private func moveDown(from stage: MapDrawerStage) {
+        switch stage {
+        case .collapsed:
+            break
+        case .medium:
+            collapse()
+        case .large:
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                detent = .medium
+            }
         }
-        return max(220, totalHeight - 12)
+    }
+
+    private func cycleExpandedStage() {
+        if expandedStage == .large {
+            moveDown(from: .large)
+        } else {
+            moveUp(from: .medium)
+        }
     }
 
     private func collapse() {
         onCollapse()
+    }
+}
+
+private enum MapDrawerStage {
+    case collapsed
+    case medium
+    case large
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .collapsed: "map.drawerPanel.collapsed"
+        case .medium: "map.drawerPanel.medium"
+        case .large: "map.drawerPanel.large"
+        }
+    }
+
+    var accessibilityValue: String {
+        switch self {
+        case .collapsed: "Collapsed"
+        case .medium: "Medium"
+        case .large: "Large"
+        }
     }
 }
