@@ -1,6 +1,6 @@
 // Sendblue iMessage bot (SPIKE).
 //
-// Flow: a user texts SAV-E's Sendblue number a message. If it contains a social
+// Flow: a user texts Savvy's Sendblue number a message. If it contains a social
 // link (Instagram/TikTok/小紅书/etc.), we fetch the link's public caption,
 // extract the venue via Gemini, and text back the place. This bypasses the iOS
 // app entirely so we can validate "text a reel -> get the place" with real users.
@@ -278,8 +278,8 @@ function savedPlaceAreaFallback(place: SavedPlace, chinese: boolean): string {
   const area = place.area ? (chinese ? `（${place.area}）` : ` in ${place.area}`) : "";
   const sourceNote = place.sourceUrl
     ? chinese
-      ? "\n來源貼文已保留在 My SAV-E。"
-      : "\nSource post is saved in My SAV-E."
+      ? "\n來源貼文已保留在 My Savvy。"
+      : "\nSource post is saved in My Savvy."
     : "";
   return chinese
     ? `我目前沒有「${place.name}」${area}的精確地址。\nGoogle Maps 搜尋：${searchText}${sourceNote}`
@@ -746,7 +746,7 @@ export function isRecurringConfirmIntent(text: string): boolean {
 
 // Parse a coarse weekly schedule. Defaults: every day at 08:00. Recognizes
 // 平日/weekday (Mon-Fri), 週末/weekend, and an hour (8點 / 8am / 08:00). tz is a
-// fixed default — SAV-E has no per-user tz yet.
+// fixed default — Savvy has no per-user tz yet.
 export function parseRecurringSchedule(text: string, tz: string): { daysOfWeek: number[]; hour: number; minute: number; tz: string } {
   const lower = text.toLowerCase();
   let daysOfWeek = [0, 1, 2, 3, 4, 5, 6];
@@ -915,10 +915,10 @@ function formatMySavesLinkHandoff(
   if (places.length === 0) return emptyListReply;
   if (chinese) {
     const scope = area ? `（${area}）` : "";
-    return `找到 ${savedPlaceCountLabel(places.length, true)}${scope}。\n打開 My SAV-E 看卡片和地圖：\n${url}`;
+    return `找到 ${savedPlaceCountLabel(places.length, true)}${scope}。\n打開 My Savvy 看卡片和地圖：\n${url}`;
   }
   const scope = area ? ` in ${area}` : "";
-  return `I found ${savedPlaceCountLabel(places.length, false)}${scope}.\nOpen My SAV-E to browse cards and map:\n${url}`;
+  return `I found ${savedPlaceCountLabel(places.length, false)}${scope}.\nOpen My Savvy to browse cards and map:\n${url}`;
 }
 
 /**
@@ -1383,7 +1383,7 @@ export async function decideRecall(
             : ""
         }When they ask about the recommended place, answer with {"reply"} using ONLY its known data (name/rating/address). If they ask something you do NOT have (menu items, "popular drink", prices, hours), say honestly you don't have that detail about <that place>, then offer what you do have (rating/address) or to save it. NEVER make up details and NEVER answer about a different place than the one they asked about.\n`
       : "";
-  const prompt = `You are SAV-E, a friend who remembers places the user saved from Instagram/TikTok and can also find NEW places nearby. Decide EXACTLY ONE action:
+  const prompt = `You are Savvy, a friend who remembers places the user saved from Instagram/TikTok and can also find NEW places nearby. Decide EXACTLY ONE action:
 
 1. Answer from their saved places OR about a place you recently recommended (see below). Use ONLY known data — NEVER invent a place, menu, or detail. Return {"reply":"<message>"}.
 2. Find NEW places nearby — when they want a recommendation for somewhere not yet known (e.g. "somewhere nearby", "anywhere else", "that one's too far", "find me a coffee place", "推薦附近的") AND a location is given or clearly known. Return {"search":{"query":"<2-4 word search like 'coffee' or 'ramen'>","area":"<the location, e.g. 'Santa Monica'>"}}.
@@ -1910,7 +1910,7 @@ export type ProcessDeps = {
   /** Private tokenized web page for the sender's saved places/visits/reviews. */
   mySavesUrl?: (memoryKey: string) => string | null | undefined;
   /**
-   * Resolve the inbound phone/provider id to the canonical SAV-E vault key.
+   * Resolve the inbound phone/provider id to the canonical Savvy vault key.
    * Unlinked numbers fall back to the phone so the public bot still works.
    */
   resolveMemoryKey?: (fromNumber: string) => Promise<string>;
@@ -1998,7 +1998,7 @@ export async function processSendblueInbound(
       console.error(`[sendblue] resolveMemoryKey error kind=${safeErrorKind(error)}`);
     }
   }
-  if (memoryKey !== from) console.log("[sendblue] resolved inbound channel to SAV-E profile");
+  if (memoryKey !== from) console.log("[sendblue] resolved inbound channel to Savvy profile");
 
   // Best-effort: show the user a blue read receipt + typing indicator while we
   // fetch + extract. Fire-and-forget (not awaited) so two Sendblue round-trips

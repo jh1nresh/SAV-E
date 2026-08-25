@@ -1,4 +1,4 @@
-# SAV-E App Store Screenshots v3 Notes
+# Savvy App Store Screenshots v3 Notes
 
 ## Source
 
@@ -13,7 +13,7 @@ The exporter writes:
 - `specs/app-store-screenshots/v3/` — iPhone portrait, 1242×2688
 - `specs/app-store-screenshots/v3-ipad-13/` — 13-inch iPad portrait, 2048×2732
 
-These are faithful mock equivalents, not raw simulator captures. The outer poster frame stays editorial; the iPhone interiors are rebuilt to look like simplified current SAV-E app states.
+These are faithful mock equivalents, not raw simulator captures. The outer poster frame stays editorial; the iPhone interiors are rebuilt to look like simplified current Savvy app states.
 
 ## Screenshot Mapping
 
@@ -33,9 +33,9 @@ These are faithful mock equivalents, not raw simulator captures. The outer poste
    - Primary action: `Confirm place`.
 
 4. `04-ask-your-private-map.png`
-   - Maps to the SAV-E routed assistant / saved-map query surface.
+   - Maps to the Savvy routed assistant / saved-map query surface.
    - Shows a question answered from saved places and remembered sources.
-   - Primary action: `Ask SAV-E`.
+   - Primary action: `Ask Savvy`.
 
 5. `05-private-place-passport.png`
    - Maps to the Profile / Passport surface.

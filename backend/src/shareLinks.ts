@@ -74,7 +74,7 @@ export function normalizeSharedPlaceLinkCreate(
     reviewCount: nullableInteger(payload.reviewCount),
     priceRange: nullableString(payload.priceRange),
     hours: nullableString(payload.hours),
-    sourceLabel: trimmedString(payload.sourceLabel) ?? "SAV-E",
+    sourceLabel: trimmedString(payload.sourceLabel) ?? "Savvy",
     sourceURL: safeHTTPURL(payload.sourceURL),
     photoURLs: stringArray(payload.photoURLs).map(safeHTTPURL).filter(isString).slice(0, 1),
     note,

@@ -6,7 +6,7 @@ enum SaveLocalVaultError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .storageUnavailable:
-            return "SAV-E local memory storage is unavailable."
+            return "Savvy local memory storage is unavailable."
         }
     }
 }

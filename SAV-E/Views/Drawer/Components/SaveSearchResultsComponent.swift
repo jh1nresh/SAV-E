@@ -140,8 +140,8 @@ struct SaveSearchResultsComponent: View {
     private func sectionLabel(for section: SaveSearchSection) -> String {
         if let label = section.label {
             switch label {
-            case "FROM YOUR SAV-E":
-                return languageSettings.localized(english: label, traditionalChinese: "來自你的 SAV-E")
+            case "FROM YOUR Savvy":
+                return languageSettings.localized(english: label, traditionalChinese: "來自你的 Savvy")
             case "PUBLIC DISCOVERY":
                 return languageSettings.localized(english: label, traditionalChinese: "公開探索")
             case "REVIEW CANDIDATES":
@@ -154,7 +154,7 @@ struct SaveSearchResultsComponent: View {
         }
 
         if section.id.hasPrefix("from-your-save") {
-            return languageSettings.localized(english: "FROM YOUR SAV-E", traditionalChinese: "來自你的 SAV-E")
+            return languageSettings.localized(english: "FROM YOUR Savvy", traditionalChinese: "來自你的 Savvy")
         }
         return languageSettings.localized(english: "PUBLIC DISCOVERY", traditionalChinese: "公開探索")
     }
@@ -241,7 +241,7 @@ private struct SaveSearchAssistantMessage: View {
                 .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.1))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(languageSettings.localized(english: "SAV-E answer", traditionalChinese: "SAV-E 回答"))
+                Text(languageSettings.localized(english: "Savvy answer", traditionalChinese: "Savvy 回答"))
                     .font(.caption2.weight(.bold))
                     .foregroundColor(.saveCocoa)
                     .textCase(.uppercase)

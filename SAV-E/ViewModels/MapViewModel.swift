@@ -1003,7 +1003,7 @@ final class MapViewModel: ObservableObject {
         try await markReviewCandidateNeedsMoreEvidence(
             candidate,
             eventType: .investigateMore,
-            reason: "User asked SAV-E to investigate this clue further."
+            reason: "User asked Savvy to investigate this clue further."
         )
         clearExactSearchResolution(matching: candidate.id)
     }
@@ -1345,7 +1345,7 @@ final class MapViewModel: ObservableObject {
     func createCollaborativeList(title: String, note: String?) -> SaveCollaborativeList {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let list = SaveCollaborativeList(
-            title: trimmedTitle.isEmpty ? "Untitled SAV-E list" : trimmedTitle,
+            title: trimmedTitle.isEmpty ? "Untitled Savvy list" : trimmedTitle,
             note: note?.trimmingCharacters(in: .whitespacesAndNewlines).trimmedForDraft
         )
         collaborativeLists.insert(list, at: 0)

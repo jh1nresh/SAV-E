@@ -289,7 +289,7 @@ final class SaveAIService {
         }
 
         return """
-        You are SAV-E's AI assistant. The map is a spatial memory canvas, and the drawer is the intent and recommendation layer. You help users explore confirmed Map Stamps and plan trips from them.
+        You are Savvy's AI assistant. The map is a spatial memory canvas, and the drawer is the intent and recommendation layer. You help users explore confirmed Map Stamps and plan trips from them.
 
         USER'S MAP STAMPS:
         [\(placesJSON)]
@@ -408,8 +408,8 @@ final class SaveAIService {
                     traditionalChinese: "公開探索候選，在你已存地點附近；核准後才會留在行程裡。"
                 ),
                 sourceSummary: outputLanguage.localized(
-                    english: "Public discovery candidate · not saved to your SAV-E",
-                    traditionalChinese: "公開探索候選 · 尚未存進你的 SAV-E"
+                    english: "Public discovery candidate · not saved to your Savvy",
+                    traditionalChinese: "公開探索候選 · 尚未存進你的 Savvy"
                 ),
                 risks: [.externalSuggestion, .hoursUnknown, .bookingUnknown]
             )

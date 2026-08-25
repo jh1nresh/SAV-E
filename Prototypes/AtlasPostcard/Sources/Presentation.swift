@@ -412,7 +412,10 @@ struct AtlasPresentation: @unchecked Sendable {
     var tripDateLabel: String
     var tripStops: [AtlasStopPresentation]
     var homePriority: AtlasHomePriorityPresentation
-    var recentPlaces: [AtlasPlacePresentation]
+    /// Locked One-Face Home raster keeps the old hero and three-card stack.
+    /// Live Home instead leads with the user's saved-place library.
+    var locksOneFaceHomeComposition: Bool
+    var savedPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
     var selectedMapPlace: AtlasPlacePresentation
     var tripSummaries: [AtlasTripSummaryPresentation]
@@ -424,6 +427,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var onOpenHomePriority: () -> Void
     var onOpenTrip: () -> Void
     var onOpenSaves: () -> Void
+    var onOpenTrips: () -> Void
     var onOpenPlace: (String) -> Void
     var onOpenReview: (String) -> Void
     var onSelectReview: () -> Void
@@ -494,7 +498,8 @@ struct AtlasPresentation: @unchecked Sendable {
             badge: "Day 2 of 3",
             systemName: "point.3.connected.trianglepath.dotted"
         ),
-        recentPlaces: [.shibuyaBackstreets, .koffeeMameya],
+        locksOneFaceHomeComposition: true,
+        savedPlaces: [.shibuyaBackstreets, .koffeeMameya],
         reviewItems: [
             AtlasReviewPresentation(
                 id: "tsukiji",
@@ -550,6 +555,7 @@ struct AtlasPresentation: @unchecked Sendable {
         onOpenHomePriority: {},
         onOpenTrip: {},
         onOpenSaves: {},
+        onOpenTrips: {},
         onOpenPlace: { _ in },
         onOpenReview: { _ in },
         onSelectReview: {},

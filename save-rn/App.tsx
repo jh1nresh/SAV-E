@@ -158,10 +158,10 @@ function SaveApp() {
   const incomingSaveButtonLabel = incomingPlaceSaveState === "saving"
     ? "Saving..."
     : incomingPlaceSaveState === "saved"
-      ? "Saved to my SAV-E"
+      ? "Saved to my Savvy"
       : incomingPlaceSaveState === "already_saved"
         ? "Already saved"
-        : "Save to my SAV-E";
+        : "Save to my Savvy";
   const incomingSourceURL = safeHTTPURL(incomingPlace?.sourceURL);
   const showingIncomingShare = Boolean(
     incomingMySaves || incomingTrip || incomingPlaceState !== "idle",
@@ -249,14 +249,14 @@ function SaveApp() {
       if (!token) return;
       setIncomingMySaves(null);
       setActiveTab("share");
-      setImportMessage("Opening My SAV-E...");
+      setImportMessage("Opening My Savvy...");
       void resolveMySaves(token)
         .then((payload) => {
           setIncomingMySaves(payload);
-          setImportMessage(`Opened My SAV-E: ${payload.counts.places} saved places`);
+          setImportMessage(`Opened My Savvy: ${payload.counts.places} saved places`);
         })
         .catch((error) => {
-          setImportMessage(error instanceof Error ? `My SAV-E link failed: ${error.message}` : "My SAV-E link failed.");
+          setImportMessage(error instanceof Error ? `My Savvy link failed: ${error.message}` : "My Savvy link failed.");
         });
       return;
     }
@@ -279,8 +279,8 @@ function SaveApp() {
       setIncomingTrip(null);
       setActiveTab("share");
       setIncomingPlaceState("error");
-      setIncomingPlaceError("This SAV-E place link is invalid or incomplete.");
-      setImportMessage("This SAV-E place link is invalid or incomplete.");
+      setIncomingPlaceError("This Savvy place link is invalid or incomplete.");
+      setImportMessage("This Savvy place link is invalid or incomplete.");
       return;
     }
 
@@ -290,7 +290,7 @@ function SaveApp() {
       const trip = decodeTripLink(url);
       if (!trip) {
         setActiveTab("share");
-        setImportMessage("This SAV-E trip link is invalid or incomplete.");
+        setImportMessage("This Savvy trip link is invalid or incomplete.");
         return;
       }
 
@@ -558,7 +558,7 @@ function SaveApp() {
 
   async function shareTripLink() {
     await Share.share({
-      message: `SAV-E trip: ${tripLink}`,
+      message: `Savvy trip: ${tripLink}`,
       url: tripLink,
     });
   }
@@ -571,7 +571,7 @@ function SaveApp() {
 
     const appleMapsUrl = buildAppleMapsUrl(nextStop);
     const summary = [
-      `SAV-E trip: ${tripName}`,
+      `Savvy trip: ${tripName}`,
       `Next stop: ${nextStop.name}`,
       nextStop.address,
       appleMapsUrl,
@@ -673,7 +673,7 @@ function SaveApp() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color={palette.ink} />
-          <Text style={styles.loadingText}>Loading SAV-E...</Text>
+          <Text style={styles.loadingText}>Loading Savvy...</Text>
         </View>
       </SafeAreaView>
     );
@@ -684,7 +684,7 @@ function SaveApp() {
       <StatusBar style="dark" />
       <View style={styles.appShell}>
         <View style={styles.header}>
-          <Text style={styles.brand}>SAV-E</Text>
+          <Text style={styles.brand}>Savvy</Text>
           <Text style={styles.subtitle}>
             Save places, refine event stops, and turn bookmarks into a trip you can share or hand off.
           </Text>
@@ -830,7 +830,7 @@ function SaveApp() {
                 <LabeledInput label="City" value={tripCity} onChangeText={setTripCity} />
                 <Text style={styles.helperText}>
                   {authenticated
-                    ? "Signed in mode saves bookmarks and trips to your SAV-E account."
+                    ? "Signed in mode saves bookmarks and trips to your Savvy account."
                     : apiEnabled
                       ? "Guest mode saves bookmarks and trips for this browser. Sign in to sync across devices."
                       : "Local mode works in this browser only. Configure the backend to persist."}
@@ -865,7 +865,7 @@ function SaveApp() {
                   label={authenticated ? "Save Trip to Account" : "Save Trip as Guest"}
                   onPress={saveTripToAccount}
                 />
-                <ActionButton label="Share SAV-E Trip Link" onPress={shareTripLink} tone="secondary" />
+                <ActionButton label="Share Savvy Trip Link" onPress={shareTripLink} tone="secondary" />
                 <ActionButton label="Open Trip Link" onPress={openTripLink} tone="secondary" />
               </View>
 
@@ -889,7 +889,7 @@ function SaveApp() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
                 {incomingMySaves
-                  ? "My SAV-E"
+                  ? "My Savvy"
                   : incomingPlaceState !== "idle"
                     ? "Shared place"
                     : incomingTrip
@@ -899,7 +899,7 @@ function SaveApp() {
 
               {incomingMySaves ? (
                 <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Opened My SAV-E</Text>
+                  <Text style={styles.cardTitle}>Opened My Savvy</Text>
                   <DecodedMySaves payload={incomingMySaves} />
                 </View>
               ) : null}
@@ -1155,7 +1155,7 @@ function DecodedPlace({
       <Text style={styles.previewSubhead}>{place.address || "No address attached"}</Text>
       {meta.length > 0 ? <Text style={styles.stopMeta}>{meta.join(" · ")}</Text> : null}
       {place.hours ? <Text style={styles.stopMeta}>Hours: {place.hours}</Text> : null}
-      <Text style={styles.stopMeta}>Original source: {place.sourceLabel || "SAV-E"}</Text>
+      <Text style={styles.stopMeta}>Original source: {place.sourceLabel || "Savvy"}</Text>
       {place.sourceURL ? <Text style={styles.stopMeta}>{place.sourceURL}</Text> : null}
       {place.note ? <Text style={styles.placeNote}>{place.note}</Text> : null}
     </View>
@@ -1168,7 +1168,7 @@ function DecodedMySaves({ payload }: { payload: MySavesPayload }) {
       <Text style={styles.previewHeadline}>
         {payload.counts.places} places · {payload.counts.visits} visits · {payload.counts.reviews} reviews
       </Text>
-      <Text style={styles.helperText}>Private to the phone account that created this SAV-E link.</Text>
+      <Text style={styles.helperText}>Private to the phone account that created this Savvy link.</Text>
 
       {payload.places.length > 0 ? (
         <View style={styles.previewList}>

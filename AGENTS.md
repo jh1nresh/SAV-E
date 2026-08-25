@@ -1,7 +1,7 @@
-# SAV-E Agent Contract
+# Savvy Agent Contract
 
-SAV-E turns saved-place clues into user-confirmed place memory and trip
-planning. R8 may supply evidence, but it does not write SAV-E user truth.
+Savvy turns saved-place clues into user-confirmed place memory and trip
+planning. R8 may supply evidence, but it does not write Savvy user truth.
 SLL-R commerce is a later handoff and is outside this repository's default
 scope.
 

@@ -11,7 +11,7 @@ enum GoogleTakeoutImportError: LocalizedError {
         case .unsupportedFile:
             return "Choose a .zip, .json, .geojson, or .kml export from Google Takeout."
         case .unreadableFile:
-            return "SAV-E could not read this file."
+            return "Savvy could not read this file."
         case .emptyImport:
             return "No places were found in this export."
         }

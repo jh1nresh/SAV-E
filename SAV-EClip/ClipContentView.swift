@@ -60,13 +60,13 @@ struct ClipContentView: View {
         }
     }
 
-    // MARK: - My SAV-E Content
+    // MARK: - My Savvy Content
 
     private func mySavesContentView(_ payload: SharedMySavesData) -> some View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("My SAV-E")
+                    Text("My Savvy")
                         .font(.largeTitle.weight(.bold))
                         .foregroundColor(Color.saveInk)
 
@@ -125,7 +125,7 @@ struct ClipContentView: View {
                 }
 
                 Button(action: openInFullApp) {
-                    Text("Open in SAV-E")
+                    Text("Open in Savvy")
                         .font(.headline)
                         .foregroundColor(Color.saveInk)
                         .frame(maxWidth: .infinity)
@@ -172,7 +172,7 @@ struct ClipContentView: View {
             Text("No saved places yet")
                 .font(.headline)
                 .foregroundColor(Color.saveInk)
-            Text("Text SAV-E a place link to start building your private map.")
+            Text("Text Savvy a place link to start building your private map.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -429,7 +429,7 @@ struct ClipContentView: View {
 
                 VStack(spacing: 10) {
                     Button(action: openInFullApp) {
-                        Label("Save to my SAV-E", systemImage: "plus.circle.fill")
+                        Label("Save to my Savvy", systemImage: "plus.circle.fill")
                             .font(ClipAtlasType.strong(16))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
@@ -563,7 +563,7 @@ struct ClipContentView: View {
                     }
 
                     Button(action: openInFullApp) {
-                        Text("Import / Open in SAV-E")
+                        Text("Import / Open in Savvy")
                             .font(.headline)
                             .foregroundColor(Color.saveInk)
                             .frame(maxWidth: .infinity)
@@ -624,7 +624,7 @@ struct ClipContentView: View {
 
                 VStack(spacing: 10) {
                     Button(action: openInFullApp) {
-                        Text("Open list in SAV-E")
+                        Text("Open list in Savvy")
                             .font(.headline)
                             .foregroundColor(Color.saveInk)
                             .frame(maxWidth: .infinity)
@@ -638,7 +638,7 @@ struct ClipContentView: View {
                             .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
                     }
 
-                    Text("Save any place from this list into your own SAV-E after opening the app.")
+                    Text("Save any place from this list into your own Savvy after opening the app.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -712,7 +712,7 @@ struct ClipContentView: View {
                     Text(profile.displayName)
                         .font(.title2.weight(.bold))
                         .foregroundColor(Color.saveInk)
-                    Text("@\(profile.handle) invited you to SAV-E")
+                    Text("@\(profile.handle) invited you to Savvy")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Text("Open their starter map pack, follow their guide lens, and get your first AI itinerary from their places.")
@@ -757,7 +757,7 @@ struct ClipContentView: View {
                 .padding(.horizontal)
 
                 Button(action: openInFullApp) {
-                    Text("Follow in SAV-E")
+                    Text("Follow in Savvy")
                         .font(.headline)
                         .foregroundColor(Color.saveInk)
                         .frame(maxWidth: .infinity)
@@ -782,7 +782,7 @@ struct ClipContentView: View {
             Spacer()
             ProgressView()
                 .tint(Color.saveInk)
-            Text("Loading SAV-E link...")
+            Text("Loading Savvy link...")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             Spacer()
@@ -796,7 +796,7 @@ struct ClipContentView: View {
             Image(systemName: "exclamationmark.triangle")
                 .font(.largeTitle)
                 .foregroundColor(Color.saveCoral)
-            Text("Couldn't load this SAV-E link")
+            Text("Couldn't load this Savvy link")
                 .font(.headline)
                 .foregroundColor(Color.saveInk)
             Text("The link may be invalid or expired.")
@@ -961,15 +961,15 @@ struct ClipContentView: View {
     }
 
     private var navigationTitle: String {
-        if mySavesData != nil { return "My SAV-E" }
+        if mySavesData != nil { return "My Savvy" }
         if referralData != nil { return "Referral Preview" }
         if listData != nil { return "List Preview" }
-        if placeReceipt != nil { return "SAV-E" }
+        if placeReceipt != nil { return "Savvy" }
         return "Trip Preview"
     }
 
     private func isPlaceLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "p" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "p" {
             return true
         }
         guard url.scheme == "https",
@@ -980,7 +980,7 @@ struct ClipContentView: View {
     }
 
     private func isTripLink(_ url: URL) -> Bool {
-        if url.scheme == "wanderly", url.host == "trip" {
+        if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "trip" {
             return true
         }
         guard url.scheme == "https",
@@ -1074,9 +1074,9 @@ struct ClipContentView: View {
         } else if let referralData {
             url = referralData.fullAppURL()
         } else if let placeReceipt {
-            url = placeReceipt.fullAppURL ?? URL(string: "wanderly://p")
+            url = placeReceipt.fullAppURL ?? URL(string: "savvy://p")
         } else {
-            url = tripData?.toURL(baseURL: "wanderly://trip") ?? URL(string: "wanderly://trip")
+            url = tripData?.toURL(baseURL: "savvy://trip") ?? URL(string: "savvy://trip")
         }
         guard let url else { return }
         if placeReceipt != nil {
@@ -1100,9 +1100,9 @@ struct ClipContentView: View {
         guard let listData,
               let payloadData = try? JSONEncoder().encode(SharedListPayload(list: listData, role: listData.viewerRole)),
               let base64 = payloadData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return URL(string: "wanderly://list")
+            return URL(string: "savvy://list")
         }
-        return URL(string: "wanderly://list?d=\(base64)&r=\(listData.viewerRole)")
+        return URL(string: "savvy://list?d=\(base64)&r=\(listData.viewerRole)")
     }
 }
 

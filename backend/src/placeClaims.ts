@@ -361,7 +361,7 @@ export function buildMaatPlaceAnalysis(
     : "Not enough evidence for Ma'at analysis";
   const summary = status === "ready"
     ? analysisSummary(place, citedClaims, strongestProofLevel)
-    : "SAV-E has the selected place, but not enough saved notes, claims, receipts, or source evidence to analyze without guessing.";
+    : "Savvy has the selected place, but not enough saved notes, claims, receipts, or source evidence to analyze without guessing.";
   const restaurantDetails = buildRestaurantDetails(place, citedClaims, scopedClaims, warnings);
 
   return {
@@ -548,7 +548,7 @@ function publicSummary(place: JsonObject, publicClaims: JsonObject[]): string {
   const best = publicClaims[0];
   const claim = trimmedString(best?.agent_usable_summary) ?? trimmedString(best?.claim);
   if (claim) return claim;
-  return `${trimmedString(place.name) ?? "This place"} has public SAV-E claims with proof labels.`;
+  return `${trimmedString(place.name) ?? "This place"} has public Savvy claims with proof labels.`;
 }
 
 function reputationSummary(claims: JsonObject[]): JsonObject {
@@ -805,7 +805,7 @@ function criticalReviewItems(evidenceTexts: string[], warnings: string[]): JsonO
   if (waitText || warnings.includes("long_wait_peak_hours")) {
     items.push({
       issue: waitText ?? "Peak-hour waits are mentioned in saved evidence",
-      source: "SAV-E evidence",
+      source: "Savvy evidence",
       frequency: "mentioned",
     });
   }
@@ -822,7 +822,7 @@ function criticalReviewItems(evidenceTexts: string[], warnings: string[]): JsonO
   if (negativeText && !items.some((item) => item.issue === negativeText)) {
     items.push({
       issue: negativeText,
-      source: "SAV-E evidence",
+      source: "Savvy evidence",
       frequency: "mentioned",
     });
   }

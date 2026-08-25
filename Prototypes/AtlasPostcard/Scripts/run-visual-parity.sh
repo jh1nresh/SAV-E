@@ -25,8 +25,9 @@ Options:
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
 The screenshots directory must contain home.png, saves.png, plan.png, and
-map.png. The result-bundle mode exports the stable atlas-home, atlas-saves,
-atlas-plan, and atlas-map XCTest attachments.
+map.png. The result-bundle mode prefers the live five-tab-home attachment for
+Home and falls back to atlas-home for prototype-only runs. Saves, Plan, and Map
+use the stable atlas-saves, atlas-plan, and atlas-map XCTest attachments.
 EOF
 }
 
@@ -267,24 +268,32 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 plutil -extract "$prefix.timestamp" raw -o - "$manifest" 2>/dev/null
             )" || timestamp=0
             case "$human_name" in
+                five-tab-home*)
+                    screen="home"
+                    priority=1
+                    ;;
                 atlas-home*)
                     screen="home"
+                    priority=0
                     ;;
                 atlas-saves*)
                     screen="saves"
+                    priority=0
                     ;;
                 atlas-plan*)
                     screen="plan"
+                    priority=0
                     ;;
                 atlas-map*)
                     screen="map"
+                    priority=0
                     ;;
                 *)
                     continue
                     ;;
             esac
 
-            candidates="$candidates$screen$tab$timestamp$tab$exported_name
+            candidates="$candidates$screen$tab$priority$tab$timestamp$tab$exported_name
 "
         done
         ((test_index += 1))
@@ -294,9 +303,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
-                    $1 == want && (file == "" || $2 + 0 >= best) {
-                        best = $2 + 0
-                        file = $3
+                    $1 == want && (file == "" || $2 + 0 > best_priority || ($2 + 0 == best_priority && $3 + 0 >= best_timestamp)) {
+                        best_priority = $2 + 0
+                        best_timestamp = $3 + 0
+                        file = $4
                     }
                     END { print file }
                 '
@@ -312,7 +322,7 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 awk -F"$tab" -v want="$screen" '$1 == want { n += 1 } END { print n + 0 }'
         )"
         if ((attempts > 1)); then
-            echo "note: $screen has $attempts attachments (test retried); using the newest"
+            echo "note: $screen has $attempts candidate attachments; using the highest-priority newest"
         fi
 
         cp "$export_dir/$newest" "$ARTIFACT_DIR/output/$screen.png"

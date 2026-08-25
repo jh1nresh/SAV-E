@@ -96,7 +96,7 @@ struct GoogleTakeoutImportView: View {
                     .font(SaveAtlasType.strong(34, relativeTo: .largeTitle))
                     .foregroundStyle(SaveAtlasPalette.forest)
 
-                Text("Bring historical places into SAV-E without inventing coordinates.")
+                Text("Bring historical places into Savvy without inventing coordinates.")
                     .font(SaveAtlasType.body(15))
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)

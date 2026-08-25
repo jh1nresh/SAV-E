@@ -21,7 +21,7 @@ def unique_setting(project: str, name: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Write the SAV-E main-branch release-readiness receipt."
+        description="Write the Savvy main-branch release-readiness receipt."
     )
     parser.add_argument("--output", required=True)
     parser.add_argument("--commit", required=True)
@@ -43,11 +43,11 @@ def main() -> None:
     build = unique_setting(project, "CURRENT_PROJECT_VERSION")
     bundle_identifier = "com.wanderly.app"
     if f"PRODUCT_BUNDLE_IDENTIFIER = {bundle_identifier};" not in project:
-        raise SystemExit("canonical SAV-E app bundle identifier is missing")
+        raise SystemExit("canonical Savvy app bundle identifier is missing")
 
     receipt = {
         "contractVersion": "save-release-readiness/v1",
-        "product": "SAV-E",
+        "product": "Savvy",
         "source": {
             "repository": args.repository,
             "commit": args.commit,

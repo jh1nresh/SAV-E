@@ -67,7 +67,7 @@ enum SaveTheme {
     }
 }
 
-/// Centralized haptics so key SAV-E actions feel consistent.
+/// Centralized haptics so key Savvy actions feel consistent.
 /// `stamp()` is reserved for the save moment (clue -> Map Stamp).
 @MainActor
 enum SaveHaptics {
@@ -106,7 +106,7 @@ struct SaveBrandPrimaryButtonStyle: ButtonStyle {
 }
 
 extension Color {
-    // MARK: - SAV-E Memo Scrapbook Theme
+    // MARK: - Savvy Memo Scrapbook Theme
     static let saveCream = Color(light: "FFF5E7", dark: "15191F")
     static let saveMint = Color(light: "C8EBCF", dark: "4F7D5D")
     static let saveCocoa = Color(light: "3A2415", dark: "F7EFE5")
@@ -263,7 +263,7 @@ extension View {
         )
     }
 
-    /// Keeps list and form content on the SAV-E notebook canvas while leaving
+    /// Keeps list and form content on the Savvy notebook canvas while leaving
     /// navigation and tab chrome to the system material.
     func saveNotebookListCanvas() -> some View {
         scrollContentBackground(.hidden)

@@ -3,11 +3,11 @@ const { spawnSync } = require("node:child_process");
 const allowedAdvisories = new Map([
   [
     "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
-    "image-size has no patched release; SAV-E reaches it only through Metro's build tooling.",
+    "image-size has no patched release; Savvy reaches it only through Metro's build tooling.",
   ],
   [
     "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
-    "image-size has no patched release; SAV-E reaches it only through Metro's build tooling.",
+    "image-size has no patched release; Savvy reaches it only through Metro's build tooling.",
   ],
 ]);
 

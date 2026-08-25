@@ -137,8 +137,39 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testSharedProductionConstantsMatchExistingAppleIdentifiers() {
         XCTAssertEqual(SAVEProductionConfig.legacyProductionBundleID, "com.wanderly.app")
         XCTAssertEqual(SAVEProductionConfig.appGroupSuiteName, "group.com.wanderly.app")
+        XCTAssertEqual(SAVEProductionConfig.currentCustomURLScheme, "savvy")
+        XCTAssertEqual(SAVEProductionConfig.legacyCustomURLScheme, "wanderly")
+        XCTAssertTrue(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "savvy://p")!))
+        XCTAssertTrue(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "wanderly://p")!))
+        XCTAssertFalse(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "other://p")!))
         XCTAssertEqual(SAVEProductionConfig.pendingPlacesFileName, "pending-places.json")
         XCTAssertEqual(SAVEProductionConfig.pendingReviewCandidatesFileName, "pending-review-candidates.json")
+    }
+
+    @MainActor
+    func testAppleFacingDisplayNamesUseSavvyWithoutChangingIdentifiers() throws {
+        let mainInfo = try plistTemplate(at: "SAV-E/Info.plist")
+        let shareInfo = try plistTemplate(at: "SAV-EShareExtension/Info.plist")
+        let messageInfo = try plistTemplate(at: "SAV-EiMessage/Info.plist")
+        let projectSpec = try source(at: "project.yml")
+        let brandHeader = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let storeKit = try source(at: "SAV-E/Resources/SAVEPro.storekit")
+
+        XCTAssertEqual(mainInfo["CFBundleDisplayName"] as? String, "Savvy")
+        XCTAssertEqual(shareInfo["CFBundleDisplayName"] as? String, "Savvy")
+        XCTAssertEqual(messageInfo["CFBundleDisplayName"] as? String, "Savvy")
+        XCTAssertTrue(projectSpec.contains("INFOPLIST_KEY_CFBundleDisplayName: Savvy"))
+        XCTAssertTrue(brandHeader.contains("Text(\"Savvy\")"))
+        XCTAssertTrue(storeKit.contains("Savvy Pro Annual"))
+        XCTAssertTrue(storeKit.contains("Savvy Pro Monthly"))
+
+        let urlTypes = try XCTUnwrap(mainInfo["CFBundleURLTypes"] as? [[String: Any]])
+        let schemes = try XCTUnwrap(urlTypes.first?["CFBundleURLSchemes"] as? [String])
+        XCTAssertEqual(schemes, ["savvy", "wanderly"])
+
+        XCTAssertTrue(projectSpec.contains("PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app"))
+        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.annual"))
+        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.monthly"))
     }
 
     @MainActor

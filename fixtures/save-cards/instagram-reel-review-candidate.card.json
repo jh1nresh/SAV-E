@@ -29,7 +29,7 @@
       ]
     }
   ],
-  "humanSummary": "SAV-E found a likely place signal from an Instagram reel, but it should remain a private review candidate until the address and coordinates are confirmed.",
+  "humanSummary": "Savvy found a likely place signal from an Instagram reel, but it should remain a private review candidate until the address and coordinates are confirmed.",
   "agentInstructions": [
     "Do not save as a confirmed place until a map listing or official source corroborates the venue.",
     "Use this card as review-candidate memory, not as a public recommendation."

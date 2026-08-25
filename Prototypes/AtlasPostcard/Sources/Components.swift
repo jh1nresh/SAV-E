@@ -37,7 +37,7 @@ struct BrandHeader<Trailing: View>: View {
                                 .offset(x: 3, y: 2)
                         }
 
-                    Text("SAV-E")
+                    Text("Savvy")
                         .font(AtlasType.strong(24))
                         .tracking(1.1)
                         .foregroundStyle(AtlasPalette.forest)
@@ -45,7 +45,7 @@ struct BrandHeader<Trailing: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open SAV-E Passport")
+            .accessibilityLabel("Open Savvy Passport")
             .accessibilityIdentifier("root.passport")
 
             Spacer()
@@ -55,13 +55,57 @@ struct BrandHeader<Trailing: View>: View {
     }
 }
 
+/// Layout math for `AtlasTabBar`, split out so it can be asserted without
+/// rendering.
+///
+/// The bar lives on the fixed 402x874 Atlas canvas (`ReferenceViewport` scales
+/// that canvas to whatever device it lands on), so the *width* is not the
+/// fragile part. What breaks is the selection pill: it was hardcoded to 90pt
+/// while each slot is `(402 - 8) / count`. At four items a slot is ~98.5pt and
+/// 90 fits with room to spare. At five it is ~78.8pt and a 90pt pill overflows
+/// its own slot and collides with its neighbours.
+///
+/// The pill is therefore derived from the slot, never fixed.
+enum AtlasTabBarMetrics {
+    static let width: CGFloat = AtlasMetrics.width
+    static let height: CGFloat = 76
+    static let horizontalPadding: CGFloat = 4
+    static let itemHeight: CGFloat = 64
+    /// Breathing room between the pill and the slot edge, per side.
+    static let pillInset: CGFloat = 4
+    /// Below this the label truncates before the pill does, so the pill stops
+    /// shrinking and the label is what has to give.
+    static let minimumPillWidth: CGFloat = 56
+
+    static func slotWidth(itemCount: Int) -> CGFloat {
+        guard itemCount > 0 else { return 0 }
+        return (width - horizontalPadding * 2) / CGFloat(itemCount)
+    }
+
+    static func pillWidth(itemCount: Int) -> CGFloat {
+        max(minimumPillWidth, slotWidth(itemCount: itemCount) - pillInset * 2)
+    }
+
+    /// True when the pill sits inside its slot with no overlap. The four-item
+    /// bar has always satisfied this by luck; five items only satisfies it
+    /// because `pillWidth` is now derived.
+    static func pillFitsSlot(itemCount: Int) -> Bool {
+        pillWidth(itemCount: itemCount) <= slotWidth(itemCount: itemCount)
+    }
+}
+
 struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let items: [Item]
     let selection: Item
     let title: KeyPath<Item, String>
     let icon: KeyPath<Item, String>
     let accessibilityPrefix: String
+    var isRaisedControl: (Item) -> Bool = { _ in false }
     let onSelect: (Item) -> Void
+
+    private var pillWidth: CGFloat {
+        AtlasTabBarMetrics.pillWidth(itemCount: items.count)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -69,24 +113,40 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                 Button {
                     onSelect(item)
                 } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: item[keyPath: icon])
-                            .font(.system(size: 23, weight: .regular))
-                            .frame(height: 27)
-
-                        Text(item[keyPath: title])
-                            .font(AtlasType.display(12))
-                    }
-                    .foregroundStyle(AtlasPalette.ink)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 64)
-                    .background {
-                        if selection == item {
+                    ZStack {
+                        if isRaisedControl(item) {
+                            Circle()
+                                .fill(AtlasPalette.coral)
+                                .frame(width: 58, height: 58)
+                                .shadow(color: AtlasPalette.ink.opacity(0.16), radius: 7, y: 4)
+                                .offset(y: -10)
+                        } else if selection == item {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
                                 .fill(AtlasPalette.mint.opacity(0.82))
-                                .frame(width: 90, height: 64)
+                                .frame(
+                                    width: pillWidth,
+                                    height: AtlasTabBarMetrics.itemHeight
+                                )
                         }
+
+                        VStack(spacing: isRaisedControl(item) ? 1 : 3) {
+                            Image(systemName: item[keyPath: icon])
+                                .font(.system(
+                                    size: isRaisedControl(item) ? 21 : 23,
+                                    weight: isRaisedControl(item) ? .semibold : .regular
+                                ))
+                                .frame(height: 27)
+
+                            Text(item[keyPath: title])
+                                .font(AtlasType.display(isRaisedControl(item) ? 10 : 12))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .foregroundStyle(isRaisedControl(item) ? .white : AtlasPalette.ink)
+                        .offset(y: isRaisedControl(item) ? -10 : 0)
                     }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: AtlasTabBarMetrics.itemHeight)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -97,8 +157,8 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                 .accessibilityAddTraits(selection == item ? .isSelected : [])
             }
         }
-        .padding(.horizontal, 4)
-        .frame(width: 402, height: 76)
+        .padding(.horizontal, AtlasTabBarMetrics.horizontalPadding)
+        .frame(width: AtlasTabBarMetrics.width, height: AtlasTabBarMetrics.height)
         .background(AtlasPalette.paper.opacity(0.94), in: RoundedRectangle(cornerRadius: 21, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 21, style: .continuous)

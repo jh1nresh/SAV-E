@@ -176,8 +176,11 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(SaveSharedListPayload.shareCode(from: https), "Ab3_x-9Q")
         XCTAssertTrue(SaveSharedListPayload.isListLink(https))
 
-        let scheme = try XCTUnwrap(URL(string: "wanderly://list?c=abcdef"))
-        XCTAssertEqual(SaveSharedListPayload.shareCode(from: scheme), "abcdef")
+        let currentScheme = try XCTUnwrap(URL(string: "savvy://list?c=abcdef"))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: currentScheme), "abcdef")
+
+        let legacyScheme = try XCTUnwrap(URL(string: "wanderly://list?c=abcdef"))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: legacyScheme), "abcdef")
     }
 
     @MainActor

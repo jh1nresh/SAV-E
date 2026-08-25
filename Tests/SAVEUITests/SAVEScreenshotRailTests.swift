@@ -1,6 +1,6 @@
 import XCTest
 
-/// App Store screenshot rail for the SAV-E root shell and Trip workspace.
+/// App Store screenshot rail for the Savvy root shell and Trip workspace.
 ///
 /// The review-demo session is local and deterministic. The screenshots cover
 /// Home plus the focused Plan / Map Trip workspace and top-level Share action.
@@ -26,7 +26,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["BETA"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Trip planning is still improving."].exists)
@@ -36,8 +36,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Home", app: app)
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.trip.beta"].waitForExistence(timeout: stepTimeout),
-            "Home trip card should show Beta."
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Live Home should lead with the saved-place library."
         )
         app.buttons["root.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -50,13 +50,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testHomeRegionalHeroUsesCoarseLocationFixture() throws {
+    func testHomeLeadsWithSavedPlacesAndUsesSaveTabForCapture() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-taipei",
                 "-save.appLanguage", "en",
             ]
         )
@@ -65,150 +64,26 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.cityAtlas.taipei"].waitForExistence(timeout: stepTimeout),
-            "Production Home should render the illustrated Taipei city atlas."
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Production Home should render confirmed saved places immediately."
         )
-        XCTAssertTrue(app.staticTexts["Taipei"].waitForExistence(timeout: stepTimeout))
+        let firstPlace = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).firstMatch
+        XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
+        XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
-            app.staticTexts["Tokyo Weekend"].exists,
-            "Home tells one city story: Taipei hero must not pair with Tokyo Weekend."
+            app.buttons["home.capture"].exists,
+            "Home should not duplicate the root Save action."
         )
         XCTAssertFalse(
-            app.descendants(matching: .any)["prototype.home.atlas"].exists,
-            "Production Home must not keep the static Tokyo reference hero."
+            app.buttons["home.hero.openMap"].exists,
+            "Live Home should not expose the decorative regional hero."
         )
-        XCTAssertTrue(app.buttons["home.capture"].isHittable)
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
-
-        attach(app, name: "atlas-home-regional-taipei")
-
-        let cityAtlas = app.buttons["home.hero.openMap"]
-        XCTAssertTrue(cityAtlas.waitForExistence(timeout: stepTimeout))
-        cityAtlas.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
-    }
-
-    @MainActor
-    func testHomeUsesOwnedNewYorkShanghaiAndSeoulScenes() throws {
-        let fixtures = [
-            ("--uitest-home-region-new-york", "home.cityAtlas.newYork", "New York", "atlas-home-city-new-york"),
-            ("--uitest-home-region-shanghai", "home.cityAtlas.shanghai", "Shanghai", "atlas-home-city-shanghai"),
-            ("--uitest-home-region-seoul", "home.cityAtlas.seoul", "Seoul", "atlas-home-city-seoul"),
-        ]
-
-        for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding",
-                    "--skip-map-tour",
-                    "--uitest-repair-review-demo-seed",
-                    launchArgument,
-                    "-save.appLanguage", "en",
-                ]
-            )
-            launch(app)
-            try signInViaReviewDemo(app: app)
-
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            XCTAssertTrue(
-                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
-                "Production Home should render the owned \(city) city atlas."
-            )
-            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
-            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
-            attach(app, name: attachmentName)
-            terminate(app)
-        }
-    }
-
-    @MainActor
-    func testHomeUsesOwnedMainlandChinaScenes() throws {
-        let fixtures = [
-            ("--uitest-home-region-beijing", "home.cityAtlas.beijing", "Beijing", "atlas-home-city-beijing"),
-            ("--uitest-home-region-guangzhou", "home.cityAtlas.guangzhou", "Guangzhou", "atlas-home-city-guangzhou"),
-            ("--uitest-home-region-shenzhen", "home.cityAtlas.shenzhen", "Shenzhen", "atlas-home-city-shenzhen"),
-            ("--uitest-home-region-chengdu", "home.cityAtlas.chengdu", "Chengdu", "atlas-home-city-chengdu"),
-            ("--uitest-home-region-chongqing", "home.cityAtlas.chongqing", "Chongqing", "atlas-home-city-chongqing"),
-            ("--uitest-home-region-tianjin", "home.cityAtlas.tianjin", "Tianjin", "atlas-home-city-tianjin"),
-            ("--uitest-home-region-hangzhou", "home.cityAtlas.hangzhou", "Hangzhou", "atlas-home-city-hangzhou"),
-            ("--uitest-home-region-nanjing", "home.cityAtlas.nanjing", "Nanjing", "atlas-home-city-nanjing"),
-            ("--uitest-home-region-wuhan", "home.cityAtlas.wuhan", "Wuhan", "atlas-home-city-wuhan"),
-            ("--uitest-home-region-xian", "home.cityAtlas.xian", "Xi'an", "atlas-home-city-xian"),
-            ("--uitest-home-region-suzhou", "home.cityAtlas.suzhou", "Suzhou", "atlas-home-city-suzhou"),
-            ("--uitest-home-region-qingdao", "home.cityAtlas.qingdao", "Qingdao", "atlas-home-city-qingdao"),
-            ("--uitest-home-region-xiamen", "home.cityAtlas.xiamen", "Xiamen", "atlas-home-city-xiamen"),
-            ("--uitest-home-region-changsha", "home.cityAtlas.changsha", "Changsha", "atlas-home-city-changsha"),
-        ]
-
-        for (launchArgument, identifier, city, attachmentName) in fixtures {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding",
-                    "--skip-map-tour",
-                    "--uitest-repair-review-demo-seed",
-                    launchArgument,
-                    "-save.appLanguage", "en",
-                ]
-            )
-            launch(app)
-            try signInViaReviewDemo(app: app)
-
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            XCTAssertTrue(
-                app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout),
-                "Production Home should render the owned \(city) city atlas."
-            )
-            XCTAssertTrue(app.staticTexts[city].waitForExistence(timeout: stepTimeout))
-            XCTAssertFalse(app.descendants(matching: .any)["home.regionalHero"].exists)
-            attach(app, name: attachmentName)
-            terminate(app)
-        }
-    }
-
-    @MainActor
-    func testHomeUsesSouthernCaliforniaSceneOnlyWithinLABasinAndOrangeCounty() throws {
-        let ownedSceneApp = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-tustin",
-                "-save.appLanguage", "en",
-            ]
-        )
-        launch(ownedSceneApp)
-        try signInViaReviewDemo(app: ownedSceneApp)
-
-        XCTAssertTrue(ownedSceneApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(
-            ownedSceneApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"]
-                .waitForExistence(timeout: stepTimeout),
-            "Tustin should use the owned Southern California atlas."
-        )
-        XCTAssertTrue(ownedSceneApp.staticTexts["Tustin"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(ownedSceneApp.descendants(matching: .any)["home.regionalHero"].exists)
-        attach(ownedSceneApp, name: "atlas-home-city-southern-california")
-        terminate(ownedSceneApp)
-        let fallbackApp = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                "--uitest-home-region-san-francisco",
-                "-save.appLanguage", "en",
-            ]
-        )
-        launch(fallbackApp)
-        try signInViaReviewDemo(app: fallbackApp)
-
-        XCTAssertTrue(fallbackApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(
-            fallbackApp.descendants(matching: .any)["home.regionalHero"]
-                .waitForExistence(timeout: stepTimeout),
-            "San Francisco should keep the regional live-map fallback."
-        )
-        XCTAssertFalse(fallbackApp.descendants(matching: .any)["home.cityAtlas.southernCalifornia"].exists)
+        attach(app, name: "home-saved-places-library")
     }
 
     @MainActor
@@ -228,11 +103,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         attach(app, name: "atlas-home")
 
-        openRootTab("Saves", app: app)
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-saves")
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         let trip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
         ).firstMatch
@@ -249,6 +124,52 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-map")
+    }
+
+    /// Visual gate for the five-item root bar. Run this same test on the
+    /// 402pt reference device and an SE-class device; attachment dimensions
+    /// record which viewport produced each frame.
+    @MainActor
+    func testCaptureFiveTabLanding() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        try signInViaReviewDemo(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(rootTabButton("Save", app: app).exists)
+        attach(app, name: "five-tab-home")
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        attach(app, name: "five-tab-map")
+
+        openRootTab("Origin", app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["origin.placeholder"].waitForExistence(timeout: stepTimeout)
+        )
+        attach(app, name: "five-tab-origin")
+
+        openRootTab("Profile", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-profile")
+
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-capture")
     }
 
     @MainActor
@@ -287,10 +208,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "debug-after-signin")
             throw XCTSkip("Home never appeared after demo sign-in.")
         }
-        XCTAssertTrue(app.buttons["home.capture"].exists)
+        XCTAssertTrue(rootTabButton("Save", app: app).exists)
         attach(app, name: "screenshot-01-home")
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
@@ -349,7 +270,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        let capture = app.buttons["home.capture"]
+        let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
@@ -376,14 +297,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        // Live Home leads with the saved-place library. The pending candidate
+        // is proven on Saves below; do not require the old One-Face
+        // "clues need your help" headline.
         XCTAssertTrue(
-            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'clue' AND label CONTAINS[c] 'help'"))
-                .firstMatch.waitForExistence(timeout: stepTimeout)
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Home should show the saved-place library after relaunch."
         )
         XCTAssertFalse(app.staticTexts["Quarter Sheets Pizza Club"].exists)
         attach(app, name: "atlas-production-home")
 
-        openRootTab("Saves", app: app)
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let savedCandidate = app.buttons.matching(
             NSPredicate(
@@ -432,38 +356,38 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     func testGlobalTabsAreReachableAndTripUsesScopedTabs() throws {
+        let storageID = UUID().uuidString.lowercased()
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
                 "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
-            ]
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
         )
         launch(app)
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.buttons["home.capture"].exists)
-        XCTAssertTrue(app.buttons["home.review"].exists)
-        XCTAssertTrue(app.buttons["home.saves"].exists)
-        let continueTrip = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'home.trip.'")
-        ).firstMatch
-        XCTAssertTrue(continueTrip.waitForExistence(timeout: timeout(20)))
+        XCTAssertTrue(rootTabButton("Save", app: app).exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
+        XCTAssertTrue(
+            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'"))
+                .firstMatch.exists
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
 
-        let recentSaves = app.descendants(matching: .any)["home.recentSaves"]
-        if !recentSaves.waitForExistence(timeout: timeout(1)) {
-            app.swipeUp()
-        }
-        XCTAssertTrue(recentSaves.waitForExistence(timeout: stepTimeout))
-
-        for tab in ["Home", "Saves", "Trips", "Map"] {
+        for tab in ["Home", "Map", "Save", "Origin", "Profile"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
         }
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
 
-        openRootTab("Saves", app: app)
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
 
         openRootTab("Map", app: app)
@@ -471,7 +395,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         dismissLocationAlertIfPresent()
         XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
@@ -487,7 +411,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(tripTabButton("Share", app: app).exists)
         XCTAssertTrue(app.buttons["trip.share.action"].exists)
 
-        for rootTab in ["Home", "Saves", "Trips"] {
+        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists, "Root tab \(rootTab) should be hidden inside a Trip")
         }
 
@@ -500,7 +424,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         backButton.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
-        for rootTab in ["Home", "Saves", "Trips", "Map"] {
+        openRootTab("Home", app: app)
+        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
             XCTAssertTrue(
                 rootTabButton(rootTab, app: app).waitForExistence(timeout: stepTimeout),
                 "Missing \(rootTab) after leaving a Trip"
@@ -524,7 +449,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         let routeTrip = app.buttons.matching(
@@ -577,7 +502,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(tripTabButton("Inbox", app: app).exists)
         XCTAssertFalse(tripTabButton("Share", app: app).exists)
         XCTAssertTrue(tripTabButton("Map", app: app).isSelected)
-        for rootTab in ["Home", "Saves", "Trips"] {
+        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists)
         }
 
@@ -599,7 +524,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemo(app: app)
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(
             app.buttons["trips.capture"].exists,
@@ -646,7 +571,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testTripsAskFieldExpandsInPlace() throws {
+    func testTripsAskRoutesToMapDrawer() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -657,18 +582,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         launch(app)
         try signInViaReviewDemo(app: app)
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         // Tapping the ask entry focuses a real input; typed text renders in
-        // the field and the user stays on Trips (spec P1).
+        // the field before the child route hands off to the shared Map drawer.
         let askInput = app.textFields["trips.assistant.input"]
         typeText("Plan a day from my stamps", into: askInput)
         XCTAssertEqual(askInput.value as? String, "Plan a day from my stamps")
-        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].exists)
 
-        // Submit expands the panel in place: one drawer surface, no tab
-        // switch to Map.
+        // Trips is no longer a root tab. Submit returns to the root Map and
+        // expands the one shared drawer there.
         app.buttons["trips.assistant.submit"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
@@ -678,25 +603,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             1,
             "Only one ask surface should be on screen."
         )
-        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
-        attach(app, name: "trips-ask-expanded-in-place")
-
-        // Collapsing the panel (drag the grab handle down) returns to Trips.
-        // swipeDown() on the tiny handle flicks < the 80pt collapse threshold,
-        // so drag an explicit 260pt path instead.
-        let handle = app.descendants(matching: .any)["map.drawerPanel.handle"]
-        XCTAssertTrue(handle.waitForExistence(timeout: stepTimeout))
-        let dragStart = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        dragStart.press(
-            forDuration: 0.1,
-            thenDragTo: dragStart.withOffset(CGVector(dx: 0, dy: 260))
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)["drawer.root"]
-                .waitForNonExistence(timeout: stepTimeout)
-        )
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].exists)
-        XCTAssertTrue(rootTabButton("Trips", app: app).isSelected)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "trips-ask-routes-to-map-drawer")
     }
 
     @MainActor
@@ -711,7 +620,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         launch(app)
         try signInViaReviewDemo(app: app)
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
         let firstTrip = app.buttons.matching(
@@ -755,7 +664,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        let reviewClues = app.buttons["home.review"]
+        let reviewClues = app.descendants(matching: .any)["home.review"]
         XCTAssertTrue(reviewClues.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(reviewClues.isHittable)
         reviewClues.tap()
@@ -764,7 +673,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
             "Home Review clues should navigate to Saves."
         )
-        XCTAssertTrue(rootTabButton("Saves", app: app).isSelected)
+        XCTAssertFalse(rootTabButton("Saves", app: app).exists)
         XCTAssertFalse(
             app.descendants(matching: .any)["drawer.root"].exists,
             "Home Review clues should not present a drawer."
@@ -788,7 +697,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["drawer.launcher"].exists)
 
-        let captureButtons = app.buttons.matching(identifier: "home.capture")
+        let captureButtons = app.buttons.matching(identifier: "root.tab.save")
         XCTAssertEqual(captureButtons.count, 1)
         XCTAssertTrue(captureButtons.firstMatch.isHittable)
         captureButtons.firstMatch.tap()
@@ -911,7 +820,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemo(app: app)
 
-        openRootTab("Saves", app: app)
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: launchTimeout))
 
         let mapStampsSegment = app.buttons["saves.segment.mapStamps"]
@@ -923,15 +832,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")
         ).firstMatch
         XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            scrollUntilHittable(firstMapStamp, in: app.scrollViews.firstMatch),
+            "The first Map Stamp should be reachable before opening its canonical detail."
+        )
         firstMapStamp.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "place.detail.root").count,
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
             1,
-            "A Map Stamp should use one focused detail renderer."
+            "A Map Stamp should open one shared drawer."
         )
-        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
             app.descendants(matching: .any).matching(identifier: "place.detail.scroll").count,
@@ -948,11 +860,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let closeDetail = app.buttons["drawer.place.close"]
         XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
         closeDetail.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(firstMapStamp.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(mapStampsSegment.isSelected)
-        XCTAssertTrue(rootTabButton("Saves", app: app).isSelected)
+        XCTAssertFalse(rootTabButton("Saves", app: app).exists)
 
         let reviewSegment = app.buttons["saves.segment.review"]
         XCTAssertTrue(reviewSegment.waitForExistence(timeout: stepTimeout))
@@ -1070,7 +982,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
@@ -1167,15 +1079,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        for tab in ["Home", "Saves", "Trips", "Map"] {
+        for tab in ["Home", "Map", "Origin"] {
             openRootTab(tab, app: app)
             XCTAssertTrue(
                 app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
-                "\(tab) should keep the fixed Passport entry in its SAV-E lockup."
+                "\(tab) should keep the fixed Passport entry in its Savvy lockup."
             )
         }
-        openRootTab("Home", app: app)
-        app.buttons["root.passport"].tap()
+        openRootTab("Profile", app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["profile.cover"].waitForExistence(timeout: stepTimeout))
@@ -1249,7 +1160,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemo(app: app)
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         let firstTrip = app.buttons.matching(
@@ -1297,7 +1208,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        let capture = app.buttons["home.capture"]
+        let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
 
@@ -1427,7 +1338,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         attach(seededApp, name: "v5-01-home-place-memory")
 
-        seededApp.buttons["home.capture"].tap()
+        rootTabButton("Save", app: seededApp).tap()
         XCTAssertTrue(
             seededApp.descendants(matching: .any)["capture.flow"]
                 .waitForExistence(timeout: stepTimeout)
@@ -1490,7 +1401,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .waitForExistence(timeout: launchTimeout)
         )
 
-        reviewApp.buttons["home.capture"].tap()
+        rootTabButton("Save", app: reviewApp).tap()
         let captureInput = reviewApp.textViews["capture.input"]
         XCTAssertTrue(captureInput.waitForExistence(timeout: stepTimeout))
         typeText(
@@ -1611,6 +1522,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
+        if !rootTabButton(title, app: app).isHittable {
+            returnToRootBar(app: app)
+        }
         let tab = rootTabButton(title, app: app)
         XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout), "Missing \(title) root tab")
         tab.tap()
@@ -1624,11 +1538,118 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func rootScreenIdentifier(for title: String) -> String? {
         switch title {
         case "Home": return "home.root"
-        case "Saves": return "saves.root"
-        case "Trips": return "trips.home"
         case "Map": return "map.root"
+        case "Origin": return "origin.placeholder"
+        case "Profile": return "profile.root"
         default: return nil
         }
+    }
+
+    @MainActor
+    private func openSavesFromHome(app: XCUIApplication) {
+        openRootTab("Home", app: app)
+        // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
+        // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
+        let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.saves"],
+            app.buttons["Manage"],
+            app.descendants(matching: .any)["home.review"],
+            app.buttons["Review clues"],
+        ]
+        let entry = firstExisting(candidates, timeout: stepTimeout)
+        XCTAssertTrue(entry.exists, "Missing Home Saves entry")
+        tapReachable(entry)
+        let saves = app.descendants(matching: .any)["saves.root"]
+        if !saves.waitForExistence(timeout: timeout(5)) {
+            tapReachable(entry)
+        }
+        // Cap at stepTimeout, not launchTimeout. A dead navigation used to
+        // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
+        // rail step (CI 32778736280, exit 64).
+        XCTAssertTrue(
+            saves.waitForExistence(timeout: stepTimeout),
+            "Home Saves entry did not open Saves"
+        )
+    }
+
+    @MainActor
+    private func openTripsFromHome(app: XCUIApplication) {
+        openRootTab("Home", app: app)
+        let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.trips"],
+            app.buttons["Trips"],
+        ]
+        let entry = firstExisting(candidates, timeout: stepTimeout)
+        XCTAssertTrue(entry.exists, "Missing Home Trips entry")
+        tapReachable(entry)
+        let trips = app.descendants(matching: .any)["trips.home"]
+        if !trips.waitForExistence(timeout: timeout(5)) {
+            if app.descendants(matching: .any)["profile.root"].exists {
+                openRootTab("Home", app: app)
+            }
+            tapReachable(firstExisting(candidates, timeout: timeout(2)))
+        }
+        XCTAssertTrue(
+            trips.waitForExistence(timeout: stepTimeout),
+            "Home Trips entry did not open Trips"
+        )
+    }
+
+    @MainActor
+    private func firstExisting(_ elements: [XCUIElement], timeout: TimeInterval) -> XCUIElement {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let found = elements.first(where: \.exists) {
+                return found
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return elements.first(where: \.exists) ?? elements[0]
+    }
+
+    /// The 402pt Atlas canvas is scaled by `ReferenceViewport`. XCTest can
+    /// report `exists` while `isHittable` is false; a center coordinate tap
+    /// still hits the control.
+    @MainActor
+    private func tapReachable(_ element: XCUIElement) {
+        if element.exists, element.isHittable {
+            element.tap()
+            return
+        }
+        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    @MainActor
+    private func returnToRootBar(app: XCUIApplication) {
+        // Capture and confirm can replace one full-screen detail with another
+        // before leaving the pushed Saves route. Unwind every visible layer,
+        // then pop the child route back to the five-tab root.
+        for _ in 0..<12 {
+            if rootTabButton("Home", app: app).exists { return }
+
+            let placeDetailClose = app.buttons["drawer.place.close"]
+            if placeDetailClose.exists, placeDetailClose.isHittable {
+                placeDetailClose.tap()
+                continue
+            }
+
+            let tripBack = app.buttons["trip.back"]
+            if tripBack.exists, tripBack.isHittable {
+                tripBack.tap()
+                continue
+            }
+
+            let navigationBack = app.navigationBars.buttons.element(boundBy: 0)
+            if navigationBack.exists, navigationBack.isHittable {
+                navigationBack.tap()
+                continue
+            }
+
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.50))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.82, dy: 0.50))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
@@ -1671,7 +1692,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         placeName: String,
         tripName: String
     ) throws {
-        openRootTab("Saves", app: app)
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let savedPlace = app.buttons.matching(
             NSPredicate(
@@ -1681,7 +1702,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         ).firstMatch
         XCTAssertTrue(scrollUntilExists(savedPlace, app: app), "Saved Map Stamp is missing.")
 
-        openRootTab("Trips", app: app)
+        openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
         let tripCard = app.buttons.matching(
             NSPredicate(

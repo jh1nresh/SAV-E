@@ -1,9 +1,9 @@
-# SAV-E Little Atlas + Postcard Pocket
+# Savvy Little Atlas + Postcard Pocket
 
 Status: locked production direction
 Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png)
 
-This file is the canonical SAV-E visual specification for Home, Saves, Trips,
+This file is the canonical Savvy visual specification for Home, Saves, Trips,
 Trip Plan, and Root Map. Where an older production spec conflicts with the fixed
 composition, assets, type scale, or one-viewport rule below, this file wins.
 Product behavior, persistence, authentication, and confirmation remain
@@ -12,7 +12,7 @@ Postcard renderer: focused full-screen detail outside Map and a drawer on Map.
 
 ## Direction
 
-SAV-E is a small illustrated travel keepsake that happens to be useful. It is
+Savvy is a small illustrated travel keepsake that happens to be useful. It is
 not a beige productivity dashboard with cute stickers.
 
 Two page archetypes share one shell:
@@ -57,7 +57,7 @@ Opening    = Postcard Pocket transition
 
 ### Home
 
-- Memo + SAV-E lockup, small link capsule.
+- Memo + Savvy lockup, small link capsule.
 - An owned illustrated city atlas fills the upper half when the resolved city
   is Tokyo, Taipei, New York, Shanghai, Beijing, Guangzhou, Shenzhen, Chengdu,
   Seoul, or the Los Angeles–Orange County region.
@@ -67,12 +67,15 @@ Opening    = Postcard Pocket transition
 - The review sheet and `Review clues` action navigate directly to Saves. Home
   never opens a review drawer; selecting a Review Candidate in Saves opens the
   focused Postcard detail and returns to the same Review queue when closed.
-- Below: one Trip preview and exactly two recent Map Stamps.
+- Live Home shows exactly one sheet. If Review is waiting, that sheet is Review
+  clues only. If Review is empty, a same-city trip may appear with no coral.
+  Otherwise Home stays quiet. Map Stamps live on Saves. The trip strip lives
+  on Trips. The locked One-Face Home raster may still show the older stack.
 - Root tabs remain visible.
 
 ### Saves
 
-- Memo + SAV-E lockup and one capture button.
+- Memo + Savvy lockup and one capture button.
 - Compact title, subtitle, and Review / Map Stamps counts.
 - Review Candidate tickets are sky; Source Clue tickets are coral.
 - Confirmed Map Stamp tickets reuse the exact ticket silhouette, medallion,
@@ -89,12 +92,12 @@ Opening    = Postcard Pocket transition
 
 ### Trips
 
-- Memo + SAV-E lockup, compact title, and the one global link entry.
+- Memo + Savvy lockup, compact title, and the one global link entry.
 - A cropped atlas is the background for one featured current or next Trip
   postcard; it is not a generic dashboard hero.
-- At most two upcoming or planning Trip tickets are visible in the fixed
+- At most one upcoming or planning Trip ticket is visible in the fixed
   viewport.
-- One cream planning chatbar opens the existing SAV-E assistant with focus.
+- One cream planning chatbar opens the existing Savvy assistant with focus.
   Chat is an input surface only; Trip cards and Day Plan remain the durable
   output.
 - One adjacent coral New Trip action remains directly reachable. Opening a Trip
@@ -110,7 +113,7 @@ Opening    = Postcard Pocket transition
 - One Add stop action.
 - Plan only contains user-confirmed Map Stamps. It does not silently inject AI
   or public recommendations into the durable itinerary.
-- AI discovery stays in the Map `Ask SAV-E` surface. A public suggestion must
+- AI discovery stays in the Map `Ask Savvy` surface. A public suggestion must
   remain visibly unconfirmed and receive explicit approval before it can be
   added to the plan.
 - Trip tabs remain visible.
@@ -119,7 +122,7 @@ Opening    = Postcard Pocket transition
 
 - Keep the existing four-step first-run proof and accessibility identifiers;
   visual unification must not change onboarding completion or clue capture.
-- The header uses one Memo + SAV-E lockup, a compact step seal, and a postal
+- The header uses one Memo + Savvy lockup, a compact step seal, and a postal
   progress rail. The page uses atlas typography rather than rounded-system
   display type.
 - Language choices, clue input, Review proof, and Map Stamp proof use scalloped
@@ -133,10 +136,10 @@ Opening    = Postcard Pocket transition
 
 ### Root Map
 
-- Live MapKit fills the viewport below the SAV-E header. Owned landmark, Memo,
+- Live MapKit fills the viewport below the Savvy header. Owned landmark, Memo,
   pin, and route accents may sit above it without obscuring geographic truth.
 - One cream Map command shelf sits above the fixed Root tabs. Its default state
-  contains a grabber, `Search places or ask SAV-E`, and the confirmed Map Stamp
+  contains a grabber, `Search places or ask Savvy`, and the confirmed Map Stamp
   count.
 - Selecting a pin changes that same shelf into a compact place peek. Closing it
   returns to search; `Open details` transitions to the single canonical

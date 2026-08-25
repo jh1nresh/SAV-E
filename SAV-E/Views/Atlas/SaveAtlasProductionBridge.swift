@@ -60,6 +60,7 @@ enum SaveAtlasPresentationFactory {
             }
         }
         presentation.onOpenSaves = onOpenSaves
+        presentation.onOpenTrips = onOpenTrips
         presentation.onOpenPlace = { id in
             guard let place = mapViewModel.places.first(where: { $0.id.uuidString == id }) else {
                 return
@@ -223,14 +224,14 @@ enum SaveAtlasPresentationFactory {
         selectedPlace: Place?
     ) -> AtlasPresentation {
         var presentation = AtlasPresentation.reference
+        presentation.locksOneFaceHomeComposition = false
         presentation.reviewCount = candidates.count
         presentation.mapStampCount = places.count
         presentation.failedCount = candidates.filter {
             ["failed", "rejected"].contains($0.status.lowercased())
         }.count
-        presentation.recentPlaces = places
+        presentation.savedPlaces = places
             .sorted { $0.createdAt > $1.createdAt }
-            .prefix(2)
             .map(placePresentation)
         presentation.reviewItems = candidates
             .sorted { $0.createdAt > $1.createdAt }
@@ -612,7 +613,7 @@ struct SaveAtlasMapCommandShelf: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AtlasPalette.forest)
 
-                    Text("Search places or ask SAV-E")
+                    Text("Search places or ask Savvy")
                         .font(AtlasType.strong(16))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
@@ -650,8 +651,8 @@ struct SaveAtlasMapCommandShelf: View {
             .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Search places or ask SAV-E")
-        .accessibilityHint("Opens the SAV-E assistant")
+        .accessibilityLabel("Search places or ask Savvy")
+        .accessibilityHint("Opens the Savvy assistant")
         .accessibilityIdentifier("map.command.search")
     }
 }

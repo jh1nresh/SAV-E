@@ -276,8 +276,8 @@ private struct SaveLocationDeniedNotice: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(languageSettings.localized(
-                        english: "Location is off for SAV-E",
-                        traditionalChinese: "SAV-E 的定位權限已關閉"
+                        english: "Location is off for Savvy",
+                        traditionalChinese: "Savvy 的定位權限已關閉"
                     ))
                     .font(SaveAtlasType.strong(16, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.forest)

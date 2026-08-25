@@ -98,7 +98,7 @@ final class ShareRouteCodecTests: XCTestCase {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E",
+            sourceLabel: "Savvy",
             sourceURL: "javascript:alert(1)",
             photoURLs: ["file:///private/photo.jpg"],
             note: String(repeating: "a", count: 240)
@@ -117,7 +117,7 @@ final class ShareRouteCodecTests: XCTestCase {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E",
+            sourceLabel: "Savvy",
             sourceURL: "javascript:alert(1)",
             photoURLs: ["file:///private/photo.jpg"],
             note: String(repeating: "a", count: 240)
@@ -143,7 +143,7 @@ final class ShareRouteCodecTests: XCTestCase {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E",
+            sourceLabel: "Savvy",
             sourceURL: "https://example.com/place?token=secret#fragment",
             photoURLs: ["https://example.com/photo.jpg?signature=secret#fragment"],
             note: "Confidence: 92%"
@@ -159,9 +159,9 @@ final class ShareRouteCodecTests: XCTestCase {
         let fallbackURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/embeddedPayload"))
         let shortURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
         let content = SavePlaceShareContent(
-            subject: "SAV-E Map Stamp: Kato",
+            subject: "Savvy Map Stamp: Kato",
             fallbackURL: fallbackURL,
-            fallbackText: "SAV-E Map Stamp\nKato\nOpen in SAV-E: \(fallbackURL.absoluteString)",
+            fallbackText: "Savvy Map Stamp\nKato\nOpen in Savvy: \(fallbackURL.absoluteString)",
             payload: nil,
             sourcePlaceId: nil,
             optionalShareNote: nil
@@ -176,9 +176,9 @@ final class ShareRouteCodecTests: XCTestCase {
     @MainActor
     func testShareContentWithoutFallbackURLKeepsImmediatePlainTextItem() {
         let content = SavePlaceShareContent(
-            subject: "SAV-E Map Result: Kato",
+            subject: "Savvy Map Result: Kato",
             fallbackURL: nil,
-            fallbackText: "SAV-E Map Result\nKato",
+            fallbackText: "Savvy Map Result\nKato",
             payload: SharedPlaceData(
                 id: "place_1",
                 name: "Kato",
@@ -190,7 +190,7 @@ final class ShareRouteCodecTests: XCTestCase {
                 reviewCount: nil,
                 priceRange: nil,
                 hours: nil,
-                sourceLabel: "SAV-E",
+                sourceLabel: "Savvy",
                 sourceURL: nil,
                 photoURLs: [],
                 note: nil
@@ -217,15 +217,15 @@ final class ShareRouteCodecTests: XCTestCase {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E",
+            sourceLabel: "Savvy",
             sourceURL: nil,
             photoURLs: [],
             note: nil
         )
         let content = SavePlaceShareContent(
-            subject: "SAV-E Map Stamp: Kato",
+            subject: "Savvy Map Stamp: Kato",
             fallbackURL: fallbackURL,
-            fallbackText: "SAV-E Map Stamp\nKato\nOpen in SAV-E: \(fallbackURL.absoluteString)",
+            fallbackText: "Savvy Map Stamp\nKato\nOpen in Savvy: \(fallbackURL.absoluteString)",
             payload: payload,
             sourcePlaceId: UUID(),
             optionalShareNote: "Order the tasting menu"
@@ -263,7 +263,7 @@ final class ShareRouteCodecTests: XCTestCase {
 
         XCTAssertEqual(receipt.verifiedSenderLabel, "Mina")
         XCTAssertEqual(receipt.sourcePlaceID, "11111111-2222-3333-4444-555555555555")
-        XCTAssertEqual(receipt.fullAppURL?.absoluteString, "wanderly://p/AbC123_x")
+        XCTAssertEqual(receipt.fullAppURL?.absoluteString, "savvy://p/AbC123_x")
         XCTAssertEqual(savedPlace.recommender, "Mina")
         XCTAssertEqual(savedPlace.status, .wantToGo)
         XCTAssertEqual(savedPlace.visibility, .privateMemory)
@@ -291,7 +291,7 @@ final class ShareRouteCodecTests: XCTestCase {
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
-            sourceLabel: "SAV-E",
+            sourceLabel: "Savvy",
             sourceURL: nil,
             photoURLs: [],
             note: nil
@@ -353,7 +353,7 @@ final class ShareRouteCodecTests: XCTestCase {
         "reviewCount": null,
         "priceRange": null,
         "hours": null,
-        "sourceLabel": "SAV-E",
+        "sourceLabel": "Savvy",
         "sourceURL": null,
         "photoURLs": [],
         "note": null,

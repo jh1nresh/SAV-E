@@ -1107,8 +1107,8 @@ private struct TripStopEditorView: View {
             .accessibilityIdentifier("trip.stop.edit.remove.confirm")
         } message: {
             Text(localized(
-                "The confirmed Map Stamp stays in SAV-E; only this Trip Pack stop is removed.",
-                "已確認地圖章仍會保留在 SAV-E，只會從這個 Trip Pack 移除。"
+                "The confirmed Map Stamp stays in Savvy; only this Trip Pack stop is removed.",
+                "已確認地圖章仍會保留在 Savvy，只會從這個 Trip Pack 移除。"
             ))
         }
         .accessibilityIdentifier("trip.stop.edit")
@@ -1385,8 +1385,8 @@ private struct TripPackShareView: View {
                         if let shareURL {
                             ShareLink(item: shareURL) {
                                 TripPostalExportStamp(
-                                    title: localized("SAV-E Link", "SAV-E 連結"),
-                                    subtitle: localized("Open in SAV-E", "在 SAV-E 開啟"),
+                                    title: localized("Savvy Link", "Savvy 連結"),
+                                    subtitle: localized("Open in Savvy", "在 Savvy 開啟"),
                                     systemImage: "link",
                                     tint: SaveAtlasPalette.sky
                                 )
@@ -1395,7 +1395,7 @@ private struct TripPackShareView: View {
                             .accessibilityIdentifier("trip.share.link")
                         } else {
                             TripPostalExportStamp(
-                                title: localized("SAV-E Link", "SAV-E 連結"),
+                                title: localized("Savvy Link", "Savvy 連結"),
                                 subtitle: localized("Add a Map Stamp", "先加入地圖章"),
                                 systemImage: "link",
                                 tint: SaveAtlasPalette.line,
@@ -1426,8 +1426,8 @@ private struct TripPackShareView: View {
                     TripPrivacyReceipt(
                         title: localized("Privacy receipt", "隱私收據"),
                         text: localized(
-                            "SAV-E links and KML include confirmed place details only. Private notes are excluded.",
-                            "SAV-E 連結與 KML 只包含已確認地點；私人備註不會輸出。"
+                            "Savvy links and KML include confirmed place details only. Private notes are excluded.",
+                            "Savvy 連結與 KML 只包含已確認地點；私人備註不會輸出。"
                         )
                     )
                     .accessibilityIdentifier("trip.share.privacyReceipt")

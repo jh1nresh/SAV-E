@@ -12,7 +12,7 @@ enum TripKMLExportError: LocalizedError {
         case .invalidCoordinates(let name):
             return "\(name) needs valid coordinates before KML export."
         case .invalidDocument:
-            return "SAV-E could not create a valid KML document."
+            return "Savvy could not create a valid KML document."
         }
     }
 }

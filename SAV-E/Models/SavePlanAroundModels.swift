@@ -161,7 +161,7 @@ enum SavePlanStopSource: String, Hashable {
     var sourceLabel: String {
         switch self {
         case .anchor, .userSaved:
-            return "From your SAV-E"
+            return "From your Savvy"
         case .pendingCandidate:
             return "Review candidate"
         case .unsavedMapCandidate:

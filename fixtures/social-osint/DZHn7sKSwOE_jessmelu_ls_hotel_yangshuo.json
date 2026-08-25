@@ -1,5 +1,5 @@
 {
-  "note": "Age-restricted Instagram reel. The IG page itself is login-walled and returns thin/empty og metadata (only the creator handle is visible). The caption + corroborating venue identity surface ONLY through public web search, not the IG page. SAV-E must run public-search recovery off the shortcode + creator handle and produce a Review Candidate (NOT an auto Map Stamp: there is no provider place id / coordinate provenance yet).",
+  "note": "Age-restricted Instagram reel. The IG page itself is login-walled and returns thin/empty og metadata (only the creator handle is visible). The caption + corroborating venue identity surface ONLY through public web search, not the IG page. Savvy must run public-search recovery off the shortcode + creator handle and produce a Review Candidate (NOT an auto Map Stamp: there is no provider place id / coordinate provenance yet).",
   "sourceUrl": "https://www.instagram.com/reel/DZHn7sKSwOE/",
   "shortcode": "DZHn7sKSwOE",
   "creatorHandle": "jessmelu",
