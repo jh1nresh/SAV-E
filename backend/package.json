@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "backfill:place-photos": "npm run build && node dist/placePhotoBackfillCli.js",
     "check:source-recovery": "node dist/sourceRecoveryConfigCheck.js",
     "prestart": "npm run build && npm run check:source-recovery",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
