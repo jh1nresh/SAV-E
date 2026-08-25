@@ -192,6 +192,11 @@ struct ContentView: View {
     @State private var suppressPendingOnboardingCaptureResume = false
     @State private var exactSearchRequestID: UUID?
     @State private var isExactSearchSessionActive = false
+    @State private var originCaptures: [SaveOriginCapture] = []
+    @State private var originCaptureCandidates: [PlaceReviewCandidate] = []
+    @State private var isLoadingOrigin = false
+    @State private var originLoadError: String?
+    @State private var pendingOriginPlanCandidateID: UUID?
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -514,11 +519,7 @@ struct ContentView: View {
                                 onOpenPassport: openPassport
                             )
                         case .origin:
-                            // W4 is not implemented. The tab exists so the bar
-                            // shape and layout are verifiable now, but it must
-                            // not pretend to have content: no seeded cards, no
-                            // implied other users. See the spec's W4 rules.
-                            SaveOriginPlaceholderView(onOpenPassport: openPassport)
+                            originView
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:
@@ -527,7 +528,7 @@ struct ContentView: View {
                             // committing the selection. Render the previous
                             // surface's neighbour rather than crashing if a
                             // future caller sets it directly.
-                            SaveOriginPlaceholderView(onOpenPassport: openPassport)
+                            originView
                         }
                     }
 
@@ -598,6 +599,30 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var originView: some View {
+        SaveOriginView(
+            captures: originCaptures,
+            sourceCandidates: storageScope == .production
+                ? originCaptureCandidates
+                : mapVM.reviewCandidates,
+            reviewCandidates: mapVM.reviewCandidates,
+            isLoading: isLoadingOrigin,
+            loadError: originLoadError,
+            onRefresh: refreshOrigin,
+            onPlanCandidate: { candidate in
+                openReviewCandidate(
+                    candidate,
+                    tripID: nil,
+                    offerTripAfterConfirmation: true
+                )
+            },
+            onArchiveCandidate: { candidate in
+                try await mapVM.archiveReviewCandidate(candidate)
+            },
+            onOpenPassport: openPassport
+        )
     }
 
     /// The Map tab's single drawer surface (spec P2): the resting shelf and
@@ -775,7 +800,14 @@ struct ContentView: View {
                 try await mapVM.investigateReviewCandidateMore(candidate)
             },
             onSaveMapCandidate: { candidate in
-                try await mapVM.saveMapCandidateAsPlace(candidate)
+                let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
+                    mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
+                } ?? false
+                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                if resolvesOriginPlan {
+                    pendingOriginPlanCandidateID = nil
+                    requestTripAssignment(for: place)
+                }
             },
             onUpdatePlaceVisibility: { place, visibility in
                 try await mapVM.updatePlaceVisibility(place, visibility: visibility)
@@ -939,8 +971,13 @@ struct ContentView: View {
         }
     }
 
-    private func openReviewCandidate(_ candidate: PlaceReviewCandidate, tripID: UUID?) {
+    private func openReviewCandidate(
+        _ candidate: PlaceReviewCandidate,
+        tripID: UUID?,
+        offerTripAfterConfirmation: Bool = false
+    ) {
         pendingCaptureTripID = tripID
+        pendingOriginPlanCandidateID = offerTripAfterConfirmation ? candidate.id : nil
         fullScreenRoute = .placeDetail(.reviewCandidate(candidate))
     }
 
@@ -949,11 +986,38 @@ struct ContentView: View {
         Task {
             defer { fullScreenCandidateActionID = nil }
             do {
-                _ = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
-                fullScreenRoute = nil
+                let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
+                if pendingOriginPlanCandidateID == candidate.id {
+                    pendingOriginPlanCandidateID = nil
+                    requestFullScreenTripAssignment(for: place)
+                } else {
+                    fullScreenRoute = nil
+                }
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
+        }
+    }
+
+    @MainActor
+    private func refreshOrigin() async {
+        guard storageScope == .production else {
+            originCaptures = []
+            originCaptureCandidates = mapVM.reviewCandidates
+            originLoadError = nil
+            return
+        }
+        guard !isLoadingOrigin else { return }
+        isLoadingOrigin = true
+        originLoadError = nil
+        defer { isLoadingOrigin = false }
+        do {
+            originCaptures = try await SupabaseService.shared.fetchOriginCaptures()
+            originCaptureCandidates = (try? await SupabaseService.shared.fetchReviewCandidates()) ?? []
+        } catch is CancellationError {
+            return
+        } catch {
+            originLoadError = error.localizedDescription
         }
     }
 
@@ -998,8 +1062,16 @@ struct ContentView: View {
         Task {
             defer { fullScreenMapCandidateActionID = nil }
             do {
-                try await mapVM.saveMapCandidateAsPlace(candidate)
-                fullScreenRoute = nil
+                let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
+                    mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
+                } ?? false
+                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                if resolvesOriginPlan {
+                    pendingOriginPlanCandidateID = nil
+                    requestFullScreenTripAssignment(for: place)
+                } else {
+                    fullScreenRoute = nil
+                }
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
@@ -1382,6 +1454,7 @@ struct ContentView: View {
         isTransitioningToTripCreation = false
         pendingTripAssignmentPlace = nil
         pendingCaptureTripID = nil
+        pendingOriginPlanCandidateID = nil
     }
 
     private func addConfirmedPlaceToTrip(_ place: Place, tripID: UUID) async {

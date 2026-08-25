@@ -106,6 +106,24 @@ final class SavePlaceCorrectionEventTests: XCTestCase {
     }
 
     @MainActor
+    func testArchiveOnlyRetiresTheReviewCandidate() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("corrections.json"))
+        let map = MapViewModel(correctionEventStore: store, usesRemotePersistence: false)
+        var candidate = makeCandidate(status: "review")
+        candidate.workflowRunId = nil
+        map.reviewCandidates = [candidate]
+
+        try await map.archiveReviewCandidate(candidate)
+
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertEqual(try store.recentEvents().first?.eventType, .rejectCandidate)
+        XCTAssertEqual(try store.recentEvents().first?.afterSnapshot?.status, "rejected")
+        XCTAssertEqual(try store.recentEvents().first?.userReasonText, "User archived review candidate.")
+    }
+
+    @MainActor
     private func makeCandidate(status: String) -> PlaceReviewCandidate {
         PlaceReviewCandidate(
             id: UUID(),

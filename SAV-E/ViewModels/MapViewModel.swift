@@ -986,6 +986,22 @@ final class MapViewModel: ObservableObject {
         clearExactSearchResolution(matching: candidate.id)
     }
 
+    func archiveReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
+        var updatedCandidate = candidate
+        updatedCandidate.status = "rejected"
+        try await recordCorrectionEvent(
+            for: candidate,
+            eventType: .rejectCandidate,
+            afterCandidate: updatedCandidate,
+            reason: "User archived review candidate."
+        )
+        reviewCandidates.removeAll { $0.id == candidate.id }
+        if selectedReviewCandidate?.id == candidate.id {
+            selectedReviewCandidate = nil
+        }
+        clearExactSearchResolution(matching: candidate.id)
+    }
+
     func saveReviewCandidateAsSourceOnly(_ candidate: PlaceReviewCandidate) async throws {
         var updatedCandidate = candidate
         updatedCandidate.status = "source_only"
@@ -1117,7 +1133,8 @@ final class MapViewModel: ObservableObject {
         return place
     }
 
-    func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws {
+    @discardableResult
+    func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws -> Place {
         let exactResolution = exactSearchResolution.flatMap { resolution in
             resolution.includes(candidateID: candidate.id) ? resolution : nil
         }
@@ -1146,7 +1163,7 @@ final class MapViewModel: ObservableObject {
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
             focusSavedPlace(existing, showStampMoment: false)
-            if resolvedExactSearch { return }
+            if resolvedExactSearch { return existing }
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
 
@@ -1177,6 +1194,12 @@ final class MapViewModel: ObservableObject {
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
         revealImportedPlaces([place])
+        return place
+    }
+
+    func mapCandidate(_ candidate: SaveMapCandidate, resolvesReviewCandidateID reviewCandidateID: UUID) -> Bool {
+        guard let resolution = exactSearchResolution else { return false }
+        return resolution.clue.id == reviewCandidateID && resolution.includes(candidateID: candidate.id)
     }
 
     /// After an exact-place search saves a map candidate, the originating
@@ -1672,6 +1695,7 @@ final class MapViewModel: ObservableObject {
             userReasonText: reason
         )
         try correctionEventStore.append(event)
+        guard usesRemotePersistence else { return }
         if let runId = candidate.workflowRunId {
             _ = try await supabaseService.recordPlaceRecoveryDecision(
                 PlaceRecoveryDecisionDraft(
