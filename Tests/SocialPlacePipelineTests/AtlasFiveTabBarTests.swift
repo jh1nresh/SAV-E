@@ -49,12 +49,21 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
-    func testFixedNinetyPointPillWouldHaveOverflowedAtFiveItems() {
-        // Documents the regression rather than trusting a comment: the old
-        // hardcoded value fit four items and does not fit five.
+    func testFixedNinetyPointPillWouldOverflowCompactFiveItemBar() {
         let legacyPillWidth: CGFloat = 90
-        XCTAssertGreaterThan(AtlasTabBarMetrics.slotWidth(itemCount: 4), legacyPillWidth)
         XCTAssertLessThan(AtlasTabBarMetrics.slotWidth(itemCount: 5), legacyPillWidth)
+    }
+
+    @MainActor
+    func testBarFloatsInsideCanvasWithAccessibleTargets() {
+        XCTAssertLessThan(AtlasTabBarMetrics.width, AtlasMetrics.width)
+        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.leadingInset, 16)
+        XCTAssertEqual(
+            AtlasTabBarMetrics.leadingInset,
+            (AtlasMetrics.width - AtlasTabBarMetrics.width) / 2
+        )
+        XCTAssertLessThan(AtlasTabBarMetrics.height, 76)
+        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, 44)
     }
 
     @MainActor

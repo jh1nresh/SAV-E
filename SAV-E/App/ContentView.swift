@@ -585,8 +585,10 @@ struct ContentView: View {
                         onSelect: selectRootTab
                     )
                     .placed(
-                        x: 0,
-                        y: selectedRootTab == .map ? 788 : 786,
+                        x: AtlasTabBarMetrics.leadingInset,
+                        y: selectedRootTab == .map
+                            ? AtlasTabBarMetrics.mapY
+                            : AtlasTabBarMetrics.standardY,
                         width: AtlasTabBarMetrics.width,
                         height: AtlasTabBarMetrics.height
                     )
