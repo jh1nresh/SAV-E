@@ -139,6 +139,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProductionConfig.appGroupSuiteName, "group.com.wanderly.app")
         XCTAssertEqual(SAVEProductionConfig.currentCustomURLScheme, "savvy")
         XCTAssertEqual(SAVEProductionConfig.legacyCustomURLScheme, "wanderly")
+        XCTAssertEqual(PrivyAuthService.oAuthRedirectURLScheme, "wanderly")
         XCTAssertTrue(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "savvy://p")!))
         XCTAssertTrue(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "wanderly://p")!))
         XCTAssertFalse(SAVEProductionConfig.supportsCustomURLScheme(URL(string: "other://p")!))

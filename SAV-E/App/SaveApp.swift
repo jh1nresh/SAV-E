@@ -194,10 +194,7 @@ struct SaveApp: App {
             case .unknown:
                 AuthLoadingView()
             case .unauthenticated:
-                SignInView(
-                    pendingOnboardingClue: $pendingOnboardingClue,
-                    pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID
-                )
+                SignInView()
                     .environmentObject(authService)
             case .authenticated:
                 AuthenticatedRootView(
@@ -1236,13 +1233,10 @@ private struct SaveOpeningHintPill: View {
 struct SignInView: View {
     @EnvironmentObject var authService: PrivyAuthService
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Binding var pendingOnboardingClue: String
-    @Binding var pendingOnboardingClueOwnerID: String
     @State private var email = ""
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
-    @State private var showsSampleProof = false
     @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
@@ -1263,21 +1257,12 @@ struct SignInView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    Spacer(minLength: isCompactHeight ? 10 : 22)
+                    Spacer(minLength: isCompactHeight ? 18 : 36)
 
                     SignInHero(isCompactHeight: isCompactHeight)
                         .padding(.horizontal, 24)
 
-                    Spacer(minLength: isCompactHeight ? 12 : 20)
-
-                    SignInWorkflowStrip(isCompactHeight: isCompactHeight)
-                        .padding(.horizontal, 22)
-
-                    sampleProofButton
-                        .padding(.horizontal, 22)
-                        .padding(.top, isCompactHeight ? 10 : 14)
-
-                    Spacer(minLength: isCompactHeight ? 12 : 18)
+                    Spacer(minLength: isCompactHeight ? 22 : 42)
 
                     VStack(spacing: isCompactHeight ? 10 : 12) {
                         appleSignInButton
@@ -1285,8 +1270,16 @@ struct SignInView: View {
                         emailSignInSection
                     }
                     .disabled(isLoading)
+                    .padding(isCompactHeight ? 14 : 18)
+                    .background(SaveAtlasPalette.paper.opacity(0.94))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 12, y: 5)
                     .padding(.horizontal, 22)
-                    .padding(.bottom, isCompactHeight ? 16 : 28)
+                    .padding(.bottom, isCompactHeight ? 18 : 34)
                 }
             }
         }
@@ -1302,21 +1295,6 @@ struct SignInView: View {
             Button(languageSettings.text(.ok)) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
-        }
-        .sheet(isPresented: $showsSampleProof) {
-            OnboardingView(startWithSampleProof: true) { firstClue in
-                // Completing the untouched sample returns nil. Preserve a real
-                // first-run clue that is still waiting for sign-in.
-                if let firstClue,
-                   PendingOnboardingClueAccess.canStoreUnclaimed(
-                       existingText: pendingOnboardingClue,
-                       ownerUserID: pendingOnboardingClueOwnerID
-                   ) {
-                    pendingOnboardingClue = firstClue
-                    pendingOnboardingClueOwnerID = ""
-                }
-                showsSampleProof = false
-            }
         }
     }
 
@@ -1385,42 +1363,6 @@ struct SignInView: View {
                     .stroke(Color.saveNotebookLine, lineWidth: 1.4)
             )
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var sampleProofButton: some View {
-        Button {
-            showsSampleProof = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.headline.weight(.bold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(languageSettings.localized(
-                        english: "See how it works — no sign-in",
-                        traditionalChinese: "先試試看 — 不用登入"
-                    ))
-                    .font(.subheadline.weight(.bold))
-                    Text(languageSettings.localized(
-                        english: "Drop a sample clue and watch it land on a map.",
-                        traditionalChinese: "丟一個範例線索，看它變成地圖上的地點。"
-                    ))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveMutedText)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-            }
-            .foregroundColor(.saveInk)
-            .padding(14)
-            .background(SaveAtlasPalette.kraft.opacity(0.72))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -1497,10 +1439,6 @@ enum PendingOnboardingClueAccess {
         return ownerUserID.isEmpty || ownerUserID == currentUserID
     }
 
-    static func canStoreUnclaimed(existingText: String, ownerUserID: String) -> Bool {
-        existingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ownerUserID.isEmpty
-    }
-
     static func ownerAfterMutation(newText: String, ownerUserID: String, currentUserID: String) -> String {
         guard !newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
         return ownerUserID.isEmpty ? currentUserID : ownerUserID
@@ -1512,13 +1450,11 @@ private struct SignInHero: View {
     let isCompactHeight: Bool
 
     var body: some View {
-        VStack(spacing: isCompactHeight ? 12 : 16) {
-            SignInProofMark(
-                label: languageSettings.localized(english: "Proof kept", traditionalChinese: "保留證據"),
-                isCompactHeight: isCompactHeight
-            )
+        VStack(spacing: isCompactHeight ? 10 : 14) {
+            MemoMascotMark(size: isCompactHeight ? 76 : 92, framed: false)
+                .accessibilityHidden(true)
 
-            VStack(spacing: isCompactHeight ? 5 : 8) {
+            VStack(spacing: isCompactHeight ? 5 : 7) {
                 Text(languageSettings.text(.appName))
                     .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
                     .foregroundStyle(SaveAtlasPalette.forest)
@@ -1533,115 +1469,11 @@ private struct SignInHero: View {
                     .lineSpacing(2)
                     .foregroundStyle(SaveAtlasPalette.ink.opacity(0.66))
                     .multilineTextAlignment(.center)
-                    .lineLimit(isCompactHeight ? 3 : nil)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.84)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-    }
-}
-
-private struct SignInProofMark: View {
-    let label: String
-    let isCompactHeight: Bool
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.saveNotebookPage.opacity(0.82))
-                .frame(width: isCompactHeight ? 140 : 166, height: isCompactHeight ? 106 : 126)
-                .rotationEffect(.degrees(-4))
-
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(SaveAtlasPalette.kraft.opacity(0.38))
-                .frame(width: isCompactHeight ? 114 : 138, height: isCompactHeight ? 84 : 100)
-                .offset(x: 22, y: 12)
-
-            MemoMascotMark(size: isCompactHeight ? 98 : 118, framed: false)
-                .offset(y: isCompactHeight ? -3 : -5)
-
-            Label(label, systemImage: "link")
-                .font(SaveAtlasType.strong(isCompactHeight ? 10 : 11))
-                .foregroundStyle(SaveAtlasPalette.paper)
-                .padding(.horizontal, isCompactHeight ? 9 : 11)
-                .padding(.vertical, isCompactHeight ? 6 : 7)
-                .background(SaveAtlasPalette.coral.opacity(0.92))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1))
-                .offset(x: isCompactHeight ? 54 : 66, y: isCompactHeight ? 44 : 52)
-        }
-        .frame(height: isCompactHeight ? 126 : 152)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct SignInWorkflowStrip: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let isCompactHeight: Bool
-
-    private var steps: [(String, String, Color)] {
-        [
-            (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), SaveAtlasPalette.coral),
-            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), SaveAtlasPalette.sky),
-            (languageSettings.text(.save), languageSettings.text(.saveSubtitle), SaveAtlasPalette.mint),
-        ]
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(steps.indices, id: \.self) { index in
-                WorkflowStepCard(
-                    title: steps[index].0,
-                    subtitle: steps[index].1,
-                    tint: steps[index].2,
-                    isCompactHeight: isCompactHeight
-                )
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(languageSettings.localized(
-            english: "Capture links or media, review with evidence, remember confirmed places.",
-            traditionalChinese: "收進連結或媒體，看證據確認，再記住已確認地點。"
-        ))
-    }
-}
-
-private struct WorkflowStepCard: View {
-    let title: String
-    let subtitle: String
-    let tint: Color
-    let isCompactHeight: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 4 : 5) {
-            Circle()
-                .fill(tint)
-                .frame(width: isCompactHeight ? 8 : 10, height: isCompactHeight ? 8 : 10)
-                .overlay(
-                    Circle()
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
-                )
-
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundColor(.saveCocoa.opacity(0.68))
-                .lineLimit(isCompactHeight ? 1 : 2)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(isCompactHeight ? 10 : 12)
-        .background(Color.saveNotebookPage.opacity(0.96))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
