@@ -16,6 +16,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("savedPlaceGroups"))
         XCTAssertTrue(library.contains("regionTitle"))
         XCTAssertTrue(library.contains("group.places"))
+        XCTAssertTrue(library.contains("HomeFeaturedPlaceHero"))
+        XCTAssertTrue(library.contains("ScrollView(.horizontal)"))
+        XCTAssertFalse(library.contains("shelfGroups"))
         XCTAssertFalse(library.contains("ForEach(Array(presentation.savedPlaces.enumerated())"))
         XCTAssertTrue(
             library.contains("alignment: .top"),
@@ -29,16 +32,33 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
         let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
         let row = try typeBody("HomeSavedPlaceRow", in: screens)
+        let hero = try typeBody("HomeFeaturedPlaceHero", in: screens)
         let thumbnail = try typeBody("HomeSavedPlaceThumbnail", in: screens)
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
 
-        XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail(photoURL: place.photoURL)"))
+        XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
+        XCTAssertTrue(row.contains("latitude: place.latitude"))
+        XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
+        XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
+        XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
+        XCTAssertTrue(hero.contains("longitude: place.longitude"))
+        XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
+        XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
         XCTAssertTrue(thumbnail.contains("fallback"))
+        XCTAssertTrue(screens.contains("MKLookAroundSceneRequest"))
+        XCTAssertTrue(screens.contains("MKMapSnapshotter"))
+        XCTAssertTrue(screens.contains("mapOptions.mapType = .hybrid"))
         XCTAssertTrue(
             bridge.contains("businessPhotoURLStrings.first.flatMap(URL.init(string:))")
         )
+        XCTAssertTrue(bridge.contains("latitude: place.latitude"))
+        XCTAssertTrue(bridge.contains("longitude: place.longitude"))
+
+        let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(home.contains("await mapViewModel.enrichMissingHomePlacePhotos()"))
+        XCTAssertTrue(home.contains("ReviewDemo.isOfflineUITestMode"))
     }
 
     @MainActor

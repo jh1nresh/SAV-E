@@ -14,8 +14,19 @@ struct SaveHomeView: View {
     var body: some View {
         HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
+        .task(id: missingPhotoPlaceIDs) {
+            guard !ReviewDemo.isOfflineUITestMode else { return }
+            await mapViewModel.enrichMissingHomePlacePhotos()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private var missingPhotoPlaceIDs: [UUID] {
+        mapViewModel.places
+            .filter { $0.businessPhotoURLStrings.isEmpty }
+            .prefix(6)
+            .map(\.id)
     }
 
     private var atlasPresentation: AtlasPresentation {

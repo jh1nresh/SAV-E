@@ -314,8 +314,32 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
     let area: String
     let region: String?
     let photoURL: URL?
+    let latitude: Double?
+    let longitude: Double?
     let relativeDay: String
     let note: String
+
+    init(
+        id: String,
+        name: String,
+        area: String,
+        region: String?,
+        photoURL: URL?,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        relativeDay: String,
+        note: String
+    ) {
+        self.id = id
+        self.name = name
+        self.area = area
+        self.region = region
+        self.photoURL = photoURL
+        self.latitude = latitude
+        self.longitude = longitude
+        self.relativeDay = relativeDay
+        self.note = note
+    }
 
     static func groupedByRegion(
         _ places: [AtlasPlacePresentation]

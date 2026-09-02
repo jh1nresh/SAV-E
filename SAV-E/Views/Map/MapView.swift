@@ -28,7 +28,7 @@ struct MapView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let topChromeInset = max(geo.safeAreaInsets.top + 55, 108)
+            let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
             let bottomChromeInset = max(geo.safeAreaInsets.bottom + 86, 98)
 
             ZStack {

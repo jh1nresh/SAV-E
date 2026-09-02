@@ -408,6 +408,8 @@ enum SaveAtlasPresentationFactory {
             area: place.shareAreaLabel.nonEmpty ?? place.address,
             region: SavedPlaceTripRecommender.areaLabel(for: place),
             photoURL: place.businessPhotoURLStrings.first.flatMap(URL.init(string:)),
+            latitude: place.latitude,
+            longitude: place.longitude,
             relativeDay: relativeDay(for: place.createdAt),
             note: place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
                 ?? place.address
@@ -544,27 +546,24 @@ struct SaveAtlasInteractiveRootMap: View {
             .clipped()
             .placed(x: 0, y: 0, width: 402, height: 874)
 
-            BrandHeader {
-                HStack(spacing: 7) {
-                    Image(systemName: "star.circle")
-                        .font(.system(size: 16))
-                    Text("\(presentation.mapStampCount) Map Stamps")
-                        .font(AtlasType.display(14))
-                }
-                .foregroundStyle(AtlasPalette.ink)
-                .frame(width: 157, height: 34)
-                .background(AtlasPalette.mint, in: Capsule())
-                .overlay {
-                    Capsule().stroke(AtlasPalette.forest.opacity(0.24), lineWidth: 1)
-                }
+            HStack(spacing: 7) {
+                Image(systemName: "star.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.forest)
+                Text("\(presentation.mapStampCount) Map Stamps")
+                    .font(AtlasType.display(12))
+                    .foregroundStyle(AtlasPalette.ink)
             }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay {
-                Capsule()
-                    .stroke(AtlasPalette.forest.opacity(0.18), lineWidth: 1)
+                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
             }
-            .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 8, y: 3)
-            .placed(x: 11, y: 48, width: 380, height: 50)
+            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+            .placed(x: 16, y: 56, width: 139, height: 38)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("map.stampCount")
 
             if let place = mapViewModel.selectedPlace {
                 SaveAtlasLivePlaceCard(
@@ -573,20 +572,21 @@ struct SaveAtlasInteractiveRootMap: View {
                     onOpen: {
                         presentation.onOpenPlace(place.id.uuidString)
                     },
+                    onOpenAssistant: presentation.onOpenAssistant,
                     onPlanAround: {
                         onPlanAroundPlace(place)
                     }
                 )
                 .id(place.id)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .placed(x: 15, y: 568, width: 372, height: 220)
+                .placed(x: 15, y: 606, width: 372, height: 180)
             } else if !hidesCommandShelf {
                 SaveAtlasMapCommandShelf(
                     mapStampCount: presentation.mapStampCount,
                     onOpenAssistant: presentation.onOpenAssistant
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .placed(x: 15, y: 676, width: 372, height: 112)
+                .placed(x: 15, y: 702, width: 372, height: 84)
             }
         }
         .animation(SaveTheme.Motion.standardSpring, value: mapViewModel.selectedPlace?.id)
@@ -604,7 +604,7 @@ struct SaveAtlasMapCommandShelf: View {
 
     var body: some View {
         Button(action: onOpenAssistant) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Capsule()
                     .fill(AtlasPalette.line.opacity(0.48))
                     .frame(width: 38, height: 4)
@@ -622,32 +622,23 @@ struct SaveAtlasMapCommandShelf: View {
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 31, height: 31)
-                        .background(AtlasPalette.coral, in: Circle())
-                }
-
-                HStack(spacing: 6) {
-                    Image(systemName: "star.circle.fill")
+                    Text("\(mapStampCount)")
+                        .font(AtlasType.display(12))
+                        .monospacedDigit()
                         .foregroundStyle(AtlasPalette.forest)
-                    Text("\(mapStampCount) confirmed Map Stamps")
-                    Spacer()
-                    MemoMascotMark(size: 24, framed: false)
+                        .frame(minWidth: 28, minHeight: 28)
+                        .background(AtlasPalette.mint.opacity(0.82), in: Circle())
                 }
-                .font(AtlasType.regular(12))
-                .foregroundStyle(AtlasPalette.muted)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 AtlasPalette.paper,
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
             }
             .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
@@ -663,110 +654,69 @@ private struct SaveAtlasLivePlaceCard: View {
     let place: Place
     let onClose: () -> Void
     let onOpen: () -> Void
+    let onOpenAssistant: () -> Void
     let onPlanAround: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Capsule()
-                    .fill(AtlasPalette.line.opacity(0.48))
-                    .frame(width: 38, height: 4)
-                    .frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: 8) {
+            Capsule()
+                .fill(AtlasPalette.line.opacity(0.48))
+                .frame(width: 38, height: 4)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
 
-                // Spec P2b: share moved here from the retired legacy strip —
-                // the card is the only surface for a selected place.
-                SavePlaceShareButton(content: .place(place)) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 32, height: 32)
-                        .background(AtlasPalette.canvas, in: Circle())
-                }
-                .accessibilityLabel("Share \(place.name)")
-                .accessibilityIdentifier("map.place.share")
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 32, height: 32)
-                        .background(AtlasPalette.canvas, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close place preview")
-                .accessibilityIdentifier("map.place.close")
-            }
-            .frame(height: 24)
-
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 11) {
                 SaveAtlasMapPlaceThumbnail(place: place)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
-                        .font(AtlasType.strong(22))
+                        .font(AtlasType.strong(20))
                         .foregroundStyle(AtlasPalette.forest)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .accessibilityIdentifier("map.place.name")
 
                     Text(primaryLocation(for: place))
                         .font(AtlasType.body(13))
                         .foregroundStyle(AtlasPalette.muted)
-                        .lineLimit(savedNote == nil ? 2 : 1)
+                        .lineLimit(1)
                         .accessibilityIdentifier("map.place.location")
-
-                    // Spec P2b: surface the saved memory note the legacy
-                    // strip context used to carry (read-only; edit stays in
-                    // the expanded detail).
-                    if let savedNote {
-                        Text(savedNote)
-                            .font(AtlasType.editorial(12))
-                            .foregroundStyle(AtlasPalette.forest.opacity(0.85))
-                            .lineLimit(1)
-                            .accessibilityIdentifier("map.place.note")
-                    }
                 }
 
                 Spacer(minLength: 0)
-            }
 
-            HStack(spacing: 7) {
-                Label("Map Stamp", systemImage: "star.circle.fill")
-                    .font(AtlasType.display(12))
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 27)
-                    .background(AtlasPalette.mint, in: Capsule())
-
-                Text(place.category.displayName)
-                    .font(AtlasType.display(12))
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: 27)
-                    .background(AtlasPalette.sky.opacity(0.72), in: Capsule())
-
-                if let rating = place.googleRating ?? place.rating {
-                    Label(String(format: "%.1f", rating), systemImage: "star.fill")
-                        .font(AtlasType.display(12))
-                        .padding(.horizontal, 9)
-                        .frame(minHeight: 27)
-                        .background(AtlasPalette.kraft.opacity(0.82), in: Capsule())
+                SavePlaceShareButton(content: .place(place)) {
+                    mapCardIcon("square.and.arrow.up")
                 }
+                .accessibilityLabel("Share \(place.name)")
+                .accessibilityIdentifier("map.place.share")
 
-                Spacer(minLength: 0)
+                Button(action: onClose) {
+                    mapCardIcon("xmark")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close place preview")
+                .accessibilityIdentifier("map.place.close")
             }
-            .foregroundStyle(AtlasPalette.ink)
-            .accessibilityIdentifier("map.place.context")
 
             HStack(spacing: 8) {
+                Button(action: onOpenAssistant) {
+                    mapCardActionIcon("magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search places")
+                .accessibilityIdentifier("map.place.search")
+
                 Button(action: onOpen) {
                     HStack {
                         Spacer()
                         Text("Open details")
-                            .font(AtlasType.strong(17))
+                            .font(AtlasType.strong(16))
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                         Spacer()
                     }
                     .foregroundStyle(.white)
-                    .frame(minHeight: 42)
+                    .frame(height: 44)
                     .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                 }
                 .buttonStyle(.plain)
@@ -775,15 +725,7 @@ private struct SaveAtlasLivePlaceCard: View {
                 // Spec P2b: plan-around moved onto the card from the retired
                 // legacy strip's expanded sibling.
                 Button(action: onPlanAround) {
-                    Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 42, height: 42)
-                        .background(AtlasPalette.kraft.opacity(0.82), in: RoundedRectangle(cornerRadius: 11))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 11)
-                                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-                        }
+                    mapCardActionIcon("point.topleft.down.to.point.bottomright.curvepath")
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Plan around \(place.name)")
@@ -791,14 +733,14 @@ private struct SaveAtlasLivePlaceCard: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             AtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
         }
         .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
@@ -806,8 +748,24 @@ private struct SaveAtlasLivePlaceCard: View {
         .accessibilityIdentifier("map.place.card")
     }
 
-    private var savedNote: String? {
-        place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
+    private func mapCardIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 44, height: 44)
+            .background(AtlasPalette.canvas.opacity(0.88), in: Circle())
+    }
+
+    private func mapCardActionIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(AtlasPalette.ink)
+            .frame(width: 44, height: 44)
+            .background(AtlasPalette.kraft.opacity(0.72), in: RoundedRectangle(cornerRadius: 11))
+            .overlay {
+                RoundedRectangle(cornerRadius: 11)
+                    .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+            }
     }
 
     private func primaryLocation(for place: Place) -> String {
@@ -837,11 +795,11 @@ private struct SaveAtlasMapPlaceThumbnail: View {
                 fallback
             }
         }
-        .frame(width: 64, height: 64)
+        .frame(width: 56, height: 56)
         .background(AtlasPalette.mint.opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
     }

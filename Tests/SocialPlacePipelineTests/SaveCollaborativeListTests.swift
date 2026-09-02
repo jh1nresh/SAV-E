@@ -146,6 +146,37 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testHomePhotoEnrichmentBackfillsOnlyMissingPhotosOncePerSession() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = HomePhotoGooglePlacesService()
+        let map = MapViewModel(
+            googlePlacesService: service,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("save-memory-records.json")
+            ),
+            usesRemotePersistence: false
+        )
+        let missing = place(name: "Memory Cafe", category: .cafe)
+        var existing = place(name: "Existing Photo", category: .cafe)
+        existing.sourceImageUrl = "https://example.com/existing.jpg"
+        map.places = [missing, existing]
+
+        await map.enrichMissingHomePlacePhotos()
+        await map.enrichMissingHomePlacePhotos()
+
+        XCTAssertEqual(
+            map.places.first(where: { $0.id == missing.id })?.businessPhotoURLStrings,
+            ["https://example.com/memory-cafe.jpg"]
+        )
+        XCTAssertEqual(
+            map.places.first(where: { $0.id == existing.id })?.businessPhotoURLStrings,
+            ["https://example.com/existing.jpg"]
+        )
+        XCTAssertEqual(service.searchCallCount, 1)
+    }
+
+    @MainActor
     func testPersistedMemoryAndSharedListsStripLegacyGooglePhotoKeys() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
         let record = SaveMemoryRecord(
@@ -421,5 +452,45 @@ private final class StaleGooglePlaceIDService: GooglePlacesServiceProtocol {
 
     func photoURL(reference: String, maxWidth: Int) -> URL? {
         URL(string: "https://example.com/amamotobros.jpg")
+    }
+}
+
+@MainActor
+private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
+    private(set) var searchCallCount = 0
+
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        searchCallCount += 1
+        return [
+            GooglePlaceMatch(
+                id: "memory-cafe",
+                name: "Memory Cafe",
+                address: "Irvine, CA",
+                latitude: 33.6849,
+                longitude: -117.8262,
+                rating: 4.6,
+                photoReference: "memory-cafe-photo"
+            )
+        ]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        GooglePlaceDetails(
+            placeId: placeId,
+            name: "Memory Cafe",
+            formattedAddress: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            rating: 4.6,
+            priceLevel: nil,
+            openingHours: nil,
+            phoneNumber: nil,
+            websiteUrl: nil,
+            photoReferences: ["memory-cafe-photo"]
+        )
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/memory-cafe.jpg")
     }
 }
