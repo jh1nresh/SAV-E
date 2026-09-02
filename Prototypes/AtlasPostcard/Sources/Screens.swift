@@ -444,7 +444,7 @@ private struct HomeSavedPlacesLibrary: View {
                             onManage: presentation.onOpenSaves
                         )
 
-                        ForEach(shelfGroups) { group in
+                        ForEach(savedPlaceGroups) { group in
                             VStack(alignment: .leading, spacing: 9) {
                                 HStack(spacing: 8) {
                                     Text(regionTitle(for: group))
@@ -542,20 +542,6 @@ private struct HomeSavedPlacesLibrary: View {
         AtlasPlacePresentation.groupedByRegion(presentation.savedPlaces)
     }
 
-    private var shelfGroups: [AtlasSavedPlaceGroupPresentation] {
-        guard let featuredPlace else { return savedPlaceGroups }
-
-        return savedPlaceGroups.compactMap { group in
-            let places = group.places.filter { $0.id != featuredPlace.id }
-            guard !places.isEmpty else { return nil }
-            return AtlasSavedPlaceGroupPresentation(
-                id: group.id,
-                region: group.region,
-                places: places
-            )
-        }
-    }
-
     private func regionTitle(for group: AtlasSavedPlaceGroupPresentation) -> String {
         group.region ?? localized("Other areas", "其他地區")
     }
@@ -608,7 +594,11 @@ private struct HomeFeaturedPlaceHero: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Button(action: onOpen) {
-                HomeSavedPlaceThumbnail(photoURL: place.photoURL)
+                HomeSavedPlaceThumbnail(
+                    photoURL: place.photoURL,
+                    latitude: place.latitude,
+                    longitude: place.longitude
+                )
                     .overlay(alignment: .bottom) {
                         Rectangle()
                             .fill(Color.black.opacity(0.48))
@@ -709,28 +699,30 @@ private struct HomeSavedPlaceRow: View {
 
     var body: some View {
         Button(action: onOpen) {
-            ZStack(alignment: .bottomLeading) {
-                HomeSavedPlaceThumbnail(photoURL: place.photoURL)
-
+            HomeSavedPlaceThumbnail(
+                photoURL: place.photoURL,
+                latitude: place.latitude,
+                longitude: place.longitude
+            )
+            .frame(width: width, height: 112)
+            .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(Color.black.opacity(0.46))
                     .frame(height: 44)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(place.name)
-                        .font(AtlasType.strong(14))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    Text(place.relativeDay)
-                        .font(AtlasType.regular(10))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 7)
             }
-            .frame(width: width, height: 112)
+            .overlay(alignment: .bottomLeading) {
+                Text(place.name)
+                    .font(AtlasType.strong(14))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 11)
+            }
+            .overlay(alignment: .topLeading) {
+                RoundStamp(text: "", style: .mapStamp)
+                    .scaleEffect(0.82)
+                    .padding(8)
+            }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -739,16 +731,24 @@ private struct HomeSavedPlaceRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(place.name), \(place.area), \(place.relativeDay)")
+        .accessibilityLabel("\(place.name), \(place.area)")
         .accessibilityIdentifier("home.place.\(place.id)")
     }
 }
 
 private struct HomeSavedPlaceThumbnail: View {
     let photoURL: URL?
+    let latitude: Double?
+    let longitude: Double?
 
     var body: some View {
-        Group {
+        ZStack {
+            HomeLocationSnapshot(
+                latitude: latitude,
+                longitude: longitude,
+                fallback: fallback
+            )
+
             if let photoURL {
                 CachedAsyncImage(url: photoURL) { phase in
                     if case .success(let image) = phase {
@@ -756,11 +756,9 @@ private struct HomeSavedPlaceThumbnail: View {
                             .resizable()
                             .scaledToFill()
                     } else {
-                        fallback
+                        Color.clear
                     }
                 }
-            } else {
-                fallback
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -774,6 +772,73 @@ private struct HomeSavedPlaceThumbnail: View {
             .font(.system(size: 21, weight: .medium))
             .foregroundStyle(AtlasPalette.forest)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct HomeLocationSnapshot<Fallback: View>: View {
+    let latitude: Double?
+    let longitude: Double?
+    let fallback: Fallback
+
+    @State private var snapshotImage: UIImage?
+
+    var body: some View {
+        Group {
+            if let snapshotImage {
+                Image(uiImage: snapshotImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                fallback
+            }
+        }
+        .task(id: snapshotID) {
+            await loadSnapshot()
+        }
+    }
+
+    private var snapshotID: String {
+        guard let latitude, let longitude else { return "none" }
+        return "\(latitude),\(longitude)"
+    }
+
+    private func loadSnapshot() async {
+        guard let latitude,
+              let longitude,
+              latitude.isFinite,
+              longitude.isFinite,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude)
+        else { return }
+
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let mapOptions = MKMapSnapshotter.Options()
+        mapOptions.region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
+        )
+        mapOptions.size = CGSize(width: 720, height: 400)
+        mapOptions.scale = 2
+        mapOptions.mapType = .hybrid
+
+        if let snapshot = try? await MKMapSnapshotter(options: mapOptions).start(),
+           !Task.isCancelled {
+            snapshotImage = snapshot.image
+        }
+
+        guard !Task.isCancelled,
+              let scene = try? await MKLookAroundSceneRequest(coordinate: coordinate).scene
+        else { return }
+
+        let lookAroundOptions = MKLookAroundSnapshotter.Options()
+        lookAroundOptions.size = CGSize(width: 720, height: 400)
+        if let snapshot = try? await MKLookAroundSnapshotter(
+            scene: scene,
+            options: lookAroundOptions
+        ).snapshot,
+           !Task.isCancelled {
+            snapshotImage = snapshot.image
+        }
     }
 }
 

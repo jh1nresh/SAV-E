@@ -408,6 +408,8 @@ enum SaveAtlasPresentationFactory {
             area: place.shareAreaLabel.nonEmpty ?? place.address,
             region: SavedPlaceTripRecommender.areaLabel(for: place),
             photoURL: place.businessPhotoURLStrings.first.flatMap(URL.init(string:)),
+            latitude: place.latitude,
+            longitude: place.longitude,
             relativeDay: relativeDay(for: place.createdAt),
             note: place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
                 ?? place.address

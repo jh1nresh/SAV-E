@@ -513,6 +513,9 @@ final class MapViewModel: ObservableObject {
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
     private var hasLoadedFollowedFriends = false
+    /// Home may revisit the same missing-photo places while switching tabs.
+    /// Keep provider lookups to one attempt per place for this app session.
+    private var homePhotoEnrichmentAttemptedPlaceIDs: Set<UUID> = []
     private var followedFriendsCursor: String?
     private var followedFriendsQuery = ""
     private var followedFriendsRequestGeneration = UUID()
@@ -2191,6 +2194,43 @@ final class MapViewModel: ObservableObject {
         guard PlaceBusinessEnricher.needsEnrichment(place) else { return }
         Task {
             await enrichSelectedPlacePhoto(place)
+        }
+    }
+
+    /// Backfills real business photos for the first visible Home places that
+    /// predate photo persistence. Requests are sequential and session-bounded
+    /// so opening Home cannot fan out an unbounded provider workload.
+    func enrichMissingHomePlacePhotos(limit: Int = 6) async {
+        let candidates = places
+            .filter {
+                $0.businessPhotoURLStrings.isEmpty &&
+                    !homePhotoEnrichmentAttemptedPlaceIDs.contains($0.id)
+            }
+            .prefix(max(0, limit))
+
+        homePhotoEnrichmentAttemptedPlaceIDs.formUnion(candidates.map(\.id))
+
+        for place in candidates {
+            guard let enriched = await PlaceBusinessEnricher.enrich(
+                place,
+                service: googlePlacesService
+            ),
+            !enriched.businessPhotoURLStrings.isEmpty,
+            let index = places.firstIndex(where: { $0.id == place.id })
+            else { continue }
+
+            places[index] = enriched
+            if selectedPlace?.id == place.id {
+                selectedPlace = enriched
+            }
+            mirrorToLocalVault(enriched)
+
+            guard usesRemotePersistence else { continue }
+            do {
+                try await supabaseService.updatePlace(enriched)
+            } catch {
+                print("MapViewModel: failed to sync Home photo for \(place.name): \(error)")
+            }
         }
     }
 
