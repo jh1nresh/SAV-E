@@ -2,7 +2,7 @@
 
 Savvy is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
 
-Current app version in this repo: **1.0.0 (build 103)**.
+Current app version in this repo: **1.0.0 (build 106)**.
 
 Build numbers live in `project.yml`. `SAV-E.xcodeproj` is generated from it, so a
 bump applied only to the generated project is undone by the next `xcodegen generate`.
@@ -12,24 +12,39 @@ bump applied only to the generated project is undone by the next `xcodegen gener
 Savvy is no longer a generic map/list/trip app. The current app is:
 
 ```text
-source clue → Review receipt → confirmed Map Stamp → private passport / shareable proof / plan
+source clue → Save / Review receipt → confirmed Map Stamp → Home / Map / Origin / Passport / plan
 ```
 
 The core judgment is conservative: Savvy should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
 
 ## What ships in the iOS app
 
-- **Map-first home** — the app stays on confirmed Map Stamps with current-location controls; unresolved links and place clues are handled in the drawer's Review tab without replacing the map.
-- **AI command drawer** — persistent bottom drawer for search, “plan around this”, order/recommendation analysis, URL import, voice input, and place actions.
+- **Five-part app shell** — Home, Map, a raised Save control, Origin, and Passport use a compact Liquid Glass tab bar. Save opens capture without replacing the selected tab.
+- **Region-based Home** — confirmed saves are grouped by region and use a stored or enriched place photo when one is available. The denser Saves library remains a child screen rather than a root tab.
+- **Map + three-stage search drawer** — the map keeps current-location controls and confirmed Map Stamps while search expands through compact, medium, and large stages for results, review, and place actions.
+- **Save capture** — the centre control accepts URLs, pasted text, voice/text commands, and Google Takeout exports, then routes uncertain clues through Review.
+- **Origin** — an owner-scoped history of stored source links and exact source text, plus related items still waiting for review. It does not invent source history for older saves that lack a stored capture.
 - **Review inbox** — imported social/web clues become review candidates with evidence, rejected evidence, confidence, and source-recovery receipts before saving.
 - **Map Stamps** — confirmed places support categories, visibility, detail cards, source links, notes, navigation, deletion, and list membership.
 - **Place recovery pipeline** — deterministic parser + public source-search fallback for Instagram/Threads/Xiaohongshu/web clues. Source-only clues remain source-only instead of creating fake places.
-- **Google Takeout import** — bulk import saved Google Maps places into reviewable drafts with duplicate handling.
 - **Collaborative lists** — create lists, add places, share viewer/editor list links, join list links, and plan from list items.
 - **Referral/friends layer** — referral/profile links can hand off starter map packs and complete follow intent after install/open.
-- **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, and receipt-style progress surfaces.
+- **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, receipt-style progress, and working invite/list share actions.
+- **Trips** — planning remains available from Home and place detail, but it is intentionally not a permanent root tab.
 - **App Intents / shortcuts** — local app intents for saving a URL and asking Savvy memory.
 - **Bilingual UI path** — English and Traditional Chinese app-language settings for user-visible surfaces.
+
+## Build 106 release state
+
+Last verified on 2026-08-25:
+
+- build 106 source is merged at `fc29cd4`, and [main CI run 32901152122](https://github.com/jh1nresh/SAV-E/actions/runs/32901152122) passed
+- the signed app, Share Extension, and App Clip archive was uploaded successfully to App Store Connect
+- the last App Store Connect read-back showed build 106 still processing
+- build 106 visibility in the internal `Test g` group and a real-device smoke test are not yet verified
+- external TestFlight, Beta Review, App Review, and public release are outside the current internal-testing boundary
+
+An upload is not proof that the build is available to testers. Confirm Apple processing, the exact internal group, and a real-device launch separately before reporting the build as TestFlight-ready.
 
 ## Companion surfaces
 
@@ -177,28 +192,34 @@ Use the **SAV-E** scheme for the shipping app. The installed display name is **S
 
 ## Local verification
 
-### iOS simulator build
+### iOS compile (default)
 
-Use the wrapper so benign locked-device discovery warnings do not bury the real build output:
+Compile against the generic simulator destination without booting a runtime. Reuse the repository's canonical DerivedData directory:
 
 ```bash
 scripts/xcodebuild-clean.sh \
   -project SAV-E.xcodeproj \
   -scheme SAV-E \
   -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
   CODE_SIGNING_ALLOWED=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
   build
 ```
 
-### Swift tests
+### Runtime Swift/UI tests
+
+Boot one headless simulator only when the changed behavior requires UIKit/SwiftUI runtime evidence, gestures, screenshots, accessibility, or an iOS XCTest bundle. Reuse one device and the same DerivedData directory, then shut the device down after the focused test.
 
 ```bash
 scripts/xcodebuild-clean.sh \
   -project SAV-E.xcodeproj \
   -scheme SAV-E \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
   CODE_SIGNING_ALLOWED=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
   test
 ```
 
