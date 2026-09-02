@@ -960,8 +960,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Selecting a root-map place should expose its location."
         )
         XCTAssertTrue(
-            app.descendants(matching: .any)["map.place.context"].exists,
-            "Selecting a root-map place should expose category and status context."
+            app.descendants(matching: .any)["map.place.card"].exists,
+            "Selecting a root-map place should expose the atlas place card."
         )
         XCTAssertTrue(app.buttons["map.place.close"].exists)
 
