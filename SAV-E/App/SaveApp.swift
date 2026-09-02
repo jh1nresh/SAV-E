@@ -1265,20 +1265,36 @@ struct SignInView: View {
                     Spacer(minLength: isCompactHeight ? 22 : 42)
 
                     VStack(spacing: isCompactHeight ? 10 : 12) {
+                        Text(languageSettings.text(.signInOrCreateAccount))
+                            .font(SaveAtlasType.strong(
+                                isCompactHeight ? 18 : 20,
+                                relativeTo: .headline
+                            ))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, isCompactHeight ? 0 : 2)
+                            .accessibilityIdentifier("signin.title")
+
                         appleSignInButton
                         googleSignInButton
                         emailSignInSection
                     }
                     .disabled(isLoading)
+                    // Provider controls already have large, fixed-height native
+                    // labels. Cap only this compact action sheet so extreme
+                    // sizes keep every auth route visible; VoiceOver remains
+                    // available and the title still scales through XXXL.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .padding(isCompactHeight ? 14 : 18)
-                    .background(SaveAtlasPalette.paper.opacity(0.94))
+                    .background(SaveAtlasPalette.paper.opacity(0.98))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 12, y: 5)
-                    .padding(.horizontal, 22)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: SaveAtlasPalette.ink.opacity(0.075), radius: 18, y: 8)
+                    .frame(maxWidth: 390)
+                    .padding(.horizontal, isCompactHeight ? 12 : 22)
                     .padding(.bottom, isCompactHeight ? 18 : 34)
                 }
             }
@@ -1335,7 +1351,8 @@ struct SignInView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityIdentifier("signin.apple")
     }
 
     private var googleSignInButton: some View {
@@ -1350,21 +1367,25 @@ struct SignInView: View {
         }) {
             HStack(spacing: 10) {
                 Image(systemName: "g.circle.fill")
-                    .font(.headline)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                 Text(languageSettings.text(.continueWithGoogle))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
-            .font(.headline)
-            .foregroundColor(.saveInk)
+            .font(SaveAtlasType.strong(16, relativeTo: .headline))
+            .foregroundStyle(SaveAtlasPalette.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color.saveNotebookPage)
+            .background(SaveAtlasPalette.paper)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("signin.google")
     }
 
     private var emailSignInSection: some View {
@@ -1374,8 +1395,10 @@ struct SignInView: View {
                     .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
                 Text(languageSettings.text(.orUseEmail))
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.68))
+                    .font(SaveAtlasType.body(13, relativeTo: .caption))
+                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.82))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Rectangle()
                     .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
@@ -1485,7 +1508,13 @@ private struct SignInInputRow: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
+            Image(systemName: keyboardType == .emailAddress ? "envelope" : "number")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.82))
+                .frame(width: 18)
+                .accessibilityHidden(true)
+
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
@@ -1493,6 +1522,8 @@ private struct SignInInputRow: View {
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .foregroundColor(.saveInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
                 .accessibilityIdentifier(fieldAccessibilityID)
                 .focused($isFocused)
                 // The sign-in layout ignores the keyboard safe area, so the
@@ -1512,20 +1543,23 @@ private struct SignInInputRow: View {
             Button(buttonTitle, action: action)
                 .accessibilityIdentifier(buttonAccessibilityID)
                 .font(SaveAtlasType.strong(13))
-                .foregroundStyle(isDisabled ? SaveAtlasPalette.muted.opacity(0.42) : SaveAtlasPalette.paper)
-                .padding(.horizontal, 10)
-                .frame(height: 34)
-                .background(isDisabled ? Color.clear : SaveAtlasPalette.coral)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .foregroundStyle(SaveAtlasPalette.paper)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 11)
+                .frame(height: 36)
+                .background(SaveAtlasPalette.coral.opacity(isDisabled ? 0.34 : 1))
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 .disabled(isDisabled)
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
         .frame(height: 52)
-        .background(Color.saveNotebookPage.opacity(0.96))
+        .background(SaveAtlasPalette.canvas.opacity(0.72))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.48), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

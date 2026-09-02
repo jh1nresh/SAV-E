@@ -11,6 +11,34 @@ import XCTest
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testSignInCardKeepsEveryRouteVisible() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+
+        let title = app.staticTexts["signin.title"]
+        let apple = app.buttons["signin.apple"]
+        let google = app.buttons["signin.google"]
+        let email = app.textFields["signin.emailField"]
+        let sendCode = app.buttons["signin.sendCode"]
+
+        for element in [title, apple, google, email, sendCode] {
+            XCTAssertTrue(element.waitForExistence(timeout: launchTimeout))
+            XCTAssertGreaterThanOrEqual(element.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(element.frame.maxX, app.frame.maxX)
+            XCTAssertGreaterThanOrEqual(element.frame.minY, app.frame.minY)
+            XCTAssertLessThanOrEqual(element.frame.maxY, app.frame.maxY)
+        }
+        XCTAssertGreaterThanOrEqual(apple.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(google.frame.height, 44)
+        attach(app, name: "signin-card-all-routes")
+    }
+
+    @MainActor
     func testLaunchKeepsPaywallAbsentAndTripsInBeta() throws {
         let app = makeApp(
             launchArguments: [

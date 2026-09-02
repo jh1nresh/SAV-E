@@ -146,6 +146,7 @@ enum SaveTextKey {
     case appNotAllowedMessage
     case authSetupNeeded
     case genericSignInError
+    case signInOrCreateAccount
     case continueWithGoogle
     case orUseEmail
     case emailAddress
@@ -232,6 +233,8 @@ enum SaveText {
             return localized(english: "Auth Setup Needed", traditionalChinese: "需要設定登入", language: language)
         case .genericSignInError:
             return localized(english: "Something went wrong. Try again in a moment.", traditionalChinese: "剛剛沒成功，請稍後再試一次。", language: language)
+        case .signInOrCreateAccount:
+            return localized(english: "Sign in or create an account", traditionalChinese: "登入或建立帳號", language: language)
         case .continueWithGoogle:
             return localized(english: "Continue with Google", traditionalChinese: "使用 Google 繼續", language: language)
         case .orUseEmail:
