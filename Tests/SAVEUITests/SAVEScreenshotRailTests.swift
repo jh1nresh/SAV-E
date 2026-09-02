@@ -1170,13 +1170,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        for tab in ["Home", "Map", "Origin"] {
+        for tab in ["Home", "Origin"] {
             openRootTab(tab, app: app)
             XCTAssertTrue(
                 app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
                 "\(tab) should keep the fixed Passport entry in its Savvy lockup."
             )
         }
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.stampCount"].waitForExistence(timeout: stepTimeout),
+            "Map geography-first chrome should expose the stamp count instead of the Savvy lockup."
+        )
+
         openRootTab("Profile", app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
