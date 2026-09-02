@@ -94,22 +94,6 @@ final class OnboardingSampleClueTests: XCTestCase {
     }
 
     @MainActor
-    func testSampleProofCannotOverwriteAnotherAccountsPendingClue() {
-        XCTAssertFalse(PendingOnboardingClueAccess.canStoreUnclaimed(
-            existingText: "Account A private clue",
-            ownerUserID: "account-a"
-        ))
-        XCTAssertTrue(PendingOnboardingClueAccess.canStoreUnclaimed(
-            existingText: "Existing unclaimed clue",
-            ownerUserID: ""
-        ))
-        XCTAssertTrue(PendingOnboardingClueAccess.canStoreUnclaimed(
-            existingText: "",
-            ownerUserID: "account-a"
-        ))
-    }
-
-    @MainActor
     func testEmptyClueIsNotImported() {
         XCTAssertNil(OnboardingView.clueWorthKeeping(rawClue: "   ", language: .english))
     }

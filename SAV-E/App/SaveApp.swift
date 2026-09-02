@@ -194,10 +194,7 @@ struct SaveApp: App {
             case .unknown:
                 AuthLoadingView()
             case .unauthenticated:
-                SignInView(
-                    pendingOnboardingClue: $pendingOnboardingClue,
-                    pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID
-                )
+                SignInView()
                     .environmentObject(authService)
             case .authenticated:
                 AuthenticatedRootView(
@@ -1236,13 +1233,10 @@ private struct SaveOpeningHintPill: View {
 struct SignInView: View {
     @EnvironmentObject var authService: PrivyAuthService
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Binding var pendingOnboardingClue: String
-    @Binding var pendingOnboardingClueOwnerID: String
     @State private var email = ""
     @State private var showEmailCode = false
     @State private var verificationCode = ""
     @State private var isLoading = false
-    @State private var showsSampleProof = false
     @State private var errorTitle = "Can't Sign In"
     @State private var errorMessage: String?
 
@@ -1263,30 +1257,45 @@ struct SignInView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    Spacer(minLength: isCompactHeight ? 10 : 22)
+                    Spacer(minLength: isCompactHeight ? 18 : 36)
 
                     SignInHero(isCompactHeight: isCompactHeight)
                         .padding(.horizontal, 24)
 
-                    Spacer(minLength: isCompactHeight ? 12 : 20)
-
-                    SignInWorkflowStrip(isCompactHeight: isCompactHeight)
-                        .padding(.horizontal, 22)
-
-                    sampleProofButton
-                        .padding(.horizontal, 22)
-                        .padding(.top, isCompactHeight ? 10 : 14)
-
-                    Spacer(minLength: isCompactHeight ? 12 : 18)
+                    Spacer(minLength: isCompactHeight ? 22 : 42)
 
                     VStack(spacing: isCompactHeight ? 10 : 12) {
+                        Text(languageSettings.text(.signInOrCreateAccount))
+                            .font(SaveAtlasType.strong(
+                                isCompactHeight ? 18 : 20,
+                                relativeTo: .headline
+                            ))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, isCompactHeight ? 0 : 2)
+                            .accessibilityIdentifier("signin.title")
+
                         appleSignInButton
                         googleSignInButton
                         emailSignInSection
                     }
                     .disabled(isLoading)
-                    .padding(.horizontal, 22)
-                    .padding(.bottom, isCompactHeight ? 16 : 28)
+                    // Provider controls already have large, fixed-height native
+                    // labels. Cap only this compact action sheet so extreme
+                    // sizes keep every auth route visible; VoiceOver remains
+                    // available and the title still scales through XXXL.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .padding(isCompactHeight ? 14 : 18)
+                    .background(SaveAtlasPalette.paper.opacity(0.98))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.24), lineWidth: 1)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: SaveAtlasPalette.ink.opacity(0.075), radius: 18, y: 8)
+                    .frame(maxWidth: 390)
+                    .padding(.horizontal, isCompactHeight ? 12 : 22)
+                    .padding(.bottom, isCompactHeight ? 18 : 34)
                 }
             }
         }
@@ -1302,21 +1311,6 @@ struct SignInView: View {
             Button(languageSettings.text(.ok)) { errorMessage = nil }
         } message: {
             Text(errorMessage ?? "")
-        }
-        .sheet(isPresented: $showsSampleProof) {
-            OnboardingView(startWithSampleProof: true) { firstClue in
-                // Completing the untouched sample returns nil. Preserve a real
-                // first-run clue that is still waiting for sign-in.
-                if let firstClue,
-                   PendingOnboardingClueAccess.canStoreUnclaimed(
-                       existingText: pendingOnboardingClue,
-                       ownerUserID: pendingOnboardingClueOwnerID
-                   ) {
-                    pendingOnboardingClue = firstClue
-                    pendingOnboardingClueOwnerID = ""
-                }
-                showsSampleProof = false
-            }
         }
     }
 
@@ -1357,7 +1351,8 @@ struct SignInView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 52)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityIdentifier("signin.apple")
     }
 
     private var googleSignInButton: some View {
@@ -1372,57 +1367,25 @@ struct SignInView: View {
         }) {
             HStack(spacing: 10) {
                 Image(systemName: "g.circle.fill")
-                    .font(.headline)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                 Text(languageSettings.text(.continueWithGoogle))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
-            .font(.headline)
-            .foregroundColor(.saveInk)
+            .font(SaveAtlasType.strong(16, relativeTo: .headline))
+            .foregroundStyle(SaveAtlasPalette.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color.saveNotebookPage)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var sampleProofButton: some View {
-        Button {
-            showsSampleProof = true
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.headline.weight(.bold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(languageSettings.localized(
-                        english: "See how it works — no sign-in",
-                        traditionalChinese: "先試試看 — 不用登入"
-                    ))
-                    .font(.subheadline.weight(.bold))
-                    Text(languageSettings.localized(
-                        english: "Drop a sample clue and watch it land on a map.",
-                        traditionalChinese: "丟一個範例線索，看它變成地圖上的地點。"
-                    ))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveMutedText)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-            }
-            .foregroundColor(.saveInk)
-            .padding(14)
-            .background(SaveAtlasPalette.kraft.opacity(0.72))
+            .background(SaveAtlasPalette.paper)
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+                    .stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("signin.google")
     }
 
     private var emailSignInSection: some View {
@@ -1432,8 +1395,10 @@ struct SignInView: View {
                     .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
                 Text(languageSettings.text(.orUseEmail))
-                    .font(.caption)
-                    .foregroundColor(.saveCocoa.opacity(0.68))
+                    .font(SaveAtlasType.body(13, relativeTo: .caption))
+                    .foregroundStyle(SaveAtlasPalette.muted.opacity(0.82))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                 Rectangle()
                     .fill(Color.saveNotebookLine.opacity(0.22))
                     .frame(height: 1)
@@ -1497,10 +1462,6 @@ enum PendingOnboardingClueAccess {
         return ownerUserID.isEmpty || ownerUserID == currentUserID
     }
 
-    static func canStoreUnclaimed(existingText: String, ownerUserID: String) -> Bool {
-        existingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ownerUserID.isEmpty
-    }
-
     static func ownerAfterMutation(newText: String, ownerUserID: String, currentUserID: String) -> String {
         guard !newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return "" }
         return ownerUserID.isEmpty ? currentUserID : ownerUserID
@@ -1512,136 +1473,23 @@ private struct SignInHero: View {
     let isCompactHeight: Bool
 
     var body: some View {
+        let logoSize: CGFloat = isCompactHeight ? 104 : 124
+
         VStack(spacing: isCompactHeight ? 12 : 16) {
-            SignInProofMark(
-                label: languageSettings.localized(english: "Proof kept", traditionalChinese: "保留證據"),
-                isCompactHeight: isCompactHeight
-            )
+            Image("SavvyLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: logoSize, height: logoSize)
+                .clipShape(RoundedRectangle(
+                    cornerRadius: logoSize * 0.225,
+                    style: .continuous
+                ))
+                .accessibilityHidden(true)
 
-            VStack(spacing: isCompactHeight ? 5 : 8) {
-                Text(languageSettings.text(.appName))
-                    .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-
-                Text(languageSettings.text(.signInTagline))
-                    .font(SaveAtlasType.strong(isCompactHeight ? 16 : 18, relativeTo: .headline))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .multilineTextAlignment(.center)
-
-                Text(languageSettings.text(.signInDescription))
-                    .font(SaveAtlasType.body(isCompactHeight ? 12 : 14))
-                    .lineSpacing(2)
-                    .foregroundStyle(SaveAtlasPalette.ink.opacity(0.66))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(isCompactHeight ? 3 : nil)
-                    .minimumScaleFactor(0.84)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(languageSettings.text(.appName))
+                .font(SaveAtlasType.strong(isCompactHeight ? 28 : 32, relativeTo: .title))
+                .foregroundStyle(SaveAtlasPalette.forest)
         }
-    }
-}
-
-private struct SignInProofMark: View {
-    let label: String
-    let isCompactHeight: Bool
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(Color.saveNotebookPage.opacity(0.82))
-                .frame(width: isCompactHeight ? 140 : 166, height: isCompactHeight ? 106 : 126)
-                .rotationEffect(.degrees(-4))
-
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(SaveAtlasPalette.kraft.opacity(0.38))
-                .frame(width: isCompactHeight ? 114 : 138, height: isCompactHeight ? 84 : 100)
-                .offset(x: 22, y: 12)
-
-            MemoMascotMark(size: isCompactHeight ? 98 : 118, framed: false)
-                .offset(y: isCompactHeight ? -3 : -5)
-
-            Label(label, systemImage: "link")
-                .font(SaveAtlasType.strong(isCompactHeight ? 10 : 11))
-                .foregroundStyle(SaveAtlasPalette.paper)
-                .padding(.horizontal, isCompactHeight ? 9 : 11)
-                .padding(.vertical, isCompactHeight ? 6 : 7)
-                .background(SaveAtlasPalette.coral.opacity(0.92))
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(SaveAtlasPalette.line.opacity(0.52), lineWidth: 1))
-                .offset(x: isCompactHeight ? 54 : 66, y: isCompactHeight ? 44 : 52)
-        }
-        .frame(height: isCompactHeight ? 126 : 152)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct SignInWorkflowStrip: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let isCompactHeight: Bool
-
-    private var steps: [(String, String, Color)] {
-        [
-            (languageSettings.text(.capture), languageSettings.text(.captureSubtitle), SaveAtlasPalette.coral),
-            (languageSettings.text(.review), languageSettings.text(.reviewSubtitle), SaveAtlasPalette.sky),
-            (languageSettings.text(.save), languageSettings.text(.saveSubtitle), SaveAtlasPalette.mint),
-        ]
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach(steps.indices, id: \.self) { index in
-                WorkflowStepCard(
-                    title: steps[index].0,
-                    subtitle: steps[index].1,
-                    tint: steps[index].2,
-                    isCompactHeight: isCompactHeight
-                )
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(languageSettings.localized(
-            english: "Capture links or media, review with evidence, remember confirmed places.",
-            traditionalChinese: "收進連結或媒體，看證據確認，再記住已確認地點。"
-        ))
-    }
-}
-
-private struct WorkflowStepCard: View {
-    let title: String
-    let subtitle: String
-    let tint: Color
-    let isCompactHeight: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: isCompactHeight ? 4 : 5) {
-            Circle()
-                .fill(tint)
-                .frame(width: isCompactHeight ? 8 : 10, height: isCompactHeight ? 8 : 10)
-                .overlay(
-                    Circle()
-                        .stroke(Color.saveNotebookLine, lineWidth: 1.2)
-                )
-
-            Text(title)
-                .font(.caption.weight(.bold))
-                .foregroundColor(.saveInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundColor(.saveCocoa.opacity(0.68))
-                .lineLimit(isCompactHeight ? 1 : 2)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(isCompactHeight ? 10 : 12)
-        .background(Color.saveNotebookPage.opacity(0.96))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -1660,7 +1508,13 @@ private struct SignInInputRow: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
+            Image(systemName: keyboardType == .emailAddress ? "envelope" : "number")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.82))
+                .frame(width: 18)
+                .accessibilityHidden(true)
+
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
                 .textContentType(keyboardType == .emailAddress ? .emailAddress : .oneTimeCode)
@@ -1668,6 +1522,8 @@ private struct SignInInputRow: View {
                 .autocorrectionDisabled()
                 .submitLabel(.done)
                 .foregroundColor(.saveInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
                 .accessibilityIdentifier(fieldAccessibilityID)
                 .focused($isFocused)
                 // The sign-in layout ignores the keyboard safe area, so the
@@ -1687,20 +1543,23 @@ private struct SignInInputRow: View {
             Button(buttonTitle, action: action)
                 .accessibilityIdentifier(buttonAccessibilityID)
                 .font(SaveAtlasType.strong(13))
-                .foregroundStyle(isDisabled ? SaveAtlasPalette.muted.opacity(0.42) : SaveAtlasPalette.paper)
-                .padding(.horizontal, 10)
-                .frame(height: 34)
-                .background(isDisabled ? Color.clear : SaveAtlasPalette.coral)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .foregroundStyle(SaveAtlasPalette.paper)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 11)
+                .frame(height: 36)
+                .background(SaveAtlasPalette.coral.opacity(isDisabled ? 0.34 : 1))
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 .disabled(isDisabled)
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
         .frame(height: 52)
-        .background(Color.saveNotebookPage.opacity(0.96))
+        .background(SaveAtlasPalette.canvas.opacity(0.72))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 1.4)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.48), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

@@ -37,6 +37,11 @@ enum AuthError: LocalizedError {
 final class PrivyAuthService: ObservableObject {
     static let shared = PrivyAuthService()
 
+    /// Privy must return OAuth to a scheme registered on the existing iOS app
+    /// client. `savvy://` remains the public deep-link scheme, while the
+    /// legacy `wanderly://` callback preserves the established auth identity.
+    static let oAuthRedirectURLScheme = SAVEProductionConfig.legacyCustomURLScheme
+
     private let privy: Privy?
     @Published var authState: AuthState = .unknown
     @Published private(set) var sessionOrigin: AccountSessionOrigin = .restored
@@ -124,7 +129,10 @@ final class PrivyAuthService: ObservableObject {
         let privy = try validatedPrivy()
         let attemptID = beginInteractiveAuthentication()
         defer { endInteractiveAuthentication(attemptID) }
-        let user = try await privy.oAuth.login(with: .apple)
+        let user = try await privy.oAuth.login(
+            with: .apple,
+            appUrlScheme: Self.oAuthRedirectURLScheme
+        )
         transitionToAuthenticated(userId: user.id)
     }
 
@@ -134,7 +142,10 @@ final class PrivyAuthService: ObservableObject {
         let privy = try validatedPrivy()
         let attemptID = beginInteractiveAuthentication()
         defer { endInteractiveAuthentication(attemptID) }
-        let user = try await privy.oAuth.login(with: .google)
+        let user = try await privy.oAuth.login(
+            with: .google,
+            appUrlScheme: Self.oAuthRedirectURLScheme
+        )
         transitionToAuthenticated(userId: user.id)
     }
 
