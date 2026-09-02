@@ -425,80 +425,31 @@ private struct HomeSavedPlacesLibrary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(localized("Saved places", "已存地點"))
-                        .font(AtlasType.strong(28))
-                        .foregroundStyle(AtlasPalette.forest)
-
-                    Text(savedCountText)
-                        .font(AtlasType.body(12))
-                        .foregroundStyle(AtlasPalette.muted)
-                }
-
-                Spacer()
-
-                Button(action: presentation.onOpenSaves) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(localized("Manage", "管理"))
-                            .font(AtlasType.strong(12))
-                    }
-                    .foregroundStyle(AtlasPalette.ink)
-                    .padding(.horizontal, 12)
-                    .frame(height: 34)
-                    .background(AtlasPalette.paper, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-                    }
-                }
-                .accessibilityLabel(localized("Manage", "管理"))
-                .accessibilityIdentifier("home.saves")
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-
-            if presentation.reviewCount > 0 {
-                Button(action: presentation.onReviewAll) {
-                    HStack(spacing: 9) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(reviewText)
-                            .font(AtlasType.strong(13))
-                        Spacer()
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundStyle(AtlasPalette.forest)
-                    .padding(.horizontal, 14)
-                    .frame(height: 42)
-                    .background(AtlasPalette.mint.opacity(0.58), in: RoundedRectangle(cornerRadius: 13))
-                }
-                .accessibilityIdentifier("home.review")
-                .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-
             if presentation.savedPlaces.isEmpty {
+                emptyHeader
                 HomeSavedPlacesEmpty()
                 Spacer(minLength: 0)
-            } else {
+            } else if let featuredPlace {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(savedPlaceGroups) { group in
-                            VStack(spacing: 0) {
-                                Rectangle()
-                                    .fill(AtlasPalette.line.opacity(0.42))
-                                    .frame(height: 1)
+                    LazyVStack(alignment: .leading, spacing: 20) {
+                        HomeFeaturedPlaceHero(
+                            place: featuredPlace,
+                            title: localized("Saved places", "已存地點"),
+                            savedCountText: savedCountText,
+                            reviewCount: presentation.reviewCount,
+                            reviewLabel: reviewText,
+                            manageLabel: localized("Manage saved places", "管理已存地點"),
+                            onOpen: { presentation.onOpenPlace(featuredPlace.id) },
+                            onReview: presentation.onReviewAll,
+                            onManage: presentation.onOpenSaves
+                        )
 
+                        ForEach(shelfGroups) { group in
+                            VStack(alignment: .leading, spacing: 9) {
                                 HStack(spacing: 8) {
                                     Text(regionTitle(for: group))
-                                        .font(AtlasType.display(14))
-                                        .foregroundStyle(AtlasPalette.ink)
+                                        .font(AtlasType.strong(16))
+                                        .foregroundStyle(AtlasPalette.forest)
 
                                     Spacer()
 
@@ -506,26 +457,25 @@ private struct HomeSavedPlacesLibrary: View {
                                         .font(AtlasType.regular(11))
                                         .foregroundStyle(AtlasPalette.muted)
                                 }
-                                .padding(.horizontal, 2)
-                                .frame(minHeight: 34)
+                                .padding(.horizontal, 16)
 
-                                ForEach(Array(group.places.enumerated()), id: \.element.id) { index, place in
-                                    HomeSavedPlaceRow(place: place) {
-                                        presentation.onOpenPlace(place.id)
+                                ScrollView(.horizontal) {
+                                    LazyHStack(spacing: 10) {
+                                        ForEach(group.places) { place in
+                                            HomeSavedPlaceRow(
+                                                place: place,
+                                                width: group.places.count == 1 ? 370 : 174,
+                                                onOpen: { presentation.onOpenPlace(place.id) }
+                                            )
+                                        }
                                     }
-
-                                    if index < group.places.count - 1 {
-                                        Rectangle()
-                                            .fill(AtlasPalette.line.opacity(0.24))
-                                            .frame(height: 1)
-                                            .padding(.leading, 112)
-                                    }
+                                    .padding(.horizontal, 16)
                                 }
+                                .scrollIndicators(.hidden)
                             }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 18)
+                    .padding(.bottom, 22)
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
@@ -538,8 +488,72 @@ private struct HomeSavedPlacesLibrary: View {
         .accessibilityIdentifier("home.savedPlaces")
     }
 
+    private var emptyHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localized("Saved places", "已存地點"))
+                    .font(AtlasType.strong(28))
+                    .foregroundStyle(AtlasPalette.forest)
+
+                Text(savedCountText)
+                    .font(AtlasType.body(12))
+                    .foregroundStyle(AtlasPalette.muted)
+            }
+
+            Spacer()
+
+            if presentation.reviewCount > 0 {
+                Button(action: presentation.onReviewAll) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.forest)
+                        .frame(width: 44, height: 44)
+                        .background(AtlasPalette.mint.opacity(0.92), in: Circle())
+                }
+                .accessibilityLabel(reviewText)
+                .accessibilityIdentifier("home.review")
+                .buttonStyle(.plain)
+            }
+
+            Button(action: presentation.onOpenSaves) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: 44, height: 44)
+                    .background(AtlasPalette.paper, in: Circle())
+                    .overlay {
+                        Circle().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel(localized("Manage saved places", "管理已存地點"))
+            .accessibilityIdentifier("home.saves")
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
+    }
+
+    private var featuredPlace: AtlasPlacePresentation? {
+        presentation.savedPlaces.first
+    }
+
     private var savedPlaceGroups: [AtlasSavedPlaceGroupPresentation] {
         AtlasPlacePresentation.groupedByRegion(presentation.savedPlaces)
+    }
+
+    private var shelfGroups: [AtlasSavedPlaceGroupPresentation] {
+        guard let featuredPlace else { return savedPlaceGroups }
+
+        return savedPlaceGroups.compactMap { group in
+            let places = group.places.filter { $0.id != featuredPlace.id }
+            guard !places.isEmpty else { return nil }
+            return AtlasSavedPlaceGroupPresentation(
+                id: group.id,
+                region: group.region,
+                places: places
+            )
+        }
     }
 
     private func regionTitle(for group: AtlasSavedPlaceGroupPresentation) -> String {
@@ -580,6 +594,82 @@ private struct HomeSavedPlacesLibrary: View {
     }
 }
 
+private struct HomeFeaturedPlaceHero: View {
+    let place: AtlasPlacePresentation
+    let title: String
+    let savedCountText: String
+    let reviewCount: Int
+    let reviewLabel: String
+    let manageLabel: String
+    let onOpen: () -> Void
+    let onReview: () -> Void
+    let onManage: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Button(action: onOpen) {
+                HomeSavedPlaceThumbnail(photoURL: place.photoURL)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.48))
+                            .frame(height: 82)
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(title)
+                                .font(AtlasType.strong(28))
+                                .foregroundStyle(.white)
+
+                            Text(savedCountText)
+                                .font(AtlasType.body(12))
+                                .foregroundStyle(.white.opacity(0.86))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 13)
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(place.name), \(place.area)")
+            .accessibilityIdentifier("home.place.\(place.id)")
+
+            HStack(spacing: 8) {
+                if reviewCount > 0 {
+                    Button(action: onReview) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles")
+                            Text("\(reviewCount)")
+                                .font(AtlasType.strong(12))
+                        }
+                        .foregroundStyle(AtlasPalette.forest)
+                        .padding(.horizontal, 12)
+                        .frame(height: 44)
+                        .background(AtlasPalette.mint.opacity(0.92), in: Capsule())
+                    }
+                    .accessibilityLabel(reviewLabel)
+                    .accessibilityIdentifier("home.review")
+                    .buttonStyle(.plain)
+                }
+
+                Button(action: onManage) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 44, height: 44)
+                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
+                }
+                .accessibilityLabel(manageLabel)
+                .accessibilityIdentifier("home.saves")
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+        }
+        .frame(height: 208)
+        .clipped()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.photoHero")
+    }
+}
+
 private struct HomeSavedPlacesEmpty: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
@@ -614,42 +704,42 @@ private struct HomeSavedPlacesEmpty: View {
 
 private struct HomeSavedPlaceRow: View {
     let place: AtlasPlacePresentation
+    let width: CGFloat
     let onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 12) {
+            ZStack(alignment: .bottomLeading) {
                 HomeSavedPlaceThumbnail(photoURL: place.photoURL)
 
-                VStack(alignment: .leading, spacing: 3) {
+                Rectangle()
+                    .fill(Color.black.opacity(0.46))
+                    .frame(height: 44)
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text(place.name)
-                        .font(AtlasType.strong(16))
-                        .foregroundStyle(AtlasPalette.ink)
+                        .font(AtlasType.strong(14))
+                        .foregroundStyle(.white)
                         .lineLimit(1)
 
-                    Text(place.area)
-                        .font(AtlasType.body(11))
-                        .foregroundStyle(AtlasPalette.muted)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 6)
-
-                VStack(alignment: .trailing, spacing: 5) {
                     Text(place.relativeDay)
                         .font(AtlasType.regular(10))
-                        .foregroundStyle(AtlasPalette.muted)
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.muted.opacity(0.72))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(1)
                 }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 7)
             }
-            .padding(.horizontal, 2)
-            .frame(height: 72)
+            .frame(width: width, height: 112)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(place.name), \(place.area), \(place.relativeDay)")
         .accessibilityIdentifier("home.place.\(place.id)")
     }
 }
@@ -673,13 +763,9 @@ private struct HomeSavedPlaceThumbnail: View {
                 fallback
             }
         }
-        .frame(width: 98, height: 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AtlasPalette.mint.opacity(0.48))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
-        }
+        .clipped()
         .accessibilityHidden(true)
     }
 

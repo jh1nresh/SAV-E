@@ -14,8 +14,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("home.saves"))
         XCTAssertTrue(library.contains("home.review"))
         XCTAssertTrue(library.contains("savedPlaceGroups"))
+        XCTAssertTrue(library.contains("shelfGroups"))
         XCTAssertTrue(library.contains("regionTitle"))
         XCTAssertTrue(library.contains("group.places"))
+        XCTAssertTrue(library.contains("HomeFeaturedPlaceHero"))
+        XCTAssertTrue(library.contains("ScrollView(.horizontal)"))
         XCTAssertFalse(library.contains("ForEach(Array(presentation.savedPlaces.enumerated())"))
         XCTAssertTrue(
             library.contains("alignment: .top"),
@@ -29,10 +32,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
         let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
         let row = try typeBody("HomeSavedPlaceRow", in: screens)
+        let hero = try typeBody("HomeFeaturedPlaceHero", in: screens)
         let thumbnail = try typeBody("HomeSavedPlaceThumbnail", in: screens)
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail(photoURL: place.photoURL)"))
+        XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
+        XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail(photoURL: place.photoURL)"))
+        XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
         XCTAssertTrue(thumbnail.contains("fallback"))
