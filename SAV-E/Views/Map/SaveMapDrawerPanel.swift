@@ -19,8 +19,8 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
     /// Keeps the collapsed shelf clear of the root tab bar.
-    private let collapsedBottomInset: CGFloat = 90
-    private let collapsedHeight: CGFloat = 132
+    private let collapsedBottomInset: CGFloat = 88
+    private let collapsedHeight: CGFloat = 104
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -49,7 +49,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                 onExpand(true)
             }
         )
-        .frame(height: 112)
+        .frame(height: 84)
         .padding(.horizontal, 15)
         .padding(.bottom, collapsedBottomInset)
         .offset(y: max(-96, min(0, dragTranslation)))
@@ -116,7 +116,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         let largeHeight = max(320, totalHeight - 12)
         let baseHeight = expandedStage == .large
             ? largeHeight
-            : max(320, totalHeight * 0.52)
+            : max(320, totalHeight * 0.42)
         return min(largeHeight, max(collapsedHeight, baseHeight - dragTranslation))
     }
 

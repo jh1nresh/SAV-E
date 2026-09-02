@@ -428,7 +428,7 @@ private struct HomeSavedPlacesLibrary: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(localized("Saved places", "已存地點"))
-                        .font(AtlasType.display(25))
+                        .font(AtlasType.strong(28))
                         .foregroundStyle(AtlasPalette.forest)
 
                     Text(savedCountText)
@@ -488,13 +488,17 @@ private struct HomeSavedPlacesLibrary: View {
                 Spacer(minLength: 0)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 0) {
                         ForEach(savedPlaceGroups) { group in
                             VStack(spacing: 0) {
+                                Rectangle()
+                                    .fill(AtlasPalette.line.opacity(0.42))
+                                    .frame(height: 1)
+
                                 HStack(spacing: 8) {
                                     Text(regionTitle(for: group))
-                                        .font(AtlasType.strong(13))
-                                        .foregroundStyle(AtlasPalette.forest)
+                                        .font(AtlasType.display(14))
+                                        .foregroundStyle(AtlasPalette.ink)
 
                                     Spacer()
 
@@ -502,12 +506,8 @@ private struct HomeSavedPlacesLibrary: View {
                                         .font(AtlasType.regular(11))
                                         .foregroundStyle(AtlasPalette.muted)
                                 }
-                                .padding(.horizontal, 14)
-                                .frame(minHeight: 42)
-
-                                Rectangle()
-                                    .fill(AtlasPalette.line.opacity(0.24))
-                                    .frame(height: 1)
+                                .padding(.horizontal, 2)
+                                .frame(minHeight: 34)
 
                                 ForEach(Array(group.places.enumerated()), id: \.element.id) { index, place in
                                     HomeSavedPlaceRow(place: place) {
@@ -518,17 +518,9 @@ private struct HomeSavedPlacesLibrary: View {
                                         Rectangle()
                                             .fill(AtlasPalette.line.opacity(0.24))
                                             .frame(height: 1)
-                                            .padding(.leading, 66)
+                                            .padding(.leading, 112)
                                     }
                                 }
-                            }
-                            .background(
-                                AtlasPalette.paper,
-                                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
                             }
                         }
                     }
@@ -631,7 +623,7 @@ private struct HomeSavedPlaceRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.name)
-                        .font(AtlasType.strong(15))
+                        .font(AtlasType.strong(16))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
 
@@ -641,17 +633,19 @@ private struct HomeSavedPlaceRow: View {
                         .lineLimit(1)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
 
-                Text(place.relativeDay)
-                    .font(AtlasType.regular(10))
-                    .foregroundStyle(AtlasPalette.muted)
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(place.relativeDay)
+                        .font(AtlasType.regular(10))
+                        .foregroundStyle(AtlasPalette.muted)
 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(AtlasPalette.muted.opacity(0.72))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.muted.opacity(0.72))
+                }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 2)
             .frame(height: 72)
             .contentShape(Rectangle())
         }
@@ -679,11 +673,11 @@ private struct HomeSavedPlaceThumbnail: View {
                 fallback
             }
         }
-        .frame(width: 48, height: 48)
+        .frame(width: 98, height: 56)
         .background(AtlasPalette.mint.opacity(0.48))
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
         }
         .accessibilityHidden(true)
@@ -691,7 +685,7 @@ private struct HomeSavedPlaceThumbnail: View {
 
     private var fallback: some View {
         Image(systemName: "mappin.and.ellipse")
-            .font(.system(size: 19, weight: .medium))
+            .font(.system(size: 21, weight: .medium))
             .foregroundStyle(AtlasPalette.forest)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
