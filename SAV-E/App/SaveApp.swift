@@ -1450,29 +1450,22 @@ private struct SignInHero: View {
     let isCompactHeight: Bool
 
     var body: some View {
-        VStack(spacing: isCompactHeight ? 10 : 14) {
-            MemoMascotMark(size: isCompactHeight ? 76 : 92, framed: false)
+        let logoSize: CGFloat = isCompactHeight ? 104 : 124
+
+        VStack(spacing: isCompactHeight ? 12 : 16) {
+            Image("SavvyLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: logoSize, height: logoSize)
+                .clipShape(RoundedRectangle(
+                    cornerRadius: logoSize * 0.225,
+                    style: .continuous
+                ))
                 .accessibilityHidden(true)
 
-            VStack(spacing: isCompactHeight ? 5 : 7) {
-                Text(languageSettings.text(.appName))
-                    .font(SaveAtlasType.strong(isCompactHeight ? 26 : 28, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-
-                Text(languageSettings.text(.signInTagline))
-                    .font(SaveAtlasType.strong(isCompactHeight ? 16 : 18, relativeTo: .headline))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .multilineTextAlignment(.center)
-
-                Text(languageSettings.text(.signInDescription))
-                    .font(SaveAtlasType.body(isCompactHeight ? 12 : 14))
-                    .lineSpacing(2)
-                    .foregroundStyle(SaveAtlasPalette.ink.opacity(0.66))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.84)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(languageSettings.text(.appName))
+                .font(SaveAtlasType.strong(isCompactHeight ? 28 : 32, relativeTo: .title))
+                .foregroundStyle(SaveAtlasPalette.forest)
         }
     }
 }
