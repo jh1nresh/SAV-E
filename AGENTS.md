@@ -20,6 +20,31 @@ Before editing, record:
 
 If those fields are missing, produce a clarification brief instead of guessing.
 
+## Design Reference
+
+Before designing, laying out, or changing any user-visible surface, read
+`DESIGN.md` in full. It is the source of truth for design intent, state
+language, and platform boundary.
+
+Token authority order, most authoritative first:
+
+1. `SAV-E/Extensions/Color+Theme.swift` — owns the actual palette values. Code
+   wins over any hex written in Markdown.
+2. `DESIGN.md` — owns intent, naming, state language, and what is not allowed.
+3. `design-assets/` — accepted examples (`app-store/`, `logo-exploration/`,
+   `social/`). Reference them; do not treat them as tokens.
+
+If something you need is not covered by those three, ask instead of choosing
+for yourself. If `DESIGN.md` and the code disagree, report the drift rather
+than silently picking one.
+
+When you have finished a user-visible change, check your own output against
+`DESIGN.md` and the theme tokens, fix what fails, and only then present it.
+
+The five-second state test from `DESIGN.md` applies to every surface: a user
+must be able to tell a clue from a review candidate from a Map Stamp. A diff
+that blurs those states fails review even if it compiles.
+
 ## Engineering Loop
 
 ```text
