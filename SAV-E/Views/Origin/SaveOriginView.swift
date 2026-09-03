@@ -23,18 +23,14 @@ struct SaveOriginCapture: Identifiable, Hashable {
 }
 
 struct SaveOriginView: View {
-    let captures: [SaveOriginCapture]
-    let sourceCandidates: [PlaceReviewCandidate]
-    let reviewCandidates: [PlaceReviewCandidate]
-    let isLoading: Bool
-    let loadError: String?
-    let onRefresh: () async -> Void
-    let onPlanCandidate: (PlaceReviewCandidate) -> Void
-    let onArchiveCandidate: (PlaceReviewCandidate) async throws -> Void
+    let places: [Place]
+    let onSave: (Place) async throws -> Void
+    let onSkip: (Place) -> Void
     let onOpenPassport: () -> Void
 
     @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var workingCandidateID: UUID?
+    @State private var dragOffset: CGSize = .zero
+    @State private var workingPlaceID: UUID?
     @State private var actionError: String?
 
     var body: some View {
@@ -46,30 +42,18 @@ struct SaveOriginView: View {
             }
             .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
 
-            ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    heading
-
-                    sectionLabel(localized("YOUR SOURCES", "你的來源"), count: visibleCaptures.count)
-                    sourceContent
-
-                    if !activeCandidates.isEmpty {
-                        sectionLabel(localized("TO REVIEW", "待處理"), count: activeCandidates.count)
-                        ForEach(activeCandidates) { candidate in
-                            backlogCard(candidate)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 112)
+            VStack(alignment: .leading, spacing: 14) {
+                heading
+                cardDeck
+                swipeControls
             }
-            .placed(x: 0, y: 105, width: AtlasMetrics.width, height: 681)
+            .padding(.horizontal, 16)
+            .placed(x: 0, y: 105, width: AtlasMetrics.width, height: 674)
         }
         .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("origin.root")
-        .task { await onRefresh() }
         .alert(
             localized("Couldn’t finish that action", "無法完成這個動作"),
             isPresented: Binding(
@@ -85,16 +69,16 @@ struct SaveOriginView: View {
 
     private var heading: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(localized("YOUR PLACE MEMORY", "你的地點記憶"))
+            Text(localized("DISCOVER FROM SAVVY", "探索 SAVVY 推薦"))
                 .font(AtlasType.body(11))
                 .tracking(1.1)
                 .foregroundStyle(SaveAtlasPalette.muted)
-            Text(localized("Origin", "來處"))
+            Text(localized("What should we eat?", "下一餐吃什麼？"))
                 .font(AtlasType.display(34))
                 .foregroundStyle(SaveAtlasPalette.forest)
             Text(localized(
-                "The links and exact words your saved places came from.",
-                "保留每個地點原本的連結與文字。"
+                "Swipe left to save. Swipe right to skip.",
+                "左滑收藏，右滑跳過。"
             ))
             .font(AtlasType.body(15))
             .foregroundStyle(SaveAtlasPalette.muted)
@@ -102,171 +86,234 @@ struct SaveOriginView: View {
     }
 
     @ViewBuilder
-    private var sourceContent: some View {
-        if isLoading && visibleCaptures.isEmpty {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text(localized("Loading your sources…", "正在載入你的來源⋯"))
-                    .font(AtlasType.body(14))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-            }
-            .frame(maxWidth: .infinity, minHeight: 88)
-            .accessibilityIdentifier("origin.loading")
-        } else if let loadError, visibleCaptures.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(localized("Sources couldn’t load.", "無法載入來源。"))
-                    .font(AtlasType.display(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                Text(loadError)
-                    .font(AtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Button(localized("Try again", "再試一次")) {
-                    Task { await onRefresh() }
-                }
-                .buttonStyle(.bordered)
-            }
-            .originCardStyle()
-            .accessibilityIdentifier("origin.loadError")
-        } else if visibleCaptures.isEmpty {
+    private var cardDeck: some View {
+        if foodPlaces.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "paperclip")
-                    .font(.system(size: 24, weight: .regular))
+                Image(systemName: "fork.knife.circle")
+                    .font(.system(size: 34, weight: .regular))
                     .foregroundStyle(SaveAtlasPalette.coral)
-                Text(localized("No source saved yet", "還沒有來源"))
-                    .font(AtlasType.display(18))
+                Text(localized("You’re caught up", "推薦都看完了"))
+                    .font(AtlasType.display(22))
                     .foregroundStyle(SaveAtlasPalette.ink)
                 Text(localized(
-                    "New links and notes will collect here from now on. Older saves are not guessed.",
-                    "之後新增的連結與筆記會收在這裡；既有收藏不會被猜測補齊。"
+                    "New food posts from people and guides you follow will appear here.",
+                    "追蹤的朋友與美食指南有新貼文時，會出現在這裡。"
                 ))
                 .font(AtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)
             }
-            .originCardStyle()
+            .padding(24)
+            .frame(maxWidth: .infinity, minHeight: 430, alignment: .center)
+            .background(SaveAtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .accessibilityIdentifier("origin.empty")
         } else {
-            ForEach(visibleCaptures) { capture in
-                sourceCard(capture)
+            ZStack {
+                ForEach(Array(foodPlaces.prefix(3).reversed())) { place in
+                    foodCard(place, isActive: place.id == foodPlaces.first?.id)
+                        .scaleEffect(place.id == foodPlaces.first?.id ? 1 : 0.96)
+                        .offset(y: place.id == foodPlaces.first?.id ? 0 : 9)
+                        .allowsHitTesting(place.id == foodPlaces.first?.id)
+                }
             }
+            .frame(maxWidth: .infinity, minHeight: 430)
         }
     }
 
-    private func sourceCard(_ capture: SaveOriginCapture) -> some View {
-        let related = candidatesByCapture[capture.id] ?? []
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(capture.title?.trimmingCharacters(in: .whitespacesAndNewlines).originNonEmpty
-                     ?? localized("Saved source", "已儲存來源"))
-                    .font(AtlasType.display(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                Spacer(minLength: 8)
-                Text(capture.createdAt, style: .date)
-                    .font(AtlasType.body(11))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-            }
+    private func foodCard(_ place: Place, isActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                foodPhoto(place)
 
-            if let rawText = capture.rawText,
-               !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(rawText)
+                LinearGradient(
+                    colors: [.clear, SaveAtlasPalette.ink.opacity(0.82)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                VStack(alignment: .leading, spacing: 6) {
+                    if let signal = place.socialSignal {
+                        Label(signal.displayText, systemImage: signal.kind.pinSystemImage)
+                            .font(AtlasType.display(12))
+                            .foregroundStyle(SaveAtlasPalette.paper)
+                    }
+                    Text(place.name)
+                        .font(AtlasType.display(28))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                }
+                .padding(18)
+
+                swipeDecisionOverlay
+            }
+            .frame(height: 305)
+            .clipped()
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Label(
+                        place.category.displayName(language: languageSettings.language),
+                        systemImage: place.category.iconName
+                    )
+                    if let rating = place.googleRating ?? place.rating {
+                        Label(String(format: "%.1f", rating), systemImage: "star.fill")
+                    }
+                }
+                .font(AtlasType.display(12))
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+                Text(place.note?.trimmingCharacters(in: .whitespacesAndNewlines).originNonEmpty
+                     ?? place.address)
                     .font(AtlasType.body(14))
                     .foregroundStyle(SaveAtlasPalette.ink)
-                    .padding(.leading, 10)
-                    .overlay(alignment: .leading) {
-                        Rectangle()
-                            .fill(SaveAtlasPalette.coral.opacity(0.68))
-                            .frame(width: 3)
+                    .lineLimit(3)
+
+                if let handle = place.savedSourceHandle?.originNonEmpty {
+                    Text("@\(handle.trimmingCharacters(in: CharacterSet(charactersIn: "@")))")
+                        .font(AtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+            .padding(16)
+        }
+        .frame(maxWidth: .infinity, minHeight: 430, alignment: .top)
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 14, y: 8)
+        .offset(isActive ? dragOffset : .zero)
+        .rotationEffect(.degrees(isActive ? Double(dragOffset.width / 22) : 0))
+        .gesture(swipeGesture(for: place), including: isActive ? .all : .none)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("origin.foodCard.\(place.id.uuidString)")
+    }
+
+    @ViewBuilder
+    private func foodPhoto(_ place: Place) -> some View {
+        if let value = place.businessPhotoURLStrings.first,
+           let url = URL(string: value) {
+            CachedAsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image.resizable().scaledToFill()
+                } else {
+                    foodPhotoFallback(place)
+                }
+            }
+        } else {
+            foodPhotoFallback(place)
+        }
+    }
+
+    private func foodPhotoFallback(_ place: Place) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [SaveAtlasPalette.mint, SaveAtlasPalette.honey.opacity(0.78)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Image(systemName: place.category.iconName)
+                .font(.system(size: 72, weight: .light))
+                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.72))
+        }
+    }
+
+    @ViewBuilder
+    private var swipeDecisionOverlay: some View {
+        if abs(dragOffset.width) > 38 {
+            Text(dragOffset.width < 0
+                 ? localized("SAVE", "收藏")
+                 : localized("SKIP", "跳過"))
+                .font(AtlasType.display(22))
+                .tracking(1.2)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    dragOffset.width < 0 ? SaveAtlasPalette.coral : SaveAtlasPalette.forest,
+                    in: Capsule()
+                )
+                .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: dragOffset.width < 0 ? .topTrailing : .topLeading)
+        }
+    }
+
+    private var swipeControls: some View {
+        HStack(spacing: 18) {
+            Button {
+                guard let place = foodPlaces.first else { return }
+                completeSwipe(.save, place: place)
+            } label: {
+                Label(localized("Save", "收藏"), systemImage: "arrow.left")
+                    .frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(SaveAtlasPalette.coral)
+            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
+            .accessibilityIdentifier("origin.save")
+
+            Button {
+                guard let place = foodPlaces.first else { return }
+                completeSwipe(.skip, place: place)
+            } label: {
+                Label(localized("Skip", "跳過"), systemImage: "arrow.right")
+                    .frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.bordered)
+            .tint(SaveAtlasPalette.forest)
+            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
+            .accessibilityIdentifier("origin.skip")
+        }
+    }
+
+    private var foodPlaces: [Place] {
+        places.filter { place in
+            place.socialSignal != nil && [.food, .cafe, .bar].contains(place.category)
+        }
+    }
+
+    private func swipeGesture(for place: Place) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard workingPlaceID == nil else { return }
+                dragOffset = value.translation
+            }
+            .onEnded { value in
+                let decision = OriginSwipeDecision.resolve(translation: value.translation.width)
+                guard decision != .none else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        dragOffset = .zero
                     }
-                    .accessibilityIdentifier("origin.source.verbatim")
-            }
-
-            if !related.isEmpty {
-                Text(related.map(\.name).joined(separator: " · "))
-                    .font(AtlasType.display(12))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-            }
-
-            if let url = capture.originalURL {
-                Link(destination: url) {
-                    Label(localized("Open original", "開啟原始連結"), systemImage: "arrow.up.right")
-                        .font(AtlasType.display(13))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .frame(minHeight: 44)
+                    return
                 }
-                .accessibilityIdentifier("origin.source.open")
+                completeSwipe(decision, place: place)
             }
-        }
-        .originCardStyle()
-        .accessibilityIdentifier("origin.source.\(capture.id.uuidString)")
     }
 
-    private func backlogCard(_ candidate: PlaceReviewCandidate) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(candidate.name)
-                .font(AtlasType.display(18))
-                .foregroundStyle(SaveAtlasPalette.ink)
-            if !candidate.address.isEmpty {
-                Text(candidate.address)
-                    .font(AtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-            }
+    private func completeSwipe(_ decision: OriginSwipeDecision, place: Place) {
+        guard workingPlaceID == nil else { return }
+        workingPlaceID = place.id
+        withAnimation(.easeIn(duration: 0.2)) {
+            dragOffset.width = decision == .save ? -520 : 520
+        }
 
-            HStack(spacing: 10) {
-                Button {
-                    onPlanCandidate(candidate)
-                } label: {
-                    Label(localized("Plan it", "排入行程"), systemImage: "calendar.badge.plus")
-                        .frame(maxWidth: .infinity, minHeight: 44)
+        Task {
+            do {
+                try await Task.sleep(for: .milliseconds(210))
+                if decision == .save {
+                    try await onSave(place)
+                } else {
+                    onSkip(place)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(SaveAtlasPalette.forest)
-                .disabled(workingCandidateID != nil)
-                .accessibilityIdentifier("origin.backlog.plan.\(candidate.id.uuidString)")
-
-                Button(role: .destructive) {
-                    archive(candidate)
-                } label: {
-                    if workingCandidateID == candidate.id {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    } else {
-                        Label(localized("Archive", "封存"), systemImage: "archivebox")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(workingCandidateID != nil)
-                .accessibilityIdentifier("origin.backlog.archive.\(candidate.id.uuidString)")
+                dragOffset = .zero
+                workingPlaceID = nil
+            } catch {
+                dragOffset = .zero
+                workingPlaceID = nil
+                actionError = error.localizedDescription
             }
-        }
-        .originCardStyle()
-        .accessibilityIdentifier("origin.backlog.\(candidate.id.uuidString)")
-    }
-
-    private func sectionLabel(_ title: String, count: Int) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-            Text("\(count)")
-                .foregroundStyle(SaveAtlasPalette.coral)
-        }
-        .font(AtlasType.body(11))
-        .tracking(1.05)
-        .foregroundStyle(SaveAtlasPalette.muted)
-        .padding(.top, 4)
-    }
-
-    private var visibleCaptures: [SaveOriginCapture] {
-        captures.filter(\.hasDisplayableSource)
-    }
-
-    private var activeCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.filter { $0.status == "review" || $0.status == "needs_more_evidence" }
-    }
-
-    private var candidatesByCapture: [UUID: [PlaceReviewCandidate]] {
-        Dictionary(grouping: sourceCandidates.compactMap { candidate in
-            candidate.captureId.map { ($0, candidate) }
-        }, by: { $0.0 }).mapValues { pairs in
-            pairs.map { $0.1 }
         }
     }
 
@@ -276,33 +323,20 @@ struct SaveOriginView: View {
         return presentation
     }
 
-    private func archive(_ candidate: PlaceReviewCandidate) {
-        workingCandidateID = candidate.id
-        Task {
-            defer { workingCandidateID = nil }
-            do {
-                try await onArchiveCandidate(candidate)
-            } catch {
-                actionError = error.localizedDescription
-            }
-        }
-    }
-
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.language.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 
-private extension View {
-    func originCardStyle() -> some View {
-        padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(SaveAtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
-            }
-            .shadow(color: SaveAtlasPalette.ink.opacity(0.04), radius: 5, y: 2)
+enum OriginSwipeDecision: Equatable {
+    case save
+    case skip
+    case none
+
+    static func resolve(translation: CGFloat, threshold: CGFloat = 82) -> OriginSwipeDecision {
+        if translation <= -threshold { return .save }
+        if translation >= threshold { return .skip }
+        return .none
     }
 }
 
