@@ -88,7 +88,7 @@ struct SaveOriginView: View {
     @ViewBuilder
     private var cardDeck: some View {
         if foodPlaces.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Image(systemName: "fork.knife.circle")
                     .font(.system(size: 34, weight: .regular))
                     .foregroundStyle(SaveAtlasPalette.coral)
@@ -96,11 +96,23 @@ struct SaveOriginView: View {
                     .font(AtlasType.display(22))
                     .foregroundStyle(SaveAtlasPalette.ink)
                 Text(localized(
-                    "New food posts from people and guides you follow will appear here.",
-                    "追蹤的朋友與美食指南有新貼文時，會出現在這裡。"
+                    "Places people explicitly recommend through Savvy will appear here.",
+                    "其他人明確透過 Savvy 分享的地點推薦會出現在這裡。"
                 ))
                 .font(AtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)
+
+                Button(action: onOpenPassport) {
+                    Label(
+                        localized("Share a recommendation", "分享一個推薦"),
+                        systemImage: "person.text.rectangle"
+                    )
+                    .font(AtlasType.display(13))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(SaveAtlasPalette.forest)
+                .accessibilityIdentifier("origin.openPassport")
             }
             .padding(24)
             .frame(maxWidth: .infinity, minHeight: 430, alignment: .center)
@@ -132,7 +144,7 @@ struct SaveOriginView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     if let signal = place.socialSignal {
-                        Label(signal.displayText, systemImage: signal.kind.pinSystemImage)
+                        Label(signalLabel(signal), systemImage: signal.kind.pinSystemImage)
                             .font(AtlasType.display(12))
                             .foregroundStyle(SaveAtlasPalette.paper)
                     }
@@ -144,6 +156,19 @@ struct SaveOriginView: View {
                 .padding(18)
 
                 swipeDecisionOverlay
+            }
+            .overlay(alignment: .topLeading) {
+                Label(
+                    localized("SAVVY PLACE CARD", "SAVVY 地點推薦"),
+                    systemImage: "sparkles"
+                )
+                .font(AtlasType.display(10))
+                .tracking(0.8)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background(SaveAtlasPalette.paper.opacity(0.94), in: Capsule())
+                .padding(14)
             }
             .frame(height: 305)
             .clipped()
@@ -161,16 +186,31 @@ struct SaveOriginView: View {
                 .font(AtlasType.display(12))
                 .foregroundStyle(SaveAtlasPalette.forest)
 
-                Text(place.note?.trimmingCharacters(in: .whitespacesAndNewlines).originNonEmpty
-                     ?? place.address)
+                Text(place.originRecommendationSummary)
                     .font(AtlasType.body(14))
                     .foregroundStyle(SaveAtlasPalette.ink)
-                    .lineLimit(3)
+                    .lineLimit(2)
 
-                if let handle = place.savedSourceHandle?.originNonEmpty {
+                if place.socialSignal?.kind != .communityRecommendation,
+                   let handle = place.savedSourceHandle?.originNonEmpty {
                     Text("@\(handle.trimmingCharacters(in: CharacterSet(charactersIn: "@")))")
                         .font(AtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
+                }
+
+                if let sourceURL = place.publicShareSourceURL {
+                    Link(destination: sourceURL) {
+                        Label(
+                            localized(
+                                "View \(place.sourcePlatform.displayName) source",
+                                "查看 \(place.sourcePlatform.displayName) 原始來源"
+                            ),
+                            systemImage: "arrow.up.right"
+                        )
+                        .font(AtlasType.display(12))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    }
+                    .accessibilityIdentifier("origin.source.\(place.id.uuidString)")
                 }
             }
             .padding(16)
@@ -272,6 +312,11 @@ struct SaveOriginView: View {
         places.filter { place in
             place.socialSignal != nil && [.food, .cafe, .bar].contains(place.category)
         }
+    }
+
+    private func signalLabel(_ signal: PlaceSocialSignal) -> String {
+        guard signal.kind == .communityRecommendation else { return signal.displayText }
+        return localized("Shared by \(signal.sourceLabel)", "由 \(signal.sourceLabel) 分享")
     }
 
     private func swipeGesture(for place: Place) -> some Gesture {
