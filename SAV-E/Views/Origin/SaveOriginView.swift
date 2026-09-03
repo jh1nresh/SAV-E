@@ -42,7 +42,7 @@ struct SaveOriginView: View {
             }
             .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
                 heading
                 cardDeck
                 swipeControls
@@ -68,21 +68,30 @@ struct SaveOriginView: View {
     }
 
     private var heading: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(localized("DISCOVER FROM SAVVY", "探索 SAVVY 推薦"))
-                .font(AtlasType.body(11))
-                .tracking(1.1)
-                .foregroundStyle(SaveAtlasPalette.muted)
-            Text(localized("What should we eat?", "下一餐吃什麼？"))
-                .font(AtlasType.display(34))
-                .foregroundStyle(SaveAtlasPalette.forest)
+        HStack(alignment: .bottom, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(localized("ORIGIN · COMMUNITY", "ORIGIN · 社群推薦"))
+                    .font(AtlasType.body(10))
+                    .tracking(1.15)
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Text(localized("A place to consider.", "這個地方，考慮看看。"))
+                    .font(AtlasType.display(28))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+
+            Spacer(minLength: 6)
+
             Text(localized(
-                "Swipe left to save. Swipe right to skip.",
-                "左滑收藏，右滑跳過。"
+                "Swipe left to save\nright to skip",
+                "左滑儲存\n右滑跳過"
             ))
-            .font(AtlasType.body(15))
+            .font(AtlasType.body(11))
+            .multilineTextAlignment(.trailing)
             .foregroundStyle(SaveAtlasPalette.muted)
         }
+        .accessibilityIdentifier("origin.heading")
     }
 
     @ViewBuilder
@@ -127,7 +136,7 @@ struct SaveOriginView: View {
                         .allowsHitTesting(place.id == foodPlaces.first?.id)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 430)
+            .frame(maxWidth: .infinity, minHeight: 476)
         }
     }
 
@@ -145,11 +154,11 @@ struct SaveOriginView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if let signal = place.socialSignal {
                         Label(signalLabel(signal), systemImage: signal.kind.pinSystemImage)
-                            .font(AtlasType.display(12))
+                            .font(AtlasType.display(11))
                             .foregroundStyle(SaveAtlasPalette.paper)
                     }
                     Text(place.name)
-                        .font(AtlasType.display(28))
+                        .font(AtlasType.display(30))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                 }
@@ -159,35 +168,54 @@ struct SaveOriginView: View {
             }
             .overlay(alignment: .topLeading) {
                 Label(
-                    localized("SAVVY PLACE CARD", "SAVVY 地點推薦"),
-                    systemImage: "sparkles"
+                    localized("UNSAVED CANDIDATE", "尚未儲存"),
+                    systemImage: "bookmark"
                 )
                 .font(AtlasType.display(10))
                 .tracking(0.8)
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 7)
-                .background(SaveAtlasPalette.paper.opacity(0.94), in: Capsule())
+                .background(SaveAtlasPalette.sky.opacity(0.94), in: Capsule())
                 .padding(14)
+                .accessibilityHidden(!isActive)
+                .accessibilityIdentifier("origin.unsavedCandidate.\(place.id.uuidString)")
             }
-            .frame(height: 305)
+            .frame(height: 326)
             .clipped()
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Label(
-                        place.category.displayName(language: languageSettings.language),
-                        systemImage: place.category.iconName
-                    )
-                    if let rating = place.googleRating ?? place.rating {
-                        Label(String(format: "%.1f", rating), systemImage: "star.fill")
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Label(
+                            place.category.displayName(language: languageSettings.language),
+                            systemImage: place.category.iconName
+                        )
+                        if let rating = place.googleRating ?? place.rating {
+                            Label(String(format: "%.1f", rating), systemImage: "star.fill")
+                        }
+                    }
+                    .font(AtlasType.display(12))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+
+                    Spacer(minLength: 8)
+
+                    if let sourceURL = place.publicShareSourceURL {
+                        Link(destination: sourceURL) {
+                            Label(place.sourcePlatform.displayName, systemImage: "arrow.up.right")
+                                .font(AtlasType.display(11))
+                                .foregroundStyle(SaveAtlasPalette.forest)
+                        }
+                        .accessibilityLabel(localized(
+                            "View \(place.sourcePlatform.displayName) source",
+                            "查看 \(place.sourcePlatform.displayName) 原始來源"
+                        ))
+                        .accessibilityIdentifier("origin.source.\(place.id.uuidString)")
                     }
                 }
-                .font(AtlasType.display(12))
-                .foregroundStyle(SaveAtlasPalette.forest)
 
                 Text(place.originRecommendationSummary)
-                    .font(AtlasType.body(14))
+                    .font(AtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .lineLimit(2)
 
@@ -197,32 +225,18 @@ struct SaveOriginView: View {
                         .font(AtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
                 }
-
-                if let sourceURL = place.publicShareSourceURL {
-                    Link(destination: sourceURL) {
-                        Label(
-                            localized(
-                                "View \(place.sourcePlatform.displayName) source",
-                                "查看 \(place.sourcePlatform.displayName) 原始來源"
-                            ),
-                            systemImage: "arrow.up.right"
-                        )
-                        .font(AtlasType.display(12))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                    }
-                    .accessibilityIdentifier("origin.source.\(place.id.uuidString)")
-                }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
-        .frame(maxWidth: .infinity, minHeight: 430, alignment: .top)
-        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 476, alignment: .top)
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
         }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 14, y: 8)
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 10, y: 6)
         .offset(isActive ? dragOffset : .zero)
         .rotationEffect(.degrees(isActive ? Double(dragOffset.width / 22) : 0))
         .gesture(swipeGesture(for: place), including: isActive ? .all : .none)
@@ -248,14 +262,10 @@ struct SaveOriginView: View {
 
     private func foodPhotoFallback(_ place: Place) -> some View {
         ZStack {
-            LinearGradient(
-                colors: [SaveAtlasPalette.mint, SaveAtlasPalette.honey.opacity(0.78)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            SaveAtlasPalette.kraft.opacity(0.55)
             Image(systemName: place.category.iconName)
-                .font(.system(size: 72, weight: .light))
-                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.72))
+                .font(.system(size: 66, weight: .light))
+                .foregroundStyle(SaveAtlasPalette.forest.opacity(0.62))
         }
     }
 
@@ -281,12 +291,12 @@ struct SaveOriginView: View {
     }
 
     private var swipeControls: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 12) {
             Button {
                 guard let place = foodPlaces.first else { return }
                 completeSwipe(.save, place: place)
             } label: {
-                Label(localized("Save", "收藏"), systemImage: "arrow.left")
+                Label(localized("Save place", "儲存地點"), systemImage: "arrow.left")
                     .frame(maxWidth: .infinity, minHeight: 46)
             }
             .buttonStyle(.borderedProminent)
@@ -299,7 +309,8 @@ struct SaveOriginView: View {
                 completeSwipe(.skip, place: place)
             } label: {
                 Label(localized("Skip", "跳過"), systemImage: "arrow.right")
-                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .frame(width: 96)
+                    .frame(minHeight: 46)
             }
             .buttonStyle(.bordered)
             .tint(SaveAtlasPalette.forest)
