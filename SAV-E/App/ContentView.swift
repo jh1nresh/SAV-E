@@ -212,10 +212,6 @@ struct ContentView: View {
     @State private var suppressPendingOnboardingCaptureResume = false
     @State private var exactSearchRequestID: UUID?
     @State private var isExactSearchSessionActive = false
-    @State private var originCaptures: [SaveOriginCapture] = []
-    @State private var originCaptureCandidates: [PlaceReviewCandidate] = []
-    @State private var isLoadingOrigin = false
-    @State private var originLoadError: String?
     @State private var pendingOriginPlanCandidateID: UUID?
     /// True while chrome is swapping one exclusive presentation for another.
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
@@ -426,6 +422,14 @@ struct ContentView: View {
         if storageScope == .reviewerDemo {
             await tripStore.seedReviewerDemoIfNeeded(confirmedPlaces: mapVM.places)
         }
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-origin-food") {
+            mapVM.socialPlaces = Place.socialPreviewSeeds(
+                referrerDisplayName: "Savvy Food Club",
+                referralCode: "origin-ui-test"
+            )
+        }
+#endif
         openPostcardDrawerUITestFixtureIfNeeded()
         runRapidChromeTransitionUITestFixtureIfNeeded()
     }
@@ -653,23 +657,12 @@ struct ContentView: View {
 
     private var originView: some View {
         SaveOriginView(
-            captures: originCaptures,
-            sourceCandidates: storageScope == .production
-                ? originCaptureCandidates
-                : mapVM.reviewCandidates,
-            reviewCandidates: mapVM.reviewCandidates,
-            isLoading: isLoadingOrigin,
-            loadError: originLoadError,
-            onRefresh: refreshOrigin,
-            onPlanCandidate: { candidate in
-                openReviewCandidate(
-                    candidate,
-                    tripID: nil,
-                    offerTripAfterConfirmation: true
-                )
+            places: mapVM.socialPlaces,
+            onSave: { place in
+                _ = try await mapVM.saveSocialPlaceToMySave(place)
             },
-            onArchiveCandidate: { candidate in
-                try await mapVM.archiveReviewCandidate(candidate)
+            onSkip: { place in
+                mapVM.dismissSocialPlace(place)
             },
             onOpenPassport: openPassport
         )
@@ -1135,28 +1128,6 @@ struct ContentView: View {
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
-        }
-    }
-
-    @MainActor
-    private func refreshOrigin() async {
-        guard storageScope == .production else {
-            originCaptures = []
-            originCaptureCandidates = mapVM.reviewCandidates
-            originLoadError = nil
-            return
-        }
-        guard !isLoadingOrigin else { return }
-        isLoadingOrigin = true
-        originLoadError = nil
-        defer { isLoadingOrigin = false }
-        do {
-            originCaptures = try await SupabaseService.shared.fetchOriginCaptures()
-            originCaptureCandidates = (try? await SupabaseService.shared.fetchReviewCandidates()) ?? []
-        } catch is CancellationError {
-            return
-        } catch {
-            originLoadError = error.localizedDescription
         }
     }
 

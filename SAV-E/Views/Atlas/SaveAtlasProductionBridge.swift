@@ -604,7 +604,7 @@ struct SaveAtlasMapCommandShelf: View {
 
     var body: some View {
         Button(action: onOpenAssistant) {
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 Capsule()
                     .fill(AtlasPalette.line.opacity(0.48))
                     .frame(width: 38, height: 4)
@@ -615,36 +615,45 @@ struct SaveAtlasMapCommandShelf: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AtlasPalette.forest)
 
-                    Text("Search places or ask Savvy")
+                    Text("Search places")
                         .font(AtlasType.strong(16))
                         .foregroundStyle(AtlasPalette.ink)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
-                    Text("\(mapStampCount)")
-                        .font(AtlasType.display(12))
-                        .monospacedDigit()
-                        .foregroundStyle(AtlasPalette.forest)
-                        .frame(minWidth: 28, minHeight: 28)
-                        .background(AtlasPalette.mint.opacity(0.82), in: Circle())
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.ink)
                 }
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(
+                    AtlasPalette.canvas.opacity(0.88),
+                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                )
+
+                Label("\(mapStampCount) saved Map Stamps", systemImage: "star.circle.fill")
+                    .font(AtlasType.body(12))
+                    .foregroundStyle(AtlasPalette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.top, 9)
+            .padding(.bottom, 10)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
-                AtlasPalette.paper,
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
             }
-            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+            .shadow(color: AtlasPalette.ink.opacity(0.14), radius: 14, y: 6)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Search places or ask Savvy")
+        .accessibilityLabel("Search places")
         .accessibilityHint("Opens the Savvy assistant")
         .accessibilityIdentifier("map.command.search")
     }

@@ -422,6 +422,7 @@ private struct AtlasRegionalHomeHero: View {
 private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var featuredPlaceID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -439,9 +440,11 @@ private struct HomeSavedPlacesLibrary: View {
                             reviewCount: presentation.reviewCount,
                             reviewLabel: reviewText,
                             manageLabel: localized("Manage saved places", "管理已存地點"),
+                            changeCoverLabel: localized("Change cover photo", "更換封面照片"),
                             onOpen: { presentation.onOpenPlace(featuredPlace.id) },
                             onReview: presentation.onReviewAll,
-                            onManage: presentation.onOpenSaves
+                            onManage: presentation.onOpenSaves,
+                            onChangeCover: cycleFeaturedPlace
                         )
 
                         ForEach(savedPlaceGroups) { group in
@@ -486,6 +489,11 @@ private struct HomeSavedPlacesLibrary: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
+        .onChange(of: presentation.savedPlaces.map(\.id)) { _, ids in
+            if let featuredPlaceID, !ids.contains(featuredPlaceID) {
+                self.featuredPlaceID = nil
+            }
+        }
     }
 
     private var emptyHeader: some View {
@@ -535,7 +543,24 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var featuredPlace: AtlasPlacePresentation? {
-        presentation.savedPlaces.first
+        let candidates = featuredPlaces
+        return featuredPlaceID.flatMap { selectedID in
+            candidates.first { $0.id == selectedID }
+        } ?? candidates.first
+    }
+
+    private var featuredPlaces: [AtlasPlacePresentation] {
+        let placesWithPhotos = presentation.savedPlaces.filter { $0.photoURL != nil }
+        return placesWithPhotos.isEmpty ? presentation.savedPlaces : placesWithPhotos
+    }
+
+    private func cycleFeaturedPlace() {
+        guard featuredPlaces.count > 1, let featuredPlace else { return }
+        let currentIndex = featuredPlaces.firstIndex(where: { $0.id == featuredPlace.id }) ?? 0
+        let nextIndex = featuredPlaces.index(after: currentIndex)
+        withAnimation(SaveTheme.Motion.standardSpring) {
+            featuredPlaceID = featuredPlaces[nextIndex == featuredPlaces.endIndex ? 0 : nextIndex].id
+        }
     }
 
     private var savedPlaceGroups: [AtlasSavedPlaceGroupPresentation] {
@@ -587,9 +612,11 @@ private struct HomeFeaturedPlaceHero: View {
     let reviewCount: Int
     let reviewLabel: String
     let manageLabel: String
+    let changeCoverLabel: String
     let onOpen: () -> Void
     let onReview: () -> Void
     let onManage: () -> Void
+    let onChangeCover: () -> Void
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -623,6 +650,17 @@ private struct HomeFeaturedPlaceHero: View {
             .accessibilityIdentifier("home.place.\(place.id)")
 
             HStack(spacing: 8) {
+                Button(action: onChangeCover) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 44, height: 44)
+                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
+                }
+                .accessibilityLabel(changeCoverLabel)
+                .accessibilityIdentifier("home.hero.changeCover")
+                .buttonStyle(.plain)
+
                 if reviewCount > 0 {
                     Button(action: onReview) {
                         HStack(spacing: 5) {
