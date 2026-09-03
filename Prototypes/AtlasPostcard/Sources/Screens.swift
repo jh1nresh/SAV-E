@@ -439,7 +439,6 @@ private struct AtlasRegionalHomeHero: View {
 private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var featuredPlaceID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -463,9 +462,7 @@ private struct HomeSavedPlacesLibrary: View {
 
                         HomeFeaturedPlaceHero(
                             place: featuredPlace,
-                            changeCoverLabel: localized("Change cover photo", "更換封面照片"),
-                            onOpen: { presentation.onOpenPlace(featuredPlace.id) },
-                            onChangeCover: cycleFeaturedPlace
+                            onOpen: { presentation.onOpenPlace(featuredPlace.id) }
                         )
                         .padding(.horizontal, AtlasSpacing.content)
 
@@ -513,11 +510,6 @@ private struct HomeSavedPlacesLibrary: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
-        .onChange(of: presentation.savedPlaces.map(\.id)) { _, ids in
-            if let featuredPlaceID, !ids.contains(featuredPlaceID) {
-                self.featuredPlaceID = nil
-            }
-        }
     }
 
     private var libraryHeader: some View {
@@ -578,24 +570,10 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var featuredPlace: AtlasPlacePresentation? {
-        let candidates = featuredPlaces
-        return featuredPlaceID.flatMap { selectedID in
-            candidates.first { $0.id == selectedID }
-        } ?? candidates.first
-    }
-
-    private var featuredPlaces: [AtlasPlacePresentation] {
-        let placesWithPhotos = presentation.savedPlaces.filter { $0.photoURL != nil }
-        return placesWithPhotos.isEmpty ? presentation.savedPlaces : placesWithPhotos
-    }
-
-    private func cycleFeaturedPlace() {
-        guard featuredPlaces.count > 1, let featuredPlace else { return }
-        let currentIndex = featuredPlaces.firstIndex(where: { $0.id == featuredPlace.id }) ?? 0
-        let nextIndex = featuredPlaces.index(after: currentIndex)
-        withAnimation(SaveTheme.Motion.standardSpring) {
-            featuredPlaceID = featuredPlaces[nextIndex == featuredPlaces.endIndex ? 0 : nextIndex].id
-        }
+        // Keep the cover tied to the newest confirmed Map Stamp. Photo
+        // enrichment happens asynchronously; selecting only photo-ready rows
+        // made the cover jump to a different place as each request completed.
+        presentation.savedPlaces.first
     }
 
     private var savedPlaceGroups: [AtlasSavedPlaceGroupPresentation] {
@@ -642,60 +620,43 @@ private struct HomeSavedPlacesLibrary: View {
 
 private struct HomeFeaturedPlaceHero: View {
     let place: AtlasPlacePresentation
-    let changeCoverLabel: String
     let onOpen: () -> Void
-    let onChangeCover: () -> Void
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Button(action: onOpen) {
-                HomeSavedPlaceThumbnail(
-                    photoURL: place.photoURL,
-                    latitude: place.latitude,
-                    longitude: place.longitude
-                )
-                    .frame(height: 176)
-                    .overlay(alignment: .bottom) {
-                        LinearGradient(
-                            colors: [.clear, Color.black.opacity(0.72)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 104)
-                    }
-                    .overlay(alignment: .bottomLeading) {
-                        VStack(alignment: .leading, spacing: AtlasSpacing.tight) {
-                            Text(place.name)
-                                .font(AtlasType.strong(22))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
+        Button(action: onOpen) {
+            HomeSavedPlaceThumbnail(
+                photoURL: place.photoURL,
+                latitude: place.latitude,
+                longitude: place.longitude
+            )
+                .frame(height: 176)
+                .overlay(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [.clear, Color.black.opacity(0.72)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 104)
+                }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: AtlasSpacing.tight) {
+                        Text(place.name)
+                            .font(AtlasType.strong(22))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
 
-                            Text(place.area)
-                                .font(AtlasType.body(13))
-                                .foregroundStyle(.white.opacity(0.86))
-                                .lineLimit(1)
-                        }
-                        .padding(.horizontal, AtlasSpacing.content)
-                        .padding(.bottom, AtlasSpacing.control)
+                        Text(place.area)
+                            .font(AtlasType.body(13))
+                            .foregroundStyle(.white.opacity(0.86))
+                            .lineLimit(1)
                     }
+                    .padding(.horizontal, AtlasSpacing.content)
+                    .padding(.bottom, AtlasSpacing.control)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(place.name), \(place.area)")
-            .accessibilityIdentifier("home.place.\(place.id)")
-
-            Button(action: onChangeCover) {
-                Image(systemName: "photo.stack")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .frame(width: 44, height: 44)
-                    .background(AtlasPalette.paper.opacity(0.94), in: Circle())
-            }
-            .accessibilityLabel(changeCoverLabel)
-            .accessibilityIdentifier("home.hero.changeCover")
-            .buttonStyle(.plain)
-            .atlasCardShadow()
-            .padding(AtlasSpacing.control)
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(place.name), \(place.area)")
+        .accessibilityIdentifier("home.place.\(place.id)")
         .frame(height: 176)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
