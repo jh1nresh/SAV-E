@@ -845,6 +845,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'origin.foodCard.'")
         )
         XCTAssertEqual(cards.count, 2)
+        let candidateState = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'origin.unsavedCandidate.'")
+        )
+        XCTAssertTrue(candidateState.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.staticTexts["SAVVY PLACE CARD"].exists)
         let skippedCard = cards.element(boundBy: cards.count - 1)
         XCTAssertTrue(skippedCard.waitForExistence(timeout: stepTimeout))
         let skippedCardID = skippedCard.identifier

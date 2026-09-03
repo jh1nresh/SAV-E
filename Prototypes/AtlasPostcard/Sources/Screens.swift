@@ -427,31 +427,27 @@ private struct HomeSavedPlacesLibrary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if presentation.savedPlaces.isEmpty {
-                emptyHeader
+                libraryHeader
                 HomeSavedPlacesEmpty()
                 Spacer(minLength: 0)
             } else if let featuredPlace {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
+                    LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
+                        libraryHeader
+
                         HomeFeaturedPlaceHero(
                             place: featuredPlace,
-                            title: localized("Saved places", "已存地點"),
-                            savedCountText: savedCountText,
-                            reviewCount: presentation.reviewCount,
-                            reviewLabel: reviewText,
-                            manageLabel: localized("Manage saved places", "管理已存地點"),
                             changeCoverLabel: localized("Change cover photo", "更換封面照片"),
                             onOpen: { presentation.onOpenPlace(featuredPlace.id) },
-                            onReview: presentation.onReviewAll,
-                            onManage: presentation.onOpenSaves,
                             onChangeCover: cycleFeaturedPlace
                         )
+                        .padding(.horizontal, AtlasSpacing.content)
 
                         ForEach(savedPlaceGroups) { group in
-                            VStack(alignment: .leading, spacing: 9) {
-                                HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: AtlasSpacing.compact) {
+                                HStack(spacing: AtlasSpacing.compact) {
                                     Text(regionTitle(for: group))
-                                        .font(AtlasType.strong(16))
+                                        .font(AtlasType.strong(17))
                                         .foregroundStyle(AtlasPalette.forest)
 
                                     Spacer()
@@ -460,10 +456,10 @@ private struct HomeSavedPlacesLibrary: View {
                                         .font(AtlasType.regular(11))
                                         .foregroundStyle(AtlasPalette.muted)
                                 }
-                                .padding(.horizontal, 16)
+                                .padding(.horizontal, AtlasSpacing.content)
 
                                 ScrollView(.horizontal) {
-                                    LazyHStack(spacing: 10) {
+                                    LazyHStack(spacing: AtlasSpacing.control) {
                                         ForEach(group.places) { place in
                                             HomeSavedPlaceRow(
                                                 place: place,
@@ -472,13 +468,15 @@ private struct HomeSavedPlacesLibrary: View {
                                             )
                                         }
                                     }
-                                    .padding(.horizontal, 16)
+                                    .padding(.horizontal, AtlasSpacing.content)
+                                    .padding(.bottom, AtlasElevation.cardY)
                                 }
                                 .scrollIndicators(.hidden)
                             }
                         }
                     }
-                    .padding(.bottom, 22)
+                    .padding(.top, AtlasSpacing.content)
+                    .padding(.bottom, AtlasSpacing.section)
                 }
                 .scrollIndicators(.hidden)
                 .frame(maxHeight: .infinity)
@@ -496,11 +494,11 @@ private struct HomeSavedPlacesLibrary: View {
         }
     }
 
-    private var emptyHeader: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+    private var libraryHeader: some View {
+        HStack(alignment: .center, spacing: AtlasSpacing.control) {
+            VStack(alignment: .leading, spacing: AtlasSpacing.tight) {
                 Text(localized("Saved places", "已存地點"))
-                    .font(AtlasType.strong(28))
+                    .font(AtlasType.strong(30))
                     .foregroundStyle(AtlasPalette.forest)
 
                 Text(savedCountText)
@@ -517,6 +515,7 @@ private struct HomeSavedPlacesLibrary: View {
                         .foregroundStyle(AtlasPalette.forest)
                         .frame(width: 44, height: 44)
                         .background(AtlasPalette.mint.opacity(0.92), in: Circle())
+                        .atlasCardShadow()
                 }
                 .accessibilityLabel(reviewText)
                 .accessibilityIdentifier("home.review")
@@ -532,14 +531,13 @@ private struct HomeSavedPlacesLibrary: View {
                     .overlay {
                         Circle().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
+                    .atlasCardShadow()
             }
             .accessibilityLabel(localized("Manage saved places", "管理已存地點"))
             .accessibilityIdentifier("home.saves")
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
-        .padding(.bottom, 14)
+        .padding(.horizontal, AtlasSpacing.content)
     }
 
     private var featuredPlace: AtlasPlacePresentation? {
@@ -607,15 +605,8 @@ private struct HomeSavedPlacesLibrary: View {
 
 private struct HomeFeaturedPlaceHero: View {
     let place: AtlasPlacePresentation
-    let title: String
-    let savedCountText: String
-    let reviewCount: Int
-    let reviewLabel: String
-    let manageLabel: String
     let changeCoverLabel: String
     let onOpen: () -> Void
-    let onReview: () -> Void
-    let onManage: () -> Void
     let onChangeCover: () -> Void
 
     var body: some View {
@@ -626,73 +617,55 @@ private struct HomeFeaturedPlaceHero: View {
                     latitude: place.latitude,
                     longitude: place.longitude
                 )
+                    .frame(height: 176)
                     .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .fill(Color.black.opacity(0.48))
-                            .frame(height: 82)
+                        LinearGradient(
+                            colors: [.clear, Color.black.opacity(0.72)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 104)
                     }
                     .overlay(alignment: .bottomLeading) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(title)
-                                .font(AtlasType.strong(28))
+                        VStack(alignment: .leading, spacing: AtlasSpacing.tight) {
+                            Text(place.name)
+                                .font(AtlasType.strong(22))
                                 .foregroundStyle(.white)
+                                .lineLimit(1)
 
-                            Text(savedCountText)
-                                .font(AtlasType.body(12))
+                            Text(place.area)
+                                .font(AtlasType.body(13))
                                 .foregroundStyle(.white.opacity(0.86))
+                                .lineLimit(1)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 13)
+                        .padding(.horizontal, AtlasSpacing.content)
+                        .padding(.bottom, AtlasSpacing.control)
                     }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(place.name), \(place.area)")
             .accessibilityIdentifier("home.place.\(place.id)")
 
-            HStack(spacing: 8) {
-                Button(action: onChangeCover) {
-                    Image(systemName: "photo.stack")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 44, height: 44)
-                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
-                }
-                .accessibilityLabel(changeCoverLabel)
-                .accessibilityIdentifier("home.hero.changeCover")
-                .buttonStyle(.plain)
-
-                if reviewCount > 0 {
-                    Button(action: onReview) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "sparkles")
-                            Text("\(reviewCount)")
-                                .font(AtlasType.strong(12))
-                        }
-                        .foregroundStyle(AtlasPalette.forest)
-                        .padding(.horizontal, 12)
-                        .frame(height: 44)
-                        .background(AtlasPalette.mint.opacity(0.92), in: Capsule())
-                    }
-                    .accessibilityLabel(reviewLabel)
-                    .accessibilityIdentifier("home.review")
-                    .buttonStyle(.plain)
-                }
-
-                Button(action: onManage) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 44, height: 44)
-                        .background(AtlasPalette.paper.opacity(0.94), in: Circle())
-                }
-                .accessibilityLabel(manageLabel)
-                .accessibilityIdentifier("home.saves")
-                .buttonStyle(.plain)
+            Button(action: onChangeCover) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .frame(width: 44, height: 44)
+                    .background(AtlasPalette.paper.opacity(0.94), in: Circle())
             }
-            .padding(12)
+            .accessibilityLabel(changeCoverLabel)
+            .accessibilityIdentifier("home.hero.changeCover")
+            .buttonStyle(.plain)
+            .atlasCardShadow()
+            .padding(AtlasSpacing.control)
         }
-        .frame(height: 208)
-        .clipped()
+        .frame(height: 176)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
+        }
+        .atlasCardShadow()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.photoHero")
     }
@@ -744,28 +717,32 @@ private struct HomeSavedPlaceRow: View {
             )
             .frame(width: width, height: 112)
             .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color.black.opacity(0.46))
-                    .frame(height: 44)
+                LinearGradient(
+                    colors: [.clear, Color.black.opacity(0.68)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 64)
             }
             .overlay(alignment: .bottomLeading) {
                 Text(place.name)
-                    .font(AtlasType.strong(14))
+                    .font(AtlasType.strong(15))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 11)
+                    .padding(.horizontal, AtlasSpacing.control)
+                    .padding(.bottom, AtlasSpacing.control)
             }
             .overlay(alignment: .topLeading) {
                 RoundStamp(text: "", style: .mapStamp)
                     .scaleEffect(0.82)
-                    .padding(8)
+                    .padding(AtlasSpacing.compact)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
             }
+            .atlasCardShadow()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

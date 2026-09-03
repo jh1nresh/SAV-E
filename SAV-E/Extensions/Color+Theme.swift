@@ -24,6 +24,12 @@ enum SaveTheme {
         static let xl: CGFloat = 22
     }
 
+    enum Elevation {
+        static let cardOpacity = 0.09
+        static let cardRadius: CGFloat = 12
+        static let cardY: CGFloat = 5
+    }
+
     enum Motion {
         static let breathingDuration: TimeInterval = 2.8
         static let standardResponse: Double = 0.52
@@ -185,32 +191,62 @@ enum SaveAtlasType {
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .body
     ) -> Font {
-        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+        rounded(size, weight: .semibold, relativeTo: style)
     }
 
     static func strong(
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .body
     ) -> Font {
-        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+        rounded(size, weight: .bold, relativeTo: style)
     }
 
     static func body(
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .body
     ) -> Font {
-        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+        rounded(size, weight: .medium, relativeTo: style)
     }
 
     static func regular(
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .body
     ) -> Font {
-        .custom("AvenirNextCondensed-Regular", size: size, relativeTo: style)
+        rounded(size, weight: .regular, relativeTo: style)
     }
 
     static func editorial(_ size: CGFloat) -> Font {
-        .custom("Georgia-Italic", size: size, relativeTo: .headline)
+        rounded(size, weight: .regular, relativeTo: .headline).italic()
+    }
+
+    private static func rounded(
+        _ size: CGFloat,
+        weight: UIFont.Weight,
+        relativeTo style: Font.TextStyle
+    ) -> Font {
+        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = systemFont.fontDescriptor.withDesign(.rounded)
+            ?? systemFont.fontDescriptor
+        let roundedFont = UIFont(descriptor: descriptor, size: size)
+        let scaledFont = UIFontMetrics(forTextStyle: style.uiTextStyle)
+            .scaledFont(for: roundedFont)
+        return Font(scaledFont)
+    }
+}
+
+private extension Font.TextStyle {
+    var uiTextStyle: UIFont.TextStyle {
+        if self == .largeTitle { return .largeTitle }
+        if self == .title { return .title1 }
+        if self == .title2 { return .title2 }
+        if self == .title3 { return .title3 }
+        if self == .headline { return .headline }
+        if self == .subheadline { return .subheadline }
+        if self == .callout { return .callout }
+        if self == .footnote { return .footnote }
+        if self == .caption { return .caption1 }
+        if self == .caption2 { return .caption2 }
+        return .body
     }
 }
 
@@ -257,9 +293,9 @@ extension View {
                 .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
         }
         .shadow(
-            color: shadow ? SaveAtlasPalette.ink.opacity(0.07) : .clear,
-            radius: shadow ? 7 : 0,
-            y: shadow ? 3 : 0
+            color: shadow ? SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity) : .clear,
+            radius: shadow ? SaveTheme.Elevation.cardRadius : 0,
+            y: shadow ? SaveTheme.Elevation.cardY : 0
         )
     }
 

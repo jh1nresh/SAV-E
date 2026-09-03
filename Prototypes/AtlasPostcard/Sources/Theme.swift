@@ -6,6 +6,20 @@ enum AtlasMetrics {
     static let statusBarHeight: CGFloat = 48
 }
 
+enum AtlasSpacing {
+    static let tight: CGFloat = 4
+    static let compact: CGFloat = 8
+    static let control: CGFloat = 12
+    static let content: CGFloat = 16
+    static let section: CGFloat = 24
+}
+
+enum AtlasElevation {
+    static let cardOpacity = 0.09
+    static let cardRadius: CGFloat = 12
+    static let cardY: CGFloat = 5
+}
+
 // Light-only mirror of the production light column in `SaveAtlasPalette`
 // (SAV-E/Extensions/Color+Theme.swift). Per DESIGN.md, production wins on
 // any mismatch — keep these hex values byte-identical to production.
@@ -38,23 +52,23 @@ private extension Color {
 
 enum AtlasType {
     static func display(_ size: CGFloat) -> Font {
-        .custom("AvenirNextCondensed-DemiBold", size: size)
+        .system(size: size, weight: .semibold, design: .rounded)
     }
 
     static func strong(_ size: CGFloat) -> Font {
-        .custom("AvenirNextCondensed-Bold", size: size)
+        .system(size: size, weight: .bold, design: .rounded)
     }
 
     static func body(_ size: CGFloat) -> Font {
-        .custom("AvenirNextCondensed-Medium", size: size)
+        .system(size: size, weight: .medium, design: .rounded)
     }
 
     static func regular(_ size: CGFloat) -> Font {
-        .custom("AvenirNextCondensed-Regular", size: size)
+        .system(size: size, weight: .regular, design: .rounded)
     }
 
     static func editorial(_ size: CGFloat) -> Font {
-        .custom("Georgia-Italic", size: size)
+        .system(size: size, weight: .regular, design: .rounded).italic()
     }
 }
 
@@ -107,10 +121,18 @@ extension View {
                     .stroke(border, lineWidth: 1)
             }
             .shadow(
-                color: shadow ? AtlasPalette.ink.opacity(0.075) : .clear,
-                radius: shadow ? 7 : 0,
-                y: shadow ? 3 : 0
+                color: shadow ? AtlasPalette.ink.opacity(AtlasElevation.cardOpacity) : .clear,
+                radius: shadow ? AtlasElevation.cardRadius : 0,
+                y: shadow ? AtlasElevation.cardY : 0
             )
+    }
+
+    func atlasCardShadow() -> some View {
+        shadow(
+            color: AtlasPalette.ink.opacity(AtlasElevation.cardOpacity),
+            radius: AtlasElevation.cardRadius,
+            y: AtlasElevation.cardY
+        )
     }
 
     func placed(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) -> some View {
