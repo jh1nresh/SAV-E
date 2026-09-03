@@ -44,6 +44,7 @@ struct SaveOriginView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 heading
+                privacyNote
                 cardDeck
                 swipeControls
             }
@@ -65,6 +66,20 @@ struct SaveOriginView: View {
         } message: {
             Text(actionError ?? "")
         }
+    }
+
+    private var privacyNote: some View {
+        Label(
+            localized(
+                "Only confirmed Map Stamps people choose to share appear here. Private clues never publish automatically.",
+                "只有使用者主動分享的已確認地圖章會出現在這裡；私人線索不會自動公開。"
+            ),
+            systemImage: "lock.fill"
+        )
+        .font(AtlasType.body(11))
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("origin.privacy")
     }
 
     private var heading: some View {
@@ -105,8 +120,8 @@ struct SaveOriginView: View {
                     .font(AtlasType.display(22))
                     .foregroundStyle(SaveAtlasPalette.ink)
                 Text(localized(
-                    "Places people explicitly recommend through Savvy will appear here.",
-                    "其他人明確透過 Savvy 分享的地點推薦會出現在這裡。"
+                    "Confirmed Map Stamps people explicitly choose to Share recommendation will appear here. Private clues stay private.",
+                    "其他人主動設為「分享推薦」的已確認地圖章會出現在這裡；私人線索保持私密。"
                 ))
                 .font(AtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)
@@ -218,6 +233,32 @@ struct SaveOriginView: View {
                     .font(AtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .lineLimit(2)
+
+                if place.socialSignal?.kind == .communityRecommendation {
+                    SavePlaceShareButton(content: .communityRecommendation(place)) {
+                        Label(
+                            localized("Share with someone", "分享給其他人"),
+                            systemImage: "square.and.arrow.up"
+                        )
+                        .font(AtlasType.display(12))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(SaveAtlasPalette.kraft.opacity(0.34), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
+                        }
+                    }
+                    .accessibilityLabel(localized(
+                        "Share recommendation for \(place.name)",
+                        "分享 \(place.name) 的推薦"
+                    ))
+                    .accessibilityHint(localized(
+                        "Opens the system share sheet",
+                        "開啟系統分享選單"
+                    ))
+                    .accessibilityIdentifier("origin.reshare.\(place.id.uuidString)")
+                }
 
                 if place.socialSignal?.kind != .communityRecommendation,
                    let handle = place.savedSourceHandle?.originNonEmpty {
