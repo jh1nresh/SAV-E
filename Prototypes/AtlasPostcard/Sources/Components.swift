@@ -63,7 +63,10 @@ enum AtlasTabBarMetrics {
     static let mapY: CGFloat = standardY + 2
     static let horizontalPadding: CGFloat = 4
     static let itemHeight: CGFloat = 54
+    static let minimumHitTarget: CGFloat = 44
     static let selectionHeight: CGFloat = 46
+    static let raisedControlDiameter: CGFloat = 50
+    static let raisedControlOffsetY: CGFloat = 0
     /// Breathing room between the pill and the slot edge, per side.
     static let pillInset: CGFloat = 4
     /// The lozenge may shrink independently of the 44pt button target.
@@ -83,6 +86,16 @@ enum AtlasTabBarMetrics {
     /// because `pillWidth` is now derived.
     static func pillFitsSlot(itemCount: Int) -> Bool {
         pillWidth(itemCount: itemCount) <= slotWidth(itemCount: itemCount)
+    }
+
+    static var raisedControlFitsBar: Bool {
+        let centreY = height / 2 + raisedControlOffsetY
+        return centreY - raisedControlDiameter / 2 >= 0
+            && centreY + raisedControlDiameter / 2 <= height
+    }
+
+    static func raisedControlFitsSlot(itemCount: Int) -> Bool {
+        raisedControlDiameter <= slotWidth(itemCount: itemCount)
     }
 }
 
@@ -109,13 +122,15 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                         if isRaisedControl(item) {
                             Circle()
                                 .fill(AtlasPalette.coral.opacity(0.94))
-                                .frame(width: 52, height: 52)
+                                .frame(
+                                    width: AtlasTabBarMetrics.raisedControlDiameter,
+                                    height: AtlasTabBarMetrics.raisedControlDiameter
+                                )
                                 .overlay {
                                     Circle()
                                         .stroke(.white.opacity(0.42), lineWidth: 0.8)
                                 }
-                                .shadow(color: AtlasPalette.ink.opacity(0.15), radius: 8, y: 3)
-                                .offset(y: -6)
+                                .offset(y: AtlasTabBarMetrics.raisedControlOffsetY)
                         } else if selection == item {
                             Capsule()
                                 .fill(AtlasPalette.mint.opacity(0.62))
@@ -143,7 +158,11 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                 .minimumScaleFactor(0.85)
                         }
                         .foregroundStyle(isRaisedControl(item) ? .white : AtlasPalette.ink)
-                        .offset(y: isRaisedControl(item) ? -6 : 0)
+                        .offset(
+                            y: isRaisedControl(item)
+                                ? AtlasTabBarMetrics.raisedControlOffsetY
+                                : 0
+                        )
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: AtlasTabBarMetrics.itemHeight)
