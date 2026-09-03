@@ -47,6 +47,8 @@ protocol SupabaseServiceProtocol {
     func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse
     func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt
     func fetchMemoryPreferences() async throws -> [SaveMemoryPreference]
+    func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome]
+    func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws
     func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference
     func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference
     func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference
@@ -414,6 +416,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { return [] }
         let data = try await request(path: "/v0/memory-preferences")
         return try JSONDecoder.supabase.decode([SaveMemoryPreference].self, from: data)
+    }
+
+    func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome] {
+        guard isConfigured else { return [] }
+        let data = try await request(path: "/v0/recommendation-outcomes")
+        return try JSONDecoder.supabase.decode([SaveRecommendationOutcome].self, from: data)
+    }
+
+    func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        _ = try await request(
+            path: "/v0/recommendation-outcomes",
+            method: "POST",
+            body: try JSONEncoder.supabase.encode(draft)
+        )
     }
 
     func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
