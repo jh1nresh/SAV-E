@@ -22,6 +22,19 @@ export interface VisibilityRequest {
   allowTrendingSignal: boolean;
 }
 
+export interface CommunityRecommendationSignal extends JsonObject {
+  kind: "community_recommendation";
+  lens: "forYou";
+  friendNames: never[];
+  friendCount: 0;
+  saveCount: 0;
+  trendingRank: null;
+  categoryRank: null;
+  sourceLabel: string;
+  referrerId: string | null;
+  referralCode: null;
+}
+
 export function parseLens(value: unknown, fallback: SaveSocialLens = "friends"): SaveSocialLens {
   return typeof value === "string" && lenses.has(value as SaveSocialLens)
     ? value as SaveSocialLens
@@ -53,6 +66,33 @@ export function socialSignalKindForLens(lens: SaveSocialLens): "friend_saved" | 
   return lens === "trending" ? "trending" : "friend_saved";
 }
 
+export function publicRecommendationRow(row: JsonObject): JsonObject {
+  return {
+    ...row,
+    note: null,
+    source_image_url: null,
+    source_url: publicRecommendationSourceURL(row.source_url),
+  };
+}
+
+export function communityRecommendationSignal(
+  sourceLabel: string,
+  referrerId: string | null,
+): CommunityRecommendationSignal {
+  return {
+    kind: "community_recommendation",
+    lens: "forYou",
+    friendNames: [],
+    friendCount: 0,
+    saveCount: 0,
+    trendingRank: null,
+    categoryRank: null,
+    sourceLabel,
+    referrerId,
+    referralCode: null,
+  };
+}
+
 function parseFollowSource(value: unknown, fallback: FollowSource): FollowSource {
   return typeof value === "string" && followSources.has(value as FollowSource)
     ? value as FollowSource
@@ -78,4 +118,19 @@ function stringValue(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function publicRecommendationSourceURL(value: unknown): string | null {
+  const text = stringValue(value);
+  if (!text || text.length > 2_048) return null;
+  try {
+    const url = new URL(text);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") ||
+        !url.hostname || url.username || url.password) return null;
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }

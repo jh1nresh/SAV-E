@@ -12,7 +12,7 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         case .privateMemory: return "Private"
         case .friends: return "Friends"
         case .publicLink: return "Public link"
-        case .publicGuide: return "Public guide"
+        case .publicGuide: return "Share recommendation"
         }
     }
 
@@ -25,7 +25,7 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         case .publicLink:
             return language.localized(english: "Public link", traditionalChinese: "公開連結")
         case .publicGuide:
-            return language.localized(english: "Public guide", traditionalChinese: "公開指南")
+            return language.localized(english: "Share recommendation", traditionalChinese: "分享推薦")
         }
     }
 
@@ -47,7 +47,7 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         case .publicLink:
             return "Shareable by link, but not used for trending."
         case .publicGuide:
-            return "Can appear in public guide and trending surfaces."
+            return "Your Savvy place card can appear in Origin. Private notes stay private."
         }
     }
 
@@ -60,7 +60,10 @@ enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
         case .publicLink:
             return language.localized(english: "Shareable by link, but not used for trending.", traditionalChinese: "可用連結分享，但不會進入熱門訊號。")
         case .publicGuide:
-            return language.localized(english: "Can appear in public guide and trending surfaces.", traditionalChinese: "可出現在公開指南與熱門地點。")
+            return language.localized(
+                english: "Your Savvy place card can appear in Origin. Private notes stay private.",
+                traditionalChinese: "你的 Savvy 地點推薦卡可出現在 Origin；私人筆記不會公開。"
+            )
         }
     }
 
@@ -133,12 +136,14 @@ enum PlaceSocialSignalKind: String, Codable, Hashable {
     case friendSaved = "friend_saved"
     case trending
     case referralGuide = "referral_guide"
+    case communityRecommendation = "community_recommendation"
 
     var pinSystemImage: String {
         switch self {
         case .friendSaved: return "person.2.fill"
         case .trending: return "flame.fill"
         case .referralGuide: return "link"
+        case .communityRecommendation: return "person.crop.circle.badge.checkmark"
         }
     }
 }
@@ -169,6 +174,8 @@ struct PlaceSocialSignal: Codable, Hashable {
             return "\(saveCount) saves nearby"
         case .referralGuide:
             return "From \(sourceLabel)'s Savvy"
+        case .communityRecommendation:
+            return "Shared by \(sourceLabel)"
         }
     }
 
@@ -180,6 +187,8 @@ struct PlaceSocialSignal: Codable, Hashable {
             return "Trending signal from public Map Stamps in this category."
         case .referralGuide:
             return "Referral guide preview. Save it to make it your own memory."
+        case .communityRecommendation:
+            return "A place card its owner explicitly shared through Savvy."
         }
     }
 }
@@ -347,6 +356,13 @@ extension Place {
         socialSignal?.displayText
     }
 
+    var originRecommendationSummary: String {
+        if socialSignal?.kind == .communityRecommendation {
+            return address
+        }
+        return note?.trimmingCharacters(in: .whitespacesAndNewlines).originSignalNonEmpty ?? address
+    }
+
     static func socialPreviewSeeds(referrerDisplayName: String, referralCode: String) -> [Place] {
         [
             Place(
@@ -358,19 +374,20 @@ extension Place {
                 category: .cafe,
                 status: .wantToGo,
                 rating: 4.7,
-                note: "Starter map pack from \(referrerDisplayName)",
-                sourcePlatform: .other,
+                note: "Private note: birthday dinner shortlist",
+                sourceUrl: "https://www.instagram.com/p/savvy-preview/?utm_source=fixture",
+                sourcePlatform: .instagram,
                 priceRange: "$$",
                 recommender: referrerDisplayName,
                 googleRating: 4.6,
                 createdAt: Date(),
                 visibility: .publicGuide,
                 socialSignal: PlaceSocialSignal(
-                    kind: .referralGuide,
-                    lens: .friends,
-                    friendNames: [referrerDisplayName],
-                    friendCount: 1,
-                    saveCount: 42,
+                    kind: .communityRecommendation,
+                    lens: .forYou,
+                    friendNames: [],
+                    friendCount: 0,
+                    saveCount: 0,
                     trendingRank: nil,
                     categoryRank: nil,
                     sourceLabel: referrerDisplayName,
@@ -387,19 +404,20 @@ extension Place {
                 category: .food,
                 status: .wantToGo,
                 rating: 4.5,
-                note: "Featured by \(referrerDisplayName)",
-                sourcePlatform: .other,
+                note: "Private note: ask about the tasting menu",
+                sourceUrl: "https://www.threads.net/@savvy/post/preview?share=1",
+                sourcePlatform: .threads,
                 priceRange: "$$",
                 recommender: referrerDisplayName,
                 googleRating: 4.5,
                 createdAt: Date(),
                 visibility: .publicGuide,
                 socialSignal: PlaceSocialSignal(
-                    kind: .referralGuide,
-                    lens: .friends,
-                    friendNames: [referrerDisplayName],
-                    friendCount: 1,
-                    saveCount: 31,
+                    kind: .communityRecommendation,
+                    lens: .forYou,
+                    friendNames: [],
+                    friendCount: 0,
+                    saveCount: 0,
                     trendingRank: nil,
                     categoryRank: nil,
                     sourceLabel: referrerDisplayName,
@@ -409,4 +427,8 @@ extension Place {
             ),
         ]
     }
+}
+
+private extension String {
+    var originSignalNonEmpty: String? { isEmpty ? nil : self }
 }
