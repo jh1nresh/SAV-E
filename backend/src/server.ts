@@ -98,9 +98,11 @@ import {
   type FriendShareShareMetricsRow,
 } from "./friendShareEvents.js";
 import {
+  communityRecommendationSignal,
   normalizeFollowRequest,
   normalizeVisibilityRequest,
   parseLens,
+  publicRecommendationRow,
 } from "./socialContracts.js";
 import {
   FollowListInputError,
@@ -4054,6 +4056,9 @@ async function handleSocialSignals(
     if (lens === "forYou" || lens === "trending") {
       signals.push(...await trendingSignalPlaces(userId, limit));
     }
+    if (lens === "forYou") {
+      signals.push(...await communityRecommendationPlaces(userId, limit));
+    }
   } catch (error) {
     if (isMissingRelationError(error)) {
       console.warn("Social signal schema is missing; returning empty signals until migrations run.");
@@ -4062,7 +4067,14 @@ async function handleSocialSignals(
     throw error;
   }
 
-  return sendJson(response, signals.slice(0, limit));
+  const seenPlaceIds = new Set<unknown>();
+  const uniqueSignals = signals.filter((signal) => {
+    const id = signal.id;
+    if (seenPlaceIds.has(id)) return false;
+    seenPlaceIds.add(id);
+    return true;
+  });
+  return sendJson(response, uniqueSignals.slice(0, limit));
 }
 
 async function handleReferrals(
@@ -4603,6 +4615,37 @@ async function trendingSignalPlaces(userId: string, limit: number): Promise<Json
       referrerId: stringValue(value.referrer_id) ?? null,
       referralCode: stringValue(value.referral_code) ?? null,
     });
+  });
+}
+
+async function communityRecommendationPlaces(userId: string, limit: number): Promise<JsonBody[]> {
+  const { rows } = await pool.query(
+    `select
+       p.*,
+       pv.visibility as social_visibility,
+       owner.display_name as owner_display_name,
+       owner.handle as owner_handle
+     from places p
+     join place_visibility pv on pv.place_id = p.id
+     join profiles owner on owner.id = p.user_id
+     where pv.visibility = 'public_guide'
+       and pv.allow_trending_signal = true
+       and p.user_id <> $1
+     order by pv.published_at desc nulls last, p.created_at desc
+     limit $2`,
+    [userId, limit],
+  );
+
+  return rows.map((row) => {
+    const value = asObject(row);
+    const ownerName = displayName({
+      display_name: value.owner_display_name,
+      handle: value.owner_handle,
+    });
+    return formatSocialPlace(
+      publicRecommendationRow(value),
+      communityRecommendationSignal(ownerName, stringValue(value.user_id) ?? null),
+    );
   });
 }
 
