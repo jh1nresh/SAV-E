@@ -1737,10 +1737,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
+        let moreActions = app.descendants(matching: .any)["home.more"]
+        if moreActions.waitForExistence(timeout: timeout(2)) {
+            tapReachable(moreActions)
+        }
         // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
         // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
         let candidates: [XCUIElement] = [
             app.descendants(matching: .any)["home.saves"],
+            app.buttons["Manage saved places"],
+            app.buttons["管理已存地點"],
             app.buttons["Manage"],
             app.descendants(matching: .any)["home.review"],
             app.buttons["Review clues"],
@@ -1764,9 +1770,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
+        let moreActions = app.descendants(matching: .any)["home.more"]
+        if moreActions.waitForExistence(timeout: timeout(2)) {
+            tapReachable(moreActions)
+        }
         let candidates: [XCUIElement] = [
             app.descendants(matching: .any)["home.trips"],
             app.buttons["Trips"],
+            app.buttons["行程"],
         ]
         let entry = firstExisting(candidates, timeout: stepTimeout)
         XCTAssertTrue(entry.exists, "Missing Home Trips entry")

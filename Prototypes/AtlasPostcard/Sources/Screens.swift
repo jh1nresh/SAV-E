@@ -3,25 +3,40 @@ import SwiftUI
 
 struct HomeAtlasScreen: View {
     @Environment(\.atlasPresentation) private var presentation
+    @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
             BrandHeader {
-                Button(action: presentation.onOpenTrips) {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 19, weight: .medium))
+                Menu {
+                    Button(action: presentation.onOpenTrips) {
+                        Label(
+                            localized("Trips", "行程"),
+                            systemImage: "point.3.connected.trianglepath.dotted"
+                        )
+                    }
+                    .accessibilityIdentifier("home.trips")
+                    Button(action: presentation.onOpenSaves) {
+                        Label(
+                            localized("Manage saved places", "管理已存地點"),
+                            systemImage: "slider.horizontal.3"
+                        )
+                    }
+                    .accessibilityIdentifier("home.saves")
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(AtlasPalette.ink)
-                        .frame(width: 42, height: 35)
+                        .frame(width: 44, height: 44)
                         .background(AtlasPalette.paper, in: Capsule())
                         .overlay {
                             Capsule().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
                         }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Trips")
-                .accessibilityIdentifier("home.trips")
+                .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
+                .accessibilityIdentifier("home.more")
             }
             .placed(x: 0, y: 48, width: 402, height: 51)
 
@@ -186,6 +201,10 @@ struct HomeAtlasScreen: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("prototype.home")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 
@@ -426,13 +445,22 @@ private struct HomeSavedPlacesLibrary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if presentation.savedPlaces.isEmpty {
-                libraryHeader
-                HomeSavedPlacesEmpty()
-                Spacer(minLength: 0)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
+                        libraryHeader
+                        reviewQueuePreview
+                        HomeSavedPlacesEmpty()
+                            .frame(height: 360)
+                    }
+                    .padding(.top, AtlasSpacing.content)
+                    .padding(.bottom, AtlasSpacing.section)
+                }
+                .scrollIndicators(.hidden)
             } else if let featuredPlace {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
                         libraryHeader
+                        reviewQueuePreview
 
                         HomeFeaturedPlaceHero(
                             place: featuredPlace,
@@ -500,36 +528,47 @@ private struct HomeSavedPlacesLibrary: View {
 
             Spacer()
 
-            if presentation.reviewCount > 0 {
-                Button(action: presentation.onReviewAll) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.forest)
-                        .frame(width: 44, height: 44)
-                        .background(AtlasPalette.mint.opacity(0.92), in: Circle())
-                        .atlasCardShadow()
-                }
-                .accessibilityLabel(reviewText)
-                .accessibilityIdentifier("home.review")
-                .buttonStyle(.plain)
-            }
-
-            Button(action: presentation.onOpenSaves) {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .frame(width: 44, height: 44)
-                    .background(AtlasPalette.paper, in: Circle())
-                    .overlay {
-                        Circle().stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-                    }
-                    .atlasCardShadow()
-            }
-            .accessibilityLabel(localized("Manage saved places", "管理已存地點"))
-            .accessibilityIdentifier("home.saves")
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, AtlasSpacing.content)
+    }
+
+    @ViewBuilder
+    private var reviewQueuePreview: some View {
+        if let item = presentation.reviewItems.first {
+            VStack(alignment: .leading, spacing: AtlasSpacing.compact) {
+                HStack(spacing: AtlasSpacing.compact) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(localized("Waiting for review", "等待你確認"))
+                            .font(AtlasType.strong(17))
+                            .foregroundStyle(AtlasPalette.forest)
+                        Text(reviewText)
+                            .font(AtlasType.body(11))
+                            .foregroundStyle(AtlasPalette.muted)
+                    }
+
+                    Spacer()
+
+                    Button(action: presentation.onReviewAll) {
+                        Text(localized("View all", "查看全部"))
+                            .font(AtlasType.display(12))
+                            .foregroundStyle(AtlasPalette.forest)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("home.reviewAll")
+                }
+
+                ReviewTicket(
+                    item: item,
+                    onOpen: { presentation.onOpenReview(item.id) },
+                    accessibilityPrefix: "home.reviewCandidate"
+                )
+                .frame(height: 111)
+            }
+            .padding(.horizontal, AtlasSpacing.content)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("home.reviewQueue")
+        }
     }
 
     private var featuredPlace: AtlasPlacePresentation? {
@@ -1700,6 +1739,7 @@ private struct SavesTickets: View {
 private struct ReviewTicket: View {
     let item: AtlasReviewPresentation
     let onOpen: () -> Void
+    var accessibilityPrefix = "saves.reviewCandidate"
 
     private var tint: Color {
         item.kind == .sourceOnly
@@ -1753,7 +1793,7 @@ private struct ReviewTicket: View {
                 .frame(width: item.kind == .sourceOnly ? 88 : 74, height: 44)
                 .position(x: item.kind == .sourceOnly ? 313 : 316, y: 55)
                 .accessibilityLabel("\(item.actionTitle) \(item.name)")
-                .accessibilityIdentifier("saves.reviewCandidate.\(item.id)")
+                .accessibilityIdentifier("\(accessibilityPrefix).\(item.id)")
         }
     }
 }
