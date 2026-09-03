@@ -560,7 +560,22 @@ private struct DefaultPOIMarker: View {
 
     var body: some View {
         Group {
-            if isSelected {
+            if state == .saved {
+                ZStack {
+                    Circle()
+                        .fill(SaveAtlasPalette.forest)
+                        .frame(width: isSelected ? 36 : 32, height: isSelected ? 36 : 32)
+                        .overlay {
+                            Circle()
+                                .stroke(SaveAtlasPalette.paper, lineWidth: 2.5)
+                        }
+
+                    Image(systemName: "star.fill")
+                        .font(.system(size: isSelected ? 17 : 15, weight: .bold))
+                        .foregroundStyle(SaveAtlasPalette.paper)
+                }
+                .shadow(color: SaveAtlasPalette.ink.opacity(0.28), radius: 4, y: 2)
+            } else if isSelected {
                 ZStack {
                     Circle()
                         .fill(.regularMaterial)
@@ -588,14 +603,14 @@ private struct DefaultPOIMarker: View {
                     .frame(width: 10, height: 10)
             }
         }
-        // The selected marker is 30 pt and the unselected dot is 10 pt, but
-        // both retain the same >= 44 pt touch target.
+        // Saved stamps stay legible at rest; every state retains a >= 44 pt
+        // touch target independent of its rendered size.
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
     }
 }
 
-private enum MapMarkerState {
+private enum MapMarkerState: Equatable {
     case saved
     case shared
     case review
