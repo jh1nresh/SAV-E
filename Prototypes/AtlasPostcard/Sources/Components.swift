@@ -21,21 +21,11 @@ struct BrandHeader<Trailing: View>: View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
                 HStack(spacing: 9) {
-                    MemoMascotMark(size: 40, framed: false)
-                        .overlay(alignment: .bottomTrailing) {
-                            // A person badge, not a book: this is the profile
-                            // entry and has to read as one at a glance.
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(AtlasPalette.forest)
-                                .frame(width: 17, height: 17)
-                                .background(AtlasPalette.mint, in: Circle())
-                                .overlay {
-                                    Circle()
-                                        .stroke(AtlasPalette.paper, lineWidth: 1.5)
-                                }
-                                .offset(x: 3, y: 2)
-                        }
+                    Image("SavvyLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     Text("Savvy")
                         .font(AtlasType.strong(24))

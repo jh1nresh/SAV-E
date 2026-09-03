@@ -536,21 +536,12 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 9) {
             Button(action: onOpenPassport) {
-                // Same mark, size, and person badge as the prototype
-                // BrandHeader so every tab's profile entry matches.
                 HStack(spacing: 9) {
-                    MemoMascotMark(size: 40, framed: false)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(SaveAtlasPalette.forest)
-                                .frame(width: 17, height: 17)
-                                .background(SaveAtlasPalette.mint, in: Circle())
-                                .overlay {
-                                    Circle().stroke(SaveAtlasPalette.paper, lineWidth: 1.5)
-                                }
-                                .offset(x: 3, y: 2)
-                        }
+                    Image("SavvyLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     Text("Savvy")
                         .font(SaveAtlasType.strong(24, relativeTo: .title3))

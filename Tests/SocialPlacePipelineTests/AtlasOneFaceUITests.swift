@@ -37,10 +37,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(seed.contains("Quarter Sheets Pizza Club"))
     }
 
-    func testScopedHeadersUseMemoMascotMark() throws {
-        let header = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+    func testOnboardingKeepsMemoMascotMark() throws {
         let firstRun = try source(at: "SAV-E/Views/Onboarding/OnboardingView.swift")
-        XCTAssertTrue(header.contains("MemoMascotMark"))
         XCTAssertTrue(firstRun.contains("MemoMascotMark"))
     }
 

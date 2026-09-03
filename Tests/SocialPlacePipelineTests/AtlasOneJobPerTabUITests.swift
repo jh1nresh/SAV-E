@@ -160,6 +160,22 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    func testPrimaryHeadersUseTheCurrentSavvyLogo() throws {
+        let components = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        let brandHeader = try typeBody("BrandHeader", in: components)
+        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let rootHeader = try typeBody("SaveAtlasBrandHeader", in: root)
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let passportTopBar = try typeBody("PassportTopBar", in: profile)
+
+        XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
+        XCTAssertFalse(brandHeader.contains("MemoMascotMark"))
+        XCTAssertTrue(rootHeader.contains("Image(\"SavvyLogo\")"))
+        XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
+        XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
+        XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
+    }
+
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
