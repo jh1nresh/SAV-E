@@ -67,6 +67,49 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
+    func testReferenceCanvasFills430By932WithoutCropping() {
+        let viewport = CGSize(width: 430, height: 932)
+        let scale = min(
+            viewport.width / AtlasMetrics.width,
+            viewport.height / AtlasMetrics.height
+        )
+        let rendered = CGSize(
+            width: AtlasMetrics.width * scale,
+            height: AtlasMetrics.height * scale
+        )
+
+        XCTAssertLessThanOrEqual(rendered.width, viewport.width)
+        XCTAssertLessThanOrEqual(rendered.height, viewport.height)
+        XCTAssertEqual(rendered.height, viewport.height, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(viewport.width - rendered.width, 1.5)
+    }
+
+    @MainActor
+    func testAtlasVisualSystemUsesRoundedTypeAndOrderedSpacing() throws {
+        let theme = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        let productionTheme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+
+        XCTAssertTrue(theme.contains("design: .rounded"))
+        XCTAssertFalse(theme.contains("AvenirNextCondensed"))
+        XCTAssertFalse(theme.contains("Georgia-Italic"))
+        XCTAssertTrue(productionTheme.contains("fontDescriptor.withDesign(.rounded)"))
+        XCTAssertFalse(productionTheme.contains("AvenirNextCondensed"))
+        XCTAssertFalse(productionTheme.contains("Georgia-Italic"))
+        XCTAssertEqual(
+            [
+                AtlasSpacing.tight,
+                AtlasSpacing.compact,
+                AtlasSpacing.control,
+                AtlasSpacing.content,
+                AtlasSpacing.section,
+            ],
+            [4, 8, 12, 16, 24]
+        )
+        XCTAssertLessThanOrEqual(AtlasElevation.cardOpacity, 0.1)
+        XCTAssertGreaterThan(AtlasElevation.cardRadius, AtlasElevation.cardY)
+    }
+
+    @MainActor
     func testPillWidthIsDerivedFromSlotAndNeverZero() {
         let five = AtlasTabBarMetrics.pillWidth(itemCount: 5)
         let four = AtlasTabBarMetrics.pillWidth(itemCount: 4)
