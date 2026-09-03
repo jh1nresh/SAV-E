@@ -185,6 +185,15 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
     }
 
+    func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {
+        let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+
+        XCTAssertTrue(origin.contains("SavePlaceShareButton(content: .communityRecommendation(place))"))
+        XCTAssertTrue(origin.contains("origin.reshare.\\(place.id.uuidString)"))
+        XCTAssertTrue(origin.contains("Private clues never publish automatically."))
+        XCTAssertTrue(origin.contains("Confirmed Map Stamps people explicitly choose to Share recommendation"))
+    }
+
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
