@@ -255,6 +255,52 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
+    func testCommunityRecommendationReshareDoesNotClaimOrLeakOriginalPlace() throws {
+        var place = Place(
+            id: UUID(uuidString: "7B095461-6957-4C5B-9F43-0C6D9A2F459A")!,
+            name: "Koffee Mameya",
+            address: "Shibuya City, Tokyo",
+            latitude: 35.665,
+            longitude: 139.710,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Private note: surprise birthday dinner",
+            sourceUrl: "https://www.instagram.com/p/example/?token=private#fragment",
+            sourcePlatform: .instagram,
+            sourceImageUrl: "https://example.com/photo.jpg?signature=private",
+            recommender: "Mina",
+            createdAt: Date(timeIntervalSince1970: 1_721_865_600),
+            visibility: .publicGuide,
+            socialSignal: PlaceSocialSignal(
+                kind: .communityRecommendation,
+                lens: .forYou,
+                friendNames: [],
+                friendCount: 0,
+                saveCount: 0,
+                trendingRank: nil,
+                categoryRank: nil,
+                sourceLabel: "Mina",
+                referrerId: "user-2",
+                referralCode: nil
+            )
+        )
+        place.businessPhotoUrls = ["https://example.com/other.jpg?signature=private"]
+
+        let content = SavePlaceShareContent.communityRecommendation(place)
+        let payload = try XCTUnwrap(content.payload(includingOptionalNote: false))
+
+        XCTAssertNil(content.sourcePlaceId)
+        XCTAssertNil(content.optionalShareNote)
+        XCTAssertEqual(payload.id, "")
+        XCTAssertNil(payload.note)
+        XCTAssertNil(content.payload(includingOptionalNote: true)?.note)
+        XCTAssertEqual(payload.sourceURL, "https://www.instagram.com/p/example/")
+        XCTAssertEqual(payload.photoURLs, ["https://example.com/other.jpg"])
+        XCTAssertFalse(content.fallbackText.contains("surprise birthday"))
+        XCTAssertFalse(content.fallbackText.contains(place.id.uuidString))
+    }
+
+    @MainActor
     func testVerifiedReceiptDecodesServerOwnedSenderAndCreatesPrivateMemory() throws {
         let data = try XCTUnwrap(Self.verifiedReceiptJSON.data(using: .utf8))
 

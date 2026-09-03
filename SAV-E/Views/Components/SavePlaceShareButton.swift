@@ -58,6 +58,31 @@ struct SavePlaceShareContent {
         )
     }
 
+    /// Re-shares an Origin recommendation without claiming the original
+    /// author's Map Stamp as the current user's source place. Community cards
+    /// only carry public place facts; private notes are never attached.
+    static func communityRecommendation(_ place: Place) -> SavePlaceShareContent {
+        let payload = SharedPlaceData.from(place: place)
+        let fallbackURL = payload.toURL()
+        var fallbackLines = [
+            "Savvy recommendation",
+            place.name,
+            place.address,
+        ]
+        if let fallbackURL {
+            fallbackLines.append("Open in Savvy: \(fallbackURL.absoluteString)")
+        }
+
+        return SavePlaceShareContent(
+            subject: "Savvy recommendation: \(place.name)",
+            fallbackURL: fallbackURL,
+            fallbackText: fallbackLines.joined(separator: "\n"),
+            payload: payload,
+            sourcePlaceId: nil,
+            optionalShareNote: nil
+        )
+    }
+
     static func mapCandidate(_ candidate: SaveMapCandidate) -> SavePlaceShareContent {
         SavePlaceShareContent(
             subject: candidate.shareSubject,
