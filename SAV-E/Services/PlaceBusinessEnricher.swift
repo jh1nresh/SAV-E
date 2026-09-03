@@ -37,8 +37,8 @@ enum PlaceBusinessEnricher {
         var updated = place
         if !update.photoURLs.isEmpty {
             let urls = update.photoURLs.map(\.absoluteString)
-            updated.sourceImageUrl = updated.sourceImageUrl ?? urls.first
-            updated.businessPhotoUrls = urls
+            updated.businessPhotoUrls = ((updated.businessPhotoUrls ?? []) + urls)
+                .removingDuplicatePhotoURLs()
         }
         updated.googleRating = updated.googleRating ?? update.rating
         updated.priceRange = updated.priceRange ?? update.priceRange
@@ -201,17 +201,28 @@ enum PlaceBusinessEnricher {
                 .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
             let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            return matches.first { match in
-                let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                let sameArea = targetLocation.distance(from: matchLocation) < 250
-                let sameName = lookupNames.contains { lookupName in
-                    match.name.localizedCaseInsensitiveContains(lookupName) ||
-                        lookupName.localizedCaseInsensitiveContains(match.name)
+            return matches
+                .compactMap { match -> (match: GooglePlaceMatch, score: Double)? in
+                    let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
+                    let distance = targetLocation.distance(from: matchLocation)
+                    let sameName = lookupNames.contains { lookupName in
+                        match.name.localizedCaseInsensitiveContains(lookupName) ||
+                            lookupName.localizedCaseInsensitiveContains(match.name)
+                    }
+                    guard (sameName && distance < 2_000) || distance < 35 else { return nil }
+                    return (match, (sameName ? 0 : 10_000) + distance)
                 }
-                return sameArea || sameName
-            }
+                .min { $0.score < $1.score }?
+                .match
         } catch {
             return nil
         }
+    }
+}
+
+private extension Array where Element == String {
+    func removingDuplicatePhotoURLs() -> [String] {
+        var seen: Set<String> = []
+        return filter { seen.insert($0).inserted }
     }
 }
