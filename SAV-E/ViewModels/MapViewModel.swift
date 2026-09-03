@@ -1367,6 +1367,13 @@ final class MapViewModel: ObservableObject {
         return place
     }
 
+    func dismissSocialPlace(_ socialPlace: Place) {
+        socialPlaces.removeAll { $0.id == socialPlace.id }
+        if selectedSocialPlace?.id == socialPlace.id {
+            selectedSocialPlace = nil
+        }
+    }
+
     @discardableResult
     func createCollaborativeList(title: String, note: String?) -> SaveCollaborativeList {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)

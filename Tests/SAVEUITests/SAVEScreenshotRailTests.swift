@@ -819,6 +819,52 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testOriginFoodDiscoverySaveAndSkipActions() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-origin-food",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        openRootTab("Origin", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["origin.root"].waitForExistence(timeout: launchTimeout))
+
+        let cards = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'origin.foodCard.'")
+        )
+        XCTAssertEqual(cards.count, 2)
+        let skippedCard = cards.element(boundBy: cards.count - 1)
+        XCTAssertTrue(skippedCard.waitForExistence(timeout: stepTimeout))
+        let skippedCardID = skippedCard.identifier
+        attach(app, name: "origin-food-discovery")
+
+        let skip = app.buttons["origin.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: stepTimeout))
+        skip.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)[skippedCardID].waitForNonExistence(timeout: stepTimeout)
+        )
+
+        let savedCard = cards.firstMatch
+        XCTAssertTrue(savedCard.waitForExistence(timeout: stepTimeout))
+        let save = app.buttons["origin.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: stepTimeout))
+        save.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["origin.empty"].waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    @MainActor
     func testLocateWithDeniedPermissionShowsRecoveryNotice() throws {
         let app = makeApp(
             launchArguments: [

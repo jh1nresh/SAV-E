@@ -120,34 +120,31 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertEqual(SaveRootTab.origin.title(language: .traditionalChinese), "來處")
     }
 
-    // MARK: - Origin honesty (W4)
+    // MARK: - Origin food discovery
 
     @MainActor
-    func testOriginDoesNotImplyOtherUsers() throws {
+    func testOriginOnlyRendersRealUnsavedFoodSignals() throws {
         let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
-        // Production has one user, zero place_visibility rows and zero
-        // place_social_signals rows (measured 2026-08-24). Any of these strings
-        // on this surface would be a fabricated social signal.
-        for forbidden in ["people saved", "friends", "trending", "popular", "nearby saved"] {
-            XCTAssertFalse(
-                source.lowercased().contains(forbidden),
-                "Origin must not imply other users: found '\(forbidden)'"
-            )
-        }
+        let content = try contentViewSource()
+
+        XCTAssertTrue(source.contains("place.socialSignal != nil"))
+        XCTAssertTrue(source.contains("[.food, .cafe, .bar].contains(place.category)"))
+        XCTAssertTrue(content.contains("places: mapVM.socialPlaces"))
+        XCTAssertTrue(content.contains("saveSocialPlaceToMySave"))
+        XCTAssertTrue(content.contains("dismissSocialPlace"))
     }
 
     @MainActor
-    func testOriginShowsVerbatimSourceAndExactlyTwoBacklogActions() throws {
+    func testOriginSwipeDirectionMatchesTheProductContract() throws {
         let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
-        XCTAssertTrue(source.contains("Text(rawText)"), "Origin must render the stored source text verbatim")
-        XCTAssertTrue(source.contains("Link(destination: url)"), "Origin must link to the original source")
-        XCTAssertTrue(source.contains("Dictionary(grouping:"), "One capture must remain one source card")
-        XCTAssertTrue(source.contains("origin.backlog.plan"))
-        XCTAssertTrue(source.contains("origin.backlog.archive"))
-        let backlogBody = source
-            .components(separatedBy: "private func backlogCard")[1]
-            .components(separatedBy: "private func sectionLabel")[0]
-        XCTAssertEqual(backlogBody.components(separatedBy: "Button").count - 1, 2)
+
+        XCTAssertEqual(OriginSwipeDecision.resolve(translation: -100), .save)
+        XCTAssertEqual(OriginSwipeDecision.resolve(translation: 100), .skip)
+        XCTAssertEqual(OriginSwipeDecision.resolve(translation: 40), .none)
+        XCTAssertTrue(source.contains("origin.foodCard"))
+        XCTAssertTrue(source.contains("origin.save"))
+        XCTAssertTrue(source.contains("origin.skip"))
+        XCTAssertTrue(source.contains("CachedAsyncImage"))
     }
 
     @MainActor
