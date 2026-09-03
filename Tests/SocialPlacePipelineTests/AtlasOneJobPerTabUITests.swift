@@ -145,10 +145,17 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     func testMapRestStateHasNoDefaultPlaceCard() throws {
         let map = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let markers = try source(at: "SAV-E/Views/Map/MapView.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(map.contains("if let place = mapViewModel.selectedPlace"))
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
+        XCTAssertTrue(map.contains("Search places"))
+        XCTAssertTrue(map.contains("slider.horizontal.3"))
+        XCTAssertTrue(map.contains("saved Map Stamps"))
+        XCTAssertTrue(markers.contains("if state == .saved"))
+        XCTAssertTrue(markers.contains("frame(width: isSelected ? 36 : 32"))
+        XCTAssertTrue(markers.contains(".frame(width: 44, height: 44)"))
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
     }
 
