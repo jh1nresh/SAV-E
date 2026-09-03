@@ -13,6 +13,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("presentation.savedPlaces"))
         XCTAssertTrue(library.contains("home.savedPlaces"))
         XCTAssertTrue(home.contains("home.more"))
+        XCTAssertTrue(home.contains("home.trips"))
+        XCTAssertTrue(home.contains("home.saves"))
         XCTAssertTrue(home.contains("presentation.onOpenTrips"))
         XCTAssertTrue(home.contains("presentation.onOpenSaves"))
         XCTAssertTrue(home.contains(".frame(width: 44, height: 44)"))

@@ -17,12 +17,14 @@ struct HomeAtlasScreen: View {
                             systemImage: "point.3.connected.trianglepath.dotted"
                         )
                     }
+                    .accessibilityIdentifier("home.trips")
                     Button(action: presentation.onOpenSaves) {
                         Label(
                             localized("Manage saved places", "管理已存地點"),
                             systemImage: "slider.horizontal.3"
                         )
                     }
+                    .accessibilityIdentifier("home.saves")
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 18, weight: .semibold))
