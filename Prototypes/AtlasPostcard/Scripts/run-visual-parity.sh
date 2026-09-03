@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROTOTYPE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-REFERENCE_SOURCE="$PROTOTYPE_ROOT/Reference/Targets"
+REFERENCE_SOURCE="$PROTOTYPE_ROOT/Reference/ProductionTargets"
 PARITY_SCRIPT="$SCRIPT_DIR/VisualParity.swift"
 DERIVED_DATA="${ATLAS_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/SAVE-AtlasPrototype}"
 ARTIFACT_DIR="${ATLAS_PARITY_ARTIFACTS:-}"

@@ -51,6 +51,10 @@ must score at least `0.90`. XCTest locks the application window to 402 × 874
 points; the comparator accepts only exact, uniform Retina pixel multiples of
 that viewport and rejects other dimensions.
 
+Production parity uses `Reference/ProductionTargets`. The original
+`Reference/Targets` remain the immutable inputs for deterministic illustration
+extraction, so approving a UI refresh cannot silently alter generated assets.
+
 ## Boundaries
 
 - Seeded display data only.
