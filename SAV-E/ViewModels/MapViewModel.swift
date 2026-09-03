@@ -1322,6 +1322,7 @@ final class MapViewModel: ObservableObject {
                 place.name.localizedCaseInsensitiveCompare(socialPlace.name) == .orderedSame
         }) {
             focusSavedPlace(existing, showStampMoment: false)
+            await recordOriginSaveOutcomeBestEffort(for: socialPlace)
             return existing
         }
 
@@ -1364,7 +1365,13 @@ final class MapViewModel: ObservableObject {
         socialPlaces.removeAll { $0.id == socialPlace.id }
         selectedSocialPlace = nil
         revealImportedPlaces([place])
+        await recordOriginSaveOutcomeBestEffort(for: socialPlace)
         return place
+    }
+
+    func skipOriginPlace(_ socialPlace: Place) async throws {
+        try await recordOriginOutcome(.irrelevant, for: socialPlace)
+        dismissSocialPlace(socialPlace)
     }
 
     func dismissSocialPlace(_ socialPlace: Place) {
@@ -2030,12 +2037,20 @@ final class MapViewModel: ObservableObject {
 
         do {
             let signals = try await supabaseService.fetchSocialSignals(lens: socialLens)
-            socialPlaces = signals.filter { seed in
+            async let preferences = fetchOriginPreferences()
+            async let outcomes = fetchOriginOutcomes()
+            let unsavedSignals = signals.filter { seed in
                 !places.contains { saved in
                     saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
                         saved.name.localizedCaseInsensitiveCompare(seed.name) == .orderedSame
                 }
             }
+            socialPlaces = SaveOriginPersonalization.rank(
+                candidates: unsavedSignals,
+                savedPlaces: places,
+                preferences: await preferences,
+                outcomes: await outcomes
+            )
         } catch {
             print("MapViewModel: failed to refresh social signals: \(error)")
             socialPlaces = socialPlaces.filter { seed in
@@ -2045,6 +2060,46 @@ final class MapViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func fetchOriginPreferences() async -> [SaveMemoryPreference] {
+        do {
+            return try await supabaseService.fetchMemoryPreferences()
+        } catch {
+            print("MapViewModel: failed to fetch Origin preferences: \(error)")
+            return []
+        }
+    }
+
+    private func fetchOriginOutcomes() async -> [SaveRecommendationOutcome] {
+        do {
+            return try await supabaseService.fetchRecommendationOutcomes()
+        } catch {
+            print("MapViewModel: failed to fetch Origin outcomes: \(error)")
+            return []
+        }
+    }
+
+    private func recordOriginSaveOutcomeBestEffort(for place: Place) async {
+        do {
+            try await recordOriginOutcome(.useful, for: place)
+        } catch {
+            // Saving the Map Stamp is the primary user action and already
+            // contributes category/area taste even if this auxiliary receipt fails.
+            print("MapViewModel: failed to record Origin save outcome: \(error)")
+        }
+    }
+
+    private func recordOriginOutcome(
+        _ label: SaveOriginOutcomeLabel,
+        for place: Place
+    ) async throws {
+        guard usesRemotePersistence else { return }
+        try await supabaseService.recordRecommendationOutcome(SaveRecommendationOutcomeDraft(
+            recommendationId: SaveOriginPersonalization.recommendationID(for: place.id),
+            labels: [label.rawValue],
+            labelSource: "explicit_user"
+        ))
     }
 
     func refreshMapCandidates(

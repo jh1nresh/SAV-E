@@ -662,7 +662,7 @@ struct ContentView: View {
                 _ = try await mapVM.saveSocialPlaceToMySave(place)
             },
             onSkip: { place in
-                mapVM.dismissSocialPlace(place)
+                try await mapVM.skipOriginPlace(place)
             },
             onOpenPassport: openPassport
         )
