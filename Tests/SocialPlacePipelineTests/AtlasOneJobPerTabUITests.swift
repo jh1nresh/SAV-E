@@ -43,6 +43,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(hero.contains("longitude: place.longitude"))
         XCTAssertTrue(hero.contains("home.photoHero"))
+        XCTAssertTrue(hero.contains("home.hero.changeCover"))
+        XCTAssertTrue(screens.contains("placesWithPhotos"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
         XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))

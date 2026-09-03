@@ -146,6 +146,39 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testBusinessPhotosStayAheadOfSourceImageAndKeepTheirOrder() async throws {
+        var saved = place(name: "Memory Cafe", category: .cafe)
+        saved.sourceImageUrl = "https://example.com/social-post.jpg"
+        saved.businessPhotoUrls = ["https://example.com/stable-cover.jpg"]
+
+        let result = await PlaceBusinessEnricher.enrich(
+            saved,
+            service: ReorderedPhotoGooglePlacesService()
+        )
+        let enriched = try XCTUnwrap(result)
+
+        XCTAssertEqual(enriched.businessPhotoURLStrings, [
+            "https://example.com/stable-cover.jpg",
+            "https://example.com/new-first.jpg",
+            "https://example.com/social-post.jpg",
+        ])
+    }
+
+    @MainActor
+    func testBusinessPhotoLookupRejectsNearbyWrongBusiness() async {
+        var saved = place(name: "Memory Cafe", category: .cafe)
+        saved.latitude = 25.0330
+        saved.longitude = 121.5654
+
+        let enriched = await PlaceBusinessEnricher.enrich(
+            saved,
+            service: NearbyWrongBusinessGooglePlacesService()
+        )
+
+        XCTAssertNil(enriched)
+    }
+
+    @MainActor
     func testHomePhotoEnrichmentBackfillsOnlyMissingPhotosOncePerSession() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -492,5 +525,62 @@ private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
 
     func photoURL(reference: String, maxWidth: Int) -> URL? {
         URL(string: "https://example.com/memory-cafe.jpg")
+    }
+}
+
+@MainActor
+private final class ReorderedPhotoGooglePlacesService: GooglePlacesServiceProtocol {
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        [GooglePlaceMatch(
+            id: "memory-cafe",
+            name: "Memory Cafe",
+            address: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            photoReference: "new-first"
+        )]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        GooglePlaceDetails(
+            placeId: placeId,
+            name: "Memory Cafe",
+            formattedAddress: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            rating: 4.6,
+            priceLevel: 2,
+            openingHours: ["Monday: 9:00 AM – 5:00 PM"],
+            phoneNumber: nil,
+            websiteUrl: nil,
+            photoReferences: ["new-first"]
+        )
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/new-first.jpg")
+    }
+}
+
+@MainActor
+private final class NearbyWrongBusinessGooglePlacesService: GooglePlacesServiceProtocol {
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        [GooglePlaceMatch(
+            id: "wrong-restaurant",
+            name: "Different Restaurant",
+            address: "Nearby",
+            latitude: 25.0337,
+            longitude: 121.5654,
+            photoReference: "wrong-photo"
+        )]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        XCTFail("An unrelated nearby business must not be enriched")
+        throw URLError(.resourceUnavailable)
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/wrong.jpg")
     }
 }

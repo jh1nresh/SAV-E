@@ -188,7 +188,7 @@ struct Place: Identifiable, Codable, Hashable {
     var businessPhotoURLStrings: [String] {
         var values = businessPhotoUrls ?? []
         if let sourceImageUrl {
-            values.insert(sourceImageUrl, at: 0)
+            values.append(sourceImageUrl)
         }
         return values
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

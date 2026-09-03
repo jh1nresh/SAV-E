@@ -99,6 +99,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
+        let changeCover = app.buttons["home.hero.changeCover"]
+        XCTAssertTrue(changeCover.waitForExistence(timeout: stepTimeout))
+        changeCover.tap()
+        XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
