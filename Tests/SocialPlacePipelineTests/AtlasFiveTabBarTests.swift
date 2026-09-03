@@ -131,7 +131,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertTrue(source.contains("[.food, .cafe, .bar].contains(place.category)"))
         XCTAssertTrue(content.contains("places: mapVM.socialPlaces"))
         XCTAssertTrue(content.contains("saveSocialPlaceToMySave"))
-        XCTAssertTrue(content.contains("dismissSocialPlace"))
+        XCTAssertTrue(content.contains("skipOriginPlace"))
     }
 
     @MainActor
@@ -145,6 +145,144 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertTrue(source.contains("origin.save"))
         XCTAssertTrue(source.contains("origin.skip"))
         XCTAssertTrue(source.contains("CachedAsyncImage"))
+    }
+
+    @MainActor
+    func testOriginPersonalizationUsesExplicitPreferenceAndSavedHistory() {
+        let bar = originPlace(
+            id: "00000000-0000-4000-8000-000000000001",
+            name: "Busy Bar",
+            address: "Da'an District, Taipei",
+            category: .bar
+        )
+        let cafe = originPlace(
+            id: "00000000-0000-4000-8000-000000000002",
+            name: "Quiet Coffee House",
+            address: "Zhongshan District, Taipei",
+            category: .cafe
+        )
+        let savedCafe = originPlace(
+            id: "00000000-0000-4000-8000-000000000003",
+            name: "Daily Coffee",
+            address: "Zhongshan District, Taipei",
+            category: .cafe,
+            socialSignal: nil
+        )
+        let preference = originPreference(value: "coffee", polarity: .like)
+
+        let ranked = SaveOriginPersonalization.rank(
+            candidates: [bar, cafe],
+            savedPlaces: [savedCafe],
+            preferences: [preference],
+            outcomes: []
+        )
+
+        XCTAssertEqual(ranked.map(\.id), [cafe.id, bar.id])
+    }
+
+    @MainActor
+    func testOriginPersonalizationSeparatelyUsesSavedCategoryAndArea() {
+        let tokyoFood = originPlace(
+            id: "00000000-0000-4000-8000-000000000031",
+            name: "Tokyo Food",
+            address: "Shibuya, Tokyo",
+            category: .food
+        )
+        let tokyoCafe = originPlace(
+            id: "00000000-0000-4000-8000-000000000032",
+            name: "Tokyo Cafe",
+            address: "Shibuya, Tokyo",
+            category: .cafe
+        )
+        let savedCafeElsewhere = originPlace(
+            id: "00000000-0000-4000-8000-000000000033",
+            name: "Saved Cafe",
+            address: "Namba, Osaka",
+            category: .cafe,
+            socialSignal: nil
+        )
+
+        let categoryRanked = SaveOriginPersonalization.rank(
+            candidates: [tokyoFood, tokyoCafe],
+            savedPlaces: [savedCafeElsewhere],
+            preferences: [],
+            outcomes: []
+        )
+        XCTAssertEqual(categoryRanked.first?.id, tokyoCafe.id)
+
+        let xinyiCafe = originPlace(
+            id: "00000000-0000-4000-8000-000000000034",
+            name: "Xinyi Cafe",
+            address: "Xinyi, Taipei",
+            category: .cafe
+        )
+        let savedXinyiFood = originPlace(
+            id: "00000000-0000-4000-8000-000000000035",
+            name: "Saved Xinyi Food",
+            address: "Xinyi, Taipei",
+            category: .food,
+            socialSignal: nil
+        )
+
+        let areaRanked = SaveOriginPersonalization.rank(
+            candidates: [tokyoCafe, xinyiCafe],
+            savedPlaces: [savedXinyiFood],
+            preferences: [],
+            outcomes: []
+        )
+        XCTAssertEqual(areaRanked.first?.id, xinyiCafe.id)
+    }
+
+    @MainActor
+    func testOriginPersonalizationPersistsLatestSwipeDecision() {
+        let skipped = originPlace(
+            id: "00000000-0000-4000-8000-000000000011",
+            name: "Skipped Cafe",
+            address: "Taipei",
+            category: .cafe
+        )
+        let remaining = originPlace(
+            id: "00000000-0000-4000-8000-000000000012",
+            name: "Remaining Cafe",
+            address: "Taipei",
+            category: .cafe
+        )
+        let olderSave = originOutcome(placeID: skipped.id, label: .useful, at: Date(timeIntervalSince1970: 10))
+        let newerSkip = originOutcome(placeID: skipped.id, label: .irrelevant, at: Date(timeIntervalSince1970: 20))
+
+        let ranked = SaveOriginPersonalization.rank(
+            candidates: [skipped, remaining],
+            savedPlaces: [],
+            preferences: [],
+            outcomes: [olderSave, newerSkip]
+        )
+
+        XCTAssertEqual(ranked.map(\.id), [remaining.id])
+    }
+
+    @MainActor
+    func testOriginPersonalizationPreservesSocialOrderWithoutPersonalSignals() {
+        let first = originPlace(
+            id: "00000000-0000-4000-8000-000000000021",
+            name: "First",
+            address: "Taipei",
+            category: .food
+        )
+        let second = originPlace(
+            id: "00000000-0000-4000-8000-000000000022",
+            name: "Second",
+            address: "Tokyo",
+            category: .cafe
+        )
+
+        let ranked = SaveOriginPersonalization.rank(
+            candidates: [first, second],
+            savedPlaces: [],
+            preferences: [],
+            outcomes: []
+        )
+
+        XCTAssertEqual(ranked.map(\.id), [first.id, second.id])
     }
 
     @MainActor
@@ -218,5 +356,71 @@ final class AtlasFiveTabBarTests: XCTestCase {
             .deletingLastPathComponent()
         let url = root.appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func originPlace(
+        id: String,
+        name: String,
+        address: String,
+        category: PlaceCategory,
+        socialSignal: PlaceSocialSignal? = PlaceSocialSignal(
+            kind: .trending,
+            lens: .forYou,
+            friendNames: [],
+            friendCount: 0,
+            saveCount: 10,
+            trendingRank: 1,
+            categoryRank: 1,
+            sourceLabel: "Trending in Savvy",
+            referrerId: nil,
+            referralCode: nil
+        )
+    ) -> Place {
+        Place(
+            id: UUID(uuidString: id)!,
+            name: name,
+            address: address,
+            latitude: 25.03,
+            longitude: 121.56,
+            category: category,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: .distantPast,
+            socialSignal: socialSignal
+        )
+    }
+
+    private func originPreference(
+        value: String,
+        polarity: SaveMemoryPreference.Polarity
+    ) -> SaveMemoryPreference {
+        SaveMemoryPreference(
+            id: UUID(),
+            preferenceType: "cuisine",
+            normalizedValue: value,
+            context: "general",
+            polarity: polarity,
+            source: .explicit,
+            evidenceRefs: [],
+            evidenceCount: 0,
+            confidence: 1,
+            status: .active,
+            correctedFromId: nil,
+            createdAt: .distantPast,
+            updatedAt: .distantPast
+        )
+    }
+
+    @MainActor
+    private func originOutcome(
+        placeID: UUID,
+        label: SaveOriginOutcomeLabel,
+        at date: Date
+    ) -> SaveRecommendationOutcome {
+        SaveRecommendationOutcome(
+            recommendationId: SaveOriginPersonalization.recommendationID(for: placeID),
+            labels: [label.rawValue],
+            createdAt: date
+        )
     }
 }

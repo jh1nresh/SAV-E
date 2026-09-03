@@ -25,7 +25,7 @@ struct SaveOriginCapture: Identifiable, Hashable {
 struct SaveOriginView: View {
     let places: [Place]
     let onSave: (Place) async throws -> Void
-    let onSkip: (Place) -> Void
+    let onSkip: (Place) async throws -> Void
     let onOpenPassport: () -> Void
 
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -305,7 +305,7 @@ struct SaveOriginView: View {
                 if decision == .save {
                     try await onSave(place)
                 } else {
-                    onSkip(place)
+                    try await onSkip(place)
                 }
                 dragOffset = .zero
                 workingPlaceID = nil
