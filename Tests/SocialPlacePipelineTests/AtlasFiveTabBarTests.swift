@@ -67,6 +67,22 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
+    func testRaisedCaptureControlFitsInsideBarAndItsFiveItemSlot() {
+        XCTAssertTrue(
+            AtlasTabBarMetrics.raisedControlFitsBar,
+            "the complete Save control must stay inside the 62pt navigation capsule"
+        )
+        XCTAssertTrue(
+            AtlasTabBarMetrics.raisedControlFitsSlot(itemCount: 5),
+            "the Save control must not overlap its neighbouring tabs"
+        )
+        XCTAssertGreaterThanOrEqual(
+            AtlasTabBarMetrics.itemHeight,
+            AtlasTabBarMetrics.minimumHitTarget
+        )
+    }
+
+    @MainActor
     func testReferenceCanvasFills430By932WithoutCropping() {
         let viewport = CGSize(width: 430, height: 932)
         let scale = min(
