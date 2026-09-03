@@ -1522,6 +1522,14 @@ private struct PassportTopBar: View {
                     .accessibilityIdentifier("profile.close")
             }
 
+            Image("SavvyLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityLabel("Savvy")
+                .accessibilityIdentifier("profile.brandLogo")
+
             VStack(alignment: .leading, spacing: 2) {
                 Text("Savvy · \(languageSettings.text(.profileTitle).uppercased())")
                     .font(SaveAtlasType.strong(12))
