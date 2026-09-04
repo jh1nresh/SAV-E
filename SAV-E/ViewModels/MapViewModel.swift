@@ -646,13 +646,17 @@ final class MapViewModel: ObservableObject {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
             places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
             await completeReferralHandoffIfNeeded()
-            try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
+            // Each sync step is isolated: a failed pending import must not
+            // blank the review queue, and a failed place import must not
+            // skip the social refresh. Home reads `reviewCandidates`
+            // directly, so one thrown step used to hide every waiting clue.
+            await importPendingReviewCandidatesLoggingFailures(for: userId)
+            await refreshReviewCandidatesLoggingFailures()
             do {
-                try await refreshReviewCandidates()
+                try await importPendingPlaces(for: userId)
             } catch {
-                print("MapViewModel: failed to fetch review candidates: \(error)")
+                print("MapViewModel: failed to import pending places: \(error)")
             }
-            try await importPendingPlaces(for: userId)
             await refreshSocialSignals()
         } catch {
             print("MapViewModel: failed to load places: \(error)")
@@ -660,7 +664,26 @@ final class MapViewModel: ObservableObject {
                 places = localConfirmedPlaces()
             }
             importPendingPlacesForLocalUse()
+            // The place fetch failing says nothing about the candidate
+            // endpoint; still try so Home can show waiting clues.
+            await refreshReviewCandidatesLoggingFailures()
             await refreshSocialSignals()
+        }
+    }
+
+    private func importPendingReviewCandidatesLoggingFailures(for userId: String) async {
+        do {
+            try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
+        } catch {
+            print("MapViewModel: failed to import pending review candidates: \(error)")
+        }
+    }
+
+    private func refreshReviewCandidatesLoggingFailures() async {
+        do {
+            try await refreshReviewCandidates()
+        } catch {
+            print("MapViewModel: failed to fetch review candidates: \(error)")
         }
     }
 
@@ -686,15 +709,17 @@ final class MapViewModel: ObservableObject {
         isLoadingPlaces = true
         defer { isLoadingPlaces = false }
 
+        await completeReferralHandoffIfNeeded()
+        await importPendingReviewCandidatesLoggingFailures(for: userId)
         do {
-            await completeReferralHandoffIfNeeded()
-            try await importPendingReviewCandidates(for: userId, runSourceRecovery: false)
             try await importPendingPlaces(for: userId)
-            try await refreshReviewCandidates()
-            await refreshSocialSignals()
         } catch {
             print("MapViewModel: failed to process scene activation imports: \(error)")
         }
+        // Runs even when an import above failed, so returning to the app
+        // never leaves Home without its waiting clues.
+        await refreshReviewCandidatesLoggingFailures()
+        await refreshSocialSignals()
     }
 
     func importPendingPlacesForLocalUse() {
