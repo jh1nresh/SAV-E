@@ -306,7 +306,9 @@ jobs:
 
   save-contracts:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # save-rn `npm ci` is ~5m and a healthy production audit is ~2m. The
+    # previous 8-minute cap cancelled mid-audit on registry hangs (#185/#187).
+    timeout-minutes: 18
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

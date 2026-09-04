@@ -186,6 +186,47 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
+        let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+
+        XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
+        XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
+        XCTAssertTrue(passport.contains("TODAY ON SAVVY"))
+        XCTAssertTrue(passport.contains("今日 Savvy"))
+        XCTAssertTrue(passport.contains("Up to three real next steps"))
+        XCTAssertTrue(passport.contains("最多三件真正要做的事"))
+        XCTAssertTrue(passport.contains("Uses existing review queue count"))
+        XCTAssertTrue(passport.contains("Fills Origin for peers"))
+        XCTAssertTrue(passport.contains("Feeds Origin + connections"))
+        XCTAssertTrue(passport.contains("profile.today.confirmWaitingClue"))
+        XCTAssertTrue(passport.contains("profile.today.shareRecommendation"))
+        XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
+        XCTAssertTrue(passport.contains("profile.connections"))
+        XCTAssertTrue(passport.contains("opensConnections = true"))
+        XCTAssertTrue(passport.contains("onReviewAll()"))
+        XCTAssertTrue(content.contains("onReviewAll:"))
+        XCTAssertTrue(content.contains("pathByOpening"))
+        XCTAssertTrue(content.contains(".saves"))
+
+        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
+            < passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
+            < passport.range(of: "profile.controlPocket")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "profile.controlPocket")!.lowerBound
+            < passport.range(of: "PassportCountingRulesPanel")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "PassportCountingRulesPanel")!.lowerBound
+            < passport.range(of: "PassportVisibilityPanel")!.lowerBound)
+
+        XCTAssertFalse(passport.contains("\"XP\""))
+        XCTAssertFalse(passport.contains("gems"))
+        XCTAssertFalse(passport.contains("streak calendar"))
+        XCTAssertFalse(passport.contains("quest board"))
+        XCTAssertFalse(passport.contains("SaveStoreKitService"))
+        XCTAssertFalse(passport.contains("SaveEntitlementStore"))
+        XCTAssertFalse(passport.contains("serverVerifiedTier"))
+    }
+
     func testPrimaryHeadersUseTheCurrentSavvyLogo() throws {
         let components = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
         let brandHeader = try typeBody("BrandHeader", in: components)

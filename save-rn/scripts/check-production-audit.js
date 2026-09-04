@@ -11,6 +11,9 @@ const allowedAdvisories = new Map([
   ],
 ]);
 
+const AUDIT_ATTEMPTS = 3;
+const AUDIT_TIMEOUT_MS = 180_000;
+
 function advisoryRoots(name, vulnerabilities, seen = new Set()) {
   if (seen.has(name)) return [];
 
@@ -29,20 +32,79 @@ function advisoryRoots(name, vulnerabilities, seen = new Set()) {
   });
 }
 
-const audit = spawnSync(
-  "npm",
-  ["audit", "--omit=dev", "--audit-level=high", "--json"],
-  { encoding: "utf8" },
-);
+function parseAuditReport(stdout) {
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+}
+
+function transientAuditReason(audit, report) {
+  if (audit.error?.code === "ETIMEDOUT" || audit.signal === "SIGTERM") {
+    return "npm audit timed out talking to the registry";
+  }
+
+  if (audit.error) {
+    return audit.error.code || audit.error.message || "npm audit failed to start";
+  }
+
+  if (!report) {
+    return "npm audit returned non-JSON output";
+  }
+
+  if (!report.error) return null;
+
+  const blob = JSON.stringify(report.error);
+  if (
+    /ENOAUDIT|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EPIPE|ECONNABORTED/i.test(
+      blob,
+    ) ||
+    /empty registry|does not support audit|too many requests|try again/i.test(blob)
+  ) {
+    return report.error.code || report.error.summary || "registry audit error";
+  }
+
+  return null;
+}
+
+function runNpmAudit() {
+  return spawnSync(
+    "npm",
+    ["audit", "--omit=dev", "--audit-level=high", "--json"],
+    { encoding: "utf8", timeout: AUDIT_TIMEOUT_MS },
+  );
+}
+
+let audit;
+let report;
+
+for (let attempt = 1; attempt <= AUDIT_ATTEMPTS; attempt += 1) {
+  audit = runNpmAudit();
+  report = parseAuditReport(audit.stdout);
+  const transient = transientAuditReason(audit, report);
+
+  if (!transient) break;
+
+  console.warn(
+    `npm audit attempt ${attempt}/${AUDIT_ATTEMPTS} was transient (${transient}).`,
+  );
+
+  if (attempt === AUDIT_ATTEMPTS) {
+    if (report?.error) {
+      console.error(JSON.stringify(report.error, null, 2));
+    } else {
+      console.error(audit.stderr || audit.stdout || transient);
+    }
+    process.exit(1);
+  }
+}
 
 if (audit.error) {
   throw audit.error;
 }
 
-let report;
-try {
-  report = JSON.parse(audit.stdout);
-} catch {
+if (!report) {
   console.error(audit.stderr || audit.stdout);
   process.exit(1);
 }

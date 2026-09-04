@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-08-05
+> Last updated: 2026-09-04
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
@@ -151,6 +151,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
+- Today on Savvy
 - Plan around this
 - Confirm candidate
 - Reject clue
@@ -164,6 +165,7 @@ Avoid these in user-facing UI:
 - Generic "saved item" when the item is a Map Stamp
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
+- XP, Level, gems, streak calendar, quest board, Path / Shop / Progress chrome
 
 ## Atlas Postcard Tokens
 
@@ -493,6 +495,7 @@ Required content:
 - Cities count.
 - Waiting clues count.
 - Member since.
+- Today on Savvy: at most three live incomplete next steps. Hide the whole strip when none apply. Not a quest board.
 - Language and local memory controls.
 
 ## State Model
@@ -607,6 +610,10 @@ Rules:
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.
+- Today on Savvy sits after the stamp ledger and before the control pocket.
+  It may observe a waiting clue, a private Map Stamp, or a missing friend
+  connection. It does not grant Pro, XP, or rewards. If no live step applies,
+  hide the strip. Do not show an empty quest card.
 
 ### Share Extension
 
