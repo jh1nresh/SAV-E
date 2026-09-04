@@ -543,7 +543,8 @@ final class MapViewModel: ObservableObject {
         self.supabaseService = supabaseService
         self.mapCandidatePlaceSaver = mapCandidatePlaceSaver ?? { place, userID in
             try await supabaseService.savePlace(place, userId: userID)
-            recordPassportFieldActionAfterSavingPlace()
+            // Record from the store directly: this closure runs before `self` is usable.
+            SavePassportFieldStreakStore.shared.recordFieldAction()
         }
         self.mapCandidateUserIDProvider = mapCandidateUserIDProvider ?? {
             PrivyAuthService.shared.currentUserId
