@@ -2325,6 +2325,9 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var localVisibility: PlaceVisibility?
     @State private var isUpdatingVisibility = false
     @State private var visibilityError: String?
+    @State private var localStatus: PlaceStatus?
+    @State private var isUpdatingVisitIntent = false
+    @State private var visitIntentError: String?
 
     private var detailPlace: Place {
         var value = place
@@ -2333,6 +2336,9 @@ private struct SavedMapDetailDrawerContent: View {
         }
         if let localVisibility {
             value.visibility = localVisibility
+        }
+        if let localStatus {
+            value.status = localStatus
         }
         return value
     }
@@ -2533,6 +2539,9 @@ private struct SavedMapDetailDrawerContent: View {
         .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.postcardBody")
+        .onChange(of: place.status) { _, status in
+            localStatus = status
+        }
         .confirmationDialog(
             languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
             isPresented: $showDeleteConfirmation,
@@ -2605,6 +2614,20 @@ private struct SavedMapDetailDrawerContent: View {
                     }
                 }
                 .padding(.top, 5)
+            }
+
+            SaveVisitIntentChooser(
+                status: detailPlace.status,
+                language: languageSettings.language,
+                isDisabled: isUpdatingVisitIntent || isSavingPlaceEdit
+            ) { intent in
+                Task { await updateVisitIntent(intent) }
+            }
+
+            if let visitIntentError {
+                Text(visitIntentError)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveError)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -2738,6 +2761,25 @@ private struct SavedMapDetailDrawerContent: View {
         } catch {
             localVisibility = previousVisibility
             visibilityError = error.localizedDescription
+        }
+    }
+
+    private func updateVisitIntent(_ status: PlaceStatus) async {
+        guard status != detailPlace.status else { return }
+        let previousStatus = localStatus
+        isUpdatingVisitIntent = true
+        visitIntentError = nil
+        localStatus = status
+        defer { isUpdatingVisitIntent = false }
+
+        var updatedPlace = detailPlace
+        updatedPlace.status = status
+        do {
+            try await onUpdatePlace(updatedPlace)
+            enrichedPlace = updatedPlace
+        } catch {
+            localStatus = previousStatus
+            visitIntentError = error.localizedDescription
         }
     }
 

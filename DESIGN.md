@@ -436,7 +436,10 @@ A Memory Card is the user-facing card for a confirmed Map Stamp.
 
 Required hierarchy:
 
-1. State badge: Map Stamp or Visited Map Stamp.
+1. State badge: Map Stamp or Visited Map Stamp. Want to try and Visited are
+   Map Stamp substates. Show them as kraft (Want to try) or mint (Visited)
+   chips next to the Confirmed Map Stamp seal. Do not add a `SaveMemoryBadge`
+   case.
 2. Place name.
 3. Address or area.
 4. Short memory summary.
