@@ -3605,8 +3605,6 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-
-    @MainActor
     func testPassportTodayCatalogIncludesMarkVisitedReturnMission() {
         var wantToGo = place(name: "Unvisited Noodle", address: "Irvine, CA", category: .food)
         wantToGo.status = .wantToGo
