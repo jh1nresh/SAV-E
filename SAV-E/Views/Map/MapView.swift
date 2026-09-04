@@ -29,7 +29,17 @@ struct MapView: View {
     var body: some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
-            let bottomChromeInset = max(geo.safeAreaInsets.bottom + 86, 98)
+            // Root Map parks a floating search pill (~68) above the tab bar
+            // (~88). Trip Map crops MapView above its place card, so a short
+            // trailing clearance is enough. Selection swaps the pill for a
+            // taller place peek, so locate rises with that chrome.
+            let isEmbeddedCrop = displayedPlaces != nil
+            let bottomChromeInset = isEmbeddedCrop
+                ? max(geo.safeAreaInsets.bottom + 18, 28)
+                : max(
+                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
+                    viewModel.selectedPlace == nil ? 160 : 252
+                )
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
@@ -130,6 +140,21 @@ struct MapView: View {
                     viewModel.selectMapFeature(feature)
                 }
                 .accessibilityIdentifier("map.liveSurface")
+                .overlay(alignment: .bottomTrailing) {
+                    CurrentLocationButton(
+                        isLocating: viewModel.isLocatingUser,
+                        action: {
+                            SaveHaptics.tap()
+                            Task { await viewModel.focusOnUserLocation() }
+                        }
+                    )
+                    .padding(.trailing, 16)
+                    // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
+                    // cleared above the floating search pill or place peek.
+                    .padding(.bottom, bottomChromeInset)
+                    .accessibilityIdentifier("map.currentLocation")
+                }
+                .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
                 if let contextBadgeText {
                     VStack {
@@ -141,21 +166,6 @@ struct MapView: View {
                     .frame(maxWidth: .infinity)
                     .allowsHitTesting(false)
                 }
-
-                CurrentLocationButton(
-                    isLocating: viewModel.isLocatingUser,
-                    action: {
-                        SaveHaptics.tap()
-                        Task { await viewModel.focusOnUserLocation() }
-                    }
-                )
-                .padding(.trailing, 16)
-                // Top-trailing: the bottom edge of every map surface is
-                // covered by a shelf/drawer or place card, which buried the
-                // button when it sat bottom-trailing.
-                .padding(.top, topChromeInset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .accessibilityIdentifier("map.currentLocation")
 
                 if let providerPlace = providerBackedPlaces.first {
                     Button {
@@ -357,17 +367,20 @@ private struct CurrentLocationButton: View {
                     ProgressView()
                         .tint(controlForeground)
                 } else {
+                    // Apple Maps reference uses the filled location glyph in a
+                    // frosted circular control above the search capsule.
                     Image(systemName: "location.fill")
-                        .font(.system(size: 21, weight: .semibold))
-                        .foregroundColor(controlForeground)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(controlForeground)
                 }
             }
-            .frame(width: 54, height: 54)
-            .background(.ultraThinMaterial, in: Circle())
+            .frame(width: 48, height: 48)
+            .background(.regularMaterial, in: Circle())
             .overlay {
                 Circle()
-                    .stroke(controlStroke, lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
             }
+            .shadow(color: Color.black.opacity(0.12), radius: 12, y: 4)
         }
         .buttonStyle(.plain)
         .disabled(isLocating)
@@ -375,12 +388,8 @@ private struct CurrentLocationButton: View {
         .accessibilityHint(languageSettings.localized(english: "Moves the map back to where you are now", traditionalChinese: "把地圖移回你現在所在的位置"))
     }
 
-    private var controlStroke: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.saveNotebookLine.opacity(0.26)
-    }
-
     private var controlForeground: Color {
-        colorScheme == .dark ? .white : .saveInk
+        colorScheme == .dark ? .white : Color.primary.opacity(0.78)
     }
 }
 

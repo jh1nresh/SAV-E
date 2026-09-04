@@ -3,10 +3,10 @@ import SwiftUI
 /// One resizable drawer surface for the Map tab.
 ///
 /// Collapsed is the Apple Maps–style floating search pill. Medium and large
-/// keep the existing in-tree panel. The map stays interactive above it, and
-/// expanding never presents a second layer. The embedded drawer intentionally
-/// doesn't use sheet presentation modifiers because those can abort SwiftUI's
-/// presentation coordinator when attached to an in-tree view.
+/// keep the notebook canvas panel (memory / ask workbench). Expanding never
+/// presents a second layer. The embedded drawer intentionally doesn't use
+/// sheet presentation modifiers because those can abort SwiftUI's presentation
+/// coordinator when attached to an in-tree view.
 struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var isExpanded: Bool
     @Binding var detent: PresentationDetent
@@ -16,11 +16,13 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     /// the card shouldn't summon the keyboard; tapping the field should.
     let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
+    let onOpenPassport: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
     /// Keeps the collapsed floating pill clear of the root tab bar.
     private let collapsedBottomInset: CGFloat = 88
-    private let collapsedHeight: CGFloat = 72
+    /// Apple Maps search capsule is one row (~48) plus breathing room.
+    private let collapsedHeight: CGFloat = 56
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -47,9 +49,10 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
             onOpenAssistant: {
                 guard !collapsedDragConsumedTap else { return }
                 onExpand(true)
-            }
+            },
+            onOpenPassport: onOpenPassport
         )
-        .frame(height: 68)
+        .frame(height: collapsedHeight)
         .padding(.horizontal, 15)
         .padding(.bottom, collapsedBottomInset)
         .offset(y: max(-96, min(0, dragTranslation)))

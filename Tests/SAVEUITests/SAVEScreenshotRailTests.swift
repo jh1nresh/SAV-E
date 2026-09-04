@@ -891,11 +891,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
 
-        // The identifier sits on a full-map container, so tap the button's
-        // actual top-trailing position instead of the element center.
+        // The identifier is on the locate control itself (bottom-trailing,
+        // Apple Maps placement above the floating search chrome).
         let locate = app.descendants(matching: .any)["map.currentLocation"]
         XCTAssertTrue(locate.waitForExistence(timeout: stepTimeout))
-        locate.coordinate(withNormalizedOffset: CGVector(dx: 0.91, dy: 0.06)).tap()
+        locate.tap()
 
         // Spec P4: denied permission surfaces an Atlas notice with an Open
         // Settings action instead of a silent no-op.
@@ -1265,8 +1265,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(
-            app.descendants(matching: .any)["map.stampCount"].waitForExistence(timeout: stepTimeout),
-            "Map geography-first chrome should expose the stamp count instead of the Savvy lockup."
+            app.descendants(matching: .any)["map.command.search"].waitForExistence(timeout: stepTimeout),
+            "Map geography-first chrome is the floating Apple Maps search capsule."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.command.passport"].waitForExistence(timeout: stepTimeout),
+            "Passport opens from the Apple Maps avatar slot inside the search capsule."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.stampCount"].exists,
+            "Apple Maps reference keeps Map top empty; no persistent stamp chip."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["root.passport"].exists,
+            "Passport must not sit in persistent Map top chrome."
         )
 
         openRootTab("Profile", app: app)
