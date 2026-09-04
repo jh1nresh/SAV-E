@@ -833,6 +833,28 @@ private struct DaySection: View {
                 .clipShape(Capsule())
                 .padding(.bottom, 12)
 
+            if let windowNote = day.windowNote, !windowNote.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(languageSettings.localized(english: "Travel window", traditionalChinese: "行程時窗"))
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.7)
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(windowNote)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SaveAtlasPalette.kraft.opacity(0.38), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(SaveAtlasPalette.line.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+                }
+                .accessibilityIdentifier("plan.window.\(day.dayNumber)")
+                .padding(.bottom, 10)
+            }
+
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
                 if let leg = travelLeg(before: index) {
                     Label(travelLegLabel(leg), systemImage: leg.mode == .driving ? "car" : "figure.walk")
@@ -965,18 +987,18 @@ private struct DaySection: View {
         case .reviewCandidate:
             return languageSettings.localized(english: "Needs review", traditionalChinese: "待確認")
         case .confirmedMapStamp:
-            return languageSettings.localized(english: "Confirmed", traditionalChinese: "已確認")
+            return languageSettings.localized(english: "Map Stamp", traditionalChinese: "地圖章")
         case .externalSuggestion:
-            return languageSettings.localized(english: "External", traditionalChinese: "外部建議")
+            return languageSettings.localized(english: "Unsaved Candidate", traditionalChinese: "尚未儲存")
         }
     }
 
     private func stateTint(_ state: ItineraryPlaceState) -> Color {
         switch state {
-        case .sourceOnly: return SaveAtlasPalette.kraft
-        case .reviewCandidate: return SaveAtlasPalette.kraft
+        case .sourceOnly: return SaveAtlasPalette.coral
+        case .reviewCandidate: return SaveAtlasPalette.sky
         case .confirmedMapStamp: return SaveAtlasPalette.mint
-        case .externalSuggestion: return SaveAtlasPalette.coral
+        case .externalSuggestion: return SaveAtlasPalette.sky
         }
     }
 

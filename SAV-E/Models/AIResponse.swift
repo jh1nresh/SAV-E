@@ -92,6 +92,9 @@ struct ItineraryDay: Identifiable, Equatable {
     let label: String?
     let stops: [ItineraryStop]
     var health: TripHealth? = nil
+    /// Arrival, departure, check-in, or check-out constraint for this day.
+    /// Not a place. Shown as a travel window, never as a Map Stamp.
+    var windowNote: String? = nil
     var id: Int { dayNumber }
 }
 
@@ -342,7 +345,13 @@ struct TripCanvasDraft: Equatable {
 
 extension ItineraryDay {
     func replacingStops(_ stops: [ItineraryStop]) -> ItineraryDay {
-        ItineraryDay(dayNumber: dayNumber, label: label, stops: stops, health: health)
+        ItineraryDay(
+            dayNumber: dayNumber,
+            label: label,
+            stops: stops,
+            health: health,
+            windowNote: windowNote
+        )
     }
 }
 
@@ -464,6 +473,7 @@ struct TripGap: Identifiable, Codable, Equatable, Hashable {
         case needsAreaCluster = "needs_area_cluster"
         case needsRainBackup = "needs_rain_backup"
         case needsHoursCheck = "needs_hours_check"
+        case missingLodging = "missing_lodging"
     }
 }
 

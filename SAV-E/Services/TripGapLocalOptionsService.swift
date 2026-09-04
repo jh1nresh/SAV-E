@@ -187,6 +187,8 @@ struct TripGapLocalOptionsService {
                 // unverified. Offering more places would answer a question the
                 // user did not ask.
                 break
+            case .missingLodging:
+                result.insert(.stay)
             }
         }
     }
