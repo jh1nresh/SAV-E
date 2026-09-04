@@ -38,7 +38,11 @@ struct ProfileView: View {
     var onSearchFollowedFriends: (String) async -> Void = { _ in }
     var onLoadMoreFollowedFriends: () async -> Void = {}
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
+    var onReviewAll: () -> Void = {}
     var isRootTab = false
+    @State private var opensConnections = false
+    @State private var shareFocusPlace: Place?
+    @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
@@ -47,9 +51,20 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    private var todayMissions: [SavePassportTodayMission] {
+        guard isRootTab else { return [] }
+        return SavePassportTodayCatalog.missions(
+            waitingClues: waitingClues,
+            savedPlaces: passportPlaces,
+            followedFriends: followedFriends,
+            hasSharedInvite: hasSharedInvite
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
+                ScrollViewReader { proxy in
                 VStack(spacing: SaveTheme.Spacing.lg) {
                     PassportTopBar(
                         waitingClues: waitingClues,
@@ -94,6 +109,12 @@ struct ProfileView: View {
 
                     PassportStampSection(profile: viewModel.profile, stats: passportStats)
                         .accessibilityIdentifier("profile.stampLedger")
+
+                    if !todayMissions.isEmpty {
+                        PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
+                            handleTodayMission(missionID, scrollProxy: proxy)
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                         DisclosureGroup {
@@ -152,29 +173,9 @@ struct ProfileView: View {
                         .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.memoryPreferences")
 
-                        NavigationLink {
-                            PassportConnectionsView(
-                                collaborativeLists: collaborativeLists,
-                                followedFriends: followedFriends,
-                                isLoadingFollowedFriends: isLoadingFollowedFriends,
-                                hasMoreFollowedFriends: hasMoreFollowedFriends,
-                                onCreateList: onCreateList,
-                                onShareListURL: onShareListURL,
-                                onShareListLink: onShareListLink,
-                                onLoadMyReferralURL: onLoadMyReferralURL,
-                                onOpenListOnMap: onOpenListOnMap,
-                                currentUserID: currentUserID,
-                                onRefreshLists: onRefreshLists,
-                                onLoadListMembers: onLoadListMembers,
-                                onRemoveListMember: onRemoveListMember,
-                                onLoadListShareCodes: onLoadListShareCodes,
-                                onRevokeListShareCode: onRevokeListShareCode,
-                                onFollowReferral: onFollowReferral,
-                                onRefreshFollowedFriends: onRefreshFollowedFriends,
-                                onSearchFollowedFriends: onSearchFollowedFriends,
-                                onLoadMoreFollowedFriends: onLoadMoreFollowedFriends,
-                                onUnfollowFriend: onUnfollowFriend
-                            )
+                        Button {
+                            SaveHaptics.tap()
+                            opensConnections = true
                         } label: {
                             SettingsRow(
                                 icon: "person.2.fill",
@@ -187,7 +188,6 @@ struct ProfileView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
                         .accessibilityIdentifier("profile.connections")
 
                         SettingsRow(
@@ -241,9 +241,10 @@ struct ProfileView: View {
                     PassportCountingRulesPanel(stats: passportStats)
 
                     PassportVisibilityPanel(
-                        places: passportPlaces,
+                        places: visibilityPlaces,
                         onUpdate: updatePlaceVisibility
                     )
+                    .id("profile.sharingPrivacy")
                 }
                 .padding(
                     .bottom,
@@ -252,17 +253,29 @@ struct ProfileView: View {
                         : SaveTheme.Spacing.xl
                 )
                 .padding(.top, 2)
+                }
             }
             .background(SaveDottedBackground().ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
+            .navigationDestination(isPresented: $opensConnections) {
+                connectionsDestination
+            }
         }
         .task {
             localSavedPlaces = savedPlaces
+            hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             await viewModel.loadProfile()
         }
         .onChange(of: savedPlaces) { _, places in
             localSavedPlaces = places
+        }
+        .onChange(of: opensConnections) { _, isOpen in
+            guard !isOpen else { return }
+            hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+        }
+        .sheet(item: $shareFocusPlace) { place in
+            shareMissionSheet(place)
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
@@ -321,10 +334,101 @@ struct ProfileView: View {
         }
     }
 
+    private var visibilityPlaces: [Place] {
+        guard let focused = shareFocusPlace else { return passportPlaces }
+        return [focused] + passportPlaces.filter { $0.id != focused.id }
+    }
+
+    private var connectionsDestination: PassportConnectionsView {
+        PassportConnectionsView(
+            collaborativeLists: collaborativeLists,
+            followedFriends: followedFriends,
+            isLoadingFollowedFriends: isLoadingFollowedFriends,
+            hasMoreFollowedFriends: hasMoreFollowedFriends,
+            onCreateList: onCreateList,
+            onShareListURL: onShareListURL,
+            onShareListLink: onShareListLink,
+            onLoadMyReferralURL: onLoadMyReferralURL,
+            onOpenListOnMap: onOpenListOnMap,
+            currentUserID: currentUserID,
+            onRefreshLists: onRefreshLists,
+            onLoadListMembers: onLoadListMembers,
+            onRemoveListMember: onRemoveListMember,
+            onLoadListShareCodes: onLoadListShareCodes,
+            onRevokeListShareCode: onRevokeListShareCode,
+            onFollowReferral: onFollowReferral,
+            onRefreshFollowedFriends: onRefreshFollowedFriends,
+            onSearchFollowedFriends: onSearchFollowedFriends,
+            onLoadMoreFollowedFriends: onLoadMoreFollowedFriends,
+            onUnfollowFriend: onUnfollowFriend,
+            onSharedInvite: markInviteShared
+        )
+    }
+
+    private func handleTodayMission(
+        _ missionID: SavePassportTodayMissionID,
+        scrollProxy: ScrollViewProxy
+    ) {
+        switch missionID {
+        case .confirmWaitingClue:
+            onReviewAll()
+        case .shareRecommendation:
+            shareFocusPlace = SavePassportTodayCatalog.firstShareEligiblePlace(in: passportPlaces)
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                scrollProxy.scrollTo("profile.sharingPrivacy", anchor: .center)
+            }
+        case .inviteOrFollowFriend:
+            opensConnections = true
+        }
+    }
+
+    private func markInviteShared() {
+        SavePassportInviteShareStore.shared.markShared()
+        hasSharedInvite = true
+    }
+
+    private func shareMissionSheet(_ place: Place) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+            HStack(spacing: SaveTheme.Spacing.md) {
+                PassportIconButton(systemName: "xmark") {
+                    SaveHaptics.tap()
+                    shareFocusPlace = nil
+                }
+                .accessibilityLabel(languageSettings.localized(english: "Close", traditionalChinese: "關閉"))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.localized(
+                        english: "SHARING & PRIVACY",
+                        traditionalChinese: "分享與隱私"
+                    ))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(languageSettings.localized(
+                        english: "Share one Map Stamp",
+                        traditionalChinese: "分享一個地圖章推薦"
+                    ))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            }
+
+            PassportVisibilityRow(place: place, onUpdate: updatePlaceVisibility)
+            Spacer(minLength: 0)
+        }
+        .padding(SaveTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+    }
+
     private func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
         try await onUpdatePlaceVisibility(place, visibility)
         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
             localSavedPlaces[index].visibility = visibility
+        }
+        if shareFocusPlace?.id == place.id {
+            shareFocusPlace?.visibility = visibility
         }
     }
 }
@@ -360,6 +464,7 @@ private struct PassportConnectionsView: View {
     let onSearchFollowedFriends: (String) async -> Void
     let onLoadMoreFollowedFriends: () async -> Void
     let onUnfollowFriend: (SaveFollowedFriend) async throws -> Void
+    var onSharedInvite: () -> Void = {}
 
     @State private var selectedSection: Section = .friends
     @State private var referralValue = ""
@@ -526,6 +631,9 @@ private struct PassportConnectionsView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded {
+                    onSharedInvite()
+                })
                 .accessibilityIdentifier("profile.connections.myInvite")
             }
 
@@ -1501,6 +1609,173 @@ private struct EditProfileSheet: View {
             photoError = nil
         } catch {
             photoError = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Today on Savvy
+
+private struct PassportTodayOnSavvyStrip: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let missions: [SavePassportTodayMission]
+    let onSelect: (SavePassportTodayMissionID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(languageSettings.localized(
+                    english: "TODAY ON SAVVY",
+                    traditionalChinese: "今日 Savvy"
+                ))
+                .font(SaveAtlasType.strong(11))
+                .tracking(0.65)
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+                Text(languageSettings.localized(
+                    english: "Up to three real next steps",
+                    traditionalChinese: "最多三件真正要做的事"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+
+            ForEach(missions) { mission in
+                PassportTodayMissionRow(mission: mission) {
+                    SaveHaptics.tap()
+                    onSelect(mission.id)
+                }
+            }
+        }
+        .padding(.bottom, 12)
+        .background {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .stroke(
+                    SaveAtlasPalette.kraft.opacity(0.82),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
+        .padding(.horizontal)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("profile.today")
+    }
+}
+
+private struct PassportTodayMissionRow: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let mission: SavePassportTodayMission
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: SaveTheme.Spacing.md) {
+                SavePostcardPerforatedMedallion(
+                    systemName: iconName,
+                    tint: medallionTint,
+                    edge: SaveAtlasPalette.forest
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(SaveAtlasType.strong(15))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(detail)
+                        .font(SaveAtlasType.body(11))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SaveAtlasPalette.coral)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(rowAccessibilityIdentifier)
+    }
+
+    private var rowAccessibilityIdentifier: String {
+        switch mission.id {
+        case .confirmWaitingClue:
+            return "profile.today.confirmWaitingClue"
+        case .shareRecommendation:
+            return "profile.today.shareRecommendation"
+        case .inviteOrFollowFriend:
+            return "profile.today.inviteFriend"
+        }
+    }
+
+    private var title: String {
+        switch mission.id {
+        case .confirmWaitingClue:
+            return languageSettings.localized(
+                english: "Confirm a waiting clue",
+                traditionalChinese: "確認一個待審線索"
+            )
+        case .shareRecommendation:
+            return languageSettings.localized(
+                english: "Share one Map Stamp",
+                traditionalChinese: "分享一個地圖章推薦"
+            )
+        case .inviteOrFollowFriend:
+            return languageSettings.localized(
+                english: "Invite or follow a friend",
+                traditionalChinese: "邀請或追蹤朋友"
+            )
+        }
+    }
+
+    private var detail: String {
+        switch mission.id {
+        case .confirmWaitingClue:
+            return languageSettings.localized(
+                english: "A source clue still needs a confirmed place.",
+                traditionalChinese: "還有來源線索等你確認成地點。"
+            )
+        case .shareRecommendation:
+            return languageSettings.localized(
+                english: "Choose who can see one saved Map Stamp.",
+                traditionalChinese: "選一個已存地圖章，決定誰看得到。"
+            )
+        case .inviteOrFollowFriend:
+            return languageSettings.localized(
+                english: "Share your invite or follow someone you trust.",
+                traditionalChinese: "分享邀請，或追蹤你信任的人。"
+            )
+        }
+    }
+
+    private var iconName: String {
+        switch mission.id {
+        case .confirmWaitingClue:
+            return "circle.hexagongrid"
+        case .shareRecommendation:
+            return "checkmark.seal.fill"
+        case .inviteOrFollowFriend:
+            return "person.badge.plus"
+        }
+    }
+
+    private var medallionTint: Color {
+        switch mission.id {
+        case .confirmWaitingClue:
+            return SaveAtlasPalette.coral
+        case .shareRecommendation:
+            return SaveAtlasPalette.mint
+        case .inviteOrFollowFriend:
+            return SaveAtlasPalette.kraft
         }
     }
 }

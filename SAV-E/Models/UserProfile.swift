@@ -79,6 +79,84 @@ struct PlaceCollection: Identifiable, Codable, Hashable {
     var emoji: String
 }
 
+// MARK: - Today on Savvy
+
+/// Fixed mission catalog for the Passport "Today on Savvy" strip.
+/// Live incomplete rows only. The strip hides when this list is empty.
+enum SavePassportTodayMissionID: String, CaseIterable, Equatable {
+    case confirmWaitingClue = "confirm_waiting_clue"
+    case shareRecommendation = "share_recommendation"
+    case inviteOrFollowFriend = "invite_or_follow_friend"
+
+    var accessibilityIdentifier: String {
+        switch self {
+        case .confirmWaitingClue:
+            return "profile.today.confirmWaitingClue"
+        case .shareRecommendation:
+            return "profile.today.shareRecommendation"
+        case .inviteOrFollowFriend:
+            return "profile.today.inviteFriend"
+        }
+    }
+}
+
+struct SavePassportTodayMission: Equatable, Identifiable {
+    let id: SavePassportTodayMissionID
+}
+
+enum SavePassportTodayCatalog {
+    static let missionCap = 3
+
+    /// Order is confirm → share → invite, capped at three.
+    static func missions(
+        waitingClues: Int,
+        savedPlaces: [Place],
+        followedFriends: [SaveFollowedFriend],
+        hasSharedInvite: Bool
+    ) -> [SavePassportTodayMission] {
+        var result: [SavePassportTodayMission] = []
+        if waitingClues >= 1 {
+            result.append(SavePassportTodayMission(id: .confirmWaitingClue))
+        }
+        if firstShareEligiblePlace(in: savedPlaces) != nil {
+            result.append(SavePassportTodayMission(id: .shareRecommendation))
+        }
+        if followedFriends.isEmpty || !hasSharedInvite {
+            result.append(SavePassportTodayMission(id: .inviteOrFollowFriend))
+        }
+        return Array(result.prefix(missionCap))
+    }
+
+    /// Prefer the first private Map Stamp; otherwise the first stamp that is
+    /// not already in the Origin-consumed shareable-recommendation state.
+    static func firstShareEligiblePlace(in places: [Place]) -> Place? {
+        if let privateStamp = places.first(where: { $0.effectiveVisibility == .privateMemory }) {
+            return privateStamp
+        }
+        return places.first { !$0.effectiveVisibility.allowsTrendingSignal }
+    }
+}
+
+/// Local flag for "never shared invite". Not a grant path and not commerce.
+final class SavePassportInviteShareStore {
+    static let shared = SavePassportInviteShareStore()
+
+    private let storageKey = "save.passport.inviteShared.v1"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    var hasSharedInvite: Bool {
+        defaults.bool(forKey: storageKey)
+    }
+
+    func markShared() {
+        defaults.set(true, forKey: storageKey)
+    }
+}
+
 // MARK: - Mock Data
 
 extension UserProfile {

@@ -3462,6 +3462,118 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(stats.cityNames, ["臺北市", "臺南市"])
     }
 
+    func testPassportTodayCatalogHidesWhenNoLiveMissionsApply() {
+        let missions = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [],
+            followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
+            hasSharedInvite: true
+        )
+
+        XCTAssertTrue(missions.isEmpty)
+    }
+
+    func testPassportTodayCatalogOrdersConfirmShareInviteAndCapsAtThree() {
+        var privateStamp = place(name: "Private Cafe", address: "Irvine, CA", category: .cafe)
+        privateStamp.visibility = .privateMemory
+        var publicGuide = place(name: "Origin Card", address: "Irvine, CA", category: .food)
+        publicGuide.visibility = .publicGuide
+
+        let missions = SavePassportTodayCatalog.missions(
+            waitingClues: 2,
+            savedPlaces: [publicGuide, privateStamp],
+            followedFriends: [],
+            hasSharedInvite: false
+        )
+
+        XCTAssertEqual(
+            missions.map(\.id),
+            [.confirmWaitingClue, .shareRecommendation, .inviteOrFollowFriend]
+        )
+        XCTAssertEqual(missions.count, SavePassportTodayCatalog.missionCap)
+        XCTAssertEqual(
+            SavePassportTodayCatalog.firstShareEligiblePlace(in: [publicGuide, privateStamp])?.name,
+            "Private Cafe"
+        )
+    }
+
+    func testPassportTodayShareMissionSkipsOriginConsumedPublicGuideStamps() {
+        var friendsOnly = place(name: "Friends Dinner", address: "Irvine, CA", category: .food)
+        friendsOnly.visibility = .friends
+        var publicGuide = place(name: "Already Shared", address: "Irvine, CA", category: .cafe)
+        publicGuide.visibility = .publicGuide
+
+        let shareOnly = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [publicGuide, friendsOnly],
+            followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
+            hasSharedInvite: true
+        )
+        XCTAssertEqual(shareOnly.map(\.id), [.shareRecommendation])
+        XCTAssertEqual(
+            SavePassportTodayCatalog.firstShareEligiblePlace(in: [publicGuide, friendsOnly])?.name,
+            "Friends Dinner"
+        )
+
+        let none = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [publicGuide],
+            followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
+            hasSharedInvite: true
+        )
+        XCTAssertTrue(none.isEmpty)
+    }
+
+    func testPassportTodayInviteMissionUsesEmptyFriendsOrNeverSharedInvite() {
+        let friend = SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)
+
+        let emptyFriends = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [],
+            followedFriends: [],
+            hasSharedInvite: true
+        )
+        XCTAssertEqual(emptyFriends.map(\.id), [.inviteOrFollowFriend])
+
+        let neverShared = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [],
+            followedFriends: [friend],
+            hasSharedInvite: false
+        )
+        XCTAssertEqual(neverShared.map(\.id), [.inviteOrFollowFriend])
+    }
+
+    func testPassportTodayAccessibilityIdentifiersStayStable() {
+        XCTAssertEqual(
+            SavePassportTodayMissionID.confirmWaitingClue.accessibilityIdentifier,
+            "profile.today.confirmWaitingClue"
+        )
+        XCTAssertEqual(
+            SavePassportTodayMissionID.shareRecommendation.accessibilityIdentifier,
+            "profile.today.shareRecommendation"
+        )
+        XCTAssertEqual(
+            SavePassportTodayMissionID.inviteOrFollowFriend.accessibilityIdentifier,
+            "profile.today.inviteFriend"
+        )
+        XCTAssertEqual(SavePassportTodayMissionID.confirmWaitingClue.rawValue, "confirm_waiting_clue")
+        XCTAssertEqual(SavePassportTodayMissionID.shareRecommendation.rawValue, "share_recommendation")
+        XCTAssertEqual(SavePassportTodayMissionID.inviteOrFollowFriend.rawValue, "invite_or_follow_friend")
+    }
+
+    func testPassportInviteShareStoreIsLocalFlagNotAGrantPath() {
+        let suite = "save.passport.today.invite.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = SavePassportInviteShareStore(defaults: defaults)
+
+        XCTAssertFalse(store.hasSharedInvite)
+        store.markShared()
+        XCTAssertTrue(store.hasSharedInvite)
+        defaults.removePersistentDomain(forName: suite)
+    }
+
     @MainActor
     func testMapFilterActionDoesNotHideSavedPins() {
         let focusedPlace = place(name: "Focused Stop", address: "Irvine, CA", category: .cafe)

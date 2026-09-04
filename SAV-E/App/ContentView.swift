@@ -495,6 +495,18 @@ struct ContentView: View {
             onUnfollowFriend: { friend in
                 try await mapVM.unfollowFriend(friend)
             },
+            onReviewAll: {
+                // Same destination Home's review CTA uses: the Saves child
+                // with the review pocket. Sheet Passport dismisses first so
+                // the push lands on the root stack.
+                if isPassportPresented {
+                    isPassportPresented = false
+                }
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .saves,
+                    currently: rootPath
+                )
+            },
             isRootTab: isRootTab
         )
         .environment(\.appLanguageSettings, languageSettings)
