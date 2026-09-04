@@ -142,7 +142,40 @@ final class SaveCollaborativeListTests: XCTestCase {
 
         XCTAssertEqual(service.requestedDetailIDs, ["stale-place-id", "fresh-place-id"])
         XCTAssertEqual(enriched.businessPhotoURLStrings, ["https://example.com/amamotobros.jpg"])
+        XCTAssertEqual(enriched.googlePlaceId, "fresh-place-id")
         XCTAssertEqual(enriched.googleRating, 4.8)
+    }
+
+    @MainActor
+    func testStaleGooglePlaceIDReplacesWrongCoverPhoto() async throws {
+        var saved = place(name: "amamotobros", category: .food)
+        saved.address = "No. 377, Section 4, Ren'ai Road, Taipei"
+        saved.latitude = 25.0386
+        saved.longitude = 121.5557
+        saved.googlePlaceId = "stale-place-id"
+        saved.businessPhotoUrls = ["https://example.com/wrong-ceiling.jpg"]
+        let service = StaleGooglePlaceIDService()
+
+        let result = await PlaceBusinessEnricher.enrich(saved, service: service)
+        let enriched = try XCTUnwrap(result)
+
+        XCTAssertEqual(enriched.businessPhotoURLStrings.first, "https://example.com/amamotobros.jpg")
+        XCTAssertEqual(enriched.googlePlaceId, "fresh-place-id")
+        XCTAssertFalse(try XCTUnwrap(enriched.businessPhotoURLStrings.first).contains("wrong-ceiling"))
+    }
+
+    @MainActor
+    func testBusinessPhotoLookupRejectsDistantSameNameBranch() async {
+        var saved = place(name: "竣師父牛肉麵-大安店", category: .food)
+        saved.latitude = 25.0410
+        saved.longitude = 121.5434
+
+        let enriched = await PlaceBusinessEnricher.enrich(
+            saved,
+            service: DistantSameNameGooglePlacesService()
+        )
+
+        XCTAssertNil(enriched)
     }
 
     @MainActor
@@ -582,5 +615,28 @@ private final class NearbyWrongBusinessGooglePlacesService: GooglePlacesServiceP
 
     func photoURL(reference: String, maxWidth: Int) -> URL? {
         URL(string: "https://example.com/wrong.jpg")
+    }
+}
+
+@MainActor
+private final class DistantSameNameGooglePlacesService: GooglePlacesServiceProtocol {
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        [GooglePlaceMatch(
+            id: "other-branch",
+            name: "竣師父牛肉麵",
+            address: "Zhongxiao",
+            latitude: 25.0545,
+            longitude: 121.5434,
+            photoReference: "other-branch-photo"
+        )]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        XCTFail("A same-name shop 1.5 km away must not bind Home cover art")
+        throw URLError(.resourceUnavailable)
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/other-branch.jpg")
     }
 }

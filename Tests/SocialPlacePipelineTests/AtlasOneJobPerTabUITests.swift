@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 import XCTest
 @testable import SAVE
@@ -54,11 +55,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(row.contains("placeID: place.id"))
         XCTAssertTrue(row.contains("photoURL: place.photoURL"))
+        XCTAssertTrue(row.contains("latitude: place.latitude"))
         XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
         XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(hero.contains("placeID: place.id"))
         XCTAssertTrue(hero.contains("photoURL: place.photoURL"))
+        XCTAssertTrue(hero.contains("longitude: place.longitude"))
         XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertFalse(hero.contains("home.hero.changeCover"))
         XCTAssertFalse(hero.contains("photo.stack"))
@@ -66,15 +69,19 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("placesWithPhotos"))
         XCTAssertFalse(screens.contains("cycleFeaturedPlace"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
-        XCTAssertTrue(thumbnail.contains("placeID"))
+        XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
+        XCTAssertTrue(thumbnail.contains("placeID: placeID"))
         XCTAssertTrue(thumbnail.contains(".id(placeID)"))
-        XCTAssertTrue(thumbnail.contains(".id(photoURL)"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
         XCTAssertTrue(thumbnail.contains("fallback"))
-        XCTAssertFalse(thumbnail.contains("HomeLocationSnapshot"))
-        XCTAssertFalse(thumbnail.contains("MKLookAroundSceneRequest"))
-        XCTAssertFalse(thumbnail.contains("MKMapSnapshotter"))
-        XCTAssertFalse(screens.contains("MKLookAroundSceneRequest"))
+        let snapshot = try typeBody("HomeLocationSnapshot", in: screens)
+        XCTAssertTrue(snapshot.contains("placeID"))
+        XCTAssertTrue(snapshot.contains("snapshotImage = nil"))
+        XCTAssertTrue(snapshot.contains("loadedPlaceID = nil"))
+        XCTAssertTrue(snapshot.contains("HomeLocationSnapshotDisplay.shouldShow"))
+        XCTAssertTrue(snapshot.contains("MKLookAroundSceneRequest"))
+        XCTAssertTrue(snapshot.contains("MKMapSnapshotter"))
+        XCTAssertTrue(screens.contains("mapOptions.mapType = .hybrid"))
         XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
         let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
@@ -115,6 +122,74 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertNotEqual(
             HomePlaceCardArt.photoURL(for: noodles),
             HomePlaceCardArt.photoURL(for: yakiniku)
+        )
+    }
+
+    func testHomeLocationSnapshotDoesNotKeepAnotherPlaceUnderlay() {
+        XCTAssertTrue(
+            HomeLocationSnapshotDisplay.shouldShow(
+                loadedPlaceID: "place-a",
+                placeID: "place-a"
+            )
+        )
+        XCTAssertFalse(
+            HomeLocationSnapshotDisplay.shouldShow(
+                loadedPlaceID: "place-a",
+                placeID: "place-b"
+            )
+        )
+        XCTAssertFalse(
+            HomeLocationSnapshotDisplay.shouldShow(
+                loadedPlaceID: nil,
+                placeID: "place-b"
+            )
+        )
+    }
+
+    func testPlaceBusinessMatchPolicyRejectsLooseSameNameAndNamelessNeighbors() {
+        let daan = CLLocationCoordinate2D(latitude: 25.0410, longitude: 121.5434)
+        let nearbySame = GooglePlaceMatch(
+            id: "same-block",
+            name: "竣師父牛肉麵",
+            address: "Da'an",
+            latitude: 25.0414,
+            longitude: 121.5434
+        )
+        let distantBranch = GooglePlaceMatch(
+            id: "other-branch",
+            name: "竣師父牛肉麵",
+            address: "Zhongxiao",
+            latitude: 25.0545,
+            longitude: 121.5434
+        )
+        let namelessNeighbor = GooglePlaceMatch(
+            id: "neighbor",
+            name: "Ceiling Grid Cafe",
+            address: "Next door",
+            latitude: 25.04115,
+            longitude: 121.5434
+        )
+
+        XCTAssertNotNil(
+            PlaceBusinessMatchPolicy.score(
+                name: "竣師父牛肉麵-大安店",
+                coordinate: daan,
+                match: nearbySame
+            )
+        )
+        XCTAssertNil(
+            PlaceBusinessMatchPolicy.score(
+                name: "竣師父牛肉麵-大安店",
+                coordinate: daan,
+                match: distantBranch
+            )
+        )
+        XCTAssertNil(
+            PlaceBusinessMatchPolicy.score(
+                name: "竣師父牛肉麵-大安店",
+                coordinate: daan,
+                match: namelessNeighbor
+            )
         )
     }
 
