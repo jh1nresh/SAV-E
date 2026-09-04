@@ -579,7 +579,10 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var savedPlaceGroups: [AtlasSavedPlaceGroupPresentation] {
-        AtlasPlacePresentation.groupedByRegion(presentation.savedPlaces)
+        AtlasPlacePresentation.cityRowsExcludingFeatured(
+            presentation.savedPlaces,
+            featuredID: featuredPlace?.id
+        )
     }
 
     private func regionTitle(for group: AtlasSavedPlaceGroupPresentation) -> String {
@@ -627,7 +630,7 @@ private struct HomeFeaturedPlaceHero: View {
     var body: some View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
-                placeID: place.id,
+                placeID: "hero.\(place.id)",
                 photoURL: place.photoURL,
                 latitude: place.latitude,
                 longitude: place.longitude
@@ -712,7 +715,7 @@ private struct HomeSavedPlaceRow: View {
     var body: some View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
-                placeID: place.id,
+                placeID: "row.\(place.id)",
                 photoURL: place.photoURL,
                 latitude: place.latitude,
                 longitude: place.longitude
@@ -761,12 +764,16 @@ private struct HomeSavedPlaceThumbnail: View {
 
     var body: some View {
         ZStack {
-            HomeLocationSnapshot(
-                placeID: placeID,
-                latitude: latitude,
-                longitude: longitude,
-                fallback: fallback
-            )
+            if photoURL == nil {
+                HomeLocationSnapshot(
+                    placeID: placeID,
+                    latitude: latitude,
+                    longitude: longitude,
+                    fallback: fallback
+                )
+            } else {
+                fallback
+            }
 
             if let photoURL {
                 CachedAsyncImage(url: photoURL) { phase in

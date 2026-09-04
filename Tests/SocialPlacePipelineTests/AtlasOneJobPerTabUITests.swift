@@ -30,6 +30,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(library.contains("Image(systemName: \"sparkles\")"))
         XCTAssertFalse(library.contains("Image(systemName: \"slider.horizontal.3\")"))
         XCTAssertTrue(library.contains("savedPlaceGroups"))
+        XCTAssertTrue(library.contains("cityRowsExcludingFeatured"))
+        XCTAssertTrue(library.contains("featuredID: featuredPlace?.id"))
         XCTAssertTrue(library.contains("regionTitle"))
         XCTAssertTrue(library.contains("group.places"))
         XCTAssertTrue(library.contains("HomeFeaturedPlaceHero"))
@@ -53,13 +55,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(row.contains("placeID: place.id"))
+        XCTAssertTrue(row.contains("placeID: \"row.\\(place.id)\""))
         XCTAssertTrue(row.contains("photoURL: place.photoURL"))
         XCTAssertTrue(row.contains("latitude: place.latitude"))
         XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
         XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(hero.contains("placeID: place.id"))
+        XCTAssertTrue(hero.contains("placeID: \"hero.\\(place.id)\""))
         XCTAssertTrue(hero.contains("photoURL: place.photoURL"))
         XCTAssertTrue(hero.contains("longitude: place.longitude"))
         XCTAssertTrue(hero.contains("home.photoHero"))
@@ -70,6 +72,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("cycleFeaturedPlace"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
         XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
+        XCTAssertTrue(thumbnail.contains("if photoURL == nil"))
         XCTAssertTrue(thumbnail.contains("placeID: placeID"))
         XCTAssertTrue(thumbnail.contains(".id(placeID)"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
@@ -237,6 +240,29 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertEqual(groups[0].places.map(\.id), ["taipei-new", "taipei-old"])
         XCTAssertEqual(groups[1].places.map(\.id), ["la-new", "la-old"])
         XCTAssertEqual(groups[2].places.map(\.id), ["unknown"])
+    }
+
+    @MainActor
+    func testCityRowsOmitTheFeaturedHeroSoThumbnailsDoNotDedupeAcrossSlots() {
+        let featured = place(id: "jun-shifu", region: "台北市")
+        let seoul = place(id: "li-ting-yuan", region: "Seoul")
+        let taipeiOlder = place(id: "other-taipei", region: "台北市")
+
+        let groups = AtlasPlacePresentation.cityRowsExcludingFeatured(
+            [featured, seoul, taipeiOlder],
+            featuredID: featured.id
+        )
+
+        XCTAssertEqual(groups.map(\.region), ["Seoul", "台北市"])
+        XCTAssertFalse(groups.contains { $0.places.contains(where: { $0.id == featured.id }) })
+        XCTAssertEqual(groups[0].places.map(\.id), ["li-ting-yuan"])
+        XCTAssertEqual(groups[1].places.map(\.id), ["other-taipei"])
+        XCTAssertTrue(
+            AtlasPlacePresentation.cityRowsExcludingFeatured(
+                [featured],
+                featuredID: featured.id
+            ).isEmpty
+        )
     }
 
     func testVisualParityPrefersTheLiveFiveTabHome() throws {
