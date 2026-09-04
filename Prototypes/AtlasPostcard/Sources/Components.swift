@@ -65,8 +65,16 @@ enum AtlasTabBarMetrics {
     static let itemHeight: CGFloat = 54
     static let minimumHitTarget: CGFloat = 44
     static let selectionHeight: CGFloat = 46
-    static let raisedControlDiameter: CGFloat = 50
+    /// Hairline on the coral Save circle. Counted in the chrome-fit check
+    /// because a centered stroke grows the optical disk past `diameter`.
+    static let raisedControlStrokeWidth: CGFloat = 0.8
+    /// #179 kept a 50pt disk inside the 62pt box (6pt geometric inset). The
+    /// glass pill still reads smaller than that box, so 50pt bursts the
+    /// visible chrome. Keep Save at or under the mint lozenge, minus stroke.
+    static let raisedControlDiameter: CGFloat = 44
     static let raisedControlOffsetY: CGFloat = 0
+    /// Same vertical inset as the mint selection lozenge, per side.
+    static var raisedControlChromeInset: CGFloat { (height - selectionHeight) / 2 }
     /// Breathing room between the pill and the slot edge, per side.
     static let pillInset: CGFloat = 4
     /// The lozenge may shrink independently of the 44pt button target.
@@ -89,9 +97,11 @@ enum AtlasTabBarMetrics {
     }
 
     static var raisedControlFitsBar: Bool {
+        let opticalHalf = (raisedControlDiameter + raisedControlStrokeWidth) / 2
         let centreY = height / 2 + raisedControlOffsetY
-        return centreY - raisedControlDiameter / 2 >= 0
-            && centreY + raisedControlDiameter / 2 <= height
+        let inset = raisedControlChromeInset
+        return centreY - opticalHalf >= inset
+            && centreY + opticalHalf <= height - inset
     }
 
     static func raisedControlFitsSlot(itemCount: Int) -> Bool {
@@ -128,7 +138,10 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                 )
                                 .overlay {
                                     Circle()
-                                        .stroke(.white.opacity(0.42), lineWidth: 0.8)
+                                        .stroke(
+                                            .white.opacity(0.42),
+                                            lineWidth: AtlasTabBarMetrics.raisedControlStrokeWidth
+                                        )
                                 }
                                 .offset(y: AtlasTabBarMetrics.raisedControlOffsetY)
                         } else if selection == item {
@@ -178,6 +191,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
         }
         .padding(.horizontal, AtlasTabBarMetrics.horizontalPadding)
         .frame(width: AtlasTabBarMetrics.width, height: AtlasTabBarMetrics.height)
+        .clipShape(Capsule())
     }
 
     @ViewBuilder
