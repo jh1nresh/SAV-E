@@ -101,6 +101,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     func testVisualParityPrefersTheLiveFiveTabHome() throws {
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         let workflow = try source(at: ".github/workflows/ci.yml")
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
         XCTAssertTrue(script.contains("priority=1"))
@@ -108,6 +109,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             workflow.contains(
                 "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding"
             )
+        )
+        XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
+        XCTAssertTrue(rail.contains("home.photoHero"))
+        XCTAssertTrue(rail.contains("pngRepresentation.count"))
+        XCTAssertTrue(
+            rail.contains("1_200_000"),
+            "Parity attach must wait for painted Home covers, not the pin fallback."
         )
     }
 
