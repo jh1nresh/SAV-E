@@ -96,6 +96,8 @@ final class SaveEntitlementWiringTests: XCTestCase {
     }
 
     /// Passport is a passive entry, but it still needs the Map Stamp proof.
+    /// Policy owns the Passport UI gate (keeps storefront types out of
+    /// ProfileView); the store method remains the shared stamp-only check.
     @MainActor
     func testPassportPaywallRequiresConfirmedMapStamp() {
         let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
@@ -105,6 +107,10 @@ final class SaveEntitlementWiringTests: XCTestCase {
             "Passport must not open Pro before the place-memory loop has worked once"
         )
         XCTAssertTrue(store.shouldPresentPaywallFromPassport(hasConfirmedMapStamp: true))
+
+        // Launch posture: purchasing is off, so even a stamped account sees no Pro row.
+        XCTAssertFalse(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: false))
+        XCTAssertFalse(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: true))
     }
 
     /// Only a refusal opens the reactive paywall. Warnings and allowances must not.
@@ -172,11 +178,16 @@ final class SaveEntitlementWiringTests: XCTestCase {
     }
 
     /// Passport Pro entry must reuse the shared stamp gate so a zero-Stamp
-    /// account cannot open the wall from Settings alone.
+    /// account cannot open the wall from Settings alone. Gate lives on the
+    /// access policy so Passport never imports entitlement storefront types.
     func testPassportProEntryUsesSharedStampGate() throws {
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        XCTAssertTrue(profile.contains("shouldPresentPaywallFromPassport"))
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
+        XCTAssertTrue(profile.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(profile.contains("hasConfirmedMapStamp: !passportPlaces.isEmpty"))
+        XCTAssertFalse(profile.contains("SaveEntitlementStore"))
+        XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
+        XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
     }
 
     // MARK: - Helpers

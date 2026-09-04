@@ -32,6 +32,14 @@ enum SAVEProAccessPolicy {
     /// ships (Ask or equivalent). Slice 1 contract.
     nonisolated static let enforcementEnabled = false
 
+    /// Passive Passport Pro entry. Purchasing must be live, and the user must
+    /// already have one confirmed Map Stamp so pricing never precedes place
+    /// memory. Kept on the policy (not `SaveEntitlementStore`) so Passport
+    /// source stays free of storefront types.
+    nonisolated static func shouldOfferProFromPassport(hasConfirmedMapStamp: Bool) -> Bool {
+        purchasingIsAvailable && hasConfirmedMapStamp
+    }
+
     /// Product identifiers, reserved ahead of App Store Connect creation.
     enum ProductID {
         nonisolated static let annual = "com.wanderly.app.pro.annual"

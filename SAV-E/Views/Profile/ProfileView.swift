@@ -131,10 +131,9 @@ struct ProfileView: View {
                                 showLanguageSettings = true
                             }
 
-                            if SAVEProAccessPolicy.purchasingIsAvailable,
-                               SaveEntitlementStore.shared.shouldPresentPaywallFromPassport(
+                            if SAVEProAccessPolicy.shouldOfferProFromPassport(
                                 hasConfirmedMapStamp: !passportPlaces.isEmpty
-                               ) {
+                            ) {
                                 SettingsRow(
                                     icon: "sparkles",
                                     title: languageSettings.localized(
