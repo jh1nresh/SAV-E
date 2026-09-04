@@ -243,7 +243,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     }
 
     @MainActor
-    func testCityRowsOmitTheFeaturedHeroSoThumbnailsDoNotDedupeAcrossSlots() {
+    func testCityRowsOmitTheFeaturedHeroSoThumbnailsDoNotShare() {
         let featured = place(id: "jun-shifu", region: "台北市")
         let seoul = place(id: "li-ting-yuan", region: "Seoul")
         let taipeiOlder = place(id: "other-taipei", region: "台北市")
