@@ -299,8 +299,9 @@ jobs:
       node-version: "22"
       working-directory: backend
       lockfile: backend/package-lock.json
-      check-script: test
-      audit-production: true
+      # Registry 503s are retried in backend `validate`, not the reusable audit step.
+      check-script: validate
+      audit-production: false
       job-key: save-backend
       timeout-minutes: 12
 
