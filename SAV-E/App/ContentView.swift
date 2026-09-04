@@ -507,6 +507,9 @@ struct ContentView: View {
                     currently: rootPath
                 )
             },
+            onUpdatePlace: { place in
+                try await mapVM.updatePlace(place)
+            },
             isRootTab: isRootTab
         )
         .environment(\.appLanguageSettings, languageSettings)

@@ -24,10 +24,13 @@ def missions(
     friends_empty: bool,
     has_shared_invite: bool,
     invite_url_available: bool,
+    has_unvisited_stamp: bool = False,
 ) -> list[str]:
     result: list[str] = []
     if waiting_clues >= 1:
         result.append("confirm_waiting_clue")
+    if has_unvisited_stamp:
+        result.append("mark_visited_stamp")
     if has_private_stamp or has_non_guide_stamp:
         result.append("share_recommendation")
     if friends_empty or (not has_shared_invite and invite_url_available):
@@ -70,6 +73,11 @@ def check_catalog_decision_table() -> None:
         "waiting clues show confirm only when share/invite do not apply",
     )
     expect(len(missions(1, True, True, True, False, True)) <= 3, "cap is 3")
+    expect(
+        missions(0, True, False, False, True, True, has_unvisited_stamp=True)
+        == ["mark_visited_stamp", "share_recommendation"],
+        "unvisited stamp shows return mark-visited mission",
+    )
 
 
 def check_sources(root: Path) -> None:
@@ -108,12 +116,20 @@ def check_sources(root: Path) -> None:
     )
     expect("Do not assign Judge from this ticket." in spec, "spec keeps human-gate close")
 
+    cover = profile.find("profile.cover")
+    streak = profile.find("profile.fieldStreak")
     stamp = profile.find("profile.stampLedger")
     strip = profile.find("PassportTodayOnSavvyStrip")
     pocket = profile.find("profile.controlPocket")
-    expect(stamp != -1 and strip != -1 and pocket != -1, "placement markers exist")
-    expect(stamp < strip, "strip follows stamp ledger")
+    expect(cover != -1 and streak != -1 and stamp != -1 and strip != -1 and pocket != -1, "placement markers exist")
+    expect(cover < streak, "field streak follows cover")
+    expect(streak < stamp, "collection follows field streak")
+    expect(stamp < strip, "strip follows collection ledger")
     expect(strip < pocket, "strip precedes control pocket")
+    expect("mark_visited_stamp" in catalog, "catalog id mark visited")
+    expect("profile.today.markVisitedStamp" in profile, "mark visited a11y id")
+    expect("SavePassportFieldStreakStore" in catalog, "field streak store is local")
+    expect("PassportFieldStreakStrip" in profile, "field streak strip exists")
 
     forbidden = (
         "SaveStoreKitService",
