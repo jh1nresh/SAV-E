@@ -485,7 +485,7 @@ private struct HomeSavedPlacesLibrary: View {
 
                                 ScrollView(.horizontal) {
                                     LazyHStack(spacing: AtlasSpacing.control) {
-                                        ForEach(group.places) { place in
+                                        ForEach(group.places.filter { $0.id != featuredPlace.id }) { place in
                                             HomeSavedPlaceRow(
                                                 place: place,
                                                 width: group.places.count == 1 ? 370 : 174,
@@ -631,9 +631,7 @@ private struct HomeFeaturedPlaceHero: View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
                 placeID: "hero.\(place.id)",
-                photoURL: place.photoURL,
-                latitude: place.latitude,
-                longitude: place.longitude
+                photoURL: place.photoURL
             )
                 .frame(height: 176)
                 .overlay(alignment: .bottom) {
@@ -716,9 +714,7 @@ private struct HomeSavedPlaceRow: View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
                 placeID: "row.\(place.id)",
-                photoURL: place.photoURL,
-                latitude: place.latitude,
-                longitude: place.longitude
+                photoURL: place.photoURL
             )
             .frame(width: width, height: 112)
             .overlay(alignment: .bottom) {
@@ -759,21 +755,10 @@ private struct HomeSavedPlaceRow: View {
 private struct HomeSavedPlaceThumbnail: View {
     let placeID: String
     let photoURL: URL?
-    let latitude: Double?
-    let longitude: Double?
 
     var body: some View {
         ZStack {
-            if photoURL == nil {
-                HomeLocationSnapshot(
-                    placeID: placeID,
-                    latitude: latitude,
-                    longitude: longitude,
-                    fallback: fallback
-                )
-            } else {
-                fallback
-            }
+            fallback
 
             if let photoURL {
                 CachedAsyncImage(url: photoURL) { phase in
@@ -782,6 +767,8 @@ private struct HomeSavedPlaceThumbnail: View {
                             .resizable()
                             .scaledToFill()
                     } else {
+                        // Nil or failing business photos stay on the pin.
+                        // Hybrid / Look Around must not read as this place's photo.
                         Color.clear
                     }
                 }
@@ -800,88 +787,6 @@ private struct HomeSavedPlaceThumbnail: View {
             .font(.system(size: 21, weight: .medium))
             .foregroundStyle(AtlasPalette.forest)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct HomeLocationSnapshot<Fallback: View>: View {
-    let placeID: String
-    let latitude: Double?
-    let longitude: Double?
-    let fallback: Fallback
-
-    @State private var snapshotImage: UIImage?
-    @State private var loadedPlaceID: String?
-
-    var body: some View {
-        Group {
-            if HomeLocationSnapshotDisplay.shouldShow(
-                loadedPlaceID: loadedPlaceID,
-                placeID: placeID
-            ), let snapshotImage {
-                Image(uiImage: snapshotImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                fallback
-            }
-        }
-        .task(id: snapshotID) {
-            snapshotImage = nil
-            loadedPlaceID = nil
-            await loadSnapshot()
-        }
-        .id(placeID)
-    }
-
-    private var snapshotID: String {
-        "\(placeID)|\(latitude.map(String.init) ?? "none")|\(longitude.map(String.init) ?? "none")"
-    }
-
-    private func loadSnapshot() async {
-        guard let latitude,
-              let longitude,
-              latitude.isFinite,
-              longitude.isFinite,
-              (-90...90).contains(latitude),
-              (-180...180).contains(longitude)
-        else { return }
-
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let mapOptions = MKMapSnapshotter.Options()
-        mapOptions.region = MKCoordinateRegion(
-            center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
-        )
-        mapOptions.size = CGSize(width: 720, height: 400)
-        mapOptions.scale = 2
-        mapOptions.mapType = .hybrid
-
-        if let snapshot = try? await MKMapSnapshotter(options: mapOptions).start(),
-           !Task.isCancelled {
-            snapshotImage = snapshot.image
-            loadedPlaceID = placeID
-        }
-
-        guard !Task.isCancelled,
-              let scene = try? await MKLookAroundSceneRequest(coordinate: coordinate).scene
-        else { return }
-
-        let lookAroundOptions = MKLookAroundSnapshotter.Options()
-        lookAroundOptions.size = CGSize(width: 720, height: 400)
-        if let snapshot = try? await MKLookAroundSnapshotter(
-            scene: scene,
-            options: lookAroundOptions
-        ).snapshot,
-           !Task.isCancelled {
-            snapshotImage = snapshot.image
-            loadedPlaceID = placeID
-        }
-    }
-}
-
-enum HomeLocationSnapshotDisplay {
-    static func shouldShow(loadedPlaceID: String?, placeID: String) -> Bool {
-        loadedPlaceID == placeID
     }
 }
 

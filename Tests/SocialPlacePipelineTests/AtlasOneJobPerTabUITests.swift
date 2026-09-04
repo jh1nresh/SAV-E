@@ -32,6 +32,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(library.contains("savedPlaceGroups"))
         XCTAssertTrue(library.contains("cityRowsExcludingFeatured"))
         XCTAssertTrue(library.contains("featuredID: featuredPlace?.id"))
+        XCTAssertTrue(library.contains("$0.id != featuredPlace.id"))
         XCTAssertTrue(library.contains("regionTitle"))
         XCTAssertTrue(library.contains("group.places"))
         XCTAssertTrue(library.contains("HomeFeaturedPlaceHero"))
@@ -57,13 +58,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(row.contains("placeID: \"row.\\(place.id)\""))
         XCTAssertTrue(row.contains("photoURL: place.photoURL"))
-        XCTAssertTrue(row.contains("latitude: place.latitude"))
         XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
         XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
         XCTAssertTrue(hero.contains("placeID: \"hero.\\(place.id)\""))
         XCTAssertTrue(hero.contains("photoURL: place.photoURL"))
-        XCTAssertTrue(hero.contains("longitude: place.longitude"))
         XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertFalse(hero.contains("home.hero.changeCover"))
         XCTAssertFalse(hero.contains("photo.stack"))
@@ -71,20 +70,15 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("placesWithPhotos"))
         XCTAssertFalse(screens.contains("cycleFeaturedPlace"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
-        XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
-        XCTAssertTrue(thumbnail.contains("if photoURL == nil"))
-        XCTAssertTrue(thumbnail.contains("placeID: placeID"))
         XCTAssertTrue(thumbnail.contains(".id(placeID)"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
         XCTAssertTrue(thumbnail.contains("fallback"))
-        let snapshot = try typeBody("HomeLocationSnapshot", in: screens)
-        XCTAssertTrue(snapshot.contains("placeID"))
-        XCTAssertTrue(snapshot.contains("snapshotImage = nil"))
-        XCTAssertTrue(snapshot.contains("loadedPlaceID = nil"))
-        XCTAssertTrue(snapshot.contains("HomeLocationSnapshotDisplay.shouldShow"))
-        XCTAssertTrue(snapshot.contains("MKLookAroundSceneRequest"))
-        XCTAssertTrue(snapshot.contains("MKMapSnapshotter"))
-        XCTAssertTrue(screens.contains("mapOptions.mapType = .hybrid"))
+        XCTAssertTrue(thumbnail.contains("Color.clear"))
+        XCTAssertFalse(thumbnail.contains("HomeLocationSnapshot"))
+        XCTAssertFalse(thumbnail.contains("MKLookAroundSceneRequest"))
+        XCTAssertFalse(thumbnail.contains("MKMapSnapshotter"))
+        XCTAssertFalse(screens.contains("MKLookAroundSceneRequest"))
+        XCTAssertFalse(screens.contains("mapOptions.mapType = .hybrid"))
         XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
         let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
@@ -125,27 +119,6 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertNotEqual(
             HomePlaceCardArt.photoURL(for: noodles),
             HomePlaceCardArt.photoURL(for: yakiniku)
-        )
-    }
-
-    func testHomeLocationSnapshotDoesNotKeepAnotherPlaceUnderlay() {
-        XCTAssertTrue(
-            HomeLocationSnapshotDisplay.shouldShow(
-                loadedPlaceID: "place-a",
-                placeID: "place-a"
-            )
-        )
-        XCTAssertFalse(
-            HomeLocationSnapshotDisplay.shouldShow(
-                loadedPlaceID: "place-a",
-                placeID: "place-b"
-            )
-        )
-        XCTAssertFalse(
-            HomeLocationSnapshotDisplay.shouldShow(
-                loadedPlaceID: nil,
-                placeID: "place-b"
-            )
         )
     }
 
