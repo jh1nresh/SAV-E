@@ -3462,6 +3462,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(stats.cityNames, ["臺北市", "臺南市"])
     }
 
+    @MainActor
     func testPassportTodayCatalogHidesWhenNoLiveMissionsApply() {
         let missions = SavePassportTodayCatalog.missions(
             waitingClues: 0,
@@ -3474,6 +3475,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(missions.isEmpty)
     }
 
+    @MainActor
     func testPassportTodayCatalogOrdersConfirmShareInviteAndCapsAtThree() {
         var privateStamp = place(name: "Private Cafe", address: "Irvine, CA", category: .cafe)
         privateStamp.visibility = .privateMemory
@@ -3499,6 +3501,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testPassportTodayShareMissionSkipsOriginConsumedPublicGuideStamps() {
         var friendsOnly = place(name: "Friends Dinner", address: "Irvine, CA", category: .food)
         friendsOnly.visibility = .friends
@@ -3528,6 +3531,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(none.isEmpty)
     }
 
+    @MainActor
     func testPassportTodayInviteMissionUsesEmptyFriendsOrNeverSharedInvite() {
         let friend = SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)
 
@@ -3559,6 +3563,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(noInviteURL.isEmpty)
     }
 
+    @MainActor
     func testPassportTodayAccessibilityIdentifiersStayStable() {
         XCTAssertEqual(
             SavePassportTodayMissionID.confirmWaitingClue.accessibilityIdentifier,
@@ -3577,6 +3582,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(SavePassportTodayMissionID.inviteOrFollowFriend.rawValue, "invite_or_follow_friend")
     }
 
+    @MainActor
     func testPassportInviteShareStoreIsLocalFlagNotAGrantPath() {
         let suite = "save.passport.today.invite.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
