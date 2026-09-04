@@ -554,24 +554,8 @@ struct SaveAtlasInteractiveRootMap: View {
             .clipped()
             .placed(x: 0, y: 0, width: 402, height: 874)
 
-            HStack(spacing: 7) {
-                Image(systemName: "star.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AtlasPalette.forest)
-                Text("\(presentation.mapStampCount) Map Stamps")
-                    .font(AtlasType.display(12))
-                    .foregroundStyle(AtlasPalette.ink)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay {
-                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
-            }
-            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
-            .placed(x: 16, y: 56, width: 139, height: 38)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("map.stampCount")
+            // Apple Maps reference: top stays empty (weather only when wired).
+            // Stamp count rides on search accessibility, not a persistent chip.
 
             if let place = mapViewModel.selectedPlace {
                 SaveAtlasLivePlaceCard(
@@ -591,10 +575,11 @@ struct SaveAtlasInteractiveRootMap: View {
             } else if !hidesCommandShelf {
                 SaveAtlasMapCommandShelf(
                     mapStampCount: presentation.mapStampCount,
-                    onOpenAssistant: presentation.onOpenAssistant
+                    onOpenAssistant: presentation.onOpenAssistant,
+                    onOpenPassport: presentation.onOpenPassport
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .placed(x: 15, y: 718, width: 372, height: 68)
+                .placed(x: 15, y: 730, width: 372, height: 56)
             }
         }
         .animation(SaveTheme.Motion.standardSpring, value: mapViewModel.selectedPlace?.id)
@@ -606,59 +591,72 @@ struct SaveAtlasInteractiveRootMap: View {
     }
 }
 
-/// Collapsed Map search stop: Apple Maps–style floating frosted pill.
+/// Collapsed Map search stop: Apple Maps floating frosted search capsule.
 ///
-/// Medium and large stops stay on `SaveMapDrawerPanel`. This chrome only
-/// adapts the parked map glass (`.ultraThinMaterial` capsule) so search
-/// floats over the map instead of reading as a cream card or top bar.
+/// Matches the founder Apple Maps reference: one-row pill (no grabber),
+/// magnifier + placeholder + mic + trailing identity control. Medium/large
+/// stops stay on `SaveMapDrawerPanel`.
 struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
+    let onOpenPassport: () -> Void
 
     var body: some View {
-        Button(action: onOpenAssistant) {
-            VStack(spacing: 7) {
-                Capsule()
-                    .fill(AtlasPalette.line.opacity(0.48))
-                    .frame(width: 36, height: 5)
-                    .accessibilityHidden(true)
-
+        HStack(spacing: 10) {
+            Button(action: onOpenAssistant) {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.muted)
+                        .foregroundStyle(Color.primary.opacity(0.45))
                         .frame(width: 22, height: 22)
                         .accessibilityHidden(true)
 
                     Text("Search places")
-                        .font(AtlasType.body(16))
-                        .foregroundStyle(AtlasPalette.muted)
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(Color.primary.opacity(0.45))
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.muted)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.45))
                         .frame(width: 22, height: 22)
                         .accessibilityHidden(true)
                 }
-                .padding(.horizontal, 16)
-                .frame(minHeight: 52)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 0.8)
-                }
-                .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 5)
+                .padding(.leading, 14)
+                .padding(.trailing, 8)
+                .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+                .contentShape(Capsule())
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Search places")
+            .accessibilityHint("Opens the Savvy assistant")
+            .accessibilityValue("\(mapStampCount) saved Map Stamps")
+            .accessibilityIdentifier("map.command.search")
+
+            // Apple Maps puts the account avatar inside the search capsule.
+            // Savvy opens Passport from the same trailing slot.
+            Button(action: onOpenPassport) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 28, weight: .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(AtlasPalette.forest.opacity(0.85))
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 8)
+            .accessibilityLabel("Open Passport")
+            .accessibilityIdentifier("map.command.passport")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Search places")
-        .accessibilityHint("Opens the Savvy assistant")
-        .accessibilityValue("\(mapStampCount) saved Map Stamps")
-        .accessibilityIdentifier("map.command.search")
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+        .background(.regularMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+        }
+        .shadow(color: Color.black.opacity(0.12), radius: 16, y: 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 
@@ -745,17 +743,19 @@ private struct SaveAtlasLivePlaceCard: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Apple Maps selected-place peek is frosted glass over the map.
+        // Full Memory Card detail stays notebook paper outside Map chrome.
         .background(
-            AtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
         }
-        .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+        .shadow(color: Color.black.opacity(0.14), radius: 18, y: 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.place.card")
     }
@@ -763,21 +763,17 @@ private struct SaveAtlasLivePlaceCard: View {
     private func mapCardIcon(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(AtlasPalette.ink)
-            .frame(width: 44, height: 44)
-            .background(AtlasPalette.canvas.opacity(0.88), in: Circle())
+            .foregroundStyle(Color.primary.opacity(0.72))
+            .frame(width: 36, height: 36)
+            .background(.thinMaterial, in: Circle())
     }
 
     private func mapCardActionIcon(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(AtlasPalette.ink)
+            .foregroundStyle(Color.primary.opacity(0.72))
             .frame(width: 44, height: 44)
-            .background(AtlasPalette.kraft.opacity(0.72), in: RoundedRectangle(cornerRadius: 11))
-            .overlay {
-                RoundedRectangle(cornerRadius: 11)
-                    .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-            }
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
     private func primaryLocation(for place: Place) -> String {

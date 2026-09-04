@@ -701,7 +701,8 @@ struct ContentView: View {
                 onExpand: { focusesSearch in
                     openDrawer(.ask, tripID: nil, focusesSearch: focusesSearch)
                 },
-                onCollapse: collapseMapPanel
+                onCollapse: collapseMapPanel,
+                onOpenPassport: openPassport
             ) {
                 drawerView
             }
