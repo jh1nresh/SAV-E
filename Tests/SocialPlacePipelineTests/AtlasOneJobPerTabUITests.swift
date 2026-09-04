@@ -321,13 +321,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("mic.fill"))
         XCTAssertTrue(map.contains(".regularMaterial, in: Capsule()"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
+        XCTAssertTrue(map.contains("map.command.passport"))
         XCTAssertTrue(
-            map.contains("accessibilityIdentifier(\"map.stampCount\")"),
-            "Map keeps the compact stamp-count chip from the Apple Maps chrome pass."
+            map.contains(".regularMaterial"),
+            "Selected place peek matches Apple Maps frosted card shell."
         )
-        XCTAssertTrue(
-            map.contains("AtlasPalette.paper"),
-            "Selected place peek stays notebook paper, not washed glass."
+        XCTAssertFalse(
+            map.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Apple Maps reference keeps Map top empty; no persistent stamp chip."
         )
         XCTAssertFalse(
             map.contains("slider.horizontal.3"),
@@ -348,11 +349,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
         XCTAssertTrue(root.contains("SaveMapDrawerPanel("))
         XCTAssertTrue(root.contains("hidesCommandShelf: true"))
+        XCTAssertTrue(root.contains("onOpenPassport: openPassport"))
         XCTAssertTrue(panel.contains("case collapsed"))
         XCTAssertTrue(panel.contains("case medium"))
         XCTAssertTrue(panel.contains("case large"))
         XCTAssertTrue(panel.contains("map.drawerPanel.collapsed"))
         XCTAssertTrue(panel.contains("SaveAtlasMapCommandShelf("))
+        XCTAssertTrue(panel.contains("onOpenPassport: onOpenPassport"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(
             panel.contains("AtlasPalette.canvas"),
@@ -360,17 +363,22 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
         XCTAssertFalse(
             panel.contains(".regularMaterial"),
-            "Expanded drawer must not use washed glass over notebook content."
+            "Expanded drawer must not use glass over notebook content."
         )
         XCTAssertTrue(shelf.contains("map.command.search"))
+        XCTAssertTrue(shelf.contains("map.command.passport"))
         XCTAssertTrue(shelf.contains(".regularMaterial, in: Capsule()"))
         XCTAssertTrue(
-            shelf.contains("AtlasPalette.paper"),
-            "Place peek restores notebook paper from the prior Apple Maps chrome."
+            shelf.contains("person.crop.circle.fill"),
+            "Search capsule carries Passport in the Apple Maps avatar slot."
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
-            "Stamp-count chip returns with the restored Apple Maps Map chrome."
+            "Persistent top stamp chip stays off to match Apple Maps empty top."
+        )
+        XCTAssertFalse(
+            shelf.contains("frame(width: 36, height: 5)"),
+            "Collapsed search has no grabber; Apple Maps idle search is a single capsule."
         )
         XCTAssertFalse(shelf.contains(".glassEffect("))
         XCTAssertFalse(map.contains("TextField"))
@@ -381,6 +389,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             "Locate stays Apple Maps bottom-trailing above floating chrome."
         )
         XCTAssertTrue(map.contains("padding(.bottom, bottomChromeInset)"))
+        XCTAssertTrue(
+            map.contains(".regularMaterial, in: Circle()"),
+            "Locate uses frosted circular glass like Apple Maps."
+        )
         XCTAssertFalse(
             map.contains("alignment: .topTrailing"),
             "Locate must not return to the pre-#184 top-trailing burial workaround."

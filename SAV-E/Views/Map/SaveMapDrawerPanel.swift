@@ -16,11 +16,13 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     /// the card shouldn't summon the keyboard; tapping the field should.
     let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
+    let onOpenPassport: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
     /// Keeps the collapsed floating pill clear of the root tab bar.
     private let collapsedBottomInset: CGFloat = 88
-    private let collapsedHeight: CGFloat = 72
+    /// Apple Maps search capsule is one row (~48) plus breathing room.
+    private let collapsedHeight: CGFloat = 56
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -47,9 +49,10 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
             onOpenAssistant: {
                 guard !collapsedDragConsumedTap else { return }
                 onExpand(true)
-            }
+            },
+            onOpenPassport: onOpenPassport
         )
-        .frame(height: 68)
+        .frame(height: collapsedHeight)
         .padding(.horizontal, 15)
         .padding(.bottom, collapsedBottomInset)
         .offset(y: max(-96, min(0, dragTranslation)))

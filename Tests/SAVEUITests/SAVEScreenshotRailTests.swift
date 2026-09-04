@@ -1266,11 +1266,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(
             app.descendants(matching: .any)["map.command.search"].waitForExistence(timeout: stepTimeout),
-            "Map geography-first chrome is the floating search shelf, not a Savvy lockup."
+            "Map geography-first chrome is the floating Apple Maps search capsule."
         )
         XCTAssertTrue(
-            app.descendants(matching: .any)["map.stampCount"].waitForExistence(timeout: stepTimeout),
-            "Map restores the compact stamp-count chip from the prior Apple Maps chrome."
+            app.descendants(matching: .any)["map.command.passport"].waitForExistence(timeout: stepTimeout),
+            "Passport opens from the Apple Maps avatar slot inside the search capsule."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.stampCount"].exists,
+            "Apple Maps reference keeps Map top empty; no persistent stamp chip."
         )
         XCTAssertFalse(
             app.descendants(matching: .any)["root.passport"].exists,

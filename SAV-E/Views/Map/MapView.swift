@@ -37,8 +37,8 @@ struct MapView: View {
             let bottomChromeInset = isEmbeddedCrop
                 ? max(geo.safeAreaInsets.bottom + 18, 28)
                 : max(
-                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 156 : 248),
-                    viewModel.selectedPlace == nil ? 168 : 260
+                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
+                    viewModel.selectedPlace == nil ? 160 : 252
                 )
 
             ZStack {
@@ -367,17 +367,20 @@ private struct CurrentLocationButton: View {
                     ProgressView()
                         .tint(controlForeground)
                 } else {
+                    // Apple Maps reference uses the filled location glyph in a
+                    // frosted circular control above the search capsule.
                     Image(systemName: "location.fill")
-                        .font(.system(size: 21, weight: .semibold))
-                        .foregroundColor(controlForeground)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(controlForeground)
                 }
             }
-            .frame(width: 54, height: 54)
-            .background(.ultraThinMaterial, in: Circle())
+            .frame(width: 48, height: 48)
+            .background(.regularMaterial, in: Circle())
             .overlay {
                 Circle()
-                    .stroke(controlStroke, lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
             }
+            .shadow(color: Color.black.opacity(0.12), radius: 12, y: 4)
         }
         .buttonStyle(.plain)
         .disabled(isLocating)
@@ -385,12 +388,8 @@ private struct CurrentLocationButton: View {
         .accessibilityHint(languageSettings.localized(english: "Moves the map back to where you are now", traditionalChinese: "把地圖移回你現在所在的位置"))
     }
 
-    private var controlStroke: Color {
-        colorScheme == .dark ? Color.white.opacity(0.16) : Color.saveNotebookLine.opacity(0.26)
-    }
-
     private var controlForeground: Color {
-        colorScheme == .dark ? .white : .saveInk
+        colorScheme == .dark ? .white : Color.primary.opacity(0.78)
     }
 }
 
