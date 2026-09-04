@@ -224,6 +224,50 @@ final class AccountSessionGateTests: XCTestCase {
         )
     }
 
+    func testRebindFromRestoredSessionStillLandsInExplicitConfirmation() async {
+        // Production trap on build 109: Privy session restores on launch
+        // (origin == .restored), stale Keychain ref → differentAccount, user
+        // taps re-link, but re-verify kept .restored and landed in
+        // unconfirmedRestoredAccount with no confirm button — wipe was the
+        // only escape. Re-link consent must force .interactive verify.
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        let gate = AccountSessionGate(
+            statusProvider: StubAccountStatusProvider(
+                response: response(.ready, ref: secondRef, stamps: 70, reviewItems: 12, accountRefMatch: .none)
+            ),
+            referenceStore: store
+        )
+        await gate.verify(sessionGeneration: 9, sessionOrigin: .restored, reviewerDemo: false)
+        XCTAssertEqual(gate.state, .recoveryNeeded(.differentAccount))
+
+        await gate.resetDeviceBinding(sessionGeneration: 9, sessionOrigin: .restored, reviewerDemo: false)
+
+        XCTAssertNil(store.value)
+        XCTAssertEqual(
+            gate.state,
+            .accountNeedsConfirmation(.existingAccount(stamps: 70, reviewItems: 12))
+        )
+        XCTAssertNotEqual(gate.state, .recoveryNeeded(.unconfirmedRestoredAccount))
+    }
+
+    func testPrepareAccountSwitchClearsStaleDifferentAccountReference() async {
+        let store = InMemoryAccountReferenceStore(value: firstRef)
+        let gate = AccountSessionGate(
+            statusProvider: StubAccountStatusProvider(
+                response: response(.ready, ref: secondRef, accountRefMatch: .none)
+            ),
+            referenceStore: store
+        )
+        await gate.verify(sessionGeneration: 11, sessionOrigin: .restored, reviewerDemo: false)
+        XCTAssertEqual(gate.state, .recoveryNeeded(.differentAccount))
+
+        gate.prepareAccountSwitch()
+
+        XCTAssertNil(store.value)
+        XCTAssertEqual(store.clearCount, 1)
+        XCTAssertEqual(gate.state, .idle)
+    }
+
     func testRebindIsANoOpOutsideTheDifferentAccountRecoveryState() async {
         let store = InMemoryAccountReferenceStore(value: firstRef)
         let gate = AccountSessionGate(
