@@ -218,9 +218,9 @@ final class SavePassportFieldStreakStore {
 
         var streak = 0
         var cursor = date(fromDayKey: startKey)
-        while let cursor, keys.contains(dayKey(for: cursor)) {
+        while let current = cursor, keys.contains(dayKey(for: current)) {
             streak += 1
-            cursor = dateOffset(-1, from: cursor)
+            cursor = dateOffset(-1, from: current)
         }
         return streak
     }
