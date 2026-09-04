@@ -593,6 +593,9 @@ Rules:
 
 - Place identity first.
 - Evidence second.
+- Add to Trip is the one coral primary. Plan around this sits beside it as a
+  paper secondary. Do not restyle Plan around as honey or a second coral
+  button.
 - Destructive actions in overflow.
 - Source link clickable when available.
 

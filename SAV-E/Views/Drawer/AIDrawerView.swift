@@ -2365,24 +2365,45 @@ private struct SavedMapDetailDrawerContent: View {
                 }
             }
 
-            Button(action: onAddToTrip) {
-                Label(
-                    languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"),
-                    systemImage: "suitcase.rolling.fill"
-                )
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(SaveAtlasPalette.coral)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
-                )
+            HStack(spacing: 8) {
+                Button(action: onAddToTrip) {
+                    Label(
+                        languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"),
+                        systemImage: "suitcase.rolling.fill"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.saved.addToTrip")
+
+                Button(action: onPlanAroundPlace) {
+                    Label(
+                        languageSettings.localized(english: "Plan around this", traditionalChinese: "用這裡規劃"),
+                        systemImage: "point.topleft.down.curvedto.point.bottomright.up"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.54), lineWidth: 1.4)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.saved.planAround")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("drawer.saved.addToTrip")
 
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
@@ -2436,17 +2457,6 @@ private struct SavedMapDetailDrawerContent: View {
                         )
                     }
                 }
-            }
-
-            Button(action: onPlanAroundPlace) {
-                PlaceDetailActionLabel(
-                    title: languageSettings.localized(
-                        english: "Plan around this Map Stamp",
-                        traditionalChinese: "以這個地圖章規劃"
-                    ),
-                    systemImage: "point.topleft.down.curvedto.point.bottomright.up",
-                    fill: SaveAtlasPalette.honey.opacity(0.62)
-                )
             }
 
             // One fact, one home: rating/price live in the chips row, hours in
