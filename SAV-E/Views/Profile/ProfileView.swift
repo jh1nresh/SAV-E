@@ -141,7 +141,9 @@ struct ProfileView: View {
                                 showLanguageSettings = true
                             }
 
-                            if SAVEProAccessPolicy.purchasingIsAvailable {
+                            if SAVEProAccessPolicy.shouldOfferProFromPassport(
+                                hasConfirmedMapStamp: !passportPlaces.isEmpty
+                            ) {
                                 SettingsRow(
                                     icon: "sparkles",
                                     title: languageSettings.localized(
