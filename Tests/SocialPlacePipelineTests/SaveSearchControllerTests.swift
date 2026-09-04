@@ -3592,6 +3592,7 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
 
+    @MainActor
     func testPassportInviteShareStoreIsLocalFlagNotAGrantPath() {
         let suite = "save.passport.today.invite.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -3650,6 +3651,7 @@ final class SaveSearchControllerTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
+    @MainActor
     func testMapFilterActionDoesNotHideSavedPins() {
         let focusedPlace = place(name: "Focused Stop", address: "Irvine, CA", category: .cafe)
         let otherSavedPlace = place(name: "Other Saved", address: "Irvine, CA", category: .food)
