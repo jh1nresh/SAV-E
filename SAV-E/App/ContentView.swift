@@ -554,7 +554,14 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    selectRootTab(.plan)
+                                    // Trips stays a demoted child route (same
+                                    // pattern as Saves). Plan is the root-tab
+                                    // workbench that replaced Origin — not the
+                                    // Home Trips destination.
+                                    rootPath = SaveChromeNavigation.pathByOpening(
+                                        .trips,
+                                        currently: rootPath
+                                    )
                                 },
                                 onOpenTrip: {
                                     rootPath = SaveChromeNavigation.pathByOpening(

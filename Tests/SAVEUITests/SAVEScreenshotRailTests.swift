@@ -1773,17 +1773,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = firstExisting(candidates, timeout: stepTimeout)
         XCTAssertTrue(entry.exists, "Missing Home Trips entry")
         tapReachable(entry)
-        let plan = app.descendants(matching: .any)["plan.root"]
         let trips = app.descendants(matching: .any)["trips.home"]
-        if !plan.waitForExistence(timeout: timeout(5)) && !trips.waitForExistence(timeout: timeout(2)) {
-            if app.descendants(matching: .any)["profile.root"].exists {
+        if !trips.waitForExistence(timeout: timeout(5)) {
+            if app.descendants(matching: .any)["profile.root"].exists
+                || app.descendants(matching: .any)["plan.root"].exists {
                 openRootTab("Home", app: app)
             }
             tapReachable(firstExisting(candidates, timeout: timeout(2)))
         }
         XCTAssertTrue(
-            plan.waitForExistence(timeout: stepTimeout) || trips.waitForExistence(timeout: timeout(2)),
-            "Home Trips entry did not open Plan"
+            trips.waitForExistence(timeout: stepTimeout),
+            "Home Trips entry did not open Trips"
         )
     }
 
