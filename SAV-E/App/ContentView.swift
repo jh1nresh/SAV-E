@@ -449,9 +449,6 @@ struct ContentView: View {
             onUpdatePlaceVisibility: { place, visibility in
                 try await mapVM.updatePlaceVisibility(place, visibility: visibility)
             },
-            onUpdatePlace: { place in
-                try await mapVM.updatePlace(place)
-            },
             onCreateList: { title, note in
                 _ = mapVM.createCollaborativeList(title: title, note: note)
             },
@@ -509,6 +506,9 @@ struct ContentView: View {
                     .saves,
                     currently: rootPath
                 )
+            },
+            onUpdatePlace: { place in
+                try await mapVM.updatePlace(place)
             },
             isRootTab: isRootTab
         )
