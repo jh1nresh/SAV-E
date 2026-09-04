@@ -99,7 +99,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         var yakiniku = savedPlace(name: "利庭園燒肉")
         yakiniku.businessPhotoUrls = ["https://example.com/li-ting-yuan.jpg"]
 
-        var missingPhoto = savedPlace(name: "No Photo Cafe")
+        let missingPhoto = savedPlace(name: "No Photo Cafe")
         var sourceOnly = savedPlace(name: "Source Only Noodles")
         sourceOnly.sourceImageUrl = "https://example.com/jun-shifu-source.jpg"
 
@@ -122,6 +122,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
     }
 
+    @MainActor
     func testPlaceBusinessMatchPolicyRejectsLooseSameNameAndNamelessNeighbors() {
         let daan = CLLocationCoordinate2D(latitude: 25.0410, longitude: 121.5434)
         let nearbySame = GooglePlaceMatch(
@@ -169,6 +170,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
     }
 
+    @MainActor
     func testCachedAsyncImageDoesNotPaintAnotherURLWhileReused() {
         let first = URL(string: "https://example.com/place-a.jpg")
         let second = URL(string: "https://example.com/place-b.jpg")
