@@ -543,6 +543,8 @@ final class MapViewModel: ObservableObject {
         self.supabaseService = supabaseService
         self.mapCandidatePlaceSaver = mapCandidatePlaceSaver ?? { place, userID in
             try await supabaseService.savePlace(place, userId: userID)
+            // Record from the store directly: this closure runs before `self` is usable.
+            SavePassportFieldStreakStore.shared.recordFieldAction()
         }
         self.mapCandidateUserIDProvider = mapCandidateUserIDProvider ?? {
             PrivyAuthService.shared.currentUserId
@@ -784,6 +786,7 @@ final class MapViewModel: ObservableObject {
 
             do {
                 try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
                 importedPlaces.append(place)
             } catch {
                 failedImports.append(pendingPlace)
@@ -1137,6 +1140,7 @@ final class MapViewModel: ObservableObject {
             )
         } else {
             try await supabaseService.savePlace(place, userId: userId)
+            recordPassportFieldActionAfterSavingPlace()
             do {
                 try await recordCorrectionEvent(
                     for: candidate,
@@ -1327,6 +1331,7 @@ final class MapViewModel: ObservableObject {
         if let userId = authService.currentUserId {
             do {
                 try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
             } catch {
                 print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
                 syncFailedPlaceName = place.name
@@ -1380,6 +1385,7 @@ final class MapViewModel: ObservableObject {
         if let userId = authService.currentUserId {
             do {
                 try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
             } catch {
                 print("MapViewModel: failed to sync social place \(place.name): \(error)")
             }
@@ -1630,6 +1636,7 @@ final class MapViewModel: ObservableObject {
         if let userId = authService.currentUserId {
             do {
                 try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
             } catch {
                 print("MapViewModel: failed to sync list item \(place.name): \(error)")
             }
@@ -2531,6 +2538,11 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+
+    private func recordPassportFieldActionAfterSavingPlace() {
+        SavePassportFieldStreakStore.shared.recordFieldAction()
+    }
+
     func updatePlace(_ place: Place) async throws {
         guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
         let previousPlace = places[index]
@@ -2543,6 +2555,12 @@ final class MapViewModel: ObservableObject {
         do {
             try await supabaseService.updatePlace(place)
             mirrorToLocalVault(place)
+            if place.status == .visited || previousPlace.status != place.status {
+                // Visited flips and other durable memory edits count as field actions.
+                if place.status == .visited {
+                    SavePassportFieldStreakStore.shared.recordFieldAction()
+                }
+            }
         } catch {
             places[index] = previousPlace
             if selectedPlace?.id == place.id {
@@ -2685,6 +2703,7 @@ final class MapViewModel: ObservableObject {
             existingKeys: existingKeys,
             persist: { place in
                 try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
             },
             didPersist: { place in
                 places.insert(place, at: 0)
