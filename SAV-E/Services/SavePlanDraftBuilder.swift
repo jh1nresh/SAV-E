@@ -156,7 +156,10 @@ enum SavePlanDraftBuilder {
         var terms = [trimmed]
         if trimmed.contains("台北") || trimmed.contains("臺北") { terms.append("taipei") }
         if trimmed.lowercased().contains("taipei") { terms.append("台北") }
-        return terms
+        return terms.map {
+            $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+        }
     }
 
     private static func pacePhrase(_ pace: ItineraryPace, query: String) -> String {
