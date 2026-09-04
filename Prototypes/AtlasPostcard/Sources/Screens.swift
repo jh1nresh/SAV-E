@@ -627,9 +627,8 @@ private struct HomeFeaturedPlaceHero: View {
     var body: some View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
-                photoURL: place.photoURL,
-                latitude: place.latitude,
-                longitude: place.longitude
+                placeID: place.id,
+                photoURL: place.photoURL
             )
                 .frame(height: 176)
                 .overlay(alignment: .bottom) {
@@ -711,9 +710,8 @@ private struct HomeSavedPlaceRow: View {
     var body: some View {
         Button(action: onOpen) {
             HomeSavedPlaceThumbnail(
-                photoURL: place.photoURL,
-                latitude: place.latitude,
-                longitude: place.longitude
+                placeID: place.id,
+                photoURL: place.photoURL
             )
             .frame(width: width, height: 112)
             .overlay(alignment: .bottom) {
@@ -752,17 +750,12 @@ private struct HomeSavedPlaceRow: View {
 }
 
 private struct HomeSavedPlaceThumbnail: View {
+    let placeID: String
     let photoURL: URL?
-    let latitude: Double?
-    let longitude: Double?
 
     var body: some View {
         ZStack {
-            HomeLocationSnapshot(
-                latitude: latitude,
-                longitude: longitude,
-                fallback: fallback
-            )
+            fallback
 
             if let photoURL {
                 CachedAsyncImage(url: photoURL) { phase in
@@ -774,8 +767,10 @@ private struct HomeSavedPlaceThumbnail: View {
                         Color.clear
                     }
                 }
+                .id(photoURL)
             }
         }
+        .id(placeID)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AtlasPalette.mint.opacity(0.48))
         .clipped()
@@ -787,73 +782,6 @@ private struct HomeSavedPlaceThumbnail: View {
             .font(.system(size: 21, weight: .medium))
             .foregroundStyle(AtlasPalette.forest)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct HomeLocationSnapshot<Fallback: View>: View {
-    let latitude: Double?
-    let longitude: Double?
-    let fallback: Fallback
-
-    @State private var snapshotImage: UIImage?
-
-    var body: some View {
-        Group {
-            if let snapshotImage {
-                Image(uiImage: snapshotImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                fallback
-            }
-        }
-        .task(id: snapshotID) {
-            await loadSnapshot()
-        }
-    }
-
-    private var snapshotID: String {
-        guard let latitude, let longitude else { return "none" }
-        return "\(latitude),\(longitude)"
-    }
-
-    private func loadSnapshot() async {
-        guard let latitude,
-              let longitude,
-              latitude.isFinite,
-              longitude.isFinite,
-              (-90...90).contains(latitude),
-              (-180...180).contains(longitude)
-        else { return }
-
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let mapOptions = MKMapSnapshotter.Options()
-        mapOptions.region = MKCoordinateRegion(
-            center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
-        )
-        mapOptions.size = CGSize(width: 720, height: 400)
-        mapOptions.scale = 2
-        mapOptions.mapType = .hybrid
-
-        if let snapshot = try? await MKMapSnapshotter(options: mapOptions).start(),
-           !Task.isCancelled {
-            snapshotImage = snapshot.image
-        }
-
-        guard !Task.isCancelled,
-              let scene = try? await MKLookAroundSceneRequest(coordinate: coordinate).scene
-        else { return }
-
-        let lookAroundOptions = MKLookAroundSnapshotter.Options()
-        lookAroundOptions.size = CGSize(width: 720, height: 400)
-        if let snapshot = try? await MKLookAroundSnapshotter(
-            scene: scene,
-            options: lookAroundOptions
-        ).snapshot,
-           !Task.isCancelled {
-            snapshotImage = snapshot.image
-        }
     }
 }
 

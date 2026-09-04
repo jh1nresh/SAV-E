@@ -6,6 +6,14 @@ enum SaveAtlasRuntime {
     }
 }
 
+/// Home card art for one saved place. The URL is taken only from that place;
+/// a missing photo is a deliberate placeholder, never another row's image.
+enum HomePlaceCardArt {
+    static func photoURL(for place: Place) -> URL? {
+        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+}
+
 @MainActor
 enum SaveAtlasPresentationFactory {
     static func root(
@@ -407,7 +415,7 @@ enum SaveAtlasPresentationFactory {
             name: place.name,
             area: place.shareAreaLabel.nonEmpty ?? place.address,
             region: SavedPlaceTripRecommender.areaLabel(for: place),
-            photoURL: place.businessPhotoURLStrings.first.flatMap(URL.init(string:)),
+            photoURL: HomePlaceCardArt.photoURL(for: place),
             latitude: place.latitude,
             longitude: place.longitude,
             relativeDay: relativeDay(for: place.createdAt),

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import SAVE
 
@@ -51,11 +52,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(row.contains("latitude: place.latitude"))
+        XCTAssertTrue(row.contains("placeID: place.id"))
+        XCTAssertTrue(row.contains("photoURL: place.photoURL"))
         XCTAssertTrue(row.contains("frame(width: width, height: 112)"))
         XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(hero.contains("longitude: place.longitude"))
+        XCTAssertTrue(hero.contains("placeID: place.id"))
+        XCTAssertTrue(hero.contains("photoURL: place.photoURL"))
         XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertFalse(hero.contains("home.hero.changeCover"))
         XCTAssertFalse(hero.contains("photo.stack"))
@@ -63,21 +66,84 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(screens.contains("placesWithPhotos"))
         XCTAssertFalse(screens.contains("cycleFeaturedPlace"))
         XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
-        XCTAssertTrue(thumbnail.contains("HomeLocationSnapshot"))
+        XCTAssertTrue(thumbnail.contains("placeID"))
+        XCTAssertTrue(thumbnail.contains(".id(placeID)"))
+        XCTAssertTrue(thumbnail.contains(".id(photoURL)"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
         XCTAssertTrue(thumbnail.contains("fallback"))
-        XCTAssertTrue(screens.contains("MKLookAroundSceneRequest"))
-        XCTAssertTrue(screens.contains("MKMapSnapshotter"))
-        XCTAssertTrue(screens.contains("mapOptions.mapType = .hybrid"))
-        XCTAssertTrue(
-            bridge.contains("businessPhotoURLStrings.first.flatMap(URL.init(string:))")
-        )
-        XCTAssertTrue(bridge.contains("latitude: place.latitude"))
-        XCTAssertTrue(bridge.contains("longitude: place.longitude"))
+        XCTAssertFalse(thumbnail.contains("HomeLocationSnapshot"))
+        XCTAssertFalse(thumbnail.contains("MKLookAroundSceneRequest"))
+        XCTAssertFalse(thumbnail.contains("MKMapSnapshotter"))
+        XCTAssertFalse(screens.contains("MKLookAroundSceneRequest"))
+        XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
         let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(home.contains("await mapViewModel.enrichMissingHomePlacePhotos()"))
         XCTAssertTrue(home.contains("ReviewDemo.isOfflineUITestMode"))
+
+        let imageLoader = try source(at: "SAV-E/Views/Components/CachedAsyncImage.swift")
+        XCTAssertTrue(imageLoader.contains("CachedAsyncImageDisplay.phase"))
+        XCTAssertTrue(imageLoader.contains("requestedURL == loadedURL"))
+    }
+
+    @MainActor
+    func testHomePlaceCardArtBindsEachPlaceToItsOwnPhotoOrPlaceholder() throws {
+        var noodles = savedPlace(name: "竣師父牛肉麵-大安店")
+        noodles.businessPhotoUrls = ["https://example.com/jun-shifu.jpg"]
+        noodles.sourceImageUrl = "https://example.com/unrelated-ceiling.jpg"
+
+        var yakiniku = savedPlace(name: "利庭園燒肉")
+        yakiniku.businessPhotoUrls = ["https://example.com/li-ting-yuan.jpg"]
+
+        var missingPhoto = savedPlace(name: "No Photo Cafe")
+        var sourceOnly = savedPlace(name: "Source Only Noodles")
+        sourceOnly.sourceImageUrl = "https://example.com/jun-shifu-source.jpg"
+
+        XCTAssertEqual(
+            HomePlaceCardArt.photoURL(for: noodles)?.absoluteString,
+            "https://example.com/jun-shifu.jpg"
+        )
+        XCTAssertEqual(
+            HomePlaceCardArt.photoURL(for: yakiniku)?.absoluteString,
+            "https://example.com/li-ting-yuan.jpg"
+        )
+        XCTAssertEqual(
+            HomePlaceCardArt.photoURL(for: sourceOnly)?.absoluteString,
+            "https://example.com/jun-shifu-source.jpg"
+        )
+        XCTAssertNil(HomePlaceCardArt.photoURL(for: missingPhoto))
+        XCTAssertNotEqual(
+            HomePlaceCardArt.photoURL(for: noodles),
+            HomePlaceCardArt.photoURL(for: yakiniku)
+        )
+    }
+
+    func testCachedAsyncImageDoesNotPaintAnotherURLWhileReused() {
+        let first = URL(string: "https://example.com/place-a.jpg")
+        let second = URL(string: "https://example.com/place-b.jpg")
+        let stale = AsyncImagePhase.success(Image(systemName: "photo"))
+
+        switch CachedAsyncImageDisplay.phase(
+            requestedURL: first,
+            loadedURL: first,
+            loadedPhase: stale
+        ) {
+        case .success:
+            break
+        default:
+            XCTFail("The loaded URL may keep its own image")
+        }
+
+        switch CachedAsyncImageDisplay.phase(
+            requestedURL: second,
+            loadedURL: first,
+            loadedPhase: stale
+        ) {
+        case .empty:
+            break
+        default:
+            XCTFail("A reused view must not keep another place's photo")
+        }
     }
 
     @MainActor
@@ -368,6 +434,32 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     private func source(at relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private func savedPlace(name: String) -> Place {
+        Place(
+            id: UUID(),
+            name: name,
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.5654,
+            googlePlaceId: nil,
+            category: .food,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            businessPhotoUrls: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
     }
 
     @MainActor

@@ -12,6 +12,7 @@ struct CachedAsyncImage<Content: View>: View {
     private let content: (AsyncImagePhase) -> Content
 
     @State private var phase: AsyncImagePhase = .empty
+    @State private var loadedURL: URL?
 
     init(
         url: URL?,
@@ -22,33 +23,59 @@ struct CachedAsyncImage<Content: View>: View {
     }
 
     var body: some View {
-        content(phase)
+        content(displayPhase)
             .task(id: url) {
                 await load()
             }
     }
 
+    /// Drop a previous URL's decoded image the moment this view is asked to
+    /// paint a different URL. Lazy stacks reuse `@State`; without this check
+    /// one place card can keep showing another place's photo.
+    private var displayPhase: AsyncImagePhase {
+        CachedAsyncImageDisplay.phase(
+            requestedURL: url,
+            loadedURL: loadedURL,
+            loadedPhase: phase
+        )
+    }
+
     private func load() async {
         guard let url else {
+            loadedURL = nil
             phase = .empty
             return
         }
 
         if let cached = CachedImageStore.shared.image(for: url) {
+            loadedURL = url
             phase = .success(Image(uiImage: cached))
             return
         }
 
+        loadedURL = url
         phase = .empty
 
         do {
             let image = try await CachedImageStore.shared.loadImage(for: url)
             guard !Task.isCancelled else { return }
+            loadedURL = url
             phase = .success(Image(uiImage: image))
         } catch {
             guard !Task.isCancelled else { return }
+            loadedURL = url
             phase = .failure(error)
         }
+    }
+}
+
+enum CachedAsyncImageDisplay {
+    static func phase(
+        requestedURL: URL?,
+        loadedURL: URL?,
+        loadedPhase: AsyncImagePhase
+    ) -> AsyncImagePhase {
+        requestedURL == loadedURL ? loadedPhase : .empty
     }
 }
 
