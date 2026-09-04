@@ -69,15 +69,15 @@ struct SaveLibraryView: View {
                 SavesPocketScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
+                // Pushed outside ReferenceViewport (#157): real safe area +
+                // system back chrome already apply. Do not re-add the old
+                // root-tab status-bar band or the header sits too low.
                 savesContent
-                    // ReferenceViewport ignores the safe area; the prototype
-                    // screen above draws its own status-bar band, but this
-                    // flow layout must reserve it or the header renders under
-                    // the clock.
-                    .padding(.top, AtlasMetrics.statusBarHeight)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        // ContentView shows the navigation bar for back + "Saves"/"收藏".
+        // Hiding it here fought that chrome and left a brand header with no
+        // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
     }
@@ -145,9 +145,9 @@ struct SaveLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
-                // Clear the floating Atlas tab bar so the last ticket stays
-                // reachable.
-                .padding(.bottom, 108)
+                // No floating Atlas tab bar on this pushed route — only clear
+                // the home indicator with a modest inset.
+                .padding(.bottom, Self.pushedListBottomInset)
             }
         }
         .background(SaveDottedBackground())
@@ -160,9 +160,8 @@ struct SaveLibraryView: View {
                     .font(SaveAtlasType.strong(11))
                     .tracking(1.1)
                     .foregroundStyle(SaveAtlasPalette.muted)
-                Text(localized("Saves", "收藏"))
-                    .font(SaveAtlasType.strong(34, relativeTo: .largeTitle))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                // Page title lives on the system navigation bar so this
+                // block only carries the eyebrow + state-language subtitle.
                 Text(localized(
                     "Clues you’ve saved from links and notes.",
                     "從連結與筆記留下的地點線索。"
@@ -170,13 +169,14 @@ struct SaveLibraryView: View {
                 .font(SaveAtlasType.body(15))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .lineLimit(2)
+                .padding(.top, 4)
             }
 
             Spacer(minLength: 0)
             SavePostcardMemoPeek(width: 82)
                 .accessibilityHidden(true)
         }
-        .frame(minHeight: 100)
+        .frame(minHeight: 72)
     }
 
     private var modePicker: some View {
@@ -373,6 +373,9 @@ struct SaveLibraryView: View {
     }
 
     private static let firstViewportTicketLimit = 3
+    /// Bottom inset for the pushed Saves list. Must stay well below the old
+    /// root-tab clearance (108) so tickets are not stranded above empty space.
+    private static let pushedListBottomInset: CGFloat = 24
 
     private func reviewTicket(_ candidate: PlaceReviewCandidate) -> some View {
         Button {

@@ -302,6 +302,30 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
     }
 
+    func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {
+        let file = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try typeBody("SaveLibraryView", in: file)
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+
+        // Failure fixture: after #157 demoted Saves off the root bar, the
+        // page still padded for ReferenceViewport status bar (48) and the
+        // floating tab bar (108), so the header sat too low and the list
+        // floated above empty space. It also hid the nav bar and fought the
+        // system back chrome ContentView installs for this child route.
+        XCTAssertFalse(saves.contains("padding(.top, AtlasMetrics.statusBarHeight)"))
+        XCTAssertFalse(saves.contains("padding(.bottom, 108)"))
+        XCTAssertFalse(saves.contains("toolbar(.hidden, for: .navigationBar)"))
+        XCTAssertTrue(saves.contains("pushedListBottomInset"))
+        XCTAssertTrue(saves.contains("pushedListBottomInset: CGFloat = 24"))
+
+        XCTAssertTrue(content.contains("case .saves:"))
+        XCTAssertTrue(content.contains(".toolbar(.visible, for: .navigationBar)"))
+        XCTAssertTrue(
+            content.contains("traditionalChinese: \"收藏\""),
+            "System nav title remains the single page title for Saves."
+        )
+    }
+
     func testTripsKeepsOneSecondaryTicket() throws {
         let trips = try typeBody("TripsAtlasScreen", in: try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift"))
         XCTAssertTrue(trips.contains("tripRecommendations.first"))
