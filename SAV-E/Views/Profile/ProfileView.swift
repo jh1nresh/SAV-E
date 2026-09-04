@@ -43,6 +43,7 @@ struct ProfileView: View {
     @State private var opensConnections = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+    @State private var inviteURLAvailable = false
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
@@ -57,7 +58,8 @@ struct ProfileView: View {
             waitingClues: waitingClues,
             savedPlaces: passportPlaces,
             followedFriends: followedFriends,
-            hasSharedInvite: hasSharedInvite
+            hasSharedInvite: hasSharedInvite,
+            inviteURLAvailable: inviteURLAvailable
         )
     }
 
@@ -265,6 +267,7 @@ struct ProfileView: View {
         .task {
             localSavedPlaces = savedPlaces
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+            inviteURLAvailable = await onLoadMyReferralURL() != nil
             await viewModel.loadProfile()
         }
         .onChange(of: savedPlaces) { _, places in
@@ -1741,18 +1744,18 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return languageSettings.localized(
-                english: "A source clue still needs a confirmed place.",
-                traditionalChinese: "還有來源線索等你確認成地點。"
+                english: "Uses existing review queue count",
+                traditionalChinese: "使用現有的待審線索數量"
             )
         case .shareRecommendation:
             return languageSettings.localized(
-                english: "Choose who can see one saved Map Stamp.",
-                traditionalChinese: "選一個已存地圖章，決定誰看得到。"
+                english: "Fills Origin for peers",
+                traditionalChinese: "把推薦填進 Origin 給同行的人"
             )
         case .inviteOrFollowFriend:
             return languageSettings.localized(
-                english: "Share your invite or follow someone you trust.",
-                traditionalChinese: "分享邀請，或追蹤你信任的人。"
+                english: "Feeds Origin + connections",
+                traditionalChinese: "餵給 Origin 與連線"
             )
         }
     }

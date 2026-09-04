@@ -3467,7 +3467,8 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 0,
             savedPlaces: [],
             followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
-            hasSharedInvite: true
+            hasSharedInvite: true,
+            inviteURLAvailable: true
         )
 
         XCTAssertTrue(missions.isEmpty)
@@ -3483,7 +3484,8 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 2,
             savedPlaces: [publicGuide, privateStamp],
             followedFriends: [],
-            hasSharedInvite: false
+            hasSharedInvite: false,
+            inviteURLAvailable: true
         )
 
         XCTAssertEqual(
@@ -3507,7 +3509,8 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 0,
             savedPlaces: [publicGuide, friendsOnly],
             followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
-            hasSharedInvite: true
+            hasSharedInvite: true,
+            inviteURLAvailable: true
         )
         XCTAssertEqual(shareOnly.map(\.id), [.shareRecommendation])
         XCTAssertEqual(
@@ -3519,7 +3522,8 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 0,
             savedPlaces: [publicGuide],
             followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
-            hasSharedInvite: true
+            hasSharedInvite: true,
+            inviteURLAvailable: true
         )
         XCTAssertTrue(none.isEmpty)
     }
@@ -3531,7 +3535,8 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 0,
             savedPlaces: [],
             followedFriends: [],
-            hasSharedInvite: true
+            hasSharedInvite: true,
+            inviteURLAvailable: false
         )
         XCTAssertEqual(emptyFriends.map(\.id), [.inviteOrFollowFriend])
 
@@ -3539,9 +3544,19 @@ final class SaveSearchControllerTests: XCTestCase {
             waitingClues: 0,
             savedPlaces: [],
             followedFriends: [friend],
-            hasSharedInvite: false
+            hasSharedInvite: false,
+            inviteURLAvailable: true
         )
         XCTAssertEqual(neverShared.map(\.id), [.inviteOrFollowFriend])
+
+        let noInviteURL = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [],
+            followedFriends: [friend],
+            hasSharedInvite: false,
+            inviteURLAvailable: false
+        )
+        XCTAssertTrue(noInviteURL.isEmpty)
     }
 
     func testPassportTodayAccessibilityIdentifiersStayStable() {

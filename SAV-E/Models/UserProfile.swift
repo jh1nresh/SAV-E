@@ -112,7 +112,8 @@ enum SavePassportTodayCatalog {
         waitingClues: Int,
         savedPlaces: [Place],
         followedFriends: [SaveFollowedFriend],
-        hasSharedInvite: Bool
+        hasSharedInvite: Bool,
+        inviteURLAvailable: Bool
     ) -> [SavePassportTodayMission] {
         var result: [SavePassportTodayMission] = []
         if waitingClues >= 1 {
@@ -121,7 +122,9 @@ enum SavePassportTodayCatalog {
         if firstShareEligiblePlace(in: savedPlaces) != nil {
             result.append(SavePassportTodayMission(id: .shareRecommendation))
         }
-        if followedFriends.isEmpty || !hasSharedInvite {
+        // Friends empty always qualifies. "Never shared invite" only
+        // qualifies when an invite URL actually exists to share.
+        if followedFriends.isEmpty || (!hasSharedInvite && inviteURLAvailable) {
             result.append(SavePassportTodayMission(id: .inviteOrFollowFriend))
         }
         return Array(result.prefix(missionCap))

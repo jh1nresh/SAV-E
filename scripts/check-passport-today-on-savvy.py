@@ -23,24 +23,25 @@ def missions(
     has_non_guide_stamp: bool,
     friends_empty: bool,
     has_shared_invite: bool,
+    invite_url_available: bool,
 ) -> list[str]:
     result: list[str] = []
     if waiting_clues >= 1:
         result.append("confirm_waiting_clue")
     if has_private_stamp or has_non_guide_stamp:
         result.append("share_recommendation")
-    if friends_empty or not has_shared_invite:
+    if friends_empty or (not has_shared_invite and invite_url_available):
         result.append("invite_or_follow_friend")
     return result[:3]
 
 
 def check_catalog_decision_table() -> None:
     expect(
-        missions(0, False, False, False, True) == [],
+        missions(0, False, False, False, True, True) == [],
         "strip must hide when no live mission applies",
     )
     expect(
-        missions(1, True, True, True, False)
+        missions(1, True, True, True, False, True)
         == [
             "confirm_waiting_clue",
             "share_recommendation",
@@ -49,22 +50,26 @@ def check_catalog_decision_table() -> None:
         "order is confirm → share → invite",
     )
     expect(
-        missions(0, False, False, True, True) == ["invite_or_follow_friend"],
+        missions(0, False, False, True, True, False) == ["invite_or_follow_friend"],
         "empty friends still shows invite",
     )
     expect(
-        missions(0, False, False, False, False) == ["invite_or_follow_friend"],
-        "never shared invite still shows invite",
+        missions(0, False, False, False, False, True) == ["invite_or_follow_friend"],
+        "never shared invite still shows invite when a URL exists",
     )
     expect(
-        missions(0, False, True, False, True) == ["share_recommendation"],
+        missions(0, False, False, False, False, False) == [],
+        "never shared invite does not show when no invite URL exists",
+    )
+    expect(
+        missions(0, False, True, False, True, True) == ["share_recommendation"],
         "a non-publicGuide stamp shows share",
     )
     expect(
-        missions(2, False, False, False, True) == ["confirm_waiting_clue"],
+        missions(2, False, False, False, True, True) == ["confirm_waiting_clue"],
         "waiting clues show confirm only when share/invite do not apply",
     )
-    expect(len(missions(1, True, True, True, False)) <= 3, "cap is 3")
+    expect(len(missions(1, True, True, True, False, True)) <= 3, "cap is 3")
 
 
 def check_sources(root: Path) -> None:
@@ -78,6 +83,9 @@ def check_sources(root: Path) -> None:
     expect("今日 Savvy" in profile, "Chinese eyebrow")
     expect("Up to three real next steps" in profile, "English subtitle")
     expect("最多三件真正要做的事" in profile, "Chinese subtitle")
+    expect("Uses existing review queue count" in profile, "confirm detail")
+    expect("Fills Origin for peers" in profile, "share detail")
+    expect("Feeds Origin + connections" in profile, "invite detail")
     expect("profile.today.confirmWaitingClue" in profile, "confirm a11y id")
     expect("profile.today.shareRecommendation" in profile, "share a11y id")
     expect("profile.today.inviteFriend" in profile, "invite a11y id")
@@ -87,8 +95,18 @@ def check_sources(root: Path) -> None:
     expect("confirm_waiting_clue" in catalog, "catalog id confirm")
     expect("share_recommendation" in catalog, "catalog id share")
     expect("invite_or_follow_friend" in catalog, "catalog id invite")
+    expect("inviteURLAvailable" in catalog, "invite URL gate is in the catalog")
     expect("SavePassportInviteShareStore" in catalog, "invite flag is local, not a grant")
     expect("profile.today.confirmWaitingClue" in spec, "spec keeps a11y ids")
+    expect(
+        spec.startswith("# SAV-E Passport Today on Savvy v0\n"),
+        "spec file starts with the canonical title",
+    )
+    expect(
+        "Status: draft product spec. Founder 2026-09-04:" in spec,
+        "spec file uses the canonical founder status line",
+    )
+    expect("Do not assign Judge from this ticket." in spec, "spec keeps human-gate close")
 
     stamp = profile.find("profile.stampLedger")
     strip = profile.find("PassportTodayOnSavvyStrip")
