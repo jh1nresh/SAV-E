@@ -2,10 +2,10 @@ import SwiftUI
 
 /// One resizable drawer surface for the Map tab.
 ///
-/// The resting search shelf, medium drawer, and large drawer are three stops
-/// of the same surface. The map stays interactive above it, and expanding
-/// never presents a second layer. The embedded drawer intentionally doesn't
-/// use sheet presentation modifiers because those can abort SwiftUI's
+/// Collapsed is the Apple Maps–style floating search pill. Medium and large
+/// keep the existing in-tree panel. The map stays interactive above it, and
+/// expanding never presents a second layer. The embedded drawer intentionally
+/// doesn't use sheet presentation modifiers because those can abort SwiftUI's
 /// presentation coordinator when attached to an in-tree view.
 struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var isExpanded: Bool
@@ -18,9 +18,9 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     let onCollapse: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
-    /// Keeps the collapsed shelf clear of the root tab bar.
+    /// Keeps the collapsed floating pill clear of the root tab bar.
     private let collapsedBottomInset: CGFloat = 88
-    private let collapsedHeight: CGFloat = 120
+    private let collapsedHeight: CGFloat = 72
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -49,7 +49,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                 onExpand(true)
             }
         )
-        .frame(height: 112)
+        .frame(height: 68)
         .padding(.horizontal, 15)
         .padding(.bottom, collapsedBottomInset)
         .offset(y: max(-96, min(0, dragTranslation)))

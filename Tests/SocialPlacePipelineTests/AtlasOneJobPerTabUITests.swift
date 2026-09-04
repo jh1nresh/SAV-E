@@ -168,12 +168,44 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
-        XCTAssertTrue(map.contains("slider.horizontal.3"))
+        XCTAssertTrue(map.contains("mic.fill"))
+        XCTAssertTrue(map.contains(".ultraThinMaterial, in: Capsule()"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
+        XCTAssertFalse(
+            map.contains("slider.horizontal.3"),
+            "Collapsed Map search is a floating pill, not a filter rail."
+        )
         XCTAssertTrue(markers.contains("if state == .saved"))
         XCTAssertTrue(markers.contains("frame(width: isSelected ? 36 : 32"))
         XCTAssertTrue(markers.contains(".frame(width: 44, height: 44)"))
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
+    }
+
+    func testMapSearchIsBottomFloatingChromeWithParkedDetents() throws {
+        let shelf = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
+        let map = try source(at: "SAV-E/Views/Map/MapView.swift")
+        let root = try source(at: "SAV-E/App/ContentView.swift")
+        let tabBar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+
+        XCTAssertTrue(root.contains("SaveMapDrawerPanel("))
+        XCTAssertTrue(root.contains("hidesCommandShelf: true"))
+        XCTAssertTrue(panel.contains("case collapsed"))
+        XCTAssertTrue(panel.contains("case medium"))
+        XCTAssertTrue(panel.contains("case large"))
+        XCTAssertTrue(panel.contains("map.drawerPanel.collapsed"))
+        XCTAssertTrue(panel.contains("SaveAtlasMapCommandShelf("))
+        XCTAssertTrue(panel.contains("alignment: .bottom"))
+        XCTAssertTrue(shelf.contains("map.command.search"))
+        XCTAssertTrue(shelf.contains(".ultraThinMaterial, in: Capsule()"))
+        XCTAssertFalse(shelf.contains(".glassEffect("))
+        XCTAssertFalse(map.contains("TextField"))
+        XCTAssertFalse(map.contains(".searchable"))
+        XCTAssertFalse(map.contains("map.command.search"))
+        XCTAssertTrue(
+            tabBar.contains(".glassEffect("),
+            "Tab-bar glass stays parked on AtlasTabBar; this ticket must not move it."
+        )
     }
 
     func testPassportPutsLanguageAndProBehindDisclosure() throws {
