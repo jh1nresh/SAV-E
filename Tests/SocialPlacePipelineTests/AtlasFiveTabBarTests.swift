@@ -70,16 +70,42 @@ final class AtlasFiveTabBarTests: XCTestCase {
     func testRaisedCaptureControlFitsInsideBarAndItsFiveItemSlot() {
         XCTAssertTrue(
             AtlasTabBarMetrics.raisedControlFitsBar,
-            "the complete Save control must stay inside the 62pt navigation capsule"
+            "Save plus its stroke must sit inside the mint-lozenge chrome inset"
         )
         XCTAssertTrue(
             AtlasTabBarMetrics.raisedControlFitsSlot(itemCount: 5),
             "the Save control must not overlap its neighbouring tabs"
         )
+        XCTAssertEqual(AtlasTabBarMetrics.raisedControlOffsetY, 0)
+        XCTAssertLessThanOrEqual(
+            AtlasTabBarMetrics.raisedControlDiameter + AtlasTabBarMetrics.raisedControlStrokeWidth,
+            AtlasTabBarMetrics.selectionHeight
+        )
         XCTAssertGreaterThanOrEqual(
             AtlasTabBarMetrics.itemHeight,
             AtlasTabBarMetrics.minimumHitTarget
         )
+    }
+
+    @MainActor
+    func testLegacyFiftyPointSaveWouldBreachChromeInset() {
+        // Residual of #179: 50pt / offset 0 stays in the 62pt box but the
+        // optical disk (50 + 0.8 stroke) still bursts the glass pill.
+        let legacyDiameter: CGFloat = 50
+        let opticalHalf = (legacyDiameter + AtlasTabBarMetrics.raisedControlStrokeWidth) / 2
+        let centreY = AtlasTabBarMetrics.height / 2
+        let inset = AtlasTabBarMetrics.raisedControlChromeInset
+
+        XCTAssertLessThan(
+            centreY - opticalHalf,
+            inset,
+            "50pt Save is the residual overflow fixture against glass chrome"
+        )
+        XCTAssertLessThan(
+            AtlasTabBarMetrics.raisedControlDiameter,
+            legacyDiameter
+        )
+        XCTAssertEqual(AtlasTabBarMetrics.raisedControlChromeInset, 8)
     }
 
     @MainActor
