@@ -39,10 +39,14 @@ struct ProfileView: View {
     var onLoadMoreFollowedFriends: () async -> Void = {}
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
     var onReviewAll: () -> Void = {}
+    var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var isRootTab = false
     @State private var opensConnections = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+    @State private var fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
+    @State private var hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
+    @State private var visitFocusPlace: Place?
     @State private var inviteURLAvailable = false
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -108,6 +112,12 @@ struct ProfileView: View {
                         .cornerRadius(SaveTheme.Spacing.md)
                         .padding(.horizontal)
                     }
+
+                    PassportFieldStreakStrip(
+                        streak: fieldStreak,
+                        hasActionToday: hasFieldActionToday
+                    )
+                    .accessibilityIdentifier("profile.fieldStreak")
 
                     PassportStampSection(profile: viewModel.profile, stats: passportStats)
                         .accessibilityIdentifier("profile.stampLedger")
@@ -266,12 +276,14 @@ struct ProfileView: View {
         }
         .task {
             localSavedPlaces = savedPlaces
+            refreshFieldStreak()
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             inviteURLAvailable = await onLoadMyReferralURL() != nil
             await viewModel.loadProfile()
         }
         .onChange(of: savedPlaces) { _, places in
             localSavedPlaces = places
+            refreshFieldStreak()
         }
         .onChange(of: opensConnections) { _, isOpen in
             guard !isOpen else { return }
@@ -279,6 +291,9 @@ struct ProfileView: View {
         }
         .sheet(item: $shareFocusPlace) { place in
             shareMissionSheet(place)
+        }
+        .sheet(item: $visitFocusPlace) { place in
+            visitMissionSheet(place)
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileSheet(
@@ -375,6 +390,11 @@ struct ProfileView: View {
         switch missionID {
         case .confirmWaitingClue:
             onReviewAll()
+        case .markVisitedStamp:
+            visitFocusPlace = SavePassportTodayCatalog.firstVisitEligiblePlace(in: passportPlaces)
+            withAnimation(SaveTheme.Motion.standardSpring) {
+                scrollProxy.scrollTo("profile.stampLedger", anchor: .center)
+            }
         case .shareRecommendation:
             shareFocusPlace = SavePassportTodayCatalog.firstShareEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
@@ -389,6 +409,79 @@ struct ProfileView: View {
         SavePassportInviteShareStore.shared.markShared()
         hasSharedInvite = true
     }
+
+    private func refreshFieldStreak() {
+        fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
+        hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
+    }
+
+    private func visitMissionSheet(_ place: Place) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+            HStack(spacing: SaveTheme.Spacing.md) {
+                PassportIconButton(systemName: "xmark") {
+                    SaveHaptics.tap()
+                    visitFocusPlace = nil
+                }
+                .accessibilityLabel(languageSettings.localized(english: "Close", traditionalChinese: "關閉"))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.localized(
+                        english: "MARK VISITED",
+                        traditionalChinese: "標記去過"
+                    ))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(place.name)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .lineLimit(2)
+                }
+            }
+
+            Text(languageSettings.localized(
+                english: "Count a real field day by marking one Map Stamp visited.",
+                traditionalChinese: "把一個地圖章標成去過，就算進真實的野外連續天。"
+            ))
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.ink)
+
+            Button {
+                SaveHaptics.tap()
+                Task {
+                    var updated = place
+                    updated.status = .visited
+                    do {
+                        try await onUpdatePlace(updated)
+                        SavePassportFieldStreakStore.shared.recordFieldAction()
+                        refreshFieldStreak()
+                        if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
+                            localSavedPlaces[index].status = .visited
+                        }
+                        visitFocusPlace = nil
+                    } catch {
+                        // Keep the sheet open; durable failures surface elsewhere.
+                    }
+                }
+            } label: {
+                Text(languageSettings.localized(english: "Mark visited", traditionalChinese: "標記去過"))
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.paper)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(SaveAtlasPalette.coral, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("profile.today.markVisitedConfirm")
+
+            Spacer(minLength: 0)
+        }
+        .padding(SaveTheme.Spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .presentationDetents([.medium])
+    }
+
 
     private func shareMissionSheet(_ place: Place) -> some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
@@ -1618,6 +1711,89 @@ private struct EditProfileSheet: View {
 
 // MARK: - Today on Savvy
 
+
+// MARK: - Field streak
+
+private struct PassportFieldStreakStrip: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let streak: Int
+    let hasActionToday: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: SaveTheme.Spacing.md) {
+            SavePostcardPerforatedMedallion(
+                systemName: "flame.fill",
+                tint: hasActionToday ? SaveAtlasPalette.coral : SaveAtlasPalette.kraft,
+                edge: SaveAtlasPalette.forest
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(languageSettings.localized(
+                    english: "FIELD STREAK",
+                    traditionalChinese: "野外連續"
+                ))
+                .font(SaveAtlasType.strong(11))
+                .tracking(0.7)
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+                Text(streakTitle)
+                    .font(SaveAtlasType.strong(18))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+
+                Text(streakDetail)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .background {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .fill(SaveAtlasPalette.paper)
+        }
+        .overlay {
+            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
+                .stroke(
+                    SaveAtlasPalette.kraft.opacity(0.82),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                )
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
+        .padding(.horizontal)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(streakTitle + ". " + streakDetail)
+    }
+
+    private var streakTitle: String {
+        if streak <= 0 {
+            return languageSettings.localized(
+                english: "No field day yet",
+                traditionalChinese: "還沒有野外日"
+            )
+        }
+        return languageSettings.localized(
+            english: "\(streak)-day field streak",
+            traditionalChinese: "連續 \(streak) 個野外日"
+        )
+    }
+
+    private var streakDetail: String {
+        if hasActionToday {
+            return languageSettings.localized(
+                english: "Today already counts: confirm, save, or mark Visited.",
+                traditionalChinese: "今天已記入：確認線索、存章、或標記去過。"
+            )
+        }
+        return languageSettings.localized(
+            english: "Confirm a clue, save a Map Stamp, or mark Visited to count today.",
+            traditionalChinese: "確認線索、存下地圖章、或標記去過，今天才算。"
+        )
+    }
+}
+
 private struct PassportTodayOnSavvyStrip: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let missions: [SavePassportTodayMission]
@@ -1713,6 +1889,8 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return "profile.today.confirmWaitingClue"
+        case .markVisitedStamp:
+            return "profile.today.markVisitedStamp"
         case .shareRecommendation:
             return "profile.today.shareRecommendation"
         case .inviteOrFollowFriend:
@@ -1726,6 +1904,11 @@ private struct PassportTodayMissionRow: View {
             return languageSettings.localized(
                 english: "Confirm a waiting clue",
                 traditionalChinese: "確認一個待審線索"
+            )
+        case .markVisitedStamp:
+            return languageSettings.localized(
+                english: "Mark one Map Stamp visited",
+                traditionalChinese: "把一個地圖章標成去過"
             )
         case .shareRecommendation:
             return languageSettings.localized(
@@ -1747,6 +1930,11 @@ private struct PassportTodayMissionRow: View {
                 english: "Uses existing review queue count",
                 traditionalChinese: "使用現有的待審線索數量"
             )
+        case .markVisitedStamp:
+            return languageSettings.localized(
+                english: "Return field step for an unvisited stamp",
+                traditionalChinese: "回訪一步：標記尚未去過的章"
+            )
         case .shareRecommendation:
             return languageSettings.localized(
                 english: "Fills Origin for peers",
@@ -1764,8 +1952,10 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return "circle.hexagongrid"
+        case .markVisitedStamp:
+            return "figure.walk"
         case .shareRecommendation:
-            return "checkmark.seal.fill"
+            return "square.and.arrow.up"
         case .inviteOrFollowFriend:
             return "person.badge.plus"
         }
@@ -1775,6 +1965,8 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return SaveAtlasPalette.coral
+        case .markVisitedStamp:
+            return SaveAtlasPalette.honey
         case .shareRecommendation:
             return SaveAtlasPalette.mint
         case .inviteOrFollowFriend:
@@ -2077,11 +2269,17 @@ private struct PassportStampSection: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(languageSettings.text(.passportStamps).uppercased())
+                    Text(languageSettings.localized(
+                        english: "COLLECTION",
+                        traditionalChinese: "收集"
+                    ))
                         .font(SaveAtlasType.strong(11))
                         .tracking(1)
                         .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(languageSettings.text(.memoBook))
+                    Text(languageSettings.localized(
+                        english: "Map Stamps you’ve gathered",
+                        traditionalChinese: "你收集到的地圖章"
+                    ))
                         .font(SaveAtlasType.editorial(18))
                         .foregroundStyle(SaveAtlasPalette.ink)
                 }

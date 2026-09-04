@@ -165,7 +165,8 @@ Avoid these in user-facing UI:
 - Generic "saved item" when the item is a Map Stamp
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
-- XP, Level, gems, streak calendar, quest board, Path / Shop / Progress chrome
+- XP, Level, gems, login-streak calendar, quest board, Path / Shop / Progress chrome
+- Rewards, currencies, or entitlements granted by completing Passport missions
 
 ## Atlas Postcard Tokens
 
@@ -495,8 +496,18 @@ Required content:
 - Cities count.
 - Waiting clues count.
 - Member since.
-- Today on Savvy: at most three live incomplete next steps. Hide the whole strip when none apply. Not a quest board.
+- Field streak: consecutive local days with a real memory action (confirm a waiting clue, save a Map Stamp, or mark Visited). Not a login check-in calendar.
+- Collection: Map Stamps, Visited, Cities, and Waiting clues as memory progress, not a reward track.
+- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Not a quest board.
 - Language and local memory controls.
+
+Passport section order on the root tab:
+
+1. Hero (Memo + passport name)
+2. Field streak
+3. Collection
+4. Today on Savvy
+5. Control pocket
 
 ## State Model
 
@@ -610,10 +621,15 @@ Rules:
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.
-- Today on Savvy sits after the stamp ledger and before the control pocket.
-  It may observe a waiting clue, a private Map Stamp, or a missing friend
-  connection. It does not grant Pro, XP, or rewards. If no live step applies,
-  hide the strip. Do not show an empty quest card.
+- Field streak sits after the hero and before Collection. Count only confirm /
+  save Map Stamp / mark Visited days. Opening the app does not count. Do not
+  render a streak month calendar, XP bar, or gem balance.
+- Collection is the stamp ledger reframed as memory progress: Map Stamps,
+  Visited, Cities, Waiting clues. It does not unlock rewards.
+- Today on Savvy sits after Collection and before the control pocket.
+  It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
+  or a missing friend connection. It does not grant Pro, XP, or rewards. If no
+  live step applies, hide the strip. Do not show an empty quest card.
 
 ### Share Extension
 
