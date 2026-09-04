@@ -29,7 +29,17 @@ struct MapView: View {
     var body: some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
-            let bottomChromeInset = max(geo.safeAreaInsets.bottom + 86, 98)
+            // Root Map parks a floating search pill (~68) above the tab bar
+            // (~88). Trip Map crops MapView above its place card, so a short
+            // trailing clearance is enough. Selection swaps the pill for a
+            // taller place peek, so locate rises with that chrome.
+            let isEmbeddedCrop = displayedPlaces != nil
+            let bottomChromeInset = isEmbeddedCrop
+                ? max(geo.safeAreaInsets.bottom + 18, 28)
+                : max(
+                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 156 : 248),
+                    viewModel.selectedPlace == nil ? 168 : 260
+                )
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
@@ -130,6 +140,21 @@ struct MapView: View {
                     viewModel.selectMapFeature(feature)
                 }
                 .accessibilityIdentifier("map.liveSurface")
+                .overlay(alignment: .bottomTrailing) {
+                    CurrentLocationButton(
+                        isLocating: viewModel.isLocatingUser,
+                        action: {
+                            SaveHaptics.tap()
+                            Task { await viewModel.focusOnUserLocation() }
+                        }
+                    )
+                    .padding(.trailing, 16)
+                    // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
+                    // cleared above the floating search pill or place peek.
+                    .padding(.bottom, bottomChromeInset)
+                    .accessibilityIdentifier("map.currentLocation")
+                }
+                .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
                 if let contextBadgeText {
                     VStack {
@@ -141,21 +166,6 @@ struct MapView: View {
                     .frame(maxWidth: .infinity)
                     .allowsHitTesting(false)
                 }
-
-                CurrentLocationButton(
-                    isLocating: viewModel.isLocatingUser,
-                    action: {
-                        SaveHaptics.tap()
-                        Task { await viewModel.focusOnUserLocation() }
-                    }
-                )
-                .padding(.trailing, 16)
-                // Top-trailing: the bottom edge of every map surface is
-                // covered by a shelf/drawer or place card, which buried the
-                // button when it sat bottom-trailing.
-                .padding(.top, topChromeInset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                .accessibilityIdentifier("map.currentLocation")
 
                 if let providerPlace = providerBackedPlaces.first {
                     Button {

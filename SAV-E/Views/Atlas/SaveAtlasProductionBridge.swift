@@ -554,24 +554,9 @@ struct SaveAtlasInteractiveRootMap: View {
             .clipped()
             .placed(x: 0, y: 0, width: 402, height: 874)
 
-            HStack(spacing: 7) {
-                Image(systemName: "star.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AtlasPalette.forest)
-                Text("\(presentation.mapStampCount) Map Stamps")
-                    .font(AtlasType.display(12))
-                    .foregroundStyle(AtlasPalette.ink)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 38)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay {
-                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
-            }
-            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
-            .placed(x: 16, y: 56, width: 139, height: 38)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("map.stampCount")
+            // DESIGN.md / adaptive glass: Map top stays empty. Stamp count
+            // rides on the floating search shelf accessibility value, not a
+            // persistent top-leading chip.
 
             if let place = mapViewModel.selectedPlace {
                 SaveAtlasLivePlaceCard(
@@ -748,14 +733,14 @@ private struct SaveAtlasLivePlaceCard: View {
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            AtlasPalette.paper,
+            .ultraThinMaterial,
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
+                .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 0.8)
         }
-        .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+        .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.place.card")
     }

@@ -346,12 +346,27 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(panel.contains("map.drawerPanel.collapsed"))
         XCTAssertTrue(panel.contains("SaveAtlasMapCommandShelf("))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
+        XCTAssertTrue(panel.contains(".regularMaterial"))
         XCTAssertTrue(shelf.contains("map.command.search"))
         XCTAssertTrue(shelf.contains(".ultraThinMaterial, in: Capsule()"))
+        XCTAssertTrue(shelf.contains(".ultraThinMaterial,\n            in: RoundedRectangle(cornerRadius: 24"))
         XCTAssertFalse(shelf.contains(".glassEffect("))
+        XCTAssertFalse(
+            shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Live Map top stays empty; stamp count is not persistent chrome."
+        )
         XCTAssertFalse(map.contains("TextField"))
         XCTAssertFalse(map.contains(".searchable"))
         XCTAssertFalse(map.contains("map.command.search"))
+        XCTAssertTrue(
+            map.contains("alignment: .bottomTrailing"),
+            "Locate stays Apple Maps bottom-trailing above floating chrome."
+        )
+        XCTAssertTrue(map.contains("padding(.bottom, bottomChromeInset)"))
+        XCTAssertFalse(
+            map.contains("alignment: .topTrailing"),
+            "Locate must not return to the pre-#184 top-trailing burial workaround."
+        )
         XCTAssertTrue(
             tabBar.contains(".glassEffect("),
             "Tab-bar glass stays parked on AtlasTabBar; this ticket must not move it."
