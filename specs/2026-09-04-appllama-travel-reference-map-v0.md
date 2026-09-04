@@ -26,9 +26,10 @@ token source. `DESIGN.md` and `Color+Theme.swift` still win.
   enter the app. Parkwolf is AppLlama's current Travel showcase (~$60K/mo,
   77 screens, 12 flows). Closer product analogs on the same site are Mapstr
   (save & follow places) and park4night (map browse + around-a-place).
-- Pricing / paywall hypothesis: unchanged. Launch stays free
-  (`specs/launch-without-paywall.md`). Parkwolf/Mapstr/park4night paywalls are
-  later Pro-study material only, not v1 UI.
+- Pricing / paywall hypothesis: unchanged from
+  `specs/2026-09-04-launch-purchase-path-trigger-later-v0.md` — free download,
+  purchase path ready, trigger later. No launch/onboarding wall. Parkwolf /
+  Mapstr / park4night paywalls are later Pro-study material only, not v1 UI.
 - First distribution format: this spec + PR. No TestFlight, store, or
   screenshot change.
 - Files and systems in scope: this spec only. Implementation files named below
@@ -107,17 +108,17 @@ Trail Exploration, Wildlife Explorer, Sightings, Account, Saved & Planning.
 | Parkwolf flow | Savvy landing | Borrow | Do not copy |
 | --- | --- | --- | --- |
 | Onboarding | `OnboardingView.swift` | After the first Map Stamp, one optional "where are you collecting places?" city/area prompt is allowed. Mapstr's 15-step tooltip tour is a negative example. | 6-step marketing carousel (audio, offline, wildlife, favorites, park picker). `DESIGN.md` onboarding is Language → Clue → Candidate → Map Stamp. |
-| Paywall | `SaveProPaywallView.swift` (hidden) | Later Pro study: social proof + annual trial vs monthly. | Any paywall in the first-run or save path. See `launch-without-paywall.md`. |
+| Paywall | `SaveProPaywallView.swift` (hidden until Passport / AI-refusal trigger) | Later Pro study: social proof + annual trial vs monthly. Passive Passport entry after one Map Stamp; reactive wall only after AI refusal once enforcement is on. | Any paywall in the first-run, onboarding, or save path. See `2026-09-04-launch-purchase-path-trigger-later-v0.md`. |
 | Audio Guide Exploration | none | — | GPS audio tour, CarPlay guide, Memo-as-narrator. Memo stays a memory keeper. |
 | Park Exploration | `MapView.swift`, `SaveMapDrawerPanel.swift`, drawer `categoryFilterStrip` | Layered map literacy. Bottom search shelf. Amenity-style chips in the drawer, not a persistent map rail. | Official park overlay packs, restroom/gas as new product types, download-a-park gate. |
 | Park Media Gallery | `PlaceBusinessPhotoCarousel` in `AIDrawerView.swift` | Swipeable photos on the Memory Card. Photo + map peek in one object. | Public activity/photo feed. |
 | Place Exploration | `AIDrawerView` saved-place drawer, `PlaceBottomSheet.swift` | Identity → photos → kraft chips → one coral primary → overflow. Parkwolf pin-favorite ≈ Add to Trip / Plan around this. | Landmark encyclopedia pages, trail stats as the hero. |
-| Places Browse | `SaveLibraryView` / Saves tab | List of confirmed Map Stamps vs waiting clues. Filter by category and Want to try / Visited. | A generic "all parks" catalog. |
+| Places Browse | `SaveLibraryView` (pushed Saves route, not a root tab) | List of confirmed Map Stamps vs waiting clues. Filter by category and Want to try / Visited. | A generic "all parks" catalog. |
 | Trail Exploration | `TripPackViews.swift`, `TripItineraryComponent.swift` | Ordered stops, distance/time as supporting facts. | Hiking trail product, elevation profiles, offline trail packs. |
 | Wildlife Explorer | none | — | Heatmaps, species layers, notification-for-bears. |
 | Sightings | none | Evidence Receipt already shows *why this place*. | Community UGC sightings feed. Launch notes: no UGC feed. |
 | Account | `ProfileView.swift` Passport Collection | Stamp-ledger density. Cities strip already exists. | "My Park Tracker" mosaic as a reward board, XP, login streak calendar. Forbidden by DESIGN and `specs/2026-09-04-save-passport-field-streak-collection-v0.md`. |
-| Saved & Planning | Saves tab + Trips tab + `Plan around this` | Split **saved memory** from **route**. This is the closest Parkwolf overlap. | Bundling Saves and Trips into one "favorites" list. |
+| Saved & Planning | Pushed Saves route + Trips tab + `Plan around this` | Split **saved memory** from **route**. This is the closest Parkwolf overlap. | Bundling Saves and Trips into one "favorites" list. |
 
 ## Closer analogs on the same site
 
