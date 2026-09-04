@@ -49,7 +49,12 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 
 ## 8. Pricing & release
 - 🟡 Price: **Free**, all territories (or limit to your launch regions).
-- ✅ The app is free. StoreKit code is present for a later Pro launch, but purchasing and enforcement remain disabled and the Pro entry is hidden in this build. No IAP is attached to v1.
+- ✅ Launch posture (locked 2026-09-04): **free download + purchase path ready + trigger later.**
+  See `specs/2026-09-04-launch-purchase-path-trigger-later-v0.md`.
+  - No automatic launch / onboarding paywall; no paywall before the first confirmed Map Stamp.
+  - Reactive wall only after AI-assist refusal (once enforcement is on); passive wall from Passport → Savvy Pro.
+  - StoreKit + server grant are wired; `purchasingIsAvailable` and `enforcementEnabled` stay `false` until humans create ASC products and (later) restore a model-quota refusal surface.
+  - 🟡 ASC: create subscription products with the reserved IDs, attach to the build, then flip `purchasingIsAvailable` only — do not flip enforcement in the same step.
 - 🟡 Release: **Manually release** for v1 (so you control the moment), or phased automatic.
 
 ## 9. Submit

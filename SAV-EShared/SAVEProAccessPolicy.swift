@@ -6,6 +6,11 @@ import Foundation
 /// entitlement implementation. `enforcementEnabled` is the single switch that
 /// turns a measured allowance into a refusal; it stays `false` until real usage
 /// distribution and App Store Connect products exist (spec Slice 3).
+///
+/// Launch posture (2026-09-04): free download, purchase path ready, trigger
+/// later. Do not flip these into a launch/onboarding hard paywall. Sequence:
+/// ASC products → `purchasingIsAvailable` → restore model-quota refusal →
+/// `enforcementEnabled`. See `specs/2026-09-04-launch-purchase-path-trigger-later-v0.md`.
 enum SAVEProAccessPolicy {
     /// No paywall may present automatically at launch, ever.
     nonisolated static let showsAutomaticLaunchPaywall = false
@@ -19,11 +24,12 @@ enum SAVEProAccessPolicy {
     nonisolated static let coreMemoryLoopIsFree = true
 
     /// Purchases are wired but products are not yet live in App Store Connect.
-    /// Flip together with the App Store Connect product IDs below.
+    /// Flip alone after ASC products attach — not with `enforcementEnabled`.
     nonisolated static let purchasingIsAvailable = false
 
     /// When `false`, an exhausted allowance may inform the UI but must never
-    /// refuse an AI assist. Slice 1 ships with enforcement off by contract.
+    /// refuse an AI assist. Stay off until a real model-quota refusal surface
+    /// ships (Ask or equivalent). Slice 1 contract.
     nonisolated static let enforcementEnabled = false
 
     /// Product identifiers, reserved ahead of App Store Connect creation.

@@ -95,7 +95,19 @@ final class SaveEntitlementWiringTests: XCTestCase {
         )
     }
 
-    /// Only a refusal opens the paywall. Warnings and allowances must not.
+    /// Passport is a passive entry, but it still needs the Map Stamp proof.
+    @MainActor
+    func testPassportPaywallRequiresConfirmedMapStamp() {
+        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
+
+        XCTAssertFalse(
+            store.shouldPresentPaywallFromPassport(hasConfirmedMapStamp: false),
+            "Passport must not open Pro before the place-memory loop has worked once"
+        )
+        XCTAssertTrue(store.shouldPresentPaywallFromPassport(hasConfirmedMapStamp: true))
+    }
+
+    /// Only a refusal opens the reactive paywall. Warnings and allowances must not.
     @MainActor
     func testOnlyRefusalOpensThePaywall() {
         let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
@@ -157,6 +169,14 @@ final class SaveEntitlementWiringTests: XCTestCase {
         // redelivers it rather than silently losing a paid purchase.
         XCTAssertTrue(storeKit.contains("jwsRepresentation"))
         XCTAssertTrue(storeKit.contains("serverVerifiedTier = nil"))
+    }
+
+    /// Passport Pro entry must reuse the shared stamp gate so a zero-Stamp
+    /// account cannot open the wall from Settings alone.
+    func testPassportProEntryUsesSharedStampGate() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        XCTAssertTrue(profile.contains("shouldPresentPaywallFromPassport"))
+        XCTAssertTrue(profile.contains("hasConfirmedMapStamp: !passportPlaces.isEmpty"))
     }
 
     // MARK: - Helpers
