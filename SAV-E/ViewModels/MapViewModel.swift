@@ -450,6 +450,9 @@ final class MapViewModel: ObservableObject {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     ))
     @Published var selectedCategories: Set<PlaceCategory> = []
+    @Published var selectedIntentFilters: Set<SaveMapDrawerIntent> = []
+    @Published private(set) var nearbyFilterAnchor: CLLocationCoordinate2D?
+    @Published private(set) var isRefreshingNearbyFilter = false
     @Published var activeFilter: Set<UUID>?       // nil = show all
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var isLoading = false
@@ -569,11 +572,12 @@ final class MapViewModel: ObservableObject {
     // MARK: - Computed
 
     var filteredPlaces: [Place] {
-        var result = places
-        if !selectedCategories.isEmpty {
-            result = result.filter { selectedCategories.contains($0.category) }
-        }
-        return result
+        SaveMapIntentFilter.places(
+            places,
+            categories: selectedCategories,
+            intents: selectedIntentFilters,
+            nearbyAnchor: nearbyFilterAnchor
+        )
     }
 
     func placesForRoute(placeIDs: [UUID]) -> [Place] {
@@ -1863,6 +1867,8 @@ final class MapViewModel: ObservableObject {
     private func focusSavedPlace(_ place: Place, extraCount: Int = 0, showStampMoment: Bool = true) {
         activeFilter = nil
         selectedCategories.removeAll()
+        selectedIntentFilters.removeAll()
+        nearbyFilterAnchor = nil
         selectionIsCameraOnly = true
         selectedPlace = place
         selectedSocialPlace = nil
@@ -2406,6 +2412,8 @@ final class MapViewModel: ObservableObject {
         selectedMapCandidate = nil
         selectedMapFeature = nil
         selectedCategories = []
+        selectedIntentFilters = []
+        nearbyFilterAnchor = nil
         activeFilter = nil
         exactSearchResolution = nil
         clearRoute()
@@ -2689,6 +2697,33 @@ final class MapViewModel: ObservableObject {
             selectedCategories.remove(category)
         } else {
             selectedCategories.insert(category)
+        }
+    }
+
+    func toggleIntentFilter(_ intent: SaveMapDrawerIntent) {
+        if selectedIntentFilters.contains(intent) {
+            selectedIntentFilters.remove(intent)
+            if intent == .nearby {
+                nearbyFilterAnchor = nil
+                isRefreshingNearbyFilter = false
+            }
+            return
+        }
+
+        selectedIntentFilters.insert(intent)
+        guard intent == .nearby else { return }
+        Task { await refreshNearbyFilterAnchor() }
+    }
+
+    private func refreshNearbyFilterAnchor() async {
+        guard selectedIntentFilters.contains(.nearby) else { return }
+        isRefreshingNearbyFilter = true
+        let location = await locationService.requestCurrentLocation()
+        isRefreshingNearbyFilter = false
+        guard selectedIntentFilters.contains(.nearby) else { return }
+        nearbyFilterAnchor = location?.coordinate
+        if location == nil, locationService.isAuthorizationDenied {
+            showsLocationDeniedNotice = true
         }
     }
 

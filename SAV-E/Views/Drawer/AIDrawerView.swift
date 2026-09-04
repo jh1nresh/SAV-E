@@ -119,6 +119,11 @@ struct AIDrawerView: View {
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
+    var selectedIntentFilters: Set<SaveMapDrawerIntent> = []
+    var onToggleIntentFilter: (SaveMapDrawerIntent) -> Void = { _ in }
+    var filteredPlaces: [Place] = []
+    var isRefreshingNearbyFilter = false
+    var nearbyFilterNeedsLocation = false
     var onOpenPassport: () -> Void = {}
     var onDismissMapDetailSheet: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
@@ -937,6 +942,10 @@ struct AIDrawerView: View {
 
                 categoryFilterStrip
 
+                if hasActiveMapFilters {
+                    filteredMapStampsSection
+                }
+
                 if !viewModel.chatHistory.isEmpty {
                     NotebookBandLabel(languageSettings.localized(english: "Recent", traditionalChinese: "最近"))
                         .padding(.horizontal, SaveTheme.Spacing.lg)
@@ -998,11 +1007,74 @@ struct AIDrawerView: View {
                         )
                         .onTapGesture { onToggleCategory(category) }
                     }
+
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.34))
+                        .frame(width: 1, height: 22)
+                        .padding(.horizontal, 2)
+
+                    ForEach(SaveMapDrawerIntent.allCases) { intent in
+                        SaveIntentFilterPill(
+                            intent: intent,
+                            language: languageSettings.language,
+                            isSelected: selectedIntentFilters.contains(intent)
+                        )
+                        .onTapGesture { onToggleIntentFilter(intent) }
+                    }
                 }
                 .padding(.horizontal, SaveTheme.Spacing.lg)
                 .padding(.vertical, 2)
             }
         }
+    }
+
+    private var hasActiveMapFilters: Bool {
+        !selectedCategories.isEmpty || !selectedIntentFilters.isEmpty
+    }
+
+    private var filteredMapStampsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NotebookBandLabel(languageSettings.localized(english: "From your Savvy", traditionalChinese: "來自你的 Savvy"))
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+
+            if isRefreshingNearbyFilter {
+                Text(languageSettings.localized(
+                    english: "Finding Map Stamps near you…",
+                    traditionalChinese: "正在找附近的地圖章…"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else if nearbyFilterNeedsLocation {
+                Text(languageSettings.localized(
+                    english: "Turn on location to filter nearby Map Stamps.",
+                    traditionalChinese: "開啟定位後才能篩選附近的地圖章。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else if filteredPlaces.isEmpty {
+                Text(languageSettings.localized(
+                    english: "No Map Stamps match these filters.",
+                    traditionalChinese: "沒有地圖章符合這些篩選。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else {
+                ForEach(Array(filteredPlaces.prefix(8))) { place in
+                    Button {
+                        openSavedPlace(place)
+                    } label: {
+                        SaveFilteredStampRow(place: place, language: languageSettings.language)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, SaveTheme.Spacing.lg)
+                    .accessibilityIdentifier("drawer.filter.result.\(place.id.uuidString)")
+                }
+            }
+        }
+        .accessibilityIdentifier("drawer.filter.results")
     }
 
     private func performCandidateAction(

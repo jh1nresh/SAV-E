@@ -931,6 +931,15 @@ struct ContentView: View {
             onToggleCategory: { category in
                 mapVM.toggleCategory(category)
             },
+            selectedIntentFilters: mapVM.selectedIntentFilters,
+            onToggleIntentFilter: { intent in
+                mapVM.toggleIntentFilter(intent)
+            },
+            filteredPlaces: mapVM.filteredPlaces,
+            isRefreshingNearbyFilter: mapVM.isRefreshingNearbyFilter,
+            nearbyFilterNeedsLocation: mapVM.selectedIntentFilters.contains(.nearby)
+                && mapVM.nearbyFilterAnchor == nil
+                && !mapVM.isRefreshingNearbyFilter,
             onOpenPassport: openPassport,
             onDismissMapDetailSheet: {
                 isRootSheetPresented = false

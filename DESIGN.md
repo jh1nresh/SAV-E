@@ -558,7 +558,8 @@ Rules:
 - Persistent top-left/top-right map chrome should stay empty unless a real contextual
   signal, such as weather, is wired.
 - Passport opens from the drawer command bar, not from persistent map chrome.
-- Category filters live in the drawer, not as a persistent map rail.
+- Category filters live in the drawer, not as a persistent map rail. Want to
+  try, Visited, and Nearby are drawer chips that filter Map Stamps on the map.
 - Current location remains bottom-right and one-handed.
 - Only reliable states get pins.
 - Unsaved nearby candidates are shown only after an explicit drawer action.
@@ -577,6 +578,10 @@ Rules:
 - Required mic states: idle, requesting permission, listening, transcribed,
   loading, permission denied, unavailable, and failed.
 - Filters and quick prompts belong in the drawer so the map remains clean.
+- Category chips stay in the drawer. After them, Want to try, Visited, and
+  Nearby may filter confirmed Map Stamps. Nearby is a 2 km saved-place lens.
+  It does not pin unsaved candidates. Do not add restroom, gas, or wildlife
+  chips.
 - Idle drawer content should use an Apple Maps-like hierarchy: command bar, quick
   action rows, filters, recent items, and suggestions. Do not show the full agent
   command console by default.

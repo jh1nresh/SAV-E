@@ -1972,6 +1972,7 @@ final class SaveSearchControllerTests: XCTestCase {
         map.mapCandidates = [candidate]
         map.selectedMapCandidate = candidate
         map.selectedCategories = [.cafe]
+        map.selectedIntentFilters = [.wantToGo, .nearby]
         map.activeFilter = [UUID()]
         map.routeCoordinates = route
         map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
@@ -1981,6 +1982,8 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(map.mapCandidates.isEmpty)
         XCTAssertNil(map.selectedMapCandidate)
         XCTAssertTrue(map.selectedCategories.isEmpty)
+        XCTAssertTrue(map.selectedIntentFilters.isEmpty)
+        XCTAssertNil(map.nearbyFilterAnchor)
         XCTAssertNil(map.activeFilter)
         XCTAssertTrue(map.routeCoordinates.isEmpty)
         XCTAssertNil(map.calculatedRoute)
