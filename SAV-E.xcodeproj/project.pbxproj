@@ -65,6 +65,10 @@
 		667EBE401889BD9FF4AC9837 /* AccountReferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7713D4B597C4062FFE2C08C /* AccountReferenceStore.swift */; };
 		66F4520897870F795E6E3FD7 /* SaveGuideCustomizationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7341CE0888D59F87FF9795A /* SaveGuideCustomizationControllerTests.swift */; };
 		6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528E2A03828D35E2952E7422 /* SaveOriginView.swift */; };
+		3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C91E2A04B5D638F1A2C9E04 /* SavePlanView.swift */; };
+		6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A6B7C8D9E0F1A2B3C4D5E6F /* SaveDayRhythmScheduler.swift */; };
+		9D0E1F2A3B4C5D6E7F8091A2 /* SavePlanDraftBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */; };
+		B1C2D3E4F5061728394A5B6C /* SaveDayRhythmSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */; };
 		67B0D4C02A1500F6B8D902CF /* PlaceListComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */; };
 		67B23BF4F68B65D050156E0F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EBE852DE7618089938F9421 /* Assets.xcassets */; };
 		67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -326,6 +330,10 @@
 		51DF55BE93F14D29CE673F5D /* SaveAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAIService.swift; sourceTree = "<group>"; };
 		5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugVaultExporter.swift; sourceTree = "<group>"; };
 		528E2A03828D35E2952E7422 /* SaveOriginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveOriginView.swift; sourceTree = "<group>"; };
+		7C91E2A04B5D638F1A2C9E04 /* SavePlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanView.swift; sourceTree = "<group>"; };
+		5A6B7C8D9E0F1A2B3C4D5E6F /* SaveDayRhythmScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDayRhythmScheduler.swift; sourceTree = "<group>"; };
+		8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanDraftBuilder.swift; sourceTree = "<group>"; };
+		A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDayRhythmSchedulerTests.swift; sourceTree = "<group>"; };
 		53130D5A88AAB65EF3312276 /* AIParsingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIParsingService.swift; sourceTree = "<group>"; };
 		54876D21CED56B8E43591F6E /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripPlanSaveTests.swift; sourceTree = "<group>"; };
@@ -668,6 +676,8 @@
 				2D5A7F09B9AE3F2129C605FE /* SaveLocalVaultService.swift */,
 				425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */,
 				A6C366D3712F5DE04F5EEC40 /* SavePlanAroundController.swift */,
+				5A6B7C8D9E0F1A2B3C4D5E6F /* SaveDayRhythmScheduler.swift */,
+				8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */,
 				5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */,
 				6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */,
 				576B2C6882D03B869EA156FF /* SaveStoreKitService.swift */,
@@ -736,6 +746,7 @@
 				BE956518D9B2C4F8D91A4B28 /* Map */,
 				4320D2B25C0E7653731FFABF /* Onboarding */,
 				FC233FF308BCA01DD137B953 /* Origin */,
+				C2D3E4F5061728394A5B6C7D /* Plan */,
 				0CF873FD5E2B5B611179A1D6 /* Previews */,
 				DE053ABF257FAF333E4A2425 /* Profile */,
 				7474D3EF06276FBAA7A7CE02 /* Shared */,
@@ -863,6 +874,7 @@
 				7D404A68838FF556ADEBC2D7 /* SaveLocationIntentRecommendationServiceTests.swift */,
 				0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */,
 				7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */,
+				A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */,
 				A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */,
 				314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */,
 				2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */,
@@ -959,6 +971,14 @@
 				528E2A03828D35E2952E7422 /* SaveOriginView.swift */,
 			);
 			path = Origin;
+			sourceTree = "<group>";
+		};
+		C2D3E4F5061728394A5B6C7D /* Plan */ = {
+			isa = PBXGroup;
+			children = (
+				7C91E2A04B5D638F1A2C9E04 /* SavePlanView.swift */,
+			);
+			path = Plan;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1342,6 +1362,7 @@
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
+				B1C2D3E4F5061728394A5B6C /* SaveDayRhythmSchedulerTests.swift in Sources */,
 				6D25496E2E4B1EA7B949E82E /* OnboardingSampleClueTests.swift in Sources */,
 				9E128B182EBB30CE71CA03D8 /* PlaceDeduplicationTests.swift in Sources */,
 				8C5B4D4B69560B6FF869E33D /* RelatedPlaceSourcesClientTests.swift in Sources */,
@@ -1477,6 +1498,9 @@
 				3EA497DD9126B572939E0D11 /* SaveMemoryRecord.swift in Sources */,
 				B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */,
 				6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */,
+				3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */,
+				6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */,
+				9D0E1F2A3B4C5D6E7F8091A2 /* SavePlanDraftBuilder.swift in Sources */,
 				F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */,
 				9B89D237E9E3B0347D707D58 /* SavePlaceFromURLIntent.swift in Sources */,
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,

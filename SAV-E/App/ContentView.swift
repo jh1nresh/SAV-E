@@ -5,21 +5,21 @@ import SwiftUI
 /// Shape decided 2026-08-23 and specified in
 /// `specs/2026-08-24-save-tab-restructure-and-origin-surface-v0.md` (W2):
 ///
-///     [ Home ]  [ Map ]  ( + )  [ Origin ]  [ Profile ]
+///     [ Home ]  [ Map ]  ( + )  [ Plan ]  [ Profile ]
 ///
 /// - `saves` is gone from the root bar: `SaveHomeView` is now its permanent
 ///   entry point while the denser `SaveLibraryView` remains a pushed child.
-/// - `trips` is demoted off the root bar. It is a low-frequency surface and did
-///   not earn a permanent slot; it stays reachable from Home and from a place.
+/// - `trips` is demoted off the root bar as a child route. Plan is the
+///   permanent itinerary workbench that replaced Origin.
 /// - `capture` is the raised centre control, not a screen — selecting it opens
 ///   the capture cover and leaves the previous tab selected.
-/// - `origin` is the new fifth face. See W4 in the spec; it is not a social
-///   feed and must never imply other users.
+/// - `plan` drafts walking days from confirmed Map Stamps. Unsaved
+///   attractions stay labeled. It is not a social feed.
 enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     case home
     case map
     case capture
-    case origin
+    case plan
     case profile
 
     var id: Self { self }
@@ -37,7 +37,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
         case .home: "Home"
         case .map: "Map"
         case .capture: "Save"
-        case .origin: "Origin"
+        case .plan: "Plan"
         case .profile: "Profile"
         }
     }
@@ -49,14 +49,13 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     /// Chosen against the Atlas/Postcard language rather than accepting
     /// defaults: Home is the notebook cover, Map is a folded paper map (not a
     /// globe — Savvy is a city-scale tool), Save is the capture control,
-    /// Origin is the source clipping a place came from, Profile is the
-    /// passport holder.
+    /// Plan is a calendar itinerary, Profile is the passport holder.
     var atlasIcon: String {
         switch self {
         case .home: "book.closed"
         case .map: "map"
         case .capture: "plus"
-        case .origin: "paperclip"
+        case .plan: "calendar"
         case .profile: "person.crop.circle"
         }
     }
@@ -69,8 +68,8 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
             return language.localized(english: "Map", traditionalChinese: "地圖")
         case .capture:
             return language.localized(english: "Save", traditionalChinese: "收藏")
-        case .origin:
-            return language.localized(english: "Origin", traditionalChinese: "來處")
+        case .plan:
+            return language.localized(english: "Plan", traditionalChinese: "規劃")
         case .profile:
             return language.localized(english: "Profile", traditionalChinese: "護照")
         }
@@ -555,6 +554,10 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
+                                    // Trips stays a demoted child route (same
+                                    // pattern as Saves). Plan is the root-tab
+                                    // workbench that replaced Origin — not the
+                                    // Home Trips destination.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -580,8 +583,8 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
-                        case .origin:
-                            originView
+                        case .plan:
+                            planView
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:
@@ -590,7 +593,7 @@ struct ContentView: View {
                             // committing the selection. Render the previous
                             // surface's neighbour rather than crashing if a
                             // future caller sets it directly.
-                            originView
+                            planView
                         }
                     }
 
@@ -670,14 +673,16 @@ struct ContentView: View {
         }
     }
 
-    private var originView: some View {
-        SaveOriginView(
-            places: mapVM.socialPlaces,
-            onSave: { place in
-                _ = try await mapVM.saveSocialPlaceToMySave(place)
-            },
-            onSkip: { place in
-                try await mapVM.skipOriginPlace(place)
+    private var planView: some View {
+        SavePlanView(
+            savedPlaces: mapVM.places,
+            mapCandidates: mapVM.mapCandidates,
+            tripStore: tripStore,
+            onOpenTrip: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trip($0),
+                    currently: rootPath
+                )
             },
             onOpenPassport: openPassport
         )

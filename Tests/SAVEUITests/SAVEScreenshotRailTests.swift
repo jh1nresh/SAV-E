@@ -176,7 +176,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        let tabs = ["Home", "Map", "Save", "Origin", "Profile"].map {
+        let tabs = ["Home", "Map", "Save", "Plan", "Profile"].map {
             rootTabButton($0, app: app)
         }
         for tab in tabs {
@@ -199,11 +199,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
         attach(app, name: "five-tab-map")
 
-        openRootTab("Origin", app: app)
+        openRootTab("Plan", app: app)
         XCTAssertTrue(
-            app.descendants(matching: .any)["origin.root"].waitForExistence(timeout: stepTimeout)
+            app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout)
         )
-        attach(app, name: "five-tab-origin")
+        attach(app, name: "five-tab-plan")
 
         openRootTab("Profile", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -426,7 +426,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
 
-        for tab in ["Home", "Map", "Save", "Origin", "Profile"] {
+        for tab in ["Home", "Map", "Save", "Plan", "Profile"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
         }
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
@@ -455,7 +455,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(tripTabButton("Share", app: app).exists)
         XCTAssertTrue(app.buttons["trip.share.action"].exists)
 
-        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
+        for rootTab in ["Home", "Map", "Save", "Plan", "Profile"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists, "Root tab \(rootTab) should be hidden inside a Trip")
         }
 
@@ -469,7 +469,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
 
         openRootTab("Home", app: app)
-        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
+        for rootTab in ["Home", "Map", "Save", "Plan", "Profile"] {
             XCTAssertTrue(
                 rootTabButton(rootTab, app: app).waitForExistence(timeout: stepTimeout),
                 "Missing \(rootTab) after leaving a Trip"
@@ -546,7 +546,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(tripTabButton("Inbox", app: app).exists)
         XCTAssertFalse(tripTabButton("Share", app: app).exists)
         XCTAssertTrue(tripTabButton("Map", app: app).isSelected)
-        for rootTab in ["Home", "Map", "Save", "Origin", "Profile"] {
+        for rootTab in ["Home", "Map", "Save", "Plan", "Profile"] {
             XCTAssertFalse(rootTabButton(rootTab, app: app).exists)
         }
 
@@ -824,14 +824,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testOriginFoodDiscoverySaveAndSkipActions() throws {
+    func testPlanTabDraftsFromSavedMapStamps() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
-                "--uitest-origin-food",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
@@ -839,38 +839,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
 
-        openRootTab("Origin", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["origin.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Plan", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.composer"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["origin.root"].exists)
 
-        let cards = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'origin.foodCard.'")
-        )
-        XCTAssertEqual(cards.count, 2)
-        let candidateState = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'origin.unsavedCandidate.'")
-        )
-        XCTAssertTrue(candidateState.firstMatch.waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.staticTexts["SAVVY PLACE CARD"].exists)
-        let skippedCard = cards.element(boundBy: cards.count - 1)
-        XCTAssertTrue(skippedCard.waitForExistence(timeout: stepTimeout))
-        let skippedCardID = skippedCard.identifier
-        attach(app, name: "origin-food-discovery")
-
-        let skip = app.buttons["origin.skip"]
-        XCTAssertTrue(skip.waitForExistence(timeout: stepTimeout))
-        skip.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)[skippedCardID].waitForNonExistence(timeout: stepTimeout)
-        )
-
-        let savedCard = cards.firstMatch
-        XCTAssertTrue(savedCard.waitForExistence(timeout: stepTimeout))
-        let save = app.buttons["origin.save"]
-        XCTAssertTrue(save.waitForExistence(timeout: stepTimeout))
-        save.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["origin.empty"].waitForExistence(timeout: stepTimeout)
-        )
+        let compose = app.buttons["plan.compose"]
+        XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
+        tapReachable(compose)
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: launchTimeout))
+        attach(app, name: "plan-from-stamps")
         XCTAssertEqual(app.state, .runningForeground)
     }
 
@@ -1254,7 +1232,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
-        for tab in ["Home", "Origin"] {
+        for tab in ["Home", "Plan"] {
             openRootTab(tab, app: app)
             XCTAssertTrue(
                 app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
@@ -1741,7 +1719,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         switch title {
         case "Home": return "home.root"
         case "Map": return "map.root"
-        case "Origin": return "origin.root"
+        case "Plan": return "plan.root"
         case "Profile": return "profile.root"
         default: return nil
         }
@@ -1797,7 +1775,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         tapReachable(entry)
         let trips = app.descendants(matching: .any)["trips.home"]
         if !trips.waitForExistence(timeout: timeout(5)) {
-            if app.descendants(matching: .any)["profile.root"].exists {
+            if app.descendants(matching: .any)["profile.root"].exists
+                || app.descendants(matching: .any)["plan.root"].exists {
                 openRootTab("Home", app: app)
             }
             tapReachable(firstExisting(candidates, timeout: timeout(2)))

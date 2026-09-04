@@ -207,6 +207,8 @@ struct TripGapSuggestionEngine {
             return [.attraction, .shopping, .cafe]
         case .needsHoursCheck:
             return Set(PlaceCategory.allCases)
+        case .missingLodging:
+            return [.stay]
         }
     }
 

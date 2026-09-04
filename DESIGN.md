@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-04
 > Status: source of truth for native iOS design work
-> Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
+> Token systems: **Atlas Postcard** governs Home, Saves, Plan, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
 > Tokens" and "Legacy Cream-Notebook Tokens" below.
 
@@ -152,7 +152,9 @@ Use these product nouns:
 - Evidence Receipt
 - Passport
 - Today on Savvy
+- Plan
 - Plan around this
+- Trip Plan
 - Confirm candidate
 - Reject clue
 - Needs exact place
@@ -277,6 +279,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | --- | --- |
 | Home (`SaveRootViews`) | Atlas |
 | Saves drawer + search results | Atlas |
+| Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
 | Ask drawer (`AIDrawerView`) | Atlas |
@@ -522,6 +525,7 @@ Every UI object must map to one of these states:
 | Visited Map Stamp | Confirmed place with visited memory | Yes | Update memory |
 | Private Review | User review proof or note, private by default | No by itself | Add proof |
 | Trip Stop | Route/planning object, not necessarily saved | In trip context only | Review plan |
+| Travel window | Arrival, departure, check-in, or check-out constraint on a Trip Plan | No pin of its own | Adjust time |
 
 Never collapse Source Clue, Review Candidate, and Map Stamp into one visual state.
 
@@ -562,6 +566,20 @@ Rules:
 - Current location remains bottom-right and one-handed.
 - Only reliable states get pins.
 - Unsaved nearby candidates are shown only after an explicit drawer action.
+
+### Plan
+
+Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stamps.
+
+Rules:
+
+- Plan is a root tab. It is not a social feed and not a booking desk.
+- Composer first: city from saved stamps, days, pace, optional arrival and departure clocks.
+- Confirmed Map Stamps are the only stops that can be saved into a Trip.
+- Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
+- Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.
+- Savvy does not book flights or hotels. Missing lodging is a gap, not a fake reservation.
+- Five-second test: Map Stamp, Unsaved Candidate, and travel window must be distinct.
 
 ### Drawer
 
