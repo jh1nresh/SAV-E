@@ -661,28 +661,57 @@ private struct AuthenticatedRootView: View {
     }
 
     private func recoveryView(_ reason: AccountRecoveryReason) -> some View {
-        AccountAccessView(
-            icon: "person.crop.circle.badge.exclamationmark",
-            title: recoveryTitle(reason),
-            message: recoveryMessage(reason),
-            primaryTitle: languageSettings.localized(
-                english: "Use a different sign-in",
-                traditionalChinese: "改用其他登入帳號"
-            ),
-            primaryAccessibilityID: "accountGate.switchGoogle",
-            primaryAction: signOutForGoogleChoice,
-            secondaryTitle: languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"),
-            secondaryAccessibilityID: "accountGate.retry",
-            secondaryAction: verifyAccount,
-            tertiaryTitle: reason == .differentAccount
-                ? languageSettings.localized(
-                    english: "Re-link this phone to the current account…",
-                    traditionalChinese: "把這支手機重新連結到現在的帳號…"
+        // For `.differentAccount` (stale Keychain ref after backend rebuild),
+        // re-link is the real escape hatch — promote it to primary. "Use a
+        // different sign-in" used to be primary and often looped because the
+        // dead ref survived sign-out.
+        Group {
+            if reason == .differentAccount {
+                AccountAccessView(
+                    icon: "person.crop.circle.badge.exclamationmark",
+                    title: recoveryTitle(reason),
+                    message: recoveryMessage(reason),
+                    primaryTitle: languageSettings.localized(
+                        english: "Re-link this phone to the current account…",
+                        traditionalChinese: "把這支手機重新連結到現在的帳號…"
+                    ),
+                    primaryAccessibilityID: "accountGate.rebindDevice",
+                    primaryAction: {
+                        isRebindConfirmationPresented = true
+                    },
+                    secondaryTitle: languageSettings.localized(
+                        english: "Use a different sign-in",
+                        traditionalChinese: "改用其他登入帳號"
+                    ),
+                    secondaryAccessibilityID: "accountGate.switchGoogle",
+                    secondaryAction: signOutForGoogleChoice,
+                    tertiaryTitle: languageSettings.localized(
+                        english: "Try again",
+                        traditionalChinese: "再試一次"
+                    ),
+                    tertiaryAccessibilityID: "accountGate.retry",
+                    tertiaryAction: { Task { await verifyAccount() } }
                 )
-                : nil,
-            tertiaryAccessibilityID: "accountGate.rebindDevice",
-            tertiaryAction: { isRebindConfirmationPresented = true }
-        )
+            } else {
+                AccountAccessView(
+                    icon: "person.crop.circle.badge.exclamationmark",
+                    title: recoveryTitle(reason),
+                    message: recoveryMessage(reason),
+                    primaryTitle: languageSettings.localized(
+                        english: "Use a different sign-in",
+                        traditionalChinese: "改用其他登入帳號"
+                    ),
+                    primaryAccessibilityID: "accountGate.switchGoogle",
+                    primaryAction: signOutForGoogleChoice,
+                    secondaryTitle: languageSettings.localized(
+                        english: "Try again",
+                        traditionalChinese: "再試一次"
+                    ),
+                    secondaryAccessibilityID: "accountGate.retry",
+                    secondaryAction: verifyAccount
+                )
+            }
+        }
         .confirmationDialog(
             languageSettings.localized(
                 english: "Forget the old account link on this phone?",
@@ -775,7 +804,10 @@ private struct AuthenticatedRootView: View {
     }
 
     private func signOutForGoogleChoice() async {
-        accountGate.invalidate()
+        // Clear a stale different-account Keychain ref before Privy sign-out
+        // so the next interactive login can reach confirmation instead of
+        // bouncing straight back into recovery.
+        accountGate.prepareAccountSwitch()
         await authService.signOut()
     }
 
