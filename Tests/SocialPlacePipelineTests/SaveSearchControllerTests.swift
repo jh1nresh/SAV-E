@@ -3479,8 +3479,10 @@ final class SaveSearchControllerTests: XCTestCase {
     func testPassportTodayCatalogOrdersConfirmShareInviteAndCapsAtThree() {
         var privateStamp = place(name: "Private Cafe", address: "Irvine, CA", category: .cafe)
         privateStamp.visibility = .privateMemory
+        privateStamp.status = .visited
         var publicGuide = place(name: "Origin Card", address: "Irvine, CA", category: .food)
         publicGuide.visibility = .publicGuide
+        publicGuide.status = .visited
 
         let missions = SavePassportTodayCatalog.missions(
             waitingClues: 2,
@@ -3508,6 +3510,8 @@ final class SaveSearchControllerTests: XCTestCase {
         var publicGuide = place(name: "Already Shared", address: "Irvine, CA", category: .cafe)
         publicGuide.visibility = .publicGuide
 
+        friendsOnly.status = .visited
+        publicGuide.status = .visited
         let shareOnly = SavePassportTodayCatalog.missions(
             waitingClues: 0,
             savedPlaces: [publicGuide, friendsOnly],
@@ -3570,6 +3574,10 @@ final class SaveSearchControllerTests: XCTestCase {
             "profile.today.confirmWaitingClue"
         )
         XCTAssertEqual(
+            SavePassportTodayMissionID.markVisitedStamp.accessibilityIdentifier,
+            "profile.today.markVisitedStamp"
+        )
+        XCTAssertEqual(
             SavePassportTodayMissionID.shareRecommendation.accessibilityIdentifier,
             "profile.today.shareRecommendation"
         )
@@ -3578,11 +3586,12 @@ final class SaveSearchControllerTests: XCTestCase {
             "profile.today.inviteFriend"
         )
         XCTAssertEqual(SavePassportTodayMissionID.confirmWaitingClue.rawValue, "confirm_waiting_clue")
+        XCTAssertEqual(SavePassportTodayMissionID.markVisitedStamp.rawValue, "mark_visited_stamp")
         XCTAssertEqual(SavePassportTodayMissionID.shareRecommendation.rawValue, "share_recommendation")
         XCTAssertEqual(SavePassportTodayMissionID.inviteOrFollowFriend.rawValue, "invite_or_follow_friend")
     }
 
-    @MainActor
+
     func testPassportInviteShareStoreIsLocalFlagNotAGrantPath() {
         let suite = "save.passport.today.invite.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -3596,6 +3605,53 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+
+    @MainActor
+    func testPassportTodayCatalogIncludesMarkVisitedReturnMission() {
+        var wantToGo = place(name: "Unvisited Noodle", address: "Irvine, CA", category: .food)
+        wantToGo.status = .wantToGo
+        wantToGo.visibility = .privateMemory
+
+        let missions = SavePassportTodayCatalog.missions(
+            waitingClues: 0,
+            savedPlaces: [wantToGo],
+            followedFriends: [SaveFollowedFriend(id: "ada", displayName: "Ada", handle: "ada", avatarUrl: nil)],
+            hasSharedInvite: true,
+            inviteURLAvailable: true
+        )
+
+        XCTAssertEqual(missions.map(\.id), [.markVisitedStamp, .shareRecommendation])
+        XCTAssertEqual(
+            SavePassportTodayMissionID.markVisitedStamp.accessibilityIdentifier,
+            "profile.today.markVisitedStamp"
+        )
+    }
+
+    @MainActor
+    func testPassportFieldStreakStoreCountsOnlyRecordedFieldDays() {
+        let suite = "save.passport.fieldStreak." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let store = SavePassportFieldStreakStore(defaults: defaults, calendar: calendar)
+
+        let day1 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 12))!
+        let day2 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 2, hour: 12))!
+        let day4 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 4, hour: 12))!
+
+        XCTAssertEqual(store.currentStreak, 0)
+        XCTAssertTrue(store.recordFieldAction(at: day1))
+        XCTAssertTrue(store.recordFieldAction(at: day2))
+        XCTAssertTrue(store.recordFieldAction(at: day4))
+        XCTAssertTrue(store.actionDayKeys.contains("2026-09-01"))
+        XCTAssertTrue(store.actionDayKeys.contains("2026-09-02"))
+        XCTAssertTrue(store.actionDayKeys.contains("2026-09-04"))
+        XCTAssertFalse(store.recordFieldAction(at: day4))
+
+        defaults.removePersistentDomain(forName: suite)
+    }
+
     func testMapFilterActionDoesNotHideSavedPins() {
         let focusedPlace = place(name: "Focused Stop", address: "Irvine, CA", category: .cafe)
         let otherSavedPlace = place(name: "Other Saved", address: "Irvine, CA", category: .food)
