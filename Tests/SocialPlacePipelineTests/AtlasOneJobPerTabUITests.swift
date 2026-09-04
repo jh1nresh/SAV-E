@@ -319,8 +319,16 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
         XCTAssertTrue(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains(".ultraThinMaterial, in: Capsule()"))
+        XCTAssertTrue(map.contains(".regularMaterial, in: Capsule()"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
+        XCTAssertTrue(
+            map.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Map keeps the compact stamp-count chip from the Apple Maps chrome pass."
+        )
+        XCTAssertTrue(
+            map.contains("AtlasPalette.paper"),
+            "Selected place peek stays notebook paper, not washed glass."
+        )
         XCTAssertFalse(
             map.contains("slider.horizontal.3"),
             "Collapsed Map search is a floating pill, not a filter rail."
@@ -346,15 +354,25 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(panel.contains("map.drawerPanel.collapsed"))
         XCTAssertTrue(panel.contains("SaveAtlasMapCommandShelf("))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
-        XCTAssertTrue(panel.contains(".regularMaterial"))
-        XCTAssertTrue(shelf.contains("map.command.search"))
-        XCTAssertTrue(shelf.contains(".ultraThinMaterial, in: Capsule()"))
-        XCTAssertTrue(shelf.contains(".ultraThinMaterial,\n            in: RoundedRectangle(cornerRadius: 24"))
-        XCTAssertFalse(shelf.contains(".glassEffect("))
-        XCTAssertFalse(
-            shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
-            "Live Map top stays empty; stamp count is not persistent chrome."
+        XCTAssertTrue(
+            panel.contains("AtlasPalette.canvas"),
+            "Expanded Map drawer stays notebook canvas; glass belongs on the search pill."
         )
+        XCTAssertFalse(
+            panel.contains(".regularMaterial"),
+            "Expanded drawer must not use washed glass over notebook content."
+        )
+        XCTAssertTrue(shelf.contains("map.command.search"))
+        XCTAssertTrue(shelf.contains(".regularMaterial, in: Capsule()"))
+        XCTAssertTrue(
+            shelf.contains("AtlasPalette.paper"),
+            "Place peek restores notebook paper from the prior Apple Maps chrome."
+        )
+        XCTAssertTrue(
+            shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Stamp-count chip returns with the restored Apple Maps Map chrome."
+        )
+        XCTAssertFalse(shelf.contains(".glassEffect("))
         XCTAssertFalse(map.contains("TextField"))
         XCTAssertFalse(map.contains(".searchable"))
         XCTAssertFalse(map.contains("map.command.search"))

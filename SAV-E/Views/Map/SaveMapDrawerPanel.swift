@@ -3,11 +3,10 @@ import SwiftUI
 /// One resizable drawer surface for the Map tab.
 ///
 /// Collapsed is the Apple Maps–style floating search pill. Medium and large
-/// use the same in-tree panel with adaptive glass so the map stays visible
-/// behind the command surface. Expanding never presents a second layer. The
-/// embedded drawer intentionally doesn't use sheet presentation modifiers
-/// because those can abort SwiftUI's presentation coordinator when attached
-/// to an in-tree view.
+/// keep the notebook canvas panel (memory / ask workbench). Expanding never
+/// presents a second layer. The embedded drawer intentionally doesn't use
+/// sheet presentation modifiers because those can abort SwiftUI's presentation
+/// coordinator when attached to an in-tree view.
 struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var isExpanded: Bool
     @Binding var detent: PresentationDetent
@@ -93,22 +92,14 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         .frame(maxWidth: .infinity)
         .frame(height: panelHeight(totalHeight: totalHeight), alignment: .top)
         .background(
-            .regularMaterial,
+            AtlasPalette.canvas,
             in: UnevenRoundedRectangle(
                 topLeadingRadius: 28,
                 topTrailingRadius: 28,
                 style: .continuous
             )
         )
-        .overlay {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                topTrailingRadius: 28,
-                style: .continuous
-            )
-            .stroke(AtlasPalette.line.opacity(0.22), lineWidth: 0.8)
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.14), radius: 18, y: -4)
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.18), radius: 18, y: -4)
         // Container only: the keyboard safe area still applies, so the panel
         // rises with the keyboard instead of letting it cover the content.
         .ignoresSafeArea(.container, edges: .bottom)

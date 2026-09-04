@@ -554,9 +554,24 @@ struct SaveAtlasInteractiveRootMap: View {
             .clipped()
             .placed(x: 0, y: 0, width: 402, height: 874)
 
-            // DESIGN.md / adaptive glass: Map top stays empty. Stamp count
-            // rides on the floating search shelf accessibility value, not a
-            // persistent top-leading chip.
+            HStack(spacing: 7) {
+                Image(systemName: "star.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AtlasPalette.forest)
+                Text("\(presentation.mapStampCount) Map Stamps")
+                    .font(AtlasType.display(12))
+                    .foregroundStyle(AtlasPalette.ink)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 38)
+            .background(.regularMaterial, in: Capsule())
+            .overlay {
+                Capsule().stroke(AtlasPalette.forest.opacity(0.20), lineWidth: 1)
+            }
+            .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
+            .placed(x: 16, y: 56, width: 139, height: 38)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("map.stampCount")
 
             if let place = mapViewModel.selectedPlace {
                 SaveAtlasLivePlaceCard(
@@ -593,9 +608,9 @@ struct SaveAtlasInteractiveRootMap: View {
 
 /// Collapsed Map search stop: Apple Maps–style floating frosted pill.
 ///
-/// Medium and large stops stay on `SaveMapDrawerPanel`. This chrome only
-/// adapts the parked map glass (`.ultraThinMaterial` capsule) so search
-/// floats over the map instead of reading as a cream card or top bar.
+/// Medium and large stops stay on `SaveMapDrawerPanel`. Uses denser
+/// `.regularMaterial` (not washed `.ultraThinMaterial`) so the pill reads
+/// like Apple Maps search glass over the basemap.
 struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
@@ -630,12 +645,12 @@ struct SaveAtlasMapCommandShelf: View {
                 }
                 .padding(.horizontal, 16)
                 .frame(minHeight: 52)
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(.regularMaterial, in: Capsule())
                 .overlay {
                     Capsule()
-                        .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 0.8)
+                        .stroke(AtlasPalette.line.opacity(0.22), lineWidth: 0.8)
                 }
-                .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 5)
+                .shadow(color: AtlasPalette.ink.opacity(0.12), radius: 14, y: 5)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
@@ -732,15 +747,17 @@ private struct SaveAtlasLivePlaceCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Memory peek stays notebook paper (DESIGN.md). Map chrome may be
+        // glass; place identity must not wash out into ultra-thin material.
         .background(
-            .ultraThinMaterial,
+            AtlasPalette.paper,
             in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 0.8)
+                .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
         }
-        .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
+        .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 8, y: 3)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.place.card")
     }

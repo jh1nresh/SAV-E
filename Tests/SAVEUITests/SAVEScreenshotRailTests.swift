@@ -1268,9 +1268,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["map.command.search"].waitForExistence(timeout: stepTimeout),
             "Map geography-first chrome is the floating search shelf, not a Savvy lockup."
         )
-        XCTAssertFalse(
-            app.descendants(matching: .any)["map.stampCount"].exists,
-            "Persistent top stamp-count chrome stays off; count rides on search accessibility."
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.stampCount"].waitForExistence(timeout: stepTimeout),
+            "Map restores the compact stamp-count chip from the prior Apple Maps chrome."
         )
         XCTAssertFalse(
             app.descendants(matching: .any)["root.passport"].exists,
