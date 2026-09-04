@@ -85,9 +85,12 @@ final class AccountSessionGate: ObservableObject {
     /// and a "previous" match is permanently impossible.
     ///
     /// Only acts from the `.differentAccount` recovery state, and only
-    /// forgets this device's binding record: local data is untouched, and the
-    /// next verification runs the normal first-time confirmation flow, which
-    /// shows the account's contents before anything is bound.
+    /// forgets this device's binding record: local data is untouched. The
+    /// follow-up verify always uses `.interactive` even if the Privy session
+    /// was restored: the destructive re-link dialog is the user's explicit
+    /// consent, and verifying as `.restored` would trap them in
+    /// `.unconfirmedRestoredAccount` with no confirm button (build 109
+    /// failure: wipe app data was the only way out).
     func resetDeviceBinding(
         sessionGeneration: Int,
         sessionOrigin: AccountSessionOrigin,
@@ -102,9 +105,19 @@ final class AccountSessionGate: ObservableObject {
         }
         await verify(
             sessionGeneration: sessionGeneration,
-            sessionOrigin: sessionOrigin,
+            sessionOrigin: .interactive,
             reviewerDemo: reviewerDemo
         )
+    }
+
+    /// Call when the user leaves the gate via "use a different sign-in".
+    /// A stale `.differentAccount` Keychain ref must not survive into the
+    /// next interactive login or they bounce straight back into recovery.
+    func prepareAccountSwitch() {
+        if case .recoveryNeeded(.differentAccount) = state {
+            try? referenceStore.clear()
+        }
+        invalidate()
     }
 
     func confirmPendingAccount(sessionGeneration: Int) async {
