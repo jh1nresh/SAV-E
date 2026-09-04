@@ -586,7 +586,7 @@ struct SaveAtlasInteractiveRootMap: View {
                     onOpenAssistant: presentation.onOpenAssistant
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .placed(x: 15, y: 702, width: 372, height: 84)
+                .placed(x: 15, y: 718, width: 372, height: 68)
             }
         }
         .animation(SaveTheme.Motion.standardSpring, value: mapViewModel.selectedPlace?.id)
@@ -598,63 +598,58 @@ struct SaveAtlasInteractiveRootMap: View {
     }
 }
 
+/// Collapsed Map search stop: Apple Maps–style floating frosted pill.
+///
+/// Medium and large stops stay on `SaveMapDrawerPanel`. This chrome only
+/// adapts the parked map glass (`.ultraThinMaterial` capsule) so search
+/// floats over the map instead of reading as a cream card or top bar.
 struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
 
     var body: some View {
         Button(action: onOpenAssistant) {
-            VStack(spacing: 8) {
+            VStack(spacing: 7) {
                 Capsule()
                     .fill(AtlasPalette.line.opacity(0.48))
-                    .frame(width: 38, height: 4)
+                    .frame(width: 36, height: 5)
                     .accessibilityHidden(true)
 
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.forest)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .frame(width: 22, height: 22)
+                        .accessibilityHidden(true)
 
                     Text("Search places")
-                        .font(AtlasType.strong(16))
-                        .foregroundStyle(AtlasPalette.ink)
+                        .font(AtlasType.body(16))
+                        .foregroundStyle(AtlasPalette.muted)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AtlasPalette.ink)
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .frame(width: 22, height: 22)
+                        .accessibilityHidden(true)
                 }
-                .padding(.horizontal, 14)
-                .frame(height: 44)
-                .background(
-                    AtlasPalette.canvas.opacity(0.88),
-                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                )
-
-                Label("\(mapStampCount) saved Map Stamps", systemImage: "star.circle.fill")
-                    .font(AtlasType.body(12))
-                    .foregroundStyle(AtlasPalette.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .frame(minHeight: 52)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 0.8)
+                }
+                .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 5)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 9)
-            .padding(.bottom, 10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: 28, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 1)
-            }
-            .shadow(color: AtlasPalette.ink.opacity(0.14), radius: 14, y: 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Search places")
         .accessibilityHint("Opens the Savvy assistant")
+        .accessibilityValue("\(mapStampCount) saved Map Stamps")
         .accessibilityIdentifier("map.command.search")
     }
 }

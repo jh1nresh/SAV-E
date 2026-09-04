@@ -188,6 +188,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThan(leadingInset, 12, "Root tabs must not touch the leading screen edge.")
         XCTAssertGreaterThan(trailingInset, 12, "Root tabs must not touch the trailing screen edge.")
         XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
+        waitForHomeCoverImagery(app)
         attach(app, name: "five-tab-home")
 
         openRootTab("Map", app: app)
@@ -1805,6 +1806,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         return elements.first(where: \.exists) ?? elements[0]
+    }
+
+    /// Live Home paints hybrid / Look Around covers asynchronously. The Atlas
+    /// gate compares `five-tab-home` to `ProductionTargets/home.png`. Attaching
+    /// on `home.root` alone captured the pin fallback (CI #184 score 0.70);
+    /// the same target scores 0.93 once MapKit imagery lands.
+    @MainActor
+    private func waitForHomeCoverImagery(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Live Home should show the saved-place library before the parity raster."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.photoHero"].waitForExistence(timeout: stepTimeout),
+            "Live Home should show the featured cover before the parity raster."
+        )
+
+        // Pin-fallback Home on the 402pt 3x CI viewport is ~0.7MB. Hybrid /
+        // Look Around covers from the same viewport land at ~2–3MB.
+        let minimumPaintedBytes = 1_200_000
+        let deadline = Date().addingTimeInterval(timeout(6))
+        while Date() < deadline {
+            if app.screenshot().pngRepresentation.count >= minimumPaintedBytes {
+                return
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+        }
     }
 
     @MainActor

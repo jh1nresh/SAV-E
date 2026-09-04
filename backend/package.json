@@ -9,6 +9,8 @@
     "check:source-recovery": "node dist/sourceRecoveryConfigCheck.js",
     "prestart": "npm run build && npm run check:source-recovery",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
+    "audit:production": "node scripts/audit-production.mjs",
+    "validate": "npm test && npm run audit:production",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "try:sendblue": "tsx scripts/try-sendblue.ts"

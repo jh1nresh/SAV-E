@@ -299,15 +299,16 @@ jobs:
       node-version: "22"
       working-directory: backend
       lockfile: backend/package-lock.json
-      check-script: test
-      audit-production: true
+      # Registry 503s are retried in backend `validate`, not the reusable audit step.
+      check-script: validate
+      audit-production: false
       job-key: save-backend
       timeout-minutes: 12
 
   save-contracts:
     runs-on: ubuntu-latest
-    # save-rn `npm ci` is ~5m and a healthy production audit is ~2m. The
-    # previous 8-minute cap cancelled mid-audit on registry hangs (#185/#187).
+    # save-rn `npm ci` is ~5m. Empty {summary,detail} on run 33857607310
+    # (~25s) is the same registry flake as #186. Audit then skip-flakes.
     timeout-minutes: 18
 
     steps:
@@ -331,6 +332,7 @@ jobs:
           npm run check:app-clip-invoke
           npm run check:save-cards
           npm run check:save-actions
+          node --test scripts/check-production-audit.test.js
 
       - name: Audit production dependencies
         working-directory: save-rn
