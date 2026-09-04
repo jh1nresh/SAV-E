@@ -36,10 +36,12 @@ Visual studies (proposal only, not production UI):
   `specs/2026-09-04-launch-purchase-path-trigger-later-v0.md` — free download,
   purchase path ready, trigger later. No launch/onboarding wall. Parkwolf /
   Mapstr / park4night paywalls are later Pro-study material only, not v1 UI.
-- First distribution format: this spec + PR. No TestFlight, store, or
+- First distribution format: this spec + proposal crops in
+  `design-assets/appllama-studies/`. No TestFlight, store, or production
   screenshot change.
-- Files and systems in scope: this spec only. Implementation files named below
-  are the landing spots for a later slice, not this ticket.
+- Files and systems in scope: this spec and `design-assets/appllama-studies/`.
+  Implementation files named below are landing spots for a later slice, not
+  this ticket.
 - Verification commands: `git diff --check`. No Xcode, simulator, or CI gate.
 - Security and privacy boundary: do not import AppLlama assets, screenshots,
   or user-generated park content into the app bundle. Do not add analytics,
