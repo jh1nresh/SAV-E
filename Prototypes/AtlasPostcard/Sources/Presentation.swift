@@ -375,6 +375,18 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         return groups
     }
 
+    /// City shelves omit the featured hero so the same Map Stamp cannot
+    /// appear twice and share one stale thumbnail.
+    static func cityRowsExcludingFeatured(
+        _ places: [AtlasPlacePresentation],
+        featuredID: String?
+    ) -> [AtlasSavedPlaceGroupPresentation] {
+        let remaining = featuredID.map { id in
+            places.filter { $0.id != id }
+        } ?? places
+        return groupedByRegion(remaining).filter { !$0.places.isEmpty }
+    }
+
     static let shibuyaBackstreets = AtlasPlacePresentation(
         id: "shibuya-backstreets",
         name: "Shibuya Backstreets",

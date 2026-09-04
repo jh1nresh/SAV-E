@@ -11,6 +11,8 @@ enum PlaceBusinessEnricher {
         let rating: Double?
         let priceRange: String?
         let openingHours: String?
+        let resolvedGooglePlaceId: String?
+        let replacedProviderMatch: Bool
     }
 
     /// The photo carousel should offer a real gallery, not a single shot.
@@ -26,7 +28,8 @@ enum PlaceBusinessEnricher {
     }
 
     /// Returns a place with freshly enriched fields merged in, or `nil` if no
-    /// new details were found. Never overwrites values the place already has.
+    /// new details were found. Existing photos stay first unless a stale Google
+    /// ID was rebound to a tighter match.
     static func enrich(
         _ place: Place,
         service: GooglePlacesServiceProtocol = GooglePlacesService.shared
@@ -37,8 +40,19 @@ enum PlaceBusinessEnricher {
         var updated = place
         if !update.photoURLs.isEmpty {
             let urls = update.photoURLs.map(\.absoluteString)
-            updated.businessPhotoUrls = ((updated.businessPhotoUrls ?? []) + urls)
-                .removingDuplicatePhotoURLs()
+            if update.replacedProviderMatch {
+                // A stale or wrong Google ID rebound to this place. Put the
+                // recovered photos first so Home cards do not keep another
+                // business's cover.
+                updated.businessPhotoUrls = (urls + (updated.businessPhotoUrls ?? []))
+                    .removingDuplicatePhotoURLs()
+            } else {
+                updated.businessPhotoUrls = ((updated.businessPhotoUrls ?? []) + urls)
+                    .removingDuplicatePhotoURLs()
+            }
+        }
+        if let resolvedGooglePlaceId = update.resolvedGooglePlaceId {
+            updated.googlePlaceId = resolvedGooglePlaceId
         }
         updated.googleRating = updated.googleRating ?? update.rating
         updated.priceRange = updated.priceRange ?? update.priceRange
@@ -174,11 +188,20 @@ enum PlaceBusinessEnricher {
             details?.openingHours?.isEmpty == false
         guard hasDetails else { return nil }
 
+        let resolvedGooglePlaceId = details.flatMap { value -> String? in
+            let trimmed = value.placeId.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        } ?? fallbackMatch?.id
+        let replacedProviderMatch = place.googlePlaceId != nil
+            && resolvedGooglePlaceId != place.googlePlaceId
+
         return Update(
             photoURLs: photoURLs,
             rating: details?.rating ?? fallbackMatch?.rating,
             priceRange: priceLevel.map { String(repeating: "$", count: max(1, $0)) },
-            openingHours: details?.openingHours?.first
+            openingHours: details?.openingHours?.first,
+            resolvedGooglePlaceId: resolvedGooglePlaceId,
+            replacedProviderMatch: replacedProviderMatch
         )
     }
 
@@ -194,29 +217,66 @@ enum PlaceBusinessEnricher {
                 query: "\(name) \(address)",
                 near: coordinate
             )
-            // Match against the visible name AND any alternate lookup name (e.g.
-            // a customized place keeps its original business name) so every
-            // surface resolves the same Google Place.
-            let lookupNames = [name, alternateName]
-                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            let targetLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
             return matches
                 .compactMap { match -> (match: GooglePlaceMatch, score: Double)? in
-                    let matchLocation = CLLocation(latitude: match.latitude, longitude: match.longitude)
-                    let distance = targetLocation.distance(from: matchLocation)
-                    let sameName = lookupNames.contains { lookupName in
-                        match.name.localizedCaseInsensitiveContains(lookupName) ||
-                            lookupName.localizedCaseInsensitiveContains(match.name)
-                    }
-                    guard (sameName && distance < 2_000) || distance < 35 else { return nil }
-                    return (match, (sameName ? 0 : 10_000) + distance)
+                    guard let score = PlaceBusinessMatchPolicy.score(
+                        name: name,
+                        alternateName: alternateName,
+                        coordinate: coordinate,
+                        match: match
+                    ) else { return nil }
+                    return (match, score)
                 }
                 .min { $0.score < $1.score }?
                 .match
         } catch {
             return nil
         }
+    }
+}
+
+/// Tight Home/detail photo matching. A same-name hit 2 km away, or a nameless
+/// shop 35 m away, can bind another place's cover to a Map Stamp card.
+enum PlaceBusinessMatchPolicy {
+    static let namedMatchMaxDistanceMeters: CLLocationDistance = 250
+    static let minimumSharedNameLength = 4
+
+    static func score(
+        name: String,
+        alternateName: String? = nil,
+        coordinate: CLLocationCoordinate2D,
+        match: GooglePlaceMatch
+    ) -> Double? {
+        let lookupNames = [name, alternateName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let target = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let candidate = CLLocation(latitude: match.latitude, longitude: match.longitude)
+        let distance = target.distance(from: candidate)
+        guard namesAlign(lookupNames, matchName: match.name) else { return nil }
+        guard distance < namedMatchMaxDistanceMeters else { return nil }
+        return distance
+    }
+
+    static func namesAlign(_ lookupNames: [String], matchName: String) -> Bool {
+        lookupNames.contains { distinctiveOverlap($0, matchName) }
+    }
+
+    private static func distinctiveOverlap(_ lhs: String, _ rhs: String) -> Bool {
+        let left = normalize(lhs)
+        let right = normalize(rhs)
+        if left.isEmpty || right.isEmpty { return false }
+        if left == right { return true }
+        let shorter = left.count <= right.count ? left : right
+        let longer = left.count <= right.count ? right : left
+        guard shorter.count >= minimumSharedNameLength else { return false }
+        return longer.contains(shorter)
+    }
+
+    private static func normalize(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
