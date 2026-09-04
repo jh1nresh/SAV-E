@@ -7,6 +7,12 @@ Source: [AppLlama](https://appllama.io/) homepage feature **Parkwolf: National P
 AppLlama is a screen library of top-earning iOS apps. It is a reference, not a
 token source. `DESIGN.md` and `Color+Theme.swift` still win.
 
+Visual studies (proposal only, not production UI):
+
+- [Want to try Memory Card](../design-assets/appllama-studies/memory-card-want-to-try.png)
+- [Visited Memory Card](../design-assets/appllama-studies/memory-card-visited.png)
+- [Map drawer intent filters](../design-assets/appllama-studies/map-drawer-intent-filters.png)
+
 ## Required brief
 
 - Paid user job / observed failure: paid users need a private map of confirmed
