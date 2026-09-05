@@ -545,6 +545,7 @@ final class MapViewModel: ObservableObject {
     ) {
         self.supabaseService = supabaseService
         self.mapCandidatePlaceSaver = mapCandidatePlaceSaver ?? { place, userID in
+            guard usesRemotePersistence else { return }
             try await supabaseService.savePlace(place, userId: userID)
             // Record from the store directly: this closure runs before `self` is usable.
             SavePassportFieldStreakStore.shared.recordFieldAction()

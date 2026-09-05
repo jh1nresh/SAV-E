@@ -853,6 +853,77 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPlanCandidateCanBeConfirmedSavedAndOpened() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "--uitest-plan-candidate",
+            "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let scroll = app.scrollViews.firstMatch
+        let compose = app.buttons["plan.compose"]
+        XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
+        tapReachable(compose)
+        let candidate = app.buttons["tripPlan.confirm.Plan Test Garden"]
+        XCTAssertTrue(scrollUntilHittable(candidate, in: scroll, maxSwipes: 10))
+        attach(app, name: "plan-candidate-before-confirmation")
+        candidate.tap()
+        let confirm = app.buttons["Confirm & save place"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        confirm.tap()
+        XCTAssertTrue(candidate.waitForNonExistence(timeout: timeout(30)))
+        let save = app.buttons["tripPlan.save"]
+        for _ in 0..<10 {
+            if save.isHittable { break }
+            scroll.swipeDown()
+        }
+        XCTAssertTrue(save.isHittable)
+        let savedName = "Fourth saved plan"
+        // Two seeded trips plus these two exercise access beyond the preview cards.
+        for tripName in ["Confirmed candidate plan", savedName] {
+            save.tap()
+            let name = app.textFields["tripPlanSave.name"]
+            XCTAssertTrue(name.waitForExistence(timeout: stepTimeout))
+            replaceText(in: name, with: tripName)
+            app.buttons["tripPlanSave.confirm"].tap()
+            let success = app.alerts.firstMatch
+            XCTAssertTrue(success.waitForExistence(timeout: timeout(20)))
+            XCTAssertTrue(success.staticTexts["Saved to Trip Packs"].exists)
+            success.buttons["OK"].tap()
+        }
+        let open = app.buttons["tripPlan.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-saved-open-action")
+        open.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Plan Test Garden"].firstMatch.exists)
+        attach(app, name: "plan-confirmed-trip")
+
+        terminate(app)
+        app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let allTrips = app.buttons["plan.allTrips"]
+        XCTAssertTrue(scrollUntilHittable(allTrips, in: app.scrollViews.firstMatch, maxSwipes: 8))
+        allTrips.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        let tripMenu = app.buttons["trips.allTrips"]
+        XCTAssertTrue(tripMenu.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(tripMenu.label.contains("4"))
+        tripMenu.tap()
+        let savedTrip = app.buttons[savedName]
+        XCTAssertTrue(savedTrip.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-all-four-trips")
+        savedTrip.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Plan Test Garden"].firstMatch.exists)
+        attach(app, name: "plan-confirmed-trip-after-relaunch")
+    }
+
+    @MainActor
     func testLocateWithDeniedPermissionShowsRecoveryNotice() throws {
         let app = makeApp(
             launchArguments: [

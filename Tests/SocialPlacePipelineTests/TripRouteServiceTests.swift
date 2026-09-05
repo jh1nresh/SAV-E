@@ -229,10 +229,70 @@ final class TripRouteServiceTests: XCTestCase {
         ]
     }
 
+    func testFixedOrderRequestDoesNotOptimizeMealOrStayOrder() async throws {
+        let places = [makePlace("Breakfast"), makePlace("Check out"), makePlace("Lunch")]
+        StubRoutesURLProtocol.handler = { request in
+            var data = request.httpBody ?? Data()
+            if let stream = request.httpBodyStream {
+                stream.open()
+                defer { stream.close() }
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    guard count > 0 else { break }
+                    data.append(contentsOf: buffer.prefix(count))
+                }
+            }
+            let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            XCTAssertNotNil(body)
+            XCTAssertNil(body?["optimizeWaypointOrder"])
+            return (200, ["routes": [["legs": [
+                ["duration": "600s", "distanceMeters": 800],
+                ["duration": "900s", "distanceMeters": 1200],
+            ]]]])
+        }
+        let service = GoogleTripRouteService(apiKey: "test-key", session: StubRoutesURLProtocol.session())
+        let result = try await service.fixedOrderDay(places, mode: .walking)
+        XCTAssertEqual(result.orderedPlaces.map(\.id), places.map(\.id))
+        XCTAssertEqual(result.legs.map(\.durationMinutes), [10, 15])
+    }
+
+    func testPlanTravelMarksRealTimingConflictAndPreservesOrder() async throws {
+        let places = [makePlace("Lunch"), makePlace("Museum")]
+        let draft = travelDraft(places)
+        let result = await SavePlanDraftBuilder.checkingTravel(draft, savedPlaces: places, language: .english,
+            routeService: FixedOrderFakeRouteService(minutes: 90))
+        XCTAssertEqual(result.itineraryDays[0].stops.map(\.placeId), places.map { Optional($0.id.uuidString) })
+        XCTAssertEqual(result.travelLegs.first?.durationMinutes, 90)
+        XCTAssertTrue(result.itineraryDays[0].stops[1].risks.contains(.tooFarFromPrevious))
+        XCTAssertTrue(result.itineraryDays[0].windowNote?.contains("Travel does not fit") == true)
+    }
+
+    func testPlanTravelFallbackKeepsDraftAndNamesUnverifiedTimes() async {
+        let places = [makePlace("Lunch"), makePlace("Museum")]
+        let draft = travelDraft(places)
+        let services: [TripRouteServiceProtocol] = [ThrowingFakeRouteService(), PlaceDroppingFakeRouteService()]
+        for service in services {
+            let result = await SavePlanDraftBuilder.checkingTravel(draft, savedPlaces: places, language: .english, routeService: service)
+            XCTAssertEqual(result.itineraryDays[0].stops, draft.itineraryDays[0].stops)
+            XCTAssertTrue(result.travelLegs.isEmpty)
+            XCTAssertTrue(result.itineraryDays[0].windowNote?.contains("unverified") == true)
+        }
+    }
+
+    private func travelDraft(_ places: [Place]) -> SaveAIResponse {
+        SaveAIResponse(componentType: .tripItinerary, title: "Day", placeIds: places.map { $0.id.uuidString },
+            navigationPlaceId: nil, transportMode: .walking,
+            itineraryDays: [ItineraryDay(dayNumber: 1, label: nil, stops: places.enumerated().map { index, place in
+                ItineraryStop(id: UUID(), placeId: place.id.uuidString, placeState: .confirmedMapStamp,
+                    placeName: place.name, time: index == 0 ? "12:30 PM" : "2:00 PM", duration: 60, note: nil)
+            })], messageText: nil, mapAction: nil, aiMessage: nil)
+    }
+
     private func makePlace(
         _ name: String,
-        latitude: Double,
-        longitude: Double,
+        latitude: Double = 35.68,
+        longitude: Double = 139.76,
         category: PlaceCategory = .food
     ) -> Place {
         Place(
@@ -335,4 +395,14 @@ private final class StubRoutesURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+private struct FixedOrderFakeRouteService: TripRouteServiceProtocol {
+    let minutes: Int
+    func optimizedDay(_ places: [Place], mode: SaveAIResponse.TransportMode) async throws -> TripRouteDayPlan {
+        TripRouteDayPlan(orderedPlaces: places, legs: zip(places, places.dropFirst()).map { from, to in
+            TripTravelLeg(fromPlaceId: from.id.uuidString, toPlaceId: to.id.uuidString,
+                durationMinutes: minutes, distanceMeters: 6000, mode: mode)
+        })
+    }
 }

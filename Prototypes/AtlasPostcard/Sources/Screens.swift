@@ -1126,9 +1126,18 @@ struct TripsAtlasScreen: View {
                         .tracking(1.1)
                         .foregroundStyle(AtlasPalette.muted)
                     Spacer()
-                    Text("\(presentation.tripSummaries.count) total")
-                        .font(AtlasType.regular(12))
-                        .foregroundStyle(AtlasPalette.muted)
+                    Menu {
+                        ForEach(presentation.tripSummaries) { trip in
+                            Button(trip.name) { presentation.onOpenTripID(trip.id) }
+                        }
+                    } label: {
+                        Label("\(presentation.allTripsLabel) (\(presentation.tripSummaries.count))", systemImage: "chevron.down")
+                            .font(AtlasType.regular(12))
+                            .foregroundStyle(AtlasPalette.forest)
+                            .frame(minHeight: 44)
+                    }
+                    .disabled(presentation.tripSummaries.isEmpty)
+                    .accessibilityIdentifier("trips.allTrips")
                 }
                 .padding(.horizontal, 17)
                 .padding(.top, 16)

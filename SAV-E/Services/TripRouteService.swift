@@ -24,6 +24,18 @@ protocol TripRouteServiceProtocol {
         _ places: [Place],
         mode: SaveAIResponse.TransportMode
     ) async throws -> TripRouteDayPlan
+
+    func fixedOrderDay(_ places: [Place], mode: SaveAIResponse.TransportMode) async throws -> TripRouteDayPlan
+}
+
+extension TripRouteServiceProtocol {
+    func fixedOrderDay(_ places: [Place], mode: SaveAIResponse.TransportMode) async throws -> TripRouteDayPlan {
+        let result = try await optimizedDay(places, mode: mode)
+        guard result.orderedPlaces.map(\.id) == places.map(\.id) else {
+            throw TripRouteServiceError.invalidResponse
+        }
+        return result
+    }
 }
 
 /// Google Routes API (`computeRoutes`) client. First and last stops stay
@@ -61,6 +73,16 @@ final class GoogleTripRouteService: TripRouteServiceProtocol {
         _ places: [Place],
         mode: SaveAIResponse.TransportMode
     ) async throws -> TripRouteDayPlan {
+        try await routeDay(places, mode: mode, optimizeOrder: true)
+    }
+
+    func fixedOrderDay(_ places: [Place], mode: SaveAIResponse.TransportMode) async throws -> TripRouteDayPlan {
+        try await routeDay(places, mode: mode, optimizeOrder: false)
+    }
+
+    private func routeDay(
+        _ places: [Place], mode: SaveAIResponse.TransportMode, optimizeOrder: Bool
+    ) async throws -> TripRouteDayPlan {
         guard places.count >= 2 else {
             return TripRouteDayPlan(orderedPlaces: places, legs: [])
         }
@@ -75,7 +97,7 @@ final class GoogleTripRouteService: TripRouteServiceProtocol {
         ]
         if !intermediates.isEmpty {
             body["intermediates"] = intermediates.map(Self.waypoint)
-            body["optimizeWaypointOrder"] = true
+            if optimizeOrder { body["optimizeWaypointOrder"] = true }
         }
         if mode == .driving {
             body["routingPreference"] = "TRAFFIC_AWARE"
@@ -107,7 +129,7 @@ final class GoogleTripRouteService: TripRouteServiceProtocol {
         let orderedPlaces = Self.reordered(
             places: places,
             intermediates: intermediates,
-            optimizedIndices: route["optimizedIntermediateWaypointIndex"] as? [Int]
+            optimizedIndices: optimizeOrder ? route["optimizedIntermediateWaypointIndex"] as? [Int] : nil
         )
         let legs = Self.legs(
             from: route["legs"] as? [[String: Any]] ?? [],

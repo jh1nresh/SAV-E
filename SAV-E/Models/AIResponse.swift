@@ -108,6 +108,10 @@ struct ItineraryStop: Identifiable, Equatable {
     let note: String?
     var sourceSummary: String? = nil
     var risks: [TripRisk] = []
+    /// Kept only in the draft until the user confirms this exact map result.
+    var mapCandidate: SaveMapCandidate? = nil
+
+    var routingID: String { placeId ?? id.uuidString }
 }
 
 enum TripKmlExportSelectionError: Error, Equatable {
@@ -189,11 +193,11 @@ struct TripCanvasDraft: Equatable {
     /// canvas as the user arranged it.
     func tripSaveSelection(availablePlaces: [Place]) throws -> TripPlanSaveSelection {
         let availablePlaceIDs = Set(availablePlaces.map(\.id))
-        var seenPlaceIDs = Set<UUID>()
         var stops: [TripPlanPersistableStop] = []
         var excludedStopCount = 0
 
         for day in visibleDays {
+            var seenPlaceIDs = Set<UUID>()
             var orderIndex = 0
             for stop in day.stops {
                 guard stop.placeState == .confirmedMapStamp,
@@ -230,6 +234,27 @@ struct TripCanvasDraft: Equatable {
         guard stop(with: stopID)?.placeState == .externalSuggestion else { return }
         skippedStopIDs.remove(stopID)
         approvedExternalStopIDs.insert(stopID)
+    }
+
+    mutating func confirmExternalStop(_ stopID: UUID, as place: Place) {
+        guard let location = location(of: stopID),
+              let original = stop(with: stopID),
+              original.placeState == .externalSuggestion,
+              original.mapCandidate != nil else { return }
+        var stops = days[location.dayIndex].stops
+        stops[location.stopIndex] = ItineraryStop(
+            id: original.id,
+            placeId: place.id.uuidString,
+            placeState: .confirmedMapStamp,
+            placeName: place.name,
+            time: original.time,
+            duration: original.duration,
+            note: original.note,
+            sourceSummary: place.address,
+            risks: original.risks.filter { $0 != .externalSuggestion }
+        )
+        days[location.dayIndex] = days[location.dayIndex].replacingStops(stops)
+        approvedExternalStopIDs.remove(stopID)
     }
 
     mutating func skipStop(_ stopID: UUID) {
@@ -276,7 +301,8 @@ struct TripCanvasDraft: Equatable {
     mutating func insertGapSuggestion(
         _ option: GapSuggestionOption,
         dayNumber: Int,
-        note: String
+        note: String,
+        mapCandidate: SaveMapCandidate? = nil
     ) {
         guard option.action != .skip,
               let index = days.firstIndex(where: { $0.dayNumber == dayNumber }) else { return }
@@ -305,7 +331,8 @@ struct TripCanvasDraft: Equatable {
             duration: 60,
             note: note,
             sourceSummary: option.reason,
-            risks: risks
+            risks: risks,
+            mapCandidate: mapCandidate
         )
         var stops = days[index].stops
         stops.append(suggestion)

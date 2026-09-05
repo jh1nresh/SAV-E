@@ -684,7 +684,16 @@ struct ContentView: View {
                     currently: rootPath
                 )
             },
-            onOpenPassport: openPassport
+            onOpenPassport: openPassport,
+            onOpenTrips: { rootPath = SaveChromeNavigation.pathByOpening(.trips, currently: rootPath) },
+            onConfirmCandidate: { candidate in
+                if let existing = mapVM.places.first(where: {
+                    $0.name.localizedCaseInsensitiveCompare(candidate.title) == .orderedSame
+                        && abs($0.latitude - candidate.latitude) < 0.0008
+                        && abs($0.longitude - candidate.longitude) < 0.0008
+                }) { return existing }
+                return try await mapVM.saveMapCandidateAsPlace(candidate)
+            }
         )
     }
 

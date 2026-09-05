@@ -107,6 +107,16 @@ struct SaveDayRhythmScheduler {
             isLast: isLast,
             windows: windows
         )
+        guard bounds.end - bounds.start >= 60 else {
+            return SaveDayRhythmResult(
+                stops: [],
+                windowNote: outputLanguage.localized(
+                    english: "No usable time remains after travel buffers. Adjust the arrival, departure, or number of days.",
+                    traditionalChinese: "扣除交通緩衝後沒有可安排的時段。請調整抵達、離開時間或天數。"
+                ),
+                gaps: []
+            )
+        }
         var remainingPlaces = orderedPlaces.filter { $0.category != .stay }
         var remainingUnsaved = unsavedCandidates
         let lodgingPlace = lodging
@@ -269,9 +279,6 @@ struct SaveDayRhythmScheduler {
         if isLast, let departure = windows.departureMinutes {
             end = min(end, departure - windows.airportTransferMinutes)
         }
-        if end - start < 60 {
-            end = start + 60
-        }
         return (start, end)
     }
 
@@ -363,7 +370,8 @@ struct SaveDayRhythmScheduler {
             duration: stop.duration,
             note: stop.note,
             sourceSummary: stop.sourceSummary,
-            risks: stop.risks
+            risks: stop.risks,
+            mapCandidate: stop.mapCandidate
         )
     }
 
@@ -406,14 +414,15 @@ struct SaveDayRhythmScheduler {
             time: TripClock.display(from: start),
             duration: duration,
             note: outputLanguage.localized(
-                english: "Unsaved Candidate. Approve to keep it on this plan; it will not become a Map Stamp automatically.",
-                traditionalChinese: "尚未儲存的候選。核准後才留在行程裡，不會自動變成地圖章。"
+                english: "Check opening hours and booking requirements before visiting.",
+                traditionalChinese: "出發前請確認營業時間與預約要求。"
             ),
             sourceSummary: outputLanguage.localized(
                 english: "Unsaved Candidate",
                 traditionalChinese: "尚未儲存"
             ),
-            risks: [.externalSuggestion, .hoursUnknown, .bookingUnknown]
+            risks: [.externalSuggestion, .hoursUnknown, .bookingUnknown],
+            mapCandidate: candidate
         )
     }
 
@@ -433,18 +442,19 @@ struct SaveDayRhythmScheduler {
             duration: duration,
             note: checkIn
                 ? outputLanguage.localized(
-                    english: "Unsaved lodging suggestion for check-in. Approve to keep it; Savvy does not book the room.",
-                    traditionalChinese: "尚未儲存的入住候選。核准後才留下；Savvy 不會代訂房間。"
+                    english: "Check-in. Confirm the time with your lodging; Savvy does not book the room.",
+                    traditionalChinese: "入住。請向住宿方確認時間；Savvy 不會代訂房間。"
                 )
                 : outputLanguage.localized(
-                    english: "Unsaved lodging suggestion for check-out. Approve to keep it; Savvy does not book the room.",
-                    traditionalChinese: "尚未儲存的退房候選。核准後才留下；Savvy 不會代訂房間。"
+                    english: "Check-out. Confirm the time with your lodging; Savvy does not book the room.",
+                    traditionalChinese: "退房。請向住宿方確認時間；Savvy 不會代訂房間。"
                 ),
             sourceSummary: outputLanguage.localized(
                 english: "Unsaved Candidate",
                 traditionalChinese: "尚未儲存"
             ),
-            risks: [.externalSuggestion, .bookingUnknown]
+            risks: [.externalSuggestion, .bookingUnknown],
+            mapCandidate: candidate
         )
     }
 
