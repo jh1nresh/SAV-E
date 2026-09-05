@@ -344,7 +344,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
         XCTAssertFalse(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
+        XCTAssertTrue(
+            map.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"),
+            "Rest-state Map search is a floating capsule, not a rounded paper card."
+        )
         XCTAssertTrue(map.contains("saved Map Stamps"))
         XCTAssertTrue(map.contains("map.command.passport"))
         XCTAssertTrue(
@@ -359,8 +362,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             map.contains("slider.horizontal.3"),
             "Collapsed Map search is a floating pill, not a filter rail."
         )
-        XCTAssertTrue(markers.contains("if state == .saved"))
-        XCTAssertTrue(markers.contains("frame(width: isSelected ? 36 : 32"))
+        XCTAssertTrue(markers.contains("place.category.mapMarkerSymbol"))
+        XCTAssertTrue(markers.contains("state == .review ? \"questionmark\""))
         XCTAssertTrue(markers.contains(".frame(width: 44, height: 44)"))
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
     }
@@ -386,13 +389,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             panel.contains("AtlasPalette.canvas"),
             "Expanded Map drawer stays notebook canvas; glass belongs on the search pill."
         )
-        XCTAssertFalse(
-            panel.contains(".regularMaterial"),
-            "Expanded drawer must not use glass over notebook content."
-        )
+        XCTAssertTrue(panel.contains(".fill(SaveAtlasPalette.paper)"))
+        XCTAssertTrue(panel.contains("if stage == .collapsed"))
         XCTAssertTrue(shelf.contains("map.command.search"))
         XCTAssertTrue(shelf.contains("map.command.passport"))
-        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
+        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"))
         XCTAssertTrue(
             shelf.contains("person.crop.circle.fill"),
             "Search capsule carries Passport in the Apple Maps avatar slot."
@@ -459,7 +460,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.fieldStreak"))
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
-        XCTAssertTrue(passport.contains("profile.activityDisclosure"))
+        XCTAssertFalse(passport.contains("profile.activityDisclosure"))
 
         XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
             < passport.range(of: "profile.fieldStreak")!.lowerBound)

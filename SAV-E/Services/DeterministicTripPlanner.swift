@@ -682,10 +682,16 @@ struct DeterministicTripPlanner {
             // Number words `requestedDayCount` already consumed. Leaving them
             // in makes "plan one day" search for a place called "one".
             "one", "two", "three", "four", "five", "six", "seven",
-            "single", "half", "next", "this"
+            "single", "half", "next", "this", "relaxed", "easy", "slow", "pace"
         ]
 
-        return Self.strippingProductVocabulary(normalized)
+        // CJK quick prompts have no word boundaries. Remove the complete
+        // planning phrases before splitting, so the destination stays a term.
+        let planningPhrases = ["用已存地點", "已存地點", "輕鬆的一天", "輕鬆逛一天", "輕鬆", "一天"]
+        let destinationText = planningPhrases.reduce(Self.strippingProductVocabulary(normalized)) {
+            $0.replacingOccurrences(of: $1, with: " ")
+        }
+        return destinationText
             .split { !$0.isLetter && !$0.isNumber }
             .map(String.init)
             .filter { token in
@@ -736,6 +742,7 @@ struct DeterministicTripPlanner {
         text
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
+            .replacingOccurrences(of: "臺", with: "台")
     }
 
     private func locationAliasScore(for searchable: String, tokens: [String]) -> Int {

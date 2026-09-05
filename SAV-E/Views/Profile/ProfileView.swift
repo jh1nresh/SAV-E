@@ -4,6 +4,7 @@ import UIKit
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
@@ -45,6 +46,7 @@ struct ProfileView: View {
     @State private var opensConnections = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+    @State private var recentFieldActivity = SavePassportFieldStreakStore.shared.recentActivity
     @State private var fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
     @State private var hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
     @State private var visitFocusPlace: Place?
@@ -118,20 +120,18 @@ struct ProfileView: View {
                     PassportStampSection(stats: passportStats)
                         .accessibilityIdentifier("profile.stampLedger")
 
+                    PassportFieldStreakStrip(
+                        streak: fieldStreak,
+                        hasActionToday: hasFieldActionToday,
+                        recentActivity: recentFieldActivity
+                    )
+                    .accessibilityIdentifier("profile.fieldStreak")
+
                     if !todayMissions.isEmpty {
                         PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
                             handleTodayMission(missionID, scrollProxy: proxy)
                         }
                     }
-
-                    DisclosureGroup(languageSettings.localized(english: "Field activity", traditionalChinese: "探索紀錄")) {
-                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday)
-                            .accessibilityIdentifier("profile.fieldStreak")
-                    }
-                    .font(SaveAtlasType.body(14))
-                    .tint(SaveAtlasPalette.forest)
-                    .padding(.horizontal, 16)
-                    .accessibilityIdentifier("profile.activityDisclosure")
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                         DisclosureGroup {
@@ -298,6 +298,12 @@ struct ProfileView: View {
             inviteURLAvailable = await onLoadMyReferralURL() != nil
             await viewModel.loadProfile()
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { refreshFieldStreak() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            refreshFieldStreak()
+        }
         .onChange(of: savedPlaces) { _, places in
             localSavedPlaces = places
             refreshFieldStreak()
@@ -434,6 +440,7 @@ struct ProfileView: View {
     }
 
     private func refreshFieldStreak() {
+        recentFieldActivity = SavePassportFieldStreakStore.shared.recentActivity
         fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
         hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
     }
@@ -463,8 +470,8 @@ struct ProfileView: View {
             }
 
             Text(languageSettings.localized(
-                english: "Count a real field day by marking one Map Stamp visited.",
-                traditionalChinese: "把一個地圖章標成去過，就算進真實的野外連續天。"
+                english: "Mark a saved place as visited to complete today’s activity.",
+                traditionalChinese: "將一個已存地點標記為去過，完成今天的探索紀錄。"
             ))
             .font(SaveAtlasType.body(13))
             .foregroundStyle(SaveAtlasPalette.ink)
@@ -1755,35 +1762,54 @@ private struct PassportFieldStreakStrip: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let streak: Int
     let hasActionToday: Bool
+    let recentActivity: [Bool]
 
     var body: some View {
-        HStack(alignment: .center, spacing: SaveTheme.Spacing.md) {
-            SavePostcardPerforatedMedallion(
-                systemName: "flame.fill",
-                tint: hasActionToday ? SaveAtlasPalette.coral : SaveAtlasPalette.kraft,
-                edge: SaveAtlasPalette.forest
-            )
+        VStack(spacing: 10) {
+            HStack(alignment: .center, spacing: SaveTheme.Spacing.md) {
+                SavePostcardPerforatedMedallion(
+                    systemName: "flame.fill",
+                    tint: hasActionToday ? SaveAtlasPalette.coral : SaveAtlasPalette.kraft,
+                    edge: SaveAtlasPalette.forest
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(languageSettings.localized(
-                    english: "FIELD STREAK",
-                    traditionalChinese: "野外連續"
-                ))
-                .font(SaveAtlasType.strong(11))
-                .tracking(0.7)
-                .foregroundStyle(SaveAtlasPalette.forest)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(languageSettings.localized(
+                        english: "DAILY STREAK",
+                        traditionalChinese: "每日探索"
+                    ))
+                    .font(SaveAtlasType.strong(11))
+                    .tracking(0.7)
+                    .foregroundStyle(SaveAtlasPalette.forest)
 
-                Text(streakTitle)
-                    .font(SaveAtlasType.strong(18))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                    Text(streakTitle)
+                        .font(SaveAtlasType.strong(18))
+                        .foregroundStyle(SaveAtlasPalette.ink)
 
-                Text(streakDetail)
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Text(streakDetail)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
             }
 
-            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                ForEach(Array(recentActivity.enumerated()), id: \.offset) { index, completed in
+                    Image(systemName: completed ? "checkmark" : "minus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(completed ? SaveAtlasPalette.forest : SaveAtlasPalette.muted)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 24)
+                        .background(completed ? SaveAtlasPalette.mint : SaveAtlasPalette.canvas, in: Capsule())
+                        .overlay { Capsule().stroke(index == 6 ? SaveAtlasPalette.forest : .clear, lineWidth: 1) }
+                }
+            }
+            .accessibilityLabel(languageSettings.localized(
+                english: "Last seven days, \(recentActivity.filter { $0 }.count) completed; today is last",
+                traditionalChinese: "最近七天完成 \(recentActivity.filter { $0 }.count) 天，最右邊是今天"
+            ))
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
@@ -1807,26 +1833,26 @@ private struct PassportFieldStreakStrip: View {
     private var streakTitle: String {
         if streak <= 0 {
             return languageSettings.localized(
-                english: "No field day yet",
-                traditionalChinese: "還沒有野外日"
+                english: "Start your streak today",
+                traditionalChinese: "從今天開始累積"
             )
         }
         return languageSettings.localized(
-            english: "\(streak)-day field streak",
-            traditionalChinese: "連續 \(streak) 個野外日"
+            english: "\(streak)-day streak",
+            traditionalChinese: "連續 \(streak) 天"
         )
     }
 
     private var streakDetail: String {
         if hasActionToday {
             return languageSettings.localized(
-                english: "Today already counts: confirm, save, or mark Visited.",
-                traditionalChinese: "今天已記入：確認線索、存章、或標記去過。"
+                english: "Today is complete. One place, one day at a time.",
+                traditionalChinese: "今天已完成，每天一個地點，慢慢累積。"
             )
         }
         return languageSettings.localized(
-            english: "Confirm a clue, save a Map Stamp, or mark Visited to count today.",
-            traditionalChinese: "確認線索、存下地圖章、或標記去過，今天才算。"
+            english: "Save one place or mark a place visited today. Activity is kept on this device.",
+            traditionalChinese: "今天存一個地點，或將一個地點標記為去過。紀錄保留在此裝置。"
         )
     }
 }

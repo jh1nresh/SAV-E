@@ -284,7 +284,10 @@ struct SavePlanView: View {
                 if conversation.input.trimmingCharacters(in: .whitespacesAndNewlines) == query { conversation.input = "" }
             } catch {
                 guard !Task.isCancelled else { return }
-                planError = error.localizedDescription
+                planError = localized(
+                    "Couldn’t reach planning right now. Your message is kept; please try again. You can also choose a city in Plan options to draft from saved places.",
+                    "暫時無法連上規劃服務，訊息已保留，請再試一次。也可以在「調整行程條件」選城市，用已存地點建立草稿。"
+                )
             }
         }
     }

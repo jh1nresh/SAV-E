@@ -2,8 +2,8 @@ import SwiftUI
 
 /// One resizable drawer surface for the Map tab.
 ///
-/// Search is docked to the bottom edge. Medium and large share the same
-/// paper surface for search results and place details. Expanding never
+/// Search rests above the tab bar. All three stops resize the same paper
+/// surface for search results and place details. Expanding never
 /// presents a second layer. The embedded drawer intentionally doesn't use
 /// sheet presentation modifiers because those can abort SwiftUI's presentation
 /// coordinator when attached to an in-tree view.
@@ -19,119 +19,104 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     let onOpenPassport: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
-    /// The panel extends behind the root tab bar.
-    private let collapsedBottomInset: CGFloat = 74
-    /// Grabber, search row and internal padding.
-    private let collapsedHeight: CGFloat = 88
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let tabBarClearance: CGFloat = 80
+    private let collapsedHeight: CGFloat = 64
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .bottom) {
-                if isExpanded {
-                    expandedPanel(totalHeight: proxy.size.height)
-                        .transition(.move(edge: .bottom))
-                } else if showsCollapsedShelf {
-                    collapsedShelf
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        }
-        .animation(SaveTheme.Motion.standardSpring, value: isExpanded)
-        .animation(SaveTheme.Motion.standardSpring, value: showsCollapsedShelf)
-        .animation(SaveTheme.Motion.standardSpring, value: detent)
-    }
-
-    private var collapsedShelf: some View {
-        VStack(spacing: 8) {
-            Capsule()
-                .fill(SaveAtlasPalette.line.opacity(0.45))
-                .frame(width: 36, height: 4)
-                .padding(.top, 10)
-            SaveAtlasMapCommandShelf(
-                mapStampCount: mapStampCount,
-                onOpenAssistant: {
-                    guard !collapsedDragConsumedTap else { return }
-                    onExpand(true)
-                },
-                onOpenPassport: onOpenPassport
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
-        }
-        .frame(height: collapsedHeight)
-        .padding(.bottom, collapsedBottomInset)
-        .background(SaveAtlasPalette.paper, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
-        .overlay(alignment: .top) {
-            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
-                .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-        .simultaneousGesture(resizeGesture(stage: .collapsed))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Map search drawer")
-        .accessibilityValue(MapDrawerStage.collapsed.accessibilityValue)
-        .accessibilityIdentifier(MapDrawerStage.collapsed.accessibilityIdentifier)
-    }
-
-    private func expandedPanel(totalHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(AtlasPalette.line.opacity(0.48))
-                .frame(width: 38, height: 4)
-                .frame(height: 44)
-                .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .gesture(resizeGesture(stage: expandedStage))
-                .onTapGesture { cycleExpandedStage() }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Resize map search drawer")
-                .accessibilityValue(expandedStage.accessibilityValue)
-                .accessibilityAdjustableAction { direction in
-                    switch direction {
-                    case .increment:
-                        moveUp(from: expandedStage)
-                    case .decrement:
-                        moveDown(from: expandedStage)
-                    @unknown default:
-                        break
+            // Expanded content is above root navigation, whose geometry already
+            // excludes the home indicator; keep the same bottom edge as idle.
+            let bottomClearance = max(0, tabBarClearance - (isExpanded ? proxy.safeAreaInsets.bottom : 0))
+            if isExpanded || showsCollapsedShelf {
+                VStack(spacing: 0) {
+                    resizeHandle
+                    if isExpanded {
+                        expandedContent()
+                    } else {
+                        SaveAtlasMapCommandShelf(
+                            mapStampCount: mapStampCount,
+                            onOpenAssistant: {
+                                guard !collapsedDragConsumedTap else { return }
+                                onExpand(true)
+                            },
+                            onOpenPassport: onOpenPassport
+                        )
+                        .padding(.horizontal, 12)
+                        .simultaneousGesture(resizeGesture(stage: .collapsed))
+                        Spacer(minLength: 8)
                     }
                 }
-                .accessibilityIdentifier("map.drawerPanel.handle")
-
-            expandedContent()
+                .frame(maxWidth: .infinity)
+                .frame(height: panelHeight(totalHeight: proxy.size.height - bottomClearance), alignment: .top)
+                .background {
+                    if stage == .collapsed {
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .fill(.regularMaterial)
+                    } else {
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .fill(SaveAtlasPalette.paper)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Map search drawer")
+                .accessibilityValue(stage.accessibilityValue)
+                .accessibilityIdentifier(stage.accessibilityIdentifier)
+                .padding(.horizontal, stage == .collapsed ? proxy.size.width * 0.07 : 8)
+                .padding(.bottom, bottomClearance)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: panelHeight(totalHeight: totalHeight), alignment: .top)
-        .background(
-            AtlasPalette.canvas,
-            in: UnevenRoundedRectangle(
-                topLeadingRadius: 28,
-                topTrailingRadius: 28,
-                style: .continuous
-            )
-        )
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.18), radius: 18, y: -4)
-        // Container only: the keyboard safe area still applies, so the panel
-        // rises with the keyboard instead of letting it cover the content.
-        .ignoresSafeArea(.container, edges: .bottom)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Map search drawer")
-        .accessibilityValue(expandedStage.accessibilityValue)
-        .accessibilityIdentifier(expandedStage.accessibilityIdentifier)
+        .animation(reduceMotion ? nil : SaveTheme.Motion.standardSpring, value: isExpanded)
+        .animation(reduceMotion ? nil : SaveTheme.Motion.standardSpring, value: detent)
     }
 
-    /// `totalHeight` already excludes the keyboard, so every stage remains
-    /// visible while typing. During a drag the panel tracks the finger 1:1,
-    /// then settles at the nearest directional stop on release.
+    private var stage: MapDrawerStage { isExpanded ? expandedStage : .collapsed }
+
+    private var resizeHandle: some View {
+        Capsule()
+            .fill(SaveAtlasPalette.line.opacity(0.48))
+            .frame(width: 36, height: 4)
+            .frame(height: 12)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(resizeGesture(stage: stage))
+            .onTapGesture {
+                if stage == .collapsed { onExpand(false) }
+                else { cycleExpandedStage() }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Resize map search drawer")
+            .accessibilityValue(stage.accessibilityValue)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: moveUp(from: stage)
+                case .decrement: moveDown(from: stage)
+                @unknown default: break
+                }
+            }
+            .accessibilityIdentifier("map.drawerPanel.handle")
+    }
+
+    /// One surface tracks the finger at every stop, including collapsed.
+    /// The available height already excludes the keyboard and tab controls.
     private func panelHeight(totalHeight: CGFloat) -> CGFloat {
-        let largeHeight = max(120, totalHeight - 12)
-        let baseHeight = expandedStage == .large
-            ? largeHeight
-            : max(320, totalHeight * 0.42)
+        let largeHeight = max(collapsedHeight, totalHeight - 12)
+        let baseHeight: CGFloat
+        switch stage {
+        case .collapsed: baseHeight = collapsedHeight
+        case .medium: baseHeight = min(largeHeight, max(240, totalHeight * 0.39))
+        case .large: baseHeight = largeHeight
+        }
         return min(largeHeight, max(collapsedHeight, baseHeight - dragTranslation))
     }
 
@@ -178,7 +163,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         case .collapsed:
             onExpand(false)
         case .medium:
-            withAnimation(SaveTheme.Motion.standardSpring) {
+            withAnimation(reduceMotion ? nil : SaveTheme.Motion.standardSpring) {
                 detent = .large
             }
         case .large:
@@ -193,7 +178,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         case .medium:
             collapse()
         case .large:
-            withAnimation(SaveTheme.Motion.standardSpring) {
+            withAnimation(reduceMotion ? nil : SaveTheme.Motion.standardSpring) {
                 detent = .medium
             }
         }
@@ -282,7 +267,7 @@ struct SaveMapSearchContent: View {
             }
             .foregroundStyle(SaveAtlasPalette.forest)
             .padding(.leading, 12)
-            .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
+            .background(SaveAtlasPalette.canvas, in: Capsule())
             .padding(.horizontal, 16)
 
             ScrollView {

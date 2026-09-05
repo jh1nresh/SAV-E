@@ -29,8 +29,8 @@ struct MapView: View {
     var body: some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
-            // Root Map parks a floating search pill (~68) above the tab bar
-            // (~88). Trip Map crops MapView above its place card, so a short
+            // Root Map parks a 64pt search panel above the tab bar.
+            // Trip Map crops MapView above its place card, so a short
             // trailing clearance is enough. Selection swaps the pill for a
             // taller place peek, so locate rises with that chrome.
             let isEmbeddedCrop = displayedPlaces != nil
@@ -148,11 +148,11 @@ struct MapView: View {
                             Task { await viewModel.focusOnUserLocation() }
                         }
                     )
+                    .accessibilityIdentifier("map.currentLocation")
                     .padding(.trailing, 16)
                     // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
                     // cleared above the floating search pill or place peek.
                     .padding(.bottom, bottomChromeInset)
-                    .accessibilityIdentifier("map.currentLocation")
                 }
                 .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
@@ -412,22 +412,21 @@ struct PlaceMapPin: View {
                     TripMapOrderMarker(position: position)
                 } else {
                     DefaultPOIMarker(
-                        systemName: "star.fill",
+                        systemName: place.status == .visited ? "checkmark" : place.category.mapMarkerSymbol,
                         tint: SaveAtlasPalette.forest,
                         state: .saved,
-                        isSelected: isSelected,
-                        unselectedTint: place.category.mapMarkerTint
+                        isSelected: isSelected
                     )
                 }
             }
-            .scaleEffect(isSelected ? 1.24 : 1)
+            .scaleEffect(isSelected ? 1.08 : 1)
             .overlay {
                 if isSelected {
                     // Map Stamp emphasis stays honey (DESIGN.md), on the
                     // Atlas palette.
                     Circle()
                         .stroke(SaveAtlasPalette.honey.opacity(0.86), lineWidth: 3)
-                        .frame(width: 46, height: 46)
+                        .frame(width: 40, height: 40)
                         .shadow(color: SaveAtlasPalette.honey.opacity(0.28), radius: 5)
                 }
             }
@@ -452,7 +451,7 @@ private struct SocialPlaceMapPin: View {
             onTap()
         } label: {
             DefaultPOIMarker(
-                systemName: place.category.iconName,
+                systemName: "person.2.fill",
                 tint: place.category.mapMarkerTint,
                 state: .shared,
                 isSelected: isSelected
@@ -478,10 +477,9 @@ private struct ReviewCandidateMapPin: View {
         } label: {
             DefaultPOIMarker(
                 systemName: candidate.inferredCategory.iconName,
-                tint: .saveSignal,
+                tint: SaveAtlasPalette.forest,
                 state: .review,
-                isSelected: isSelected,
-                unselectedTint: candidate.inferredCategory.mapMarkerTint
+                isSelected: isSelected
             )
         }
         .buttonStyle(.plain)
@@ -503,7 +501,7 @@ private struct UnsavedMapCandidatePin: View {
             onTap()
         } label: {
             DefaultPOIMarker(
-                systemName: candidate.category?.iconName ?? "mappin.circle.fill",
+                systemName: candidate.category?.mapMarkerSymbol ?? "mappin",
                 tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
                 state: .publicResult,
                 isSelected: isSelected
@@ -565,57 +563,31 @@ private struct DefaultPOIMarker: View {
     var tint: Color
     var state: MapMarkerState
     var isSelected: Bool
-    var unselectedTint: Color? = nil
 
     var body: some View {
-        Group {
-            if state == .saved {
-                ZStack {
-                    Circle()
-                        .fill(SaveAtlasPalette.forest)
-                        .frame(width: isSelected ? 36 : 32, height: isSelected ? 36 : 32)
-                        .overlay {
-                            Circle()
-                                .stroke(SaveAtlasPalette.paper, lineWidth: 2.5)
-                        }
-
-                    Image(systemName: "star.fill")
-                        .font(.system(size: isSelected ? 17 : 15, weight: .bold))
-                        .foregroundStyle(SaveAtlasPalette.paper)
+        ZStack {
+            Circle()
+                .fill(state == .saved ? SaveAtlasPalette.forest : SaveAtlasPalette.paper)
+                .frame(width: markerSize, height: markerSize)
+                .overlay {
+                    Circle().stroke(
+                        state == .saved ? SaveAtlasPalette.paper : state.strokeColor,
+                        style: StrokeStyle(lineWidth: state == .saved ? 2 : 1.5, dash: state == .review ? [3, 2] : [])
+                    )
                 }
-                .shadow(color: SaveAtlasPalette.ink.opacity(0.28), radius: 4, y: 2)
-            } else if isSelected {
-                ZStack {
-                    Circle()
-                        .fill(.regularMaterial)
-                        .overlay(Circle().fill(tint.opacity(0.18)))
-                        .overlay(Circle().stroke(state.strokeColor, lineWidth: state.strokeWidth))
-                        .frame(width: 30, height: 30)
-
-                    Image(systemName: systemName)
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(tint)
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    if let badgeSystemName = state.badgeSystemName {
-                        Image(systemName: badgeSystemName)
-                            .font(.system(size: 10, weight: .black))
-                            .foregroundStyle(state.badgeColor)
-                            .background(Circle().fill(Color.white.opacity(0.94)))
-                            .offset(x: 2, y: 2)
-                    }
-                }
-                .shadow(color: Color.black.opacity(0.16), radius: 2, x: 0, y: 1)
-            } else {
-                Circle()
-                    .fill(unselectedTint ?? tint)
-                    .frame(width: 10, height: 10)
-            }
+            Image(systemName: state == .review ? "questionmark" : systemName)
+                .font(.system(size: isSelected ? 15 : 12, weight: .semibold))
+                .foregroundStyle(state == .saved ? SaveAtlasPalette.paper : tint)
         }
-        // Saved stamps stay legible at rest; every state retains a >= 44 pt
-        // touch target independent of its rendered size.
+        .shadow(color: SaveAtlasPalette.ink.opacity(isSelected ? 0.16 : 0.08), radius: 2, y: 1)
+        // Every state keeps its symbol at rest and a 44pt touch region.
         .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
+        .contentShape(Circle())
+    }
+
+    private var markerSize: CGFloat {
+        if isSelected { return 34 }
+        return state == .saved ? 26 : 22
     }
 }
 
@@ -628,41 +600,22 @@ private enum MapMarkerState: Equatable {
     var strokeColor: Color {
         switch self {
         case .saved:
-            return .saveMint.opacity(0.74)
+            return SaveAtlasPalette.mint
         case .shared:
-            return .saveCocoa.opacity(0.74)
+            return SaveAtlasPalette.kraft
         case .review:
-            return .saveSignal.opacity(0.80)
+            return SaveAtlasPalette.sky
         case .publicResult:
-            return Color.white.opacity(0.86)
-        }
-    }
-
-    var strokeWidth: CGFloat {
-        switch self {
-        case .saved, .shared: return 2
-        case .review, .publicResult: return 1.6
-        }
-    }
-
-    var badgeSystemName: String? {
-        switch self {
-        case .saved: return "checkmark.circle.fill"
-        case .shared: return "person.2.circle.fill"
-        case .review, .publicResult: return nil
-        }
-    }
-
-    var badgeColor: Color {
-        switch self {
-        case .saved: return .saveMint
-        case .shared: return .saveCocoa
-        case .review, .publicResult: return .clear
+            return SaveAtlasPalette.line
         }
     }
 }
 
 private extension PlaceCategory {
+    var mapMarkerSymbol: String {
+        self == .attraction ? "binoculars.fill" : iconName
+    }
+
     var mapMarkerTint: Color {
         switch self {
         case .food: return .saveCocoa

@@ -2594,11 +2594,8 @@ final class MapViewModel: ObservableObject {
             } else {
                 _ = try saveLocalVaultService.saveConfirmedPlace(place)
             }
-            if place.status == .visited || previousPlace.status != place.status {
-                // Visited flips and other durable memory edits count as field actions.
-                if place.status == .visited {
-                    SavePassportFieldStreakStore.shared.recordFieldAction()
-                }
+            if SavePassportFieldStreakStore.countsVisit(previous: previousPlace.status, updated: place.status) {
+                SavePassportFieldStreakStore.shared.recordFieldAction()
             }
         } catch {
             places[index] = previousPlace
