@@ -1292,7 +1292,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let activity = app.descendants(matching: .any)["profile.activityDisclosure"].firstMatch
         XCTAssertTrue(activity.isHittable)
         activity.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["profile.fieldStreak"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["No field day yet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "passport-activity-expanded")
     }
 
