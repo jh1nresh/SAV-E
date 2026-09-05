@@ -151,7 +151,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
-- Today on Savvy
+- Your quests (探索任務): live next steps in Passport
 - Plan
 - Plan around this
 - Trip Plan
@@ -167,13 +167,13 @@ Avoid these in user-facing UI:
 - Generic "saved item" when the item is a Map Stamp
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
-- XP, Level, gems, login-streak calendar, quest board, Path / Shop / Progress chrome
+- XP, Level, gems, login-streak calendar, Path / Shop / Progress chrome
 - Rewards, currencies, or entitlements granted by completing Passport missions
 
 ## Atlas Postcard Tokens
 
 Atlas Postcard is the current visual system for Savvy's primary surfaces. It
-reads as an illustrated travel atlas: warm paper panels, condensed editorial
+reads as an illustrated travel atlas: warm paper panels, rounded editorial
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
 Canonical source of truth is code:
@@ -230,19 +230,19 @@ Atlas surfaces. All production variants accept `relativeTo:` for Dynamic Type.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Display | `SaveAtlasType.display(_:)` | AvenirNextCondensed-DemiBold | Hero numerals, action labels, display moments |
-| Strong | `SaveAtlasType.strong(_:)` | AvenirNextCondensed-Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
-| Body | `SaveAtlasType.body(_:)` | AvenirNextCondensed-Medium | Body and detail copy |
-| Regular | `SaveAtlasType.regular(_:)` | AvenirNextCondensed-Regular | Captions, subtitles, count labels |
-| Editorial | `SaveAtlasType.editorial(_:)` | Georgia-Italic | Editorial brand moments: envelope titles, counts, postcard captions |
+| Display | `SaveAtlasType.display(_:)` | System rounded semibold | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | System rounded bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | System rounded medium | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | System rounded regular | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | System rounded italic | Editorial brand moments: envelope titles, counts, postcard captions |
 
 Typography rules:
 
 - Eyebrows are `strong` at small sizes, uppercased, with positive tracking
   (~0.65).
-- Editorial Georgia italic is a garnish for brand moments, not a body face.
-- Do not mix `SaveAtlasType` faces with the legacy heavy rounded system fonts
-  on the same surface.
+- Editorial rounded italic is a garnish for brand moments, not a body face.
+- Use `SaveAtlasType` for consistent weights and Dynamic Type scaling across
+  Atlas surfaces; avoid ad hoc legacy font sizes on the same surface.
 
 ### Kraft Chips
 
@@ -504,15 +504,15 @@ Required content:
 - Member since.
 - Field streak: consecutive local days with a real memory action (confirm a waiting clue, save a Map Stamp, or mark Visited). Not a login check-in calendar.
 - Collection: Map Stamps, Visited, Cities, and Waiting clues as memory progress, not a reward track.
-- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Not a quest board.
+- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Label it Your quests (探索任務); it is visible by default.
 - Language and local memory controls.
 
 Passport section order on the root tab:
 
-1. Hero (Memo + passport name)
-2. Field streak
-3. Collection
-4. Today on Savvy
+1. Compact identity (Memo + passport name)
+2. Compact collection ledger
+3. Your quests (visible live next steps)
+4. Field activity disclosure
 5. Control pocket
 
 ## State Model
@@ -654,12 +654,13 @@ Rules:
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.
-- Field streak sits after the hero and before Collection. Count only confirm /
+- Field streak lives in a Field activity disclosure after quests. Count only confirm /
   save Map Stamp / mark Visited days. Opening the app does not count. Do not
   render a streak month calendar, XP bar, or gem balance.
 - Collection is the stamp ledger reframed as memory progress: Map Stamps,
   Visited, Cities, Waiting clues. It does not unlock rewards.
-- Today on Savvy sits after Collection and before the control pocket.
+- Your quests sits after Collection, visible without a disclosure. Use compact
+  rounded paper rows, the same Atlas type and spacing as Home.
   It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
   or a missing friend connection. It does not grant Pro, XP, or rewards. If no
   live step applies, hide the strip. Do not show an empty quest card.

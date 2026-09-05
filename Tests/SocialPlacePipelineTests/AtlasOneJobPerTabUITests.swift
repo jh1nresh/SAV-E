@@ -444,13 +444,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
         XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
         XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
-        XCTAssertTrue(passport.contains("TODAY ON SAVVY"))
-        XCTAssertTrue(passport.contains("今日 Savvy"))
-        XCTAssertTrue(passport.contains("Up to three real next steps"))
-        XCTAssertTrue(passport.contains("最多三件真正要做的事"))
-        XCTAssertTrue(passport.contains("Uses existing review queue count"))
-        XCTAssertTrue(passport.contains("Fills Origin for peers"))
-        XCTAssertTrue(passport.contains("Feeds Origin + connections"))
+        XCTAssertTrue(passport.contains("Your quests"))
+        XCTAssertTrue(passport.contains("你的探索任務"))
         XCTAssertTrue(passport.contains("profile.today.confirmWaitingClue"))
         XCTAssertTrue(passport.contains("profile.today.shareRecommendation"))
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
@@ -464,12 +459,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.fieldStreak"))
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
-        XCTAssertTrue(passport.contains("COLLECTION"))
+        XCTAssertTrue(passport.contains("profile.activityDisclosure"))
 
         XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
             < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.fieldStreak")!.lowerBound
-            < passport.range(of: "profile.stampLedger")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
+            < passport.range(of: "profile.fieldStreak")!.lowerBound)
         XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
             < passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound

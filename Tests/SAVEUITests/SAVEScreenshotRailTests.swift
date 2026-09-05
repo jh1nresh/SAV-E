@@ -1373,6 +1373,57 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPassportCompactLedgerShowsActionableQuests() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        let cover = app.descendants(matching: .any)["profile.cover"].firstMatch
+        let ledger = app.descendants(matching: .any)["profile.stampLedger"].firstMatch
+        XCTAssertTrue(cover.waitForExistence(timeout: stepTimeout))
+        XCTAssertLessThan(cover.frame.height, app.frame.height * 0.25)
+        XCTAssertTrue(ledger.isHittable)
+        let quests = app.descendants(matching: .any)["profile.today"].firstMatch
+        XCTAssertTrue(quests.isHittable, "Quests must be visible without opening a disclosure.")
+        let visit = app.buttons["profile.today.markVisitedStamp"]
+        XCTAssertTrue(visit.isHittable)
+        attach(app, name: "passport-compact-ledger")
+        visit.tap()
+        let confirm = app.buttons["profile.today.markVisitedConfirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-quest-visit")
+        confirm.tap()
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: stepTimeout))
+        let activity = app.descendants(matching: .any)["profile.activityDisclosure"].firstMatch
+        XCTAssertTrue(scrollUntilHittable(activity, in: app.scrollViews.firstMatch, maxSwipes: 4))
+        activity.tap()
+        XCTAssertTrue(app.staticTexts["1-day field streak"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-activity-expanded")
+        let review = app.buttons["profile.today.confirmWaitingClue"]
+        for _ in 0..<4 {
+            if review.isHittable { break }
+            app.scrollViews.firstMatch.swipeDown()
+        }
+        XCTAssertTrue(review.isHittable)
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+
+        terminate(app)
+        app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
+        if let language = app.launchArguments.firstIndex(of: "en") {
+            app.launchArguments[language] = "zh-Hant"
+        }
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        XCTAssertTrue(app.buttons["profile.today.markVisitedStamp"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-quests-zh")
+    }
+
+    @MainActor
     func testPassportAndPostalImportSurfacesAreReachable() throws {
         let storageID = UUID().uuidString.lowercased()
         let app = makeApp(
