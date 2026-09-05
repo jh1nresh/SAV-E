@@ -59,6 +59,8 @@ final class SaveAIService {
         }
 
         if deterministicDraftOverride == nil,
+           conversationHistory.isEmpty,
+           !DeterministicTripPlanner().isItineraryRequest(userMessage),
            let localResponse = localIntentResponse(for: userMessage, places: places, outputLanguage: outputLanguage) {
             return localResponse
         }

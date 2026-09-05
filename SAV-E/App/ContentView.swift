@@ -183,6 +183,7 @@ struct ContentView: View {
     @StateObject private var mapVM: MapViewModel
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
+    @StateObject private var planConversation = SavePlanConversation()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
@@ -709,6 +710,7 @@ struct ContentView: View {
             savedPlaces: mapVM.places,
             mapCandidates: mapVM.mapCandidates,
             tripStore: tripStore,
+            conversation: planConversation,
             onOpenTrip: {
                 rootPath = SaveChromeNavigation.pathByOpening(
                     .trip($0),

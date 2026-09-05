@@ -922,6 +922,43 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPlanChatDraftAndConversationSurviveTabChange() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let input = app.textFields["plan.chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["plan.compose"].isHittable)
+        attach(app, name: "plan-chat-start")
+        input.tap()
+        input.typeText("Plan a relaxed 1 day trip in Tokyo")
+        let send = app.buttons["plan.chat.send"]
+        XCTAssertTrue(send.isHittable)
+        XCTAssertLessThanOrEqual(send.frame.maxY, app.keyboards.firstMatch.frame.minY)
+        attach(app, name: "plan-chat-keyboard")
+        send.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["tripPlan.save"].exists)
+        let review = app.buttons["plan.draft.review"]
+        XCTAssertTrue(review.isHittable)
+        attach(app, name: "plan-chat-draft")
+        review.tap()
+        XCTAssertTrue(app.buttons["tripPlan.save"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-review-details")
+        app.buttons["plan.review.close"].tap()
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        openRootTab("Home", app: app)
+        openRootTab("Plan", app: app)
+        XCTAssertTrue(app.staticTexts["Plan a relaxed 1 day trip in Tokyo"].waitForExistence(timeout: stepTimeout))
+        app.buttons["plan.allTrips"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
     func testPlanTabDraftsFromSavedMapStamps() throws {
         let app = makeApp(
             launchArguments: [
@@ -939,9 +976,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Plan", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["plan.composer"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.conversation"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["origin.root"].exists)
 
+        app.descendants(matching: .any)["plan.options"].firstMatch.tap()
         let compose = app.buttons["plan.compose"]
         XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
         tapReachable(compose)
@@ -961,9 +999,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Plan", app: app)
         let scroll = app.scrollViews.firstMatch
+        app.descendants(matching: .any)["plan.options"].firstMatch.tap()
         let compose = app.buttons["plan.compose"]
         XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
+        _ = scrollUntilHittable(compose, in: scroll, maxSwipes: 6)
+        XCTAssertTrue(scroll.frame.contains(compose.frame), "Composer action must be inside the visible scroll viewport.")
+        attach(app, name: "plan-manual-options")
         tapReachable(compose)
+        let review = app.buttons["plan.draft.review"]
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        tapReachable(review)
         let candidate = app.buttons["tripPlan.confirm.Plan Test Garden"]
         XCTAssertTrue(scrollUntilHittable(candidate, in: scroll, maxSwipes: 10))
         attach(app, name: "plan-candidate-before-confirmation")
