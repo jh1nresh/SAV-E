@@ -368,7 +368,12 @@ struct SaveLibraryView: View {
     }
 
     private var sortedCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.sorted { $0.createdAt > $1.createdAt }
+        reviewCandidates.sorted { lhs, rhs in
+            if lhs.hasSavableLocation != rhs.hasSavableLocation {
+                return lhs.hasSavableLocation
+            }
+            return lhs.createdAt > rhs.createdAt
+        }
     }
 
     private var firstViewportCandidates: [PlaceReviewCandidate] {

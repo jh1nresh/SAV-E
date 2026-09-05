@@ -725,6 +725,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
         attach(app, name: "home-real-candidate-detail")
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        app.buttons["home.reviewAll"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        attach(app, name: "saves-real-candidates-first")
     }
 
     @MainActor
