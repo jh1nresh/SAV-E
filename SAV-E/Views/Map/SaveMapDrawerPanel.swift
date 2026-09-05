@@ -357,6 +357,7 @@ struct SaveMapSearchContent: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .background(SaveAtlasPalette.paper)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.search.root")
         .onAppear {
             query = initialQuery
