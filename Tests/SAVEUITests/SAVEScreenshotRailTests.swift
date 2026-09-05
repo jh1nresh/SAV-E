@@ -768,6 +768,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testCaptureUsesCompactSheetAndKeepsKeyboardActionReachable() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        rootTabButton("Save", app: app).tap()
+        let input = app.textViews["capture.input"]
+        let submit = app.buttons["capture.analyze"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThan(input.frame.minY, app.frame.height * 0.4)
+        XCTAssertFalse(submit.isEnabled)
+        attach(app, name: "capture-compact-sheet")
+        input.tap()
+        input.typeText("A cafe near Taipei station")
+        XCTAssertTrue(submit.isEnabled)
+        XCTAssertTrue(submit.isHittable)
+        attach(app, name: "capture-sheet-keyboard")
+        app.buttons["capture.keyboardDone"].tap()
+        XCTAssertTrue(app.buttons["capture.importGoogleTakeout"].isHittable)
+        app.buttons["Close capture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
+    }
+
+    @MainActor
     func testGlobalShellSeparatesCaptureFromMapDrawer() throws {
         let app = makeApp(
             launchArguments: [
