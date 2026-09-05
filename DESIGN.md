@@ -287,7 +287,8 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
 | Ask drawer (`AIDrawerView`) | Atlas |
-| Onboarding, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
+| Onboarding | Atlas |
+| Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
@@ -556,7 +557,17 @@ Teach the state ladder:
 Source Clue -> Review Candidate -> Map Stamp -> Trip Plan
 ```
 
-Use one interactive example. Do not add a marketing page.
+Use one interactive example. Do not add a marketing page. Start in the device or
+previously selected language; language selection is an optional sheet. The selected
+Source to Memory direction uses one photo postcard throughout three stages: source,
+review, saved preview. Source is explicitly a clue, review is sky with confirmation,
+and the saved preview is mint and labeled as an example. The cafe is fictional;
+no real coordinates or storage writes are implied by the demo.
+
+Personal input is a separate first-run sheet, reachable immediately or after the
+example. Its CTA hands the draft to the existing account-scoped capture flow after
+sign-in; nothing is analyzed or saved by onboarding. Every skip and replay completion
+returns no clue. Never show the fictional cafe as the result of a user's own input.
 Keep primary and visible skip actions in the bottom safe area with 44 pt targets;
 long content scrolls above them. Passport offers a replay using only the sample,
 with a visible close action. Replay never resets onboarding completion, captures
