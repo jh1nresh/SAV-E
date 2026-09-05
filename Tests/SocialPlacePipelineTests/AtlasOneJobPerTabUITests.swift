@@ -294,11 +294,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(review.contains("\"84%\""))
     }
 
-    func testSavesFirstViewportCapsTicketsAndKeepsCaptureCoral() throws {
+    func testSavesQueueIsContinuousAndKeepsCaptureCoral() throws {
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("firstViewportTicketLimit = 3"))
         XCTAssertTrue(saves.contains("SaveAtlasPalette.coral.opacity(0.92)"))
-        XCTAssertTrue(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
     }
 
@@ -342,8 +343,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
-        XCTAssertTrue(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains(".regularMaterial, in: Capsule()"))
+        XCTAssertFalse(map.contains("mic.fill"))
+        XCTAssertTrue(map.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
         XCTAssertTrue(map.contains("map.command.passport"))
         XCTAssertTrue(
@@ -364,7 +365,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
     }
 
-    func testMapSearchIsBottomFloatingChromeWithParkedDetents() throws {
+    func testMapSearchIsDockedWithParkedDetents() throws {
         let shelf = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         let map = try source(at: "SAV-E/Views/Map/MapView.swift")
@@ -391,7 +392,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
         XCTAssertTrue(shelf.contains("map.command.search"))
         XCTAssertTrue(shelf.contains("map.command.passport"))
-        XCTAssertTrue(shelf.contains(".regularMaterial, in: Capsule()"))
+        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
         XCTAssertTrue(
             shelf.contains("person.crop.circle.fill"),
             "Search capsule carries Passport in the Apple Maps avatar slot."
