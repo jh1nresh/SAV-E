@@ -459,7 +459,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.fieldStreak"))
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
-        XCTAssertTrue(passport.contains("profile.activityDisclosure"))
+        XCTAssertFalse(passport.contains("profile.activityDisclosure"))
 
         XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
             < passport.range(of: "profile.fieldStreak")!.lowerBound)

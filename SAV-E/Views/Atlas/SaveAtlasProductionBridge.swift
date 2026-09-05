@@ -615,7 +615,7 @@ struct SaveAtlasMapCommandShelf: View {
                         .accessibilityHidden(true)
 
                     Text(languageSettings.localized(english: "Search places", traditionalChinese: "搜尋地點"))
-                        .font(.system(size: 17, weight: .regular))
+                        .font(SaveAtlasType.regular(16))
                         .foregroundStyle(Color.primary.opacity(0.45))
                         .lineLimit(1)
 
@@ -624,7 +624,7 @@ struct SaveAtlasMapCommandShelf: View {
                 }
                 .padding(.leading, 14)
                 .padding(.trailing, 8)
-                .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+                .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -637,7 +637,7 @@ struct SaveAtlasMapCommandShelf: View {
             // Savvy opens Passport from the same trailing slot.
             Button(action: onOpenPassport) {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 28, weight: .regular))
+                    .font(.system(size: 26, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(AtlasPalette.forest.opacity(0.85))
                     .frame(width: 44, height: 44)
@@ -647,15 +647,13 @@ struct SaveAtlasMapCommandShelf: View {
             .accessibilityLabel("Open Passport")
             .accessibilityIdentifier("map.command.passport")
         }
-        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+        .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
         .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
         .overlay {
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
                 .allowsHitTesting(false)
         }
-        .shadow(color: Color.black.opacity(0.12), radius: 16, y: 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 }
 

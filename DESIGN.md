@@ -433,7 +433,11 @@ Source: `SAV-E/Views/Map/MapView.swift`.
 
 Rules:
 
-- Confirmed places use `PlaceMapPin`.
+- Confirmed places use `PlaceMapPin`: compact forest category symbols; a checkmark
+  means user-marked Visited. A selected stamp gains the honey focus ring.
+- Review candidates retain a question mark and dashed sky outline at rest.
+  Unsaved search results use paper category pins; shared places use a people symbol.
+  Never reduce these states to anonymous dots.
 - Review candidates use `ReviewCandidateMapPin` only when coordinates are reliable.
 - Source-only clues do not get pins.
 - Pins need accessibility labels that include the state, such as "Map Stamp" or
@@ -671,6 +675,12 @@ Rules:
 ### Passport
 
 Passport is the user's memory ledger.
+
+Daily streak is visible below the stamp ledger. A successful saved place (including
+confirming a candidate) or a new user-marked Visited transition counts once per
+local calendar day. Yesterday's streak remains active until today ends; a missing
+full day resets it. Show the last seven days, today last. This is device-local
+activity, not attendance proof, and editing an already visited place does not count.
 
 Rules:
 

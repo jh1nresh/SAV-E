@@ -183,12 +183,14 @@ final class SavePassportFieldStreakStore {
     private let storageKey = "save.passport.fieldStreak.days.v1"
     private let defaults: UserDefaults
     private let calendar: Calendar
+    private let now: () -> Date
 
-    init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
+    init(defaults: UserDefaults = .standard, calendar: Calendar = .autoupdatingCurrent, now: @escaping () -> Date = Date.init) {
         self.defaults = defaults
         // Keep the caller's calendar/time zone so tests can pin GMT and
         // production can keep the user's current calendar unchanged.
         self.calendar = calendar
+        self.now = now
     }
 
     /// Day keys are `yyyy-MM-dd` in the user's current calendar/time zone.
@@ -198,19 +200,19 @@ final class SavePassportFieldStreakStore {
     }
 
     var hasFieldActionToday: Bool {
-        actionDayKeys.contains(dayKey(for: Date()))
+        actionDayKeys.contains(dayKey(for: now()))
     }
 
     /// Consecutive days ending today, or yesterday if today is still empty.
     var currentStreak: Int {
-        let today = dayKey(for: Date())
+        let today = dayKey(for: now())
         let keys = actionDayKeys
         guard !keys.isEmpty else { return 0 }
 
         let startKey: String
         if keys.contains(today) {
             startKey = today
-        } else if let yesterday = dateOffset(-1), keys.contains(dayKey(for: yesterday)) {
+        } else if let yesterday = dateOffset(-1, from: now()), keys.contains(dayKey(for: yesterday)) {
             startKey = dayKey(for: yesterday)
         } else {
             return 0
@@ -223,6 +225,20 @@ final class SavePassportFieldStreakStore {
             cursor = dateOffset(-1, from: current)
         }
         return streak
+    }
+
+    /// Oldest first, ending today; duplicates on a day never add progress.
+    var recentActivity: [Bool] {
+        let keys = actionDayKeys
+        let today = now()
+        return (-6...0).map { offset in
+            guard let date = dateOffset(offset, from: today) else { return false }
+            return keys.contains(dayKey(for: date))
+        }
+    }
+
+    static func countsVisit(previous: PlaceStatus, updated: PlaceStatus) -> Bool {
+        previous != .visited && updated == .visited
     }
 
     @discardableResult

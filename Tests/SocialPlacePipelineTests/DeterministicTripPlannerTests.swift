@@ -4,6 +4,30 @@ import MapKit
 
 final class DeterministicTripPlannerTests: XCTestCase {
     @MainActor
+    func testTraditionalChineseQuickPromptStillPlansWhenAIIsOffline() async throws {
+        let taipei = makePlace("河濱公園", address: "台北市松山區", latitude: 25.05, longitude: 121.55, category: .attraction)
+        let cafe = makePlace("台北咖啡", address: "臺北市松山區", latitude: 25.051, longitude: 121.551, category: .cafe)
+        let irvine = makePlace("Irvine Park", address: "Irvine, CA", latitude: 33.68, longitude: -117.83, category: .attraction)
+        let query = "用已存地點安排臺北市輕鬆的一天"
+        let intent = DeterministicTripPlanner().deterministicIntent(from: query)
+        XCTAssertEqual(intent.searchTerms, ["台北市"])
+        XCTAssertEqual(intent.days, 1)
+        let response = try await SaveAIService(apiKey: "", session: .offlineForTesting).query(
+            query, places: [irvine, taipei, cafe], outputLanguage: .traditionalChinese
+        )
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertEqual(response.itineraryDays.count, 1)
+        XCTAssertEqual(Set(response.placeIds), Set([taipei.id.uuidString, cafe.id.uuidString]))
+        XCTAssertNil(DeterministicTripPlanner().plan(for: "用已存地點安排高雄市輕鬆的一天", places: [taipei, cafe]))
+    }
+
+    @MainActor
+    func testEnglishRelaxedQuickPromptRetainsOnlyDestination() {
+        let intent = DeterministicTripPlanner().deterministicIntent(from: "Plan a relaxed day in Irvine")
+        XCTAssertEqual(intent.searchTerms, ["irvine"])
+    }
+
+    @MainActor
     func testPlanRequestWithFoodPlacesDoesNotBecomePlaceList() async throws {
         let response = try await SaveAIService(apiKey: "", session: .offlineForTesting).query(
             "Plan a one day Tokyo trip from my saved food places",

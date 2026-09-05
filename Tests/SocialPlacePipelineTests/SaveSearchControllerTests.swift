@@ -3652,25 +3652,36 @@ final class SaveSearchControllerTests: XCTestCase {
     func testPassportFieldStreakStoreCountsOnlyRecordedFieldDays() {
         let suite = "save.passport.fieldStreak." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let store = SavePassportFieldStreakStore(defaults: defaults, calendar: calendar)
-
-        let day1 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 1, hour: 12))!
-        let day2 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 2, hour: 12))!
-        let day4 = calendar.date(from: DateComponents(year: 2026, month: 9, day: 4, hour: 12))!
-
+        calendar.timeZone = TimeZone(identifier: "Asia/Taipei")!
+        func day(_ value: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 9, day: value, hour: 12))!
+        }
+        var now = day(1)
+        let store = SavePassportFieldStreakStore(defaults: defaults, calendar: calendar, now: { now })
         XCTAssertEqual(store.currentStreak, 0)
-        XCTAssertTrue(store.recordFieldAction(at: day1))
-        XCTAssertTrue(store.recordFieldAction(at: day2))
-        XCTAssertTrue(store.recordFieldAction(at: day4))
-        XCTAssertTrue(store.actionDayKeys.contains("2026-09-01"))
-        XCTAssertTrue(store.actionDayKeys.contains("2026-09-02"))
-        XCTAssertTrue(store.actionDayKeys.contains("2026-09-04"))
-        XCTAssertFalse(store.recordFieldAction(at: day4))
-
-        defaults.removePersistentDomain(forName: suite)
+        XCTAssertFalse(store.hasFieldActionToday)
+        XCTAssertTrue(store.recordFieldAction(at: now))
+        XCTAssertFalse(store.recordFieldAction(at: now))
+        XCTAssertEqual(store.currentStreak, 1)
+        now = day(2)
+        XCTAssertEqual(store.currentStreak, 1, "Yesterday remains active until today's opportunity ends")
+        XCTAssertFalse(store.hasFieldActionToday)
+        XCTAssertTrue(store.recordFieldAction(at: now))
+        XCTAssertEqual(store.currentStreak, 2)
+        XCTAssertEqual(store.recentActivity, [false, false, false, false, false, true, true])
+        now = day(4)
+        XCTAssertEqual(store.currentStreak, 0, "Missing a full calendar day breaks the streak")
+        XCTAssertTrue(store.recordFieldAction(at: now))
+        XCTAssertEqual(store.currentStreak, 1)
+        let reloaded = SavePassportFieldStreakStore(defaults: defaults, calendar: calendar, now: { now })
+        XCTAssertEqual(reloaded.currentStreak, 1)
+        XCTAssertTrue(reloaded.hasFieldActionToday)
+        XCTAssertEqual(reloaded.recentActivity, [false, false, false, true, true, false, true])
+        XCTAssertTrue(SavePassportFieldStreakStore.countsVisit(previous: .wantToGo, updated: .visited))
+        XCTAssertFalse(SavePassportFieldStreakStore.countsVisit(previous: .visited, updated: .visited))
+        XCTAssertFalse(SavePassportFieldStreakStore.countsVisit(previous: .visited, updated: .wantToGo))
     }
 
     @MainActor

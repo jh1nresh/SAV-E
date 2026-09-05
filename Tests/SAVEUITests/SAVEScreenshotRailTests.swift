@@ -933,6 +933,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         waitForStableFrame(collapsed)
         let collapsedTop = collapsed.frame.minY
+        XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.height, 52)
+        XCTAssertTrue(app.buttons["map.command.passport"].isHittable)
         attach(app, name: "map-search-drawer-collapsed")
 
         app.buttons["map.command.search"].swipeUp()
@@ -1475,6 +1477,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(cover.waitForExistence(timeout: stepTimeout))
         XCTAssertLessThan(cover.frame.height, app.frame.height * 0.25)
         XCTAssertTrue(ledger.isHittable)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.fieldStreak"].firstMatch.isHittable,
+                      "Daily streak must be visible without opening a disclosure.")
         let quests = app.descendants(matching: .any)["profile.today"].firstMatch
         XCTAssertTrue(quests.isHittable, "Quests must be visible without opening a disclosure.")
         let visit = app.buttons["profile.today.markVisitedStamp"]
@@ -1486,11 +1490,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "passport-quest-visit")
         confirm.tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: stepTimeout))
-        let activity = app.descendants(matching: .any)["profile.activityDisclosure"].firstMatch
+        let activity = app.descendants(matching: .any)["profile.fieldStreak"].firstMatch
         XCTAssertTrue(scrollUntilHittable(activity, in: app.scrollViews.firstMatch, maxSwipes: 4))
-        activity.tap()
-        XCTAssertTrue(app.staticTexts["1-day field streak"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "passport-activity-expanded")
+        XCTAssertTrue(activity.label.contains("1-day streak"))
+        attach(app, name: "passport-daily-streak")
         let review = app.buttons["profile.today.confirmWaitingClue"]
         for _ in 0..<4 {
             if review.isHittable { break }
