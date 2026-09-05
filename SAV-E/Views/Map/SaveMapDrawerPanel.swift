@@ -66,6 +66,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         .overlay(alignment: .top) {
             UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
                 .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .simultaneousGesture(resizeGesture(stage: .collapsed))

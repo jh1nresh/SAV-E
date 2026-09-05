@@ -1129,7 +1129,7 @@ struct ContentView: View {
             fullScreenRoute = route
         case .mapDrawer(let request):
             drawerLaunchRequest = request
-            drawerDetent = .large
+            drawerDetent = request.focusesSearch ? .large : .medium
             isMapPanelExpanded = true
         }
     }

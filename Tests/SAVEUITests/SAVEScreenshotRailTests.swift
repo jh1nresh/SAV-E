@@ -820,7 +820,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let collapsedTop = collapsed.frame.minY
         attach(app, name: "map-search-drawer-collapsed")
 
-        collapsed.swipeUp()
+        app.buttons["map.command.search"].swipeUp()
         let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)

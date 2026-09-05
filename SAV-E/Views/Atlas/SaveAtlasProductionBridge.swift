@@ -650,8 +650,9 @@ struct SaveAtlasMapCommandShelf: View {
         .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
         .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
         .overlay {
-            Capsule()
+            RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                .allowsHitTesting(false)
         }
         .shadow(color: Color.black.opacity(0.12), radius: 16, y: 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

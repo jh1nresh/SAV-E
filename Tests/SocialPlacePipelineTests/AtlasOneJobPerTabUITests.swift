@@ -343,7 +343,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
         XCTAssertFalse(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains(".regularMaterial, in: Capsule()"))
+        XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
         XCTAssertTrue(map.contains("map.command.passport"))
         XCTAssertTrue(
