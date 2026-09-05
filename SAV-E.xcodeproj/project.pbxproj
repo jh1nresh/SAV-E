@@ -185,6 +185,12 @@
 		FE9576767070B9ABC8214BB8 /* PendingPlaceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78E2B528C610D14058FBFF5 /* PendingPlaceImportService.swift */; };
 		FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */; };
 		FFFB2F9105F65B9FC37DD8B6 /* SocialMapSignals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */; };
+		A81C4E29F6B0473D9E215F71 /* SaveMapIntentFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A81C4E29F6B0473D9E215F70 /* SaveMapIntentFilter.swift */; };
+		B92D5F30A7C1584E0F326A82 /* SaveFilteredStampRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B92D5F30A7C1584E0F326A81 /* SaveFilteredStampRow.swift */; };
+		C03E6041B8D2695F10437B93 /* SaveVisitIntentChooser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C03E6041B8D2695F10437B92 /* SaveVisitIntentChooser.swift */; };
+		D14F7152C9E37A6021548CA4 /* SaveIntentFilterPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */; };
+		E2508263DAF48B7132659DB5 /* SaveMapIntentFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2508263DAF48B7132659DB4 /* SaveMapIntentFilterTests.swift */; };
+		F3619374EB059C824376AEC6 /* SaveVisitIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3619374EB059C824376AEC5 /* SaveVisitIntentTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -460,6 +466,12 @@
 		FB3C134A9E45F294B78B7552 /* SAVEiMessageExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = SAVEiMessageExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF357924A8D4048E256F214E /* SaveProPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveProPaywallView.swift; sourceTree = "<group>"; };
 		FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
+		A81C4E29F6B0473D9E215F70 /* SaveMapIntentFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapIntentFilter.swift; sourceTree = "<group>"; };
+		B92D5F30A7C1584E0F326A81 /* SaveFilteredStampRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFilteredStampRow.swift; sourceTree = "<group>"; };
+		C03E6041B8D2695F10437B92 /* SaveVisitIntentChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveVisitIntentChooser.swift; sourceTree = "<group>"; };
+		D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveIntentFilterPill.swift; sourceTree = "<group>"; };
+		E2508263DAF48B7132659DB4 /* SaveMapIntentFilterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapIntentFilterTests.swift; sourceTree = "<group>"; };
+		F3619374EB059C824376AEC5 /* SaveVisitIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveVisitIntentTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -720,6 +732,7 @@
 				B214436BA38A3A1BEDDD8761 /* MemoMascotMark.swift */,
 				78E45623E52CFE065303EC21 /* PlatformIcon.swift */,
 				898D417634E2C5454429AFA7 /* RelatedPlaceSourcesPanel.swift */,
+				D14F7152C9E37A6021548CA3 /* SaveIntentFilterPill.swift */,
 				367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */,
 			);
 			path = Shared;
@@ -760,7 +773,9 @@
 			children = (
 				EA9A731A432A325621A34E63 /* NavigationCardComponent.swift */,
 				A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */,
+				B92D5F30A7C1584E0F326A81 /* SaveFilteredStampRow.swift */,
 				E9480F422F149ABC3338A1C7 /* SaveSearchResultsComponent.swift */,
+				C03E6041B8D2695F10437B92 /* SaveVisitIntentChooser.swift */,
 				4CF89D27BB41CF8DAC9C08D5 /* TripItineraryComponent.swift */,
 			);
 			path = Components;
@@ -876,7 +891,9 @@
 				7AA6CC1931A9C727DB73665F /* SavePlanAroundControllerTests.swift */,
 				A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */,
 				A652DE25FB690D2F6153F07B /* SAVEProductionConfigTests.swift */,
+				E2508263DAF48B7132659DB4 /* SaveMapIntentFilterTests.swift */,
 				314BD93E28C21731D98997C0 /* SaveSearchControllerTests.swift */,
+				F3619374EB059C824376AEC5 /* SaveVisitIntentTests.swift */,
 				2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */,
 				24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */,
 				6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */,
@@ -949,6 +966,7 @@
 				16A0F81D4878F533277C2E84 /* AIResponse.swift */,
 				4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */,
 				76EE79719B259620EE6212C7 /* Place.swift */,
+				A81C4E29F6B0473D9E215F70 /* SaveMapIntentFilter.swift */,
 				73E7379129FC7C2B59E01B4F /* RelatedPlaceSources.swift */,
 				146D4B13678DF31140133614 /* SaveCard.swift */,
 				9544B33485907E3A80A5DEB3 /* SaveCollaborativeList.swift */,
@@ -1375,7 +1393,9 @@
 				CAC07FED23417B9E3A51D005 /* SaveLocationIntentRecommendationServiceTests.swift in Sources */,
 				9214690FCE4C303443620FFE /* SavePlaceCorrectionEventTests.swift in Sources */,
 				20EE991C2D2D42E045F23CA5 /* SavePlanAroundControllerTests.swift in Sources */,
+				E2508263DAF48B7132659DB5 /* SaveMapIntentFilterTests.swift in Sources */,
 				BCB68390F26FDDB75ADF5ED1 /* SaveSearchControllerTests.swift in Sources */,
+				F3619374EB059C824376AEC6 /* SaveVisitIntentTests.swift in Sources */,
 				BC55C57A6C88072A588A5531 /* SaveSearchIntentEvalTests.swift in Sources */,
 				D2CF1497F4FD4CC89C23E69A /* SavedPlaceTripRecommenderTests.swift in Sources */,
 				B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */,
@@ -1467,6 +1487,10 @@
 				FE9576767070B9ABC8214BB8 /* PendingPlaceImportService.swift in Sources */,
 				07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */,
 				A6270F856D0B837CAD4276E9 /* PlaceBottomSheet.swift in Sources */,
+				B92D5F30A7C1584E0F326A82 /* SaveFilteredStampRow.swift in Sources */,
+				D14F7152C9E37A6021548CA4 /* SaveIntentFilterPill.swift in Sources */,
+				A81C4E29F6B0473D9E215F71 /* SaveMapIntentFilter.swift in Sources */,
+				C03E6041B8D2695F10437B93 /* SaveVisitIntentChooser.swift in Sources */,
 				887601CFE6BC639CDD2B859A /* PlaceBusinessEnricher.swift in Sources */,
 				67B0D4C02A1500F6B8D902CF /* PlaceListComponent.swift in Sources */,
 				39FF5DB199938DCC8C8CD544 /* PlatformIcon.swift in Sources */,

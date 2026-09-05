@@ -119,6 +119,11 @@ struct AIDrawerView: View {
     var onSaveSocialPlace: (Place) async throws -> Void = { _ in }
     var selectedCategories: Set<PlaceCategory> = []
     var onToggleCategory: (PlaceCategory) -> Void = { _ in }
+    var selectedIntentFilters: Set<SaveMapDrawerIntent> = []
+    var onToggleIntentFilter: (SaveMapDrawerIntent) -> Void = { _ in }
+    var filteredPlaces: [Place] = []
+    var isRefreshingNearbyFilter = false
+    var nearbyFilterNeedsLocation = false
     var onOpenPassport: () -> Void = {}
     var onDismissMapDetailSheet: () -> Void = {}
     var onDismissMapDetail: () -> Void = {}
@@ -937,6 +942,10 @@ struct AIDrawerView: View {
 
                 categoryFilterStrip
 
+                if hasActiveMapFilters {
+                    filteredMapStampsSection
+                }
+
                 if !viewModel.chatHistory.isEmpty {
                     NotebookBandLabel(languageSettings.localized(english: "Recent", traditionalChinese: "最近"))
                         .padding(.horizontal, SaveTheme.Spacing.lg)
@@ -998,11 +1007,74 @@ struct AIDrawerView: View {
                         )
                         .onTapGesture { onToggleCategory(category) }
                     }
+
+                    Rectangle()
+                        .fill(SaveAtlasPalette.line.opacity(0.34))
+                        .frame(width: 1, height: 22)
+                        .padding(.horizontal, 2)
+
+                    ForEach(SaveMapDrawerIntent.allCases) { intent in
+                        SaveIntentFilterPill(
+                            intent: intent,
+                            language: languageSettings.language,
+                            isSelected: selectedIntentFilters.contains(intent)
+                        )
+                        .onTapGesture { onToggleIntentFilter(intent) }
+                    }
                 }
                 .padding(.horizontal, SaveTheme.Spacing.lg)
                 .padding(.vertical, 2)
             }
         }
+    }
+
+    private var hasActiveMapFilters: Bool {
+        !selectedCategories.isEmpty || !selectedIntentFilters.isEmpty
+    }
+
+    private var filteredMapStampsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NotebookBandLabel(languageSettings.localized(english: "From your Savvy", traditionalChinese: "來自你的 Savvy"))
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+
+            if isRefreshingNearbyFilter {
+                Text(languageSettings.localized(
+                    english: "Finding Map Stamps near you…",
+                    traditionalChinese: "正在找附近的地圖章…"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else if nearbyFilterNeedsLocation {
+                Text(languageSettings.localized(
+                    english: "Turn on location to filter nearby Map Stamps.",
+                    traditionalChinese: "開啟定位後才能篩選附近的地圖章。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else if filteredPlaces.isEmpty {
+                Text(languageSettings.localized(
+                    english: "No Map Stamps match these filters.",
+                    traditionalChinese: "沒有地圖章符合這些篩選。"
+                ))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, SaveTheme.Spacing.lg)
+            } else {
+                ForEach(Array(filteredPlaces.prefix(8))) { place in
+                    Button {
+                        openSavedPlace(place)
+                    } label: {
+                        SaveFilteredStampRow(place: place, language: languageSettings.language)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, SaveTheme.Spacing.lg)
+                    .accessibilityIdentifier("drawer.filter.result.\(place.id.uuidString)")
+                }
+            }
+        }
+        .accessibilityIdentifier("drawer.filter.results")
     }
 
     private func performCandidateAction(
@@ -2325,6 +2397,9 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var localVisibility: PlaceVisibility?
     @State private var isUpdatingVisibility = false
     @State private var visibilityError: String?
+    @State private var localStatus: PlaceStatus?
+    @State private var isUpdatingVisitIntent = false
+    @State private var visitIntentError: String?
 
     private var detailPlace: Place {
         var value = place
@@ -2333,6 +2408,9 @@ private struct SavedMapDetailDrawerContent: View {
         }
         if let localVisibility {
             value.visibility = localVisibility
+        }
+        if let localStatus {
+            value.status = localStatus
         }
         return value
     }
@@ -2365,24 +2443,45 @@ private struct SavedMapDetailDrawerContent: View {
                 }
             }
 
-            Button(action: onAddToTrip) {
-                Label(
-                    languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"),
-                    systemImage: "suitcase.rolling.fill"
-                )
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(SaveAtlasPalette.coral)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
-                )
+            HStack(spacing: 8) {
+                Button(action: onAddToTrip) {
+                    Label(
+                        languageSettings.localized(english: "Add to Trip", traditionalChinese: "加入行程"),
+                        systemImage: "suitcase.rolling.fill"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SaveAtlasPalette.ink.opacity(0.18), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.saved.addToTrip")
+
+                Button(action: onPlanAroundPlace) {
+                    Label(
+                        languageSettings.localized(english: "Plan around this", traditionalChinese: "用這裡規劃"),
+                        systemImage: "point.topleft.down.curvedto.point.bottomright.up"
+                    )
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.54), lineWidth: 1.4)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("drawer.saved.planAround")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("drawer.saved.addToTrip")
 
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
@@ -2436,17 +2535,6 @@ private struct SavedMapDetailDrawerContent: View {
                         )
                     }
                 }
-            }
-
-            Button(action: onPlanAroundPlace) {
-                PlaceDetailActionLabel(
-                    title: languageSettings.localized(
-                        english: "Plan around this Map Stamp",
-                        traditionalChinese: "以這個地圖章規劃"
-                    ),
-                    systemImage: "point.topleft.down.curvedto.point.bottomright.up",
-                    fill: SaveAtlasPalette.honey.opacity(0.62)
-                )
             }
 
             // One fact, one home: rating/price live in the chips row, hours in
@@ -2533,6 +2621,9 @@ private struct SavedMapDetailDrawerContent: View {
         .shadow(color: SaveAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("drawer.saved.postcardBody")
+        .onChange(of: place.status) { _, status in
+            localStatus = status
+        }
         .confirmationDialog(
             languageSettings.localized(english: "Delete \(place.name)?", traditionalChinese: "刪除「\(place.name)」？"),
             isPresented: $showDeleteConfirmation,
@@ -2605,6 +2696,20 @@ private struct SavedMapDetailDrawerContent: View {
                     }
                 }
                 .padding(.top, 5)
+            }
+
+            SaveVisitIntentChooser(
+                status: detailPlace.status,
+                language: languageSettings.language,
+                isDisabled: isUpdatingVisitIntent || isSavingPlaceEdit
+            ) { intent in
+                Task { await updateVisitIntent(intent) }
+            }
+
+            if let visitIntentError {
+                Text(visitIntentError)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveError)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -2738,6 +2843,25 @@ private struct SavedMapDetailDrawerContent: View {
         } catch {
             localVisibility = previousVisibility
             visibilityError = error.localizedDescription
+        }
+    }
+
+    private func updateVisitIntent(_ status: PlaceStatus) async {
+        guard status != detailPlace.status else { return }
+        let previousStatus = localStatus
+        isUpdatingVisitIntent = true
+        visitIntentError = nil
+        localStatus = status
+        defer { isUpdatingVisitIntent = false }
+
+        var updatedPlace = detailPlace
+        updatedPlace.status = status
+        do {
+            try await onUpdatePlace(updatedPlace)
+            enrichedPlace = updatedPlace
+        } catch {
+            localStatus = previousStatus
+            visitIntentError = error.localizedDescription
         }
     }
 

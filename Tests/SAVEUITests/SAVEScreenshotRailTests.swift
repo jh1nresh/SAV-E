@@ -1443,6 +1443,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             scrollUntilHittable(addToTrip, in: savedDetailScroll),
             "Add-to-trip action never became tappable.\n\(app.debugDescription)"
         )
+        XCTAssertTrue(
+            app.buttons["drawer.saved.planAround"].waitForExistence(timeout: stepTimeout),
+            "Plan around this should sit beside Add to Trip.\n\(app.debugDescription)"
+        )
         addToTrip.tap()
 
         let createTripAndAdd = app.buttons
