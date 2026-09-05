@@ -591,14 +591,13 @@ The drawer is Savvy's command and memory workbench.
 
 Rules:
 
-- Collapsed drawer is the primary command bar: text input, mic input, and submit.
+- Map drawer is a docked place-search surface: saved places and public map results. It does not expose the Ask assistant or mic.
 - The drawer may use translucent system material in map mode so the map remains the
   primary visual surface.
-- Mic is push-to-talk dictation into the same command field, not a separate voice
-  assistant mode.
+- Any remaining assistant dictation is outside the Map search surface.
 - Required mic states: idle, requesting permission, listening, transcribed,
   loading, permission denied, unavailable, and failed.
-- Filters and quick prompts belong in the drawer so the map remains clean.
+- Map filters belong in the drawer so the map remains clean; conversational planning belongs in Plan.
 - Category chips stay in the drawer. After them, Want to try, Visited, and
   Nearby may filter confirmed Map Stamps. Nearby is a 2 km saved-place lens.
   It does not pin unsaved candidates. Do not add restroom, gas, or wildlife

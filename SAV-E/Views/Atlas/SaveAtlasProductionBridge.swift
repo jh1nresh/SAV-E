@@ -602,6 +602,8 @@ struct SaveAtlasMapCommandShelf: View {
     let onOpenAssistant: () -> Void
     let onOpenPassport: () -> Void
 
+    @Environment(\.appLanguageSettings) private var languageSettings
+
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onOpenAssistant) {
@@ -612,18 +614,13 @@ struct SaveAtlasMapCommandShelf: View {
                         .frame(width: 22, height: 22)
                         .accessibilityHidden(true)
 
-                    Text("Search places")
+                    Text(languageSettings.localized(english: "Search places", traditionalChinese: "搜尋地點"))
                         .font(.system(size: 17, weight: .regular))
                         .foregroundStyle(Color.primary.opacity(0.45))
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
 
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.45))
-                        .frame(width: 22, height: 22)
-                        .accessibilityHidden(true)
                 }
                 .padding(.leading, 14)
                 .padding(.trailing, 8)
@@ -632,7 +629,7 @@ struct SaveAtlasMapCommandShelf: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Search places")
-            .accessibilityHint("Opens the Savvy assistant")
+            .accessibilityHint("Search saved places and the map")
             .accessibilityValue("\(mapStampCount) saved Map Stamps")
             .accessibilityIdentifier("map.command.search")
 
@@ -643,7 +640,7 @@ struct SaveAtlasMapCommandShelf: View {
                     .font(.system(size: 28, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(AtlasPalette.forest.opacity(0.85))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .padding(.trailing, 8)
@@ -651,7 +648,7 @@ struct SaveAtlasMapCommandShelf: View {
             .accessibilityIdentifier("map.command.passport")
         }
         .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
-        .background(.regularMaterial, in: Capsule())
+        .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
         .overlay {
             Capsule()
                 .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
