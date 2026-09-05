@@ -7,7 +7,7 @@ scope.
 
 ## Required Brief
 
-Before editing, record:
+For feature, product-state or commercial changes, record:
 
 - paid user job or observed failure
 - acceptance criteria and failure fixture
@@ -18,13 +18,20 @@ Before editing, record:
 - security and privacy boundary
 - actions that still require human approval
 
-If those fields are missing, produce a clarification brief instead of guessing.
+For bounded maintenance, record the observed problem, scope, acceptance criteria,
+relevant verifier, applicable security/privacy boundaries and actions requiring
+human approval. Commercial fields may be `N/A`; mark other boundaries `N/A`
+only when they are inapplicable. Use context already available rather than
+asking for it again. Clarify only a missing decision that
+changes correctness, product behavior, privacy, payment or authority.
 
 ## Design Reference
 
-Before designing, laying out, or changing any user-visible surface, read
-`DESIGN.md` in full. It is the source of truth for design intent, state
-language, and platform boundary.
+Read the relevant `DESIGN.md` sections and theme tokens for a user-visible
+change. Read the full design contract for a new direction or cross-surface state
+change. A copy or spacing fix does not require rereading the whole document.
+`DESIGN.md` remains the source of truth for intent, state language and platform
+boundary.
 
 Token authority order, most authoritative first:
 
@@ -34,9 +41,11 @@ Token authority order, most authoritative first:
 3. `design-assets/` — accepted examples (`app-store/`, `logo-exploration/`,
    `social/`). Reference them; do not treat them as tokens.
 
-If something you need is not covered by those three, ask instead of choosing
-for yourself. If `DESIGN.md` and the code disagree, report the drift rather
-than silently picking one.
+For a bounded implementation detail, follow the nearest established pattern
+and state any material assumption. Ask when a missing decision changes design
+direction, product-state meaning, privacy or scope. If `DESIGN.md` and the code
+disagree, report the drift and apply the authority order above; do not invent a
+new design rule to hide it.
 
 When you have finished a user-visible change, check your own output against
 `DESIGN.md` and the theme tokens, fix what fails, and only then present it.
@@ -92,7 +101,10 @@ scripts/xcodebuild-clean.sh \
 ```
 
 Boot one headless simulator only for focused XCTest or UI evidence. Reuse the
-same DerivedData root, then shut down and delete the device before reporting.
+same DerivedData root and verify shutdown afterward. For a borrowed or existing
+device, shutdown is the cleanup boundary. Remove a temporary device only when
+this task created it and its removal is authorized; never delete another
+workflow's device as routine cleanup.
 CI is the canonical full checker for the native app, backend, web contracts,
 and evidence rubric.
 
