@@ -544,6 +544,7 @@ struct ContentView: View {
                                 mapViewModel: mapVM,
                                 onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
                                 // Trips left the root bar; both it and Saves
                                 // are pushed children now, so neither surface
                                 // is lost by the restructure.

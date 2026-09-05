@@ -5,6 +5,7 @@ struct SaveHomeView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
+    let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
@@ -39,10 +40,16 @@ struct SaveHomeView: View {
             onOpenTrips: onOpenTrips,
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
-            onOpenReview: { _ in onOpenSaves() },
+            onOpenReview: onOpenReviewCandidate,
             onOpenPassport: onOpenPassport
         )
         if !SaveAtlasRuntime.usesParityFixture {
+            // Home previews actionable place matches. Source-only clues remain
+            // available in the full queue, without displacing real candidates.
+            let pendingIDs = Set(mapViewModel.reviewCandidates.filter {
+                $0.hasSavableLocation && ["review", "confirmed", "needs_more_evidence"].contains($0.status)
+            }.map { $0.id.uuidString })
+            presentation.reviewItems = presentation.reviewItems.filter { pendingIDs.contains($0.id) }
             presentation.tripsBetaLabel = languageSettings.localized(
                 english: "BETA",
                 traditionalChinese: "測試版"
