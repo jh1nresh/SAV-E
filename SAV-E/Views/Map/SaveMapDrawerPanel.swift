@@ -21,12 +21,15 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let tabBarClearance: CGFloat = 80
-    private let collapsedHeight: CGFloat = 72
+    private let collapsedHeight: CGFloat = 64
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
+            // Expanded content is above root navigation, whose geometry already
+            // excludes the home indicator; keep the same bottom edge as idle.
+            let bottomClearance = max(0, tabBarClearance - (isExpanded ? proxy.safeAreaInsets.bottom : 0))
             if isExpanded || showsCollapsedShelf {
                 VStack(spacing: 0) {
                     resizeHandle
@@ -47,11 +50,19 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .frame(height: panelHeight(totalHeight: proxy.size.height - tabBarClearance), alignment: .top)
-                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 28))
-                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .frame(height: panelHeight(totalHeight: proxy.size.height - bottomClearance), alignment: .top)
+                .background {
+                    if stage == .collapsed {
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .fill(.regularMaterial)
+                    } else {
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .fill(SaveAtlasPalette.paper)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 28)
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
                         .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
                         .allowsHitTesting(false)
                 }
@@ -60,8 +71,8 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                 .accessibilityLabel("Map search drawer")
                 .accessibilityValue(stage.accessibilityValue)
                 .accessibilityIdentifier(stage.accessibilityIdentifier)
-                .padding(.horizontal, 8)
-                .padding(.bottom, tabBarClearance)
+                .padding(.horizontal, stage == .collapsed ? proxy.size.width * 0.07 : 8)
+                .padding(.bottom, bottomClearance)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
@@ -75,7 +86,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         Capsule()
             .fill(SaveAtlasPalette.line.opacity(0.48))
             .frame(width: 36, height: 4)
-            .frame(height: 20)
+            .frame(height: 12)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .gesture(resizeGesture(stage: stage))
@@ -103,7 +114,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         let baseHeight: CGFloat
         switch stage {
         case .collapsed: baseHeight = collapsedHeight
-        case .medium: baseHeight = min(largeHeight, max(300, totalHeight * 0.5))
+        case .medium: baseHeight = min(largeHeight, max(240, totalHeight * 0.39))
         case .large: baseHeight = largeHeight
         }
         return min(largeHeight, max(collapsedHeight, baseHeight - dragTranslation))
@@ -256,7 +267,7 @@ struct SaveMapSearchContent: View {
             }
             .foregroundStyle(SaveAtlasPalette.forest)
             .padding(.leading, 12)
-            .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
+            .background(SaveAtlasPalette.canvas, in: Capsule())
             .padding(.horizontal, 16)
 
             ScrollView {

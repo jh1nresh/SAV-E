@@ -933,7 +933,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         waitForStableFrame(collapsed)
         let collapsedTop = collapsed.frame.minY
-        XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.minY - collapsedTop, 24)
+        let drawerBottom = collapsed.frame.maxY
+        XCTAssertLessThanOrEqual(collapsed.frame.height, 66)
+        XCTAssertEqual(collapsed.frame.width / app.frame.width, 0.86, accuracy: 0.02)
+        XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.minY - collapsedTop, 14)
         XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.height, 52)
         XCTAssertTrue(app.buttons["map.command.passport"].isHittable)
         let locate = app.descendants(matching: .any)["map.currentLocation"].firstMatch
@@ -948,23 +951,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
         waitForStableFrame(medium)
         let mediumTop = medium.frame.minY
+        XCTAssertEqual(medium.frame.maxY, drawerBottom, accuracy: 2)
+        XCTAssertGreaterThanOrEqual(mediumTop / app.frame.height, 0.54)
+        XCTAssertLessThanOrEqual(mediumTop / app.frame.height, 0.60)
         XCTAssertLessThan(mediumTop, collapsedTop - 120)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         XCTAssertTrue(app.maps.firstMatch.isHittable)
         attach(app, name: "map-search-drawer-medium")
 
-        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeUp()
+        // Drag a finger-length distance; swipeUp/Down scales travel to the
+        // compact grip's 12pt bounds and can miss the 44pt resize threshold.
+        func dragHandle(by distance: CGFloat) {
+            let start = app.descendants(matching: .any)["map.drawerPanel.handle"]
+                .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)))
+        }
+        dragHandle(by: -160)
         let large = app.descendants(matching: .any)["map.drawerPanel.large"]
         XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
         waitForStableFrame(large)
+        XCTAssertEqual(large.frame.maxY, drawerBottom, accuracy: 2)
         XCTAssertLessThan(large.frame.minY, mediumTop - 120)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         attach(app, name: "map-search-drawer-large")
 
-        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
+        dragHandle(by: 160)
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
-        app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
+        waitForStableFrame(medium)
+        dragHandle(by: 160)
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.maps.firstMatch.exists)

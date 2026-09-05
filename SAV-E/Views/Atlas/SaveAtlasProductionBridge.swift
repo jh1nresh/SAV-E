@@ -594,9 +594,8 @@ struct SaveAtlasInteractiveRootMap: View {
 
 /// Collapsed Map search stop: Apple Maps floating frosted search capsule.
 ///
-/// Matches the founder Apple Maps reference: one-row pill (no grabber),
-/// magnifier + placeholder + mic + trailing identity control. Medium/large
-/// stops stay on `SaveMapDrawerPanel`.
+/// Search is its own capsule beside the identity control, matching the Apple
+/// Maps reference. The grabber and all three stops belong to `SaveMapDrawerPanel`.
 struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
@@ -625,6 +624,7 @@ struct SaveAtlasMapCommandShelf: View {
                 .padding(.leading, 14)
                 .padding(.trailing, 8)
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+                .background(SaveAtlasPalette.canvas.opacity(0.7), in: Capsule())
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -633,27 +633,19 @@ struct SaveAtlasMapCommandShelf: View {
             .accessibilityValue("\(mapStampCount) saved Map Stamps")
             .accessibilityIdentifier("map.command.search")
 
-            // Apple Maps puts the account avatar inside the search capsule.
-            // Savvy opens Passport from the same trailing slot.
+            // Passport sits beside the search field, inside the outer drawer.
             Button(action: onOpenPassport) {
                 Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 26, weight: .regular))
+                    .font(.system(size: 36, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(AtlasPalette.forest.opacity(0.85))
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 8)
             .accessibilityLabel("Open Passport")
             .accessibilityIdentifier("map.command.passport")
         }
         .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
-        .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        }
     }
 }
 

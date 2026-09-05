@@ -386,13 +386,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             panel.contains("AtlasPalette.canvas"),
             "Expanded Map drawer stays notebook canvas; glass belongs on the search pill."
         )
-        XCTAssertFalse(
-            panel.contains(".regularMaterial"),
-            "Expanded drawer must not use glass over notebook content."
-        )
+        XCTAssertTrue(panel.contains(".fill(SaveAtlasPalette.paper)"))
+        XCTAssertTrue(panel.contains("if stage == .collapsed"))
         XCTAssertTrue(shelf.contains("map.command.search"))
         XCTAssertTrue(shelf.contains("map.command.passport"))
-        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
+        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"))
         XCTAssertTrue(
             shelf.contains("person.crop.circle.fill"),
             "Search capsule carries Passport in the Apple Maps avatar slot."

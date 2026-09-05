@@ -29,7 +29,7 @@ struct MapView: View {
     var body: some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
-            // Root Map parks a 72pt search panel above the tab bar.
+            // Root Map parks a 64pt search panel above the tab bar.
             // Trip Map crops MapView above its place card, so a short
             // trailing clearance is enough. Selection swaps the pill for a
             // taller place peek, so locate rises with that chrome.
@@ -37,8 +37,8 @@ struct MapView: View {
             let bottomChromeInset = isEmbeddedCrop
                 ? max(geo.safeAreaInsets.bottom + 18, 28)
                 : max(
-                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 156 : 240),
-                    viewModel.selectedPlace == nil ? 168 : 252
+                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
+                    viewModel.selectedPlace == nil ? 160 : 252
                 )
 
             ZStack {
