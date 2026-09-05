@@ -22,6 +22,7 @@ final class SAVEOnboardingCarouselTests: SAVEUITestCase {
         let clueSubtitle = app.staticTexts["A link, caption, or note is enough."]
         assertFullyVisible(clueSubtitle, in: app)
         XCTAssertFalse(primary.isEnabled)
+        assertFullyVisible(app.buttons["onboarding.sampleClue"], in: app)
         app.buttons["onboarding.sampleClue"].tap()
         XCTAssertTrue(primary.isEnabled)
         XCTAssertTrue(app.descendants(matching: .any)["onboarding.pocketStage.clue"].exists)
@@ -68,15 +69,42 @@ final class SAVEOnboardingCarouselTests: SAVEUITestCase {
         primary.tap()
 
         XCTAssertTrue(app.staticTexts["Drop one messy clue"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(waitUntilHittable(skip))
+        XCTAssertGreaterThanOrEqual(skip.frame.height, 44)
+        XCTAssertEqual(skip.label, "Skip this step")
         skip.tap()
 
         XCTAssertTrue(app.staticTexts["Memo found a likely place"].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
+        attach(app, name: "first-run-visible-skip")
+
         // Skipping the final Map Stamp step exits onboarding.
         XCTAssertTrue(app.staticTexts["Demo complete. Stamped."].waitForExistence(timeout: stepTimeout))
         skip.tap()
 
+        waitForDisappearance(of: primary)
+    }
+
+    @MainActor
+    func testTraditionalChineseSampleFlow() {
+        let app = launchOnboardingApp()
+        XCTAssertTrue(app.buttons["onboarding.language.zh-Hant"].waitForExistence(timeout: launchTimeout))
+        app.buttons["onboarding.language.zh-Hant"].tap()
+        let primary = app.buttons["onboarding.primary"]
+        primary.tap()
+        assertFullyVisible(app.staticTexts["丟給我一個混亂線索"], in: app)
+        let sample = app.buttons["onboarding.sampleClue"]
+        assertFullyVisible(sample, in: app)
+        sample.tap()
+        XCTAssertTrue(primary.isEnabled)
+        attach(app, name: "first-run-zh-clue")
+        primary.tap()
+        assertFullyVisible(app.staticTexts["Memo 找到一個可能地點"], in: app)
+        primary.tap()
+        assertFullyVisible(app.staticTexts["示範完成，已蓋章。"], in: app)
+        attach(app, name: "first-run-zh-stamp")
+        primary.tap()
         waitForDisappearance(of: primary)
     }
 

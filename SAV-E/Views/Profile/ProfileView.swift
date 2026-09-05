@@ -8,6 +8,7 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
+    @State private var showTutorial = false
     @State private var showProPaywall = false
     @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
@@ -169,6 +170,16 @@ struct ProfileView: View {
                         .padding(.horizontal, SaveTheme.Spacing.xs)
                         .accessibilityIdentifier("profile.controlsDisclosure")
 
+                        SettingsRow(
+                            icon: "book.pages",
+                            title: languageSettings.localized(english: "How to use Savvy", traditionalChinese: "Savvy 使用教學"),
+                            detail: languageSettings.localized(english: "Try a clue, review it, then make a Map Stamp", traditionalChinese: "從線索、確認到地圖章，跟著做一次"),
+                            color: SaveAtlasPalette.forest,
+                            accessibilityIdentifier: "profile.tutorial"
+                        ) {
+                            showTutorial = true
+                        }
+
                         NavigationLink {
                             SaveMemoryDebugView(
                                 localVaultService: PrivyAuthService.shared.isReviewerDemo
@@ -310,6 +321,11 @@ struct ProfileView: View {
                     if saved { showEditProfile = false }
                 }
             )
+        }
+        .fullScreenCover(isPresented: $showTutorial) {
+            OnboardingView(isReplay: true) { _ in
+                showTutorial = false
+            }
         }
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()

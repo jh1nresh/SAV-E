@@ -173,7 +173,7 @@ Avoid these in user-facing UI:
 ## Atlas Postcard Tokens
 
 Atlas Postcard is the current visual system for Savvy's primary surfaces. It
-reads as an illustrated travel atlas: warm paper panels, condensed editorial
+reads as an illustrated travel atlas: warm paper panels, native rounded
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
 Canonical source of truth is code:
@@ -226,23 +226,27 @@ Palette rules:
 ### Atlas Typography
 
 `SaveAtlasType` replaces the system-font rules of the legacy section on all
-Atlas surfaces. All production variants accept `relativeTo:` for Dynamic Type.
+Atlas surfaces. Production type scales with Dynamic Type; display, strong, body, and regular
+accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Display | `SaveAtlasType.display(_:)` | AvenirNextCondensed-DemiBold | Hero numerals, action labels, display moments |
-| Strong | `SaveAtlasType.strong(_:)` | AvenirNextCondensed-Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
-| Body | `SaveAtlasType.body(_:)` | AvenirNextCondensed-Medium | Body and detail copy |
-| Regular | `SaveAtlasType.regular(_:)` | AvenirNextCondensed-Regular | Captions, subtitles, count labels |
-| Editorial | `SaveAtlasType.editorial(_:)` | Georgia-Italic | Editorial brand moments: envelope titles, counts, postcard captions |
+| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | System Rounded Regular | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | System Rounded Regular Italic | Editorial brand moments: envelope titles, counts, postcard captions |
 
 Typography rules:
 
 - Eyebrows are `strong` at small sizes, uppercased, with positive tracking
   (~0.65).
-- Editorial Georgia italic is a garnish for brand moments, not a body face.
-- Do not mix `SaveAtlasType` faces with the legacy heavy rounded system fonts
-  on the same surface.
+- Editorial rounded italic is a garnish for brand moments, not a body face.
+- Use `SaveAtlasType` roles rather than ad hoc legacy heavy/black text on Atlas
+  surfaces. Home uses paper-backed, wrapping place names beneath photographs;
+  labels must remain readable when a photo is absent or visually busy.
+- The latest confirmed place remains the stable Home cover; asynchronous photo
+  loading must not change which place is featured.
 
 ### Kraft Chips
 
@@ -553,6 +557,10 @@ Source Clue -> Review Candidate -> Map Stamp -> Trip Plan
 ```
 
 Use one interactive example. Do not add a marketing page.
+Keep primary and visible skip actions in the bottom safe area with 44 pt targets;
+long content scrolls above them. Passport offers a replay using only the sample,
+with a visible close action. Replay never resets onboarding completion, captures
+private input, or adds a place.
 
 ### Map
 

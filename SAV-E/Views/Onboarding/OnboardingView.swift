@@ -10,53 +10,53 @@ struct OnboardingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var step: OnboardingStep
     @State private var clueText = ""
-    private let autoUseSampleClue: Bool
+    private let isReplay: Bool
     var onComplete: (String?) -> Void
 
     private var language: AppLanguage { languageSettings.language }
 
-    init(startWithSampleProof: Bool = false, onComplete: @escaping (String?) -> Void) {
-        _step = State(initialValue: startWithSampleProof ? .clue : .language)
-        self.autoUseSampleClue = startWithSampleProof
+    init(isReplay: Bool = false, onComplete: @escaping (String?) -> Void) {
+        _step = State(initialValue: isReplay ? .clue : .language)
+        self.isReplay = isReplay
         self.onComplete = onComplete
     }
 
     var body: some View {
         GeometryReader { proxy in
             let isCompactHeight = proxy.size.height < 760
-            let stepBodyUsesCompactLayout = isCompactHeight || (
-                step == .language && proxy.size.height < 900
-            )
+            // Reserve room for the top rail and fixed actions on phone-sized screens.
+            let stepBodyUsesCompactLayout = proxy.size.height < 900
             let horizontalPadding: CGFloat = proxy.size.width < 380 ? 16 : 24
-            let bottomActionLift = proxy.safeAreaInsets.bottom + 22
 
-            ZStack(alignment: .bottom) {
-                AtlasCanvas()
-                    .ignoresSafeArea()
+            VStack(spacing: 0) {
+                OnboardingTopBar(
+                    step: step,
+                    language: language,
+                    onBack: goBack,
+                    onClose: isReplay ? { onComplete(nil) } : nil
+                )
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, 8)
 
-                VStack(spacing: 0) {
-                    OnboardingTopBar(
-                        step: step,
-                        language: language,
-                        onBack: goBack
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.top, isCompactHeight ? 6 : -14)
-
+                ScrollView {
                     stepBody(isCompactHeight: stepBodyUsesCompactLayout)
                         .padding(.horizontal, horizontalPadding)
-                        .padding(.bottom, (step.isSkippable ? 102 : 82) + bottomActionLift)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minHeight: max(0, proxy.size.height - 240), alignment: .top)
                 }
-
+                .scrollIndicators(.hidden)
+                .scrollDismissesKeyboard(.interactively)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomActions(isCompactHeight: isCompactHeight)
                     .padding(.horizontal, horizontalPadding)
-                    .background(SaveAtlasPalette.canvas.opacity(0.96))
-                    .offset(y: -bottomActionLift)
+                    .background(SaveAtlasPalette.canvas)
+            }
+            .background {
+                AtlasCanvas().ignoresSafeArea()
             }
         }
         .onAppear {
-            if autoUseSampleClue && trimmedClue.isEmpty {
+            if isReplay && trimmedClue.isEmpty {
                 useSampleClue()
             }
         }
@@ -80,6 +80,7 @@ struct OnboardingView: View {
                 language: language,
                 isCompactHeight: isCompactHeight,
                 reduceMotion: reduceMotion,
+                isReplay: isReplay,
                 onUseSample: useSampleClue
             )
             .transition(stepTransition)
@@ -137,7 +138,9 @@ struct OnboardingView: View {
         VStack(spacing: isCompactHeight ? 6 : 10) {
             Button(action: advance) {
                 HStack(spacing: 8) {
-                    Text(step.primaryTitle(language: language, hasOwnClue: hasOwnClue))
+                    Text(isReplay && step == .mapStamp
+                        ? language.localized(english: "Back to Passport", traditionalChinese: "返回護照")
+                        : step.primaryTitle(language: language, hasOwnClue: hasOwnClue))
                     Image(systemName: step == .mapStamp ? "arrow.right" : "chevron.right")
                         .font(.subheadline.weight(.bold))
                 }
@@ -160,22 +163,25 @@ struct OnboardingView: View {
             }
             .disabled(primaryDisabled)
             .accessibilityIdentifier("onboarding.primary")
-            .accessibilityHint(step.primaryHint(language: language))
+            .accessibilityHint(isReplay && step == .mapStamp
+                ? language.localized(english: "Closes the demo without saving a place", traditionalChinese: "關閉示範，不會保存地點")
+                : step.primaryHint(language: language))
 
             if step.isSkippable {
-                // The approved composition reserves this baseline below the
-                // CTA without rendering a second visible action. Preserve the
-                // existing one-step skip affordance for accessibility and UI
-                // regression coverage without changing the approved artwork.
                 Button(action: skipCurrentStep) {
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 17)
+                    Text(isReplay && step == .mapStamp
+                        ? language.localized(english: "Close tutorial", traditionalChinese: "關閉教學")
+                        : step.skipTitle(language: language))
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("onboarding.skip")
-                .accessibilityLabel(step.skipTitle(language: language))
+                .accessibilityLabel(isReplay && step == .mapStamp
+                    ? language.localized(english: "Close tutorial", traditionalChinese: "關閉教學")
+                    : step.skipTitle(language: language))
             }
         }
         .padding(.bottom, isCompactHeight ? 8 : 20)
@@ -258,7 +264,7 @@ struct OnboardingView: View {
     }
 
     private func finish() {
-        onComplete(Self.clueWorthKeeping(rawClue: clueText, language: language))
+        onComplete(isReplay ? nil : Self.clueWorthKeeping(rawClue: clueText, language: language))
     }
 
     /// The clue to actually import, or `nil` when there is nothing real to
@@ -298,6 +304,7 @@ struct OnboardingView: View {
     private func chooseLanguage(_ chosen: AppLanguage) {
         withAnimation(stepAnimation) {
             languageSettings.language = chosen
+            if isReplay { useSampleClue() }
         }
     }
 }
@@ -461,15 +468,16 @@ private struct OnboardingTopBar: View {
     let step: OnboardingStep
     let language: AppLanguage
     let onBack: () -> Void
+    var onClose: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 26) {
+        VStack(spacing: 16) {
             HStack(spacing: 12) {
                 Button(action: onBack) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.forest)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 44, height: 44)
                         .background(SaveAtlasPalette.paper.opacity(step == .language ? 0.38 : 0.96), in: Circle())
                         .overlay {
                             Circle()
@@ -487,15 +495,21 @@ private struct OnboardingTopBar: View {
 
                 Spacer(minLength: 8)
 
-                Text("\(step.rawValue + 1)/\(OnboardingStep.allCases.count)")
-                    .font(SaveAtlasType.strong(12))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .frame(width: 38, height: 38)
-                    .background(SaveAtlasPalette.mint, in: SavePostcardSealShape())
-                    .overlay {
-                        SavePostcardSealShape()
-                            .stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1)
+                if let onClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(width: 44, height: 44)
                     }
+                    .accessibilityLabel(language.localized(english: "Close tutorial", traditionalChinese: "關閉教學"))
+                    .accessibilityIdentifier("onboarding.close")
+                } else {
+                    Text("\(step.rawValue + 1)/\(OnboardingStep.allCases.count)")
+                        .font(SaveAtlasType.regular(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .frame(width: 44, height: 44)
+                }
             }
 
             OnboardingProgressRail(step: step, language: language)
@@ -708,14 +722,19 @@ private struct ClueStepView: View {
     let language: AppLanguage
     let isCompactHeight: Bool
     let reduceMotion: Bool
+    var isReplay = false
     let onUseSample: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             OnboardingStepTitle(
                 eyebrow: OnboardingStep.clue.eyebrow(language: language),
-                title: OnboardingStep.clue.title(language: language),
-                subtitle: OnboardingStep.clue.subtitle(language: language),
+                title: isReplay
+                    ? language.localized(english: "Try a sample clue", traditionalChinese: "從範例線索開始")
+                    : OnboardingStep.clue.title(language: language),
+                subtitle: isReplay
+                    ? language.localized(english: "A short demo. Nothing is added to your places.", traditionalChinese: "跟著示範走一遍，不會新增任何地點。")
+                    : OnboardingStep.clue.subtitle(language: language),
                 isCompactHeight: isCompactHeight,
                 showsEyebrow: false
             )
@@ -725,34 +744,37 @@ private struct ClueStepView: View {
                 language: language,
                 isCompactHeight: isCompactHeight
             )
-            .frame(height: isCompactHeight ? 250 : 460)
+            .disabled(isReplay)
+            .frame(height: isCompactHeight ? 340 : 460)
             .padding(.top, isCompactHeight ? 8 : 20)
 
-            HStack(spacing: 10) {
-                Button(action: onUseSample) {
-                    Label(
-                        language.localized(english: "Try sample", traditionalChinese: "試用範例"),
-                        systemImage: "airplane"
-                    )
-                    .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .lineLimit(1)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(SaveAtlasPalette.paper.opacity(0.96))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                SaveAtlasPalette.forest.opacity(0.56),
-                                style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                            )
+            if !isReplay {
+                HStack(spacing: 10) {
+                    Button(action: onUseSample) {
+                        Label(
+                            language.localized(english: "Try sample", traditionalChinese: "試用範例"),
+                            systemImage: "airplane"
+                        )
+                        .font(SaveAtlasType.strong(13))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .lineLimit(1)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .background(SaveAtlasPalette.paper.opacity(0.96))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(
+                                    SaveAtlasPalette.forest.opacity(0.56),
+                                    style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                                )
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .accessibilityIdentifier("onboarding.sampleClue")
                 }
-                .accessibilityIdentifier("onboarding.sampleClue")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, isCompactHeight ? 4 : 4)
 
             Spacer(minLength: 0)
         }
@@ -811,14 +833,15 @@ private struct OnboardingSourceTicket: View {
             ZStack(alignment: .topLeading) {
                 linedNoteBackground
 
+                // The envelope scales this ticket once; keep the editor at its canonical size.
                 TextEditor(text: $clueText)
-                    .font(.custom("Noteworthy-Light", size: isCompactHeight ? 13 : 21, relativeTo: .headline))
+                    .font(.custom("Noteworthy-Light", size: 21, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .lineSpacing(2)
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
-                    .frame(height: isCompactHeight ? 76 : 126)
+                    .frame(height: 126)
                     .accessibilityIdentifier("onboarding.clueEditor")
                     .accessibilityLabel(language.localized(
                         english: "Place clue text",
@@ -857,7 +880,7 @@ private struct OnboardingSourceTicket: View {
             .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(isCompactHeight ? 10 : 12)
-        .frame(height: isCompactHeight ? 220 : 286)
+        .frame(height: 286)
         .background {
             ZStack {
                 SaveAtlasPalette.paper
@@ -875,7 +898,7 @@ private struct OnboardingSourceTicket: View {
 
     private var linedNoteBackground: some View {
         Canvas { context, size in
-            let spacing: CGFloat = isCompactHeight ? 18 : 27
+            let spacing: CGFloat = 27
             for y in stride(from: spacing, through: size.height, by: spacing) {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))
@@ -883,7 +906,7 @@ private struct OnboardingSourceTicket: View {
                 context.stroke(path, with: .color(SaveAtlasPalette.line.opacity(0.22)), lineWidth: 1)
             }
         }
-        .frame(height: isCompactHeight ? 76 : 126)
+        .frame(height: 126)
         .allowsHitTesting(false)
     }
 }
@@ -1478,8 +1501,7 @@ private enum OnboardingMemoPose {
 
     var captionHorizontalOffset: CGFloat {
         switch self {
-        case .clue: return -8
-        case .review, .stamp: return -42
+        case .clue, .review, .stamp: return -42
         }
     }
 
