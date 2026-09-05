@@ -1275,6 +1275,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPassportCompactCoverLedgerAndActivityDisclosure() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        let cover = app.descendants(matching: .any)["profile.cover"].firstMatch
+        let ledger = app.descendants(matching: .any)["profile.stampLedger"].firstMatch
+        XCTAssertTrue(cover.waitForExistence(timeout: stepTimeout))
+        XCTAssertLessThan(cover.frame.height, app.frame.height * 0.25)
+        XCTAssertTrue(ledger.isHittable)
+        attach(app, name: "passport-compact-ledger")
+        let activity = app.descendants(matching: .any)["profile.activityDisclosure"].firstMatch
+        XCTAssertTrue(activity.isHittable)
+        activity.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.fieldStreak"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-activity-expanded")
+    }
+
+    @MainActor
     func testPassportAndPostalImportSurfacesAreReachable() throws {
         let storageID = UUID().uuidString.lowercased()
         let app = makeApp(
