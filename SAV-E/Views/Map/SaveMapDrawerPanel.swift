@@ -21,7 +21,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let tabBarClearance: CGFloat = 80
-    private let collapsedHeight: CGFloat = 96
+    private let collapsedHeight: CGFloat = 72
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -75,7 +75,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         Capsule()
             .fill(SaveAtlasPalette.line.opacity(0.48))
             .frame(width: 36, height: 4)
-            .frame(height: 44)
+            .frame(height: 20)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .gesture(resizeGesture(stage: stage))

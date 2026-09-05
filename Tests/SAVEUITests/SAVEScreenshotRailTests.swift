@@ -933,6 +933,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         waitForStableFrame(collapsed)
         let collapsedTop = collapsed.frame.minY
+        XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.minY - collapsedTop, 24)
         XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.height, 52)
         XCTAssertTrue(app.buttons["map.command.passport"].isHittable)
         let locate = app.descendants(matching: .any)["map.currentLocation"].firstMatch
