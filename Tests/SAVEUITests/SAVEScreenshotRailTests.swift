@@ -607,15 +607,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-root-map-live")
 
         app.buttons["map.command.search"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
     }
 
     @MainActor
-    func testTripsAskRoutesToMapDrawer() throws {
+    func testTripsAskRoutesToPlanDrawer() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -647,8 +647,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             1,
             "Only one ask surface should be on screen."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
-        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].exists)
+        XCTAssertTrue(rootTabButton("Plan", app: app).isSelected)
         attach(app, name: "trips-ask-routes-to-map-drawer")
     }
 
@@ -695,6 +695,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testHomeSearchAndPendingCandidateOpenDirectly() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let search = app.textFields["home.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: launchTimeout))
+        attach(app, name: "home-search-pending-candidate")
+        search.tap()
+        search.typeText("zzzz-no-saved-match")
+        XCTAssertTrue(app.staticTexts["home.search.empty"].waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        search.tap()
+        search.typeText("ichiran")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.search.result.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
+        attach(app, name: "home-real-candidate-detail")
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        app.buttons["home.reviewAll"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
+        XCTAssertLessThan(firstCandidate.frame.height, 150)
+        XCTAssertFalse(app.descendants(matching: .any)["saves.pocket.reviewFooter"].exists)
+        attach(app, name: "saves-real-candidates-first")
+    }
+
+    @MainActor
     func testHomeReviewCluesOpensSavesWithoutDrawer() throws {
         let app = makeApp(
             launchArguments: [
@@ -726,6 +768,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testCaptureUsesCompactSheetAndKeepsKeyboardActionReachable() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        rootTabButton("Save", app: app).tap()
+        let input = app.textViews["capture.input"]
+        let submit = app.buttons["capture.analyze"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThan(input.frame.minY, app.frame.height * 0.4)
+        XCTAssertFalse(submit.isEnabled)
+        attach(app, name: "capture-compact-sheet")
+        input.tap()
+        input.typeText("A cafe near Taipei station")
+        XCTAssertTrue(submit.isEnabled)
+        XCTAssertTrue(submit.isHittable)
+        attach(app, name: "capture-sheet-keyboard")
+        app.buttons["capture.keyboardDone"].tap()
+        XCTAssertTrue(app.buttons["capture.importGoogleTakeout"].isHittable)
+        app.buttons["Close capture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
+    }
+
+    @MainActor
     func testGlobalShellSeparatesCaptureFromMapDrawer() throws {
         let app = makeApp(
             launchArguments: [
@@ -747,7 +816,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         captureButtons.firstMatch.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["map.search.root"].exists)
         app.buttons["Close capture"].tap()
 
         openRootTab("Map", app: app)
@@ -755,16 +824,45 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
         mapSearch.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            app.descendants(matching: .any).matching(identifier: "map.search.root").count,
             1,
             "Only one command drawer should be presented."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
+    }
+
+    @MainActor
+    func testMapSearchOpensSavedPlaceWithoutAssistant() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Map", app: app)
+        dismissLocationAlertIfPresent()
+        let search = app.buttons["map.command.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-docked-search")
+        search.tap()
+        let input = app.textFields["map.search.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        input.tap()
+        input.typeText("ichiran")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'map.search.saved.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
+        attach(app, name: "map-place-search-results")
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Ichiran Shibuya"].firstMatch.exists)
+        attach(app, name: "map-search-saved-place-detail")
+        XCTAssertEqual(app.state, .runningForeground)
     }
 
     @MainActor
@@ -793,10 +891,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let collapsedTop = collapsed.frame.minY
         attach(app, name: "map-search-drawer-collapsed")
 
-        collapsed.swipeUp()
+        app.buttons["map.command.search"].swipeUp()
         let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
         waitForStableFrame(medium)
         let mediumTop = medium.frame.minY
@@ -818,7 +916,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
         app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.maps.firstMatch.exists)
         XCTAssertEqual(app.state, .runningForeground)
     }
@@ -1317,6 +1415,57 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Rapid sheet -> Passport -> Save transitions never settled on the final capture cover."
         )
         XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    @MainActor
+    func testPassportCompactLedgerShowsActionableQuests() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        let cover = app.descendants(matching: .any)["profile.cover"].firstMatch
+        let ledger = app.descendants(matching: .any)["profile.stampLedger"].firstMatch
+        XCTAssertTrue(cover.waitForExistence(timeout: stepTimeout))
+        XCTAssertLessThan(cover.frame.height, app.frame.height * 0.25)
+        XCTAssertTrue(ledger.isHittable)
+        let quests = app.descendants(matching: .any)["profile.today"].firstMatch
+        XCTAssertTrue(quests.isHittable, "Quests must be visible without opening a disclosure.")
+        let visit = app.buttons["profile.today.markVisitedStamp"]
+        XCTAssertTrue(visit.isHittable)
+        attach(app, name: "passport-compact-ledger")
+        visit.tap()
+        let confirm = app.buttons["profile.today.markVisitedConfirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-quest-visit")
+        confirm.tap()
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: stepTimeout))
+        let activity = app.descendants(matching: .any)["profile.activityDisclosure"].firstMatch
+        XCTAssertTrue(scrollUntilHittable(activity, in: app.scrollViews.firstMatch, maxSwipes: 4))
+        activity.tap()
+        XCTAssertTrue(app.staticTexts["1-day field streak"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-activity-expanded")
+        let review = app.buttons["profile.today.confirmWaitingClue"]
+        for _ in 0..<4 {
+            if review.isHittable { break }
+            app.scrollViews.firstMatch.swipeDown()
+        }
+        XCTAssertTrue(review.isHittable)
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+
+        terminate(app)
+        app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
+        if let language = app.launchArguments.firstIndex(of: "en") {
+            app.launchArguments[language] = "zh-Hant"
+        }
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        XCTAssertTrue(app.buttons["profile.today.markVisitedStamp"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-quests-zh")
     }
 
     @MainActor
