@@ -2562,8 +2562,12 @@ final class MapViewModel: ObservableObject {
         }
 
         do {
-            try await supabaseService.updatePlace(place)
-            mirrorToLocalVault(place)
+            if usesRemotePersistence {
+                try await supabaseService.updatePlace(place)
+                mirrorToLocalVault(place)
+            } else {
+                _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            }
             if place.status == .visited || previousPlace.status != place.status {
                 // Visited flips and other durable memory edits count as field actions.
                 if place.status == .visited {

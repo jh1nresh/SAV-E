@@ -47,6 +47,8 @@ struct ProfileView: View {
     @State private var fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
     @State private var hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
     @State private var visitFocusPlace: Place?
+    @State private var isUpdatingVisit = false
+    @State private var visitError: String?
     @State private var inviteURLAvailable = false
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -67,8 +69,7 @@ struct ProfileView: View {
         )
     }
 
-    var body: some View {
-        NavigationStack {
+    private var passportContent: some View {
             ScrollView {
                 ScrollViewReader { proxy in
                 VStack(spacing: SaveTheme.Spacing.lg) {
@@ -116,16 +117,17 @@ struct ProfileView: View {
                     PassportStampSection(stats: passportStats)
                         .accessibilityIdentifier("profile.stampLedger")
 
-                    DisclosureGroup(languageSettings.localized(english: "Today on Savvy", traditionalChinese: "今日 Savvy")) {
-                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday)
-                            .accessibilityIdentifier("profile.fieldStreak")
-                        if !todayMissions.isEmpty {
-                            PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
-                                handleTodayMission(missionID, scrollProxy: proxy)
-                            }
+                    if !todayMissions.isEmpty {
+                        PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
+                            handleTodayMission(missionID, scrollProxy: proxy)
                         }
                     }
-                    .font(SaveAtlasType.strong(15))
+
+                    DisclosureGroup(languageSettings.localized(english: "Field activity", traditionalChinese: "探索紀錄")) {
+                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday)
+                            .accessibilityIdentifier("profile.fieldStreak")
+                    }
+                    .font(SaveAtlasType.body(14))
                     .tint(SaveAtlasPalette.forest)
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("profile.activityDisclosure")
@@ -268,6 +270,15 @@ struct ProfileView: View {
             .navigationDestination(isPresented: $opensConnections) {
                 connectionsDestination
             }
+    }
+
+    var body: some View {
+        Group {
+            if isRootTab {
+                passportContent
+            } else {
+                NavigationStack { passportContent }
+            }
         }
         .task {
             localSavedPlaces = savedPlaces
@@ -386,6 +397,7 @@ struct ProfileView: View {
         case .confirmWaitingClue:
             onReviewAll()
         case .markVisitedStamp:
+            visitError = nil
             visitFocusPlace = SavePassportTodayCatalog.firstVisitEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
                 scrollProxy.scrollTo("profile.stampLedger", anchor: .center)
@@ -443,7 +455,10 @@ struct ProfileView: View {
 
             Button {
                 SaveHaptics.tap()
+                isUpdatingVisit = true
+                visitError = nil
                 Task {
+                    defer { isUpdatingVisit = false }
                     var updated = place
                     updated.status = .visited
                     do {
@@ -455,7 +470,10 @@ struct ProfileView: View {
                         }
                         visitFocusPlace = nil
                     } catch {
-                        // Keep the sheet open; durable failures surface elsewhere.
+                        visitError = languageSettings.localized(
+                            english: "Couldn’t update this place. Please try again.",
+                            traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                        )
                     }
                 }
             } label: {
@@ -467,7 +485,15 @@ struct ProfileView: View {
                     .background(SaveAtlasPalette.coral, in: Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(isUpdatingVisit)
             .accessibilityIdentifier("profile.today.markVisitedConfirm")
+            if isUpdatingVisit { ProgressView() }
+            if let visitError {
+                Text(visitError)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .accessibilityIdentifier("profile.today.visitError")
+            }
 
             Spacer(minLength: 0)
         }
@@ -1795,47 +1821,34 @@ private struct PassportTodayOnSavvyStrip: View {
     let onSelect: (SavePassportTodayMissionID) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(languageSettings.localized(
-                    english: "TODAY ON SAVVY",
-                    traditionalChinese: "今日 Savvy"
-                ))
-                .font(SaveAtlasType.strong(11))
-                .tracking(0.65)
-                .foregroundStyle(SaveAtlasPalette.forest)
-
-                Text(languageSettings.localized(
-                    english: "Up to three real next steps",
-                    traditionalChinese: "最多三件真正要做的事"
-                ))
-                .font(SaveAtlasType.body(12))
-                .foregroundStyle(SaveAtlasPalette.muted)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(languageSettings.localized(english: "Your quests", traditionalChinese: "你的探索任務"))
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Spacer()
+                Text(languageSettings.localized(english: "\(missions.count) next steps", traditionalChinese: "\(missions.count) 件可以做的事"))
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-
-            ForEach(missions) { mission in
-                PassportTodayMissionRow(mission: mission) {
-                    SaveHaptics.tap()
-                    onSelect(mission.id)
+            VStack(spacing: 0) {
+                ForEach(missions) { mission in
+                    PassportTodayMissionRow(mission: mission) {
+                        SaveHaptics.tap()
+                        onSelect(mission.id)
+                    }
+                    if mission.id != missions.last?.id {
+                        Rectangle()
+                            .fill(SaveAtlasPalette.line.opacity(0.2))
+                            .frame(height: 1)
+                            .padding(.leading, 62)
+                            .padding(.trailing, 16)
+                    }
                 }
             }
+            .saveAtlasPaper(radius: 18)
         }
-        .padding(.bottom, 12)
-        .background {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .fill(SaveAtlasPalette.paper)
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .stroke(
-                    SaveAtlasPalette.kraft.opacity(0.82),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.today")
     }
@@ -1849,18 +1862,18 @@ private struct PassportTodayMissionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: SaveTheme.Spacing.md) {
-                SavePostcardPerforatedMedallion(
-                    systemName: iconName,
-                    tint: medallionTint,
-                    edge: SaveAtlasPalette.forest
-                )
+                Image(systemName: iconName)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 36, height: 40)
+                    .background(medallionTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(SaveAtlasType.strong(15))
                         .foregroundStyle(SaveAtlasPalette.forest)
                     Text(detail)
-                        .font(SaveAtlasType.body(11))
+                        .font(SaveAtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1869,7 +1882,7 @@ private struct PassportTodayMissionRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
@@ -1922,23 +1935,23 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return languageSettings.localized(
-                english: "Uses existing review queue count",
-                traditionalChinese: "使用現有的待審線索數量"
+                english: "Choose which places belong in your memory",
+                traditionalChinese: "看看哪些地點值得留下"
             )
         case .markVisitedStamp:
             return languageSettings.localized(
-                english: "Return field step for an unvisited stamp",
-                traditionalChinese: "回訪一步：標記尚未去過的章"
+                english: "Keep a memory of somewhere you’ve been",
+                traditionalChinese: "把走過的地方留在記憶裡"
             )
         case .shareRecommendation:
             return languageSettings.localized(
-                english: "Fills Origin for peers",
-                traditionalChinese: "把推薦填進 Origin 給同行的人"
+                english: "Let friends discover a place you recommend",
+                traditionalChinese: "讓朋友發現你推薦的好地方"
             )
         case .inviteOrFollowFriend:
             return languageSettings.localized(
-                english: "Feeds Origin + connections",
-                traditionalChinese: "餵給 Origin 與連線"
+                english: "Find inspiration in a friend’s places",
+                traditionalChinese: "從朋友的地點找些新靈感"
             )
         }
     }
@@ -1961,7 +1974,7 @@ private struct PassportTodayMissionRow: View {
         case .confirmWaitingClue:
             return SaveAtlasPalette.coral
         case .markVisitedStamp:
-            return SaveAtlasPalette.honey
+            return SaveAtlasPalette.mint
         case .shareRecommendation:
             return SaveAtlasPalette.mint
         case .inviteOrFollowFriend:
@@ -2053,13 +2066,10 @@ private struct PassportHero: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 58)
+            ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 48)
             VStack(alignment: .leading, spacing: 6) {
-                Text(languageSettings.text(.profileTitle))
-                    .font(SaveAtlasType.strong(11))
-                    .foregroundStyle(SaveAtlasPalette.muted)
                 Text(profile.displayName)
-                    .font(SaveAtlasType.strong(25, relativeTo: .title2))
+                    .font(SaveAtlasType.strong(22, relativeTo: .title2))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(profile.email ?? languageSettings.text(.localMemoHelper))
@@ -2072,16 +2082,16 @@ private struct PassportHero: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 20))
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 18))
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(SaveAtlasPalette.forest)
                 .frame(width: 5)
                 .padding(.vertical, 20)
         }
-        .overlay { RoundedRectangle(cornerRadius: 20).stroke(SaveAtlasPalette.line.opacity(0.35)) }
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(SaveAtlasPalette.line.opacity(0.35)) }
     }
 }
 
@@ -2185,7 +2195,7 @@ private struct PassportStampSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(languageSettings.localized(english: "Your place memory", traditionalChinese: "你的地點記憶"))
-                .font(SaveAtlasType.strong(20))
+                .font(SaveAtlasType.strong(17))
                 .foregroundStyle(SaveAtlasPalette.forest)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 1) {
                 stat(stats.savedCount, title: languageSettings.localized(english: "Map Stamps", traditionalChinese: "地圖章"), symbol: "mappin", tint: SaveAtlasPalette.mint)
@@ -2210,23 +2220,23 @@ private struct PassportStampSection: View {
     }
 
     private func stat(_ count: Int, title: String, symbol: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: symbol).foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(5)
+                    .background(tint.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
                 Text(title).foregroundStyle(SaveAtlasPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(SaveAtlasType.body(14))
+            Spacer(minLength: 4)
             Text(count.formatted())
-                .font(SaveAtlasType.strong(28, relativeTo: .title2))
+                .font(SaveAtlasType.strong(22, relativeTo: .title2))
                 .foregroundStyle(SaveAtlasPalette.forest)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
         .background(SaveAtlasPalette.paper)
-        .overlay(alignment: .topLeading) {
-            Rectangle().fill(tint).frame(width: 24, height: 3).padding(.leading, 16)
-        }
         .accessibilityElement(children: .combine)
     }
 }
@@ -2537,11 +2547,11 @@ struct SettingsRow: View {
 
     private var rowContent: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            SavePostcardPerforatedMedallion(
-                systemName: icon,
-                tint: color.opacity(0.30),
-                edge: color
-            )
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 36, height: 40)
+                .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -2559,9 +2569,10 @@ struct SettingsRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption2)
-                .foregroundColor(.saveMutedText)
+                .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(.vertical, SaveTheme.Spacing.sm)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             Rectangle()
