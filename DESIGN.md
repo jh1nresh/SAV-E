@@ -573,12 +573,20 @@ Rules:
 
 ### Plan
 
+Use a single conversation with typed itinerary previews, following the interaction
+pattern in Anthropic's commerce-agent reference. Keep the Atlas palette and native
+SwiftUI components. Each response shows a compact unsaved draft with at most three
+day previews; complete stops, travel checks, candidate confirmation, and explicit
+Save as Trip live in a review sheet. The composer stays accessible while chatting.
+Conversation turns remain available for follow-up requests. This is a presentation
+pattern, not adoption of the reference demo's backend or payment architecture.
+
 Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stamps.
 
 Rules:
 
 - Plan is a root tab. It is not a social feed and not a booking desk.
-- Composer first: city from saved stamps, days, pace, optional arrival and departure clocks.
+- Conversation first; city, days, pace, and arrival/departure clocks remain in the optional Plan options disclosure.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.
 - Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
 - Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.

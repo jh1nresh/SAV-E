@@ -34,6 +34,13 @@ struct SavePlanView: View {
     @State private var departureDate = Calendar.current.date(bySettingHour: 19, minute: 0, second: 0, of: Date()) ?? Date()
     @FocusState private var isChatFocused: Bool
     @State private var keyboardOverlap: CGFloat = 0
+    @State private var reviewDraft: PlanReviewDraft?
+    @State private var pendingTripID: UUID?
+
+    private struct PlanReviewDraft: Identifiable {
+        let id = UUID()
+        let response: SaveAIResponse
+    }
     private var draft: SaveAIResponse? {
         get { conversation.draft }
         nonmutating set { conversation.draft = newValue }
@@ -56,6 +63,7 @@ struct SavePlanView: View {
             }
             .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
 
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top) {
@@ -71,6 +79,7 @@ struct SavePlanView: View {
                     if let draft {
                         draftCanvas(draft)
                             .disabled(isPlanning)
+                            .id("latestDraft")
                     }
                     DisclosureGroup(localized("Plan options", "調整行程條件")) {
                         composer
@@ -84,7 +93,11 @@ struct SavePlanView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { chatInput }
             .scrollDismissesKeyboard(.interactively)
+            .onChange(of: conversation.draft) { _, _ in
+                withAnimation { proxy.scrollTo("latestDraft", anchor: .top) }
+            }
             .placed(x: 0, y: 105, width: AtlasMetrics.width, height: max(160, min(674, AtlasMetrics.height - keyboardOverlap - 117)))
+            }
 
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
@@ -98,6 +111,29 @@ struct SavePlanView: View {
         }
         }
         .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
+        .sheet(item: $reviewDraft, onDismiss: {
+            if let tripID = pendingTripID {
+                pendingTripID = nil
+                onOpenTrip(tripID)
+            }
+        }) { review in
+            NavigationStack {
+                ScrollView {
+                    itineraryDetails(review.response)
+                        .padding(16)
+                }
+                .background(SaveAtlasPalette.canvas)
+                .navigationTitle(localized("Review your plan", "確認行程"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(localized("Done", "完成")) { reviewDraft = nil }
+                            .accessibilityIdentifier("plan.review.close")
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.root")
@@ -240,7 +276,10 @@ struct SavePlanView: View {
                 guard !Task.isCancelled else { return }
                 conversation.turns.append(ConversationTurn(userMessage: query, assistantResponse: SaveAIService.shared.encodeResponse(response)))
                 if conversation.turns.count > 12 { conversation.turns.removeFirst() }
-                conversation.messages.append(.init(request: query, reply: response.aiMessage ?? response.messageText ?? response.title ?? localized("Here’s a draft to review.", "這是行程草稿，看看合不合適。")))
+                let reply = response.componentType == .tripItinerary
+                    ? localized("Here’s a draft. Tell me what you’d like to change, or review it before saving.", "先排好這版草稿。可以繼續聊想調整的地方，或確認內容後儲存。")
+                    : response.aiMessage ?? response.messageText ?? response.title ?? localized("Tell me more about your trip.", "再多說一點你想怎麼玩。")
+                conversation.messages.append(.init(request: query, reply: reply))
                 if response.componentType == .tripItinerary { draft = response }
                 if conversation.input.trimmingCharacters(in: .whitespacesAndNewlines) == query { conversation.input = "" }
             } catch {
@@ -418,25 +457,92 @@ struct SavePlanView: View {
         }
     }
 
-    @ViewBuilder
     private func draftCanvas(_ draft: SaveAIResponse) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TripItineraryComponent(
-                title: draft.title ?? localized("Plan draft", "行程草稿"),
-                days: draft.itineraryDays,
-                tripHealth: draft.tripHealth,
-                aiMessage: draft.aiMessage,
-                places: savedPlaces,
-                travelLegs: draft.travelLegs,
-                onSaveTripPlan: { name, city, stops in
-                    await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
-                },
-                onOpenTrip: onOpenTrip,
-                onConfirmCandidate: onConfirmCandidate
-            )
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("plan.draft")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(localized("DRAFT · NOT SAVED", "草稿 · 尚未儲存"), systemImage: "map")
+                    .font(SaveAtlasType.strong(11))
+                Spacer()
+                Text(localized(draft.itineraryDays.count == 1 ? "1 day" : "\(draft.itineraryDays.count) days", "\(draft.itineraryDays.count) 天"))
+                    .font(SaveAtlasType.body(12))
+            }
+            .foregroundStyle(SaveAtlasPalette.muted)
+            Text(draft.title ?? localized("Your trip", "你的行程"))
+                .font(SaveAtlasType.strong(20, relativeTo: .title3))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            ForEach(Array(draft.itineraryDays.prefix(3))) { day in
+                HStack(alignment: .top, spacing: 12) {
+                    Text(String(format: "%02d", day.dayNumber))
+                        .font(SaveAtlasType.strong(16))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .frame(width: 32, height: 32)
+                        .background(SaveAtlasPalette.kraft.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(day.label ?? localized("Day \(day.dayNumber)", "第 \(day.dayNumber) 天"))
+                            .font(SaveAtlasType.strong(14))
+                        Text(day.stops.isEmpty
+                             ? localized("Open details to fill this day", "打開詳情，補上這天的安排")
+                             : day.stops.prefix(2).map(previewLabel).joined(separator: " → "))
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            if draft.itineraryDays.count > 3 {
+                Text(localized("+ \(draft.itineraryDays.count - 3) more days in details", "詳情還有 \(draft.itineraryDays.count - 3) 天"))
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+            }
+            Button { reviewDraft = PlanReviewDraft(response: draft) } label: {
+                HStack {
+                    Text(localized("Review & save", "確認並儲存"))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                }
+                .font(SaveAtlasType.strong(15))
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .background(SaveAtlasPalette.kraft.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("plan.draft.review")
         }
+        .padding(16)
+        .foregroundStyle(SaveAtlasPalette.ink)
+        .saveAtlasPaper(radius: 18)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("plan.draft")
+    }
+
+    private func previewLabel(_ stop: ItineraryStop) -> String {
+        let isSaved = savedPlaces.contains { $0.id.uuidString.caseInsensitiveCompare(stop.placeId ?? "") == .orderedSame }
+        let state = isSaved
+            ? localized("saved", "已存")
+            : localized("to review", "待確認")
+        return "\(stop.placeName) · \(state)"
+    }
+
+    private func itineraryDetails(_ draft: SaveAIResponse) -> some View {
+        TripItineraryComponent(
+            title: draft.title ?? localized("Plan draft", "行程草稿"),
+            days: draft.itineraryDays,
+            tripHealth: draft.tripHealth,
+            aiMessage: draft.aiMessage,
+            places: savedPlaces,
+            travelLegs: draft.travelLegs,
+            onSaveTripPlan: { name, city, stops in
+                await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
+            },
+            onOpenTrip: { tripID in
+                pendingTripID = tripID
+                reviewDraft = nil
+            },
+            onConfirmCandidate: onConfirmCandidate
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("plan.draft.details")
     }
 
     private var atlasPresentation: AtlasPresentation {

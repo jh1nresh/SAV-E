@@ -844,7 +844,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "plan-chat-keyboard")
         send.tap()
         XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["tripPlan.save"].exists)
+        let review = app.buttons["plan.draft.review"]
+        XCTAssertTrue(review.isHittable)
         attach(app, name: "plan-chat-draft")
+        review.tap()
+        XCTAssertTrue(app.buttons["tripPlan.save"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-review-details")
+        app.buttons["plan.review.close"].tap()
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
         openRootTab("Home", app: app)
         openRootTab("Plan", app: app)
         XCTAssertTrue(app.staticTexts["Plan a relaxed 1 day trip in Tokyo"].waitForExistence(timeout: stepTimeout))
@@ -896,7 +904,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.descendants(matching: .any)["plan.options"].firstMatch.tap()
         let compose = app.buttons["plan.compose"]
         XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
+        _ = scrollUntilHittable(compose, in: scroll, maxSwipes: 6)
+        XCTAssertTrue(scroll.frame.contains(compose.frame), "Composer action must be inside the visible scroll viewport.")
+        attach(app, name: "plan-manual-options")
         tapReachable(compose)
+        let review = app.buttons["plan.draft.review"]
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        tapReachable(review)
         let candidate = app.buttons["tripPlan.confirm.Plan Test Garden"]
         XCTAssertTrue(scrollUntilHittable(candidate, in: scroll, maxSwipes: 10))
         attach(app, name: "plan-candidate-before-confirmation")
