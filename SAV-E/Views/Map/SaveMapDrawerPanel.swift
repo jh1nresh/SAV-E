@@ -2,11 +2,11 @@ import SwiftUI
 
 /// One resizable drawer surface for the Map tab.
 ///
-/// Collapsed is the Apple Maps–style floating search pill. Medium and large
-/// keep the existing in-tree panel. The map stays interactive above it, and
-/// expanding never presents a second layer. The embedded drawer intentionally
-/// doesn't use sheet presentation modifiers because those can abort SwiftUI's
-/// presentation coordinator when attached to an in-tree view.
+/// Search is docked to the bottom edge. Medium and large share the same
+/// paper surface for search results and place details. Expanding never
+/// presents a second layer. The embedded drawer intentionally doesn't use
+/// sheet presentation modifiers because those can abort SwiftUI's presentation
+/// coordinator when attached to an in-tree view.
 struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var isExpanded: Bool
     @Binding var detent: PresentationDetent
@@ -16,11 +16,13 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     /// the card shouldn't summon the keyboard; tapping the field should.
     let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
+    let onOpenPassport: () -> Void
     @ViewBuilder let expandedContent: () -> ExpandedContent
 
-    /// Keeps the collapsed floating pill clear of the root tab bar.
-    private let collapsedBottomInset: CGFloat = 88
-    private let collapsedHeight: CGFloat = 72
+    /// The panel extends behind the root tab bar.
+    private let collapsedBottomInset: CGFloat = 74
+    /// Grabber, search row and internal padding.
+    private let collapsedHeight: CGFloat = 88
     @State private var collapsedDragConsumedTap = false
     @GestureState private var dragTranslation: CGFloat = 0
 
@@ -42,17 +44,31 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     }
 
     private var collapsedShelf: some View {
-        SaveAtlasMapCommandShelf(
-            mapStampCount: mapStampCount,
-            onOpenAssistant: {
-                guard !collapsedDragConsumedTap else { return }
-                onExpand(true)
-            }
-        )
-        .frame(height: 68)
-        .padding(.horizontal, 15)
+        VStack(spacing: 8) {
+            Capsule()
+                .fill(SaveAtlasPalette.line.opacity(0.45))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
+            SaveAtlasMapCommandShelf(
+                mapStampCount: mapStampCount,
+                onOpenAssistant: {
+                    guard !collapsedDragConsumedTap else { return }
+                    onExpand(true)
+                },
+                onOpenPassport: onOpenPassport
+            )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+        .frame(height: collapsedHeight)
         .padding(.bottom, collapsedBottomInset)
-        .offset(y: max(-96, min(0, dragTranslation)))
+        .background(SaveAtlasPalette.paper, in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
+        .overlay(alignment: .top) {
+            UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+                .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
         .simultaneousGesture(resizeGesture(stage: .collapsed))
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
@@ -66,8 +82,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
             Capsule()
                 .fill(AtlasPalette.line.opacity(0.48))
                 .frame(width: 38, height: 4)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
+                .frame(height: 44)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .gesture(resizeGesture(stage: expandedStage))
@@ -113,7 +128,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     /// visible while typing. During a drag the panel tracks the finger 1:1,
     /// then settles at the nearest directional stop on release.
     private func panelHeight(totalHeight: CGFloat) -> CGFloat {
-        let largeHeight = max(320, totalHeight - 12)
+        let largeHeight = max(120, totalHeight - 12)
         let baseHeight = expandedStage == .large
             ? largeHeight
             : max(320, totalHeight * 0.42)
@@ -216,5 +231,171 @@ private enum MapDrawerStage {
         case .medium: "Medium"
         case .large: "Large"
         }
+    }
+}
+
+/// Search belongs to the map; planning conversations have their own surface.
+struct SaveMapSearchContent: View {
+    @ObservedObject var mapViewModel: MapViewModel
+    let initialQuery: String
+    let focusesSearch: Bool
+    let onClose: () -> Void
+    let onOpenPlace: (Place) -> Void
+    let onOpenCandidate: (SaveMapCandidate) -> Void
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var query = ""
+    @State private var submittedQuery = ""
+    @State private var searchRequestID = UUID()
+    @FocusState private var isFocused: Bool
+
+    private var savedResults: [Place] {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return mapViewModel.filteredPlaces.filter {
+            text.isEmpty || $0.name.localizedStandardContains(text) || $0.address.localizedStandardContains(text)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                TextField(localized("Search places", "搜尋地點"), text: $query)
+                    .font(SaveAtlasType.body(17))
+                    .focused($isFocused)
+                    .submitLabel(.search)
+                    .onSubmit(submit)
+                    .accessibilityIdentifier("map.search.input")
+                Button(action: submit) {
+                    Image(systemName: "arrow.right").frame(width: 44, height: 44)
+                }
+                .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(localized("Search map", "搜尋地圖"))
+                .accessibilityIdentifier("map.search.submit")
+                Button {
+                    isFocused = false
+                    onClose()
+                } label: {
+                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(localized("Close search", "關閉搜尋"))
+                .accessibilityIdentifier("map.search.close")
+            }
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .padding(.leading, 12)
+            .background(SaveAtlasPalette.canvas, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 16)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(localized("Your Map Stamps", "你的地圖章"))
+                            .font(SaveAtlasType.strong(15))
+                        Spacer()
+                        Menu {
+                            ForEach(SaveMapDrawerIntent.allCases) { intent in
+                                Button {
+                                    mapViewModel.toggleIntentFilter(intent)
+                                } label: {
+                                    Label(intent.chipLabel(language: languageSettings.language), systemImage: mapViewModel.selectedIntentFilters.contains(intent) ? "checkmark" : intent.systemImage)
+                                }
+                            }
+                            Divider()
+                            ForEach(PlaceCategory.allCases, id: \.self) { category in
+                                Button {
+                                    mapViewModel.toggleCategory(category)
+                                } label: {
+                                    Label(category.displayName(language: languageSettings.language), systemImage: mapViewModel.selectedCategories.contains(category) ? "checkmark" : "circle")
+                                }
+                            }
+                        } label: {
+                            Label(localized("Filters", "篩選"), systemImage: "line.3.horizontal.decrease")
+                                .font(SaveAtlasType.body(14))
+                                .frame(minHeight: 44)
+                        }
+                        .accessibilityIdentifier("map.search.filters")
+                    }
+                    ForEach(savedResults) { place in
+                        Button {
+                            isFocused = false
+                            onOpenPlace(place)
+                        } label: {
+                            resultRow(place.name, detail: place.address, state: localized("Saved", "已存"), tint: SaveAtlasPalette.mint)
+                        }
+                        .accessibilityIdentifier("map.search.saved.\(place.id)")
+                    }
+                    if savedResults.isEmpty {
+                        Text(localized("No saved places match.", "沒有符合的已存地點。"))
+                            .font(SaveAtlasType.body(14))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                    }
+                    if !submittedQuery.isEmpty && submittedQuery == query.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        Text(localized("Map results · Not saved", "地圖結果 · 尚未儲存"))
+                            .font(SaveAtlasType.strong(15))
+                            .padding(.top, 12)
+                        if mapViewModel.isLoadingMapCandidates {
+                            ProgressView().frame(maxWidth: .infinity).padding()
+                        } else if mapViewModel.mapCandidates.isEmpty {
+                            Text(localized("No map results. Try a place name and city.", "沒有地圖結果，試試地點名稱加城市。"))
+                                .font(SaveAtlasType.body(14))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                        } else {
+                            ForEach(mapViewModel.mapCandidates) { candidate in
+                                Button {
+                                    isFocused = false
+                                    onOpenCandidate(candidate)
+                                } label: {
+                                    resultRow(candidate.title, detail: candidate.subtitle, state: localized("Not saved", "未儲存"), tint: SaveAtlasPalette.sky)
+                                }
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .padding(16)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .background(SaveAtlasPalette.paper)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.search.root")
+        .onAppear {
+            query = initialQuery
+            submittedQuery = initialQuery
+            isFocused = focusesSearch
+        }
+        .task(id: searchRequestID) {
+            guard !submittedQuery.isEmpty else { return }
+            await mapViewModel.searchMapPlaces(submittedQuery)
+        }
+    }
+
+    private func submit() {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        isFocused = false
+        submittedQuery = text
+        searchRequestID = UUID()
+    }
+
+    private func resultRow(_ title: String, detail: String, state: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "mappin")
+                .frame(width: 36, height: 36)
+                .background(tint, in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(SaveAtlasType.strong(17))
+                Text(detail).font(SaveAtlasType.body(13)).foregroundStyle(SaveAtlasPalette.muted)
+                Text(state).font(SaveAtlasType.body(11)).foregroundStyle(SaveAtlasPalette.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+    }
+
+    private func localized(_ english: String, _ chinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: chinese)
     }
 }

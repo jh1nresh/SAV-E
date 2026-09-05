@@ -10,6 +10,8 @@ struct TripItineraryComponent: View {
     /// Persists the distilled plan as a Trip. Nil hides the save action
     /// (previews / surfaces without a trip store).
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)?
+    var onOpenTrip: ((UUID) -> Void)? = nil
+    var onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var shareItem: TripItineraryShareItem?
     @State private var exportAlert: TripItineraryExportAlert?
@@ -19,6 +21,10 @@ struct TripItineraryComponent: View {
     @State private var isLoadingLocalGapCandidates = false
     @State private var saveTripPrompt: TripPlanSavePrompt?
     @State private var isSavingTrip = false
+    @State private var savedTripID: UUID?
+    @State private var confirmingStop: ItineraryStop?
+    @State private var isConfirmingCandidate = false
+    @State private var confirmedPlaces: [Place] = []
 
     init(
         title: String,
@@ -27,7 +33,9 @@ struct TripItineraryComponent: View {
         aiMessage: String?,
         places: [Place] = [],
         travelLegs: [TripTravelLeg] = [],
-        onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
+        onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil,
+        onOpenTrip: ((UUID) -> Void)? = nil,
+        onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
     ) {
         self.title = title
         self.sourceDays = days
@@ -36,6 +44,8 @@ struct TripItineraryComponent: View {
         self.places = places
         self.travelLegs = travelLegs
         self.onSaveTripPlan = onSaveTripPlan
+        self.onOpenTrip = onOpenTrip
+        self.onConfirmCandidate = onConfirmCandidate
         _canvas = State(initialValue: TripCanvasDraft(days: days))
     }
 
@@ -105,28 +115,6 @@ struct TripItineraryComponent: View {
                         }
                         .disabled(true)
                     }
-
-                    if onSaveTripPlan != nil {
-                        Divider()
-
-                        Button(action: presentSaveTripPrompt) {
-                            Label(
-                                languageSettings.localized(
-                                    english: isSavingTrip ? "Saving Trip…" : "Save as Trip",
-                                    traditionalChinese: isSavingTrip ? "正在儲存旅程…" : "存成旅程"
-                                ),
-                                systemImage: "suitcase"
-                            )
-                        }
-                        .disabled(isSavingTrip || tripSaveDisabledReason != nil)
-
-                        if let tripSaveDisabledReason {
-                            Button(action: {}) {
-                                Label(tripSaveDisabledReason, systemImage: "info.circle")
-                            }
-                            .disabled(true)
-                        }
-                    }
                 } label: {
                     Group {
                         if isExportingKml {
@@ -139,7 +127,7 @@ struct TripItineraryComponent: View {
                                 .foregroundColor(.saveInk)
                         }
                     }
-                    .frame(width: 34, height: 34)
+                    .frame(width: 44, height: 44)
                     .background(SaveAtlasPalette.paper.opacity(0.74))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -166,6 +154,8 @@ struct TripItineraryComponent: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
+            saveActions
+
             if let tripHealth {
                 TripHealthSummaryCard(
                     health: tripHealth,
@@ -175,7 +165,8 @@ struct TripItineraryComponent: View {
                     canvas.insertGapSuggestion(
                         option,
                         dayNumber: dayNumber(for: gap),
-                        note: gap.message
+                        note: gap.message,
+                        mapCandidate: localGapCandidates.first { $0.id == option.mapCandidateId }
                     )
                 }
             }
@@ -187,6 +178,7 @@ struct TripItineraryComponent: View {
                         approvedExternalStopIDs: canvas.approvedExternalStopIDs,
                         travelLegs: travelLegs,
                         onApproveExternalStop: { stopID in canvas.approveExternalStop(stopID) },
+                        onConfirmCandidate: candidateConfirmationAction,
                         onSkipStop: { stopID in canvas.skipStop(stopID) },
                         onMoveEarlier: { stopID in canvas.moveStopEarlier(stopID) },
                         onMoveLater: { stopID in canvas.moveStopLater(stopID) }
@@ -201,8 +193,24 @@ struct TripItineraryComponent: View {
                 .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .onChange(of: canvasInputID) { _, _ in
+        .onChange(of: sourceDays) { _, _ in
             canvas = TripCanvasDraft(days: sourceDays)
+            confirmedPlaces = []
+            savedTripID = nil
+        }
+        .onChange(of: canvas.visibleDays) { _, _ in savedTripID = nil }
+        .disabled(isConfirmingCandidate || isSavingTrip)
+        .confirmationDialog(
+            languageSettings.localized(english: "Confirm this place", traditionalChinese: "確認這個地點"),
+            isPresented: Binding(get: { confirmingStop != nil }, set: { if !$0 { confirmingStop = nil } }),
+            titleVisibility: .visible,
+            presenting: confirmingStop
+        ) { stop in
+            Button(languageSettings.localized(english: "Confirm & save place", traditionalChinese: "確認並儲存地點")) {
+                confirmCandidate(stop)
+            }
+        } message: { stop in
+            Text([stop.placeName, stop.mapCandidate?.subtitle].compactMap { $0 }.joined(separator: "\n"))
         }
         .task(id: canvasInputID) {
             await loadLocalGapCandidates()
@@ -232,8 +240,65 @@ struct TripItineraryComponent: View {
         .onDisappear(perform: handleDisappear)
     }
 
+    @ViewBuilder
+    private var saveActions: some View {
+        if onSaveTripPlan != nil {
+            HStack {
+                Button(action: presentSaveTripPrompt) {
+                    Label(languageSettings.localized(english: "Save as Trip", traditionalChinese: "存成旅程"), systemImage: "suitcase")
+                        .font(SaveAtlasType.strong(15))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SaveAtlasPalette.coral)
+                .disabled(isSavingTrip || isConfirmingCandidate || tripSaveDisabledReason != nil)
+                .accessibilityIdentifier("tripPlan.save")
+                if let savedTripID, let onOpenTrip {
+                    Button(languageSettings.localized(english: "Open trip", traditionalChinese: "開啟行程")) {
+                        onOpenTrip(savedTripID)
+                    }
+                    .font(SaveAtlasType.strong(15))
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("tripPlan.open")
+                }
+            }
+            if let tripSaveDisabledReason {
+                Text(tripSaveDisabledReason)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+            }
+        }
+    }
+
+    private var candidateConfirmationAction: ((ItineraryStop) -> Void)? {
+        guard onConfirmCandidate != nil else { return nil }
+        return { stop in confirmingStop = stop }
+    }
+
+    private var availablePlaces: [Place] {
+        places + confirmedPlaces.filter { confirmed in !places.contains { $0.id == confirmed.id } }
+    }
+
+    private func confirmCandidate(_ stop: ItineraryStop) {
+        guard let candidate = stop.mapCandidate, let onConfirmCandidate, !isConfirmingCandidate else { return }
+        isConfirmingCandidate = true
+        Task {
+            defer { isConfirmingCandidate = false }
+            do {
+                let place = try await onConfirmCandidate(candidate)
+                confirmedPlaces.append(place)
+                canvas.confirmExternalStop(stop.id, as: place)
+            } catch {
+                exportAlert = TripItineraryExportAlert(
+                    title: languageSettings.localized(english: "Couldn’t save this place", traditionalChinese: "無法儲存地點"),
+                    message: error.localizedDescription
+                )
+            }
+        }
+    }
+
     private func buildShareURL() -> URL? {
-        let tripData = SharedTripData.from(title: title, city: "", days: canvas.visibleDays, places: places)
+        let tripData = SharedTripData.from(title: title, city: "", days: canvas.visibleDays, places: availablePlaces)
         return tripData.toURL()
     }
 
@@ -253,7 +318,7 @@ struct TripItineraryComponent: View {
 
         do {
             try removeTemporaryExportIfPresent()
-            let placeIDs = try canvas.kmlExportPlaceIDs(availablePlaces: places)
+            let placeIDs = try canvas.kmlExportPlaceIDs(availablePlaces: availablePlaces)
             let data = try await SupabaseService.shared.exportTrekKml(placeIds: placeIDs)
             try Task.checkCancellation()
 
@@ -303,7 +368,7 @@ struct TripItineraryComponent: View {
 
     private var kmlExportDisabledReason: String? {
         do {
-            _ = try canvas.kmlExportPlaceIDs(availablePlaces: places)
+            _ = try canvas.kmlExportPlaceIDs(availablePlaces: availablePlaces)
             return nil
         } catch let error as TripKmlExportSelectionError {
             return selectionMessage(for: error)
@@ -317,7 +382,7 @@ struct TripItineraryComponent: View {
 
     private var tripSaveDisabledReason: String? {
         do {
-            _ = try canvas.tripSaveSelection(availablePlaces: places)
+            _ = try canvas.tripSaveSelection(availablePlaces: availablePlaces)
             return nil
         } catch let error as TripKmlExportSelectionError {
             return selectionMessage(for: error)
@@ -331,7 +396,7 @@ struct TripItineraryComponent: View {
 
     private func presentSaveTripPrompt() {
         do {
-            let selection = try canvas.tripSaveSelection(availablePlaces: places)
+            let selection = try canvas.tripSaveSelection(availablePlaces: availablePlaces)
             saveTripPrompt = TripPlanSavePrompt(selection: selection)
         } catch {
             exportAlert = TripItineraryExportAlert(
@@ -348,10 +413,12 @@ struct TripItineraryComponent: View {
     private func savePlanAsTrip(name: String, city: String, selection: TripPlanSaveSelection) {
         guard let onSaveTripPlan, !isSavingTrip else { return }
         isSavingTrip = true
+        let savingDays = canvas.visibleDays
         Task {
             let trip = await onSaveTripPlan(name, city, selection.stops)
             isSavingTrip = false
             if let trip {
+                savedTripID = canvas.visibleDays == savingDays ? trip.id : nil
                 exportAlert = TripItineraryExportAlert(
                     title: languageSettings.localized(
                         english: "Saved to Trip Packs",
@@ -474,6 +541,7 @@ struct TripItineraryComponent: View {
     /// Loads public options for the open gaps once per plan. Fire-and-forget:
     /// a plan built from saved places must still render if this never returns.
     private func loadLocalGapCandidates() async {
+        guard !ReviewDemo.isOfflineUITestMode else { return }
         guard let gaps = tripHealth?.gaps, !gaps.isEmpty else {
             localGapCandidates = []
             return
@@ -784,6 +852,7 @@ private struct DaySection: View {
     let approvedExternalStopIDs: Set<UUID>
     var travelLegs: [TripTravelLeg] = []
     let onApproveExternalStop: (UUID) -> Void
+    var onConfirmCandidate: ((ItineraryStop) -> Void)? = nil
     let onSkipStop: (UUID) -> Void
     let onMoveEarlier: (UUID) -> Void
     let onMoveLater: (UUID) -> Void
@@ -796,7 +865,8 @@ private struct DaySection: View {
         guard index > 0 else { return nil }
         let previous = day.stops[index - 1]
         let current = day.stops[index]
-        guard let fromID = previous.placeId, let toID = current.placeId else { return nil }
+        let fromID = previous.routingID
+        let toID = current.routingID
         return travelLegs.first { $0.fromPlaceId == fromID && $0.toPlaceId == toID }
     }
 
@@ -833,6 +903,28 @@ private struct DaySection: View {
                 .clipShape(Capsule())
                 .padding(.bottom, 12)
 
+            if let windowNote = day.windowNote, !windowNote.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(languageSettings.localized(english: "Travel window", traditionalChinese: "行程時窗"))
+                        .font(SaveAtlasType.strong(10))
+                        .tracking(0.7)
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(windowNote)
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SaveAtlasPalette.kraft.opacity(0.38), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(SaveAtlasPalette.line.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [5, 3]))
+                }
+                .accessibilityIdentifier("plan.window.\(day.dayNumber)")
+                .padding(.bottom, 10)
+            }
+
             ForEach(Array(day.stops.enumerated()), id: \.element.id) { index, stop in
                 if let leg = travelLeg(before: index) {
                     Label(travelLegLabel(leg), systemImage: leg.mode == .driving ? "car" : "figure.walk")
@@ -840,6 +932,11 @@ private struct DaySection: View {
                         .foregroundColor(.saveMutedText)
                         .padding(.leading, 20)
                         .padding(.vertical, 2)
+                } else if index > 0 {
+                    Text(languageSettings.localized(english: "Travel time unverified", traditionalChinese: "交通時間待確認"))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .padding(.leading, 20)
                 }
                 HStack(alignment: .top, spacing: 12) {
                     // Timeline
@@ -909,6 +1006,7 @@ private struct DaySection: View {
                             canMoveLater: index < day.stops.count - 1,
                             isApprovedExternalStop: approvedExternalStopIDs.contains(stop.id),
                             onApproveExternalStop: onApproveExternalStop,
+                            onConfirmCandidate: onConfirmCandidate,
                             onSkipStop: onSkipStop,
                             onMoveEarlier: onMoveEarlier,
                             onMoveLater: onMoveLater
@@ -965,18 +1063,18 @@ private struct DaySection: View {
         case .reviewCandidate:
             return languageSettings.localized(english: "Needs review", traditionalChinese: "待確認")
         case .confirmedMapStamp:
-            return languageSettings.localized(english: "Confirmed", traditionalChinese: "已確認")
+            return languageSettings.localized(english: "Map Stamp", traditionalChinese: "地圖章")
         case .externalSuggestion:
-            return languageSettings.localized(english: "External", traditionalChinese: "外部建議")
+            return languageSettings.localized(english: "Unsaved Candidate", traditionalChinese: "尚未儲存")
         }
     }
 
     private func stateTint(_ state: ItineraryPlaceState) -> Color {
         switch state {
-        case .sourceOnly: return SaveAtlasPalette.kraft
-        case .reviewCandidate: return SaveAtlasPalette.kraft
+        case .sourceOnly: return SaveAtlasPalette.coral
+        case .reviewCandidate: return SaveAtlasPalette.sky
         case .confirmedMapStamp: return SaveAtlasPalette.mint
-        case .externalSuggestion: return SaveAtlasPalette.coral
+        case .externalSuggestion: return SaveAtlasPalette.sky
         }
     }
 
@@ -1004,6 +1102,7 @@ private struct StopCanvasControls: View {
     let canMoveLater: Bool
     let isApprovedExternalStop: Bool
     let onApproveExternalStop: (UUID) -> Void
+    var onConfirmCandidate: ((ItineraryStop) -> Void)? = nil
     let onSkipStop: (UUID) -> Void
     let onMoveEarlier: (UUID) -> Void
     let onMoveLater: (UUID) -> Void
@@ -1032,7 +1131,7 @@ private struct StopCanvasControls: View {
             Button(action: { onMoveEarlier(stop.id) }) {
                 Image(systemName: "arrow.up")
                     .font(.caption2.weight(.bold))
-                    .frame(width: 28, height: 26)
+                    .frame(width: 44, height: 44)
                     .background(SaveAtlasPalette.paper.opacity(0.74))
                     .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
@@ -1043,7 +1142,7 @@ private struct StopCanvasControls: View {
             Button(action: { onMoveLater(stop.id) }) {
                 Image(systemName: "arrow.down")
                     .font(.caption2.weight(.bold))
-                    .frame(width: 28, height: 26)
+                    .frame(width: 44, height: 44)
                     .background(SaveAtlasPalette.paper.opacity(0.74))
                     .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                     .clipShape(Capsule())
@@ -1052,21 +1151,32 @@ private struct StopCanvasControls: View {
             .opacity(canMoveLater ? 1 : 0.38)
 
             if stop.placeState == .externalSuggestion {
-                Button(action: { onApproveExternalStop(stop.id) }) {
-                    Label(approveText, systemImage: isApprovedExternalStop ? "checkmark.circle.fill" : "checkmark")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .frame(height: 26)
-                        .background((isApprovedExternalStop ? SaveAtlasPalette.mint : SaveAtlasPalette.kraft).opacity(0.58))
-                        .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
-                        .clipShape(Capsule())
-                }
+                if let onConfirmCandidate, stop.mapCandidate != nil {
+                    Button(action: { onConfirmCandidate(stop) }) {
+                        Text(languageSettings.localized(english: "Save place", traditionalChinese: "儲存地點"))
+                            .font(SaveAtlasType.strong(13))
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 44)
+                            .background(SaveAtlasPalette.sky.opacity(0.5), in: Capsule())
+                    }
+                    .accessibilityIdentifier("tripPlan.confirm.\(stop.placeName)")
+                } else {
+                    Button(action: { onApproveExternalStop(stop.id) }) {
+                        Label(approveText, systemImage: isApprovedExternalStop ? "checkmark.circle.fill" : "checkmark")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .frame(minHeight: 44)
+                            .background((isApprovedExternalStop ? SaveAtlasPalette.mint : SaveAtlasPalette.kraft).opacity(0.58))
+                            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
+                            .clipShape(Capsule())
+                    }
 
+                }
                 Button(action: { onSkipStop(stop.id) }) {
                     Label(skipText, systemImage: "xmark")
                         .font(.caption2.weight(.bold))
                         .padding(.horizontal, 8)
-                        .frame(height: 26)
+                        .frame(minHeight: 44)
                         .background(SaveAtlasPalette.coral.opacity(0.2))
                         .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
                         .clipShape(Capsule())

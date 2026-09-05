@@ -442,9 +442,44 @@ private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
 
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if presentation.savedPlaces.isEmpty {
+            searchField
+                .padding(.horizontal, AtlasSpacing.content)
+                .padding(.top, 8)
+            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if matchingPlaces.isEmpty {
+                            Text(localized("No saved places match", "沒有符合的已存地點"))
+                                .font(AtlasType.body(16))
+                                .foregroundStyle(AtlasPalette.muted)
+                                .padding(24)
+                                .accessibilityIdentifier("home.search.empty")
+                        }
+                        ForEach(matchingPlaces) { place in
+                            Button { presentation.onOpenPlace(place.id) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(place.name).font(AtlasType.strong(18))
+                                        .foregroundStyle(AtlasPalette.forest)
+                                    Text(place.area).font(AtlasType.body(14))
+                                        .foregroundStyle(AtlasPalette.muted)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                                .padding(12)
+                                .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home.search.result.\(place.id)")
+                        }
+                    }
+                    .padding(AtlasSpacing.content)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            } else if presentation.savedPlaces.isEmpty {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
                         libraryHeader
@@ -484,7 +519,7 @@ private struct HomeSavedPlacesLibrary: View {
                                 .padding(.horizontal, AtlasSpacing.content)
 
                                 ScrollView(.horizontal) {
-                                    LazyHStack(spacing: AtlasSpacing.control) {
+                                    LazyHStack(alignment: .top, spacing: AtlasSpacing.control) {
                                         ForEach(group.places.filter { $0.id != featuredPlace.id }) { place in
                                             HomeSavedPlaceRow(
                                                 place: place,
@@ -512,6 +547,37 @@ private struct HomeSavedPlacesLibrary: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
+    }
+
+    private var matchingPlaces: [AtlasPlacePresentation] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return presentation.savedPlaces.filter {
+            [$0.name, $0.area, $0.region ?? ""].contains { $0.localizedStandardContains(query) }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(AtlasPalette.muted)
+            TextField(localized("Search saved places", "搜尋已存地點"), text: $searchText)
+                .font(AtlasType.body(17))
+                .foregroundStyle(AtlasPalette.ink)
+                .focused($isSearchFocused)
+                .submitLabel(.search)
+                .onSubmit { isSearchFocused = false }
+                .accessibilityIdentifier("home.search")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+                }
+                .foregroundStyle(AtlasPalette.muted)
+                .accessibilityLabel(localized("Clear search", "清除搜尋"))
+            }
+        }
+        .padding(.leading, 14)
+        .frame(minHeight: 48)
+        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+        .overlay { RoundedRectangle(cornerRadius: 14).stroke(AtlasPalette.line.opacity(0.35)) }
     }
 
     private var libraryHeader: some View {
@@ -624,50 +690,52 @@ private struct HomeSavedPlacesLibrary: View {
 }
 
 private struct HomeFeaturedPlaceHero: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
     let place: AtlasPlacePresentation
     let onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
-            HomeSavedPlaceThumbnail(
-                placeID: "hero.\(place.id)",
-                photoURL: place.photoURL
-            )
-                .frame(height: 176)
-                .overlay(alignment: .bottom) {
-                    LinearGradient(
-                        colors: [.clear, Color.black.opacity(0.72)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 104)
-                }
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: AtlasSpacing.tight) {
-                        Text(place.name)
-                            .font(AtlasType.strong(22))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
+            VStack(alignment: .leading, spacing: 0) {
+                HomeSavedPlaceThumbnail(
+                    placeID: "hero.\(place.id)",
+                    photoURL: place.photoURL
+                )
+                .frame(height: 144)
 
-                        Text(place.area)
-                            .font(AtlasType.body(13))
-                            .foregroundStyle(.white.opacity(0.86))
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, AtlasSpacing.content)
-                    .padding(.bottom, AtlasSpacing.control)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(
+                        languageSettings.localized(english: "Recently saved", traditionalChinese: "最近保存"),
+                        systemImage: "checkmark.seal.fill"
+                    )
+                    .font(AtlasType.regular(11))
+                    .foregroundStyle(AtlasPalette.forest)
+
+                    Text(place.name)
+                        .font(AtlasType.strong(20))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("home.featuredName")
+
+                    Text(place.area)
+                        .font(AtlasType.regular(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(AtlasSpacing.content)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .background(AtlasPalette.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+        }
         .buttonStyle(.plain)
         .accessibilityLabel("\(place.name), \(place.area)")
         .accessibilityIdentifier("home.place.\(place.id)")
-        .frame(height: 176)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
-        }
-        .atlasCardShadow()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.photoHero")
     }
@@ -712,38 +780,32 @@ private struct HomeSavedPlaceRow: View {
 
     var body: some View {
         Button(action: onOpen) {
-            HomeSavedPlaceThumbnail(
-                placeID: "row.\(place.id)",
-                photoURL: place.photoURL
-            )
-            .frame(width: width, height: 112)
-            .overlay(alignment: .bottom) {
-                LinearGradient(
-                    colors: [.clear, Color.black.opacity(0.68)],
-                    startPoint: .top,
-                    endPoint: .bottom
+            VStack(alignment: .leading, spacing: 0) {
+                HomeSavedPlaceThumbnail(
+                    placeID: "row.\(place.id)",
+                    photoURL: place.photoURL
                 )
-                .frame(height: 64)
-            }
-            .overlay(alignment: .bottomLeading) {
+                .frame(width: width, height: 112)
+                .overlay(alignment: .topLeading) {
+                    RoundStamp(text: "", style: .mapStamp)
+                        .scaleEffect(0.82)
+                        .padding(AtlasSpacing.compact)
+                }
+
                 Text(place.name)
-                    .font(AtlasType.strong(15))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, AtlasSpacing.control)
-                    .padding(.bottom, AtlasSpacing.control)
+                    .font(AtlasType.display(15))
+                    .foregroundStyle(AtlasPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(AtlasSpacing.control)
             }
-            .overlay(alignment: .topLeading) {
-                RoundStamp(text: "", style: .mapStamp)
-                    .scaleEffect(0.82)
-                    .padding(AtlasSpacing.compact)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(width: width, alignment: .topLeading)
+            .background(AtlasPalette.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(AtlasPalette.line.opacity(0.24), lineWidth: 1)
             }
-            .atlasCardShadow()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1126,9 +1188,18 @@ struct TripsAtlasScreen: View {
                         .tracking(1.1)
                         .foregroundStyle(AtlasPalette.muted)
                     Spacer()
-                    Text("\(presentation.tripSummaries.count) total")
-                        .font(AtlasType.regular(12))
-                        .foregroundStyle(AtlasPalette.muted)
+                    Menu {
+                        ForEach(presentation.tripSummaries) { trip in
+                            Button(trip.name) { presentation.onOpenTripID(trip.id) }
+                        }
+                    } label: {
+                        Label("\(presentation.allTripsLabel) (\(presentation.tripSummaries.count))", systemImage: "chevron.down")
+                            .font(AtlasType.regular(12))
+                            .foregroundStyle(AtlasPalette.forest)
+                            .frame(minHeight: 44)
+                    }
+                    .disabled(presentation.tripSummaries.isEmpty)
+                    .accessibilityIdentifier("trips.allTrips")
                 }
                 .padding(.horizontal, 17)
                 .padding(.top, 16)

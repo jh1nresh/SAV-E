@@ -294,12 +294,37 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(review.contains("\"84%\""))
     }
 
-    func testSavesFirstViewportCapsTicketsAndKeepsCaptureCoral() throws {
+    func testSavesQueueIsContinuousAndKeepsCaptureCoral() throws {
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("firstViewportTicketLimit = 3"))
         XCTAssertTrue(saves.contains("SaveAtlasPalette.coral.opacity(0.92)"))
-        XCTAssertTrue(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+    }
+
+    func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {
+        let file = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        let saves = try typeBody("SaveLibraryView", in: file)
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+
+        // Failure fixture: after #157 demoted Saves off the root bar, the
+        // page still padded for ReferenceViewport status bar (48) and the
+        // floating tab bar (108), so the header sat too low and the list
+        // floated above empty space. It also hid the nav bar and fought the
+        // system back chrome ContentView installs for this child route.
+        XCTAssertFalse(saves.contains("padding(.top, AtlasMetrics.statusBarHeight)"))
+        XCTAssertFalse(saves.contains("padding(.bottom, 108)"))
+        XCTAssertFalse(saves.contains("toolbar(.hidden, for: .navigationBar)"))
+        XCTAssertTrue(saves.contains("pushedListBottomInset"))
+        XCTAssertTrue(saves.contains("pushedListBottomInset: CGFloat = 24"))
+
+        XCTAssertTrue(content.contains("case .saves:"))
+        XCTAssertTrue(content.contains(".toolbar(.visible, for: .navigationBar)"))
+        XCTAssertTrue(
+            content.contains("traditionalChinese: \"收藏\""),
+            "System nav title remains the single page title for Saves."
+        )
     }
 
     func testTripsKeepsOneSecondaryTicket() throws {
@@ -318,9 +343,18 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("} else if !hidesCommandShelf"))
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
-        XCTAssertTrue(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains(".ultraThinMaterial, in: Capsule()"))
+        XCTAssertFalse(map.contains("mic.fill"))
+        XCTAssertTrue(map.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
         XCTAssertTrue(map.contains("saved Map Stamps"))
+        XCTAssertTrue(map.contains("map.command.passport"))
+        XCTAssertTrue(
+            map.contains(".regularMaterial"),
+            "Selected place peek matches Apple Maps frosted card shell."
+        )
+        XCTAssertFalse(
+            map.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Apple Maps reference keeps Map top empty; no persistent stamp chip."
+        )
         XCTAssertFalse(
             map.contains("slider.horizontal.3"),
             "Collapsed Map search is a floating pill, not a filter rail."
@@ -331,7 +365,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
     }
 
-    func testMapSearchIsBottomFloatingChromeWithParkedDetents() throws {
+    func testMapSearchIsDockedWithParkedDetents() throws {
         let shelf = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         let map = try source(at: "SAV-E/Views/Map/MapView.swift")
@@ -340,18 +374,54 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
         XCTAssertTrue(root.contains("SaveMapDrawerPanel("))
         XCTAssertTrue(root.contains("hidesCommandShelf: true"))
+        XCTAssertTrue(root.contains("onOpenPassport: openPassport"))
         XCTAssertTrue(panel.contains("case collapsed"))
         XCTAssertTrue(panel.contains("case medium"))
         XCTAssertTrue(panel.contains("case large"))
         XCTAssertTrue(panel.contains("map.drawerPanel.collapsed"))
         XCTAssertTrue(panel.contains("SaveAtlasMapCommandShelf("))
+        XCTAssertTrue(panel.contains("onOpenPassport: onOpenPassport"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
+        XCTAssertTrue(
+            panel.contains("AtlasPalette.canvas"),
+            "Expanded Map drawer stays notebook canvas; glass belongs on the search pill."
+        )
+        XCTAssertFalse(
+            panel.contains(".regularMaterial"),
+            "Expanded drawer must not use glass over notebook content."
+        )
         XCTAssertTrue(shelf.contains("map.command.search"))
-        XCTAssertTrue(shelf.contains(".ultraThinMaterial, in: Capsule()"))
+        XCTAssertTrue(shelf.contains("map.command.passport"))
+        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
+        XCTAssertTrue(
+            shelf.contains("person.crop.circle.fill"),
+            "Search capsule carries Passport in the Apple Maps avatar slot."
+        )
+        XCTAssertFalse(
+            shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
+            "Persistent top stamp chip stays off to match Apple Maps empty top."
+        )
+        XCTAssertFalse(
+            shelf.contains("frame(width: 36, height: 5)"),
+            "Collapsed search has no grabber; Apple Maps idle search is a single capsule."
+        )
         XCTAssertFalse(shelf.contains(".glassEffect("))
         XCTAssertFalse(map.contains("TextField"))
         XCTAssertFalse(map.contains(".searchable"))
         XCTAssertFalse(map.contains("map.command.search"))
+        XCTAssertTrue(
+            map.contains("alignment: .bottomTrailing"),
+            "Locate stays Apple Maps bottom-trailing above floating chrome."
+        )
+        XCTAssertTrue(map.contains("padding(.bottom, bottomChromeInset)"))
+        XCTAssertTrue(
+            map.contains(".regularMaterial, in: Circle()"),
+            "Locate uses frosted circular glass like Apple Maps."
+        )
+        XCTAssertFalse(
+            map.contains("alignment: .topTrailing"),
+            "Locate must not return to the pre-#184 top-trailing burial workaround."
+        )
         XCTAssertTrue(
             tabBar.contains(".glassEffect("),
             "Tab-bar glass stays parked on AtlasTabBar; this ticket must not move it."
@@ -374,13 +444,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
         XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
         XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
-        XCTAssertTrue(passport.contains("TODAY ON SAVVY"))
-        XCTAssertTrue(passport.contains("今日 Savvy"))
-        XCTAssertTrue(passport.contains("Up to three real next steps"))
-        XCTAssertTrue(passport.contains("最多三件真正要做的事"))
-        XCTAssertTrue(passport.contains("Uses existing review queue count"))
-        XCTAssertTrue(passport.contains("Fills Origin for peers"))
-        XCTAssertTrue(passport.contains("Feeds Origin + connections"))
+        XCTAssertTrue(passport.contains("Your quests"))
+        XCTAssertTrue(passport.contains("你的探索任務"))
         XCTAssertTrue(passport.contains("profile.today.confirmWaitingClue"))
         XCTAssertTrue(passport.contains("profile.today.shareRecommendation"))
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
@@ -394,12 +459,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.fieldStreak"))
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
-        XCTAssertTrue(passport.contains("COLLECTION"))
+        XCTAssertTrue(passport.contains("profile.activityDisclosure"))
 
         XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
             < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.fieldStreak")!.lowerBound
-            < passport.range(of: "profile.stampLedger")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
+            < passport.range(of: "profile.fieldStreak")!.lowerBound)
         XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
             < passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound

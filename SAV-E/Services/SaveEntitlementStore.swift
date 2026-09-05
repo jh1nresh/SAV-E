@@ -87,6 +87,13 @@ final class SaveEntitlementStore {
         guard hasConfirmedMapStamp else { return false }
         return decision.isRefusal
     }
+
+    /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing
+    /// never appears before the place-memory loop has worked once. Does not
+    /// require an AI refusal — the user opted in.
+    func shouldPresentPaywallFromPassport(hasConfirmedMapStamp: Bool) -> Bool {
+        hasConfirmedMapStamp
+    }
 }
 
 /// Server-reported usage window. Mirrors `buildUsageQuotaPreview` in

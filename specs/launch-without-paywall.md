@@ -1,5 +1,11 @@
 # Launch Without A Paywall
 
+> **Superseded for launch monetization posture (2026-09-04):**
+> See `2026-09-04-launch-purchase-path-trigger-later-v0.md`.
+> Keep the no-launch-wall and free memory-loop rules from this doc.
+> Do **not** read this file as “omit Pro purchase plumbing from the store build.”
+> Day-1 is a free download with purchase path ready and trigger delayed.
+
 ## Required brief
 
 - Paid user job / observed failure: launch users should experience SAV-E's place-memory loop before being shown pricing or quota concepts; the Passport Memo Pro preview introduces monetization before demand is measured.

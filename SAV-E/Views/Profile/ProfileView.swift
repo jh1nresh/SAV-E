@@ -8,6 +8,7 @@ struct ProfileView: View {
     @StateObject private var viewModel = ProfileViewModel()
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
+    @State private var showTutorial = false
     @State private var showProPaywall = false
     @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
@@ -47,6 +48,8 @@ struct ProfileView: View {
     @State private var fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
     @State private var hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
     @State private var visitFocusPlace: Place?
+    @State private var isUpdatingVisit = false
+    @State private var visitError: String?
     @State private var inviteURLAvailable = false
     private var passportStats: PassportStats {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
@@ -67,8 +70,7 @@ struct ProfileView: View {
         )
     }
 
-    var body: some View {
-        NavigationStack {
+    private var passportContent: some View {
             ScrollView {
                 ScrollViewReader { proxy in
                 VStack(spacing: SaveTheme.Spacing.lg) {
@@ -113,13 +115,7 @@ struct ProfileView: View {
                         .padding(.horizontal)
                     }
 
-                    PassportFieldStreakStrip(
-                        streak: fieldStreak,
-                        hasActionToday: hasFieldActionToday
-                    )
-                    .accessibilityIdentifier("profile.fieldStreak")
-
-                    PassportStampSection(profile: viewModel.profile, stats: passportStats)
+                    PassportStampSection(stats: passportStats)
                         .accessibilityIdentifier("profile.stampLedger")
 
                     if !todayMissions.isEmpty {
@@ -127,6 +123,15 @@ struct ProfileView: View {
                             handleTodayMission(missionID, scrollProxy: proxy)
                         }
                     }
+
+                    DisclosureGroup(languageSettings.localized(english: "Field activity", traditionalChinese: "探索紀錄")) {
+                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday)
+                            .accessibilityIdentifier("profile.fieldStreak")
+                    }
+                    .font(SaveAtlasType.body(14))
+                    .tint(SaveAtlasPalette.forest)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("profile.activityDisclosure")
 
                     VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
                         DisclosureGroup {
@@ -141,7 +146,9 @@ struct ProfileView: View {
                                 showLanguageSettings = true
                             }
 
-                            if SAVEProAccessPolicy.purchasingIsAvailable {
+                            if SAVEProAccessPolicy.shouldOfferProFromPassport(
+                                hasConfirmedMapStamp: !passportPlaces.isEmpty
+                            ) {
                                 SettingsRow(
                                     icon: "sparkles",
                                     title: languageSettings.localized(
@@ -166,6 +173,16 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal, SaveTheme.Spacing.xs)
                         .accessibilityIdentifier("profile.controlsDisclosure")
+
+                        SettingsRow(
+                            icon: "book.pages",
+                            title: languageSettings.localized(english: "How to use Savvy", traditionalChinese: "Savvy 使用教學"),
+                            detail: languageSettings.localized(english: "Try a clue, review it, then make a Map Stamp", traditionalChinese: "從線索、確認到地圖章，跟著做一次"),
+                            color: SaveAtlasPalette.forest,
+                            accessibilityIdentifier: "profile.tutorial"
+                        ) {
+                            showTutorial = true
+                        }
 
                         NavigationLink {
                             SaveMemoryDebugView(
@@ -235,17 +252,8 @@ struct ProfileView: View {
                     .padding(.horizontal, SaveTheme.Spacing.md)
                     .padding(.top, SaveTheme.Spacing.lg)
                     .padding(.bottom, SaveTheme.Spacing.xl)
-                    .background {
-                        SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                            .fill(SaveAtlasPalette.kraft.opacity(0.24))
-                    }
-                    .overlay {
-                        SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                            .stroke(
-                                SaveAtlasPalette.kraft.opacity(0.72),
-                                style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                            )
-                    }
+                    .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay { RoundedRectangle(cornerRadius: 16).stroke(SaveAtlasPalette.line.opacity(0.3)) }
                     .padding(.horizontal)
                     .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("profile.controlPocket")
@@ -267,11 +275,20 @@ struct ProfileView: View {
                 .padding(.top, 2)
                 }
             }
-            .background(SaveDottedBackground().ignoresSafeArea())
+            .background(SaveAtlasPalette.canvas.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
             .navigationDestination(isPresented: $opensConnections) {
                 connectionsDestination
+            }
+    }
+
+    var body: some View {
+        Group {
+            if isRootTab {
+                passportContent
+            } else {
+                NavigationStack { passportContent }
             }
         }
         .task {
@@ -308,6 +325,11 @@ struct ProfileView: View {
                     if saved { showEditProfile = false }
                 }
             )
+        }
+        .fullScreenCover(isPresented: $showTutorial) {
+            OnboardingView(isReplay: true) { _ in
+                showTutorial = false
+            }
         }
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
@@ -391,6 +413,7 @@ struct ProfileView: View {
         case .confirmWaitingClue:
             onReviewAll()
         case .markVisitedStamp:
+            visitError = nil
             visitFocusPlace = SavePassportTodayCatalog.firstVisitEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
                 scrollProxy.scrollTo("profile.stampLedger", anchor: .center)
@@ -448,7 +471,10 @@ struct ProfileView: View {
 
             Button {
                 SaveHaptics.tap()
+                isUpdatingVisit = true
+                visitError = nil
                 Task {
+                    defer { isUpdatingVisit = false }
                     var updated = place
                     updated.status = .visited
                     do {
@@ -460,7 +486,10 @@ struct ProfileView: View {
                         }
                         visitFocusPlace = nil
                     } catch {
-                        // Keep the sheet open; durable failures surface elsewhere.
+                        visitError = languageSettings.localized(
+                            english: "Couldn’t update this place. Please try again.",
+                            traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                        )
                     }
                 }
             } label: {
@@ -472,7 +501,15 @@ struct ProfileView: View {
                     .background(SaveAtlasPalette.coral, in: Capsule())
             }
             .buttonStyle(.plain)
+            .disabled(isUpdatingVisit)
             .accessibilityIdentifier("profile.today.markVisitedConfirm")
+            if isUpdatingVisit { ProgressView() }
+            if let visitError {
+                Text(visitError)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .accessibilityIdentifier("profile.today.visitError")
+            }
 
             Spacer(minLength: 0)
         }
@@ -1800,47 +1837,34 @@ private struct PassportTodayOnSavvyStrip: View {
     let onSelect: (SavePassportTodayMissionID) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(languageSettings.localized(
-                    english: "TODAY ON SAVVY",
-                    traditionalChinese: "今日 Savvy"
-                ))
-                .font(SaveAtlasType.strong(11))
-                .tracking(0.65)
-                .foregroundStyle(SaveAtlasPalette.forest)
-
-                Text(languageSettings.localized(
-                    english: "Up to three real next steps",
-                    traditionalChinese: "最多三件真正要做的事"
-                ))
-                .font(SaveAtlasType.body(12))
-                .foregroundStyle(SaveAtlasPalette.muted)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(languageSettings.localized(english: "Your quests", traditionalChinese: "你的探索任務"))
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Spacer()
+                Text(languageSettings.localized(english: "\(missions.count) next steps", traditionalChinese: "\(missions.count) 件可以做的事"))
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 16)
-
-            ForEach(missions) { mission in
-                PassportTodayMissionRow(mission: mission) {
-                    SaveHaptics.tap()
-                    onSelect(mission.id)
+            VStack(spacing: 0) {
+                ForEach(missions) { mission in
+                    PassportTodayMissionRow(mission: mission) {
+                        SaveHaptics.tap()
+                        onSelect(mission.id)
+                    }
+                    if mission.id != missions.last?.id {
+                        Rectangle()
+                            .fill(SaveAtlasPalette.line.opacity(0.2))
+                            .frame(height: 1)
+                            .padding(.leading, 62)
+                            .padding(.trailing, 16)
+                    }
                 }
             }
+            .saveAtlasPaper(radius: 18)
         }
-        .padding(.bottom, 12)
-        .background {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .fill(SaveAtlasPalette.paper)
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .stroke(
-                    SaveAtlasPalette.kraft.opacity(0.82),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
-        .padding(.horizontal)
+        .padding(.horizontal, 16)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.today")
     }
@@ -1854,18 +1878,18 @@ private struct PassportTodayMissionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: SaveTheme.Spacing.md) {
-                SavePostcardPerforatedMedallion(
-                    systemName: iconName,
-                    tint: medallionTint,
-                    edge: SaveAtlasPalette.forest
-                )
+                Image(systemName: iconName)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 36, height: 40)
+                    .background(medallionTint.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(SaveAtlasType.strong(15))
                         .foregroundStyle(SaveAtlasPalette.forest)
                     Text(detail)
-                        .font(SaveAtlasType.body(11))
+                        .font(SaveAtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1874,7 +1898,7 @@ private struct PassportTodayMissionRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
@@ -1927,23 +1951,23 @@ private struct PassportTodayMissionRow: View {
         switch mission.id {
         case .confirmWaitingClue:
             return languageSettings.localized(
-                english: "Uses existing review queue count",
-                traditionalChinese: "使用現有的待審線索數量"
+                english: "Choose which places belong in your memory",
+                traditionalChinese: "看看哪些地點值得留下"
             )
         case .markVisitedStamp:
             return languageSettings.localized(
-                english: "Return field step for an unvisited stamp",
-                traditionalChinese: "回訪一步：標記尚未去過的章"
+                english: "Keep a memory of somewhere you’ve been",
+                traditionalChinese: "把走過的地方留在記憶裡"
             )
         case .shareRecommendation:
             return languageSettings.localized(
-                english: "Fills Origin for peers",
-                traditionalChinese: "把推薦填進 Origin 給同行的人"
+                english: "Let friends discover a place you recommend",
+                traditionalChinese: "讓朋友發現你推薦的好地方"
             )
         case .inviteOrFollowFriend:
             return languageSettings.localized(
-                english: "Feeds Origin + connections",
-                traditionalChinese: "餵給 Origin 與連線"
+                english: "Find inspiration in a friend’s places",
+                traditionalChinese: "從朋友的地點找些新靈感"
             )
         }
     }
@@ -1966,7 +1990,7 @@ private struct PassportTodayMissionRow: View {
         case .confirmWaitingClue:
             return SaveAtlasPalette.coral
         case .markVisitedStamp:
-            return SaveAtlasPalette.honey
+            return SaveAtlasPalette.mint
         case .shareRecommendation:
             return SaveAtlasPalette.mint
         case .inviteOrFollowFriend:
@@ -2001,11 +2025,11 @@ private struct PassportTopBar: View {
                 .accessibilityIdentifier("profile.brandLogo")
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Savvy · \(languageSettings.text(.profileTitle).uppercased())")
-                    .font(SaveAtlasType.strong(12))
-                    .tracking(1.2)
+                Text(languageSettings.text(.profileTitle))
+                    .font(SaveAtlasType.strong(20))
+                    .tracking(0)
                     .foregroundStyle(SaveAtlasPalette.forest)
-                Text(languageSettings.memoWaitingText(waitingClues))
+                Text(languageSettings.localized(english: "Your personal atlas", traditionalChinese: "你的私人地點圖鑑"))
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
@@ -2017,10 +2041,10 @@ private struct PassportTopBar: View {
                     Image(systemName: "pencil")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.ink)
-                        .frame(width: 38, height: 38)
-                        .background(SaveAtlasPalette.honey, in: SavePostcardSealShape())
+                        .frame(width: 44, height: 44)
+                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
                         .overlay {
-                            SavePostcardSealShape()
+                            RoundedRectangle(cornerRadius: 14)
                                 .stroke(SaveAtlasPalette.kraft.opacity(0.68), lineWidth: 1)
                         }
                 }
@@ -2042,7 +2066,7 @@ private struct PassportIconButton: View {
             Image(systemName: systemName)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(SaveAtlasPalette.ink)
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
                 .background(SaveAtlasPalette.paper.opacity(0.90), in: Circle())
                 .overlay {
                     Circle().stroke(SaveAtlasPalette.line.opacity(0.40), lineWidth: 1)
@@ -2057,94 +2081,33 @@ private struct PassportHero: View {
     let profile: UserProfile
 
     var body: some View {
-        HStack(spacing: 0) {
-            PassportNotebookSpine(color: SaveAtlasPalette.kraft)
-
-            VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
-                HStack {
-                    Text("Savvy MEMORY PASSPORT")
-                        .font(SaveAtlasType.strong(10))
-                        .tracking(1.15)
-                        .foregroundStyle(SaveAtlasPalette.mint)
-
-                    Spacer()
-
-                    SavePostcardPostmark()
-                        .scaleEffect(0.76)
-                        .frame(width: 52, height: 34)
-                        .colorInvert()
-                        .opacity(0.70)
-                }
-
-                HStack(alignment: .top, spacing: SaveTheme.Spacing.md) {
-                    ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 78)
-                        .overlay(alignment: .bottomTrailing) {
-                            Image(systemName: "book.closed")
-                                // Intentional one-off badge glyph size; no token maps cleanly.
-                                .font(.system(size: 18, weight: .black))
-                                .foregroundStyle(SaveAtlasPalette.forest)
-                                .frame(width: 28, height: 28)
-                                .background(SaveAtlasPalette.mint)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1))
-                                .offset(x: 6, y: 6)
-                        }
-
-                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.xs) {
-                        Text(languageSettings.text(.profileTitle))
-                            .font(SaveAtlasType.strong(11))
-                            .tracking(0.75)
-                            .foregroundStyle(SaveAtlasPalette.honey)
-                        Text(profile.displayName)
-                            .font(SaveAtlasType.strong(28, relativeTo: .title2))
-                            .foregroundStyle(SaveAtlasPalette.paper)
-                            .lineLimit(2)
-                        Text(profile.email ?? languageSettings.text(.localMemoHelper))
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.paper.opacity(0.70))
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                HStack(alignment: .bottom, spacing: SaveTheme.Spacing.sm) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(languageSettings.text(.memberSince).uppercased())
-                            .font(SaveAtlasType.strong(9))
-                            .tracking(0.8)
-                        Text(profile.createdAt.formatted(date: .abbreviated, time: .omitted))
-                            .font(SaveAtlasType.editorial(16))
-                    }
-                    .foregroundStyle(SaveAtlasPalette.paper.opacity(0.88))
-
-                    Spacer()
-
-                    Text(visitedBadgeText)
-                        .font(SaveAtlasType.strong(9))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 38)
-                        .background(SaveAtlasPalette.mint, in: SavePostcardSealShape())
-                }
+        HStack(spacing: 16) {
+            ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 48)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(profile.displayName)
+                    .font(SaveAtlasType.strong(22, relativeTo: .title2))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(profile.email ?? languageSettings.text(.localMemoHelper))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(1)
+                Text("\(languageSettings.text(.memberSince)) · \(profile.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
             }
-            .padding(SaveTheme.Spacing.lg)
+            Spacer(minLength: 0)
         }
-        .background(SaveAtlasPalette.forest)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1.5)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 18))
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(SaveAtlasPalette.forest)
+                .frame(width: 5)
+                .padding(.vertical, 20)
         }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 8, y: 4)
-    }
-
-    private var visitedBadgeText: String {
-        switch languageSettings.language {
-        case .english: return "VISITED IS SELF-MARKED"
-        case .traditionalChinese: return "去過由你自己標記"
-        }
+        .overlay { RoundedRectangle(cornerRadius: 18).stroke(SaveAtlasPalette.line.opacity(0.35)) }
     }
 }
 
@@ -2224,25 +2187,6 @@ private struct ProfileAvatarView: View {
     }
 }
 
-private struct PassportNotebookSpine: View {
-    var color: Color
-
-    var body: some View {
-        VStack(spacing: 11) {
-            ForEach(0..<4, id: \.self) { _ in
-                Circle()
-                    .fill(SaveAtlasPalette.paper)
-                    .frame(width: 7, height: 7)
-                    .overlay(Circle().stroke(Color.saveCocoa.opacity(0.16), lineWidth: 1))
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(width: 24)
-        .padding(.top, SaveTheme.Spacing.lg)
-        .background(color.opacity(0.42))
-    }
-}
-
 private struct PassportBadge: View {
     let text: String
     let color: Color
@@ -2262,173 +2206,54 @@ private struct PassportBadge: View {
 
 private struct PassportStampSection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
-    let profile: UserProfile
     let stats: PassportStats
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(languageSettings.localized(
-                        english: "COLLECTION",
-                        traditionalChinese: "收集"
-                    ))
-                        .font(SaveAtlasType.strong(11))
-                        .tracking(1)
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(languageSettings.localized(
-                        english: "Map Stamps you’ve gathered",
-                        traditionalChinese: "你收集到的地圖章"
-                    ))
-                        .font(SaveAtlasType.editorial(18))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                }
-
-                Spacer()
-
-                SavePostcardPostmark()
-                    .scaleEffect(0.78)
-                    .frame(width: 58, height: 48)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(languageSettings.localized(english: "Your place memory", traditionalChinese: "你的地點記憶"))
+                .font(SaveAtlasType.strong(17))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 1) {
+                stat(stats.savedCount, title: languageSettings.localized(english: "Map Stamps", traditionalChinese: "地圖章"), symbol: "mappin", tint: SaveAtlasPalette.mint)
+                stat(stats.visitedCount, title: languageSettings.text(.visited), symbol: "figure.walk", tint: SaveAtlasPalette.mint)
+                stat(stats.citiesCount, title: languageSettings.text(.cities), symbol: "building.2", tint: SaveAtlasPalette.kraft)
+                stat(stats.waitingClues, title: languageSettings.text(.waitingClues), symbol: "tray", tint: SaveAtlasPalette.sky)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 8)
-
-            PassportStampRow(
-                icon: "rectangle.stack",
-                tint: SaveAtlasPalette.sky,
-                title: languageSettings.text(.memoryCards),
-                value: languageSettings.savedCountText(stats.savedCount),
-                detail: mapStampDetail
-            )
-            PassportStampRow(
-                icon: "figure.walk",
-                tint: SaveAtlasPalette.mint,
-                title: languageSettings.text(.visited),
-                value: languageSettings.visitedCountText(stats.visitedCount),
-                detail: visitedDetail
-            )
-            PassportStampRow(
-                icon: "building.2",
-                tint: SaveAtlasPalette.honey,
-                title: languageSettings.text(.cities),
-                value: languageSettings.cityCountText(stats.citiesCount),
-                detail: citiesDetail
-            )
+            .background(SaveAtlasPalette.line.opacity(0.18))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            Text(languageSettings.localized(english: "Visited places are marked by you.", traditionalChinese: "去過的地點由你自己標記。"))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
             if !stats.cityNames.isEmpty {
-                PassportCityStrip(cityNames: stats.cityNames)
-            }
-            PassportStampRow(
-                icon: "circle.hexagongrid",
-                tint: SaveAtlasPalette.coral.opacity(0.58),
-                title: languageSettings.text(.waitingClues),
-                value: languageSettings.waitingPlaceText(stats.waitingClues),
-                detail: waitingClueDetail
-            )
-
-            HStack {
-                Text(languageSettings.localized(
-                    english: "Issued to \(profile.displayName)",
-                    traditionalChinese: "發給 \(profile.displayName)"
-                ))
-                    .font(SaveAtlasType.editorial(15))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Spacer()
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundStyle(SaveAtlasPalette.forest)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 15)
-            .background(SaveAtlasPalette.mint.opacity(0.22))
-        }
-        .background {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .fill(SaveAtlasPalette.paper)
-        }
-        .overlay {
-            SavePostcardScallopedRectangle(depth: 4, pitch: 12)
-                .stroke(
-                    SaveAtlasPalette.sky.opacity(0.82),
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-        }
-        .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 6, y: 3)
-        .padding(.horizontal)
-    }
-
-    private var mapStampDetail: String {
-        switch languageSettings.language {
-        case .english: return "Saved places in your Savvy map."
-        case .traditionalChinese: return "你存進 Savvy 地圖的地點。"
-        }
-    }
-
-    private var visitedDetail: String {
-        switch languageSettings.language {
-        case .english: return "Places you marked visited in Savvy."
-        case .traditionalChinese: return "你自己標記為去過的地點。"
-        }
-    }
-
-    private var citiesDetail: String {
-        switch languageSettings.language {
-        case .english: return stats.usesSavedPlaces ? "City-level stamps parsed from saved place addresses." : "Appears after Savvy has saved place addresses."
-        case .traditionalChinese: return stats.usesSavedPlaces ? "從已存地點地址整理出的城市級地區。" : "存下帶地址的地點後就會出現。"
-        }
-    }
-
-    private var waitingClueDetail: String {
-        switch languageSettings.language {
-        case .english: return "Source clues that still need a confirmed place."
-        case .traditionalChinese: return "還需要你確認成具體地點的來源線索。"
-        }
-    }
-}
-
-private struct PassportStampRow: View {
-    let icon: String
-    let tint: Color
-    let title: String
-    let value: String
-    var detail: String? = nil
-
-    var body: some View {
-        HStack(spacing: SaveTheme.Spacing.md) {
-            SavePostcardPerforatedMedallion(
-                systemName: icon,
-                tint: tint,
-                edge: SaveAtlasPalette.forest
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                if let detail {
-                    Text(detail)
-                        .font(SaveAtlasType.body(11))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup(languageSettings.text(.cities)) {
+                    PassportCityStrip(cityNames: stats.cityNames)
                 }
+                .font(SaveAtlasType.body(14))
+                .tint(SaveAtlasPalette.forest)
             }
-
-            Spacer()
-
-            Text(value)
-                .font(SaveAtlasType.editorial(18))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .minimumScaleFactor(0.76)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(SaveAtlasPalette.line.opacity(0.22))
-                .frame(height: 1)
-                .padding(.leading, 82)
+        .padding(.horizontal, 16)
+    }
+
+    private func stat(_ count: Int, title: String, symbol: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(5)
+                    .background(tint.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+                Text(title).foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(SaveAtlasType.body(14))
+            Spacer(minLength: 4)
+            Text(count.formatted())
+                .font(SaveAtlasType.strong(22, relativeTo: .title2))
+                .foregroundStyle(SaveAtlasPalette.forest)
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .background(SaveAtlasPalette.paper)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -2738,11 +2563,11 @@ struct SettingsRow: View {
 
     private var rowContent: some View {
         HStack(spacing: SaveTheme.Spacing.md) {
-            SavePostcardPerforatedMedallion(
-                systemName: icon,
-                tint: color.opacity(0.30),
-                edge: color
-            )
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(width: 36, height: 40)
+                .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -2760,9 +2585,10 @@ struct SettingsRow: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption2)
-                .foregroundColor(.saveMutedText)
+                .foregroundStyle(SaveAtlasPalette.muted)
         }
         .padding(.vertical, SaveTheme.Spacing.sm)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             Rectangle()

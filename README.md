@@ -12,25 +12,25 @@ bump applied only to the generated project is undone by the next `xcodegen gener
 Savvy is no longer a generic map/list/trip app. The current app is:
 
 ```text
-source clue → Save / Review receipt → confirmed Map Stamp → Home / Map / Origin / Passport / plan
+source clue → Save / Review receipt → confirmed Map Stamp → Home / Map / Plan / Passport
 ```
 
 The core judgment is conservative: Savvy should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
 
 ## What ships in the iOS app
 
-- **Five-part app shell** — Home, Map, a raised Save control, Origin, and Passport use a compact Liquid Glass tab bar. Save opens capture without replacing the selected tab.
+- **Five-part app shell** — Home, Map, a raised Save control, Plan, and Passport use a compact Liquid Glass tab bar. Save opens capture without replacing the selected tab.
 - **Region-based Home** — confirmed saves are grouped by region and use a stored or enriched place photo when one is available. The denser Saves library remains a child screen rather than a root tab.
 - **Map + three-stage search drawer** — the map keeps current-location controls and confirmed Map Stamps while search expands through compact, medium, and large stages for results, review, and place actions.
 - **Save capture** — the centre control accepts URLs, pasted text, voice/text commands, and Google Takeout exports, then routes uncertain clues through Review.
-- **Origin** — an owner-scoped history of stored source links and exact source text, plus related items still waiting for review. It does not invent source history for older saves that lack a stored capture.
+- **Plan** — drafts a walking day from confirmed Map Stamps in a chosen city. Unsaved attractions stay labeled as Unsaved Candidates. Arrival and hotel times shrink the day; Savvy does not book flights or rooms.
 - **Review inbox** — imported social/web clues become review candidates with evidence, rejected evidence, confidence, and source-recovery receipts before saving.
 - **Map Stamps** — confirmed places support categories, visibility, detail cards, source links, notes, navigation, deletion, and list membership.
 - **Place recovery pipeline** — deterministic parser + public source-search fallback for Instagram/Threads/Xiaohongshu/web clues. Source-only clues remain source-only instead of creating fake places.
 - **Collaborative lists** — create lists, add places, share viewer/editor list links, join list links, and plan from list items.
 - **Referral/friends layer** — referral/profile links can hand off starter map packs and complete follow intent after install/open.
 - **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, receipt-style progress, and working invite/list share actions.
-- **Trips** — planning remains available from Home and place detail, but it is intentionally not a permanent root tab.
+- **Trips** — saved itineraries remain reachable from Plan and from a place. Plan is the permanent root workbench.
 - **App Intents / shortcuts** — local app intents for saving a URL and asking Savvy memory.
 - **Bilingual UI path** — English and Traditional Chinese app-language settings for user-visible surfaces.
 

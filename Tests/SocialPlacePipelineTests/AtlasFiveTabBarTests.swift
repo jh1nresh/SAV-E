@@ -13,7 +13,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
     func testRootBarIsFiveItemsInTheSpecifiedOrder() {
         XCTAssertEqual(
             SaveRootTab.allCases,
-            [.home, .map, .capture, .origin, .profile]
+            [.home, .map, .capture, .plan, .profile]
         )
         XCTAssertEqual(SaveRootTab.allCases.count, 5)
     }
@@ -21,7 +21,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
     @MainActor
     func testCaptureIsAControlNotADestination() {
         XCTAssertTrue(SaveRootTab.capture.isCaptureControl)
-        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .origin, .profile])
+        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .plan, .profile])
         for tab in SaveRootTab.destinations {
             XCTAssertFalse(tab.isCaptureControl, "\(tab) should be a destination")
         }
@@ -202,35 +202,82 @@ final class AtlasFiveTabBarTests: XCTestCase {
                 "\(tab) zh-Hant title looks like an untranslated fallback"
             )
         }
-        XCTAssertEqual(SaveRootTab.origin.title(language: .traditionalChinese), "來處")
+        XCTAssertEqual(SaveRootTab.plan.title(language: .traditionalChinese), "規劃")
+        XCTAssertEqual(SaveRootTab.plan.atlasIcon, "calendar")
+        XCTAssertFalse(SaveRootTab.allCases.map(\.atlasIcon).contains("paperclip"))
     }
 
-    // MARK: - Origin food discovery
+    // MARK: - Plan workbench
 
     @MainActor
-    func testOriginOnlyRendersRealUnsavedFoodSignals() throws {
-        let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+    func testPlanTabComposesFromSavedStampsAndKeepsUnsavedLabeled() throws {
+        let plan = try source(at: "SAV-E/Views/Plan/SavePlanView.swift")
         let content = try contentViewSource()
 
-        XCTAssertTrue(source.contains("place.socialSignal != nil"))
-        XCTAssertTrue(source.contains("[.food, .cafe, .bar].contains(place.category)"))
-        XCTAssertTrue(content.contains("places: mapVM.socialPlaces"))
-        XCTAssertTrue(content.contains("saveSocialPlaceToMySave"))
-        XCTAssertTrue(content.contains("skipOriginPlace"))
+        XCTAssertTrue(plan.contains("plan.root"))
+        XCTAssertTrue(plan.contains("Plan from Map Stamps"))
+        XCTAssertTrue(plan.contains("SavePlanDraftBuilder.draft"))
+        XCTAssertTrue(plan.contains("SaveAtlasType"))
+        XCTAssertFalse(plan.contains("font(AtlasType."))
+        XCTAssertTrue(plan.contains("Unsaved Candidate") || plan.contains("尚未儲存") || content.contains("SavePlanView("))
+        XCTAssertTrue(content.contains("SavePlanView("))
+        XCTAssertTrue(content.contains("case .plan") || content.contains("case plan"))
+        XCTAssertFalse(content.contains("case origin"))
+        XCTAssertFalse(content.contains("SaveOriginView("))
+        let itinerary = try source(at: "SAV-E/Views/Drawer/Components/TripItineraryComponent.swift")
+        XCTAssertTrue(itinerary.contains("Travel window"))
+        XCTAssertTrue(itinerary.contains("plan.window."))
     }
 
     @MainActor
-    func testOriginSwipeDirectionMatchesTheProductContract() throws {
-        let source = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
-
-        XCTAssertEqual(OriginSwipeDecision.resolve(translation: -100), .save)
-        XCTAssertEqual(OriginSwipeDecision.resolve(translation: 100), .skip)
-        XCTAssertEqual(OriginSwipeDecision.resolve(translation: 40), .none)
-        XCTAssertTrue(source.contains("origin.foodCard"))
-        XCTAssertTrue(source.contains("origin.save"))
-        XCTAssertTrue(source.contains("origin.skip"))
-        XCTAssertTrue(source.contains("CachedAsyncImage"))
+    func testPlanDraftBuilderKeepsUnsavedSuggestionsOutOfPersistence() throws {
+        let cafe = originPlace(
+            id: "00000000-0000-4000-8000-000000000101",
+            name: "Da'an Coffee",
+            address: "Da'an District, Taipei",
+            category: .cafe,
+            socialSignal: nil
+        )
+        let park = originPlace(
+            id: "00000000-0000-4000-8000-000000000102",
+            name: "Daan Forest Park",
+            address: "Da'an District, Taipei",
+            category: .attraction,
+            socialSignal: nil
+        )
+        let unsaved = SaveMapCandidate(
+            title: "Chiang Kai-shek Memorial",
+            subtitle: "Zhongzheng, Taipei",
+            latitude: 25.0346,
+            longitude: 121.5218,
+            category: .attraction
+        )
+        let response = try XCTUnwrap(SavePlanDraftBuilder.draft(
+            request: SavePlanRequest(
+                area: "Taipei",
+                days: 1,
+                pace: .balanced,
+                arrivalMinutes: nil,
+                departureMinutes: nil,
+                language: .english
+            ),
+            savedPlaces: [cafe, park],
+            unsavedCandidates: [unsaved]
+        ))
+        let names = response.itineraryDays.flatMap(\.stops).map(\.placeName)
+        XCTAssertTrue(names.contains("Da'an Coffee"))
+        XCTAssertTrue(names.contains("Daan Forest Park"))
+        let unsavedStops = response.itineraryDays.flatMap(\.stops).filter { $0.placeState == .externalSuggestion }
+        for stop in unsavedStops {
+            XCTAssertNil(stop.placeId)
+        }
+        let canvas = TripCanvasDraft(days: response.itineraryDays)
+        let selection = try canvas.tripSaveSelection(availablePlaces: [cafe, park])
+        XCTAssertEqual(Set(selection.stops.map(\.placeName)), Set(["Da'an Coffee", "Daan Forest Park"]))
+        XCTAssertEqual(selection.excludedStopCount, unsavedStops.count)
     }
+
+    // MARK: - Origin capture models (no longer a root tab)
 
     @MainActor
     func testOriginPersonalizationUsesExplicitPreferenceAndSavedHistory() {

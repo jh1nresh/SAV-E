@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-26
     # The UI suite is ~10 minutes on a healthy runner but has been observed at
     # 3-4x that on a contended one, and failing tests are now retried.
-    timeout-minutes: 60
+    timeout-minutes: 75
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -130,10 +130,10 @@ jobs:
       # genuine regression still fails all three attempts. Any retry that did
       # happen is surfaced by the next step rather than being swallowed.
       - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
-        # Job budget is 60. 35 was too tight once -retry-tests-on-failure
-        # spent three attempts on Home child-route flakes (run 32778736280
-        # died here at 35m, exit 64; visual parity never ran).
-        timeout-minutes: 50
+        # Job budget is 75. 60 was too tight once Plan replaced Origin: unit
+        # tests plus four UI tests that needed three attempts (run 33905649737)
+        # hit the 1h wall while Home-Saves was still running.
+        timeout-minutes: 55
         if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
@@ -157,7 +157,8 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testRapidChromeTransitionsKeepAppAlive \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
-            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests/testProofFirstFlowReachesOpenAppCTA \
+            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces \
             -test-iterations 3 \
             -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \

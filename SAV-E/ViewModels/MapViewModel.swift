@@ -450,6 +450,9 @@ final class MapViewModel: ObservableObject {
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     ))
     @Published var selectedCategories: Set<PlaceCategory> = []
+    @Published var selectedIntentFilters: Set<SaveMapDrawerIntent> = []
+    @Published private(set) var nearbyFilterAnchor: CLLocationCoordinate2D?
+    @Published private(set) var isRefreshingNearbyFilter = false
     @Published var activeFilter: Set<UUID>?       // nil = show all
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var isLoading = false
@@ -542,6 +545,7 @@ final class MapViewModel: ObservableObject {
     ) {
         self.supabaseService = supabaseService
         self.mapCandidatePlaceSaver = mapCandidatePlaceSaver ?? { place, userID in
+            guard usesRemotePersistence else { return }
             try await supabaseService.savePlace(place, userId: userID)
             // Record from the store directly: this closure runs before `self` is usable.
             SavePassportFieldStreakStore.shared.recordFieldAction()
@@ -569,11 +573,12 @@ final class MapViewModel: ObservableObject {
     // MARK: - Computed
 
     var filteredPlaces: [Place] {
-        var result = places
-        if !selectedCategories.isEmpty {
-            result = result.filter { selectedCategories.contains($0.category) }
-        }
-        return result
+        SaveMapIntentFilter.places(
+            places,
+            categories: selectedCategories,
+            intents: selectedIntentFilters,
+            nearbyAnchor: nearbyFilterAnchor
+        )
     }
 
     func placesForRoute(placeIDs: [UUID]) -> [Place] {
@@ -1863,6 +1868,8 @@ final class MapViewModel: ObservableObject {
     private func focusSavedPlace(_ place: Place, extraCount: Int = 0, showStampMoment: Bool = true) {
         activeFilter = nil
         selectedCategories.removeAll()
+        selectedIntentFilters.removeAll()
+        nearbyFilterAnchor = nil
         selectionIsCameraOnly = true
         selectedPlace = place
         selectedSocialPlace = nil
@@ -2160,6 +2167,32 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+    /// Plain map search bypasses assistant intent routing.
+    func searchMapPlaces(_ query: String) async {
+        let generation = beginMapCandidateSearch()
+        exactSearchResolution = nil
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            mapCandidates = []
+            isLoadingMapCandidates = false
+            return
+        }
+        isLoadingMapCandidates = true
+        defer {
+            if mapCandidateSearchGeneration == generation { isLoadingMapCandidates = false }
+        }
+        let candidates = await mapCandidateSearchService.searchCandidates(
+            matching: trimmed,
+            near: mapCandidateSearchCenter(),
+            span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+            excluding: places
+        )
+        guard !Task.isCancelled, mapCandidateSearchGeneration == generation else { return }
+        mapCandidates = candidates
+        selectedMapCandidate = nil
+        focusCameraOnMapCandidates(candidates)
+    }
+
     func prepareMapCandidatesForDrawerQuery(_ query: String) async -> MapCandidateSearchResult {
         let searchGeneration = beginMapCandidateSearch()
         // A fresh search invalidates any clue link; the exact-search caller
@@ -2406,6 +2439,8 @@ final class MapViewModel: ObservableObject {
         selectedMapCandidate = nil
         selectedMapFeature = nil
         selectedCategories = []
+        selectedIntentFilters = []
+        nearbyFilterAnchor = nil
         activeFilter = nil
         exactSearchResolution = nil
         clearRoute()
@@ -2553,8 +2588,12 @@ final class MapViewModel: ObservableObject {
         }
 
         do {
-            try await supabaseService.updatePlace(place)
-            mirrorToLocalVault(place)
+            if usesRemotePersistence {
+                try await supabaseService.updatePlace(place)
+                mirrorToLocalVault(place)
+            } else {
+                _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            }
             if place.status == .visited || previousPlace.status != place.status {
                 // Visited flips and other durable memory edits count as field actions.
                 if place.status == .visited {
@@ -2689,6 +2728,33 @@ final class MapViewModel: ObservableObject {
             selectedCategories.remove(category)
         } else {
             selectedCategories.insert(category)
+        }
+    }
+
+    func toggleIntentFilter(_ intent: SaveMapDrawerIntent) {
+        if selectedIntentFilters.contains(intent) {
+            selectedIntentFilters.remove(intent)
+            if intent == .nearby {
+                nearbyFilterAnchor = nil
+                isRefreshingNearbyFilter = false
+            }
+            return
+        }
+
+        selectedIntentFilters.insert(intent)
+        guard intent == .nearby else { return }
+        Task { await refreshNearbyFilterAnchor() }
+    }
+
+    private func refreshNearbyFilterAnchor() async {
+        guard selectedIntentFilters.contains(.nearby) else { return }
+        isRefreshingNearbyFilter = true
+        let location = await locationService.requestCurrentLocation()
+        isRefreshingNearbyFilter = false
+        guard selectedIntentFilters.contains(.nearby) else { return }
+        nearbyFilterAnchor = location?.coordinate
+        if location == nil, locationService.isAuthorizationDenied {
+            showsLocationDeniedNotice = true
         }
     }
 

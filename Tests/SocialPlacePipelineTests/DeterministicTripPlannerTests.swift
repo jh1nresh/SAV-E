@@ -4,6 +4,16 @@ import MapKit
 
 final class DeterministicTripPlannerTests: XCTestCase {
     @MainActor
+    func testPlanRequestWithFoodPlacesDoesNotBecomePlaceList() async throws {
+        let response = try await SaveAIService(apiKey: "", session: .offlineForTesting).query(
+            "Plan a one day Tokyo trip from my saved food places",
+            places: ReviewDemoSeed.places()
+        )
+        XCTAssertEqual(response.componentType, .tripItinerary)
+        XCTAssertFalse(response.itineraryDays.isEmpty)
+    }
+
+    @MainActor
     func testSpecificAnchorPlanningStillPullsNearbySavedMapStamps() throws {
         let anchor = makePlace(
             "一號地鍋雞",

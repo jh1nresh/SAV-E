@@ -503,6 +503,7 @@ struct AtlasPresentation: @unchecked Sendable {
     var tripSummaries: [AtlasTripSummaryPresentation]
     var tripsBetaLabel: String
     var tripsBetaDetail: String
+    var allTripsLabel: String = "All trips"
     var onCapture: () -> Void
     var onReviewAll: () -> Void
     var onOpenHomeHero: () -> Void

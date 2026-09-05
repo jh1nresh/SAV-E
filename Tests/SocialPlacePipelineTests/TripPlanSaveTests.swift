@@ -79,6 +79,44 @@ final class TripPlanSaveTests: XCTestCase {
         }
     }
 
+    func testCrossDayStaySurvivesSelectionPersistenceAndReload() async throws {
+        let hotel = makePlace("Hotel")
+        let draft = TripCanvasDraft(days: [
+            ItineraryDay(dayNumber: 1, label: nil, stops: [stop(for: hotel, time: "3:00 PM", duration: 45, note: "Check in")]),
+            ItineraryDay(dayNumber: 2, label: nil, stops: [stop(for: hotel, time: "11:00 AM", duration: 30, note: "Check out")]),
+        ])
+        let selection = try draft.tripSaveSelection(availablePlaces: [hotel])
+        XCTAssertEqual(selection.excludedStopCount, 0)
+        XCTAssertEqual(selection.stops.map(\.day), [1, 2])
+        let persistence = PlanFakeTripPersistence()
+        let store = TripPackStore(userID: "test-user", persistence: persistence)
+        let trip = await store.createTrip(fromPlanNamed: "Stay", city: "Taipei", stops: selection.stops)
+        XCTAssertEqual(trip?.places.map(\.day), [1, 2])
+        XCTAssertEqual(trip?.places.map(\.startTime), ["3:00 PM", "11:00 AM"])
+        XCTAssertEqual(Set(trip?.places.map(\.id) ?? []).count, 2)
+        let reloaded = TripPackStore(userID: "test-user", persistence: persistence)
+        await reloaded.load()
+        XCTAssertEqual(reloaded.trips.first?.places.map(\.day), [1, 2])
+    }
+
+    func testCandidateOnlyPersistsAfterExplicitConfirmation() throws {
+        let saved = makePlace("Garden")
+        let candidate = SaveMapCandidate(title: "Garden", subtitle: "Taipei", latitude: 25.04, longitude: 121.54, category: .attraction,
+            sourceURL: "https://example.com/garden")
+        var external = externalStop(named: "Garden", note: "Visit after lunch")
+        external.mapCandidate = candidate
+        var draft = TripCanvasDraft(days: [ItineraryDay(dayNumber: 2, label: nil, stops: [external])])
+        draft.approveExternalStop(external.id)
+        XCTAssertThrowsError(try draft.tripSaveSelection(availablePlaces: [saved]))
+        draft.confirmExternalStop(external.id, as: saved)
+        let selection = try draft.tripSaveSelection(availablePlaces: [saved])
+        XCTAssertEqual(selection.stops.map(\.placeID), [saved.id])
+        XCTAssertEqual(selection.stops.first?.day, 2)
+        XCTAssertEqual(draft.visibleDays.first?.stops.first?.id, external.id)
+        XCTAssertEqual(draft.visibleDays.first?.stops.first?.placeState, .confirmedMapStamp)
+        XCTAssertEqual(draft.visibleDays.first?.stops.first?.note, external.note)
+    }
+
     // MARK: - TripPackStore.createTrip(fromPlanNamed:)
 
     func testCreateTripFromPlanPersistsOneSnapshot() async {
@@ -234,7 +272,7 @@ final class TripPlanSaveTests: XCTestCase {
         )
     }
 
-    private func externalStop(named name: String) -> ItineraryStop {
+    private func externalStop(named name: String, note: String? = nil) -> ItineraryStop {
         ItineraryStop(
             id: UUID(),
             placeId: nil,
@@ -242,7 +280,7 @@ final class TripPlanSaveTests: XCTestCase {
             placeName: name,
             time: nil,
             duration: 60,
-            note: nil
+            note: note
         )
     }
 
@@ -284,7 +322,7 @@ private final class PlanFakeTripPersistence: TripPersisting {
     private(set) var saveCalls: [Trip] = []
     var saveError: Error?
 
-    func fetchTrips(for userId: String) async throws -> [Trip] { [] }
+    func fetchTrips(for userId: String) async throws -> [Trip] { saveCalls }
 
     func saveTrip(_ trip: Trip, userId: String) async throws {
         if let saveError { throw saveError }

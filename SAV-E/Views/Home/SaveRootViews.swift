@@ -5,6 +5,7 @@ struct SaveHomeView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
+    let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
@@ -39,10 +40,16 @@ struct SaveHomeView: View {
             onOpenTrips: onOpenTrips,
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
-            onOpenReview: { _ in onOpenSaves() },
+            onOpenReview: onOpenReviewCandidate,
             onOpenPassport: onOpenPassport
         )
         if !SaveAtlasRuntime.usesParityFixture {
+            // Home previews actionable place matches. Source-only clues remain
+            // available in the full queue, without displacing real candidates.
+            let pendingIDs = Set(mapViewModel.reviewCandidates.filter {
+                $0.hasSavableLocation && ["review", "confirmed", "needs_more_evidence"].contains($0.status)
+            }.map { $0.id.uuidString })
+            presentation.reviewItems = presentation.reviewItems.filter { pendingIDs.contains($0.id) }
             presentation.tripsBetaLabel = languageSettings.localized(
                 english: "BETA",
                 traditionalChinese: "測試版"
@@ -69,15 +76,15 @@ struct SaveLibraryView: View {
                 SavesPocketScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
+                // Pushed outside ReferenceViewport (#157): real safe area +
+                // system back chrome already apply. Do not re-add the old
+                // root-tab status-bar band or the header sits too low.
                 savesContent
-                    // ReferenceViewport ignores the safe area; the prototype
-                    // screen above draws its own status-bar band, but this
-                    // flow layout must reserve it or the header renders under
-                    // the clock.
-                    .padding(.top, AtlasMetrics.statusBarHeight)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        // ContentView shows the navigation bar for back + "Saves"/"收藏".
+        // Hiding it here fought that chrome and left a brand header with no
+        // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
     }
@@ -104,31 +111,26 @@ struct SaveLibraryView: View {
 
     private var savesContent: some View {
         VStack(spacing: 0) {
-            SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(effectiveMode == .review
+                    ? localized("Confirm the place before adding it to your map.", "確認地點後，才會加入你的地圖。")
+                    : localized("Places you’ve confirmed and saved.", "你已確認並存下的地點。"))
+                    .font(SaveAtlasType.body(14))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: onOpenCapture) {
-                    Image(systemName: "link")
-                        .font(.system(size: 16, weight: .semibold))
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(
-                            SaveAtlasPalette.coral.opacity(0.92),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
-                        }
+                        .frame(width: 44, height: 44)
+                        .background(SaveAtlasPalette.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
-                .frame(width: 44, height: 44)
                 .accessibilityLabel(localized("Paste or share link", "貼上／分享連結"))
                 .accessibilityIdentifier("root.capture")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-
-            titleBlock
-                .padding(.horizontal, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
 
             modePicker
                 .padding(.horizontal, 14)
@@ -145,67 +147,45 @@ struct SaveLibraryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 12)
-                // Clear the floating Atlas tab bar so the last ticket stays
-                // reachable.
-                .padding(.bottom, 108)
+                // No floating Atlas tab bar on this pushed route — only clear
+                // the home indicator with a modest inset.
+                .padding(.bottom, Self.pushedListBottomInset)
             }
         }
-        .background(SaveDottedBackground())
-    }
-
-    private var titleBlock: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(localized("YOUR PLACE MEMORY", "你的地點記憶"))
-                    .font(SaveAtlasType.strong(11))
-                    .tracking(1.1)
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text(localized("Saves", "收藏"))
-                    .font(SaveAtlasType.strong(34, relativeTo: .largeTitle))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                Text(localized(
-                    "Clues you’ve saved from links and notes.",
-                    "從連結與筆記留下的地點線索。"
-                ))
-                .font(SaveAtlasType.body(15))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-            SavePostcardMemoPeek(width: 82)
-                .accessibilityHidden(true)
-        }
-        .frame(minHeight: 100)
+        .background(SaveAtlasPalette.canvas)
     }
 
     private var modePicker: some View {
-        HStack(spacing: 10) {
-            SaveAtlasPocketCount(
-                label: localized("Review", "待確認"),
-                value: reviewCandidates.count,
-                tint: SaveAtlasPalette.coral.opacity(0.56),
-                isSelected: effectiveMode == .review
-            ) {
-                withAnimation(SaveTheme.Motion.standardSpring) {
-                    selectedMode = .review
-                }
-            }
-            .accessibilityIdentifier("saves.segment.review")
-
-            SaveAtlasPocketCount(
-                label: localized("Map Stamps", "地圖章"),
-                value: places.count,
-                tint: SaveAtlasPalette.mint,
-                isSelected: effectiveMode == .mapStamps
-            ) {
-                withAnimation(SaveTheme.Motion.standardSpring) {
-                    selectedMode = .mapStamps
-                }
-            }
-            .accessibilityIdentifier("saves.segment.mapStamps")
+        HStack(spacing: 8) {
+            modeButton(.review, title: localized("Review", "待確認"), count: reviewCandidates.count)
+                .accessibilityIdentifier("saves.segment.review")
+            modeButton(.mapStamps, title: localized("Map Stamps", "地圖章"), count: places.count)
+                .accessibilityIdentifier("saves.segment.mapStamps")
         }
-        .frame(minHeight: 44)
+    }
+
+    private func modeButton(_ mode: SaveLibraryMode, title: String, count: Int) -> some View {
+        Button {
+            withAnimation(SaveTheme.Motion.standardSpring) { selectedMode = mode }
+        } label: {
+            HStack(spacing: 8) {
+                Text(title)
+                Text(count.formatted())
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+            .font(SaveAtlasType.strong(15))
+            .foregroundStyle(effectiveMode == mode ? SaveAtlasPalette.forest : SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(effectiveMode == mode ? SaveAtlasPalette.paper : Color.clear, in: RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(SaveAtlasPalette.line.opacity(effectiveMode == mode ? 0.45 : 0.18))
+                    .allowsHitTesting(false)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(effectiveMode == mode ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -247,31 +227,19 @@ struct SaveLibraryView: View {
                 .saveAtlasPaper(radius: 18)
                 .accessibilityIdentifier("saves.review.empty")
             } else {
-                VStack(spacing: -6) {
-                    ForEach(firstViewportCandidates) { candidate in
+                let candidates = sortedCandidates
+                LazyVStack(spacing: 0) {
+                    ForEach(candidates) { candidate in
                         reviewTicket(candidate)
-                    }
-                }
-
-                SavePostcardPocketFooter(
-                    title: localized("Full review queue", "完整待確認佇列"),
-                    subtitle: localized("Decide what is worth saving", "決定哪些值得保存"),
-                    count: sortedCandidates.count,
-                    countLabel: localized("need your review", "等待確認"),
-                    tint: SaveAtlasPalette.coral
-                )
-                .padding(.top, -18)
-                .zIndex(4)
-                .accessibilityIdentifier("saves.pocket.reviewFooter")
-
-                if !remainingCandidates.isEmpty {
-                    VStack(spacing: -6) {
-                        ForEach(remainingCandidates) { candidate in
-                            reviewTicket(candidate)
+                        if candidate.id != candidates.last?.id {
+                            Divider().overlay(SaveAtlasPalette.line.opacity(0.18))
+                                .padding(.leading, 64)
                         }
                     }
-                    .padding(.top, 10)
                 }
+                .saveAtlasPaper(radius: 18)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("saves.review.list")
             }
         }
     }
@@ -361,29 +329,56 @@ struct SaveLibraryView: View {
     }
 
     private var sortedCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var firstViewportCandidates: [PlaceReviewCandidate] {
-        Array(sortedCandidates.prefix(Self.firstViewportTicketLimit))
-    }
-
-    private var remainingCandidates: [PlaceReviewCandidate] {
-        Array(sortedCandidates.dropFirst(Self.firstViewportTicketLimit))
+        reviewCandidates.sorted { lhs, rhs in
+            if lhs.hasSavableLocation != rhs.hasSavableLocation {
+                return lhs.hasSavableLocation
+            }
+            return lhs.createdAt > rhs.createdAt
+        }
     }
 
     private static let firstViewportTicketLimit = 3
+    /// Bottom inset for the pushed Saves list. Must stay well below the old
+    /// root-tab clearance (108) so tickets are not stranded above empty space.
+    private static let pushedListBottomInset: CGFloat = 24
 
     private func reviewTicket(_ candidate: PlaceReviewCandidate) -> some View {
         Button {
             onOpenReviewCandidate(candidate)
         } label: {
-            SaveAtlasReviewTicket(
-                candidate: candidate,
-                detail: candidateDetail(candidate),
-                kind: candidateKind(candidate),
-                actionTitle: candidateActionTitle(candidate)
-            )
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: candidateKind(candidate) == .sourceClue ? "link" : "mappin.and.ellipse")
+                    .font(.system(size: 19, weight: .medium))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .frame(width: 38, height: 44)
+                    .background(candidateKind(candidate) == .sourceClue ? SaveAtlasPalette.coral.opacity(0.2) : SaveAtlasPalette.sky.opacity(0.55), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(candidate.name)
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(candidateKindTitle(candidate))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(candidateDetail(candidate))
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(candidateActionTitle(candidate))
+                    .font(SaveAtlasType.strong(14))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .accessibilityHidden(true)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(

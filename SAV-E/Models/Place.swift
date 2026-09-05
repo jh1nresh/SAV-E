@@ -316,6 +316,25 @@ enum PlaceStatus: String, Codable, Hashable {
             return language.localized(english: "Visited", traditionalChinese: "去過")
         }
     }
+
+    /// Map Stamp substate shown on the Memory Card. Not a `SaveMemoryBadge` case.
+    func visitIntentLabel(language: AppLanguage) -> String {
+        switch self {
+        case .wantToGo:
+            return language.localized(english: "Want to try", traditionalChinese: "想找時間去")
+        case .visited:
+            return language.localized(english: "Visited", traditionalChinese: "去過")
+        }
+    }
+
+    func visitIntentAccessibilityIdentifier() -> String {
+        switch self {
+        case .wantToGo:
+            return "drawer.saved.wantToGo"
+        case .visited:
+            return "drawer.saved.visited"
+        }
+    }
 }
 
 enum SourcePlatform: String, Codable, CaseIterable, Hashable {

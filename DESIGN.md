@@ -2,7 +2,7 @@
 
 > Last updated: 2026-09-04
 > Status: source of truth for native iOS design work
-> Token systems: **Atlas Postcard** governs Home, Saves, Trips, Map, and the ask
+> Token systems: **Atlas Postcard** governs Home, Saves, Plan, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
 > Tokens" and "Legacy Cream-Notebook Tokens" below.
 
@@ -151,8 +151,10 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
-- Today on Savvy
+- Your quests (探索任務): live next steps in Passport
+- Plan
 - Plan around this
+- Trip Plan
 - Confirm candidate
 - Reject clue
 - Needs exact place
@@ -165,13 +167,13 @@ Avoid these in user-facing UI:
 - Generic "saved item" when the item is a Map Stamp
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
-- XP, Level, gems, login-streak calendar, quest board, Path / Shop / Progress chrome
+- XP, Level, gems, login-streak calendar, Path / Shop / Progress chrome
 - Rewards, currencies, or entitlements granted by completing Passport missions
 
 ## Atlas Postcard Tokens
 
 Atlas Postcard is the current visual system for Savvy's primary surfaces. It
-reads as an illustrated travel atlas: warm paper panels, condensed editorial
+reads as an illustrated travel atlas: warm paper panels, native rounded
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
 Canonical source of truth is code:
@@ -224,23 +226,28 @@ Palette rules:
 ### Atlas Typography
 
 `SaveAtlasType` replaces the system-font rules of the legacy section on all
-Atlas surfaces. All production variants accept `relativeTo:` for Dynamic Type.
+Atlas surfaces. Production type scales with Dynamic Type; display, strong, body, and regular
+accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Display | `SaveAtlasType.display(_:)` | AvenirNextCondensed-DemiBold | Hero numerals, action labels, display moments |
-| Strong | `SaveAtlasType.strong(_:)` | AvenirNextCondensed-Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
-| Body | `SaveAtlasType.body(_:)` | AvenirNextCondensed-Medium | Body and detail copy |
-| Regular | `SaveAtlasType.regular(_:)` | AvenirNextCondensed-Regular | Captions, subtitles, count labels |
-| Editorial | `SaveAtlasType.editorial(_:)` | Georgia-Italic | Editorial brand moments: envelope titles, counts, postcard captions |
+| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | System Rounded Regular | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | System Rounded Regular Italic | Editorial brand moments: envelope titles, counts, postcard captions |
 
 Typography rules:
 
 - Eyebrows are `strong` at small sizes, uppercased, with positive tracking
   (~0.65).
-- Editorial Georgia italic is a garnish for brand moments, not a body face.
-- Do not mix `SaveAtlasType` faces with the legacy heavy rounded system fonts
-  on the same surface.
+- Editorial rounded italic is a garnish for brand moments, not a body face.
+- Use `SaveAtlasType` roles for consistent weights and Dynamic Type scaling,
+  rather than ad hoc legacy heavy/black text on Atlas
+  surfaces. Home uses paper-backed, wrapping place names beneath photographs;
+  labels must remain readable when a photo is absent or visually busy.
+- The latest confirmed place remains the stable Home cover; asynchronous photo
+  loading must not change which place is featured.
 
 ### Kraft Chips
 
@@ -277,10 +284,12 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | --- | --- |
 | Home (`SaveRootViews`) | Atlas |
 | Saves drawer + search results | Atlas |
+| Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
 | Ask drawer (`AIDrawerView`) | Atlas |
-| Onboarding, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
+| Onboarding | Atlas |
+| Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
@@ -436,7 +445,10 @@ A Memory Card is the user-facing card for a confirmed Map Stamp.
 
 Required hierarchy:
 
-1. State badge: Map Stamp or Visited Map Stamp.
+1. State badge: Map Stamp or Visited Map Stamp. Want to try and Visited are
+   Map Stamp substates. Show them as kraft (Want to try) or mint (Visited)
+   chips next to the Confirmed Map Stamp seal. Do not add a `SaveMemoryBadge`
+   case.
 2. Place name.
 3. Address or area.
 4. Short memory summary.
@@ -498,15 +510,15 @@ Required content:
 - Member since.
 - Field streak: consecutive local days with a real memory action (confirm a waiting clue, save a Map Stamp, or mark Visited). Not a login check-in calendar.
 - Collection: Map Stamps, Visited, Cities, and Waiting clues as memory progress, not a reward track.
-- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Not a quest board.
+- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Label it Your quests (探索任務); it is visible by default.
 - Language and local memory controls.
 
 Passport section order on the root tab:
 
-1. Hero (Memo + passport name)
-2. Field streak
-3. Collection
-4. Today on Savvy
+1. Compact identity (Memo + passport name)
+2. Compact collection ledger
+3. Your quests (visible live next steps)
+4. Field activity disclosure
 5. Control pocket
 
 ## State Model
@@ -522,6 +534,7 @@ Every UI object must map to one of these states:
 | Visited Map Stamp | Confirmed place with visited memory | Yes | Update memory |
 | Private Review | User review proof or note, private by default | No by itself | Add proof |
 | Trip Stop | Route/planning object, not necessarily saved | In trip context only | Review plan |
+| Travel window | Arrival, departure, check-in, or check-out constraint on a Trip Plan | No pin of its own | Adjust time |
 
 Never collapse Source Clue, Review Candidate, and Map Stamp into one visual state.
 
@@ -545,7 +558,21 @@ Teach the state ladder:
 Source Clue -> Review Candidate -> Map Stamp -> Trip Plan
 ```
 
-Use one interactive example. Do not add a marketing page.
+Use one interactive example. Do not add a marketing page. Start in the device or
+previously selected language; language selection is an optional sheet. The selected
+Source to Memory direction uses one photo postcard throughout three stages: source,
+review, saved preview. Source is explicitly a clue, review is sky with confirmation,
+and the saved preview is mint and labeled as an example. The cafe is fictional;
+no real coordinates or storage writes are implied by the demo.
+
+Personal input is a separate first-run sheet, reachable immediately or after the
+example. Its CTA hands the draft to the existing account-scoped capture flow after
+sign-in; nothing is analyzed or saved by onboarding. Every skip and replay completion
+returns no clue. Never show the fictional cafe as the result of a user's own input.
+Keep primary and visible skip actions in the bottom safe area with 44 pt targets;
+long content scrolls above them. Passport offers a replay using only the sample,
+with a visible close action. Replay never resets onboarding completion, captures
+private input, or adds a place.
 
 ### Map
 
@@ -558,10 +585,33 @@ Rules:
 - Persistent top-left/top-right map chrome should stay empty unless a real contextual
   signal, such as weather, is wired.
 - Passport opens from the drawer command bar, not from persistent map chrome.
-- Category filters live in the drawer, not as a persistent map rail.
+- Category filters live in the drawer, not as a persistent map rail. Want to
+  try, Visited, and Nearby are drawer chips that filter Map Stamps on the map.
 - Current location remains bottom-right and one-handed.
 - Only reliable states get pins.
 - Unsaved nearby candidates are shown only after an explicit drawer action.
+
+### Plan
+
+Use a single conversation with typed itinerary previews, following the interaction
+pattern in Anthropic's commerce-agent reference. Keep the Atlas palette and native
+SwiftUI components. Each response shows a compact unsaved draft with at most three
+day previews; complete stops, travel checks, candidate confirmation, and explicit
+Save as Trip live in a review sheet. The composer stays accessible while chatting.
+Conversation turns remain available for follow-up requests. This is a presentation
+pattern, not adoption of the reference demo's backend or payment architecture.
+
+Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stamps.
+
+Rules:
+
+- Plan is a root tab. It is not a social feed and not a booking desk.
+- Conversation first; city, days, pace, and arrival/departure clocks remain in the optional Plan options disclosure.
+- Confirmed Map Stamps are the only stops that can be saved into a Trip.
+- Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
+- Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.
+- Savvy does not book flights or hotels. Missing lodging is a gap, not a fake reservation.
+- Five-second test: Map Stamp, Unsaved Candidate, and travel window must be distinct.
 
 ### Drawer
 
@@ -569,14 +619,17 @@ The drawer is Savvy's command and memory workbench.
 
 Rules:
 
-- Collapsed drawer is the primary command bar: text input, mic input, and submit.
+- Map drawer is a docked place-search surface: saved places and public map results. It does not expose the Ask assistant or mic.
 - The drawer may use translucent system material in map mode so the map remains the
   primary visual surface.
-- Mic is push-to-talk dictation into the same command field, not a separate voice
-  assistant mode.
+- Any remaining assistant dictation is outside the Map search surface.
 - Required mic states: idle, requesting permission, listening, transcribed,
   loading, permission denied, unavailable, and failed.
-- Filters and quick prompts belong in the drawer so the map remains clean.
+- Map filters belong in the drawer so the map remains clean; conversational planning belongs in Plan.
+- Category chips stay in the drawer. After them, Want to try, Visited, and
+  Nearby may filter confirmed Map Stamps. Nearby is a 2 km saved-place lens.
+  It does not pin unsaved candidates. Do not add restroom, gas, or wildlife
+  chips.
 - Idle drawer content should use an Apple Maps-like hierarchy: command bar, quick
   action rows, filters, recent items, and suggestions. Do not show the full agent
   command console by default.
@@ -593,12 +646,20 @@ Rules:
 
 - Place identity first.
 - Evidence second.
+- Add to Trip is the one coral primary. Plan around this sits beside it as a
+  paper secondary. Do not restyle Plan around as honey or a second coral
+  button.
 - Destructive actions in overflow.
 - Source link clickable when available.
 
 ### Review Queue
 
 Review queue is Memo's waiting clues.
+
+The full queue is a compact continuous list on Atlas canvas, with paper rows,
+readable counts, and explicit source-clue versus review-candidate labels.
+Use the native navigation title once. Do not interrupt the list with an oversized
+envelope, repeated mascot header, or decorative count panel.
 
 Rules:
 
@@ -621,12 +682,13 @@ Rules:
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.
-- Field streak sits after the hero and before Collection. Count only confirm /
+- Field streak lives in a Field activity disclosure after quests. Count only confirm /
   save Map Stamp / mark Visited days. Opening the app does not count. Do not
   render a streak month calendar, XP bar, or gem balance.
 - Collection is the stamp ledger reframed as memory progress: Map Stamps,
   Visited, Cities, Waiting clues. It does not unlock rewards.
-- Today on Savvy sits after Collection and before the control pocket.
+- Your quests sits after Collection, visible without a disclosure. Use compact
+  rounded paper rows, the same Atlas type and spacing as Home.
   It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
   or a missing friend connection. It does not grant Pro, XP, or rewards. If no
   live step applies, hide the strip. Do not show an empty quest card.
