@@ -2167,6 +2167,32 @@ final class MapViewModel: ObservableObject {
         }
     }
 
+    /// Plain map search bypasses assistant intent routing.
+    func searchMapPlaces(_ query: String) async {
+        let generation = beginMapCandidateSearch()
+        exactSearchResolution = nil
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            mapCandidates = []
+            isLoadingMapCandidates = false
+            return
+        }
+        isLoadingMapCandidates = true
+        defer {
+            if mapCandidateSearchGeneration == generation { isLoadingMapCandidates = false }
+        }
+        let candidates = await mapCandidateSearchService.searchCandidates(
+            matching: trimmed,
+            near: mapCandidateSearchCenter(),
+            span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+            excluding: places
+        )
+        guard !Task.isCancelled, mapCandidateSearchGeneration == generation else { return }
+        mapCandidates = candidates
+        selectedMapCandidate = nil
+        focusCameraOnMapCandidates(candidates)
+    }
+
     func prepareMapCandidatesForDrawerQuery(_ query: String) async -> MapCandidateSearchResult {
         let searchGeneration = beginMapCandidateSearch()
         // A fresh search invalidates any clue link; the exact-search caller
@@ -2562,8 +2588,12 @@ final class MapViewModel: ObservableObject {
         }
 
         do {
-            try await supabaseService.updatePlace(place)
-            mirrorToLocalVault(place)
+            if usesRemotePersistence {
+                try await supabaseService.updatePlace(place)
+                mirrorToLocalVault(place)
+            } else {
+                _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            }
             if place.status == .visited || previousPlace.status != place.status {
                 // Visited flips and other durable memory edits count as field actions.
                 if place.status == .visited {

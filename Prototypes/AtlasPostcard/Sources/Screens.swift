@@ -442,9 +442,44 @@ private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
 
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if presentation.savedPlaces.isEmpty {
+            searchField
+                .padding(.horizontal, AtlasSpacing.content)
+                .padding(.top, 8)
+            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 8) {
+                        if matchingPlaces.isEmpty {
+                            Text(localized("No saved places match", "沒有符合的已存地點"))
+                                .font(AtlasType.body(16))
+                                .foregroundStyle(AtlasPalette.muted)
+                                .padding(24)
+                                .accessibilityIdentifier("home.search.empty")
+                        }
+                        ForEach(matchingPlaces) { place in
+                            Button { presentation.onOpenPlace(place.id) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(place.name).font(AtlasType.strong(18))
+                                        .foregroundStyle(AtlasPalette.forest)
+                                    Text(place.area).font(AtlasType.body(14))
+                                        .foregroundStyle(AtlasPalette.muted)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                                .padding(12)
+                                .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("home.search.result.\(place.id)")
+                        }
+                    }
+                    .padding(AtlasSpacing.content)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            } else if presentation.savedPlaces.isEmpty {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
                         libraryHeader
@@ -512,6 +547,37 @@ private struct HomeSavedPlacesLibrary: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
+    }
+
+    private var matchingPlaces: [AtlasPlacePresentation] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return presentation.savedPlaces.filter {
+            [$0.name, $0.area, $0.region ?? ""].contains { $0.localizedStandardContains(query) }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(AtlasPalette.muted)
+            TextField(localized("Search saved places", "搜尋已存地點"), text: $searchText)
+                .font(AtlasType.body(17))
+                .foregroundStyle(AtlasPalette.ink)
+                .focused($isSearchFocused)
+                .submitLabel(.search)
+                .onSubmit { isSearchFocused = false }
+                .accessibilityIdentifier("home.search")
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+                }
+                .foregroundStyle(AtlasPalette.muted)
+                .accessibilityLabel(localized("Clear search", "清除搜尋"))
+            }
+        }
+        .padding(.leading, 14)
+        .frame(minHeight: 48)
+        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+        .overlay { RoundedRectangle(cornerRadius: 14).stroke(AtlasPalette.line.opacity(0.35)) }
     }
 
     private var libraryHeader: some View {

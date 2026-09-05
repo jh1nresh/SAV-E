@@ -151,7 +151,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
-- Today on Savvy
+- Your quests (探索任務): live next steps in Passport
 - Plan
 - Plan around this
 - Trip Plan
@@ -167,7 +167,7 @@ Avoid these in user-facing UI:
 - Generic "saved item" when the item is a Map Stamp
 - Debug labels as visible product copy
 - "Recent Stamps" unless it clearly means recent confirmed Map Stamps
-- XP, Level, gems, login-streak calendar, quest board, Path / Shop / Progress chrome
+- XP, Level, gems, login-streak calendar, Path / Shop / Progress chrome
 - Rewards, currencies, or entitlements granted by completing Passport missions
 
 ## Atlas Postcard Tokens
@@ -242,7 +242,8 @@ Typography rules:
 - Eyebrows are `strong` at small sizes, uppercased, with positive tracking
   (~0.65).
 - Editorial rounded italic is a garnish for brand moments, not a body face.
-- Use `SaveAtlasType` roles rather than ad hoc legacy heavy/black text on Atlas
+- Use `SaveAtlasType` roles for consistent weights and Dynamic Type scaling,
+  rather than ad hoc legacy heavy/black text on Atlas
   surfaces. Home uses paper-backed, wrapping place names beneath photographs;
   labels must remain readable when a photo is absent or visually busy.
 - The latest confirmed place remains the stable Home cover; asynchronous photo
@@ -509,15 +510,15 @@ Required content:
 - Member since.
 - Field streak: consecutive local days with a real memory action (confirm a waiting clue, save a Map Stamp, or mark Visited). Not a login check-in calendar.
 - Collection: Map Stamps, Visited, Cities, and Waiting clues as memory progress, not a reward track.
-- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Not a quest board.
+- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Label it Your quests (探索任務); it is visible by default.
 - Language and local memory controls.
 
 Passport section order on the root tab:
 
-1. Hero (Memo + passport name)
-2. Field streak
-3. Collection
-4. Today on Savvy
+1. Compact identity (Memo + passport name)
+2. Compact collection ledger
+3. Your quests (visible live next steps)
+4. Field activity disclosure
 5. Control pocket
 
 ## State Model
@@ -592,12 +593,20 @@ Rules:
 
 ### Plan
 
+Use a single conversation with typed itinerary previews, following the interaction
+pattern in Anthropic's commerce-agent reference. Keep the Atlas palette and native
+SwiftUI components. Each response shows a compact unsaved draft with at most three
+day previews; complete stops, travel checks, candidate confirmation, and explicit
+Save as Trip live in a review sheet. The composer stays accessible while chatting.
+Conversation turns remain available for follow-up requests. This is a presentation
+pattern, not adoption of the reference demo's backend or payment architecture.
+
 Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stamps.
 
 Rules:
 
 - Plan is a root tab. It is not a social feed and not a booking desk.
-- Composer first: city from saved stamps, days, pace, optional arrival and departure clocks.
+- Conversation first; city, days, pace, and arrival/departure clocks remain in the optional Plan options disclosure.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.
 - Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
 - Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.
@@ -610,14 +619,13 @@ The drawer is Savvy's command and memory workbench.
 
 Rules:
 
-- Collapsed drawer is the primary command bar: text input, mic input, and submit.
+- Map drawer is a docked place-search surface: saved places and public map results. It does not expose the Ask assistant or mic.
 - The drawer may use translucent system material in map mode so the map remains the
   primary visual surface.
-- Mic is push-to-talk dictation into the same command field, not a separate voice
-  assistant mode.
+- Any remaining assistant dictation is outside the Map search surface.
 - Required mic states: idle, requesting permission, listening, transcribed,
   loading, permission denied, unavailable, and failed.
-- Filters and quick prompts belong in the drawer so the map remains clean.
+- Map filters belong in the drawer so the map remains clean; conversational planning belongs in Plan.
 - Category chips stay in the drawer. After them, Want to try, Visited, and
   Nearby may filter confirmed Map Stamps. Nearby is a 2 km saved-place lens.
   It does not pin unsaved candidates. Do not add restroom, gas, or wildlife
@@ -648,6 +656,11 @@ Rules:
 
 Review queue is Memo's waiting clues.
 
+The full queue is a compact continuous list on Atlas canvas, with paper rows,
+readable counts, and explicit source-clue versus review-candidate labels.
+Use the native navigation title once. Do not interrupt the list with an oversized
+envelope, repeated mascot header, or decorative count panel.
+
 Rules:
 
 - Show count and severity.
@@ -669,12 +682,13 @@ Rules:
   verified real-world attendance without proof evidence.
 - Proof-backed is a separate slot from Visited. It remains `0` until receipt,
   original photo, or location evidence can be attached by the user.
-- Field streak sits after the hero and before Collection. Count only confirm /
+- Field streak lives in a Field activity disclosure after quests. Count only confirm /
   save Map Stamp / mark Visited days. Opening the app does not count. Do not
   render a streak month calendar, XP bar, or gem balance.
 - Collection is the stamp ledger reframed as memory progress: Map Stamps,
   Visited, Cities, Waiting clues. It does not unlock rewards.
-- Today on Savvy sits after Collection and before the control pocket.
+- Your quests sits after Collection, visible without a disclosure. Use compact
+  rounded paper rows, the same Atlas type and spacing as Home.
   It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
   or a missing friend connection. It does not grant Pro, XP, or rewards. If no
   live step applies, hide the strip. Do not show an empty quest card.
