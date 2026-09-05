@@ -695,6 +695,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testHomeSearchAndPendingCandidateOpenDirectly() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let search = app.textFields["home.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: launchTimeout))
+        attach(app, name: "home-search-pending-candidate")
+        search.tap()
+        search.typeText("zzzz-no-saved-match")
+        XCTAssertTrue(app.staticTexts["home.search.empty"].waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        search.tap()
+        search.typeText("ichiran")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.search.result.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
+        attach(app, name: "home-real-candidate-detail")
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        app.buttons["home.reviewAll"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
+        XCTAssertLessThan(firstCandidate.frame.height, 150)
+        XCTAssertFalse(app.descendants(matching: .any)["saves.pocket.reviewFooter"].exists)
+        attach(app, name: "saves-real-candidates-first")
+    }
+
+    @MainActor
     func testHomeReviewCluesOpensSavesWithoutDrawer() throws {
         let app = makeApp(
             launchArguments: [

@@ -629,6 +629,11 @@ Rules:
 
 Review queue is Memo's waiting clues.
 
+The full queue is a compact continuous list on Atlas canvas, with paper rows,
+readable counts, and explicit source-clue versus review-candidate labels.
+Use the native navigation title once. Do not interrupt the list with an oversized
+envelope, repeated mascot header, or decorative count panel.
+
 Rules:
 
 - Show count and severity.
