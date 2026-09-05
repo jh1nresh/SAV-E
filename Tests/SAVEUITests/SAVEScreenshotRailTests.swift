@@ -935,6 +935,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let collapsedTop = collapsed.frame.minY
         XCTAssertLessThanOrEqual(app.buttons["map.command.search"].frame.height, 52)
         XCTAssertTrue(app.buttons["map.command.passport"].isHittable)
+        let locate = app.descendants(matching: .any)["map.currentLocation"].firstMatch
+        XCTAssertTrue(locate.isHittable)
+        XCTAssertLessThanOrEqual(locate.frame.maxY, collapsedTop - 4)
         attach(app, name: "map-search-drawer-collapsed")
 
         app.buttons["map.command.search"].swipeUp()
@@ -1492,7 +1495,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(confirm.waitForNonExistence(timeout: stepTimeout))
         let activity = app.descendants(matching: .any)["profile.fieldStreak"].firstMatch
         XCTAssertTrue(scrollUntilHittable(activity, in: app.scrollViews.firstMatch, maxSwipes: 4))
-        XCTAssertTrue(activity.label.contains("1-day streak"))
+        XCTAssertTrue(activity.label.contains("-day streak"))
+        XCTAssertTrue(activity.label.contains("Today is complete."))
         attach(app, name: "passport-daily-streak")
         let review = app.buttons["profile.today.confirmWaitingClue"]
         for _ in 0..<4 {

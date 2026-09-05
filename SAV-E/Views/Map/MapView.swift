@@ -29,16 +29,16 @@ struct MapView: View {
     var body: some View {
         GeometryReader { geo in
             let topChromeInset = max(geo.safeAreaInsets.top + 12, 62)
-            // Root Map parks a floating search pill (~68) above the tab bar
-            // (~88). Trip Map crops MapView above its place card, so a short
+            // Root Map parks a 96pt search panel above the tab bar.
+            // Trip Map crops MapView above its place card, so a short
             // trailing clearance is enough. Selection swaps the pill for a
             // taller place peek, so locate rises with that chrome.
             let isEmbeddedCrop = displayedPlaces != nil
             let bottomChromeInset = isEmbeddedCrop
                 ? max(geo.safeAreaInsets.bottom + 18, 28)
                 : max(
-                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
-                    viewModel.selectedPlace == nil ? 160 : 252
+                    geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 180 : 240),
+                    viewModel.selectedPlace == nil ? 192 : 252
                 )
 
             ZStack {
@@ -148,11 +148,11 @@ struct MapView: View {
                             Task { await viewModel.focusOnUserLocation() }
                         }
                     )
+                    .accessibilityIdentifier("map.currentLocation")
                     .padding(.trailing, 16)
                     // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
                     // cleared above the floating search pill or place peek.
                     .padding(.bottom, bottomChromeInset)
-                    .accessibilityIdentifier("map.currentLocation")
                 }
                 .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
@@ -412,7 +412,7 @@ struct PlaceMapPin: View {
                     TripMapOrderMarker(position: position)
                 } else {
                     DefaultPOIMarker(
-                        systemName: place.status == .visited ? "checkmark" : place.category.iconName,
+                        systemName: place.status == .visited ? "checkmark" : place.category.mapMarkerSymbol,
                         tint: SaveAtlasPalette.forest,
                         state: .saved,
                         isSelected: isSelected
@@ -501,7 +501,7 @@ private struct UnsavedMapCandidatePin: View {
             onTap()
         } label: {
             DefaultPOIMarker(
-                systemName: candidate.category?.iconName ?? "mappin.circle.fill",
+                systemName: candidate.category?.mapMarkerSymbol ?? "mappin",
                 tint: candidate.category?.mapMarkerTint ?? .saveCocoa,
                 state: .publicResult,
                 isSelected: isSelected
@@ -612,6 +612,10 @@ private enum MapMarkerState: Equatable {
 }
 
 private extension PlaceCategory {
+    var mapMarkerSymbol: String {
+        self == .attraction ? "binoculars.fill" : iconName
+    }
+
     var mapMarkerTint: Color {
         switch self {
         case .food: return .saveCocoa

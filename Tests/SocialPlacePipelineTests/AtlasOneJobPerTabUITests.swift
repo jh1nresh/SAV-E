@@ -359,8 +359,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             map.contains("slider.horizontal.3"),
             "Collapsed Map search is a floating pill, not a filter rail."
         )
-        XCTAssertTrue(markers.contains("if state == .saved"))
-        XCTAssertTrue(markers.contains("frame(width: isSelected ? 36 : 32"))
+        XCTAssertTrue(markers.contains("place.category.mapMarkerSymbol"))
+        XCTAssertTrue(markers.contains("state == .review ? \"questionmark\""))
         XCTAssertTrue(markers.contains(".frame(width: 44, height: 44)"))
         XCTAssertTrue(root.contains("--uitest-map-place-selected"))
     }
