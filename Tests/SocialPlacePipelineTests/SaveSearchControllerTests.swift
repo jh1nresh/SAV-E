@@ -2171,6 +2171,25 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testPlainMapSearchUsesExactTextAndNewerResultsWin() async {
+        let search = ControlledMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        let old = Task { await map.searchMapPlaces("old cafe") }
+        await search.waitUntilRequested("old cafe")
+        let new = Task { await map.searchMapPlaces("new cafe") }
+        await search.waitUntilRequested("new cafe")
+        let candidate = SaveMapCandidate(id: "new", title: "New Cafe", subtitle: "Taipei", latitude: 25.03, longitude: 121.56, category: .cafe)
+        search.complete(query: "new cafe", with: [candidate])
+        await new.value
+        search.complete(query: "old cafe", with: [])
+        await old.value
+        XCTAssertEqual(map.mapCandidates.map(\.id), ["new"])
+        XCTAssertFalse(map.isLoadingMapCandidates)
+        await map.searchMapPlaces("  ")
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+    }
+
+    @MainActor
     func testOlderMapSearchCannotOverwriteNewerResultsOrResolution() async throws {
         let search = ControlledMapCandidateSearchService()
         let vaultURL = FileManager.default.temporaryDirectory

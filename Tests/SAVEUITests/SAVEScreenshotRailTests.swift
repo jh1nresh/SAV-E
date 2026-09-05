@@ -607,15 +607,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-root-map-live")
 
         app.buttons["map.command.search"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
     }
 
     @MainActor
-    func testTripsAskRoutesToMapDrawer() throws {
+    func testTripsAskRoutesToPlanDrawer() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -647,8 +647,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             1,
             "Only one ask surface should be on screen."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
-        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].exists)
+        XCTAssertTrue(rootTabButton("Plan", app: app).isSelected)
         attach(app, name: "trips-ask-routes-to-map-drawer")
     }
 
@@ -816,7 +816,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         captureButtons.firstMatch.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["map.search.root"].exists)
         app.buttons["Close capture"].tap()
 
         openRootTab("Map", app: app)
@@ -824,16 +824,45 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(mapSearch.waitForExistence(timeout: stepTimeout))
         mapSearch.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            app.descendants(matching: .any).matching(identifier: "map.search.root").count,
             1,
             "Only one command drawer should be presented."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.mapAssistant.intro"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
         for legacyTab in ["saved", "review", "friends", "lists"] {
             XCTAssertFalse(app.buttons["drawer.tab.\(legacyTab)"].exists)
         }
+    }
+
+    @MainActor
+    func testMapSearchOpensSavedPlaceWithoutAssistant() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Map", app: app)
+        dismissLocationAlertIfPresent()
+        let search = app.buttons["map.command.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-docked-search")
+        search.tap()
+        let input = app.textFields["map.search.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        input.tap()
+        input.typeText("ichiran")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'map.search.saved.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
+        attach(app, name: "map-place-search-results")
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Ichiran Shibuya"].firstMatch.exists)
+        attach(app, name: "map-search-saved-place-detail")
+        XCTAssertEqual(app.state, .runningForeground)
     }
 
     @MainActor
@@ -862,10 +891,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let collapsedTop = collapsed.frame.minY
         attach(app, name: "map-search-drawer-collapsed")
 
-        collapsed.swipeUp()
+        app.buttons["map.command.search"].swipeUp()
         let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
         waitForStableFrame(medium)
         let mediumTop = medium.frame.minY
@@ -887,7 +916,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
         app.descendants(matching: .any)["map.drawerPanel.handle"].swipeDown()
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.maps.firstMatch.exists)
         XCTAssertEqual(app.state, .runningForeground)
     }

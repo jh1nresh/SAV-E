@@ -244,7 +244,7 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
-            mapDrawerPanel
+            if isMapPanelExpanded { mapDrawerPanel }
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
@@ -603,7 +603,7 @@ struct ContentView: View {
                                 // The single drawer panel owns the shelf now;
                                 // the canvas never draws its own copy.
                                 hidesCommandShelf: true,
-                                onOpenSearch: { openDrawer(.ask, tripID: nil) },
+                                onOpenSearch: { openMapSearch() },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
@@ -620,6 +620,12 @@ struct ContentView: View {
                             // future caller sets it directly.
                             planView
                         }
+                    }
+
+                    // The docked resting panel sits behind the tab controls;
+                    // expanded content is above navigation and keyboard-aware.
+                    if selectedRootTab == .map && !isMapPanelExpanded {
+                        mapDrawerPanel
                     }
 
                     AtlasTabBar(
@@ -738,12 +744,23 @@ struct ContentView: View {
                     && rootPath.isEmpty
                     && incomingPlaceReceipt == nil,
                 onExpand: { focusesSearch in
-                    openDrawer(.ask, tripID: nil, focusesSearch: focusesSearch)
+                    openMapSearch(focusesSearch: focusesSearch)
                 },
                 onCollapse: collapseMapPanel,
                 onOpenPassport: openPassport
             ) {
-                drawerView
+                if mapDetailDrawerItem != nil {
+                    drawerView
+                } else {
+                    SaveMapSearchContent(
+                        mapViewModel: mapVM,
+                        initialQuery: drawerLaunchRequest.initialQuery ?? "",
+                        focusesSearch: drawerLaunchRequest.focusesSearch,
+                        onClose: collapseMapPanel,
+                        onOpenPlace: { openMapDetail(.savedPlace($0)) },
+                        onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
+                    )
+                }
             }
         }
     }
@@ -1027,6 +1044,19 @@ struct ContentView: View {
         }
     }
 
+    private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
+        guard incomingPlaceReceipt == nil else { return }
+        invalidateExactSearchRequest()
+        mapDetailDrawerItem = nil
+        mapVM.clearSelectedMapObject()
+        drawerVM.returnToCommands()
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = .map
+        presentAfterClearingExclusiveChrome(.mapDrawer(
+            DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
+        ))
+    }
+
     private func openDrawer(
         _ target: DrawerLaunchTarget,
         tripID: UUID?,
@@ -1052,18 +1082,11 @@ struct ContentView: View {
             return
         case .ask:
             rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-            // Trips left the root bar, so there is no "stay on Trips" case
-            // left to protect: asking from any root surface goes to Map.
-            selectedRootTab = .map
+            selectedRootTab = .plan
         }
 
-        presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(
-                target: target,
-                initialQuery: initialQuery,
-                focusesSearch: focusesSearch
-            )
-        ))
+        drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery, focusesSearch: focusesSearch)
+        presentExclusiveRootSheet()
     }
 
     private func openPassport() {
@@ -1131,7 +1154,7 @@ struct ContentView: View {
             fullScreenRoute = route
         case .mapDrawer(let request):
             drawerLaunchRequest = request
-            drawerDetent = .large
+            drawerDetent = request.focusesSearch ? .large : .medium
             isMapPanelExpanded = true
         }
     }
@@ -1300,7 +1323,7 @@ struct ContentView: View {
                 // No map match: fall back to the guided drawer flow so the
                 // user gets the "add another clue" explanation instead of an
                 // empty map.
-                openDrawer(.ask, tripID: nil, initialQuery: query)
+                openMapSearch(initialQuery: query)
             } else {
                 // Saving one of these pins resolves the clue itself, so the
                 // item leaves Review instead of lingering there.
@@ -1356,7 +1379,7 @@ struct ContentView: View {
 #endif
 
     private func openFoodAnalysis(_ place: Place) {
-        transitionFromFullScreenToMapDrawer {
+        transitionToPlanningDrawer {
             drawerVM.showFoodPlaceAnalysis(
                 for: place,
                 outputLanguage: languageSettings.language
@@ -1366,7 +1389,7 @@ struct ContentView: View {
     }
 
     private func openPlanAround(_ place: Place) {
-        transitionFromFullScreenToMapDrawer {
+        transitionToPlanningDrawer {
             await drawerVM.showPlanAround(
                 anchor: place,
                 reviewCandidates: mapVM.reviewCandidates,
@@ -1376,12 +1399,12 @@ struct ContentView: View {
         }
     }
 
-    private func transitionFromFullScreenToMapDrawer(
+    private func transitionToPlanningDrawer(
         action: @escaping () async -> Void
     ) {
         fullScreenRoute = nil
         rootPath.removeAll()
-        selectedRootTab = .map
+        selectedRootTab = .plan
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 180_000_000)
             openDrawer(.ask, tripID: nil)
