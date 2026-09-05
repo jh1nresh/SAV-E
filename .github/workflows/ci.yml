@@ -157,7 +157,8 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testRapidChromeTransitionsKeepAppAlive \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
-            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests/testProofFirstFlowReachesOpenAppCTA \
+            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces \
             -test-iterations 3 \
             -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \

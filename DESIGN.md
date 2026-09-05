@@ -173,7 +173,7 @@ Avoid these in user-facing UI:
 ## Atlas Postcard Tokens
 
 Atlas Postcard is the current visual system for Savvy's primary surfaces. It
-reads as an illustrated travel atlas: warm paper panels, rounded editorial
+reads as an illustrated travel atlas: warm paper panels, native rounded
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
 Canonical source of truth is code:
@@ -226,23 +226,28 @@ Palette rules:
 ### Atlas Typography
 
 `SaveAtlasType` replaces the system-font rules of the legacy section on all
-Atlas surfaces. All production variants accept `relativeTo:` for Dynamic Type.
+Atlas surfaces. Production type scales with Dynamic Type; display, strong, body, and regular
+accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Display | `SaveAtlasType.display(_:)` | System rounded semibold | Hero numerals, action labels, display moments |
-| Strong | `SaveAtlasType.strong(_:)` | System rounded bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
-| Body | `SaveAtlasType.body(_:)` | System rounded medium | Body and detail copy |
-| Regular | `SaveAtlasType.regular(_:)` | System rounded regular | Captions, subtitles, count labels |
-| Editorial | `SaveAtlasType.editorial(_:)` | System rounded italic | Editorial brand moments: envelope titles, counts, postcard captions |
+| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | System Rounded Regular | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | System Rounded Regular Italic | Editorial brand moments: envelope titles, counts, postcard captions |
 
 Typography rules:
 
 - Eyebrows are `strong` at small sizes, uppercased, with positive tracking
   (~0.65).
 - Editorial rounded italic is a garnish for brand moments, not a body face.
-- Use `SaveAtlasType` for consistent weights and Dynamic Type scaling across
-  Atlas surfaces; avoid ad hoc legacy font sizes on the same surface.
+- Use `SaveAtlasType` roles for consistent weights and Dynamic Type scaling,
+  rather than ad hoc legacy heavy/black text on Atlas
+  surfaces. Home uses paper-backed, wrapping place names beneath photographs;
+  labels must remain readable when a photo is absent or visually busy.
+- The latest confirmed place remains the stable Home cover; asynchronous photo
+  loading must not change which place is featured.
 
 ### Kraft Chips
 
@@ -283,7 +288,8 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`MapView`, `SaveMapDrawerPanel`) | Atlas |
 | Ask drawer (`AIDrawerView`) | Atlas |
-| Onboarding, Google Takeout import | Atlas (migration mostly done; some legacy tokens remain inline) |
+| Onboarding | Atlas |
+| Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
@@ -552,7 +558,21 @@ Teach the state ladder:
 Source Clue -> Review Candidate -> Map Stamp -> Trip Plan
 ```
 
-Use one interactive example. Do not add a marketing page.
+Use one interactive example. Do not add a marketing page. Start in the device or
+previously selected language; language selection is an optional sheet. The selected
+Source to Memory direction uses one photo postcard throughout three stages: source,
+review, saved preview. Source is explicitly a clue, review is sky with confirmation,
+and the saved preview is mint and labeled as an example. The cafe is fictional;
+no real coordinates or storage writes are implied by the demo.
+
+Personal input is a separate first-run sheet, reachable immediately or after the
+example. Its CTA hands the draft to the existing account-scoped capture flow after
+sign-in; nothing is analyzed or saved by onboarding. Every skip and replay completion
+returns no clue. Never show the fictional cafe as the result of a user's own input.
+Keep primary and visible skip actions in the bottom safe area with 44 pt targets;
+long content scrolls above them. Passport offers a replay using only the sample,
+with a visible close action. Replay never resets onboarding completion, captures
+private input, or adds a place.
 
 ### Map
 

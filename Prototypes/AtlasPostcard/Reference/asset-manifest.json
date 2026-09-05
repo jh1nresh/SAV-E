@@ -528,13 +528,13 @@
       "role": "owned warm night cafe image for the onboarding confirmed Map Stamp postcard",
       "source": "built-in image generation using the founder-approved onboarding direction as the subject, composition, and lighting reference",
       "prompt": "decisions/2026-07-31-onboarding-postcard-pocket-v2/prompts/night-cafe.md",
-      "transform": "deterministic 1x/2x/3x sips resampling",
+      "transform": "Original 1122x1402 source restored for the selected A photo postcard; one universal raster, no resampling or regeneration.",
       "output": {
         "imageset": "OnboardingNightCafe.imageset",
         "filename": "onboarding-night-cafe.png",
-        "width": 100,
-        "height": 125,
-        "scale": "1x",
+        "width": 1122,
+        "height": 1402,
+        "scale": "universal",
         "colorMode": "RGB"
       },
       "status": "complete"

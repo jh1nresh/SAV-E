@@ -11,6 +11,47 @@ import XCTest
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testPassportTutorialReplaysWithoutAddingPlaces() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
+        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
+        let initialCount = savedCount.label
+        openRootTab("Profile", app: app)
+
+        let tutorial = app.buttons["profile.tutorial"]
+        for _ in 0..<6 where !tutorial.isHittable { app.swipeUp() }
+        XCTAssertTrue(waitUntilHittable(tutorial))
+        tutorial.tap()
+        let primary = app.buttons["onboarding.primary"]
+        XCTAssertTrue(primary.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["onboarding.ownClue"].exists)
+        XCTAssertTrue(app.buttons["onboarding.close"].isHittable)
+        XCTAssertFalse(app.textViews["onboarding.clueEditor"].exists)
+        attach(app, name: "tutorial-replay-sample")
+        primary.tap()
+        XCTAssertTrue(app.staticTexts["Review Candidate"].waitForExistence(timeout: stepTimeout))
+        primary.tap()
+        XCTAssertTrue(app.staticTexts["Map Stamp · Example"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(primary.label, "Back to Passport")
+        primary.tap()
+        XCTAssertTrue(tutorial.waitForExistence(timeout: stepTimeout))
+        tutorial.tap()
+        XCTAssertTrue(app.buttons["onboarding.close"].waitForExistence(timeout: stepTimeout))
+        app.buttons["onboarding.close"].tap()
+        openRootTab("Home", app: app)
+        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedCount.label, initialCount)
+        XCTAssertFalse(app.buttons["onboarding.primary"].exists)
+    }
+
+    @MainActor
     func testSignInCardKeepsEveryRouteVisible() throws {
         let app = makeApp(
             launchArguments: [
@@ -84,11 +125,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
-            ]
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
         )
         launch(app)
-        try signInViaReviewDemo(app: app)
+        try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
@@ -99,12 +142,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
-        let changeCover = app.buttons["home.hero.changeCover"]
-        XCTAssertTrue(changeCover.waitForExistence(timeout: stepTimeout))
-        changeCover.tap()
+        XCTAssertFalse(app.buttons["home.hero.changeCover"].exists)
+        let featuredName = app.staticTexts["home.featuredName"]
+        XCTAssertTrue(featuredName.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(featuredName.isHittable)
+        XCTAssertTrue(app.staticTexts["Recently saved"].exists)
         XCTAssertEqual(app.state, .runningForeground)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
+        XCTAssertTrue(app.buttons["home.more"].isHittable)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
             app.buttons["home.capture"].exists,
