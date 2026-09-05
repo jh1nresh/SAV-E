@@ -294,11 +294,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(review.contains("\"84%\""))
     }
 
-    func testSavesFirstViewportCapsTicketsAndKeepsCaptureCoral() throws {
+    func testSavesQueueIsContinuousAndKeepsCaptureCoral() throws {
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("firstViewportTicketLimit = 3"))
         XCTAssertTrue(saves.contains("SaveAtlasPalette.coral.opacity(0.92)"))
-        XCTAssertTrue(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
+        XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
     }
 
