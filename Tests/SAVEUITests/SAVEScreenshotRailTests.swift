@@ -790,7 +790,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["drawer.mapAssistant.intro"].exists)
         attach(app, name: "map-place-search-results")
         result.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Ichiran Shibuya"].firstMatch.exists)
+        attach(app, name: "map-search-saved-place-detail")
         XCTAssertEqual(app.state, .runningForeground)
     }
 
