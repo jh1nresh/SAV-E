@@ -344,7 +344,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("SaveAtlasMapCommandShelf"))
         XCTAssertTrue(map.contains("Search places"))
         XCTAssertFalse(map.contains("mic.fill"))
-        XCTAssertTrue(map.contains("SaveAtlasPalette.canvas, in: RoundedRectangle"))
+        XCTAssertTrue(
+            map.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"),
+            "Rest-state Map search is a floating capsule, not a rounded paper card."
+        )
         XCTAssertTrue(map.contains("saved Map Stamps"))
         XCTAssertTrue(map.contains("map.command.passport"))
         XCTAssertTrue(
