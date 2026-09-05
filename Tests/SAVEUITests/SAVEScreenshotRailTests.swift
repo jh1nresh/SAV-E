@@ -695,6 +695,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testHomeSearchAndPendingCandidateOpenDirectly() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let search = app.textFields["home.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: launchTimeout))
+        attach(app, name: "home-search-pending-candidate")
+        search.tap()
+        search.typeText("zzzz-no-saved-match")
+        XCTAssertTrue(app.staticTexts["home.search.empty"].waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        search.tap()
+        search.typeText("ichiran")
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.search.result.'")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
+        result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        app.buttons["Clear search"].tap()
+        let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        review.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
+        attach(app, name: "home-real-candidate-detail")
+        app.buttons["drawer.place.close"].firstMatch.tap()
+        app.buttons["home.reviewAll"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
+        XCTAssertLessThan(firstCandidate.frame.height, 150)
+        XCTAssertFalse(app.descendants(matching: .any)["saves.pocket.reviewFooter"].exists)
+        attach(app, name: "saves-real-candidates-first")
+    }
+
+    @MainActor
     func testHomeReviewCluesOpensSavesWithoutDrawer() throws {
         let app = makeApp(
             launchArguments: [
@@ -723,6 +765,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Home Review clues should not present a drawer."
         )
         attach(app, name: "home-review-opens-saves")
+    }
+
+    @MainActor
+    func testCaptureUsesCompactSheetAndKeepsKeyboardActionReachable() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        rootTabButton("Save", app: app).tap()
+        let input = app.textViews["capture.input"]
+        let submit = app.buttons["capture.analyze"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThan(input.frame.minY, app.frame.height * 0.4)
+        XCTAssertFalse(submit.isEnabled)
+        attach(app, name: "capture-compact-sheet")
+        input.tap()
+        input.typeText("A cafe near Taipei station")
+        XCTAssertTrue(submit.isEnabled)
+        XCTAssertTrue(submit.isHittable)
+        attach(app, name: "capture-sheet-keyboard")
+        app.buttons["capture.keyboardDone"].tap()
+        XCTAssertTrue(app.buttons["capture.importGoogleTakeout"].isHittable)
+        app.buttons["Close capture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
     }
 
     @MainActor

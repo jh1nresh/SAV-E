@@ -297,7 +297,13 @@ struct ContentView: View {
         .sheet(isPresented: $isRootSheetPresented, onDismiss: handleRootSheetDismiss) {
             rootSheetContent
         }
-        .fullScreenCover(item: $fullScreenRoute, onDismiss: handleFullScreenDismiss) { route in
+        .sheet(item: capturePresentation, onDismiss: handleFullScreenDismiss) { route in
+            fullScreenContent(for: route)
+                .presentationDetents([.height(430), .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SaveAtlasPalette.canvas)
+        }
+        .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
@@ -532,6 +538,24 @@ struct ContentView: View {
         )
     }
 
+    private var capturePresentation: Binding<SaveFullScreenRoute?> {
+        Binding(
+            get: { if case .capture = fullScreenRoute { return fullScreenRoute }; return nil },
+            set: { value in
+                if case .capture = fullScreenRoute { fullScreenRoute = value }
+            }
+        )
+    }
+
+    private var detailPresentation: Binding<SaveFullScreenRoute?> {
+        Binding(
+            get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
+            set: { value in
+                if case .placeDetail = fullScreenRoute { fullScreenRoute = value }
+            }
+        )
+    }
+
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
             ReferenceViewport {
@@ -544,6 +568,7 @@ struct ContentView: View {
                                 mapViewModel: mapVM,
                                 onCapture: { openDrawer(.addLink, tripID: nil) },
                                 onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
                                 // Trips left the root bar; both it and Saves
                                 // are pushed children now, so neither surface
                                 // is lost by the restructure.
@@ -1692,189 +1717,99 @@ private struct SaveCaptureFlowView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                SaveDottedBackground().ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(localized("CAPTURE A CLUE", "收下一個線索"))
-                                    .font(SaveAtlasType.strong(11))
-                                    .tracking(1.0)
-                                    .foregroundStyle(SaveAtlasPalette.muted)
-                                Text(localized("Paste or share a link", "貼上或分享連結"))
-                                    .font(SaveAtlasType.strong(29, relativeTo: .title))
-                                    .foregroundStyle(SaveAtlasPalette.forest)
-                                Text(localized(
-                                    "Savvy will analyze it, then place every uncertain result in Review.",
-                                    "Savvy 會先分析；任何不確定結果都只會進入待確認。"
-                                ))
-                                .font(SaveAtlasType.body(14))
-                                .foregroundStyle(SaveAtlasPalette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 0)
-                            MemoMascotMark(size: 72, framed: false)
-                                .accessibilityHidden(true)
-                        }
-
-                        if let tripName {
-                            Label(
-                                localized("For \(tripName)", "準備加入「\(tripName)」"),
-                                systemImage: "suitcase.rolling.fill"
-                            )
-                            .font(SaveAtlasType.strong(13))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(localized("Save a place clue", "收下一個地點線索"))
+                        .font(SaveAtlasType.strong(23, relativeTo: .title2))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(localized("Paste a link or note. Review the place before saving.", "貼上連結或筆記，確認地點後再儲存。"))
+                        .font(SaveAtlasType.body(14))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                    if let tripName {
+                        Text(localized("For \(tripName)", "準備加入「\(tripName)」"))
+                            .font(SaveAtlasType.body(13))
                             .foregroundStyle(SaveAtlasPalette.forest)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 36)
-                            .background(SaveAtlasPalette.mint, in: Capsule())
-                        }
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(localized("LINK, CAPTION, OR MESSAGE", "連結、貼文文字或訊息"))
-                                .font(SaveAtlasType.strong(10))
-                                .tracking(0.9)
-                                .foregroundStyle(SaveAtlasPalette.muted)
-
-                            TextEditor(text: $sharedText)
-                                .font(SaveAtlasType.body(16))
-                                .foregroundStyle(SaveAtlasPalette.ink)
-                                .scrollContentBackground(.hidden)
-                                .frame(minHeight: 190)
-                                .padding(10)
-                                .background(SaveAtlasPalette.paper)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .stroke(
-                                            SaveAtlasPalette.sky.opacity(0.82),
-                                            style: StrokeStyle(lineWidth: 1, dash: [5, 4])
-                                        )
-                                }
-                                .accessibilityIdentifier("capture.input")
-                                .focused($isInputFocused)
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        Spacer()
-                                        Button(localized("Done", "完成")) {
-                                            isInputFocused = false
-                                        }
-                                        .accessibilityIdentifier("capture.keyboardDone")
-                                    }
-                                }
-
-                            HStack(spacing: 10) {
-                                PasteButton(payloadType: String.self) { values in
-                                    if let value = values.first {
-                                        sharedText = value
-                                    }
-                                }
-                                .labelStyle(.titleAndIcon)
-                                .font(SaveAtlasType.strong(14))
-                                .tint(SaveAtlasPalette.forest)
-                                .accessibilityIdentifier("capture.paste")
-
-                                Spacer(minLength: 0)
-
-                                Text(localized(
-                                    "Nothing is saved before Review.",
-                                    "確認前不會建立地圖章。"
-                                ))
-                                .font(SaveAtlasType.body(11))
-                                .foregroundStyle(SaveAtlasPalette.muted)
+                    }
+                    TextEditor(text: $sharedText)
+                        .font(SaveAtlasType.body(16))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .scrollContentBackground(.hidden)
+                        .frame(height: 88)
+                        .padding(8)
+                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay { RoundedRectangle(cornerRadius: 14).stroke(SaveAtlasPalette.line.opacity(0.4)) }
+                        .focused($isInputFocused)
+                        .accessibilityLabel(localized("Link or note", "連結或筆記"))
+                        .accessibilityIdentifier("capture.input")
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button(localized("Done", "完成")) { isInputFocused = false }
+                                    .accessibilityIdentifier("capture.keyboardDone")
                             }
                         }
-                        .padding(16)
-                        .saveAtlasPaper(radius: 20, shadow: true)
-
+                    HStack {
+                        PasteButton(payloadType: String.self) { values in
+                            if let value = values.first { sharedText = value }
+                        }
+                        .tint(SaveAtlasPalette.forest)
+                        .accessibilityIdentifier("capture.paste")
+                        Spacer()
                         Button {
-                            SaveHaptics.tap()
                             isInputFocused = false
                             isGoogleTakeoutPresented = true
                         } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "shippingbox.and.arrow.backward.fill")
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundStyle(SaveAtlasPalette.forest)
-                                    .frame(width: 40, height: 40)
-                                    .background(SaveAtlasPalette.mint, in: Circle())
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(localized("Import Google Takeout", "匯入 Google Takeout"))
-                                        .font(SaveAtlasType.strong(15))
-                                        .foregroundStyle(SaveAtlasPalette.forest)
-                                    Text(localized(
-                                        "Choose a Takeout export with saved places.",
-                                        "選擇包含已儲存地點的 Takeout 匯出檔。"
-                                    ))
-                                    .font(SaveAtlasType.body(12))
-                                    .foregroundStyle(SaveAtlasPalette.muted)
-                                }
-
-                                Spacer(minLength: 0)
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(SaveAtlasPalette.muted)
-                            }
-                            .padding(14)
-                            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1)
-                            }
+                            Label(localized("Import file", "匯入檔案"), systemImage: "square.and.arrow.down")
+                                .font(SaveAtlasType.strong(14))
+                                .frame(minHeight: 44)
                         }
-                        .buttonStyle(.plain)
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .disabled(isAnalyzing)
+                        .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
                         .accessibilityIdentifier("capture.importGoogleTakeout")
-
-                        if let errorMessage {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .font(SaveAtlasType.body(13))
-                                .foregroundStyle(SaveAtlasPalette.coral)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .accessibilityIdentifier("capture.error")
-                        }
-
-                        Button(action: analyze) {
-                            HStack(spacing: 9) {
-                                if isAnalyzing {
-                                    ProgressView().tint(.white)
-                                } else {
-                                    Image(systemName: "sparkles")
-                                }
-                                Text(isAnalyzing
-                                    ? localized("Analyzing…", "分析中…")
-                                    : localized("Analyze into Review", "分析後送進待確認"))
-                            }
-                            .font(SaveAtlasType.strong(17))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: 52)
-                            .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(trimmedText.isEmpty || isAnalyzing)
-                        .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
-                        .accessibilityIdentifier("capture.analyze")
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 22)
-                    .padding(.bottom, 30)
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.coral)
+                            .accessibilityIdentifier("capture.error")
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(SaveAtlasPalette.canvas)
+            .safeAreaInset(edge: .bottom) {
+                Button(action: analyze) {
+                    HStack(spacing: 8) {
+                        if isAnalyzing { ProgressView().tint(.white) }
+                        Text(isAnalyzing ? localized("Analyzing…", "分析中…") : localized("Find the place", "找出地點"))
+                    }
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(trimmedText.isEmpty || isAnalyzing)
+                .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
+                .accessibilityIdentifier("capture.analyze")
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+                .background(SaveAtlasPalette.canvas)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: onCancel) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
+                        Image(systemName: "xmark").frame(width: 44, height: 44)
                     }
                     .foregroundStyle(SaveAtlasPalette.forest)
+                    .disabled(isAnalyzing)
                     .accessibilityLabel(localized("Close capture", "關閉新增線索"))
                 }
             }
-            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
         }
+        .interactiveDismissDisabled(isAnalyzing)
         .accessibilityIdentifier("capture.flow")
         .onAppear {
             if sharedText.isEmpty {
