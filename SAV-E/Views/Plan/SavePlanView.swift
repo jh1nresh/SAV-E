@@ -6,6 +6,8 @@ struct SavePlanView: View {
     @ObservedObject var tripStore: TripPackStore
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenTrips: () -> Void
+    let onConfirmCandidate: (SaveMapCandidate) async throws -> Place
 
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var selectedArea: String = ""
@@ -18,6 +20,7 @@ struct SavePlanView: View {
     @State private var draft: SaveAIResponse?
     @State private var isPlanning = false
     @State private var planError: String?
+    @State private var planningTask: Task<Void, Never>?
 
     private var areas: [String] {
         SavePlanDraftBuilder.areas(from: savedPlaces)
@@ -38,6 +41,7 @@ struct SavePlanView: View {
                     composer
                     if let draft {
                         draftCanvas(draft)
+                            .disabled(isPlanning)
                     }
                     savedTrips
                 }
@@ -45,26 +49,17 @@ struct SavePlanView: View {
                 .padding(.bottom, 108)
             }
             .placed(x: 0, y: 105, width: AtlasMetrics.width, height: 674)
-            if isPlanning {
-                Color.black.opacity(0.08)
-                    .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
-                    .allowsHitTesting(true)
-                ProgressView()
-                    .padding(20)
-                    .background(SaveAtlasPalette.paper.opacity(0.96), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .placed(
-                        x: (AtlasMetrics.width - 120) / 2,
-                        y: 360,
-                        width: 120,
-                        height: 120
-                    )
-            }
+
         }
         .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.root")
         .onAppear(perform: selectDefaultArea)
+        .onDisappear {
+            planningTask?.cancel()
+            isPlanning = false
+        }
         .onChange(of: areas) { _, _ in selectDefaultArea() }
         .alert(
             localized("Couldn’t draft that plan", "無法排出這版行程"),
@@ -117,8 +112,24 @@ struct SavePlanView: View {
                 .accessibilityIdentifier("plan.emptyStamps")
             } else {
                 areaChips
+                    .disabled(isPlanning)
                 dayAndPace
+                    .disabled(isPlanning)
                 travelWindows
+                    .disabled(isPlanning)
+                if isPlanning {
+                    HStack {
+                        ProgressView()
+                        Text(localized("Checking local options and travel…", "正在檢查附近選項與交通…"))
+                            .font(SaveAtlasType.body(12))
+                        Spacer()
+                        Button(localized("Cancel", "取消")) {
+                            planningTask?.cancel()
+                            isPlanning = false
+                        }
+                        .frame(minHeight: 44)
+                    }
+                }
                 Button(action: planFromStamps) {
                     Text(localized("Plan from Map Stamps", "用地圖章規劃"))
                         .font(SaveAtlasType.strong(16))
@@ -137,6 +148,7 @@ struct SavePlanView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.composer")
     }
 
@@ -155,7 +167,7 @@ struct SavePlanView: View {
                             Text(area)
                                 .font(SaveAtlasType.display(13))
                                 .padding(.horizontal, 12)
-                                .frame(minHeight: 36)
+                                .frame(minHeight: 44)
                                 .foregroundStyle(SaveAtlasPalette.ink)
                                 .background(
                                     SaveAtlasPalette.kraft.opacity(selectedArea == area ? 0.72 : 0.28),
@@ -203,7 +215,7 @@ struct SavePlanView: View {
         } label: {
             Text(title)
                 .font(SaveAtlasType.display(13))
-                .frame(maxWidth: .infinity, minHeight: 36)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .foregroundStyle(SaveAtlasPalette.ink)
                 .background(
                     SaveAtlasPalette.kraft.opacity(pace == value ? 0.72 : 0.28),
@@ -263,8 +275,11 @@ struct SavePlanView: View {
                 travelLegs: draft.travelLegs,
                 onSaveTripPlan: { name, city, stops in
                     await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
-                }
+                },
+                onOpenTrip: onOpenTrip,
+                onConfirmCandidate: onConfirmCandidate
             )
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("plan.draft")
         }
     }
@@ -277,6 +292,10 @@ struct SavePlanView: View {
                     .font(SaveAtlasType.strong(11))
                     .tracking(0.8)
                     .foregroundStyle(SaveAtlasPalette.muted)
+                Button(localized("All trips", "全部行程"), action: onOpenTrips)
+                    .font(SaveAtlasType.strong(14))
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("plan.allTrips")
                 ForEach(tripStore.trips.prefix(3)) { trip in
                     Button {
                         tripStore.selectTrip(trip.id)
@@ -332,12 +351,15 @@ struct SavePlanView: View {
             departureMinutes: usesDeparture ? minutes(from: departureDate) : nil,
             language: languageSettings.language
         )
-        Task {
-            defer { isPlanning = false }
+        planningTask?.cancel()
+        let places = savedPlaces
+        let candidates = mapCandidates
+        planningTask = Task {
+            defer { if !Task.isCancelled { isPlanning = false } }
             let first = SavePlanDraftBuilder.draft(
                 request: request,
-                savedPlaces: savedPlaces,
-                unsavedCandidates: mapCandidates
+                savedPlaces: places,
+                unsavedCandidates: candidates
             )
             guard var response = first else {
                 planError = localized(
@@ -346,22 +368,43 @@ struct SavePlanView: View {
                 )
                 return
             }
+#if DEBUG
+            if ReviewDemo.isOfflineUITestMode {
+                if ProcessInfo.processInfo.arguments.contains("--uitest-plan-candidate"), let firstDay = response.itineraryDays.first {
+                    let candidate = SaveMapCandidate(title: "Plan Test Garden", subtitle: "Taipei", latitude: 25.04, longitude: 121.54,
+                        category: .attraction, sourceURL: "https://example.com/plan-garden")
+                    let stop = ItineraryStop(id: UUID(), placeId: nil, placeState: .externalSuggestion,
+                        placeName: candidate.title, time: nil, duration: 60, note: nil,
+                        sourceSummary: "Public map candidate", risks: [.externalSuggestion], mapCandidate: candidate)
+                    response = response.replacingItineraryDays(
+                        [firstDay.replacingStops([stop] + firstDay.stops)] + response.itineraryDays.dropFirst(),
+                        tripHealth: nil
+                    )
+                }
+                draft = response
+                return
+            }
+#endif
+            draft = response
             let gaps = response.itineraryDays.flatMap { $0.health?.gaps ?? [] }
             if !gaps.isEmpty {
                 let extras = await TripGapLocalOptionsService().candidates(
                     forGaps: gaps,
                     days: response.itineraryDays,
-                    savedPlaces: savedPlaces
+                    savedPlaces: places
                 )
+                guard !Task.isCancelled else { return }
                 if !extras.isEmpty,
                    let enriched = SavePlanDraftBuilder.draft(
                     request: request,
-                    savedPlaces: savedPlaces,
-                    unsavedCandidates: extras + mapCandidates
+                    savedPlaces: places,
+                    unsavedCandidates: extras + candidates
                    ) {
                     response = enriched
                 }
             }
+            response = await SavePlanDraftBuilder.checkingTravel(response, savedPlaces: places, language: request.language)
+            guard !Task.isCancelled else { return }
             draft = response
         }
     }

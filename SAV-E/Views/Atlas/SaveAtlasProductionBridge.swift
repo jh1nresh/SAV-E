@@ -168,6 +168,7 @@ enum SaveAtlasPresentationFactory {
             english: "Trip planning is still improving.",
             traditionalChinese: "行程規劃品質仍在持續改善。"
         )
+        presentation.allTripsLabel = language.localized(english: "All trips", traditionalChinese: "全部行程")
 
         if !SaveAtlasRuntime.usesParityFixture {
             presentation.tripSummaries = (

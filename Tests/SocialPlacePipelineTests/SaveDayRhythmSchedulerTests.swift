@@ -207,6 +207,67 @@ final class SaveDayRhythmSchedulerTests: XCTestCase {
     }
 
     @MainActor
+    func testEarlyFlightAndConflictingWindowsStayEmpty() {
+        let scheduler = SaveDayRhythmScheduler()
+        for arrival in [nil, 14 * 60] as [Int?] {
+            var windows = TripPlanWindows.standard
+            windows.arrivalMinutes = arrival
+            windows.departureMinutes = arrival == nil ? 10 * 60 : 16 * 60
+            let bounds = scheduler.usableWindow(isFirst: true, isLast: true, windows: windows)
+            XCTAssertLessThanOrEqual(bounds.end, windows.departureMinutes! - windows.airportTransferMinutes)
+            let result = scheduler.schedule(
+                orderedPlaces: [place("Park", category: .attraction)], unsavedCandidates: [], lodging: nil,
+                dayNumber: 1, dayCount: 1, windows: windows, outputLanguage: .english
+            )
+            XCTAssertTrue(result.stops.isEmpty)
+            XCTAssertTrue(result.windowNote?.contains("No usable time") == true)
+        }
+    }
+
+    @MainActor
+    func testLateArrivalDoesNotExtendDayPastMidnight() {
+        var windows = TripPlanWindows.standard
+        windows.arrivalMinutes = 23 * 60
+        let result = SaveDayRhythmScheduler().schedule(
+            orderedPlaces: [place("Park", category: .attraction)], unsavedCandidates: [], lodging: nil,
+            dayNumber: 1, dayCount: 2, windows: windows, outputLanguage: .english
+        )
+        XCTAssertTrue(result.stops.isEmpty)
+    }
+
+    @MainActor
+    func testScheduledCandidateKeepsIdentityAndSourceForConfirmation() throws {
+        let candidate = SaveMapCandidate(id: "provider-garden", title: "Garden", subtitle: "Taipei",
+            latitude: 25.04, longitude: 121.54, category: .attraction,
+            sourceURL: "https://example.com/garden", evidence: ["Public map result"])
+        let result = SaveDayRhythmScheduler().schedule(
+            orderedPlaces: [place("Lunch", category: .food)], unsavedCandidates: [candidate], lodging: nil,
+            dayNumber: 1, dayCount: 1, windows: .standard, outputLanguage: .english
+        )
+        let stop = try XCTUnwrap(result.stops.first { $0.placeName == "Garden" })
+        XCTAssertEqual(stop.mapCandidate, candidate)
+        XCTAssertNil(stop.placeId)
+        XCTAssertEqual(stop.placeState, .externalSuggestion)
+    }
+
+    @MainActor
+    func testUnsavedHotelIsRetainedForCheckOutOnTheLastDay() throws {
+        let candidate = SaveMapCandidate(title: "Hotel", subtitle: "Taipei", latitude: 25.04,
+            longitude: 121.54, category: .stay, sourceURL: "https://example.com/hotel")
+        let response = try XCTUnwrap(SavePlanDraftBuilder.draft(
+            request: SavePlanRequest(area: "Taipei", days: 2, pace: .balanced,
+                arrivalMinutes: nil, departureMinutes: nil, language: .english),
+            savedPlaces: [place("Park", category: .attraction), place("Lunch", category: .food)],
+            unsavedCandidates: [candidate]
+        ))
+        let stays = response.itineraryDays.flatMap(\.stops).filter { $0.mapCandidate?.id == candidate.id }
+        XCTAssertEqual(stays.count, 2)
+        XCTAssertTrue(stays.first?.note?.contains("Check-in") == true)
+        XCTAssertTrue(stays.last?.note?.contains("Check-out") == true)
+        XCTAssertTrue(stays.allSatisfy { $0.placeState == .externalSuggestion && $0.placeId == nil })
+    }
+
+    @MainActor
     private func assertStopsDoNotOverlap(_ stops: [ItineraryStop], file: StaticString = #filePath, line: UInt = #line) {
         let timed = stops.compactMap { stop -> (Int, Int)? in
             guard let start = TripClock.minutes(fromDisplay: stop.time ?? "") else { return nil }

@@ -62,7 +62,7 @@ enum SavePlanDraftBuilder {
                 outputLanguage: request.language
             )
             let usedNames = Set(result.stops.map(\.placeName))
-            unusedUnsaved.removeAll { usedNames.contains($0.title) }
+            unusedUnsaved.removeAll { $0.category != .stay && usedNames.contains($0.title) }
             let health = DeterministicTripPlanner().tripHealth(
                 for: result.stops,
                 dayNumber: day.dayNumber,
@@ -111,6 +111,71 @@ enum SavePlanDraftBuilder {
             travelLegs: []
         )
         return response
+    }
+
+    /// Validate travel against the scheduled order; routing must never move a meal or a stay.
+    static func checkingTravel(
+        _ response: SaveAIResponse,
+        savedPlaces: [Place],
+        language: AppLanguage,
+        routeService: TripRouteServiceProtocol = GoogleTripRouteService()
+    ) async -> SaveAIResponse {
+        let placesByID = Dictionary(savedPlaces.map { ($0.id.uuidString, $0) }, uniquingKeysWith: { first, _ in first })
+        var days: [ItineraryDay] = []
+        var legs: [TripTravelLeg] = []
+        for day in response.itineraryDays {
+            guard !Task.isCancelled else { return response }
+            guard day.stops.count > 1 else { days.append(day); continue }
+            let routePlaces = day.stops.compactMap { stop -> Place? in
+                if let id = stop.placeId { return placesByID[id] }
+                guard let candidate = stop.mapCandidate else { return nil }
+                return Place(
+                    id: stop.id, name: candidate.title, address: candidate.subtitle,
+                    latitude: candidate.latitude, longitude: candidate.longitude,
+                    category: candidate.category ?? .attraction, status: .wantToGo,
+                    sourcePlatform: candidate.sourcePlatform ?? .other, createdAt: candidate.createdAt
+                )
+            }
+            var updated = day
+            do {
+                guard routePlaces.count == day.stops.count else { throw TripRouteServiceError.invalidResponse }
+                let route = try await routeService.fixedOrderDay(routePlaces, mode: response.transportMode)
+                guard !Task.isCancelled else { return response }
+                guard route.orderedPlaces.map(\.id) == routePlaces.map(\.id),
+                      route.legs.count == day.stops.count - 1 else { throw TripRouteServiceError.invalidResponse }
+                var stops = day.stops
+                for index in 1..<stops.count {
+                    let leg = route.legs[index - 1]
+                    guard leg.fromPlaceId == stops[index - 1].routingID,
+                          leg.toPlaceId == stops[index].routingID,
+                          leg.durationMinutes > 0 else { throw TripRouteServiceError.invalidResponse }
+                    if let previousStart = TripClock.minutes(fromDisplay: stops[index - 1].time ?? ""),
+                       let nextStart = TripClock.minutes(fromDisplay: stops[index].time ?? ""),
+                       previousStart + (stops[index - 1].duration ?? 60) + leg.durationMinutes > nextStart {
+                        if !stops[index].risks.contains(.tooFarFromPrevious) { stops[index].risks.append(.tooFarFromPrevious) }
+                    }
+                }
+                updated = day.replacingStops(stops)
+                legs.append(contentsOf: route.legs)
+                if stops.contains(where: { $0.risks.contains(.tooFarFromPrevious) }) {
+                    let warning = language.localized(
+                        english: "Travel does not fit between some stops. Adjust the order or times before following this draft.",
+                        traditionalChinese: "部分站點間的交通時間不足。出發前請調整順序或時段。"
+                    )
+                    updated.windowNote = [day.windowNote, warning].compactMap { $0 }.joined(separator: " · ")
+                }
+            } catch {
+                let warning = language.localized(
+                    english: "Travel times are unverified. Check the route before following this draft.",
+                    traditionalChinese: "交通時間尚未確認。出發前請先檢查路線。"
+                )
+                updated.windowNote = [day.windowNote, warning].compactMap { $0 }.joined(separator: " · ")
+            }
+            days.append(updated)
+        }
+        var result = response.replacingItineraryDays(days, tripHealth: response.tripHealth)
+        result.travelLegs = legs
+        return result
     }
 
     static func areas(from places: [Place]) -> [String] {
