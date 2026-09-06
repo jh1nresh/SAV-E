@@ -1061,7 +1061,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         dragHandle(by: -160)
         XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
-        tapToFocus(app.textFields["map.search.input"])
+        focus(app.textFields["map.search.input"])
         XCTAssertTrue(app.keyboards.firstMatch.exists)
         attach(app, name: "map-search-explicit-keyboard-focus")
         XCTAssertEqual(app.state, .runningForeground)
