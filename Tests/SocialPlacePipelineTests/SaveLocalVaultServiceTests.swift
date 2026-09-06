@@ -31,6 +31,30 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testRepeatedSavePreservesBothSourcesAndOldTripIDAfterReload() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let service = SaveLocalVaultService(overrideVaultURL: url)
+        var first = makePlace(id: UUID(), name: "Cafe", address: "Taipei", googlePlaceId: "venue")
+        first.sourceUrl = "https://example.com/first"
+        first.note = "From a friend"
+        var second = makePlace(id: UUID(), name: "Cafe", address: "Taipei", googlePlaceId: "venue")
+        second.sourceUrl = "https://example.com/second"
+        second.note = "From a guide"
+        _ = try service.saveConfirmedPlace(first)
+        _ = try service.saveConfirmedPlace(second)
+        let reloaded = try SaveLocalVaultService(overrideVaultURL: url).confirmedPlaces()
+        XCTAssertEqual(reloaded.count, 1)
+        let merged = try XCTUnwrap(reloaded.first)
+        XCTAssertEqual(merged.savedIDs, [first.id, second.id])
+        XCTAssertTrue(merged.sourceEvidence.contains("Source URL: https://example.com/first"))
+        XCTAssertTrue(merged.sourceEvidence.contains("Source URL: https://example.com/second"))
+        XCTAssertTrue(merged.sourceEvidence.contains("From a friend"))
+        XCTAssertTrue(merged.sourceEvidence.contains("From a guide"))
+    }
+
+    @MainActor
     func testMissingVaultReadsAsEmpty() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

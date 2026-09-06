@@ -374,7 +374,7 @@ enum SaveAtlasPresentationFactory {
             .first
             ?? trip.places.first
         presentation.selectedMapPlace = selectedStop
-            .flatMap { stop in places.first(where: { $0.id == stop.placeId }) }
+            .flatMap { stop in places.first(where: { $0.savedIDs.contains(stop.placeId) }) }
             .map(placePresentation)
             ?? places.first.map(placePresentation)
             ?? .koffeeMameya
@@ -392,7 +392,7 @@ enum SaveAtlasPresentationFactory {
             .prefix(4)
             .enumerated()
             .map { index, stop in
-                let place = places.first { $0.id == stop.placeId }
+                let place = places.first { $0.savedIDs.contains(stop.placeId) }
                 return AtlasStopPresentation(
                     id: stop.id.uuidString,
                     name: stop.placeName,

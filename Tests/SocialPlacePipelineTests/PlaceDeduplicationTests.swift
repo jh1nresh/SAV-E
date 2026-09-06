@@ -105,6 +105,46 @@ final class PlaceDeduplicationTests: XCTestCase {
                        "Different venues must never be treated as duplicates")
     }
 
+    @MainActor
+    func testOnePostCanRecommendDifferentVenuesAtTheSameCoordinate() {
+        let first = makePlace(name: "Cafe", address: "Mall floor 1", googlePlaceId: nil, sourceUrl: "https://instagram.com/p/list")
+        let second = makePlace(name: "Museum", address: "Mall floor 2", googlePlaceId: nil, sourceUrl: "https://instagram.com/p/list")
+        XCTAssertFalse(first.matches(second))
+        XCTAssertFalse(second.matches(first))
+        XCTAssertEqual(Place.consolidated([first, second]).count, 2)
+    }
+
+    @MainActor
+    func testDifferentProviderIDsKeepNearbyBranchesSeparate() {
+        let first = makePlace(name: "Coffee", address: "Mall", googlePlaceId: "branch-1", sourceUrl: nil)
+        let second = makePlace(name: "Coffee", address: "Mall", googlePlaceId: "branch-2", sourceUrl: nil)
+        XCTAssertFalse(first.matches(second))
+    }
+
+    @MainActor
+    func testRemoteDuplicatesMergeAllSourcesAndResolveOldRouteIDs() throws {
+        var first = makePlace(name: "Coffee", address: "Taipei", googlePlaceId: "venue", sourceUrl: "https://instagram.com/p/first")
+        first.createdAt = Date(timeIntervalSince1970: 1)
+        first.note = "Try the latte"
+        var second = makePlace(name: "咖啡", address: "台北", googlePlaceId: "venue", sourceUrl: "https://example.com/recommendation")
+        second.createdAt = Date(timeIntervalSince1970: 2)
+        second.note = "Quiet upstairs"
+        let result = Place.consolidated([second, first])
+        let merged = try XCTUnwrap(result.first)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(merged.id, first.id)
+        XCTAssertEqual(merged.savedIDs, [first.id, second.id])
+        XCTAssertTrue(merged.sourceEvidence.contains("Source URL: https://instagram.com/p/first"))
+        XCTAssertTrue(merged.sourceEvidence.contains("Source URL: https://example.com/recommendation"))
+        XCTAssertTrue(merged.sourceEvidence.contains("Try the latte"))
+        XCTAssertTrue(merged.sourceEvidence.contains("Quiet upstairs"))
+        XCTAssertEqual(result.indexedBySavedID[second.id]?.id, first.id)
+        XCTAssertEqual(Place.consolidated(result), result)
+        let map = MapViewModel(usesRemotePersistence: false)
+        map.places = result
+        XCTAssertEqual(map.placesForRoute(placeIDs: [second.id]).map(\.id), [first.id])
+    }
+
     // MARK: - Helper
 
     @MainActor

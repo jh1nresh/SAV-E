@@ -120,7 +120,7 @@ struct TripHoursAnnotator {
     ) async -> SaveAIResponse {
         guard response.componentType == .tripItinerary else { return response }
 
-        let placesByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id.uuidString, $0) })
+        let placesByID = places.indexedBySavedIDString
         let checkablePlaces = response.itineraryDays
             .flatMap(\.stops)
             .filter { $0.placeState == .confirmedMapStamp && parseClockMinutes($0.time) != nil }

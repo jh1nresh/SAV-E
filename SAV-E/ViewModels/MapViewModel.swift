@@ -582,7 +582,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func placesForRoute(placeIDs: [UUID]) -> [Place] {
-        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        let placeByID = places.indexedBySavedID
         return placeIDs.compactMap { placeByID[$0] }.filter(\.isMapKitMappable)
     }
 
@@ -733,20 +733,11 @@ final class MapViewModel: ObservableObject {
         let pending = pendingImportService.consumePendingPlaces()
         guard !pending.isEmpty else { return }
 
-        let importedPlaces = pending.compactMap { pendingPlace -> Place? in
-            let key = pendingPlace.deduplicationKey
-            guard !importedPendingKeys.contains(key),
-                  !places.contains(where: { $0.matches(pendingPlace) }) else {
-                return nil
-            }
-            importedPendingKeys.insert(key)
-            return Place.from(pendingPlace)
-        }
-
-        if !importedPlaces.isEmpty {
-            places = importedPlaces + places
-            revealImportedPlaces(importedPlaces)
-        }
+        let previousIDs = Set(places.map(\.id))
+        let importedPlaces = pending.filter { importedPendingKeys.insert($0.deduplicationKey).inserted }.map(Place.from)
+        places = Place.consolidated(places + importedPlaces)
+        let newPlaces = places.filter { !previousIDs.contains($0.id) }
+        if !newPlaces.isEmpty { revealImportedPlaces(newPlaces) }
 
         pendingImportService.restorePendingPlaces(pending)
     }
@@ -770,12 +761,15 @@ final class MapViewModel: ObservableObject {
     }
 
     private func mergeRemotePlaces(_ remotePlaces: [Place], withLocalPlaces localPlaces: [Place]) -> [Place] {
-        guard !localPlaces.isEmpty else { return remotePlaces }
-        var merged = remotePlaces
-        for localPlace in localPlaces where !merged.contains(where: { $0.id == localPlace.id || $0.matches(localPlace) }) {
-            merged.append(localPlace)
-        }
-        return merged.sorted { $0.createdAt > $1.createdAt }
+        Place.consolidated(remotePlaces + localPlaces)
+    }
+
+    private func mergeSavedSources(_ incoming: Place, into existing: Place) async throws -> Place {
+        let merged = existing.mergingSources(from: incoming)
+        if usesRemotePersistence { try await supabaseService.updatePlace(merged) }
+        mirrorToLocalVault(merged)
+        places = Place.consolidated(places.filter { $0.id != existing.id } + [merged])
+        return merged
     }
 
     private func importPendingPlaces(for userId: String) async throws {
@@ -784,36 +778,36 @@ final class MapViewModel: ObservableObject {
 
         var importedPlaces: [Place] = []
         var failedImports: [PendingSharedPlace] = []
+        var persistedPlaces: [Place]
+        do {
+            persistedPlaces = try await supabaseService.fetchPlaces(for: userId)
+        } catch {
+            pendingImportService.restorePendingPlaces(pending)
+            throw error
+        }
 
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
-            mirrorToLocalVault(place)
-
             do {
-                try await supabaseService.savePlace(place, userId: userId)
-                recordPassportFieldActionAfterSavingPlace()
-                importedPlaces.append(place)
+                let remote = persistedPlaces.first { $0.matches(place) }
+                let existing = remote ?? existingSavedPlace(matching: place)
+                let merged = existing?.mergingSources(from: place) ?? place
+                if remote != nil {
+                    try await supabaseService.updatePlace(merged)
+                } else {
+                    try await supabaseService.savePlace(merged, userId: userId)
+                    persistedPlaces.append(merged)
+                    recordPassportFieldActionAfterSavingPlace()
+                }
+                mirrorToLocalVault(merged)
+                places = Place.consolidated(places.filter { $0.id != merged.id } + [merged])
+                if existing == nil { importedPlaces.append(merged) }
             } catch {
                 failedImports.append(pendingPlace)
-                importedPlaces.append(place)
-                print("MapViewModel: failed to import shared place \(pendingPlace.name): \(error)")
                 syncFailedPlaceName = pendingPlace.name
             }
         }
-
-        if !importedPlaces.isEmpty {
-            let newImports = importedPlaces.filter { place in
-                let key = place.pendingDeduplicationKey
-                guard !importedPendingKeys.contains(key),
-                      !places.contains(where: { $0.matches(place) }) else {
-                    return false
-                }
-                importedPendingKeys.insert(key)
-                return true
-            }
-            places = newImports + places
-            revealImportedPlaces(newImports)
-        }
+        if !importedPlaces.isEmpty { revealImportedPlaces(importedPlaces) }
         pendingImportService.restorePendingPlaces(failedImports)
     }
 
@@ -1082,7 +1076,8 @@ final class MapViewModel: ObservableObject {
         }
 
         if !usesRemotePersistence {
-            if let existing = existingSavedPlace(matching: place) {
+            if let match = existingSavedPlace(matching: place) {
+                let existing = try await mergeSavedSources(place, into: match)
                 try saveLocalVaultService.removeReviewCandidate(candidate.id)
                 reviewCandidates.removeAll { $0.id == candidate.id }
                 if selectedReviewCandidate?.id == candidate.id {
@@ -1105,7 +1100,8 @@ final class MapViewModel: ObservableObject {
             return place
         }
 
-        if let existing = existingSavedPlace(matching: place) {
+        if let match = existingSavedPlace(matching: place) {
+            let existing = try await mergeSavedSources(place, into: match)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
             updatedCandidate.address = existing.address
@@ -1190,8 +1186,14 @@ final class MapViewModel: ObservableObject {
         var place = try await saveSearchController.saveMapCandidate(draft)
         place.sourceImageUrl = candidate.photoURL
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
+        if candidate.sourcePlatform == .googleMaps,
+           let source = candidate.sourceURL.flatMap({ URLComponents(string: $0) }),
+           source.host == "www.google.com" || source.host == "maps.google.com" {
+            place.googlePlaceId = source.queryItems?.first(where: { $0.name == "query_place_id" })?.value
+        }
 
-        if let existing = existingSavedPlace(matching: place) {
+        if let match = existingSavedPlace(matching: place) {
+            let existing = try await mergeSavedSources(place, into: match)
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: exactResolution,
                 candidateID: candidate.id,
@@ -1327,7 +1329,8 @@ final class MapViewModel: ObservableObject {
             return result.isDuplicate ? .alreadySaved(savedPlace) : .saved(savedPlace)
         }
 
-        if let existing = existingSavedPlace(matching: place) {
+        if let match = existingSavedPlace(matching: place) {
+            let existing = try await mergeSavedSources(place, into: match)
             focusSavedPlace(existing, showStampMoment: false)
             return .alreadySaved(existing)
         }
@@ -1352,10 +1355,8 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveSocialPlaceToMySave(_ socialPlace: Place) async throws -> Place {
-        if let existing = places.first(where: { place in
-            place.matchesMapFeature(title: socialPlace.name, coordinate: socialPlace.coordinate) ||
-                place.name.localizedCaseInsensitiveCompare(socialPlace.name) == .orderedSame
-        }) {
+        if let match = existingSavedPlace(matching: socialPlace) {
+            let existing = try await mergeSavedSources(socialPlace, into: match)
             focusSavedPlace(existing, showStampMoment: false)
             await recordOriginSaveOutcomeBestEffort(for: socialPlace)
             return existing
@@ -1629,15 +1630,13 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveListItemAsPlace(_ item: SaveListItem) async throws -> Place {
-        if let existing = places.first(where: { place in
-            place.matchesMapFeature(title: item.title, coordinate: item.coordinate) ||
-                place.name.localizedCaseInsensitiveCompare(item.title) == .orderedSame
-        }) {
+        let place = item.asPlace()
+        if let match = existingSavedPlace(matching: place) {
+            let existing = try await mergeSavedSources(place, into: match)
             focusSavedPlace(existing, showStampMoment: false)
             return existing
         }
 
-        let place = item.asPlace()
         if let userId = authService.currentUserId {
             do {
                 try await supabaseService.savePlace(place, userId: userId)
@@ -1891,11 +1890,7 @@ final class MapViewModel: ObservableObject {
     }
 
     private func existingSavedPlace(matching place: Place) -> Place? {
-        places.first { existing in
-            existing.matches(place) ||
-                existing.matchesMapFeature(title: place.name, coordinate: place.coordinate) ||
-                place.matchesMapFeature(title: existing.name, coordinate: existing.coordinate)
-        }
+        places.first { $0.matches(place) }
     }
 
     private func completeReferralHandoffIfNeeded() async {

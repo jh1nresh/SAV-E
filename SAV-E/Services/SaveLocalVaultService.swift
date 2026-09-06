@@ -44,9 +44,7 @@ final class SaveLocalVaultService: Sendable {
         try withLock {
             try withCoordinatedVaultRead { url in
                 Array(
-                    try loadRecords(from: url)
-                        .compactMap(\.confirmedPlace)
-                        .prefix(limit)
+                    Place.consolidated(try loadRecords(from: url).compactMap(\.confirmedPlace)).prefix(limit)
                 )
             }
         }
@@ -135,46 +133,46 @@ final class SaveLocalVaultService: Sendable {
         return record
     }
 
-    func saveConfirmedPlace(_ place: Place) throws -> SaveMemoryRecord {
-        let record = SaveMemoryRecord(
-            id: place.id,
-            state: .confirmedPlace,
-            sourceURL: place.sourceUrl,
-            sourceText: place.note,
-            title: place.name,
-            placeName: place.name,
-            address: place.address,
-            evidence: confirmedPlaceEvidence(place),
-            placeHighlights: place.savedPlaceHighlights,
-            recommendedItems: place.savedRecommendedItems,
-            vibeTags: place.savedVibeTags,
-            accessNotes: place.savedAccessNotes,
-            sourceHandle: place.savedSourceHandle,
-            latitude: place.latitude,
-            longitude: place.longitude,
-            category: place.category,
-            status: place.status,
-            rating: place.rating ?? place.googleRating,
-            createdAt: place.createdAt,
-            googlePlaceId: place.googlePlaceId,
-            sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
-            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls)
-        )
+    func saveConfirmedPlace(_ incoming: Place) throws -> SaveMemoryRecord {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                records.removeAll { existingRecord in
-                    guard existingRecord.state == .confirmedPlace,
-                          let existingPlace = existingRecord.confirmedPlace else {
-                        return false
-                    }
-                    return existingPlace.id == place.id || existingPlace.matches(place)
+                let matches = records.compactMap(\.confirmedPlace).filter { $0.matches(incoming) }
+                // Keep current edits, and retain all prior source evidence and trip IDs.
+                let place = matches.reduce(incoming) { $0.mergingSources(from: $1) }
+                let record = SaveMemoryRecord(
+                    id: place.id,
+                    state: .confirmedPlace,
+                    sourceURL: place.sourceUrl,
+                    sourceText: place.note,
+                    title: place.name,
+                    placeName: place.name,
+                    address: place.address,
+                    evidence: confirmedPlaceEvidence(place),
+                    placeHighlights: place.savedPlaceHighlights,
+                    recommendedItems: place.savedRecommendedItems,
+                    vibeTags: place.savedVibeTags,
+                    accessNotes: place.savedAccessNotes,
+                    sourceHandle: place.savedSourceHandle,
+                    latitude: place.latitude,
+                    longitude: place.longitude,
+                    category: place.category,
+                    status: place.status,
+                    rating: place.rating ?? place.googleRating,
+                    createdAt: place.createdAt,
+                    googlePlaceId: place.googlePlaceId,
+                    sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+                    businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+                    mergedPlaceIDs: place.mergedPlaceIDs
+                )
+                records.removeAll { record in
+                    record.state == .confirmedPlace && place.savedIDs.contains(record.id)
                 }
                 records.insert(record, at: 0)
                 try save(records, to: url)
+                return record
             }
         }
-        return record
     }
 
     func removeConfirmedPlace(_ place: Place) throws {
@@ -470,7 +468,8 @@ private extension SaveMemoryRecord {
             recommendedItems: recommendedItems.nilIfEmpty,
             vibeTags: vibeTags.nilIfEmpty,
             accessNotes: accessNotes.nilIfEmpty,
-            sourceHandle: sourceHandle
+            sourceHandle: sourceHandle,
+            mergedPlaceIDs: mergedPlaceIDs
         )
     }
 }

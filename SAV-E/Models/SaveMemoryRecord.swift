@@ -38,6 +38,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var googlePlaceId: String?
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]?
+    var mergedPlaceIDs: [UUID]?
 
     init(
         id: UUID = UUID(),
@@ -62,7 +63,8 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         createdAt: Date = Date(),
         googlePlaceId: String? = nil,
         sourceImageUrl: String? = nil,
-        businessPhotoUrls: [String]? = nil
+        businessPhotoUrls: [String]? = nil,
+        mergedPlaceIDs: [UUID]? = nil
     ) {
         self.id = id
         self.state = state
@@ -88,6 +90,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.googlePlaceId = googlePlaceId
         self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
         self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
+        self.mergedPlaceIDs = mergedPlaceIDs
     }
 
     nonisolated var displayTitle: String {
@@ -120,11 +123,13 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case googlePlaceId
         case sourceImageUrl
         case businessPhotoUrls
+        case mergedPlaceIDs
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        mergedPlaceIDs = try container.decodeIfPresent([UUID].self, forKey: .mergedPlaceIDs)
         state = try container.decode(SaveMemoryState.self, forKey: .state)
         sourceURL = try container.decodeIfPresent(String.self, forKey: .sourceURL)
         sourceText = try container.decodeIfPresent(String.self, forKey: .sourceText)
