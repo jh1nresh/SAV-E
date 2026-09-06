@@ -12,6 +12,8 @@ struct ClipContentView: View {
     @State private var isLoading = true
     @State private var incomingURLTask: Task<Void, Never>?
     @State private var activeIncomingURLRequestID: UUID?
+    @State private var lastIncomingURL: URL?
+    @State private var loadErrorMessage: String?
     @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
@@ -47,9 +49,18 @@ struct ClipContentView: View {
             handleIncomingURL(url)
         }
         .task {
+#if DEBUG
+            if activeIncomingURLRequestID == nil,
+               let rawURL = ProcessInfo.processInfo.environment["_XCAppClipURL"],
+               let localInvocationURL = URL(string: rawURL) {
+                handleIncomingURL(localInvocationURL)
+                return
+            }
+#endif
             try? await Task.sleep(for: .seconds(1))
             if activeIncomingURLRequestID == nil,
                placeReceipt == nil && tripData == nil && listData == nil && referralData == nil && mySavesData == nil {
+                loadErrorMessage = "Open a Savvy shared place, trip, or list link to preview it here."
                 isLoading = false
             }
         }
@@ -585,114 +596,138 @@ struct ClipContentView: View {
 
     private func listContentView(_ list: SharedListData) -> some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: 14) {
                 Map(position: $cameraPosition) {
                     ForEach(list.items) { item in
                         Marker(item.title, coordinate: item.coordinate)
-                            .tint(item.source == "savedPlace" ? Color.saveCoral : Color.saveHoney)
+                            .tint(item.source == "savedPlace" ? ClipAtlasPalette.forest : ClipAtlasPalette.coral)
                     }
                 }
-                .frame(height: 200)
-                .cornerRadius(16)
-                .padding(.horizontal)
+                .frame(height: 176)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    Label("Shared list", systemImage: "rectangle.stack.fill")
+                        .font(ClipAtlasType.strong(12))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(ClipAtlasPalette.paper.opacity(0.94), in: Capsule())
+                        .overlay { Capsule().stroke(ClipAtlasPalette.line.opacity(0.38), lineWidth: 1) }
+                        .padding(12)
+                }
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("SHARED LIST PREVIEW")
+                        .font(ClipAtlasType.strong(11))
+                        .tracking(0.8)
+                        .foregroundStyle(ClipAtlasPalette.coral)
                     Text(list.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.saveInk)
+                        .font(ClipAtlasType.display(27, relativeTo: .title))
+                        .foregroundStyle(ClipAtlasPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    Text("\(list.items.count) places · \(list.roleLabel)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 8) {
+                        ClipAtlasChip(
+                            text: list.items.count == 1 ? "1 place" : "\(list.items.count) places",
+                            systemImage: "mappin.and.ellipse"
+                        )
+                        ClipAtlasChip(text: list.roleLabel, systemImage: "person.2")
+                    }
 
                     if let note = list.note, !note.isEmpty {
                         Text(note)
-                            .font(.caption)
-                            .foregroundColor(Color.saveCoral)
+                            .font(ClipAtlasType.body(14))
+                            .foregroundStyle(ClipAtlasPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
+                .padding(16)
+                .background {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .fill(ClipAtlasPalette.paper)
+                }
+                .overlay {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .stroke(ClipAtlasPalette.sky, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
+                }
 
                 VStack(spacing: 12) {
                     ForEach(list.items) { item in
                         listItemRow(item)
                     }
                 }
-                .padding(.horizontal)
 
                 VStack(spacing: 10) {
                     Button(action: openInFullApp) {
-                        Text("Open list in Savvy")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.saveHoney)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                        Label("Open list in Savvy", systemImage: "arrow.up.right.square")
+                            .font(ClipAtlasType.strong(16))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(ClipAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                     }
+                    .buttonStyle(.plain)
 
                     Text("Save any place from this list into your own Savvy after opening the app.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(ClipAtlasType.body(12))
+                        .foregroundStyle(ClipAtlasPalette.muted)
                         .multilineTextAlignment(.center)
                 }
-                .padding(.horizontal)
                 .padding(.bottom, 32)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
+        .accessibilityIdentifier("clip.list.preview")
     }
 
     private func listItemRow(_ item: SharedListItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             AsyncImage(url: item.photoURLs.first.flatMap(URL.init(string:))) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 Image(systemName: item.source == "savedPlace" ? "mappin.circle.fill" : "map")
-                    .font(.title3)
-                    .foregroundColor(Color.saveCoral)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(ClipAtlasPalette.forest)
             }
             .frame(width: 48, height: 48)
-            .background(Color.savePaper)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(
+                item.source == "savedPlace"
+                    ? ClipAtlasPalette.mint.opacity(0.7)
+                    : ClipAtlasPalette.sky.opacity(0.7),
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+            )
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(item.title)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(Color.saveInk)
-                    Spacer()
-                    Text(item.sourceLabel)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(ClipAtlasType.strong(16))
+                    .foregroundStyle(ClipAtlasPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
                 if !item.subtitle.isEmpty {
                     Text(item.subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(ClipAtlasType.body(12))
+                        .foregroundStyle(ClipAtlasPalette.muted)
                 }
                 if let note = item.note {
                     Text(note)
-                        .font(.caption)
-                        .foregroundColor(Color.saveCoral)
+                        .font(ClipAtlasType.body(12))
+                        .foregroundStyle(ClipAtlasPalette.muted)
                 }
             }
+            Spacer(minLength: 4)
+            Text(item.sourceLabel)
+                .font(ClipAtlasType.strong(10))
+                .foregroundStyle(item.source == "savedPlace" ? ClipAtlasPalette.forest : ClipAtlasPalette.coral)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(ClipAtlasPalette.paper, in: Capsule())
+                .overlay { Capsule().stroke(ClipAtlasPalette.line.opacity(0.32), lineWidth: 1) }
         }
         .padding(12)
-        .background(Color.savePaper)
+        .background(ClipAtlasPalette.paper)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.saveNotebookLine, lineWidth: 2)
-        )
-        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+        .overlay { RoundedRectangle(cornerRadius: 16).stroke(ClipAtlasPalette.line.opacity(0.34), lineWidth: 1) }
+        .shadow(color: ClipAtlasPalette.ink.opacity(0.05), radius: 4, y: 2)
     }
 
     private func referralContentView(_ profile: SharedReferralProfile) -> some View {
@@ -778,33 +813,125 @@ struct ClipContentView: View {
     // MARK: - Loading / Error
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            ProgressView()
-                .tint(Color.saveInk)
-            Text("Loading Savvy link...")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Spacer()
+        VStack(spacing: 18) {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 16) {
+                Text("OPENING SHARED MEMORY")
+                    .font(ClipAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundStyle(ClipAtlasPalette.coral)
+
+                ZStack(alignment: .bottomTrailing) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 29, weight: .bold))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .frame(width: 70, height: 70)
+                        .background(ClipAtlasPalette.sky.opacity(0.72), in: Circle())
+                        .overlay {
+                            Circle().stroke(
+                                ClipAtlasPalette.forest.opacity(0.36),
+                                style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])
+                            )
+                        }
+                    ProgressView()
+                        .tint(ClipAtlasPalette.forest)
+                        .padding(7)
+                        .background(ClipAtlasPalette.paper, in: Circle())
+                        .offset(x: 3, y: 3)
+                }
+
+                VStack(spacing: 6) {
+                    Text("Getting the link ready")
+                        .font(ClipAtlasType.display(25, relativeTo: .title2))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                    Text("Checking the shared place, trip, or list before showing it.")
+                        .font(ClipAtlasType.body(14))
+                        .foregroundStyle(ClipAtlasPalette.muted)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 26)
+            .background {
+                ClipScallopedRectangle(depth: 3, pitch: 11)
+                    .fill(ClipAtlasPalette.paper)
+            }
+            .overlay {
+                ClipScallopedRectangle(depth: 3, pitch: 11)
+                    .stroke(
+                        ClipAtlasPalette.sky,
+                        style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])
+                    )
+            }
+            .shadow(color: ClipAtlasPalette.ink.opacity(0.06), radius: 6, y: 2)
+
+            Text("Nothing is added to your Savvy until you choose to open the app.")
+                .font(ClipAtlasType.body(12))
+                .foregroundStyle(ClipAtlasPalette.muted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            Spacer(minLength: 24)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("clip.loading")
     }
 
     private var errorView: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "exclamationmark.triangle")
-                .font(.largeTitle)
-                .foregroundColor(Color.saveCoral)
-            Text("Couldn't load this Savvy link")
-                .font(.headline)
-                .foregroundColor(Color.saveInk)
-            Text("The link may be invalid or expired.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            Spacer()
+        VStack(spacing: 18) {
+            Spacer(minLength: 24)
+
+            VStack(spacing: 14) {
+                Image(systemName: "link.badge.plus")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(ClipAtlasPalette.coral)
+                    .frame(width: 64, height: 64)
+                    .background(ClipAtlasPalette.coral.opacity(0.14), in: Circle())
+
+                Text("This link needs attention")
+                    .font(ClipAtlasType.display(25, relativeTo: .title2))
+                    .foregroundStyle(ClipAtlasPalette.forest)
+
+                Text(loadErrorMessage ?? "The shared Savvy link may be invalid or expired.")
+                    .font(ClipAtlasType.body(14))
+                    .foregroundStyle(ClipAtlasPalette.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let lastIncomingURL {
+                    Button {
+                        handleIncomingURL(lastIncomingURL)
+                    } label: {
+                        Label("Try again", systemImage: "arrow.clockwise")
+                            .font(ClipAtlasType.strong(15))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .background(ClipAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("clip.error.retry")
+                }
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 24)
+            .background(ClipAtlasPalette.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(ClipAtlasPalette.line.opacity(0.42), lineWidth: 1)
+            }
+            .shadow(color: ClipAtlasPalette.ink.opacity(0.06), radius: 6, y: 2)
+
+            Spacer(minLength: 24)
         }
-        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("clip.error")
     }
 
     // MARK: - URL Handling
@@ -813,6 +940,8 @@ struct ClipContentView: View {
         guard let url else { return }
         incomingURLTask?.cancel()
         incomingURLTask = nil
+        lastIncomingURL = url
+        loadErrorMessage = nil
         let requestID = UUID()
         activeIncomingURLRequestID = requestID
 
@@ -839,8 +968,38 @@ struct ClipContentView: View {
                 tripData = nil
                 referralData = nil
                 updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note, day: nil, order: nil) })
+                isLoading = false
+                return
             }
-            isLoading = false
+            guard SharedListPayload.shareCode(from: url) != nil else {
+                loadErrorMessage = "This shared list link is not valid."
+                isLoading = false
+                return
+            }
+            isLoading = true
+            incomingURLTask = Task { @MainActor in
+                do {
+                    let payload = try await SharedListPayload.resolve(from: url)
+                    guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                    listData = payload.list
+                    mySavesData = nil
+                    mySavesSourceURL = nil
+                    placeReceipt = nil
+                    tripData = nil
+                    referralData = nil
+                    updateCamera(for: payload.list.items.map { SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note, day: nil, order: nil) })
+                    isLoading = false
+                    incomingURLTask = nil
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                    loadErrorMessage = (error as? LocalizedError)?.errorDescription
+                        ?? "Savvy could not open this shared list."
+                    isLoading = false
+                    incomingURLTask = nil
+                }
+            }
             return
         }
 
@@ -906,6 +1065,16 @@ struct ClipContentView: View {
                         return
                     } catch let error as SharedPlaceReceiptError {
                         guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
+                        switch error {
+                        case .missingOrExpired:
+                            loadErrorMessage = "This shared place link is no longer available."
+                        case .networkUnavailable:
+                            loadErrorMessage = "Savvy could not reach this shared place. Check your connection and try again."
+                        case .serverUnavailable:
+                            loadErrorMessage = "This shared place is temporarily unavailable. Try again in a moment."
+                        case .malformedOrUnconfigured, .invalidResponse:
+                            loadErrorMessage = "Savvy could not read this shared place link."
+                        }
                         if let code = SharedPlaceData.shortCode(from: url) {
                             await SharedPlaceReceipt.recordPublicEvent(
                                 code: code,
@@ -943,6 +1112,7 @@ struct ClipContentView: View {
             referralData = nil
             mySavesData = nil
             mySavesSourceURL = nil
+            loadErrorMessage = "This link does not contain a Savvy place, trip, or list."
             isLoading = false
             return
         }
@@ -955,6 +1125,8 @@ struct ClipContentView: View {
             mySavesData = nil
             mySavesSourceURL = nil
             updateCamera(for: data.stops)
+        } else {
+            loadErrorMessage = "This shared trip link is invalid or incomplete."
         }
         // Invalid URL data → tripData stays nil → errorView shown
         isLoading = false
@@ -1097,6 +1269,10 @@ struct ClipContentView: View {
     }
 
     private func currentListAppURL() -> URL? {
+        if let lastIncomingURL,
+           let code = SharedListPayload.shareCode(from: lastIncomingURL) {
+            return URL(string: "savvy://list?c=\(code)")
+        }
         guard let listData,
               let payloadData = try? JSONEncoder().encode(SharedListPayload(list: listData, role: listData.viewerRole)),
               let base64 = payloadData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
@@ -1169,6 +1345,7 @@ private enum ClipAtlasPalette {
     static let ink = Color(hex: "2E2117")
     static let muted = Color(hex: "62594F")
     static let coral = Color(hex: "F26B4A")
+    static let mint = Color(hex: "D6E8C4")
     static let sky = Color(hex: "B5E3F5")
     static let line = Color(hex: "A68F78")
 }
