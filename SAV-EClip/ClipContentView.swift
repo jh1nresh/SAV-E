@@ -41,6 +41,25 @@ struct ClipContentView: View {
             .background(ClipDottedBackground())
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if tripData != nil || placeReceipt != nil {
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            Image("SavvyLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 28, height: 28)
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
+                                .accessibilityHidden(true)
+                            Text("Savvy")
+                                .font(ClipAtlasType.strong(18, relativeTo: .headline))
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                        }
+                    }
+                }
+            }
+            .toolbarBackground(ClipAtlasPalette.canvas, for: .navigationBar)
+            .toolbarBackground(tripData != nil || placeReceipt != nil ? .visible : .automatic, for: .navigationBar)
         }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
             handleIncomingURL(activity.webpageURL)
@@ -323,275 +342,344 @@ struct ClipContentView: View {
         let place = receipt.payload
         return ScrollView {
             VStack(spacing: 14) {
-                Map(position: $cameraPosition) {
-                    Marker(place.name, coordinate: place.coordinate)
-                        .tint(ClipAtlasPalette.coral)
-                }
-                .frame(height: 176)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(alignment: .bottomLeading) {
-                    Label("Shared place", systemImage: "paperplane.fill")
-                        .font(ClipAtlasType.strong(12))
-                        .foregroundStyle(ClipAtlasPalette.forest)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(ClipAtlasPalette.paper.opacity(0.94), in: Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(ClipAtlasPalette.line.opacity(0.38), lineWidth: 1)
+                VStack(spacing: 0) {
+                    Map(position: $cameraPosition) {
+                        Annotation("", coordinate: place.coordinate) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 32, weight: .semibold))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(ClipAtlasPalette.paper, ClipAtlasPalette.forest)
+                                .shadow(color: ClipAtlasPalette.ink.opacity(0.16), radius: 3, y: 2)
+                                .accessibilityLabel("Shared place, \(place.name)")
                         }
-                        .padding(12)
-                }
+                    }
+                    .frame(height: 210)
+                    .overlay(alignment: .topTrailing) {
+                        ClipSharedPostageStamp()
+                            .padding(14)
+                    }
+                    .accessibilityIdentifier("clip.place.map")
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .center, spacing: 10) {
-                        Image(systemName: "mappin.and.ellipse")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(ClipAtlasPalette.forest)
-                            .frame(width: 42, height: 42)
-                            .background(ClipAtlasPalette.sky, in: Circle())
-                            .overlay {
-                                Circle()
-                                    .stroke(
-                                        ClipAtlasPalette.forest.opacity(0.34),
-                                        style: StrokeStyle(lineWidth: 1, dash: [2.5, 2.5])
-                                    )
-                                    .padding(2)
+                    ClipAirmailDivider()
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("PLACE POSTCARD")
+                                    .font(ClipAtlasType.strong(10, relativeTo: .caption))
+                                    .tracking(0.8)
+                                    .foregroundStyle(ClipAtlasPalette.coral)
+
+                                Text(place.name)
+                                    .font(ClipAtlasType.strong(25, relativeTo: .title2))
+                                    .foregroundStyle(ClipAtlasPalette.forest)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("PLACE PREVIEW")
-                                .font(ClipAtlasType.strong(11))
-                                .tracking(0.7)
+                            Spacer(minLength: 4)
+                            ClipPostmark(kind: "PLACE")
+                        }
+
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(ClipAtlasPalette.forest)
-                            Text(receipt.verifiedSenderLabel.map { "Shared by \($0)" } ?? "Ready for your review")
-                                .font(ClipAtlasType.body(13))
-                                .foregroundStyle(ClipAtlasPalette.muted)
-                        }
-                    }
+                                .frame(width: 46, height: 46)
+                                .background(ClipAtlasPalette.kraft.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
 
-                    Text(place.name)
-                        .font(ClipAtlasType.display(27, relativeTo: .title))
-                        .foregroundStyle(ClipAtlasPalette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("DELIVERED FOR REVIEW")
+                                    .font(ClipAtlasType.strong(10, relativeTo: .caption))
+                                    .tracking(0.55)
+                                    .foregroundStyle(ClipAtlasPalette.muted)
+                                Text(receipt.verifiedSenderLabel.map { "Shared by \($0)" } ?? "Ready for your review")
+                                    .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                                    .foregroundStyle(ClipAtlasPalette.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
 
-                    HStack(spacing: 8) {
-                        ClipAtlasChip(text: place.category, systemImage: "fork.knife")
-                        if let ratingText = ratingLine(for: place) {
-                            ClipAtlasChip(text: ratingText, systemImage: "star.fill")
+                        HStack(spacing: 8) {
+                            ClipAtlasChip(text: place.category, systemImage: "fork.knife")
+                            if let ratingText = ratingLine(for: place) {
+                                ClipAtlasChip(text: ratingText, systemImage: "star.fill")
+                            }
                         }
-                    }
 
-                    VStack(spacing: 9) {
-                        if let hours = place.hours, !hours.isEmpty {
-                            detailRow(icon: "clock", title: "Hours", value: hours)
-                        }
-                        if !place.address.isEmpty {
-                            detailRow(icon: "mappin.and.ellipse", title: "Address", value: place.address)
-                        }
-                        detailRow(icon: "link", title: "Source", value: place.sourceLabel)
-                    }
-                    .padding(.top, 10)
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .stroke(
-                                ClipAtlasPalette.line.opacity(0.45),
-                                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                            )
-                            .frame(height: 1)
-                    }
-
-                    if let note = place.note, !note.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("WHY IT WAS SHARED")
-                                .font(ClipAtlasType.strong(10))
-                                .tracking(0.55)
-                                .foregroundStyle(ClipAtlasPalette.forest)
-                            Text(note)
-                                .font(ClipAtlasType.body(14))
-                                .foregroundStyle(ClipAtlasPalette.ink)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(11)
-                        .background(ClipAtlasPalette.sky.opacity(0.36))
-                        .overlay {
-                            Rectangle()
-                                .stroke(
-                                    ClipAtlasPalette.sky,
-                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                                )
+                        VStack(spacing: 0) {
+                            if let note = place.note, !note.isEmpty {
+                                postcardLine(title: "A NOTE FOR YOU", value: note, icon: "quote.opening")
+                            }
+                            if let hours = place.hours, !hours.isEmpty {
+                                postcardLine(title: "WHEN", value: hours, icon: "clock")
+                            }
+                            if !place.address.isEmpty {
+                                postcardLine(title: "WHERE", value: place.address, icon: "mappin.and.ellipse")
+                            }
+                            postcardLine(title: "FOUND ON", value: place.sourceLabel, icon: "link")
                         }
                     }
+                    .padding(18)
                 }
-                .padding(16)
                 .background {
                     ClipScallopedRectangle(depth: 3, pitch: 11)
                         .fill(ClipAtlasPalette.paper)
                 }
+                .clipShape(ClipScallopedRectangle(depth: 3, pitch: 11))
                 .overlay {
                     ClipScallopedRectangle(depth: 3, pitch: 11)
                         .stroke(
-                            ClipAtlasPalette.sky,
-                            style: StrokeStyle(lineWidth: 1.2, dash: [2.5, 2.5])
+                            ClipAtlasPalette.coral.opacity(0.68),
+                            style: StrokeStyle(lineWidth: 1.1, dash: [3, 3])
                         )
                 }
-                .shadow(color: ClipAtlasPalette.ink.opacity(0.055), radius: 5, y: 2)
+                .shadow(color: ClipAtlasPalette.ink.opacity(0.07), radius: 8, y: 4)
 
-                VStack(spacing: 10) {
-                    Button(action: openInFullApp) {
-                        Label("Save to my Savvy", systemImage: "plus.circle.fill")
-                            .font(ClipAtlasType.strong(16))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 13)
-                            .background(ClipAtlasPalette.coral)
-                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                    .stroke(ClipAtlasPalette.ink.opacity(0.16), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-
-                    if let mapsURL = place.appleMapsURL {
-                        Link(destination: mapsURL) {
-                            Label("Open in Maps", systemImage: "map")
-                                .font(ClipAtlasType.strong(15))
-                                .foregroundStyle(ClipAtlasPalette.forest)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
-                                .background(ClipAtlasPalette.paper)
-                                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                        .stroke(ClipAtlasPalette.line.opacity(0.48), lineWidth: 1)
-                                }
-                        }
-                    }
-                }
-                .padding(.bottom, 24)
+                Text("A read-only preview. Review it in Savvy before adding it to your map.")
+                    .font(ClipAtlasType.body(11, relativeTo: .caption))
+                    .foregroundStyle(ClipAtlasPalette.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+            .padding(.bottom, 12)
         }
+        .scrollIndicators(.hidden)
         .background(ClipAtlasPalette.canvas)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 4) {
+                Button(action: openInFullApp) {
+                    Label("Save to my Savvy", systemImage: "plus.circle.fill")
+                        .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background {
+                            ClipScallopedRectangle(depth: 2.5, pitch: 10)
+                                .fill(ClipAtlasPalette.coral)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("clip.place.open")
+
+                if let mapsURL = place.appleMapsURL {
+                    Link(destination: mapsURL) {
+                        Label("Open in Maps", systemImage: "map")
+                            .font(ClipAtlasType.body(14, relativeTo: .subheadline))
+                            .foregroundStyle(ClipAtlasPalette.forest)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("clip.place.maps")
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .background(ClipAtlasPalette.paper)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(ClipAtlasPalette.line.opacity(0.42))
+                    .frame(height: 1)
+            }
+        }
+        .accessibilityIdentifier("clip.place.preview")
     }
 
     // MARK: - Trip Content
 
     private func tripContentView(_ trip: SharedTripData) -> some View {
         ScrollView {
-            VStack(spacing: 20) {
-                Map(position: $cameraPosition) {
-                    ForEach(trip.stops) { stop in
-                        Marker(stop.name, coordinate: stop.coordinate)
-                            .tint(Color.saveCoral)
+            VStack(spacing: 14) {
+                VStack(spacing: 0) {
+                    Map(position: $cameraPosition) {
+                        ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
+                            Annotation("", coordinate: stop.coordinate) {
+                                Text("\(index + 1)")
+                                    .font(ClipAtlasType.strong(13, relativeTo: .caption))
+                                    .foregroundStyle(ClipAtlasPalette.paper)
+                                    .padding(9)
+                                    .background(ClipAtlasPalette.forest, in: Circle())
+                                    .overlay { Circle().stroke(ClipAtlasPalette.paper, lineWidth: 2) }
+                                    .accessibilityLabel("Shared trip stop \(index + 1), \(stop.name)")
+                            }
+                        }
                     }
-                }
-                .frame(height: 200)
-                .cornerRadius(16)
-                .padding(.horizontal)
+                    .frame(height: 210)
+                    .overlay(alignment: .topTrailing) {
+                        ClipSharedPostageStamp()
+                            .padding(14)
+                    }
+                    .accessibilityIdentifier("clip.trip.map")
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(trip.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.saveInk)
+                    ClipAirmailDivider()
 
-                    Text(summaryLine(for: trip))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("TRIP POSTCARD")
+                                    .font(ClipAtlasType.strong(10, relativeTo: .caption))
+                                    .tracking(0.8)
+                                    .foregroundStyle(ClipAtlasPalette.coral)
 
-                    Text(routeSummary(for: trip))
-                        .font(.caption)
-                        .foregroundColor(Color.saveCoral)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-
-                VStack(spacing: 12) {
-                    ForEach(trip.stops) { stop in
-                        HStack(spacing: 12) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(Color.saveCoral)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(stop.name)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(Color.saveInk)
-                                    Spacer()
-                                    if let time = stop.time {
-                                        Text(time)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                if !stop.address.isEmpty {
-                                    Text(stop.address)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                if let note = stop.note {
-                                    Text(note)
-                                        .font(.caption)
-                                        .foregroundColor(Color.saveCoral)
-                                }
+                                Text(trip.name)
+                                    .font(ClipAtlasType.strong(25, relativeTo: .title2))
+                                    .foregroundStyle(ClipAtlasPalette.forest)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
 
-                            Spacer()
+                            Spacer(minLength: 4)
+                            ClipPostmark(kind: "TRIP")
                         }
-                        .padding(12)
-                        .background(Color.savePaper)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 2)
+
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                                .frame(width: 46, height: 46)
+                                .background(ClipAtlasPalette.kraft.opacity(0.72), in: RoundedRectangle(cornerRadius: 10))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("TO YOUR TRAVEL CREW")
+                                    .font(ClipAtlasType.strong(10, relativeTo: .caption))
+                                    .tracking(0.55)
+                                    .foregroundStyle(ClipAtlasPalette.muted)
+                                Text(trip.city.isEmpty ? "Destination pending" : trip.city)
+                                    .font(ClipAtlasType.strong(17, relativeTo: .headline))
+                                    .foregroundStyle(ClipAtlasPalette.ink)
+                                Text(summaryLine(for: trip))
+                                    .font(ClipAtlasType.body(12, relativeTo: .caption))
+                                    .foregroundStyle(ClipAtlasPalette.muted)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("ROUTE")
+                                .font(ClipAtlasType.strong(10, relativeTo: .caption))
+                                .tracking(0.75)
+                                .foregroundStyle(ClipAtlasPalette.muted)
+                                .padding(.bottom, 4)
+
+                            ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
+                                if index > 0 {
+                                    Rectangle()
+                                        .fill(ClipAtlasPalette.line.opacity(0.30))
+                                        .frame(height: 1)
+                                        .padding(.leading, 52)
+                                }
+                                tripStopRow(stop, index: index)
+                            }
+                        }
+                    }
+                    .padding(18)
+                }
+                .background {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .fill(ClipAtlasPalette.paper)
+                }
+                .clipShape(ClipScallopedRectangle(depth: 3, pitch: 11))
+                .overlay {
+                    ClipScallopedRectangle(depth: 3, pitch: 11)
+                        .stroke(
+                            ClipAtlasPalette.coral.opacity(0.68),
+                            style: StrokeStyle(lineWidth: 1.1, dash: [3, 3])
                         )
-                        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
-                    }
                 }
-                .padding(.horizontal)
+                .shadow(color: ClipAtlasPalette.ink.opacity(0.07), radius: 8, y: 4)
 
-                VStack(spacing: 12) {
-                    Button {
-                        UIPasteboard.general.string = copySummary(for: trip)
-                    } label: {
-                        Text("Copy route summary")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.savePaper)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                    }
-
-                    Button(action: openInFullApp) {
-                        Text("Import / Open in Savvy")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.saveHoney)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
-                    }
+                Text("A read-only preview. Nothing is added until you open Savvy.")
+                    .font(ClipAtlasType.body(11, relativeTo: .caption))
+                    .foregroundStyle(ClipAtlasPalette.muted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .scrollIndicators(.hidden)
+        .background(ClipAtlasPalette.canvas)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 4) {
+                Button(action: openInFullApp) {
+                    Label("Open in Savvy", systemImage: "arrow.up.right")
+                        .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background {
+                            ClipScallopedRectangle(depth: 2.5, pitch: 10)
+                                .fill(ClipAtlasPalette.coral)
+                        }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 32)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("clip.trip.open")
+
+                Button {
+                    UIPasteboard.general.string = copySummary(for: trip)
+                } label: {
+                    Label("Copy route summary", systemImage: "doc.on.doc")
+                        .font(ClipAtlasType.body(14, relativeTo: .subheadline))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("clip.trip.copy")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .background(ClipAtlasPalette.paper)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(ClipAtlasPalette.line.opacity(0.42))
+                    .frame(height: 1)
             }
         }
+        .accessibilityIdentifier("clip.trip.preview")
+    }
+
+    private func tripStopRow(_ stop: SharedTripData.SharedStop, index: Int) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(index + 1)")
+                .font(ClipAtlasType.strong(13, relativeTo: .caption))
+                .foregroundStyle(ClipAtlasPalette.forest)
+                .frame(width: 36, height: 36)
+                .background {
+                    ClipScallopedRectangle(depth: 2, pitch: 8)
+                        .fill(ClipAtlasPalette.mint.opacity(0.82))
+                }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(stop.name)
+                    .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                    .foregroundStyle(ClipAtlasPalette.ink)
+                if let time = stop.time, !time.isEmpty {
+                    Text(time)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                }
+                if !stop.address.isEmpty {
+                    Text(stop.address)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.muted)
+                }
+                if let note = stop.note, !note.isEmpty {
+                    Text(note)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.muted)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 11)
+        .accessibilityElement(children: .combine)
     }
 
     private func listContentView(_ list: SharedListData) -> some View {
@@ -1196,10 +1284,6 @@ struct ClipContentView: View {
         return "\(countLabel) in \(trip.city)"
     }
 
-    private func routeSummary(for trip: SharedTripData) -> String {
-        trip.stops.map(\.name).joined(separator: " → ")
-    }
-
     private func copySummary(for trip: SharedTripData) -> String {
         let stops = trip.stops.enumerated().map { index, stop in
             let address = stop.address.isEmpty ? "" : " — \(stop.address)"
@@ -1235,6 +1319,36 @@ struct ClipContentView: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    private func postcardLine(title: String, value: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(ClipAtlasPalette.coral)
+                .frame(width: 18, height: 18)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(ClipAtlasType.strong(9, relativeTo: .caption2))
+                    .tracking(0.65)
+                    .foregroundStyle(ClipAtlasPalette.muted)
+                Text(value)
+                    .font(ClipAtlasType.body(13, relativeTo: .caption))
+                    .foregroundStyle(ClipAtlasPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ClipAtlasPalette.line.opacity(0.30))
+                .frame(height: 1)
+                .padding(.leading, 28)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func openInFullApp() {
@@ -1347,20 +1461,139 @@ private enum ClipAtlasPalette {
     static let coral = Color(hex: "F26B4A")
     static let mint = Color(hex: "D6E8C4")
     static let sky = Color(hex: "B5E3F5")
+    static let kraft = Color(hex: "F0CFA1")
     static let line = Color(hex: "A68F78")
 }
 
 private enum ClipAtlasType {
-    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .semibold, relativeTo: style)
     }
 
-    static func strong(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+    static func strong(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .bold, relativeTo: style)
     }
 
-    static func body(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+    static func body(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .medium, relativeTo: style)
+    }
+
+    private static func rounded(
+        _ size: CGFloat,
+        weight: UIFont.Weight,
+        relativeTo style: Font.TextStyle
+    ) -> Font {
+        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = systemFont.fontDescriptor.withDesign(.rounded)
+            ?? systemFont.fontDescriptor
+        let roundedFont = UIFont(descriptor: descriptor, size: size)
+        let scaledFont = UIFontMetrics(forTextStyle: style.uiTextStyle)
+            .scaledFont(for: roundedFont)
+        return Font(scaledFont)
+    }
+}
+
+private extension Font.TextStyle {
+    var uiTextStyle: UIFont.TextStyle {
+        if self == .largeTitle { return .largeTitle }
+        if self == .title { return .title1 }
+        if self == .title2 { return .title2 }
+        if self == .title3 { return .title3 }
+        if self == .headline { return .headline }
+        if self == .subheadline { return .subheadline }
+        if self == .callout { return .callout }
+        if self == .footnote { return .footnote }
+        if self == .caption { return .caption1 }
+        if self == .caption2 { return .caption2 }
+        return .body
+    }
+}
+
+private struct ClipSharedPostageStamp: View {
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: "paperplane.fill")
+                .font(.system(size: 17, weight: .semibold))
+            Text("SHARED")
+                .font(ClipAtlasType.strong(9, relativeTo: .caption2))
+                .tracking(0.7)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .foregroundStyle(.white)
+        .frame(width: 62, height: 72)
+        .background {
+            ClipScallopedRectangle(depth: 2.5, pitch: 8)
+                .fill(ClipAtlasPalette.coral.opacity(0.96))
+        }
+        .overlay {
+            ClipScallopedRectangle(depth: 2.5, pitch: 8)
+                .stroke(ClipAtlasPalette.paper.opacity(0.86), lineWidth: 1)
+                .padding(4)
+        }
+        .shadow(color: ClipAtlasPalette.ink.opacity(0.08), radius: 4, y: 2)
+        .dynamicTypeSize(.large)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct ClipPostmark: View {
+    let kind: String
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(ClipAtlasPalette.line.opacity(0.72), lineWidth: 1)
+                .frame(width: 52, height: 52)
+
+            VStack(spacing: 0) {
+                Text("SAVVY")
+                Text(kind)
+            }
+            .font(ClipAtlasType.strong(8, relativeTo: .caption2))
+            .tracking(0.6)
+            .foregroundStyle(ClipAtlasPalette.line)
+        }
+        .overlay(alignment: .trailing) {
+            VStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Rectangle()
+                        .fill(ClipAtlasPalette.line.opacity(0.58))
+                        .frame(width: 26, height: 1)
+                }
+            }
+            .offset(x: 22)
+        }
+        .frame(width: 72, height: 56)
+        .dynamicTypeSize(.large)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct ClipAirmailDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(ClipAtlasPalette.coral)
+            .frame(height: 5)
+            .overlay {
+                HStack(spacing: 7) {
+                    ForEach(0..<18, id: \.self) { index in
+                        Capsule()
+                            .fill(index.isMultiple(of: 2) ? ClipAtlasPalette.paper : ClipAtlasPalette.sky)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 
