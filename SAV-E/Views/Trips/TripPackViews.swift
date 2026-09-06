@@ -431,11 +431,11 @@ private struct TripPlanView: View {
 
     private var availablePlaces: [Place] {
         let usedIDs = Set(trip.places.map(\.placeId))
-        return savedPlaces.filter { !usedIDs.contains($0.id) }
+        return savedPlaces.filter { usedIDs.isDisjoint(with: $0.savedIDs) }
     }
 
     private func savedPlace(for stop: TripStop) -> Place? {
-        savedPlaces.first { $0.id == stop.placeId }
+        savedPlaces.first { $0.savedIDs.contains(stop.placeId) }
     }
 
     private func normalizeSelectedDay() {
@@ -1482,13 +1482,13 @@ private struct TripPackShareView: View {
     }
 
     private var orderedConfirmedPlaceIDs: [UUID] {
-        let availableIDs = Set(places.map(\.id))
+        let placesByID = places.indexedBySavedID
         var seen = Set<UUID>()
         return trip.places
             .sorted { ($0.day, $0.orderIndex) < ($1.day, $1.orderIndex) }
             .compactMap { stop in
-                guard availableIDs.contains(stop.placeId), seen.insert(stop.placeId).inserted else { return nil }
-                return stop.placeId
+                guard let canonical = placesByID[stop.placeId], seen.insert(canonical.id).inserted else { return nil }
+                return canonical.id
             }
     }
 

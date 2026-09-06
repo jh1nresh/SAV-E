@@ -246,8 +246,11 @@ Typography rules:
   rather than ad hoc legacy heavy/black text on Atlas
   surfaces. Home uses paper-backed, wrapping place names beneath photographs;
   labels must remain readable when a photo is absent or visually busy.
-- The latest confirmed place remains the stable Home cover; asynchronous photo
-  loading must not change which place is featured.
+- With an authorized location, Home orders confirmed places by distance and
+  features the nearest. Without a location, it uses the latest confirmed place.
+  Asynchronous photo loading must not change which place is featured.
+- Home photos use a fixed crop region in both loaded and missing states, with
+  paper-backed names and areas beneath every card.
 
 ### Kraft Chips
 

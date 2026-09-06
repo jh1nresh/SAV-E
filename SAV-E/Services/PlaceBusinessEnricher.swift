@@ -32,15 +32,16 @@ enum PlaceBusinessEnricher {
     /// ID was rebound to a tighter match.
     static func enrich(
         _ place: Place,
-        service: GooglePlacesServiceProtocol = GooglePlacesService.shared
+        service: GooglePlacesServiceProtocol = GooglePlacesService.shared,
+        refreshPhotos: Bool = false
     ) async -> Place? {
-        guard needsEnrichment(place) else { return nil }
+        guard refreshPhotos || needsEnrichment(place) else { return nil }
         guard let update = await businessDetails(for: place, service: service) else { return nil }
 
         var updated = place
         if !update.photoURLs.isEmpty {
             let urls = update.photoURLs.map(\.absoluteString)
-            if update.replacedProviderMatch {
+            if refreshPhotos || update.replacedProviderMatch {
                 // A stale or wrong Google ID rebound to this place. Put the
                 // recovered photos first so Home cards do not keep another
                 // business's cover.

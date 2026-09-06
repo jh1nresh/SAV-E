@@ -638,9 +638,8 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var featuredPlace: AtlasPlacePresentation? {
-        // Keep the cover tied to the newest confirmed Map Stamp. Photo
-        // enrichment happens asynchronously; selecting only photo-ready rows
-        // made the cover jump to a different place as each request completed.
+        // Ranking comes from location (or recency without a location).
+        // Photo availability never changes the featured place.
         presentation.savedPlaces.first
     }
 
@@ -698,14 +697,14 @@ private struct HomeFeaturedPlaceHero: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 0) {
                 HomeSavedPlaceThumbnail(
-                    placeID: "hero.\(place.id)",
-                    photoURL: place.photoURL,
+                    placeID: place.id,
+                    photoURLs: place.photoURLs,
                     photoHeight: 144
                 )
 
                 VStack(alignment: .leading, spacing: 6) {
                     Label(
-                        languageSettings.localized(english: "Recently saved", traditionalChinese: "最近保存"),
+                        languageSettings.localized(english: "Saved place", traditionalChinese: "已存地點"),
                         systemImage: "checkmark.seal.fill"
                     )
                     .font(AtlasType.regular(11))
@@ -796,8 +795,8 @@ private struct HomeSavedPlaceRow: View {
         Button(action: onOpen) {
             VStack(alignment: .leading, spacing: 0) {
                 HomeSavedPlaceThumbnail(
-                    placeID: "row.\(place.id)",
-                    photoURL: place.photoURL,
+                    placeID: place.id,
+                    photoURLs: place.photoURLs,
                     photoHeight: 112
                 )
                 .frame(width: width)
@@ -807,12 +806,18 @@ private struct HomeSavedPlaceRow: View {
                         .padding(AtlasSpacing.compact)
                 }
 
-                Text(place.name)
-                    .font(AtlasType.display(15))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(AtlasSpacing.control)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(place.name)
+                        .font(AtlasType.strong(15))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .lineLimit(2, reservesSpace: true)
+                    Text(place.area)
+                        .font(AtlasType.regular(12))
+                        .foregroundStyle(AtlasPalette.muted)
+                        .lineLimit(2, reservesSpace: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(AtlasSpacing.control)
             }
             .frame(width: width, alignment: .topLeading)
             .background(AtlasPalette.paper)
@@ -831,41 +836,43 @@ private struct HomeSavedPlaceRow: View {
 
 private struct HomeSavedPlaceThumbnail: View {
     let placeID: String
-    let photoURL: URL?
+    let photoURLs: [URL]
     let photoHeight: CGFloat
+    @Environment(\.atlasPresentation) private var presentation
+    @State private var loadedURL: URL?
+    @State private var loadedImage: UIImage?
 
     var body: some View {
-        Group {
-            if let photoURL {
-                CachedAsyncImage(url: photoURL) { phase in
-                    if case .success(let image) = phase {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: photoHeight)
-                            .clipped()
-                    } else {
-                        fallback
-                    }
+        GeometryReader { proxy in
+            Group {
+                if let loadedImage, let loadedURL, photoURLs.contains(loadedURL) {
+                    Image(uiImage: loadedImage).resizable().scaledToFill()
+                } else {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(AtlasPalette.forest)
                 }
-                .id("\(placeID)-\(photoURL.absoluteString)")
-            } else {
-                fallback
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .background(AtlasPalette.mint.opacity(0.48))
+            .clipped()
         }
-        .id(placeID)
-        .frame(maxWidth: .infinity)
-        .background(AtlasPalette.mint.opacity(0.48))
-        .clipped()
+        .frame(height: photoHeight)
+        .task(id: photoURLs) {
+            loadedImage = nil
+            loadedURL = nil
+            for url in photoURLs {
+                if let image = try? await CachedImageStore.shared.loadImage(for: url) {
+                    guard !Task.isCancelled else { return }
+                    loadedURL = url
+                    loadedImage = image
+                    return
+                }
+                guard !Task.isCancelled else { return }
+            }
+            await presentation.onRefreshPlacePhoto(placeID)
+        }
         .accessibilityHidden(true)
-    }
-
-    private var fallback: some View {
-        Image(systemName: "mappin.and.ellipse")
-            .font(.system(size: 21, weight: .medium))
-            .foregroundStyle(AtlasPalette.forest)
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
     }
 }
 

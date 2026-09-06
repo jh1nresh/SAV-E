@@ -25,7 +25,7 @@ enum TripKMLExportService {
             throw TripKMLExportError.invalidSelection
         }
 
-        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        let placeByID = places.indexedBySavedID
         let selected = try orderedIDs.map { id -> Place in
             guard let place = placeByID[id] else {
                 throw TripKMLExportError.invalidSelection

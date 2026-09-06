@@ -36,6 +36,50 @@ struct Place: Identifiable, Codable, Hashable {
     var vibeTags: [String]? = nil
     var accessNotes: [String]? = nil
     var sourceHandle: String? = nil
+    var mergedPlaceIDs: [UUID]? = nil
+
+    var savedIDs: Set<UUID> { Set([id] + (mergedPlaceIDs ?? [])) }
+
+    func mergingSources(from other: Place) -> Place {
+        var merged = self
+        let aliases = Array(savedIDs.union(other.savedIDs).subtracting([id])).sorted { $0.uuidString < $1.uuidString }
+        merged.mergedPlaceIDs = aliases.isEmpty ? nil : aliases
+        // A fresh copy of the same record owns its edits, including cleared notes.
+        guard id != other.id else { return merged }
+        let evidence = (sourceEvidence + other.sourceEvidence).removingDuplicates()
+        merged.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")
+        merged.sourceUrl = sourceUrl ?? other.sourceUrl
+        if sourceUrl == nil { merged.sourcePlatform = other.sourcePlatform }
+        merged.recommender = recommender ?? other.recommender
+        merged.googlePlaceId = googlePlaceId ?? other.googlePlaceId
+        merged.sourceImageUrl = sourceImageUrl ?? other.sourceImageUrl
+        merged.businessPhotoUrls = (businessPhotoURLStrings + other.businessPhotoURLStrings).removingDuplicates()
+        merged.placeHighlights = (savedPlaceHighlights + other.savedPlaceHighlights).removingDuplicates()
+        merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates()
+        merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates()
+        merged.recommendedItems = savedRecommendedItems + other.savedRecommendedItems.filter { !savedRecommendedItems.contains($0) }
+        merged.rating = rating ?? other.rating
+        merged.googleRating = googleRating ?? other.googleRating
+        merged.priceRange = priceRange ?? other.priceRange
+        merged.openingHours = openingHours ?? other.openingHours
+        return merged
+    }
+
+    /// Stable venue identity with every original ID retained for old trip stops.
+    static func consolidated(_ places: [Place]) -> [Place] {
+        var result: [Place] = []
+        for place in places.sorted(by: {
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            return $0.id.uuidString < $1.id.uuidString
+        }) {
+            if let index = result.firstIndex(where: { $0.matches(place) }) {
+                result[index] = result[index].mergingSources(from: place)
+            } else {
+                result.append(place)
+            }
+        }
+        return result.sorted { $0.createdAt > $1.createdAt }
+    }
 
     var savedRecommendedItems: [RecommendedItem] {
         if let recommendedItems, !recommendedItems.isEmpty { return recommendedItems }
@@ -428,5 +472,15 @@ extension Place {
     static func socialSignalSeeds(near _: [Place]) -> [Place] {
         // Real social signals must come from follows/referrals/trending data, not demo seeds.
         []
+    }
+}
+
+extension Array where Element == Place {
+    var indexedBySavedID: [UUID: Place] {
+        Dictionary(flatMap { place in place.savedIDs.map { ($0, place) } }, uniquingKeysWith: { first, _ in first })
+    }
+
+    var indexedBySavedIDString: [String: Place] {
+        Dictionary(indexedBySavedID.map { ($0.key.uuidString, $0.value) }, uniquingKeysWith: { first, _ in first })
     }
 }

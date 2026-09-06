@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 enum SaveAtlasRuntime {
     static var usesParityFixture: Bool {
@@ -26,7 +27,8 @@ enum SaveAtlasPresentationFactory {
         onOpenSaves: @escaping () -> Void,
         onOpenPlace: @escaping (Place) -> Void,
         onOpenReview: @escaping (PlaceReviewCandidate) -> Void,
-        onOpenPassport: @escaping () -> Void
+        onOpenPassport: @escaping () -> Void,
+        homeLocation: CLLocation? = nil
     ) -> AtlasPresentation {
         let tripPriority = store.homeTripPriority
         let displayedTrip = tripPriority?.trip
@@ -40,6 +42,11 @@ enum SaveAtlasPresentationFactory {
                 selectedPlace: mapViewModel.selectedPlace
             )
         if !SaveAtlasRuntime.usesParityFixture {
+            presentation.savedPlaces = orderedHomePlaces(mapViewModel.places, location: homeLocation).map(placePresentation)
+            presentation.onRefreshPlacePhoto = { id in
+                guard !ReviewDemo.isOfflineUITestMode, let placeID = UUID(uuidString: id) else { return }
+                await mapViewModel.refreshHomePlacePhoto(id: placeID)
+            }
             presentation.homePriority = homePriorityPresentation(
                 tripPriority: tripPriority,
                 mapStampCount: mapViewModel.places.count
@@ -85,6 +92,20 @@ enum SaveAtlasPresentationFactory {
         }
         presentation.onOpenPassport = onOpenPassport
         return presentation
+    }
+
+    static func orderedHomePlaces(_ places: [Place], location: CLLocation?) -> [Place] {
+        places.sorted { lhs, rhs in
+            if let location {
+                let left = lhs.isMapKitMappable
+                    ? location.distance(from: CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)) : .infinity
+                let right = rhs.isMapKitMappable
+                    ? location.distance(from: CLLocation(latitude: rhs.latitude, longitude: rhs.longitude)) : .infinity
+                if left != right { return left < right }
+            }
+            if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
     }
 
     static func library(
@@ -374,7 +395,7 @@ enum SaveAtlasPresentationFactory {
             .first
             ?? trip.places.first
         presentation.selectedMapPlace = selectedStop
-            .flatMap { stop in places.first(where: { $0.id == stop.placeId }) }
+            .flatMap { stop in places.first(where: { $0.savedIDs.contains(stop.placeId) }) }
             .map(placePresentation)
             ?? places.first.map(placePresentation)
             ?? .koffeeMameya
@@ -392,7 +413,7 @@ enum SaveAtlasPresentationFactory {
             .prefix(4)
             .enumerated()
             .map { index, stop in
-                let place = places.first { $0.id == stop.placeId }
+                let place = places.first { $0.savedIDs.contains(stop.placeId) }
                 return AtlasStopPresentation(
                     id: stop.id.uuidString,
                     name: stop.placeName,
@@ -417,6 +438,7 @@ enum SaveAtlasPresentationFactory {
             area: place.shareAreaLabel.nonEmpty ?? place.address,
             region: SavedPlaceTripRecommender.areaLabel(for: place),
             photoURL: HomePlaceCardArt.photoURL(for: place),
+            photoURLs: place.businessPhotoURLStrings.compactMap(URL.init(string:)),
             latitude: place.latitude,
             longitude: place.longitude,
             relativeDay: relativeDay(for: place.createdAt),

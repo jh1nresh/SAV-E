@@ -410,7 +410,7 @@ final class TripPackStore: ObservableObject {
             fail(TripPackStoreError.tripNotFound)
             return false
         }
-        guard !trip.places.contains(where: { $0.placeId == place.id }) else {
+        guard !trip.places.contains(where: { place.savedIDs.contains($0.placeId) }) else {
             selectedTripID = targetID
             return false
         }
