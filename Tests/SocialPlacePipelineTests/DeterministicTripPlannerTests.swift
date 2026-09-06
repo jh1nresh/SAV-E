@@ -4,6 +4,24 @@ import MapKit
 
 final class DeterministicTripPlannerTests: XCTestCase {
     @MainActor
+    func testHealthUsesVenueCategoryInsteadOfMealTimeOrActivityWords() {
+        let cafe = makePlace("Park Cafe", address: "Taipei", latitude: 25.03, longitude: 121.5, category: .cafe)
+        let attraction = makePlace("故宮", address: "Taipei", latitude: 25.04, longitude: 121.5, category: .attraction)
+        func stop(_ place: Place, time: String) -> ItineraryStop {
+            ItineraryStop(id: UUID(), placeId: place.id.uuidString, placeState: .confirmedMapStamp,
+                          placeName: place.name, time: time, duration: 60, note: nil, sourceSummary: nil, risks: [])
+        }
+        let judge = DeterministicTripPlanner()
+        let foodOnly = judge.tripHealth(for: [stop(cafe, time: "2:00 PM")], savedPlaces: [cafe],
+                                       dayNumber: 1, maxStopsPerDay: 5, outputLanguage: .english)
+        XCTAssertTrue(foodOnly.gaps.contains { $0.type == .missingAfternoonActivity })
+        let sightseeing = judge.tripHealth(for: [stop(attraction, time: "12:30 PM")], savedPlaces: [attraction],
+                                          dayNumber: 1, maxStopsPerDay: 5, outputLanguage: .english)
+        XCTAssertTrue(sightseeing.gaps.contains { $0.type == .missingLunch })
+        XCTAssertFalse(sightseeing.gaps.contains { $0.type == .missingAfternoonActivity })
+    }
+
+    @MainActor
     func testTraditionalChineseQuickPromptStillPlansWhenAIIsOffline() async throws {
         let taipei = makePlace("河濱公園", address: "台北市松山區", latitude: 25.05, longitude: 121.55, category: .attraction)
         let cafe = makePlace("台北咖啡", address: "臺北市松山區", latitude: 25.051, longitude: 121.551, category: .cafe)
@@ -89,8 +107,11 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.componentType, .tripItinerary)
         XCTAssertEqual(response.itineraryDays.count, 2)
         XCTAssertEqual(response.mapAction?.type, .showRoute)
-        XCTAssertEqual(response.itineraryDays.first?.stops.first?.placeName, "Santa Monica Pier")
-        XCTAssertEqual(response.itineraryDays.first?.stops.dropFirst().first?.placeName, "Venice Dinner")
+        XCTAssertEqual(response.mapAction?.placeIds?.first, places[0].id.uuidString)
+        let activities = Set(places.filter { [.attraction, .shopping].contains($0.category) }.map { $0.id.uuidString })
+        for day in response.itineraryDays {
+            XCTAssertTrue(day.stops.contains { $0.placeId.map(activities.contains) ?? false }, "Spread activities across both days")
+        }
     }
 
     @MainActor
