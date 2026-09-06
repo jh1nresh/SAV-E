@@ -40,14 +40,44 @@ struct ParsedPlace {
 }
 
 private enum SaveTheme {
-    static let cream = Color(hex: "FFF5E7")
-    static let yellow = Color(hex: "FFD66B")
-    static let coral = Color(hex: "EE9C78")
-    static let sky = Color(hex: "8FCAEA")
-    static let mint = Color(hex: "C8EBCF")
-    static let pink = Color(hex: "F6C1CB")
-    static let ink = Color(hex: "3A2415")
-    static let paper = Color(hex: "FFF0DC")
+    // Target-local twins of the production Atlas tokens. Extensions cannot
+    // import the main app target, so these values must stay aligned with
+    // SaveAtlasPalette in Color+Theme.swift.
+    static let cream = Color(hex: "FDF8F3")
+    static let yellow = Color(hex: "F26B4A")
+    static let coral = Color(hex: "F26B4A")
+    static let sky = Color(hex: "B5E3F5")
+    static let mint = Color(hex: "D6E8C4")
+    static let pink = Color(hex: "F0CFA1")
+    static let forest = Color(hex: "0E4A33")
+    static let muted = Color(hex: "62594F")
+    static let line = Color(hex: "A68F78")
+    static let ink = Color(hex: "2E2117")
+    static let paper = Color(hex: "FFFDF7")
+}
+
+private enum ShareAtlasType {
+    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        rounded(size, weight: .semibold, relativeTo: style)
+    }
+
+    static func strong(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        rounded(size, weight: .bold, relativeTo: style)
+    }
+
+    static func body(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        rounded(size, weight: .medium, relativeTo: style)
+    }
+
+    private static func rounded(
+        _ size: CGFloat,
+        weight: UIFont.Weight,
+        relativeTo style: Font.TextStyle
+    ) -> Font {
+        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = systemFont.fontDescriptor.withDesign(.rounded) ?? systemFont.fontDescriptor
+        return Font(UIFont(descriptor: descriptor, size: size))
+    }
 }
 
 private struct ShareScrapbookBackground: View {
@@ -70,23 +100,23 @@ private struct ShareScrapbookBackground: View {
 
 private struct ShareStatusPill: View {
     var text: String
+    var fill: Color = SaveTheme.sky
 
     var body: some View {
         HStack(spacing: 7) {
             Circle()
                 .fill(SaveTheme.mint)
                 .frame(width: 8, height: 8)
-                .overlay(Circle().stroke(SaveTheme.ink, lineWidth: 1))
+                .overlay(Circle().stroke(SaveTheme.forest.opacity(0.42), lineWidth: 1))
             Text(text)
-                .font(.caption.weight(.black))
-                .foregroundColor(SaveTheme.ink)
+                .font(ShareAtlasType.strong(12))
+                .foregroundColor(SaveTheme.forest)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(SaveTheme.yellow)
+        .background(fill.opacity(0.78))
         .clipShape(Capsule())
-        .overlay(Capsule().stroke(SaveTheme.ink, lineWidth: 1.6))
-        .shadow(color: SaveTheme.ink.opacity(0.14), radius: 0, x: 3, y: 3)
+        .overlay(Capsule().stroke(SaveTheme.line.opacity(0.48), lineWidth: 1))
     }
 }
 
@@ -112,6 +142,7 @@ private struct ShareScrapbookButton: View {
     var title: String
     var fill: Color
     var systemImage: String
+    var foregroundColor: Color = SaveTheme.ink
     var action: () -> Void
 
     var body: some View {
@@ -120,18 +151,18 @@ private struct ShareScrapbookButton: View {
                 Image(systemName: systemImage)
                     .font(.subheadline.weight(.black))
                 Text(title)
-                    .font(.headline.weight(.black))
+                    .font(ShareAtlasType.strong(16))
             }
-            .foregroundColor(SaveTheme.ink)
+            .foregroundColor(foregroundColor)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
             .background(fill)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(SaveTheme.ink.opacity(0.22), lineWidth: 1)
             )
-            .shadow(color: SaveTheme.ink.opacity(0.18), radius: 0, x: 4, y: 4)
+            .shadow(color: SaveTheme.ink.opacity(0.06), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
     }
@@ -150,9 +181,9 @@ private struct ShareMiniSticker: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 1.8)
+                    .stroke(SaveTheme.line.opacity(0.48), lineWidth: 1)
             )
-            .shadow(color: SaveTheme.ink.opacity(0.14), radius: 0, x: 3, y: 3)
+            .shadow(color: SaveTheme.ink.opacity(0.06), radius: 4, y: 2)
     }
 }
 
@@ -193,12 +224,12 @@ private struct ShareEvidenceReceipt: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Evidence")
-                    .font(.subheadline.weight(.black))
-                    .foregroundColor(SaveTheme.ink)
+                    .font(ShareAtlasType.strong(13))
+                    .foregroundColor(SaveTheme.forest)
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.black))
-                    .foregroundColor(SaveTheme.ink.opacity(0.60))
+                    .foregroundColor(SaveTheme.muted)
             }
 
             ShareEvidenceRow(text: "Source saved", isComplete: candidate.sourceURL != nil)
@@ -207,12 +238,12 @@ private struct ShareEvidenceReceipt: View {
         }
         .padding(14)
         .background(SaveTheme.paper.opacity(0.94))
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(SaveTheme.ink, lineWidth: 1.8)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
         )
-        .shadow(color: SaveTheme.ink.opacity(0.12), radius: 0, x: 4, y: 4)
+        .shadow(color: SaveTheme.ink.opacity(0.05), radius: 4, y: 2)
     }
 }
 
@@ -227,8 +258,8 @@ private struct ShareEvidenceRow: View {
                 .foregroundColor(SaveTheme.ink)
                 .frame(width: 18)
             Text(text)
-                .font(.caption.weight(.bold))
-                .foregroundColor(SaveTheme.ink.opacity(0.78))
+                .font(ShareAtlasType.body(12))
+                .foregroundColor(SaveTheme.muted)
             Spacer()
         }
     }
@@ -247,11 +278,11 @@ private struct ShareCheckingStepRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.subheadline.weight(.black))
+                    .font(ShareAtlasType.strong(14))
                     .foregroundColor(SaveTheme.ink)
                 Text(subtitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(SaveTheme.ink.opacity(0.66))
+                    .font(ShareAtlasType.body(12))
+                    .foregroundColor(SaveTheme.muted)
                     .lineLimit(2)
             }
 
@@ -269,10 +300,10 @@ private struct ShareCheckingStepRow: View {
         }
         .padding(10)
         .background(SaveTheme.cream)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(SaveTheme.ink, lineWidth: 1.6)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(SaveTheme.line.opacity(0.36), lineWidth: 1)
         )
     }
 }
@@ -290,7 +321,7 @@ private struct ShareFlatSticker: View {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 1.6)
+                    .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
             )
     }
 }
@@ -303,7 +334,7 @@ private struct ShareCaptureFooter: View {
             Image(systemName: "tray.and.arrow.down.fill")
                 .font(.caption.weight(.black))
             Text(text)
-                .font(.caption.weight(.black))
+                .font(ShareAtlasType.strong(12))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
             Spacer(minLength: 8)
@@ -317,7 +348,7 @@ private struct ShareCaptureFooter: View {
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(SaveTheme.ink, lineWidth: 1.8)
+                .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
         )
     }
 }
@@ -460,31 +491,35 @@ struct ShareExtensionView: View {
                     savedConfirmationView
                 } else if let error = parseError {
                     VStack(spacing: 16) {
-                        Text("🧸")
-                            .font(.system(size: 46))
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(SaveTheme.coral)
+                            .frame(width: 64, height: 64)
+                            .background(SaveTheme.coral.opacity(0.14), in: Circle())
                         Text("Savvy needs one more clue")
-                            .font(.title3.weight(.semibold))
+                            .font(ShareAtlasType.display(25, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                         Text(error)
-                            .font(.subheadline)
-                            .foregroundColor(SaveTheme.ink)
+                            .font(ShareAtlasType.body(14))
+                            .foregroundColor(SaveTheme.muted)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                         Text("Try sharing a map link, a clearer caption, or a frame with the place name.")
-                            .font(.caption)
-                            .foregroundColor(SaveTheme.ink)
+                            .font(ShareAtlasType.body(12))
+                            .foregroundColor(SaveTheme.muted)
                             .multilineTextAlignment(.center)
                     }
                     .padding(24)
                     .background(SaveTheme.paper)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(SaveTheme.ink, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(SaveTheme.ink.opacity(0.28), lineWidth: 1)
                     )
-                    .cornerRadius(28)
-                    .shadow(color: SaveTheme.ink.opacity(0.16), radius: 0, x: 5, y: 5)
+                    .cornerRadius(18)
+                    .shadow(color: SaveTheme.ink.opacity(0.06), radius: 6, y: 2)
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 20)
+                    .accessibilityIdentifier("share.capture.error")
                 } else if !reviewCandidates.isEmpty {
                     reviewCandidatesPreview(reviewCandidates)
                 } else if let candidate = reviewCandidate {
@@ -515,9 +550,10 @@ struct ShareExtensionView: View {
     private var checkingPlaceCluesView: some View {
         VStack(spacing: 14) {
             HStack {
-                Text("Savvy ✨")
-                    .font(.title3.weight(.black))
-                    .foregroundColor(SaveTheme.ink)
+                Text("SAVVY CAPTURE")
+                    .font(ShareAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundColor(SaveTheme.coral)
                 Spacer()
                 ShareStatusPill(text: "Checking place clues")
             }
@@ -529,13 +565,13 @@ struct ShareExtensionView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Reading the shared post")
-                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .font(ShareAtlasType.display(25, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
 
                         Text("Savvy is looking for a real place name before it creates a review card.")
-                            .font(.subheadline)
-                            .foregroundColor(SaveTheme.ink.opacity(0.76))
+                            .font(ShareAtlasType.body(14))
+                            .foregroundColor(SaveTheme.muted)
                             .lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -567,10 +603,10 @@ struct ShareExtensionView: View {
             }
             .padding(18)
             .background(SaveTheme.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 2.4)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(SaveTheme.sky, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
             )
 
             Spacer(minLength: 8)
@@ -579,11 +615,15 @@ struct ShareExtensionView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
+        .accessibilityIdentifier("share.capture.loading")
     }
 
     private var savedConfirmationView: some View {
         VStack(spacing: 14) {
-            ShareStatusPill(text: savedReviewCandidateCount == nil ? "Map Stamp saved" : "Added to Review")
+            ShareStatusPill(
+                text: savedReviewCandidateCount == nil ? "Map Stamp saved" : "Added to Review",
+                fill: savedReviewCandidateCount == nil ? SaveTheme.mint : SaveTheme.sky
+            )
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
@@ -594,13 +634,13 @@ struct ShareExtensionView: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(savedConfirmationTitle)
-                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .font(ShareAtlasType.display(24, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                             .lineLimit(2)
 
                         Text(savedConfirmationSubtitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(SaveTheme.ink.opacity(0.70))
+                            .font(ShareAtlasType.body(14))
+                            .foregroundColor(SaveTheme.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
@@ -613,25 +653,26 @@ struct ShareExtensionView: View {
                     ShareEvidenceRow(text: "Open Savvy to confirm", isComplete: savedReviewCandidateCount != nil)
                 }
                 .padding(12)
-                .background(SaveTheme.yellow.opacity(0.18))
+                .background(SaveTheme.sky.opacity(0.30))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(SaveTheme.ink, style: StrokeStyle(lineWidth: 1.4, dash: [4]))
+                        .stroke(SaveTheme.sky, style: StrokeStyle(lineWidth: 1, dash: [4]))
                 )
 
                 Text("Closing in a moment...")
-                    .font(.caption.weight(.black))
-                    .foregroundColor(SaveTheme.ink.opacity(0.58))
+                    .font(ShareAtlasType.strong(11))
+                    .foregroundColor(SaveTheme.muted)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(18)
             .background(SaveTheme.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 2.4)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
             )
+            .shadow(color: SaveTheme.ink.opacity(0.06), radius: 6, y: 2)
 
             Spacer(minLength: 8)
 
@@ -662,25 +703,26 @@ struct ShareExtensionView: View {
     private func placePreview(_ place: ParsedPlace) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Savvy ✨")
-                    .font(.title3.weight(.black))
-                    .foregroundColor(SaveTheme.ink)
+                Text("SAVVY CAPTURE")
+                    .font(ShareAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundColor(SaveTheme.coral)
                 Spacer()
-                ShareStatusPill(text: "Map Stamp ready")
+                ShareStatusPill(text: "Map Stamp ready", fill: SaveTheme.mint)
             }
 
             ZStack(alignment: .topTrailing) {
                 VStack(alignment: .leading, spacing: 13) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(place.name)
-                            .font(.system(size: 25, weight: .black, design: .rounded))
+                            .font(ShareAtlasType.display(25, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
 
                         Text(place.address.isEmpty ? "Address confirmed from source" : place.address)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(SaveTheme.ink.opacity(0.68))
+                            .font(ShareAtlasType.body(14))
+                            .foregroundColor(SaveTheme.muted)
 
                         HStack(spacing: 6) {
                             Image(systemName: "mappin.and.ellipse")
@@ -734,17 +776,24 @@ struct ShareExtensionView: View {
                         }
                     }
 
-                    ShareScrapbookButton(title: "Save Map Stamp", fill: SaveTheme.yellow, systemImage: "checkmark.seal.fill", action: savePlace)
+                    ShareScrapbookButton(
+                        title: "Save Map Stamp",
+                        fill: SaveTheme.coral,
+                        systemImage: "checkmark.seal.fill",
+                        foregroundColor: .white,
+                        action: savePlace
+                    )
+                    .accessibilityIdentifier("share.capture.saveMapStamp")
                         .padding(.top, 2)
                 }
                 .padding(18)
                 .background(SaveTheme.paper)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(SaveTheme.ink, lineWidth: 2.4)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
                 )
-                .shadow(color: SaveTheme.ink.opacity(0.18), radius: 0, x: 6, y: 6)
+                .shadow(color: SaveTheme.ink.opacity(0.06), radius: 6, y: 2)
 
                 ShareStickerStack(category: selectedCategory)
                     .offset(x: -12, y: -16)
@@ -763,9 +812,10 @@ struct ShareExtensionView: View {
 
         return VStack(spacing: 14) {
             HStack {
-                Text("Savvy ✨")
-                    .font(.title3.weight(.black))
-                    .foregroundColor(SaveTheme.ink)
+                Text("SAVVY CAPTURE")
+                    .font(ShareAtlasType.strong(11))
+                    .tracking(0.9)
+                    .foregroundColor(SaveTheme.coral)
                 Spacer()
             }
             .padding(.top, 2)
@@ -786,20 +836,23 @@ struct ShareExtensionView: View {
 
     private func singleCandidateResult(_ candidate: PendingReviewCandidate) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            ShareStatusPill(text: candidate.isSourceOnly ? "More clues needed" : "Possible place found")
+            ShareStatusPill(
+                text: candidate.isSourceOnly ? "Source clue" : "Review Candidate",
+                fill: candidate.isSourceOnly ? SaveTheme.coral : SaveTheme.sky
+            )
 
             ZStack(alignment: .topTrailing) {
                 VStack(alignment: .leading, spacing: 13) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(candidate.candidateName)
-                            .font(.system(size: 25, weight: .black, design: .rounded))
+                            .font(ShareAtlasType.display(25, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
 
                         Text(candidateLocationSubtitle(candidate))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(SaveTheme.ink.opacity(0.68))
+                            .font(ShareAtlasType.body(14))
+                            .foregroundColor(SaveTheme.muted)
 
                         HStack(spacing: 6) {
                             Image(systemName: "camera.fill")
@@ -813,30 +866,38 @@ struct ShareExtensionView: View {
                     ShareBadge(text: candidate.address.isEmpty ? "Almost ready · 1 clue missing" : "Ready to review")
 
                     Text(candidateExplanation(candidate))
-                        .font(.subheadline)
+                        .font(ShareAtlasType.body(14))
                         .lineSpacing(3)
                         .foregroundColor(SaveTheme.ink.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(spacing: 10) {
-                        ShareScrapbookButton(title: "Confirm this place", fill: SaveTheme.yellow, systemImage: "checkmark.seal.fill", action: saveReviewCandidates)
-                        ShareScrapbookButton(title: "Find address", fill: SaveTheme.sky, systemImage: "magnifyingglass", action: saveReviewCandidates)
+                    VStack(spacing: 8) {
+                        ShareScrapbookButton(
+                            title: candidate.isSourceOnly ? "Keep Source Clue" : "Add to Review",
+                            fill: SaveTheme.coral,
+                            systemImage: candidate.isSourceOnly ? "link" : "tray.and.arrow.down.fill",
+                            foregroundColor: .white,
+                            action: saveReviewCandidates
+                        )
+                        .accessibilityIdentifier("share.capture.addToReview")
 
-                        Button("Keep as Source Clue", action: saveReviewCandidates)
-                            .font(.caption.weight(.black))
-                            .foregroundColor(SaveTheme.ink.opacity(0.72))
-                            .padding(.top, 2)
+                        Text(candidate.isSourceOnly
+                            ? "Savvy will preserve the source without adding a map pin."
+                            : "Confirm the exact place in Savvy before it becomes a Map Stamp.")
+                            .font(ShareAtlasType.body(12))
+                            .foregroundColor(SaveTheme.ink.opacity(0.68))
+                            .multilineTextAlignment(.center)
                     }
                     .padding(.top, 2)
                 }
                 .padding(18)
                 .background(SaveTheme.paper)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(SaveTheme.ink, lineWidth: 2.4)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
                 )
-                .shadow(color: SaveTheme.ink.opacity(0.18), radius: 0, x: 6, y: 6)
+                .shadow(color: SaveTheme.ink.opacity(0.06), radius: 6, y: 2)
 
                 ShareStickerStack(category: candidate.category)
                     .offset(x: -12, y: -16)
@@ -848,15 +909,15 @@ struct ShareExtensionView: View {
 
     private func multipleCandidatesResult(_ candidates: [PendingReviewCandidate]) -> some View {
         VStack(alignment: .leading, spacing: 13) {
-            ShareStatusPill(text: "\(candidates.count) possible places found")
+            ShareStatusPill(text: "\(candidates.count) clues found", fill: SaveTheme.sky)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Pick the place clue to save")
-                    .font(.title3.weight(.black))
+                Text("Choose what to add to Review")
+                    .font(ShareAtlasType.display(23, relativeTo: .title3))
                     .foregroundColor(SaveTheme.ink)
 
-                Text("Savvy found a few possible places. They will wait in Review before becoming map pins.")
-                    .font(.subheadline)
+                Text("These are clues from this share. Nothing becomes a Map Stamp until you confirm it in Savvy.")
+                    .font(ShareAtlasType.body(14))
                     .foregroundColor(SaveTheme.ink.opacity(0.76))
 
                 ForEach(Array(candidates.prefix(4).enumerated()), id: \.offset) { _, candidate in
@@ -876,8 +937,8 @@ struct ShareExtensionView: View {
                                     .lineLimit(2)
                             }
                             Spacer()
-                            Text("Add")
-                                .font(.caption.weight(.black))
+                            Text("Review")
+                                .font(ShareAtlasType.strong(11))
                                 .foregroundColor(SaveTheme.ink)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 5)
@@ -896,16 +957,23 @@ struct ShareExtensionView: View {
                     .buttonStyle(.plain)
                 }
 
-                ShareScrapbookButton(title: "Add all \(candidates.count) to Review", fill: SaveTheme.yellow, systemImage: "tray.and.arrow.down.fill", action: saveReviewCandidates)
+                ShareScrapbookButton(
+                    title: "Add all \(candidates.count) to Review",
+                    fill: SaveTheme.coral,
+                    systemImage: "tray.and.arrow.down.fill",
+                    foregroundColor: .white,
+                    action: saveReviewCandidates
+                )
+                .accessibilityIdentifier("share.capture.addAllToReview")
             }
             .padding(16)
             .background(SaveTheme.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(SaveTheme.ink, lineWidth: 2.4)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(SaveTheme.line.opacity(0.42), lineWidth: 1)
             )
-            .shadow(color: SaveTheme.ink.opacity(0.18), radius: 0, x: 6, y: 6)
+            .shadow(color: SaveTheme.ink.opacity(0.06), radius: 6, y: 2)
         }
     }
 
