@@ -489,6 +489,11 @@ struct SavePlanView: View {
                             .font(SaveAtlasType.body(13))
                             .foregroundStyle(SaveAtlasPalette.muted)
                             .lineLimit(2)
+                        if day.health?.gaps.contains(where: { $0.type == .missingAfternoonActivity }) == true {
+                            Text(localized("Activities still needed · review suggestions", "還缺景點活動 · 查看建議補齊"))
+                                .font(SaveAtlasType.body(12))
+                                .foregroundStyle(SaveAtlasPalette.forest)
+                        }
                     }
                 }
             }

@@ -175,7 +175,7 @@ struct TripGapLocalOptionsService {
             case .missingCoffeeBreak:
                 result.insert(.cafe)
             case .missingAfternoonActivity:
-                result.formUnion([.attraction, .shopping, .cafe])
+                result.formUnion([.attraction, .shopping])
             case .missingEveningPlan:
                 result.formUnion([.bar, .food, .attraction])
             case .needsAreaCluster:
