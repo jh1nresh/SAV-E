@@ -11,6 +11,71 @@ import XCTest
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testCaptureMultipleResultsExcludeOlderClues() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
+        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
+        let count = savedCount.label
+        let hero = app.descendants(matching: .any)["home.photoHero"].firstMatch
+        XCTAssertTrue(hero.waitForExistence(timeout: stepTimeout))
+        XCTAssertLessThan(hero.frame.height, 210, "No-photo hero must remain compact.")
+        attach(app, name: "review-flow-home-no-photo")
+        rootTabButton("Save", app: app).tap()
+        typeText("""
+        The coffee shops in Los Angeles County I always return to
+        @theboyandthebearco @stereoscopecoffee @musocoffeela
+        @elorea @archives.ofus @fasttimescoffee @est.today.cafe @moducafe
+        https://www.instagram.com/reel/DYsbskQyclc/
+        """, into: app.textViews["capture.input"])
+        dismissKeyboard(app: app)
+        app.buttons["capture.analyze"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
+        let notice = app.descendants(matching: .any)["capture.results.notice"].firstMatch
+        XCTAssertTrue(notice.label.contains("Found 8 clues"))
+        XCTAssertFalse(app.buttons["saves.segment.mapStamps"].exists)
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'"))
+        XCTAssertGreaterThan(rows.count, 1)
+        XCTAssertFalse(rows.matching(NSPredicate(format: "label CONTAINS[c] 'Harbor Oven'")).firstMatch.exists)
+        attach(app, name: "review-flow-multiple-results")
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout))
+        XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save", "No coordinates must not become a saved place.")
+        let reject = app.buttons["drawer.review.reject"]
+        tapReachable(reject)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedCount.label, count)
+    }
+
+    @MainActor
+    func testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-empty-home", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let start = app.buttons["home.empty.capture"]
+        XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(start.isHittable)
+        attach(app, name: "review-flow-home-empty")
+        start.tap()
+        typeText("https://www.instagram.com/reel/UnresolvedClue/", into: app.textViews["capture.input"])
+        dismissKeyboard(app: app)
+        app.buttons["capture.analyze"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: timeout(20)))
+        XCTAssertTrue(app.descendants(matching: .any)["capture.results.notice"].firstMatch.label.contains("Found 1 clue"))
+        XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save")
+        attach(app, name: "review-flow-source-only")
+    }
+
+    @MainActor
     func testPassportTutorialReplaysWithoutAddingPlaces() throws {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour",
@@ -213,8 +278,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
-            ]
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
         launch(app)
         try signInViaReviewDemo(app: app)
@@ -370,14 +437,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
 
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
-        let analyzedCandidate = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
-        ).firstMatch
-        XCTAssertTrue(
-            analyzedCandidate.waitForExistence(timeout: timeout(20)),
-            "Expected the analyzed link to persist as a Review Candidate."
-        )
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: timeout(20)))
+        let receipt = app.descendants(matching: .any)["capture.results.notice"].firstMatch
+        XCTAssertTrue(receipt.exists)
+        XCTAssertTrue(receipt.label.contains("Found 1 clue"))
+        let confirm = app.buttons["drawer.review.primaryAction"]
+        XCTAssertEqual(confirm.label, "Confirm and save")
+        let context = app.descendants(matching: .any)["drawer.review.contextHero"].firstMatch
+        XCTAssertTrue(context.exists)
+        XCTAssertLessThan(context.frame.minY, confirm.frame.minY)
+        XCTAssertTrue(app.buttons["drawer.review.reject"].exists)
+        attach(app, name: "review-flow-single-result")
 
         terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
@@ -1735,18 +1805,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: timeout(20)),
             "Capture should dismiss after Analyze into Review."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(20)))
-        let candidate = app.buttons.matching(
-            NSPredicate(
-                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
-                placeName
-            )
-        ).firstMatch
-        XCTAssertTrue(
-            candidate.waitForExistence(timeout: timeout(20)),
-            "Expected the captured map link as a Review Candidate.\n\(app.debugDescription)"
-        )
-        candidate.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: timeout(20)))
 
         let placeDetailScroll = app.scrollViews["place.detail.scroll"]
         XCTAssertTrue(placeDetailScroll.waitForExistence(timeout: stepTimeout))
@@ -1756,6 +1815,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Confirm candidate never became tappable.\n\(app.debugDescription)"
         )
         confirmCandidate.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        app.navigationBars.buttons.firstMatch.tap()
+        openSavesFromHome(app: app)
+        app.buttons["saves.segment.mapStamps"].tap()
 
         // Saving no longer interrupts with a trip prompt; adding to a Trip is
         // an explicit action from the saved place detail.
@@ -1930,15 +1993,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(reviewApp.buttons["capture.analyze"].isHittable)
         reviewApp.buttons["capture.analyze"].tap()
 
-        XCTAssertTrue(
-            reviewApp.descendants(matching: .any)["saves.root"]
-                .waitForExistence(timeout: timeout(20))
-        )
-        let candidate = reviewApp.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")
-        ).firstMatch
-        XCTAssertTrue(candidate.waitForExistence(timeout: timeout(20)))
-        candidate.tap()
         XCTAssertTrue(
             reviewApp.descendants(matching: .any)["place.detail.root"]
                 .waitForExistence(timeout: stepTimeout)
