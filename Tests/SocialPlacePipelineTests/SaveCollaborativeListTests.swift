@@ -198,6 +198,21 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testExhaustedGalleryRefreshPutsRecoveredPhotoFirst() async throws {
+        var saved = place(name: "Memory Cafe", category: .cafe)
+        saved.businessPhotoUrls = (0..<5).map { "https://example.com/expired-\($0).jpg" }
+        saved.googleRating = 4
+        saved.priceRange = "$$"
+        saved.openingHours = "9-5"
+        XCTAssertFalse(PlaceBusinessEnricher.needsEnrichment(saved))
+        let result = await PlaceBusinessEnricher.enrich(
+            saved, service: ReorderedPhotoGooglePlacesService(), refreshPhotos: true
+        )
+        let refreshed = try XCTUnwrap(result)
+        XCTAssertEqual(refreshed.businessPhotoURLStrings.first, "https://example.com/new-first.jpg")
+    }
+
+    @MainActor
     func testBusinessPhotoLookupRejectsNearbyWrongBusiness() async {
         var saved = place(name: "Memory Cafe", category: .cafe)
         saved.latitude = 25.0330
@@ -212,7 +227,7 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
-    func testHomePhotoEnrichmentBackfillsOnlyMissingPhotosOncePerSession() async throws {
+    func testVisibleHomePhotoBeyondFirstSixRefreshesOncePerSession() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let service = HomePhotoGooglePlacesService()
@@ -226,10 +241,10 @@ final class SaveCollaborativeListTests: XCTestCase {
         let missing = place(name: "Memory Cafe", category: .cafe)
         var existing = place(name: "Existing Photo", category: .cafe)
         existing.sourceImageUrl = "https://example.com/existing.jpg"
-        map.places = [missing, existing]
+        map.places = (0..<6).map { place(name: "Earlier \($0)", category: .cafe) } + [missing, existing]
 
-        await map.enrichMissingHomePlacePhotos()
-        await map.enrichMissingHomePlacePhotos()
+        await map.refreshHomePlacePhoto(id: missing.id)
+        await map.refreshHomePlacePhoto(id: missing.id)
 
         XCTAssertEqual(
             map.places.first(where: { $0.id == missing.id })?.businessPhotoURLStrings,

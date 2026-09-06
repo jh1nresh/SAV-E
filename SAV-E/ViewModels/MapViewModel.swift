@@ -519,6 +519,7 @@ final class MapViewModel: ObservableObject {
     /// Home may revisit the same missing-photo places while switching tabs.
     /// Keep provider lookups to one attempt per place for this app session.
     private var homePhotoEnrichmentAttemptedPlaceIDs: Set<UUID> = []
+    private var homePhotoEnrichmentTask: Task<Void, Never>?
     private var followedFriendsCursor: String?
     private var followedFriendsQuery = ""
     private var followedFriendsRequestGeneration = UUID()
@@ -2324,41 +2325,43 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    /// Backfills real business photos for the first visible Home places that
-    /// predate photo persistence. Requests are sequential and session-bounded
-    /// so opening Home cannot fan out an unbounded provider workload.
-    func enrichMissingHomePlacePhotos(limit: Int = 6) async {
-        let candidates = places
-            .filter {
-                $0.businessPhotoURLStrings.isEmpty &&
-                    !homePhotoEnrichmentAttemptedPlaceIDs.contains($0.id)
+    /// Visible Home cards request missing or exhausted galleries. Queue one
+    /// provider refresh per place per session, including rows beyond the first six.
+    func refreshHomePlacePhoto(id: UUID) async {
+        guard homePhotoEnrichmentAttemptedPlaceIDs.insert(id).inserted else { return }
+        let userID = authService.currentUserId
+        let previous = homePhotoEnrichmentTask
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, self.authService.currentUserId == userID,
+                  let place = self.places.first(where: { $0.id == id }),
+                  let enriched = await PlaceBusinessEnricher.enrich(place, service: self.googlePlacesService, refreshPhotos: true),
+                  self.authService.currentUserId == userID,
+                  let index = self.places.firstIndex(where: { $0.id == id }) else { return }
+            // Preserve edits made while provider details were in flight.
+            guard self.places[index].name == place.name,
+                  self.places[index].address == place.address,
+                  self.places[index].coordinate.latitude == place.latitude,
+                  self.places[index].coordinate.longitude == place.longitude else { return }
+            self.places[index].businessPhotoUrls = enriched.businessPhotoUrls
+            if self.places[index].googlePlaceId == place.googlePlaceId {
+                self.places[index].googlePlaceId = enriched.googlePlaceId
             }
-            .prefix(max(0, limit))
-
-        homePhotoEnrichmentAttemptedPlaceIDs.formUnion(candidates.map(\.id))
-
-        for place in candidates {
-            guard let enriched = await PlaceBusinessEnricher.enrich(
-                place,
-                service: googlePlacesService
-            ),
-            !enriched.businessPhotoURLStrings.isEmpty,
-            let index = places.firstIndex(where: { $0.id == place.id })
-            else { continue }
-
-            places[index] = enriched
-            if selectedPlace?.id == place.id {
-                selectedPlace = enriched
-            }
-            mirrorToLocalVault(enriched)
-
-            guard usesRemotePersistence else { continue }
+            self.places[index].googleRating = self.places[index].googleRating ?? enriched.googleRating
+            self.places[index].priceRange = self.places[index].priceRange ?? enriched.priceRange
+            self.places[index].openingHours = self.places[index].openingHours ?? enriched.openingHours
+            let updated = self.places[index]
+            if self.selectedPlace?.id == id { self.selectedPlace = updated }
+            self.mirrorToLocalVault(updated)
+            guard self.usesRemotePersistence else { return }
             do {
-                try await supabaseService.updatePlace(enriched)
+                try await self.supabaseService.updatePlace(updated)
             } catch {
-                print("MapViewModel: failed to sync Home photo for \(place.name): \(error)")
+                print("MapViewModel: failed to sync Home photo: \(error)")
             }
         }
+        homePhotoEnrichmentTask = task
+        await task.value
     }
 
     private func enrichSelectedPlacePhoto(_ place: Place) async {

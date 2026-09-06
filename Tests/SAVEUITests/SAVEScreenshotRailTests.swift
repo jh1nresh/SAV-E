@@ -23,7 +23,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let count = savedCount.label
         let hero = app.descendants(matching: .any)["home.photoHero"].firstMatch
         XCTAssertTrue(hero.waitForExistence(timeout: stepTimeout))
-        XCTAssertLessThan(hero.frame.height, 210, "No-photo hero must remain compact.")
+        let featuredName = app.staticTexts["home.featuredName"]
+        XCTAssertTrue(featuredName.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(featuredName.frame.minY - hero.frame.minY, 144, "The paper caption must sit below the fixed photo region, including without a photo.")
+        XCTAssertLessThan(featuredName.frame.maxY, hero.frame.maxY, "The name must stay inside its card.")
+        XCTAssertLessThan(hero.frame.height, app.frame.height * 0.4, "The unified hero must leave room for the place shelves.")
         attach(app, name: "review-flow-home-no-photo")
         rootTabButton("Save", app: app).tap()
         typeText("""

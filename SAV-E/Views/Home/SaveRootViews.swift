@@ -11,23 +11,18 @@ struct SaveHomeView: View {
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
         HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
-        .task(id: missingPhotoPlaceIDs) {
-            guard !ReviewDemo.isOfflineUITestMode else { return }
-            await mapViewModel.enrichMissingHomePlacePhotos()
+        .task(id: locationService.authorizationStatus) {
+            guard !ReviewDemo.isOfflineUITestMode,
+                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
+            _ = await locationService.requestCurrentLocation()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
-    }
-
-    private var missingPhotoPlaceIDs: [UUID] {
-        mapViewModel.places
-            .filter { $0.businessPhotoURLStrings.isEmpty }
-            .prefix(6)
-            .map(\.id)
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -41,7 +36,8 @@ struct SaveHomeView: View {
             onOpenSaves: onOpenSaves,
             onOpenPlace: onOpenSavedPlace,
             onOpenReview: onOpenReviewCandidate,
-            onOpenPassport: onOpenPassport
+            onOpenPassport: onOpenPassport,
+            homeLocation: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
         )
         if !SaveAtlasRuntime.usesParityFixture {
             // Home previews actionable place matches. Source-only clues remain
