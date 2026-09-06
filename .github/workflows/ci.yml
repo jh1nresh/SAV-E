@@ -123,6 +123,7 @@ jobs:
       # genuine regression still fails all three attempts. Any retry that did
       # happen is surfaced by the next step rather than being swallowed.
       - name: Run selected UI regression tests
+        id: ui_tests
         # Job budget is 75. 60 was too tight once Plan replaced Origin: unit
         # tests plus four UI tests that needed three attempts (run 33905649737)
         # hit the 1h wall while Home-Saves was still running.
@@ -161,7 +162,7 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
+        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
         run: |
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \

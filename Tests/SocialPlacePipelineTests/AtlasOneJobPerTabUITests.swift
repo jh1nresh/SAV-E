@@ -262,11 +262,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
         XCTAssertTrue(script.contains("priority=1"))
-        XCTAssertTrue(
-            workflow.contains(
-                "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding"
-            )
-        )
+        let selection = try source(at: "scripts/select-ios-tests.py")
+        XCTAssertTrue(workflow.contains("scripts/select-ios-tests.py"))
+        XCTAssertTrue(workflow.contains("ios-ui-args.txt"))
+        XCTAssertTrue(selection.contains("testCaptureFiveTabLanding"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
         XCTAssertTrue(rail.contains("home.photoHero"))
         XCTAssertTrue(rail.contains("pngRepresentation.count"))
