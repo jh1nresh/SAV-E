@@ -780,7 +780,7 @@ final class MapViewModel: ObservableObject {
         var failedImports: [PendingSharedPlace] = []
         var persistedPlaces: [Place]
         do {
-            persistedPlaces = try await supabaseService.fetchPlaces(for: userId)
+            persistedPlaces = Place.consolidated(try await supabaseService.fetchPlaces(for: userId))
         } catch {
             pendingImportService.restorePendingPlaces(pending)
             throw error
@@ -796,9 +796,10 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.updatePlace(merged)
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
-                    persistedPlaces.append(merged)
                     recordPassportFieldActionAfterSavingPlace()
                 }
+                persistedPlaces.removeAll { $0.id == merged.id }
+                persistedPlaces.append(merged)
                 mirrorToLocalVault(merged)
                 places = Place.consolidated(places.filter { $0.id != merged.id } + [merged])
                 if existing == nil { importedPlaces.append(merged) }
