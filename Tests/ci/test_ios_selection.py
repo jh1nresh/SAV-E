@@ -14,17 +14,27 @@ SPEC.loader.exec_module(selection)
 
 
 class CoverageTests(unittest.TestCase):
-    def test_full_keeps_frozen_baseline_and_every_focused_test(self):
+    def test_full_matches_frozen_baseline_without_plan_extras(self):
         full = selection.select([], full=True)
         actual = set(full["tests"] + [selection.TRIP_SHEET])
-        baseline = json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text())
-        self.assertTrue(set(baseline) <= actual)
-        for path in selection.SURFACES:
-            self.assertTrue(set(selection.select([path])["tests"]) <= actual)
+        baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
+        self.assertEqual(actual, baseline)
         self.assertTrue(full["trip"])
+        plan_only = (
+            selection.RAIL + "testPlanChatDraftAndConversationSurviveTabChange",
+            selection.RAIL + "testPlanTabDraftsFromSavedMapStamps",
+            selection.RAIL + "testPlanCandidateCanBeConfirmedSavedAndOpened",
+        )
+        plan = selection.select(["SAV-E/Views/Plan/SavePlanView.swift"])
+        for test in plan_only:
+            self.assertIn(test, plan["tests"])
+            self.assertNotIn(test, full["tests"])
 
     def test_selected_tests_exist_in_real_xctest_sources(self):
-        for test in selection.FULL + [selection.TRIP_SHEET]:
+        catalog = list(dict.fromkeys(
+            selection.FULL + sum(selection.TESTS.values(), []) + [selection.TRIP_SHEET]
+        ))
+        for test in catalog:
             _, test_class, *method = test.split("/")
             source = (ROOT / f"Tests/SAVEUITests/{test_class}.swift").read_text()
             self.assertRegex(source, rf"class {test_class}\b")
