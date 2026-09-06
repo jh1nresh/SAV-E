@@ -580,6 +580,54 @@ struct SharedListPayload: Codable {
         return payload
     }
 
+    static func shareCode(from url: URL) -> String? {
+        guard isListLink(url),
+              let code = URLComponents(url: url, resolvingAgainstBaseURL: true)?
+                .queryItems?
+                .first(where: { $0.name == "c" })?
+                .value?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              code.range(of: "^[A-Za-z0-9_-]{6,32}$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return code
+    }
+
+    static func resolve(from url: URL, apiBaseURL: String? = nil) async throws -> SharedListPayload {
+        guard let code = shareCode(from: url) else {
+            throw SharedListPreviewError.invalidLink
+        }
+        let baseURL = apiBaseURL.map { SAVEProductionConfig.removingTrailingSlashes(from: $0) }
+            ?? SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"])
+            ?? SAVEProductionConfig.defaultAPIBaseURL
+        guard let requestURL = URL(string: "\(baseURL)/v0/shared-list-links/\(code)") else {
+            throw SharedListPreviewError.invalidLink
+        }
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(from: requestURL)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw SharedListPreviewError.network
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw SharedListPreviewError.network
+        }
+        if http.statusCode == 404 { throw SharedListPreviewError.notFound }
+        if http.statusCode == 410 { throw SharedListPreviewError.expired }
+        guard http.statusCode == 200, data.count <= 2 * 1024 * 1024 else {
+            throw SharedListPreviewError.invalidResponse
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let payload = try? decoder.decode(SharedListPayload.self, from: data) else {
+            throw SharedListPreviewError.invalidResponse
+        }
+        return payload
+    }
+
     static func isListLink(_ url: URL) -> Bool {
         if SAVEProductionConfig.supportsCustomURLScheme(url), url.host == "list" {
             return true
@@ -587,6 +635,24 @@ struct SharedListPayload: Codable {
         return url.scheme == "https" &&
             ["sav-e-app.vercel.app"].contains(url.host ?? "") &&
             url.path == "/list"
+    }
+}
+
+enum SharedListPreviewError: LocalizedError {
+    case invalidLink
+    case notFound
+    case expired
+    case network
+    case invalidResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidLink: return "This shared list link is not valid."
+        case .notFound: return "This shared list is no longer available."
+        case .expired: return "This shared list link has expired."
+        case .network: return "Savvy could not reach the shared list. Check your connection and try again."
+        case .invalidResponse: return "Savvy could not read this shared list."
+        }
     }
 }
 

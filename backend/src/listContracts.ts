@@ -214,6 +214,65 @@ order by c.created_at desc, c.code`,
   return rows;
 }
 
+/// Resolve the read-only preview behind a bearer-style list share code. The
+/// code itself is the authorization boundary: no member, profile, or owner
+/// identifiers are selected for the App Clip response.
+export async function publicListForShareCode(
+  code: string,
+  query: ListQuery,
+): Promise<JsonObject | null> {
+  const normalizedCode = normalizeListShareCode(code);
+  if (!normalizedCode) return null;
+  const { rows } = await query(
+    `select
+  l.id::text as id,
+  l.title,
+  l.note,
+  l.created_at,
+  l.updated_at,
+  c.role as viewer_role,
+  c.expires_at,
+  coalesce(
+    (
+      select json_agg(json_build_object(
+        'id', li.id,
+        'payload', li.payload,
+        'created_at', li.created_at
+      ) order by li.created_at, li.id)
+      from list_items li
+      where li.list_id = l.id
+    ),
+    '[]'::json
+  ) as items
+from list_share_codes c
+join lists l on l.id = c.list_id
+where c.code = $1
+limit 1`,
+    [normalizedCode],
+  );
+  return rows[0] ?? null;
+}
+
+export function formatPublicListPreview(row: JsonObject): JsonObject {
+  const role = row.viewer_role === "editor" ? "editor" : "viewer";
+  return {
+    list: {
+      id: stringOrNull(row.id),
+      title: stringOrNull(row.title),
+      note: stringOrNull(row.note),
+      ownerDisplayName: "Shared list",
+      viewerRole: role,
+      items: (Array.isArray(row.items) ? row.items : [])
+        .filter((item): item is JsonObject => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+        .map((item) => item.payload)
+        .filter((payload): payload is JsonObject => Boolean(payload) && typeof payload === "object" && !Array.isArray(payload)),
+      createdAt: isoTimestamp(row.created_at),
+      updatedAt: isoTimestamp(row.updated_at),
+    },
+    role,
+  };
+}
+
 export function formatListRow(row: JsonObject): JsonObject {
   return {
     id: stringOrNull(row.id),

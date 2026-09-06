@@ -5,6 +5,7 @@ import {
   formatListItemRow,
   formatListMemberRow,
   formatListRow,
+  formatPublicListPreview,
   formatShareCodeRow,
   listBodyMaxBytes,
   listForMember,
@@ -23,6 +24,7 @@ import {
   normalizeListMemberUserId,
   normalizeListShareCode,
   normalizeShareCodeCreate,
+  publicListForShareCode,
   referralShareURL,
   shareCodesForOwner,
 } from "./listContracts.js";
@@ -201,6 +203,59 @@ test("shareCodesForOwner requires the owner role inside the SQL", async () => {
   await assert.rejects(() => shareCodesForOwner(listId, "  ", query), /user id is required/);
 });
 
+test("public list preview is scoped only by a valid share code and drops private columns", async () => {
+  const itemPayload = {
+    id: "item-1",
+    source: "savedPlace",
+    sourceID: "place-1",
+    title: "Kato",
+    subtitle: "Los Angeles",
+    latitude: 34.035,
+    longitude: -118.238,
+    photoURLs: [],
+    addedByDisplayName: "Ezven",
+    addedAt: "2026-08-12T01:02:03Z",
+  };
+  const row = {
+    id: listId,
+    title: "Tokyo",
+    note: "Saturday",
+    viewer_role: "editor",
+    created_at: "2026-08-12T00:00:00Z",
+    updated_at: "2026-08-12T01:00:00Z",
+    expires_at: "2026-11-10T00:00:00Z",
+    owner_id: "must-not-leak",
+    items: [{ payload: itemPayload, added_by: "must-not-leak" }],
+  };
+  const { calls, query } = capturingQuery([row]);
+
+  assert.equal(await publicListForShareCode(" AbC123_x ", query), row);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].values, ["AbC123_x"]);
+  assert.match(calls[0].sql, /from list_share_codes c/);
+  assert.match(calls[0].sql, /join lists l on l\.id = c\.list_id/);
+  assert.doesNotMatch(calls[0].sql, /owner_id|user_id|added_by/);
+
+  const formatted = formatPublicListPreview(row);
+  assert.deepEqual(formatted, {
+    list: {
+      id: listId,
+      title: "Tokyo",
+      note: "Saturday",
+      ownerDisplayName: "Shared list",
+      viewerRole: "editor",
+      items: [itemPayload],
+      createdAt: "2026-08-12T00:00:00Z",
+      updatedAt: "2026-08-12T01:00:00Z",
+    },
+    role: "editor",
+  });
+  assert.equal(JSON.stringify(formatted).includes("must-not-leak"), false);
+
+  assert.equal(await publicListForShareCode("bad!", query), null);
+  assert.equal(calls.length, 1, "invalid codes must not reach the database");
+});
+
 test("member and share-code formatters keep their contracts and drop private columns", () => {
   const member = formatListMemberRow({
     user_id: "did:privy:friend",
@@ -297,6 +352,16 @@ test("lists routes are authenticated and enforce membership ACL in SQL", () => {
   );
   assert.ok(serverSource.indexOf('resource === "list-joins"') > authGate);
   assert.ok(serverSource.indexOf('id === "referral"') > authGate);
+
+  const publicPreview = serverSource.indexOf('resource === "shared-list-links"');
+  assert.ok(publicPreview > 0 && publicPreview < authGate, "App Clip previews must resolve before auth");
+  const publicHandler = serverSource.slice(
+    serverSource.indexOf("async function handleSharedListLinkPublic"),
+    serverSource.indexOf("async function handlePublicFriendShareEvent"),
+  );
+  assert.match(publicHandler, /Cache-Control", "private, no-store/);
+  assert.match(publicHandler, /Referrer-Policy", "no-referrer/);
+  assert.match(publicHandler, /Shared list link expired/);
 
   const listsHandler = serverSource.slice(
     serverSource.indexOf("async function handleLists"),
