@@ -1018,7 +1018,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThanOrEqual(locate.frame.maxY, collapsedTop - 4)
         attach(app, name: "map-search-drawer-collapsed")
 
-        app.buttons["map.command.search"].swipeUp()
+        app.buttons["map.command.search"].tap()
         let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
@@ -1040,7 +1040,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: distance)))
         }
-        dragHandle(by: -160)
+        app.descendants(matching: .any)["map.drawerPanel.handle"].tap()
         let large = app.descendants(matching: .any)["map.drawerPanel.large"]
         XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].exists)
@@ -1057,6 +1057,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.maps.firstMatch.exists)
+        // Repeat from rest to catch a drag leaving taps blocked or focus stuck.
+        app.buttons["map.command.search"].swipeUp()
+        XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        waitForStableFrame(medium)
+        dragHandle(by: -160)
+        XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        focus(app.textFields["map.search.input"])
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
+        attach(app, name: "map-search-explicit-keyboard-focus")
         XCTAssertEqual(app.state, .runningForeground)
     }
 
