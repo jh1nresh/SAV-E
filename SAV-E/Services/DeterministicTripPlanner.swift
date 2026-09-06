@@ -349,6 +349,7 @@ struct DeterministicTripPlanner {
                 stops: stops,
                 health: tripHealth(
                     for: stops,
+                    savedPlaces: places,
                     dayNumber: index + 1,
                     maxStopsPerDay: constraints.pace.maxStopsPerDay,
                     outputLanguage: outputLanguage
@@ -839,7 +840,15 @@ struct DeterministicTripPlanner {
         }
 
         for place in places where !assignedIDs.contains(place.id) {
-            guard let dayIndex = days.indices.first(where: { days[$0].count < targetSizes[$0] }) else {
+            guard let dayIndex = days.indices
+                .filter({ days[$0].count < targetSizes[$0] })
+                .min(by: { lhs, rhs in
+                    let leftActivities = days[lhs].filter(isActivity).count
+                    let rightActivities = days[rhs].filter(isActivity).count
+                    if leftActivities != rightActivities { return leftActivities < rightActivities }
+                    if days[lhs].count != days[rhs].count { return days[lhs].count < days[rhs].count }
+                    return lhs < rhs
+                }) else {
                 assertionFailure("Balanced day targets must fit every selected place")
                 continue
             }
@@ -910,6 +919,7 @@ struct DeterministicTripPlanner {
 
     func tripHealth(
         for stops: [ItineraryStop],
+        savedPlaces: [Place] = [],
         dayNumber: Int,
         maxStopsPerDay: Int,
         outputLanguage: AppLanguage
@@ -946,7 +956,19 @@ struct DeterministicTripPlanner {
             ))
         }
 
-        if !hasMealSlot(in: stops, matching: ["12:", "1:"]) {
+        let categoriesByID = Dictionary(savedPlaces.map { ($0.id.uuidString, $0.category) }, uniquingKeysWith: { first, _ in first })
+        func category(of stop: ItineraryStop) -> PlaceCategory? {
+            stop.placeId.flatMap { categoriesByID[$0] } ?? stop.mapCandidate?.category
+        }
+        func hasMeal(in window: Range<Int>) -> Bool {
+            stops.contains { stop in
+                guard let type = category(of: stop), [.food, .bar].contains(type),
+                      let time = stop.time.flatMap(TripClock.minutes(fromDisplay:)) else { return false }
+                return window.contains(time)
+            }
+        }
+
+        if !hasMeal(in: (11 * 60)..<(15 * 60)) {
             gaps.append(TripGap(
                 id: "\(dayId)-missing-lunch",
                 type: .missingLunch,
@@ -959,7 +981,7 @@ struct DeterministicTripPlanner {
             ))
         }
 
-        if !hasMealSlot(in: stops, matching: ["6:", "7:"]) {
+        if !hasMeal(in: (17 * 60)..<(22 * 60)) {
             gaps.append(TripGap(
                 id: "\(dayId)-missing-dinner",
                 type: .missingDinner,
@@ -972,7 +994,10 @@ struct DeterministicTripPlanner {
             ))
         }
 
-        if !hasAfternoonActivity(in: stops) {
+        if !stops.contains(where: { stop in
+            guard let type = category(of: stop) else { return false }
+            return [.attraction, .shopping].contains(type)
+        }) {
             gaps.append(TripGap(
                 id: "\(dayId)-missing-afternoon-activity",
                 type: .missingAfternoonActivity,
@@ -1012,22 +1037,4 @@ struct DeterministicTripPlanner {
         ])
     }
 
-    private func hasMealSlot(in stops: [ItineraryStop], matching prefixes: [String]) -> Bool {
-        stops.contains { stop in
-            guard let time = stop.time?.lowercased(), time.contains("pm") else { return false }
-            return prefixes.contains { time.hasPrefix($0) }
-        }
-    }
-
-    private func hasAfternoonActivity(in stops: [ItineraryStop]) -> Bool {
-        stops.contains { stop in
-            guard let time = stop.time?.lowercased(), time.contains("pm") else { return false }
-            let isAfternoon = time.hasPrefix("2:") || time.hasPrefix("3:") || time.hasPrefix("4:")
-            guard isAfternoon else { return false }
-            let lowerName = stop.placeName.lowercased()
-            let lowerNote = (stop.note ?? "").lowercased()
-            let activitySignals = ["museum", "park", "shop", "market", "activity", "景點", "活動", "購物"]
-            return activitySignals.contains { lowerName.contains($0) || lowerNote.contains($0) }
-        }
-    }
 }

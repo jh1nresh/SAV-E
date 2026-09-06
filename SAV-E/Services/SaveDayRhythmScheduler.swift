@@ -193,7 +193,7 @@ struct SaveDayRhythmScheduler {
                     let place = remainingPlaces.remove(at: index)
                     stops.append(stampStop(place, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
                 } else if let index = remainingUnsaved.firstIndex(where: {
-                    mealCategories.contains($0.category ?? .food)
+                    $0.category.map { mealCategories.contains($0) } ?? false
                 }) {
                     let candidate = remainingUnsaved.remove(at: index)
                     stops.append(unsavedStop(candidate, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
@@ -202,20 +202,12 @@ struct SaveDayRhythmScheduler {
                 }
             case .activity:
                 if let index = remainingPlaces.firstIndex(where: {
-                    [.attraction, .shopping, .cafe].contains($0.category)
+                    [.attraction, .shopping].contains($0.category)
                 }) {
                     let place = remainingPlaces.remove(at: index)
                     stops.append(stampStop(place, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
-                } else if let index = remainingPlaces.firstIndex(where: { $0.category != .food && $0.category != .bar }) {
-                    let place = remainingPlaces.remove(at: index)
-                    stops.append(stampStop(place, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
                 } else if let index = remainingUnsaved.firstIndex(where: {
-                    [.attraction, .shopping, .cafe].contains($0.category ?? .attraction)
-                }) {
-                    let candidate = remainingUnsaved.remove(at: index)
-                    stops.append(unsavedStop(candidate, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
-                } else if let index = remainingUnsaved.firstIndex(where: {
-                    $0.category != .stay
+                    $0.category.map { [.attraction, .shopping].contains($0) } ?? false
                 }) {
                     let candidate = remainingUnsaved.remove(at: index)
                     stops.append(unsavedStop(candidate, start: slot.start, duration: slot.duration, outputLanguage: outputLanguage))
