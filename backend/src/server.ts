@@ -115,6 +115,7 @@ import {
   formatListItemRow,
   formatListMemberRow,
   formatListRow,
+  formatPublicListPreview,
   formatShareCodeRow,
   listBodyMaxBytes,
   listForMember,
@@ -129,6 +130,7 @@ import {
   normalizeListMemberUserId,
   normalizeListShareCode,
   normalizeShareCodeCreate,
+  publicListForShareCode,
   referralShareURL,
   shareCodesForOwner,
 } from "./listContracts.js";
@@ -938,6 +940,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && request.method === "GET" && resource === "shared-place-links" && id && segments.length === 2) {
       return await handleSharedPlaceLinkPublic(response, id);
+    }
+    if (isV0 && request.method === "GET" && resource === "shared-list-links" && id && segments.length === 2) {
+      return await handleSharedListLinkPublic(response, id);
     }
     if (isV0 && request.method === "POST" && resource === "guest-sessions" && !id) {
       return sendJson(response, createGuestSession(guestSessionSecret), 201);
@@ -3082,6 +3087,20 @@ async function handleSharedPlaceLinkPublic(
     return sendJson(response, { error: "Shared place link expired" }, 410);
   }
   return sendJson(response, formatPublicSharedPlaceLink(formatDates(rows[0])));
+}
+
+async function handleSharedListLinkPublic(
+  response: ServerResponse,
+  code: string,
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  const row = await publicListForShareCode(code, (sql, values) => pool.query(sql, [...values] as QueryValue[]));
+  if (!row) return sendJson(response, { error: "Shared list link not found" }, 404);
+  if (isSharedPlaceLinkExpired(row.expires_at)) {
+    return sendJson(response, { error: "Shared list link expired" }, 410);
+  }
+  return sendJson(response, formatPublicListPreview(row));
 }
 
 async function handlePublicFriendShareEvent(
