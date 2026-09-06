@@ -26,5 +26,10 @@
 
 ## Delivery
 
+- Owner / state (`active`, `parked`, `ready`, `blocked`):
+- Predecessor PR / next action / intended merge order:
+- CI profile + selection artifact / Judge-reviewed head SHA:
+- Merge owner / post-merge result / cleanup candidates (approval required):
+
 - Expected durable artifact:
 - Public proof draft or `N/A` with reason:

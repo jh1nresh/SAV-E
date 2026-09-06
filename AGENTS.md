@@ -84,6 +84,49 @@ scoped brief or issue
   unavailable credentials, failing checks after three repair attempts, or less
   than 10 GiB free before a runtime gate.
 
+## PR Queue And Closeout
+
+- Keep at most two implementation tasks actively coding, repairing CI, or waiting
+  for review. A draft is not exempt if an agent is still working on it. Park the
+  rest with an owner, dependency, and next action in the PR; do not open another
+  product task just because its predecessor is waiting. A bounded CI repair may
+  proceed to unblock this queue.
+- Before starting another task, inspect the open PR queue:
+  `gh pr list --repo jh1nresh/SAV-E --state open --limit 100 --json number,title,isDraft,headRefName,baseRefName`.
+  This is an admission policy, not a required CI check: a queue limit must never
+  prevent an existing PR from completing. No bot listener enforces this policy.
+- Record predecessor PRs and the intended merge order. Update from main only
+  when the PR is next for review/merge; do not repeatedly update every queued
+  branch. Judge may inspect the frozen diff while CI runs, but its final verdict
+  must name the same head SHA as the passing checks. A moved head invalidates it.
+- The merge owner owns closeout. After explicit merge approval, verify the
+  merged PR/head and main result, record the result and remaining release gate,
+  then prepare the exact remote branch and local worktree cleanup candidates.
+  Confirm worktree occupancy, dirty/untracked files, and unpushed commits before
+  requesting deletion approval. Never delete solely because a PR is closed;
+  squash merges need the PR merge record, not just ancestry. PR creation alone
+  is not completion, and merge does not authorize deployment or branch deletion.
+
+## CI Coverage
+
+- iOS-relevant PRs retain the generic build and all `SAVETests`. Exact-file UI
+  routing lives in `scripts/select-ios-tests.py`; currently only Map drawer,
+  Onboarding, and Plan views qualify. All UI routes retain production visual
+  parity at 0.90 and five-tab smoke. Plan also retains the isolated Trip sheet.
+- Shared navigation/theme/data, test harness, project, workflow, and unknown
+  changes run full integration coverage. Multiple known surfaces run the union;
+  renames consider both paths. An unavailable or empty diff runs full coverage.
+  Unit-test-only changes build and run units without UI. Existing non-iOS
+  exclusions remain in effect.
+- Main pushes and manual `CI` workflow dispatches run full integration coverage.
+  PR success on a focused route is not full integration or release evidence.
+  Review the `save-test-selection-<sha>` artifact and Actions step summary for
+  the selected profile. The required job names and main release gate stay fixed.
+- Coverage-map changes must pass
+  `python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v`.
+  The frozen baseline prevents accidentally dropping existing full-suite tests;
+  each new allowlisted source file needs a reviewed UI coverage mapping.
+
 ## Verification
 
 For ordinary iOS edits, compile without booting a simulator:
