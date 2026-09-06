@@ -173,6 +173,20 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.monthly"))
     }
 
+    func testShareExtensionUsesAtlasStatesWithoutConfirmingUnverifiedCandidates() throws {
+        let shareView = try source(at: "SAV-EShareExtension/ShareViewController.swift")
+
+        for token in ["FDF8F3", "FFFDF7", "0E4A33", "2E2117", "F26B4A", "B5E3F5", "D6E8C4", "F0CFA1"] {
+            XCTAssertTrue(shareView.contains(token), "Share Extension must keep Atlas token \(token)")
+        }
+        XCTAssertTrue(shareView.contains("share.capture.loading"))
+        XCTAssertTrue(shareView.contains("share.capture.error"))
+        XCTAssertTrue(shareView.contains("share.capture.addToReview"))
+        XCTAssertTrue(shareView.contains("Nothing becomes a Map Stamp until you confirm it in Savvy."))
+        XCTAssertFalse(shareView.contains("Confirm this place"))
+        XCTAssertFalse(shareView.contains("Find address"))
+    }
+
     @MainActor
     func testSharedGeminiModelFallbacksPreferStrongFlashWithStableFallback() {
         XCTAssertEqual(SAVEProductionConfig.defaultGeminiModelFallbacks, ["gemini-3.5-flash", "gemini-2.5-flash"])
