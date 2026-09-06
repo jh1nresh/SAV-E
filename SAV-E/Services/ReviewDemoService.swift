@@ -319,7 +319,14 @@ enum ReviewDemoSeed {
         wasSeeded: Bool,
         repairForUITests: Bool
     ) -> Bool {
-        repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
+#if DEBUG
+        if ReviewDemo.isOfflineUITestMode,
+           ReviewDemo.uiTestStorageIdentifier != nil,
+           ProcessInfo.processInfo.arguments.contains("--uitest-empty-home") {
+            return false
+        }
+#endif
+        return repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
     }
 
     /// Harbor Oven is the Review demo face. Isolated offline UI tests that
