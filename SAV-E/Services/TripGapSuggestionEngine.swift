@@ -150,7 +150,7 @@ struct TripGapSuggestionEngine {
 
             let externalOptions = mapCandidates
                 .filter { candidate in
-                    guard let category = candidate.category else { return true }
+                    guard let category = candidate.category else { return false }
                     return categories.contains(category)
                 }
                 .filter { destinationScope?.contains(mapCandidate: $0) ?? true }
@@ -198,7 +198,7 @@ struct TripGapSuggestionEngine {
         case .missingCoffeeBreak:
             return [.cafe]
         case .missingAfternoonActivity:
-            return [.attraction, .shopping, .cafe]
+            return [.attraction, .shopping]
         case .missingEveningPlan:
             return [.bar, .food, .attraction]
         case .needsAreaCluster:

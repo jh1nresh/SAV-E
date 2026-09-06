@@ -717,6 +717,7 @@ struct ItineraryPlanValidator {
                 stops: normalizedStops,
                 health: healthJudge.tripHealth(
                     for: normalizedStops,
+                    savedPlaces: Array(savedPlacesByID.values),
                     dayNumber: day.dayNumber,
                     maxStopsPerDay: maxStopsPerDay,
                     outputLanguage: outputLanguage
