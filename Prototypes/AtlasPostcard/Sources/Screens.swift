@@ -484,7 +484,7 @@ private struct HomeSavedPlacesLibrary: View {
                     LazyVStack(alignment: .leading, spacing: AtlasSpacing.section) {
                         libraryHeader
                         reviewQueuePreview
-                        HomeSavedPlacesEmpty()
+                        HomeSavedPlacesEmpty(onCapture: presentation.onCapture)
                             .frame(height: 360)
                     }
                     .padding(.top, AtlasSpacing.content)
@@ -699,9 +699,9 @@ private struct HomeFeaturedPlaceHero: View {
             VStack(alignment: .leading, spacing: 0) {
                 HomeSavedPlaceThumbnail(
                     placeID: "hero.\(place.id)",
-                    photoURL: place.photoURL
+                    photoURL: place.photoURL,
+                    photoHeight: 144
                 )
-                .frame(height: 144)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Label(
@@ -744,9 +744,11 @@ private struct HomeFeaturedPlaceHero: View {
 private struct HomeSavedPlacesEmpty: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
+    let onCapture: () -> Void
+
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "bookmark")
+            Image(systemName: "link.badge.plus")
                 .font(.system(size: 28, weight: .regular))
                 .foregroundStyle(AtlasPalette.muted.opacity(0.58))
 
@@ -755,16 +757,28 @@ private struct HomeSavedPlacesEmpty: View {
                 .foregroundStyle(AtlasPalette.forest)
 
             Text(localized(
-                "Tap Save when a place is worth keeping.",
-                "遇到想留下的地點時，點一下 Save。"
+                "Paste a link. Confirm the place before adding it to your map.",
+                "貼上連結，確認地點後再加入你的地圖。"
             ))
                 .font(AtlasType.body(13))
                 .foregroundStyle(AtlasPalette.muted)
                 .multilineTextAlignment(.center)
+
+            Button(action: onCapture) {
+                Label(localized("Paste your first link", "貼上第一個連結"), systemImage: "link")
+                    .font(AtlasType.strong(16))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+            .accessibilityIdentifier("home.empty.capture")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 34)
         .padding(.bottom, 70)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces.empty")
     }
 
@@ -783,9 +797,10 @@ private struct HomeSavedPlaceRow: View {
             VStack(alignment: .leading, spacing: 0) {
                 HomeSavedPlaceThumbnail(
                     placeID: "row.\(place.id)",
-                    photoURL: place.photoURL
+                    photoURL: place.photoURL,
+                    photoHeight: 112
                 )
-                .frame(width: width, height: 112)
+                .frame(width: width)
                 .overlay(alignment: .topLeading) {
                     RoundStamp(text: "", style: .mapStamp)
                         .scaleEffect(0.82)
@@ -817,28 +832,29 @@ private struct HomeSavedPlaceRow: View {
 private struct HomeSavedPlaceThumbnail: View {
     let placeID: String
     let photoURL: URL?
+    let photoHeight: CGFloat
 
     var body: some View {
-        ZStack {
-            fallback
-
+        Group {
             if let photoURL {
                 CachedAsyncImage(url: photoURL) { phase in
                     if case .success(let image) = phase {
                         image
                             .resizable()
                             .scaledToFill()
+                            .frame(height: photoHeight)
+                            .clipped()
                     } else {
-                        // Nil or failing business photos stay on the pin.
-                        // Hybrid / Look Around must not read as this place's photo.
-                        Color.clear
+                        fallback
                     }
                 }
                 .id("\(placeID)-\(photoURL.absoluteString)")
+            } else {
+                fallback
             }
         }
         .id(placeID)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
         .background(AtlasPalette.mint.opacity(0.48))
         .clipped()
         .accessibilityHidden(true)
@@ -848,7 +864,8 @@ private struct HomeSavedPlaceThumbnail: View {
         Image(systemName: "mappin.and.ellipse")
             .font(.system(size: 21, weight: .medium))
             .foregroundStyle(AtlasPalette.forest)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
     }
 }
 

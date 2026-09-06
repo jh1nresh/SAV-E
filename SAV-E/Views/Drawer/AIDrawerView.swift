@@ -3351,6 +3351,17 @@ private struct ReviewCandidateDetailCard: View {
             accessibilityIdentifier: "drawer.review.postcardBody"
         ) {
             VStack(alignment: .leading, spacing: 12) {
+                ReviewCandidateContextHero(
+                    candidate: candidate,
+                    captureTripName: captureTripName,
+                    eyebrow: presentationEyebrow,
+                    title: presentation.title,
+                    contextLine: presentationContextLine,
+                    // Tapping the hero map jumps straight to the live map with
+                    // this clue's candidates pinned.
+                    onOpenOnMap: onFindExactPlace
+                )
+
                 VStack(alignment: .leading, spacing: 10) {
                     CandidateActionButton(
                         title: primaryActionTitle,
@@ -3361,22 +3372,26 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     .accessibilityIdentifier("drawer.review.primaryAction")
+
+                    Button(role: .destructive, action: onReject) {
+                        Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
+                            .font(SaveAtlasType.strong(14))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(SaveAtlasPalette.line.opacity(0.42), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isWorking)
+                    .accessibilityIdentifier("drawer.review.reject")
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("drawer.review.firstViewport")
 
                 VStack(alignment: .leading, spacing: 12) {
-                    ReviewCandidateContextHero(
-                        candidate: candidate,
-                        captureTripName: captureTripName,
-                        eyebrow: presentationEyebrow,
-                        title: presentation.title,
-                        contextLine: presentationContextLine,
-                        // Tapping the hero map jumps straight to the live map with
-                        // this clue's candidates pinned.
-                        onOpenOnMap: onFindExactPlace
-                    )
-
                     ReviewCandidateNextStepPanel(candidate: candidate)
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -3417,9 +3432,6 @@ private struct ReviewCandidateDetailCard: View {
                         Button(action: onSaveSourceOnly) {
                             Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
                         }
-                        Button(role: .destructive, action: onReject) {
-                            Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
-                        }
                     } label: {
                         Label(languageSettings.localized(english: "More review actions", traditionalChinese: "更多確認動作"), systemImage: "ellipsis.circle")
                             .font(SaveAtlasType.strong(12))
@@ -3451,7 +3463,7 @@ private struct ReviewCandidateDetailCard: View {
 
     private var primaryActionTitle: String {
         if primaryAction.confirmsMapStamp {
-            return languageSettings.localized(english: "Confirm", traditionalChinese: "確認")
+            return languageSettings.localized(english: "Confirm and save", traditionalChinese: "確認並儲存")
         }
         return primaryAction.kind.displayName(language: languageSettings.language)
     }
@@ -3813,8 +3825,8 @@ private struct ReviewCandidateNextStepPanel: View {
     private var nextStepText: String {
         if candidate.hasReliableCoordinates {
             return languageSettings.localized(
-                english: "Check the name/address. If it is correct, tap Save Map Stamp.",
-                traditionalChinese: "確認名稱和地址正確後，點「存成地圖章」。"
+                english: "Check the name/address. If it is correct, tap Confirm and save.",
+                traditionalChinese: "確認名稱和地址正確後，點「確認並儲存」。"
             )
         }
         if candidate.hasProviderMap {

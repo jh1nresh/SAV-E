@@ -77,6 +77,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
 }
 
 enum SaveRootRoute: Hashable {
+    case captureResults([UUID])
     case trip(UUID)
     /// The old Saves tab, now a child screen.
     ///
@@ -662,22 +663,9 @@ struct ContentView: View {
                         onActiveTripChange: { activeTripID = $0 }
                     )
                 case .saves:
-                    SaveLibraryView(
-                        places: mapVM.places,
-                        reviewCandidates: mapVM.reviewCandidates,
-                        onOpenCapture: { openDrawer(.addLink, tripID: nil) },
-                        onOpenReviewCandidate: {
-                            openReviewCandidate($0, tripID: nil)
-                        },
-                        onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                        onOpenPassport: openPassport
-                    )
-                    .navigationTitle(languageSettings.localized(
-                        english: "Saves",
-                        traditionalChinese: "收藏"
-                    ))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar(.visible, for: .navigationBar)
+                    saveLibrary(captureResultIDs: nil)
+                case .captureResults(let ids):
+                    saveLibrary(captureResultIDs: ids)
                 case .trips:
                     TripsHomeView(
                         store: tripStore,
@@ -804,13 +792,18 @@ struct ContentView: View {
                 onSaveGoogleTakeoutImport: { drafts in
                     try await mapVM.saveImportedPlaces(drafts)
                 },
-                onComplete: {
+                onComplete: { candidateIDs in
                     pendingOnboardingClue = ""
-                    fullScreenRoute = nil
-                    // A finished capture lands in the Saves pocket, which is
-                    // now a child of Home rather than its own root tab.
                     selectedRootTab = .home
-                    rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
+                    rootPath = [.captureResults(candidateIDs)]
+                    if candidateIDs.count == 1,
+                       let candidate = mapVM.reviewCandidates.first(where: { $0.id == candidateIDs[0] }) {
+                        // Let the existing chrome coordinator dismiss capture
+                        // before presenting its one result.
+                        openReviewCandidate(candidate, tripID: pendingCaptureTripID)
+                    } else {
+                        fullScreenRoute = nil
+                    }
                 },
                 onCancel: {
                     // Closing is not consent to discard a private clue. Keep it
@@ -866,6 +859,16 @@ struct ContentView: View {
             )
             .environment(\.appLanguageSettings, languageSettings)
             .background(SaveDottedBackground().ignoresSafeArea())
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if case .reviewCandidate(let candidate) = item,
+                   case .captureResults(let ids) = rootPath.last,
+                   ids.contains(candidate.id) {
+                    SaveCaptureResultNotice(count: ids.count)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(SaveAtlasPalette.canvas)
+                }
+            }
             .alert(
                 languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
                 isPresented: Binding(
@@ -1190,6 +1193,26 @@ struct ContentView: View {
         Task {
             await mapVM.planCollaborativeList(list)
         }
+    }
+
+    private func saveLibrary(captureResultIDs: [UUID]?) -> some View {
+        SaveLibraryView(
+            places: mapVM.places,
+            reviewCandidates: mapVM.reviewCandidates.filter { candidate in
+                captureResultIDs?.contains(candidate.id) ?? true
+            },
+            onOpenCapture: { openDrawer(.addLink, tripID: nil) },
+            onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
+            onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+            onOpenPassport: openPassport,
+            captureResultCount: captureResultIDs?.count
+        )
+        .navigationTitle(languageSettings.localized(
+            english: captureResultIDs == nil ? "Saves" : "This capture",
+            traditionalChinese: captureResultIDs == nil ? "收藏" : "本次找到的線索"
+        ))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     private func openReviewCandidate(
@@ -1709,7 +1732,7 @@ private struct SaveCaptureFlowView: View {
     let onDraftChange: (String) -> Void
     let onImport: (String) async throws -> [UUID]
     let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
-    let onComplete: () -> Void
+    let onComplete: ([UUID]) -> Void
     let onCancel: () -> Void
     @State private var sharedText = ""
     @State private var isAnalyzing = false
@@ -1848,7 +1871,7 @@ private struct SaveCaptureFlowView: View {
                     )
                     return
                 }
-                onComplete()
+                onComplete(candidateIDs)
             } catch {
                 errorMessage = error.localizedDescription
             }
