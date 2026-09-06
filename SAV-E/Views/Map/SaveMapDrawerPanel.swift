@@ -12,8 +12,8 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var detent: PresentationDetent
     let mapStampCount: Int
     let showsCollapsedShelf: Bool
-    /// `focusesSearch` is true for a tap and false for a resize drag. Dragging
-    /// the card shouldn't summon the keyboard; tapping the field should.
+    /// Resizing and opening the shelf never focus the editor.
+    /// Keyboard focus belongs to an explicit tap on the expanded text field.
     let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
     let onOpenPassport: () -> Void
@@ -40,7 +40,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                             mapStampCount: mapStampCount,
                             onOpenAssistant: {
                                 guard !collapsedDragConsumedTap else { return }
-                                onExpand(true)
+                                onExpand(false)
                             },
                             onOpenPassport: onOpenPassport
                         )
@@ -86,7 +86,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
         Capsule()
             .fill(SaveAtlasPalette.line.opacity(0.48))
             .frame(width: 36, height: 4)
-            .frame(height: 12)
+            .frame(height: stage == .collapsed ? 12 : 44)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
             .gesture(resizeGesture(stage: stage))
@@ -125,8 +125,9 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     }
 
     private func resizeGesture(stage: MapDrawerStage) -> some Gesture {
-        DragGesture(minimumDistance: 8)
-            .updating($dragTranslation) { value, state, _ in
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .updating($dragTranslation) { value, state, transaction in
+                transaction.animation = nil
                 state = value.translation.height
             }
             .onChanged { value in
