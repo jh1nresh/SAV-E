@@ -181,7 +181,7 @@ final class SaveLocalVaultService: Sendable {
                 var records = try loadRecords(from: url)
                 records.removeAll { record in
                     guard let confirmed = record.confirmedPlace else { return false }
-                    return confirmed.id == place.id || confirmed.matches(place)
+                    return place.savedIDs.contains(confirmed.id) || confirmed.matches(place)
                 }
                 try save(records, to: url)
             }

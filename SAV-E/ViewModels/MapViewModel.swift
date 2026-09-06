@@ -2538,8 +2538,16 @@ final class MapViewModel: ObservableObject {
         clearRoute()
 
         do {
+            if usesRemotePersistence {
+                guard let userID = authService.currentUserId else { throw SupabaseError.notAuthenticated }
+                // The user's Delete action applies to the whole displayed venue.
+                // Only delete aliases that actually exist in this account.
+                let remote = try await supabaseService.fetchPlaces(for: userID)
+                for record in remote where place.savedIDs.contains(record.id) {
+                    try await supabaseService.deletePlace(record.id)
+                }
+            }
             try saveLocalVaultService.removeConfirmedPlace(place)
-            try await supabaseService.deletePlace(place.id)
         } catch {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place)
             places = previousPlaces
