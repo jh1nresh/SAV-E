@@ -107,8 +107,11 @@ final class DeterministicTripPlannerTests: XCTestCase {
         XCTAssertEqual(response.componentType, .tripItinerary)
         XCTAssertEqual(response.itineraryDays.count, 2)
         XCTAssertEqual(response.mapAction?.type, .showRoute)
-        XCTAssertEqual(response.itineraryDays.first?.stops.first?.placeName, "Santa Monica Pier")
-        XCTAssertEqual(response.itineraryDays.first?.stops.dropFirst().first?.placeName, "Venice Dinner")
+        XCTAssertEqual(response.mapAction?.placeIds.first, places[0].id.uuidString)
+        let activities = Set(places.filter { [.attraction, .shopping].contains($0.category) }.map { $0.id.uuidString })
+        for day in response.itineraryDays {
+            XCTAssertTrue(day.stops.contains { $0.placeId.map(activities.contains) ?? false }, "Spread activities across both days")
+        }
     }
 
     @MainActor
