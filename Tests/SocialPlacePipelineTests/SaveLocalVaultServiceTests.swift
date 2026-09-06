@@ -55,6 +55,24 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testSameRecordEditCanClearNotesAndVisitedState() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var original = makePlace(id: UUID(), name: "Cafe", address: "Taipei", googlePlaceId: "venue")
+        original.note = "Old note"
+        original.status = .visited
+        _ = try service.saveConfirmedPlace(original)
+        var edited = original
+        edited.note = nil
+        edited.status = .wantToGo
+        _ = try service.saveConfirmedPlace(edited)
+        let stored = try XCTUnwrap(service.confirmedPlaces().first)
+        XCTAssertNil(stored.note)
+        XCTAssertEqual(stored.status, .wantToGo)
+    }
+
+    @MainActor
     func testMissingVaultReadsAsEmpty() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

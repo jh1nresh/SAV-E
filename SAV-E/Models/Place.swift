@@ -44,6 +44,8 @@ struct Place: Identifiable, Codable, Hashable {
         var merged = self
         let aliases = Array(savedIDs.union(other.savedIDs).subtracting([id])).sorted { $0.uuidString < $1.uuidString }
         merged.mergedPlaceIDs = aliases.isEmpty ? nil : aliases
+        // A fresh copy of the same record owns its edits, including cleared notes.
+        guard id != other.id else { return merged }
         let evidence = (sourceEvidence + other.sourceEvidence).removingDuplicates()
         merged.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")
         merged.sourceUrl = sourceUrl ?? other.sourceUrl
@@ -56,7 +58,6 @@ struct Place: Identifiable, Codable, Hashable {
         merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates()
         merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates()
         merged.recommendedItems = savedRecommendedItems + other.savedRecommendedItems.filter { !savedRecommendedItems.contains($0) }
-        if other.id != id, other.status == .visited { merged.status = .visited }
         merged.rating = rating ?? other.rating
         merged.googleRating = googleRating ?? other.googleRating
         merged.priceRange = priceRange ?? other.priceRange
