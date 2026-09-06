@@ -790,50 +790,41 @@ extension Place {
 
     var pendingDeduplicationKey: String {
         if let normalizedSourceURL = sourceUrl?.normalizedDeduplicationURLString() {
-            return normalizedSourceURL
+            return "\(normalizedSourceURL)|\(name.normalizedVenueIdentity)|\(address.normalizedVenueIdentity)"
         }
         return "\(name)|\(address)|\(createdAt.timeIntervalSince1970)"
     }
 
     func matches(_ pendingPlace: PendingSharedPlace) -> Bool {
-        pendingDeduplicationKey == pendingPlace.deduplicationKey || (
-            name == pendingPlace.name &&
-            address == pendingPlace.address &&
-            sourceUrl == pendingPlace.sourceURL
-        )
+        matches(Place.from(pendingPlace))
     }
 
     func matches(_ other: Place) -> Bool {
-        if let lhsProvider = locationProvider,
-           lhsProvider == other.locationProvider,
-           let lhsID = providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !lhsID.isEmpty,
-           let rhsID = other.providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
-           lhsID == rhsID {
-            return true
+        if id == other.id { return true }
+        func nonEmpty(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed?.isEmpty == false ? trimmed : nil
         }
-        // A shared Google Place ID is the same venue, no matter how each copy was
-        // captured (social link vs. map pin vs. confirmed candidate).
-        if let lhsID = googlePlaceId?.trimmingCharacters(in: .whitespacesAndNewlines), !lhsID.isEmpty,
-           let rhsID = other.googlePlaceId?.trimmingCharacters(in: .whitespacesAndNewlines), lhsID == rhsID {
-            return true
+        if let provider = locationProvider, provider == other.locationProvider,
+           let left = nonEmpty(providerPlaceId), let right = nonEmpty(other.providerPlaceId) {
+            return left == right
         }
-        // Same source post, normalised so trailing slashes / tracking params don't split it.
-        if let lhsURL = sourceUrl?.normalizedDeduplicationURLString(),
-           let rhsURL = other.sourceUrl?.normalizedDeduplicationURLString(),
-           lhsURL == rhsURL {
-            return true
+        if let left = nonEmpty(googlePlaceId), let right = nonEmpty(other.googlePlaceId) {
+            return left == right
         }
-        // Same venue by name + geographic proximity — catches a place re-saved from a
-        // different source where neither copy carries a place id or a shared URL.
-        if matchesMapFeature(title: other.name, coordinate: other.coordinate) {
-            return true
+        // A post may recommend multiple venues; proximity alone may be a mall.
+        let leftName = name.normalizedVenueIdentity
+        guard !leftName.isEmpty, leftName == other.name.normalizedVenueIdentity else { return false }
+        if hasValidCoordinate && other.hasValidCoordinate {
+            guard resolvedCoordinateSystem == other.resolvedCoordinateSystem else { return false }
+            return CLLocation(latitude: latitude, longitude: longitude).distance(
+                from: CLLocation(latitude: other.latitude, longitude: other.longitude)
+            ) < 120
         }
-        // Exact text fallback.
-        return name == other.name &&
-            address == other.address &&
-            sourceUrl == other.sourceUrl
+        let leftAddress = address.normalizedVenueIdentity
+        return !leftAddress.isEmpty && leftAddress == other.address.normalizedVenueIdentity
     }
+
 }
 
 private func sourceURL(from evidence: [String]) -> String? {
@@ -980,7 +971,7 @@ extension PlaceCategory {
 extension PendingSharedPlace {
     var deduplicationKey: String {
         if let normalizedSourceURL = sourceURL?.normalizedDeduplicationURLString() {
-            return normalizedSourceURL
+            return "\(normalizedSourceURL)|\(name.normalizedVenueIdentity)|\(address.normalizedVenueIdentity)"
         }
         return "\(name)|\(address)|\(savedAt.timeIntervalSince1970)"
     }
@@ -1076,5 +1067,12 @@ private extension String {
             let name = item.name.lowercased()
             return name == "q" || name == "ll"
         }
+    }
+}
+
+private extension String {
+    var normalizedVenueIdentity: String {
+        folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
     }
 }

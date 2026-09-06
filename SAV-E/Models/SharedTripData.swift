@@ -488,7 +488,7 @@ struct SharedTripData: Codable {
 
     /// Build from an AI-generated itinerary response + resolved places.
     static func from(title: String, city: String, days: [ItineraryDay], places: [Place]) -> SharedTripData {
-        let placeMap = Dictionary(uniqueKeysWithValues: places.map { ($0.id.uuidString, $0) })
+        let placeMap = places.indexedBySavedIDString
         let stops: [SharedStop] = days.flatMap { day in
             day.stops.map { stop in
                 let place = stop.placeId.flatMap { placeMap[$0] }
@@ -511,7 +511,7 @@ struct SharedTripData: Codable {
     /// Builds a public Trip Pack link from confirmed Map Stamps only. Private
     /// notes never leave the device through the route payload.
     static func from(trip: Trip, places: [Place]) -> SharedTripData? {
-        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        let placeByID = places.indexedBySavedID
         var seen = Set<UUID>()
         let stops = trip.places
             .sorted { ($0.day, $0.orderIndex) < ($1.day, $1.orderIndex) }
