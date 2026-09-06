@@ -30,6 +30,23 @@ final class TripGapLocalOptionsServiceTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testActivityGapNeverRecommendsFoodOrCoffeeAsAnActivity() {
+        let activityGap = gap(.missingAfternoonActivity)
+        XCTAssertEqual(TripGapLocalOptionsService.categories(for: [activityGap]), [.attraction, .shopping])
+        let anchor = place("Lunch", latitude: 35, longitude: 139)
+        var cafe = candidate("Coffee")
+        cafe.category = .cafe
+        var park = candidate("Riverside")
+        park.category = .attraction
+        let options = TripGapSuggestionEngine().suggestions(
+            for: [activityGap], days: [day(stops: [stop(for: anchor)])],
+            savedPlaces: [anchor], reviewCandidates: [], mapCandidates: [cafe, park], outputLanguage: .english
+        ).flatMap(\.options)
+        XCTAssertEqual(options.map(\.title), ["Riverside"])
+        XCTAssertEqual(options.first?.action, .addExternalWithApproval)
+    }
+
     // MARK: - Anchoring
 
     @MainActor

@@ -4,6 +4,24 @@ import MapKit
 
 final class DeterministicTripPlannerTests: XCTestCase {
     @MainActor
+    func testHealthUsesVenueCategoryInsteadOfMealTimeOrActivityWords() {
+        let cafe = makePlace("Park Cafe", address: "Taipei", latitude: 25.03, longitude: 121.5, category: .cafe)
+        let attraction = makePlace("故宮", address: "Taipei", latitude: 25.04, longitude: 121.5, category: .attraction)
+        func stop(_ place: Place, time: String) -> ItineraryStop {
+            ItineraryStop(id: UUID(), placeId: place.id.uuidString, placeState: .confirmedMapStamp,
+                          placeName: place.name, time: time, duration: 60, note: nil, sourceSummary: nil, risks: [])
+        }
+        let judge = DeterministicTripPlanner()
+        let foodOnly = judge.tripHealth(for: [stop(cafe, time: "2:00 PM")], savedPlaces: [cafe],
+                                       dayNumber: 1, maxStopsPerDay: 5, outputLanguage: .english)
+        XCTAssertTrue(foodOnly.gaps.contains { $0.type == .missingAfternoonActivity })
+        let sightseeing = judge.tripHealth(for: [stop(attraction, time: "12:30 PM")], savedPlaces: [attraction],
+                                          dayNumber: 1, maxStopsPerDay: 5, outputLanguage: .english)
+        XCTAssertTrue(sightseeing.gaps.contains { $0.type == .missingLunch })
+        XCTAssertFalse(sightseeing.gaps.contains { $0.type == .missingAfternoonActivity })
+    }
+
+    @MainActor
     func testTraditionalChineseQuickPromptStillPlansWhenAIIsOffline() async throws {
         let taipei = makePlace("河濱公園", address: "台北市松山區", latitude: 25.05, longitude: 121.55, category: .attraction)
         let cafe = makePlace("台北咖啡", address: "臺北市松山區", latitude: 25.051, longitude: 121.551, category: .cafe)

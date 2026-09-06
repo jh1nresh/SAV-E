@@ -65,6 +65,7 @@ enum SavePlanDraftBuilder {
             unusedUnsaved.removeAll { $0.category != .stay && usedNames.contains($0.title) }
             let health = DeterministicTripPlanner().tripHealth(
                 for: result.stops,
+                savedPlaces: plannable,
                 dayNumber: day.dayNumber,
                 maxStopsPerDay: request.pace.maxStopsPerDay,
                 outputLanguage: request.language
