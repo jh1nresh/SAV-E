@@ -670,43 +670,23 @@ struct AIDrawerView: View {
         VStack(spacing: SaveTheme.Spacing.md) {
             Spacer()
 
-            ZStack(alignment: .bottomTrailing) {
-                MemoMascotMark(size: 76)
-
-                Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .black))
-                    .foregroundColor(.saveInk)
-                    .frame(width: 30, height: 30)
-                    .background(SaveAtlasPalette.kraft)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
+            SaveAtlasLoadingCard(
+                eyebrow: languageSettings.localized(english: "Savvy is working", traditionalChinese: "Savvy 處理中"),
+                title: languageSettings.text(.memoSorting),
+                detail: showsSlowLoadingHint
+                    ? languageSettings.localized(
+                        english: "Still checking your saved places and map clues.",
+                        traditionalChinese: "還在檢查你存過的地點與地圖線索。"
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .symbolEffect(.pulse, isActive: true)
-                    .offset(x: 10, y: 8)
-            }
-
-            VStack(spacing: SaveTheme.Spacing.xs) {
-                ProgressView().tint(.saveInk)
-                Text(languageSettings.text(.memoSorting))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.78))
-                    .multilineTextAlignment(.center)
-
-                // Long requests (5-10s) read as frozen and get cancelled —
-                // reassure after a beat that work is still happening.
-                if showsSlowLoadingHint {
-                    Text(languageSettings.localized(
-                        english: "Still on it — checking your saved places…",
-                        traditionalChinese: "還在弄——正在翻你存過的地點…"
-                    ))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveMutedText)
-                    .multilineTextAlignment(.center)
-                    .transition(.opacity)
-                }
-            }
+                    : languageSettings.localized(
+                        english: "Matching your request with place memory.",
+                        traditionalChinese: "正在把你的問題和地點記憶配對。"
+                    ),
+                systemImage: "sparkles"
+            )
+            .padding(.horizontal, 16)
+            .transition(.opacity)
+            .accessibilityIdentifier("drawer.loading.card")
             .task {
                 showsSlowLoadingHint = false
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -722,18 +702,18 @@ struct AIDrawerView: View {
                 withAnimation { drawerDetent = .medium }
             }) {
                 Label(languageSettings.text(.cancel), systemImage: "xmark")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.saveInk)
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
                     .padding(.horizontal, SaveTheme.Spacing.md)
                     .padding(.vertical, SaveTheme.Spacing.sm)
-                    .background(SaveAtlasPalette.paper.opacity(0.62))
+                    .background(SaveAtlasPalette.paper)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(SaveAtlasPalette.line, lineWidth: 1.4)
+                            .stroke(SaveAtlasPalette.line.opacity(0.44), lineWidth: 1)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
+            .accessibilityIdentifier("drawer.loading.cancel")
 
             Spacer()
         }

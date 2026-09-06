@@ -42,14 +42,14 @@ struct TripsHomeView: View {
         }
         .overlay {
             if store.isLoading && store.trips.isEmpty {
-                ProgressView(localized("Loading Trip Packs…", "正在載入 Trip Packs…"))
-                    .padding(20)
-                    .saveNotebookSurface(
-                        cornerRadius: 18,
-                        opacity: 0.96,
-                        strokeOpacity: 0.42,
-                        lineWidth: 1.4
-                    )
+                SaveAtlasLoadingCard(
+                    eyebrow: localized("Trip Packs", "旅行包"),
+                    title: localized("Opening your Trip Packs", "正在打開你的旅行包"),
+                    detail: localized("Syncing saved routes and confirmed Map Stamps.", "正在同步路線與已確認的地圖章。"),
+                    systemImage: "map"
+                )
+                .padding(.horizontal, 28)
+                .accessibilityIdentifier("trips.loading")
             }
         }
         .accessibilityIdentifier("trips.home")

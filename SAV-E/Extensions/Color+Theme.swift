@@ -614,6 +614,61 @@ struct SavePostcardMemoPeek: View {
     }
 }
 
+/// Shared loading treatment for Atlas surfaces. Callers own retry, cancel, and
+/// timeout behavior; this view only keeps progress hierarchy consistent.
+struct SaveAtlasLoadingCard: View {
+    let eyebrow: String
+    let title: String
+    let detail: String
+    var systemImage: String = "sparkles"
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            ZStack(alignment: .bottomTrailing) {
+                SavePostcardPerforatedMedallion(
+                    systemName: systemImage,
+                    tint: SaveAtlasPalette.sky,
+                    edge: SaveAtlasPalette.forest
+                )
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(SaveAtlasPalette.forest)
+                    .padding(5)
+                    .background(SaveAtlasPalette.paper, in: Circle())
+                    .offset(x: 5, y: 5)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(eyebrow.uppercased())
+                    .font(SaveAtlasType.strong(10))
+                    .tracking(0.7)
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                Text(title)
+                    .font(SaveAtlasType.strong(19, relativeTo: .headline))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
+        .background(SaveAtlasPalette.paper.opacity(0.98))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.36), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 5, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail)")
+    }
+}
+
 struct SavePostcardPerforatedMedallion: View {
     let systemName: String
     let tint: Color

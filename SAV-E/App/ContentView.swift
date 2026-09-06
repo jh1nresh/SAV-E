@@ -1918,11 +1918,19 @@ private struct FriendShareReceiptView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-            Text(localized("Verifying this share receipt…", "正在驗證這張分享收據…"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        ZStack {
+            SaveDottedBackground().ignoresSafeArea()
+            SaveAtlasLoadingCard(
+                eyebrow: localized("Shared place", "好友分享"),
+                title: localized("Checking this Savvy link", "正在檢查這個 Savvy 連結"),
+                detail: localized(
+                    "Verifying the sender and place before showing a save action.",
+                    "正在確認分享者與地點，再顯示儲存動作。"
+                ),
+                systemImage: "link"
+            )
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("friendShareReceipt.loading")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
