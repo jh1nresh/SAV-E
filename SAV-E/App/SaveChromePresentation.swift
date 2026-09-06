@@ -65,6 +65,8 @@ enum SaveChromeNavigation {
         switch route {
         case .saves:
             return [.saves]
+        case .captureResults:
+            return [route]
         case .trips:
             return [.trips]
         case .trip(let tripID):

@@ -148,6 +148,8 @@ jobs:
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues \
+            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily \
             -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \

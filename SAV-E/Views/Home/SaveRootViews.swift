@@ -66,6 +66,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var captureResultCount: Int? = nil
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedMode: SaveLibraryMode?
@@ -111,6 +112,11 @@ struct SaveLibraryView: View {
 
     private var savesContent: some View {
         VStack(spacing: 0) {
+            if let captureResultCount {
+                SaveCaptureResultNotice(count: captureResultCount)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+            }
             HStack(alignment: .center, spacing: 12) {
                 Text(effectiveMode == .review
                     ? localized("Confirm the place before adding it to your map.", "確認地點後，才會加入你的地圖。")
@@ -132,9 +138,11 @@ struct SaveLibraryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
-            modePicker
-                .padding(.horizontal, 14)
-                .padding(.top, 4)
+            if captureResultCount == nil {
+                modePicker
+                    .padding(.horizontal, 14)
+                    .padding(.top, 4)
+            }
 
             ScrollView(showsIndicators: false) {
                 Group {
@@ -194,7 +202,9 @@ struct SaveLibraryView: View {
             if sortedCandidates.isEmpty {
                 VStack(spacing: 8) {
                     MemoMascotMark(size: 72, framed: false)
-                    Text(localized("No clues waiting", "沒有待確認線索"))
+                    Text(captureResultCount == nil
+                        ? localized("No clues waiting", "沒有待確認線索")
+                        : localized("This capture is reviewed", "本次線索已處理完"))
                         .font(SaveAtlasType.strong(21))
                         .foregroundStyle(SaveAtlasPalette.forest)
                     Text(localized(
@@ -310,7 +320,7 @@ struct SaveLibraryView: View {
     }
 
     private var effectiveMode: SaveLibraryMode {
-        if SaveAtlasRuntime.usesParityFixture {
+        if captureResultCount != nil || SaveAtlasRuntime.usesParityFixture {
             return .review
         }
         return selectedMode ?? (reviewCandidates.isEmpty ? .mapStamps : .review)
@@ -887,5 +897,29 @@ private struct SaveAtlasSealShape: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+/// A capture receipt is evidence found, never confirmation of a saved place.
+struct SaveCaptureResultNotice: View {
+    let count: Int
+    @Environment(\.appLanguageSettings) private var languageSettings
+
+    private var message: String {
+        languageSettings.localized(
+            english: count == 1 ? "Found 1 clue · Review before saving" : "Found \(count) clues · Review before saving",
+            traditionalChinese: "找到 \(count) 個地點線索 · 確認後再儲存"
+        )
+    }
+
+    var body: some View {
+        Label(message, systemImage: "magnifyingglass")
+        .font(SaveAtlasType.body(14))
+        .foregroundStyle(SaveAtlasPalette.forest)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(message)
+        .accessibilityIdentifier("capture.results.notice")
     }
 }
