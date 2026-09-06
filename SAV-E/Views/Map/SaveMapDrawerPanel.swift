@@ -27,9 +27,9 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            // Expanded content is above root navigation, whose geometry already
-            // excludes the home indicator; keep the same bottom edge as idle.
-            let bottomClearance = max(0, tabBarClearance - (isExpanded ? proxy.safeAreaInsets.bottom : 0))
+            // Keep one view and coordinate space alive at every stage.
+            // The root geometry already excludes the home indicator.
+            let bottomClearance = max(0, tabBarClearance - proxy.safeAreaInsets.bottom)
             if isExpanded || showsCollapsedShelf {
                 VStack(spacing: 0) {
                     resizeHandle

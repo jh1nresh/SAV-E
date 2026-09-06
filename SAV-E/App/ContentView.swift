@@ -246,7 +246,7 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
-            if isMapPanelExpanded { mapDrawerPanel }
+            if selectedRootTab == .map || isMapPanelExpanded { mapDrawerPanel }
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
@@ -622,12 +622,6 @@ struct ContentView: View {
                             // future caller sets it directly.
                             planView
                         }
-                    }
-
-                    // The docked resting panel sits behind the tab controls;
-                    // expanded content is above navigation and keyboard-aware.
-                    if selectedRootTab == .map && !isMapPanelExpanded {
-                        mapDrawerPanel
                     }
 
                     AtlasTabBar(
