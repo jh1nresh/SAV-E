@@ -35,10 +35,22 @@ class CoverageTests(unittest.TestCase):
         plan = selection.select(["SAV-E/Views/Map/SaveMapDrawerPanel.swift"])
         self.assertEqual(plan["profile"], "map")
         self.assertIn(selection.RAIL + "testCaptureAtlasProductionParity", plan["tests"])
+        self.assertIn(selection.RAIL + "testCaptureFiveTabLanding", plan["tests"])
         self.assertIn(selection.RAIL + "testMapSearchDrawerResizesThroughThreeStages", plan["tests"])
         self.assertIn(selection.RAIL + "testTripMapMarkerDetailReturnsToScopedTabs", plan["tests"])
         self.assertFalse(plan["trip"])
         self.assertLess(len(plan["tests"]), len(selection.FULL))
+
+    def test_every_ui_route_keeps_parity_and_five_tab_home(self):
+        parity = selection.RAIL + "testCaptureAtlasProductionParity"
+        five_tab = selection.RAIL + "testCaptureFiveTabLanding"
+        for path in (*selection.SURFACES,):
+            plan = selection.select([path])
+            with self.subTest(path=path):
+                self.assertTrue(plan["ui"])
+                self.assertIn(parity, plan["tests"])
+                self.assertIn(five_tab, plan["tests"])
+        self.assertIn(five_tab, selection.select([], full=True)["tests"])
 
     def test_onboarding_keeps_entire_carousel_class_and_replay(self):
         plan = selection.select(["SAV-E/Views/Onboarding/OnboardingView.swift"])
