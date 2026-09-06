@@ -1,0 +1,19 @@
+[
+  "SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity",
+  "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding",
+  "SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData",
+  "SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues",
+  "SAVEUITests/SAVEScreenshotRailTests/testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",
+  "SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail",
+  "SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily",
+  "SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch",
+  "SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs",
+  "SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps",
+  "SAVEUITests/SAVEScreenshotRailTests/testMapSearchDrawerResizesThroughThreeStages",
+  "SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket",
+  "SAVEUITests/SAVEScreenshotRailTests/testRapidChromeTransitionsKeepAppAlive",
+  "SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable",
+  "SAVEUITests/SAVEOnboardingCarouselTests",
+  "SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces",
+  "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable"
+]

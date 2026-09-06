@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,48 +24,40 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
 
-      # Docs/spec/backend-only PRs don't need the 30-minute iOS pipeline.
-      # Fail-open: if this step errors, outputs.run stays unset and every
-      # gated step still runs.
-      - name: Detect iOS-relevant changes
+      - name: Verify CI test selection
+        run: python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v
+
+      - name: Select iOS coverage
         id: scope
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          files="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files" \
-            --paginate --jq '.[].filename')"
-          run=false
-          while IFS= read -r f; do
-            [[ -z "$f" ]] && continue
-            case "$f" in
-              *.md) ;;
-              specs/*|docs/*|design-prompts/*) ;;
-              backend/*|save-rn/*|services/*|supabase/*) ;;
-              Prototypes/AtlasPostcard/decisions/*) ;;
-              *) run=true; break ;;
-            esac
-          done <<< "$files"
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-          echo "iOS-relevant changes: $run"
-          echo "changed files:"; echo "$files"
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/select-ios-tests.py --output-dir "$RUNNER_TEMP"
+
+      - name: Upload test selection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-test-selection-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-test-selection.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Select Xcode 26.6
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Verify toolchain
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: xcodebuild -version
 
       - name: Check secrets packaging
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: scripts/test-package-google-places-secrets.sh
 
       - name: Cache SwiftPM packages
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
@@ -73,7 +66,7 @@ jobs:
             spm-${{ runner.os }}-
 
       - name: Build without booting a simulator
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -87,7 +80,7 @@ jobs:
 
       - name: Create focused test simulator
         id: simulator
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: |
           udid="$(xcrun simctl create \
             'SAV-E CI' \
@@ -101,7 +94,7 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
 
       - name: Run unit tests
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.run == 'true'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -115,7 +108,7 @@ jobs:
             test
 
       - name: Reset focused simulator before UI tests
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.ui == 'true'
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
@@ -129,15 +122,23 @@ jobs:
       # only re-runs tests that failed, so a green run costs nothing, and a
       # genuine regression still fails all three attempts. Any retry that did
       # happen is surfaced by the next step rather than being swallowed.
-      - name: Run Home-Saves, link-to-Trip, and Trip Map UI tests
+      - name: Run selected UI regression tests
         # Job budget is 75. 60 was too tight once Plan replaced Origin: unit
         # tests plus four UI tests that needed three attempts (run 33905649737)
         # hit the 1h wall while Home-Saves was still running.
         timeout-minutes: 55
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
         run: |
+          ui_args=()
+          while IFS= read -r argument; do
+            ui_args+=("$argument")
+          done < "$RUNNER_TEMP/ios-ui-args.txt"
+          if ((${#ui_args[@]} == 0)); then
+            echo 'UI coverage was selected but no test arguments were produced.' >&2
+            exit 1
+          fi
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
@@ -145,29 +146,14 @@ jobs:
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testUnsavedAndSocialDetailsUsePostcardDetailFamily \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripMapMarkerDetailReturnsToScopedTabs \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasTripsAndLiveMaps \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testMapSearchDrawerResizesThroughThreeStages \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripUsesPlanMapAndTopSharePostcardPocket \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testRapidChromeTransitionsKeepAppAlive \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable \
-            -only-testing:SAVEUITests/SAVEOnboardingCarouselTests \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces \
+            "${ui_args[@]}" \
             -test-iterations 3 \
             -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
       - name: Enforce Atlas production visual parity
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.ui == 'true'
         run: |
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -175,14 +161,14 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
+        if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-First-Run"
 
       - name: Reset focused simulator before Trip sheet UI test
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.trip == 'true'
         run: |
           xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
           xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
@@ -192,7 +178,7 @@ jobs:
 
       - name: Run Trip atlas sheet family UI test
         timeout-minutes: 15
-        if: github.event_name != 'pull_request' || steps.scope.outputs.run != 'false'
+        if: steps.scope.outputs.trip == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Trip-Sheets-tests.log
         run: |
@@ -217,7 +203,7 @@ jobs:
       # every test that needed more than one attempt so the trend stays visible
       # even while the job is green.
       - name: Report retried UI tests
-        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
+        if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           shopt -s nullglob
           logs=("$RUNNER_TEMP"/SAVE-*-tests.log)
@@ -265,7 +251,7 @@ jobs:
           exit "$cleanup_status"
 
       - name: Upload Atlas parity evidence
-        if: always() && (github.event_name != 'pull_request' || steps.scope.outputs.run != 'false')
+        if: always() && (steps.scope.outputs.ui == 'true')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: save-atlas-parity-${{ github.sha }}
