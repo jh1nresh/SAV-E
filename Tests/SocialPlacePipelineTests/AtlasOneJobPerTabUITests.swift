@@ -72,23 +72,23 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
 
         XCTAssertTrue(row.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(row.contains("placeID: \"row.\\(place.id)\""))
-        XCTAssertTrue(row.contains("photoURL: place.photoURL"))
+        XCTAssertTrue(row.contains("placeID: place.id"))
+        XCTAssertTrue(row.contains("photoURLs: place.photoURLs"))
         XCTAssertTrue(row.contains("photoHeight: 112"))
         XCTAssertTrue(row.contains("RoundStamp(text: \"\", style: .mapStamp)"))
         XCTAssertTrue(hero.contains("HomeSavedPlaceThumbnail("))
-        XCTAssertTrue(hero.contains("placeID: \"hero.\\(place.id)\""))
-        XCTAssertTrue(hero.contains("photoURL: place.photoURL"))
+        XCTAssertTrue(hero.contains("placeID: place.id"))
+        XCTAssertTrue(hero.contains("photoURLs: place.photoURLs"))
         XCTAssertTrue(hero.contains("home.photoHero"))
         XCTAssertFalse(hero.contains("home.hero.changeCover"))
         XCTAssertFalse(hero.contains("photo.stack"))
         XCTAssertTrue(screens.contains("presentation.savedPlaces.first"))
         XCTAssertFalse(screens.contains("placesWithPhotos"))
         XCTAssertFalse(screens.contains("cycleFeaturedPlace"))
-        XCTAssertTrue(thumbnail.contains("CachedAsyncImage"))
-        XCTAssertTrue(thumbnail.contains(".id(placeID)"))
+        XCTAssertTrue(thumbnail.contains("CachedImageStore"))
+        XCTAssertTrue(thumbnail.contains("onRefreshPlacePhoto(placeID)"))
         XCTAssertTrue(thumbnail.contains("scaledToFill"))
-        XCTAssertTrue(thumbnail.contains("fallback"))
+        XCTAssertTrue(thumbnail.contains(".frame(height: photoHeight)"))
         XCTAssertFalse(thumbnail.contains("HomeLocationSnapshot"))
         XCTAssertFalse(thumbnail.contains("MKLookAroundSceneRequest"))
         XCTAssertFalse(thumbnail.contains("MKMapSnapshotter"))
@@ -97,12 +97,29 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(bridge.contains("HomePlaceCardArt.photoURL(for: place)"))
 
         let home = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(home.contains("await mapViewModel.enrichMissingHomePlacePhotos()"))
+        XCTAssertTrue(bridge.contains("await mapViewModel.refreshHomePlacePhoto(id: placeID)"))
         XCTAssertTrue(home.contains("ReviewDemo.isOfflineUITestMode"))
 
         let imageLoader = try source(at: "SAV-E/Views/Components/CachedAsyncImage.swift")
         XCTAssertTrue(imageLoader.contains("CachedAsyncImageDisplay.phase"))
         XCTAssertTrue(imageLoader.contains("requestedURL == loadedURL"))
+    }
+
+    @MainActor
+    func testHomeUsesDistanceWithLocationAndRecencyWithoutIt() {
+        var nearby = savedPlace(name: "Nearby")
+        nearby.latitude = 25.03
+        nearby.longitude = 121.55
+        nearby.createdAt = Date(timeIntervalSince1970: 1)
+        var distant = savedPlace(name: "Distant")
+        distant.latitude = 34.05
+        distant.longitude = -118.25
+        distant.createdAt = Date(timeIntervalSince1970: 2)
+        let location = CLLocation(latitude: 25.031, longitude: 121.551)
+        XCTAssertEqual(SaveAtlasPresentationFactory.orderedHomePlaces([distant, nearby], location: location).first?.id, nearby.id)
+        XCTAssertEqual(SaveAtlasPresentationFactory.orderedHomePlaces([nearby, distant], location: nil).first?.id, distant.id)
+        nearby.businessPhotoUrls = ["https://example.com/photo.jpg"]
+        XCTAssertEqual(SaveAtlasPresentationFactory.orderedHomePlaces([distant, nearby], location: location).first?.id, nearby.id)
     }
 
     @MainActor

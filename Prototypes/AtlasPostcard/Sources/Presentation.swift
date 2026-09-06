@@ -314,6 +314,7 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
     let area: String
     let region: String?
     let photoURL: URL?
+    let photoURLs: [URL]
     let latitude: Double?
     let longitude: Double?
     let relativeDay: String
@@ -325,6 +326,7 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         area: String,
         region: String?,
         photoURL: URL?,
+        photoURLs: [URL] = [],
         latitude: Double? = nil,
         longitude: Double? = nil,
         relativeDay: String,
@@ -335,6 +337,8 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         self.area = area
         self.region = region
         self.photoURL = photoURL
+        var seen = Set<URL>()
+        self.photoURLs = ([photoURL].compactMap { $0 } + photoURLs).filter { seen.insert($0).inserted }
         self.latitude = latitude
         self.longitude = longitude
         self.relativeDay = relativeDay
@@ -528,6 +532,7 @@ struct AtlasPresentation: @unchecked Sendable {
     /// One-tap planning suggestions derived from confirmed Map Stamps.
     var tripRecommendations: [AtlasTripRecommendationPresentation] = []
     var onPlanRecommendation: (String) -> Void = { _ in }
+    var onRefreshPlacePhoto: (String) async -> Void = { _ in }
 
     static let reference = AtlasPresentation(
         homeHero: .referenceTokyo,
