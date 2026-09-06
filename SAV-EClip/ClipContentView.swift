@@ -39,6 +39,25 @@ struct ClipContentView: View {
             .background(ClipDottedBackground())
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if tripData != nil {
+                    ToolbarItem(placement: .principal) {
+                        HStack(spacing: 8) {
+                            Image("SavvyLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 28, height: 28)
+                                .clipShape(RoundedRectangle(cornerRadius: 7))
+                                .accessibilityHidden(true)
+                            Text("Savvy")
+                                .font(ClipAtlasType.strong(18, relativeTo: .headline))
+                                .foregroundStyle(ClipAtlasPalette.forest)
+                        }
+                    }
+                }
+            }
+            .toolbarBackground(ClipAtlasPalette.canvas, for: .navigationBar)
+            .toolbarBackground(tripData != nil ? .visible : .automatic, for: .navigationBar)
         }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
             handleIncomingURL(activity.webpageURL)
@@ -471,116 +490,139 @@ struct ClipContentView: View {
 
     private func tripContentView(_ trip: SharedTripData) -> some View {
         ScrollView {
-            VStack(spacing: 20) {
-                Map(position: $cameraPosition) {
-                    ForEach(trip.stops) { stop in
-                        Marker(stop.name, coordinate: stop.coordinate)
-                            .tint(Color.saveCoral)
-                    }
-                }
-                .frame(height: 200)
-                .cornerRadius(16)
-                .padding(.horizontal)
-
+            VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("SHARED TRIP · PREVIEW")
+                        .font(ClipAtlasType.strong(11, relativeTo: .caption))
+                        .tracking(0.65)
+                        .foregroundStyle(ClipAtlasPalette.muted)
+
                     Text(trip.name)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.saveInk)
+                        .font(ClipAtlasType.display(30, relativeTo: .title))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(summaryLine(for: trip))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-
-                    Text(routeSummary(for: trip))
-                        .font(.caption)
-                        .foregroundColor(Color.saveCoral)
+                        .font(ClipAtlasType.body(14, relativeTo: .subheadline))
+                        .foregroundStyle(ClipAtlasPalette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
 
-                VStack(spacing: 12) {
-                    ForEach(trip.stops) { stop in
-                        HStack(spacing: 12) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(Color.saveCoral)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(stop.name)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(Color.saveInk)
-                                    Spacer()
-                                    if let time = stop.time {
-                                        Text(time)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                if !stop.address.isEmpty {
-                                    Text(stop.address)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                if let note = stop.note {
-                                    Text(note)
-                                        .font(.caption)
-                                        .foregroundColor(Color.saveCoral)
-                                }
-                            }
-
-                            Spacer()
+                Map(position: $cameraPosition) {
+                    ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
+                        Annotation(stop.name, coordinate: stop.coordinate) {
+                            Text("\(index + 1)")
+                                .font(ClipAtlasType.strong(13, relativeTo: .caption))
+                                .foregroundStyle(ClipAtlasPalette.paper)
+                                .padding(9)
+                                .background(ClipAtlasPalette.forest, in: Circle())
+                                .overlay { Circle().stroke(ClipAtlasPalette.paper, lineWidth: 2) }
+                                .accessibilityLabel("Shared trip stop \(index + 1), \(stop.name)")
                         }
-                        .padding(12)
-                        .background(Color.savePaper)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.saveNotebookLine, lineWidth: 2)
-                        )
-                        .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
                     }
                 }
-                .padding(.horizontal)
+                .frame(height: 190)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityIdentifier("clip.trip.map")
 
-                VStack(spacing: 12) {
-                    Button {
-                        UIPasteboard.general.string = copySummary(for: trip)
-                    } label: {
-                        Text("Copy route summary")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.savePaper)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Itinerary")
+                        .font(ClipAtlasType.strong(18, relativeTo: .headline))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+
+                    VStack(spacing: 0) {
+                        ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
+                            if index > 0 {
+                                Rectangle()
+                                    .fill(ClipAtlasPalette.line.opacity(0.28))
+                                    .frame(height: 1)
+                                    .padding(.leading, 58)
+                            }
+                            tripStopRow(stop, index: index)
+                        }
                     }
-
-                    Button(action: openInFullApp) {
-                        Text("Import / Open in Savvy")
-                            .font(.headline)
-                            .foregroundColor(Color.saveInk)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.saveHoney)
-                            .cornerRadius(16)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color.saveNotebookLine, lineWidth: 2)
-                            )
-                            .shadow(color: Color.saveNotebookLine.opacity(0.18), radius: 0, x: 4, y: 4)
+                    .background(ClipAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(ClipAtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 32)
+            }
+            .padding(20)
+        }
+        .background(ClipAtlasPalette.canvas)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 4) {
+                Button(action: openInFullApp) {
+                    Label("Open in Savvy", systemImage: "arrow.up.right")
+                        .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(ClipAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("clip.trip.open")
+
+                Button {
+                    UIPasteboard.general.string = copySummary(for: trip)
+                } label: {
+                    Label("Copy route summary", systemImage: "doc.on.doc")
+                        .font(ClipAtlasType.body(14, relativeTo: .subheadline))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("clip.trip.copy")
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .background(ClipAtlasPalette.canvas)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(ClipAtlasPalette.line.opacity(0.28))
+                    .frame(height: 1)
             }
         }
+        .accessibilityIdentifier("clip.trip.preview")
+    }
+
+    private func tripStopRow(_ stop: SharedTripData.SharedStop, index: Int) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(index + 1)")
+                .font(ClipAtlasType.strong(13, relativeTo: .caption))
+                .foregroundStyle(ClipAtlasPalette.forest)
+                .frame(minWidth: 30, minHeight: 30)
+                .background(ClipAtlasPalette.line.opacity(0.14), in: Circle())
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(stop.name)
+                    .font(ClipAtlasType.strong(16, relativeTo: .headline))
+                    .foregroundStyle(ClipAtlasPalette.ink)
+                if let time = stop.time, !time.isEmpty {
+                    Text(time)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.forest)
+                }
+                if !stop.address.isEmpty {
+                    Text(stop.address)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.muted)
+                }
+                if let note = stop.note, !note.isEmpty {
+                    Text(note)
+                        .font(ClipAtlasType.body(13, relativeTo: .caption))
+                        .foregroundStyle(ClipAtlasPalette.muted)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .accessibilityElement(children: .combine)
     }
 
     private func listContentView(_ list: SharedListData) -> some View {
@@ -1024,10 +1066,6 @@ struct ClipContentView: View {
         return "\(countLabel) in \(trip.city)"
     }
 
-    private func routeSummary(for trip: SharedTripData) -> String {
-        trip.stops.map(\.name).joined(separator: " → ")
-    }
-
     private func copySummary(for trip: SharedTripData) -> String {
         let stops = trip.stops.enumerated().map { index, stop in
             let address = stop.address.isEmpty ? "" : " — \(stop.address)"
@@ -1174,16 +1212,55 @@ private enum ClipAtlasPalette {
 }
 
 private enum ClipAtlasType {
-    static func display(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-DemiBold", size: size, relativeTo: style)
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .semibold, relativeTo: style)
     }
 
-    static func strong(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-Bold", size: size, relativeTo: style)
+    static func strong(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .bold, relativeTo: style)
     }
 
-    static func body(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
-        .custom("AvenirNextCondensed-Medium", size: size, relativeTo: style)
+    static func body(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .body
+    ) -> Font {
+        rounded(size, weight: .medium, relativeTo: style)
+    }
+
+    private static func rounded(
+        _ size: CGFloat,
+        weight: UIFont.Weight,
+        relativeTo style: Font.TextStyle
+    ) -> Font {
+        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
+        let descriptor = systemFont.fontDescriptor.withDesign(.rounded)
+            ?? systemFont.fontDescriptor
+        let roundedFont = UIFont(descriptor: descriptor, size: size)
+        let scaledFont = UIFontMetrics(forTextStyle: style.uiTextStyle)
+            .scaledFont(for: roundedFont)
+        return Font(scaledFont)
+    }
+}
+
+private extension Font.TextStyle {
+    var uiTextStyle: UIFont.TextStyle {
+        if self == .largeTitle { return .largeTitle }
+        if self == .title { return .title1 }
+        if self == .title2 { return .title2 }
+        if self == .title3 { return .title3 }
+        if self == .headline { return .headline }
+        if self == .subheadline { return .subheadline }
+        if self == .callout { return .callout }
+        if self == .footnote { return .footnote }
+        if self == .caption { return .caption1 }
+        if self == .caption2 { return .caption2 }
+        return .body
     }
 }
 

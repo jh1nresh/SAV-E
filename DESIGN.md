@@ -293,7 +293,8 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
-| `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), Clip preview, smoke harness | Legacy cream-notebook |
+| App Clip trip preview (`ClipContentView.tripContentView`) | Atlas; rounded type, numbered itinerary, coral open action |
+| `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), remaining legacy Clip surfaces, smoke harness | Legacy cream-notebook |
 
 Rules:
 
