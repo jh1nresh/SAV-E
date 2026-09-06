@@ -2339,7 +2339,17 @@ final class MapViewModel: ObservableObject {
                   self.authService.currentUserId == userID,
                   let index = self.places.firstIndex(where: { $0.id == id }) else { return }
             // Preserve edits made while provider details were in flight.
+            guard self.places[index].name == place.name,
+                  self.places[index].address == place.address,
+                  self.places[index].coordinate.latitude == place.latitude,
+                  self.places[index].coordinate.longitude == place.longitude else { return }
             self.places[index].businessPhotoUrls = enriched.businessPhotoUrls
+            if self.places[index].googlePlaceId == place.googlePlaceId {
+                self.places[index].googlePlaceId = enriched.googlePlaceId
+            }
+            self.places[index].googleRating = self.places[index].googleRating ?? enriched.googleRating
+            self.places[index].priceRange = self.places[index].priceRange ?? enriched.priceRange
+            self.places[index].openingHours = self.places[index].openingHours ?? enriched.openingHours
             let updated = self.places[index]
             if self.selectedPlace?.id == id { self.selectedPlace = updated }
             self.mirrorToLocalVault(updated)
