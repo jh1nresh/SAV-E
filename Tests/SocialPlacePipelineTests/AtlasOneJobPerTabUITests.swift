@@ -4,6 +4,22 @@ import XCTest
 @testable import SAVE
 
 final class AtlasOneJobPerTabUITests: XCTestCase {
+    func testPrimaryLoadingSurfacesShareTheAtlasLoadingCard() throws {
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        let trips = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+
+        XCTAssertTrue(theme.contains("struct SaveAtlasLoadingCard"))
+        XCTAssertTrue(theme.contains("SavePostcardPerforatedMedallion"))
+        XCTAssertTrue(content.contains("friendShareReceipt.loading"))
+        XCTAssertTrue(trips.contains("trips.loading"))
+        XCTAssertTrue(drawer.contains("drawer.loading.card"))
+        XCTAssertTrue(drawer.contains("drawer.loading.cancel"))
+        XCTAssertFalse(trips.contains("ProgressView(localized(\"Loading Trip Packs"))
+        XCTAssertFalse(content.contains("Text(localized(\"Verifying this share receipt"))
+    }
+
     func testLiveHomeLeadsWithSavedPlacesAndKeepsSecondaryManagement() throws {
         let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
