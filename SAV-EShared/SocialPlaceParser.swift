@@ -361,6 +361,13 @@ struct SharedMapLinkMatch: Codable, Hashable {
 enum SocialShareURLCanonicalizer {
     static func analysisURL(originalURL: URL, resolvedURL: URL?) -> URL {
         guard let resolvedURL else { return originalURL }
+        // Login/challenge/error pages and unrelated posts cannot replace the
+        // shared post. Retaining its identity also lets metadata consumers
+        // discard the redirect shell and retry recovery with the original ID.
+        if let originalPostID = instagramPostID(originalURL),
+           (resolvedURL.scheme?.lowercased() != "https" || instagramPostID(resolvedURL) != originalPostID) {
+            return originalURL
+        }
         if let target = trustedDianpingRedirectTarget(in: resolvedURL) {
             return target
         }
@@ -369,6 +376,16 @@ enum SocialShareURLCanonicalizer {
             return originalURL
         }
         return resolvedURL
+    }
+
+    private static func instagramPostID(_ url: URL) -> String? {
+        guard let host = url.host?.lowercased(), isHost(host, domain: "instagram.com"),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        let parts = url.path.split(separator: "/")
+        guard parts.count == 2,
+              ["p", "reel", "reels", "tv"].contains(String(parts[0]).lowercased()),
+              parts[1].range(of: #"^[A-Za-z0-9_-]+$"#, options: .regularExpression) != nil else { return nil }
+        return String(parts[1])
     }
 
     private static func trustedDianpingRedirectTarget(in url: URL) -> URL? {
@@ -1198,9 +1215,11 @@ struct SocialPlaceParser {
         candidates.append(contentsOf: mainlandMerchantCandidates(from: evidence, fullText: text))
         candidates.append(contentsOf: douyinFoodListCandidates(from: text, sourceURL: evidence.sourceURL))
         if !isDouyinAggregateList || !candidates.isEmpty {
+            let proseCandidates = englishProseVenueCandidates(from: text, sourceURL: evidence.sourceURL)
             candidates.append(contentsOf: numberedCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text, handleContexts: handleContexts))
-            candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL))
+            candidates.append(contentsOf: bracketedCandidates(from: text, sourceURL: evidence.sourceURL, proseCandidates: proseCandidates))
             candidates.append(contentsOf: englishStayCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
+            candidates.append(contentsOf: proseCandidates)
             candidates.append(contentsOf: inferredAddressCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
             candidates.append(contentsOf: addressOnlyCandidates(from: lines, sourceURL: evidence.sourceURL, fullText: text))
             candidates.append(contentsOf: chineseVenueCandidates(from: text, sourceURL: evidence.sourceURL))
@@ -1502,18 +1521,33 @@ struct SocialPlaceParser {
         }
     }
 
-    private func bracketedCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+    private func bracketedCandidates(from text: String, sourceURL: String, proseCandidates: [SocialPlaceCandidateDraft]) -> [SocialPlaceCandidateDraft] {
+        let locationIntroPattern = #"(?i)\b(?:at|spot|place)\s+([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n)"#
         let patterns = [
             #"<\s*([A-Za-z0-9\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af][A-Za-z0-9 &'._\-\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]{1,80})\s*>"#,
             #"[《]\s*([^》\n\r]{2,80})\s*[》]"#,
             #"[\[【]\s*([^\]】]{2,80})\s*[\]】]"#,
-            #"(?i)\b(?:at|spot|place)\s+([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n)"#,
+            locationIntroPattern,
             #"(?i)\b(?:new\s+)?(?:brunch\s+)?(?:spot|place|restaurant|cafe)\s*:\s*([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n|$)"#
         ]
         return patterns.compactMap { pattern in
-            guard let name = firstCapture(in: text, pattern: pattern) else { return nil }
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)),
+                  let nameRange = Range(match.range(at: 1), in: text) else { return nil }
+            let name = String(text[nameRange])
             let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
             guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) else { return nil }
+            // A paired HTML element is markup, not a bracketed venue name.
+            let closingTag = #"</\s*"# + NSRegularExpression.escapedPattern(for: name) + #"\s*>"#
+            guard text.range(of: closingTag, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+            // "Aurora Museum opens at Harbor Square, Boston" names one venue;
+            // the broad "at ..." rule must not promote its area to a second one.
+            if pattern == locationIntroPattern, proseCandidates.contains(where: { candidate in
+                candidate.evidence.contains { atom in
+                    guard atom.role == .venueName, let sentenceRange = text.range(of: atom.line) else { return false }
+                    return NSLocationInRange(match.range.location, NSRange(sentenceRange, in: text))
+                }
+            }) { return nil }
             let location = firstLocationClue(in: text)
             let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
             return draft(
@@ -1571,6 +1605,46 @@ struct SocialPlaceParser {
                 )
             }
             return nil
+        }
+    }
+
+    private func englishProseVenueCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
+        // A category mention or a person's name is insufficient. Require a
+        // capitalized venue name and an explicit physical-location predicate,
+        // keeping the location from that same sentence as an unverified clue.
+        let word = #"[A-Z][A-Za-z0-9'’&-]*"#
+        let name = word + #"(?:\s+(?:of|the|and|for|&|"# + word + #")){0,9}"#
+        let location = word + #"(?:\s+"# + word + #"){0,5}(?:,\s*"# + word + #"(?:\s+"# + word + #"){0,4}){0,2}"#
+        let pattern = #"(?:^|[.!?\n]\s*|[\"“]\s*)(?:The\s+)?("# + name + #")\s+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\s+(?:in|at|near)\s+("# + location + #")(?=[,.!?;\s]|$)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        return regex.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)).compactMap { match in
+            guard let nameRange = Range(match.range(at: 1), in: text),
+                  let locationRange = Range(match.range(at: 2), in: text),
+                  let sentenceRange = Range(match.range, in: text) else { return nil }
+            let venue = String(text[nameRange])
+            let categoryPattern = #"\b(?:Museum|Gallery|Park|Garden|Gardens|Theatre|Theater|Aquarium|Zoo|Library|Observatory|Restaurant|Cafe|Café|Hotel|Resort)\b"#
+            let venueEnding = categoryPattern + #"(?:\s+(?:of|for)\s+"# + name + #")?$"#
+            guard venue.range(of: venueEnding, options: .regularExpression) != nil,
+                  venue.range(of: #"^(?:This|That|Our|Your|My|A|An)\b"#, options: .regularExpression) == nil,
+                  venue.replacingOccurrences(of: categoryPattern, with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespaces).count >= 2,
+                  SocialPlaceEvidenceScorer.isUsableCandidateName(venue) else { return nil }
+            let area = String(text[locationRange])
+            let sentence = String(text[sentenceRange])
+            return draft(
+                name: venue,
+                category: category(from: venue),
+                sourceURL: sourceURL,
+                fullText: text,
+                locationClues: [area],
+                atoms: [
+                    SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: venue, line: sentence, confidence: 0.66),
+                    SocialEvidenceAtom(source: .captionSentence, role: .cityClue, value: area, line: sentence, confidence: 0.52)
+                ],
+                confidence: 0.58,
+                tier: .weakCandidate,
+                extraMissingInfo: ["Prose location clue; verify exact venue and address"]
+            )
         }
     }
 
