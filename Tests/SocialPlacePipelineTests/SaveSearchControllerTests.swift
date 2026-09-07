@@ -4153,7 +4153,7 @@ private struct StubAIDrawerLocationProvider: AIDrawerLocationProviding {
     }
 }
 
-private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol, @unchecked Sendable {
+private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol {
     struct MatchingRequest {
         let query: String
         let coordinate: CLLocationCoordinate2D?
@@ -4161,7 +4161,6 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
         let span: MKCoordinateSpan?
     }
 
-    private let lock = NSLock()
     private(set) var matchingRequests: [MatchingRequest] = []
     var nextMatchingResults: [SaveMapCandidate]
 
@@ -4184,13 +4183,10 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
         span: MKCoordinateSpan?,
         excluding savedPlaces: [Place]
     ) async -> [SaveMapCandidate] {
-        lock.lock()
         matchingRequests.append(
             MatchingRequest(query: query, coordinate: coordinate, near: coordinate, span: span)
         )
-        let results = nextMatchingResults
-        lock.unlock()
-        return results
+        return nextMatchingResults
     }
 }
 
@@ -4292,13 +4288,13 @@ private final class SuspendedMapCandidatePlaceSaver: @unchecked Sendable {
     }
 }
 
+@MainActor
 final class MapReviewLocationRepairTests: XCTestCase {
     private let taipei = CLLocationCoordinate2D(latitude: 25.0330, longitude: 121.5654)
     private let osaka = CLLocationCoordinate2D(latitude: 34.6937, longitude: 135.5023)
     private let usVenue = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
 
-    @MainActor
-    func testGenericCategorySearchUsesViewportNotSavedUSVenue() async {
+    func testGenericCategorySearchUsesViewportNotSavedUSVenue() async throws {
         for query in ["奶茶", "酒吧", "咖啡", "museum"] {
             let search = RecordingMapCandidateSearchService()
             let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -4317,7 +4313,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         }
     }
 
-    @MainActor
     func testPanningViewportChangesGenericSearchAnchor() async {
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -4332,7 +4327,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(search.matchingRequests[1].near?.latitude ?? 0, osaka.latitude, accuracy: 0.0001)
     }
 
-    @MainActor
     func testGenericSearchWithoutAnchorKeepsCameraAndAsksForCity() async {
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -4348,8 +4342,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(cameraCenter(map)?.longitude ?? 0, before?.longitude ?? 1, accuracy: 0.0001)
     }
 
-    @MainActor
-    func testNamedTaipeiQueryCanSearchAwayFromViewport() async {
+    func testNamedTaipeiQueryCanSearchAwayFromViewport() async throws {
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
         map.updateVisibleMapRegion(region(around: osaka))
@@ -4361,8 +4354,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(request.query, "咖啡 臺北")
     }
 
-    @MainActor
-    func testLocalResultsIgnoreUSOutlierAndInvalidCoordinates() async {
+    func testLocalResultsIgnoreUSOutlierAndInvalidCoordinates() async throws {
         let search = RecordingMapCandidateSearchService()
         search.nextMatchingResults = [
             SaveMapCandidate(id: "local", title: "Local Tea", subtitle: "Taipei", latitude: 25.034, longitude: 121.564, category: .cafe),
@@ -4376,18 +4368,14 @@ final class MapReviewLocationRepairTests: XCTestCase {
 
         XCTAssertEqual(map.mapCandidates.map(\.id), ["local"])
         let focused = try XCTUnwrap(cameraCenter(map))
+        let distanceToTaipei = MapSearchGeography.distanceMeters(from: focused, to: taipei)
+        let distanceToUS = MapSearchGeography.distanceMeters(from: focused, to: usVenue)
         XCTAssertEqual(focused.latitude, 25.034, accuracy: 0.02)
-        XCTAssertLessThan(
-            MapSearchGeography.distanceMeters(from: focused, to: taipei),
-            8_000
-        )
-        XCTAssertGreaterThan(
-            MapSearchGeography.distanceMeters(from: focused, to: usVenue),
-            8_000_000
-        )
+        XCTAssertLessThan(distanceToTaipei, 8_000)
+        XCTAssertGreaterThan(distanceToUS, 8_000_000)
     }
 
-    func testDatelineOppositesDoNotCreateContinentalFit() {
+    func testDatelineOppositesDoNotCreateContinentalFit() throws {
         let west = CLLocationCoordinate2D(latitude: 21.3, longitude: 179.8)
         let east = CLLocationCoordinate2D(latitude: 21.3, longitude: -179.8)
         let region = try XCTUnwrap(
@@ -4399,29 +4387,26 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     func testEmptyOrInvalidCoordinatesPreserveNoRegion() {
-        XCTAssertNil(MapSearchGeography.cameraRegion(for: [], around: taipei))
-        XCTAssertNil(
-            MapSearchGeography.cameraRegion(
-                for: [CLLocationCoordinate2D(latitude: .nan, longitude: .infinity)],
-                around: taipei
-            )
+        let empty = MapSearchGeography.cameraRegion(for: [], around: taipei)
+        let invalid = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: .nan, longitude: .infinity)],
+            around: taipei
         )
-        XCTAssertNil(
-            MapSearchGeography.cameraRegion(
-                for: [CLLocationCoordinate2D(latitude: 0, longitude: 0)],
-                around: taipei
-            )
+        let placeholder = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: 0, longitude: 0)],
+            around: taipei
         )
-        XCTAssertNil(
-            MapSearchGeography.cameraRegion(
-                for: [CLLocationCoordinate2D(latitude: usVenue.latitude, longitude: usVenue.longitude)],
-                around: taipei
-            )
+        let distant = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: usVenue.latitude, longitude: usVenue.longitude)],
+            around: taipei
         )
+        XCTAssertNil(empty)
+        XCTAssertNil(invalid)
+        XCTAssertNil(placeholder)
+        XCTAssertNil(distant)
     }
 
-    @MainActor
-    func testReliableReviewMapFocusDoesNotSearch() async {
+    func testReliableReviewMapFocusDoesNotSearch() async throws {
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
         let candidate = reviewClue(
@@ -4442,7 +4427,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(focusedRegion.center.longitude, taipei.longitude, accuracy: 0.0001)
     }
 
-    @MainActor
     func testSourceOnlyReviewMapFocusDoesNotPinOrSearch() async {
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -4454,7 +4438,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
     }
 
-    @MainActor
     func testExactSearchEmptyRefineThenSaveRetiresClue() async throws {
         let search = RecordingMapCandidateSearchService()
         let vaultURL = FileManager.default.temporaryDirectory
@@ -4495,7 +4478,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
-    @MainActor
     func testUnrelatedLaterSaveDoesNotRetirePriorClue() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("unrelated-save-\(UUID().uuidString).json")
@@ -4517,7 +4499,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
-    @MainActor
     func testSameDisplayNameDifferentAddressesDoNotMerge() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("name-only-\(UUID().uuidString).json")
@@ -4548,7 +4529,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(map.places[1].address, "台北市大安區")
     }
 
-    @MainActor
     func testPersistFailureKeepsClueAndRetrySucceeds() async throws {
         let saver = SuspendedMapCandidatePlaceSaver()
         let vaultURL = FileManager.default.temporaryDirectory
@@ -4603,7 +4583,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
-    @MainActor
     func testStaleSearchDoesNotStealCameraAfterCancel() async {
         let search = ControlledMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -4636,26 +4615,31 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {
-        XCTAssertEqual(SaveSearchIntentParser().parse("咖啡 臺北")?.locationMode, .namedArea("Taipei"))
-        XCTAssertEqual(SaveSearchIntentParser().parse("咖啡 台北")?.locationMode, .namedArea("Taipei"))
-        XCTAssertTrue(SaveSearchTextMatch.matchesSavedPlace("臺北市信義區松壽路11號", query: "台北"))
-        XCTAssertTrue(SaveSearchTextMatch.matchesSavedPlace("台北市大安區", query: "臺北"))
-        XCTAssertEqual(SaveSearchTextMatch.foldedForTaiwanCityMatch("臺北市"), "台北市")
+        let traditionalMode = SaveSearchIntentParser().parse("咖啡 臺北")?.locationMode
+        let simplifiedMode = SaveSearchIntentParser().parse("咖啡 台北")?.locationMode
+        let traditionalMatch = SaveSearchTextMatch.matchesSavedPlace("臺北市信義區松壽路11號", query: "台北")
+        let simplifiedMatch = SaveSearchTextMatch.matchesSavedPlace("台北市大安區", query: "臺北")
+        let folded = SaveSearchTextMatch.foldedForTaiwanCityMatch("臺北市")
+        XCTAssertEqual(traditionalMode, .namedArea("Taipei"))
+        XCTAssertEqual(simplifiedMode, .namedArea("Taipei"))
+        XCTAssertTrue(traditionalMatch)
+        XCTAssertTrue(simplifiedMatch)
+        XCTAssertEqual(folded, "台北市")
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
     }
 
-    @MainActor
     func testSavedPlaceSearchMatchesTaipeiVariants() {
         let map = MapViewModel(usesRemotePersistence: false)
         map.places = [
             savedPlace(name: "信義咖啡", address: "臺北市信義區", coordinate: taipei)
         ]
-        XCTAssertTrue(SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "台北"))
-        XCTAssertTrue(SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "臺北"))
+        let matchesSimplifiedQuery = SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "台北")
+        let matchesTraditionalQuery = SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "臺北")
+        XCTAssertTrue(matchesSimplifiedQuery)
+        XCTAssertTrue(matchesTraditionalQuery)
         XCTAssertEqual(map.places[0].address, "臺北市信義區")
     }
 
-    @MainActor
     private func cameraCenter(_ map: MapViewModel) -> CLLocationCoordinate2D? {
         map.cameraPosition.region?.center
     }
