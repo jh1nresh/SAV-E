@@ -4399,6 +4399,21 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(cameraCenter(map)?.latitude ?? 0, taipei.latitude, accuracy: 0.001)
     }
 
+    func testNamedCityInCategoryFreeReviewAddressIgnoresViewport() async throws {
+        let query = "A Cheng Goose No. 105 Jilin Rd Taipei"
+        XCTAssertNotNil(SaveSearchController().exactMapCandidateQuery(for: query))
+        XCTAssertNil(SaveSearchIntentParser().parse(query))
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        _ = await map.prepareMapCandidatesForDrawerQuery(query)
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertNil(request.near)
+        XCTAssertNil(request.span)
+    }
+
     func testExactVenueWithoutNamedCityRetainsViewportBias() async throws {
         let query = "search A Cheng Goose"
         XCTAssertNotNil(SaveSearchController().exactMapCandidateQuery(for: query))

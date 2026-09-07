@@ -2580,7 +2580,14 @@ final class MapViewModel: ObservableObject {
     }
 
     private func explicitDestinationPolicy(for query: String) -> MapSearchDestinationPolicy {
-        if case .namedArea = saveSearchIntentParser.parse(query)?.locationMode {
+        let intent = saveSearchIntentParser.parse(query)
+        if case .namedArea = intent?.locationMode {
+            return .namedArea
+        }
+        // Venue/address refinements may have no category intent at all.
+        // Preserve explicit current-location intent when the parser found one.
+        if intent == nil,
+           SaveSearchIntentParser.namedArea(in: " " + SaveSearchIntentParser.normalize(query)) != nil {
             return .namedArea
         }
         if saveSearchController.exactMapCandidateQuery(for: query) != nil {
