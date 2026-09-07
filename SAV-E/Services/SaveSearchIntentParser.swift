@@ -310,7 +310,7 @@ struct SaveSearchIntentParser {
         return .savedAnywhere
     }
 
-    private static func namedArea(in normalized: String) -> String? {
+    static func namedArea(in normalized: String) -> String? {
         if normalized.contains(" in la") || normalized.contains(" los angeles") { return "Los Angeles" }
         if normalized.contains(" irvine") { return "Irvine" }
         if normalized.contains(" taipei") || SaveSearchTextMatch.foldedForTaiwanCityMatch(normalized).contains("台北") {
