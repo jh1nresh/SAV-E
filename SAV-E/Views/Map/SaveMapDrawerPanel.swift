@@ -12,8 +12,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     @Binding var detent: PresentationDetent
     let mapStampCount: Int
     let showsCollapsedShelf: Bool
-    /// Resizing and opening the shelf never focus the editor.
-    /// Keyboard focus belongs to an explicit tap on the expanded text field.
+    /// Shelf tap focuses the editor. Drag and resize-handle taps do not.
     let onExpand: (_ focusesSearch: Bool) -> Void
     let onCollapse: () -> Void
     let onOpenPassport: () -> Void
@@ -40,7 +39,7 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                             mapStampCount: mapStampCount,
                             onOpenAssistant: {
                                 guard !collapsedDragConsumedTap else { return }
-                                onExpand(false)
+                                onExpand(true)
                             },
                             onOpenPassport: onOpenPassport
                         )
@@ -225,6 +224,7 @@ struct SaveMapSearchContent: View {
     @ObservedObject var mapViewModel: MapViewModel
     let initialQuery: String
     let focusesSearch: Bool
+    let preservesExactSearchClue: Bool
     let onClose: () -> Void
     let onOpenPlace: (Place) -> Void
     let onOpenCandidate: (SaveMapCandidate) -> Void
@@ -237,7 +237,9 @@ struct SaveMapSearchContent: View {
     private var savedResults: [Place] {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return mapViewModel.filteredPlaces.filter {
-            text.isEmpty || $0.name.localizedStandardContains(text) || $0.address.localizedStandardContains(text)
+            text.isEmpty
+                || SaveSearchTextMatch.matchesSavedPlace($0.name, query: text)
+                || SaveSearchTextMatch.matchesSavedPlace($0.address, query: text)
         }
     }
 
@@ -321,7 +323,14 @@ struct SaveMapSearchContent: View {
                         if mapViewModel.isLoadingMapCandidates {
                             ProgressView().frame(maxWidth: .infinity).padding()
                         } else if mapViewModel.mapCandidates.isEmpty {
-                            Text(localized("No map results. Try a place name and city.", "沒有地圖結果，試試地點名稱加城市。"))
+                            Text(
+                                mapViewModel.mapSearchNeedsLocationHint
+                                    ? localized(
+                                        "Locate yourself or add a city to search this area.",
+                                        "請先定位或加上城市，才能搜尋這個區域。"
+                                    )
+                                    : localized("No map results. Try a place name and city.", "沒有地圖結果，試試地點名稱加城市。")
+                            )
                                 .font(SaveAtlasType.body(14))
                                 .foregroundStyle(SaveAtlasPalette.muted)
                         } else {
@@ -352,7 +361,10 @@ struct SaveMapSearchContent: View {
         }
         .task(id: searchRequestID) {
             guard !submittedQuery.isEmpty else { return }
-            await mapViewModel.searchMapPlaces(submittedQuery)
+            await mapViewModel.searchMapPlaces(
+                submittedQuery,
+                preservesExactSearchClue: preservesExactSearchClue
+            )
         }
     }
 
