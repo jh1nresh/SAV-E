@@ -714,6 +714,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
         back.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        tapReachable(app.buttons["trips.create"])
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.chat.input"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
+        XCTAssertFalse(app.buttons["plan.options"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        attach(app, name: "trips-new-opens-plan-chat")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))

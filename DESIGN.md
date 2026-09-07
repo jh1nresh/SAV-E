@@ -630,6 +630,8 @@ Rules:
   exact place without submitting. Add to Trip offers eligible existing trips
   and a new-plan choice inline; only an explicit existing-trip selection writes
   that place to the chosen trip. Saved trips remain accessible from Plan.
+- New trip from Saved trips opens a blank Plan input while retaining prior drafts
+  and saved trips. It does not open a calendar or manual trip form.
 - A question submitted from Trips continues in Plan chat and asks for missing
   conditions there; it does not open a second planning drawer.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.

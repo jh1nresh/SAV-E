@@ -1364,10 +1364,15 @@ struct ContentView: View {
     }
 
     private func openPlanConversation(submittedQuery: String? = nil) {
-        if let submittedQuery, !planConversation.assignmentInProgress {
+        if !planConversation.assignmentInProgress {
             planConversation.assignmentPlace = nil
             planConversation.anchorPlaceID = nil
             planConversation.submittedQuery = submittedQuery
+            if submittedQuery == nil {
+                planConversation.input = ""
+                planConversation.conditions = SavePlanConversationConditions()
+                planConversation.turns = []
+            }
         }
         presentAfterClearingExclusiveChrome(.plan)
     }
