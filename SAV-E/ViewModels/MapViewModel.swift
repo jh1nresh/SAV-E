@@ -427,6 +427,141 @@ struct ExactSearchResolution {
     func includes(candidateID: String) -> Bool {
         candidateIDs.contains(candidateID)
     }
+
+    func attaching(candidateIDs: Set<String>) -> ExactSearchResolution {
+        ExactSearchResolution(clue: clue, candidateIDs: candidateIDs)
+    }
+}
+
+/// Generic map search uses the visible area or a known current location.
+/// It never silently substitutes a saved venue or a US default.
+enum MapSearchGeography {
+    static let defaultSearchSpan = MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06)
+    static let localClusterRadiusMeters: CLLocationDistance = 80_000
+    static let maxFitLatitudeDelta: CLLocationDegrees = 4
+    static let maxFitLongitudeDelta: CLLocationDegrees = 4
+
+    static func isTrustworthyCoordinate(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate)
+    }
+
+    static func isTrustworthyRegion(_ region: MKCoordinateRegion) -> Bool {
+        isTrustworthyCoordinate(region.center)
+            && region.span.latitudeDelta.isFinite
+            && region.span.longitudeDelta.isFinite
+            && region.span.latitudeDelta > 0
+            && region.span.longitudeDelta > 0
+            && region.span.latitudeDelta <= 180
+            && region.span.longitudeDelta <= 360
+    }
+
+    static func genericSearchAnchor(
+        visibleRegion: MKCoordinateRegion?,
+        currentLocation: CLLocationCoordinate2D?
+    ) -> (center: CLLocationCoordinate2D, span: MKCoordinateSpan)? {
+        if let visibleRegion, isTrustworthyRegion(visibleRegion) {
+            return (visibleRegion.center, visibleRegion.span)
+        }
+        if let currentLocation, isTrustworthyCoordinate(currentLocation) {
+            return (currentLocation, defaultSearchSpan)
+        }
+        return nil
+    }
+
+    static func cameraRegion(
+        for coordinates: [CLLocationCoordinate2D],
+        around anchor: CLLocationCoordinate2D?,
+        localRadiusMeters: CLLocationDistance = localClusterRadiusMeters
+    ) -> MKCoordinateRegion? {
+        let valid = coordinates.filter(isTrustworthyCoordinate)
+        guard !valid.isEmpty else { return nil }
+
+        if let anchor, isTrustworthyCoordinate(anchor) {
+            let local = valid.filter { distanceMeters(from: anchor, to: $0) <= localRadiusMeters }
+            guard !local.isEmpty else { return nil }
+            return regionFitting(local)
+        }
+
+        return regionFitting(localCluster(in: valid, radiusMeters: localRadiusMeters))
+    }
+
+    private static func localCluster(
+        in coordinates: [CLLocationCoordinate2D],
+        radiusMeters: CLLocationDistance
+    ) -> [CLLocationCoordinate2D] {
+        guard let seed = coordinates.first else { return [] }
+        let nearby = coordinates.filter { distanceMeters(from: seed, to: $0) <= radiusMeters }
+        return nearby.isEmpty ? [seed] : nearby
+    }
+
+    private static func regionFitting(_ coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion? {
+        guard let first = coordinates.first else { return nil }
+        if coordinates.count == 1 {
+            return MKCoordinateRegion(
+                center: first,
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
+        }
+
+        var minLat = first.latitude
+        var maxLat = first.latitude
+        var minLngOffset = 0.0
+        var maxLngOffset = 0.0
+        for coordinate in coordinates.dropFirst() {
+            minLat = min(minLat, coordinate.latitude)
+            maxLat = max(maxLat, coordinate.latitude)
+            let offset = wrappedLongitudeDelta(from: first.longitude, to: coordinate.longitude)
+            minLngOffset = min(minLngOffset, offset)
+            maxLngOffset = max(maxLngOffset, offset)
+        }
+
+        let latDelta = (maxLat - minLat) * 1.5
+        let lngDelta = (maxLngOffset - minLngOffset) * 1.5
+        if latDelta > maxFitLatitudeDelta || lngDelta > maxFitLongitudeDelta {
+            return MKCoordinateRegion(
+                center: first,
+                span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+            )
+        }
+
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: wrappedLongitude(first.longitude + (minLngOffset + maxLngOffset) / 2)
+        )
+        guard isTrustworthyCoordinate(center) else { return nil }
+        return MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(
+                latitudeDelta: min(maxFitLatitudeDelta, max(0.02, latDelta)),
+                longitudeDelta: min(maxFitLongitudeDelta, max(0.02, lngDelta))
+            )
+        )
+    }
+
+    static func distanceMeters(from lhs: CLLocationCoordinate2D, to rhs: CLLocationCoordinate2D) -> CLLocationDistance {
+        CLLocation(latitude: lhs.latitude, longitude: lhs.longitude)
+            .distance(from: CLLocation(latitude: rhs.latitude, longitude: rhs.longitude))
+    }
+
+    private static func wrappedLongitudeDelta(from origin: Double, to value: Double) -> Double {
+        var delta = value - origin
+        if delta > 180 { delta -= 360 }
+        if delta < -180 { delta += 360 }
+        return delta
+    }
+
+    private static func wrappedLongitude(_ value: Double) -> Double {
+        var longitude = value
+        while longitude > 180 { longitude -= 360 }
+        while longitude < -180 { longitude += 360 }
+        return longitude
+    }
+}
+
+private enum MapSearchDestinationPolicy: Equatable {
+    case generic
+    case exactPlace
+    case namedArea
 }
 
 enum MapCandidateSearchResult {
@@ -449,6 +584,10 @@ final class MapViewModel: ObservableObject {
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     ))
+    /// Last camera region reported by the live Map surface after pan or focus.
+    @Published private(set) var visibleMapRegion: MKCoordinateRegion?
+    /// Generic search had no trustworthy viewport or current location.
+    @Published private(set) var mapSearchNeedsLocationHint = false
     @Published var selectedCategories: Set<PlaceCategory> = []
     @Published var selectedIntentFilters: Set<SaveMapDrawerIntent> = []
     @Published private(set) var nearbyFilterAnchor: CLLocationCoordinate2D?
@@ -490,6 +629,8 @@ final class MapViewModel: ObservableObject {
     private var exactSearchResolution: ExactSearchResolution?
     /// Invalidates any in-flight map search before it can publish stale pins.
     private var mapCandidateSearchGeneration = UUID()
+    /// Last trustworthy generic-search or locate center used to reject outliers.
+    private var lastSearchAnchor: CLLocationCoordinate2D?
     /// Spec P4: shown when a locate tap fails because location permission is
     /// denied or restricted; offers the Open Settings recovery path.
     @Published var showsLocationDeniedNotice = false
@@ -602,8 +743,9 @@ final class MapViewModel: ObservableObject {
     }
 
     var visibleMapCandidates: [SaveMapCandidate] {
-        guard !selectedCategories.isEmpty else { return mapCandidates }
-        return mapCandidates.filter { candidate in
+        let trustworthy = mapCandidates.filter(\.hasTrustworthyCoordinate)
+        guard !selectedCategories.isEmpty else { return trustworthy }
+        return trustworthy.filter { candidate in
             guard let category = candidate.category else { return false }
             return selectedCategories.contains(category)
         }
@@ -2146,8 +2288,15 @@ final class MapViewModel: ObservableObject {
         guard !isLoadingMapCandidates else { return }
         let searchGeneration = beginMapCandidateSearch()
         exactSearchResolution = nil
-        let searchCenter = coordinate ?? mapCandidateSearchCenter()
-        let searchSpan = span ?? MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
+        let requestedCenter = coordinate.flatMap { MapSearchGeography.isTrustworthyCoordinate($0) ? $0 : nil }
+        guard let searchCenter = requestedCenter ?? genericSearchAnchor()?.center else {
+            mapSearchNeedsLocationHint = true
+            mapCandidates = []
+            return
+        }
+        let searchSpan = span ?? genericSearchAnchor()?.span ?? MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
+        lastSearchAnchor = searchCenter
+        mapSearchNeedsLocationHint = false
         isLoadingMapCandidates = true
         defer { isLoadingMapCandidates = false }
 
@@ -2158,8 +2307,8 @@ final class MapViewModel: ObservableObject {
             categories: categories
         )
         guard mapCandidateSearchGeneration == searchGeneration else { return }
-        mapCandidates = candidates
-        if let selectedMapCandidate, !candidates.contains(where: { $0.id == selectedMapCandidate.id }) {
+        publishMapCandidates(candidates, focusingCamera: false)
+        if let selectedMapCandidate, !mapCandidates.contains(where: { $0.id == selectedMapCandidate.id }) {
             self.selectedMapCandidate = nil
         }
     }
@@ -2167,10 +2316,12 @@ final class MapViewModel: ObservableObject {
     /// Plain map search bypasses assistant intent routing.
     func searchMapPlaces(_ query: String) async {
         let generation = beginMapCandidateSearch()
-        exactSearchResolution = nil
+        let preservedResolution = exactSearchResolution
+        exactSearchResolution = preservedResolution
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             mapCandidates = []
+            mapSearchNeedsLocationHint = false
             isLoadingMapCandidates = false
             return
         }
@@ -2178,128 +2329,275 @@ final class MapViewModel: ObservableObject {
         defer {
             if mapCandidateSearchGeneration == generation { isLoadingMapCandidates = false }
         }
+
+        let destination = explicitDestinationPolicy(for: trimmed)
+        let anchor = genericSearchAnchor()
+        let searchCenter: CLLocationCoordinate2D?
+        let searchSpan: MKCoordinateSpan?
+        switch destination {
+        case .namedArea, .exactPlace:
+            searchCenter = destination == .namedArea ? nil : anchor?.center
+            searchSpan = destination == .namedArea ? nil : (anchor?.span ?? MapSearchGeography.defaultSearchSpan)
+            lastSearchAnchor = searchCenter
+            mapSearchNeedsLocationHint = false
+        case .generic:
+            guard let anchor else {
+                mapCandidates = []
+                selectedMapCandidate = nil
+                mapSearchNeedsLocationHint = true
+                return
+            }
+            searchCenter = anchor.center
+            searchSpan = anchor.span
+            lastSearchAnchor = anchor.center
+            mapSearchNeedsLocationHint = false
+        }
+
         let candidates = await mapCandidateSearchService.searchCandidates(
             matching: trimmed,
-            near: mapCandidateSearchCenter(),
-            span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+            near: searchCenter,
+            span: searchSpan,
             excluding: places
         )
         guard !Task.isCancelled, mapCandidateSearchGeneration == generation else { return }
-        mapCandidates = candidates
-        selectedMapCandidate = nil
-        focusCameraOnMapCandidates(candidates)
+        let published = destination == .generic
+            ? locallyRelevantCandidates(candidates, around: searchCenter)
+            : sanitizedMapCandidates(candidates)
+        publishMapCandidates(published, focusingCamera: true, alreadySanitized: true)
+        if let preservedResolution {
+            exactSearchResolution = preservedResolution.attaching(candidateIDs: Set(mapCandidates.map(\.id)))
+        }
     }
 
-    func prepareMapCandidatesForDrawerQuery(_ query: String) async -> MapCandidateSearchResult {
+    func prepareMapCandidatesForDrawerQuery(
+        _ query: String,
+        preservesExactSearchClue: Bool = false
+    ) async -> MapCandidateSearchResult {
         let searchGeneration = beginMapCandidateSearch()
-        // A fresh search invalidates any clue link; the exact-search caller
-        // re-links via beginExactSearchResolution after this returns.
-        exactSearchResolution = nil
+        let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
+        if !preservesExactSearchClue {
+            exactSearchResolution = nil
+        }
         guard saveSearchController.shouldPrepareMapCandidates(for: query) else {
             mapCandidates = []
             selectedMapCandidate = nil
+            mapSearchNeedsLocationHint = false
             return .current([])
         }
         if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
             let candidates = await mapCandidateSearchService.searchCandidates(
                 matching: exactQuery,
-                near: nil,
-                span: nil,
+                near: genericSearchAnchor()?.center,
+                span: genericSearchAnchor()?.span,
                 excluding: places
             )
             guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-            mapCandidates = candidates
-            selectedMapCandidate = nil
-            focusCameraOnMapCandidates(candidates)
-            return .current(candidates)
+            return finishPreparedSearch(
+                candidates,
+                generation: searchGeneration,
+                preservedResolution: preservedResolution,
+                focusingCamera: true
+            )
         }
 
+        let destination = explicitDestinationPolicy(for: query)
+        let anchor = genericSearchAnchor()
         let searchCenter: CLLocationCoordinate2D?
-        let shouldUseCurrentLocation = saveSearchIntentParser.parse(query)?.mustMatchLocation == true ||
-            !saveSearchController.mapCandidateCategories(for: query).isEmpty
-        if shouldUseCurrentLocation {
-            guard let currentLocationCenter = await currentLocationSearchCenter() else {
-                guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-                mapCandidates = []
-                return .current([])
-            }
-            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-            searchCenter = currentLocationCenter
-        } else {
+        if destination == .namedArea {
             searchCenter = nil
+            lastSearchAnchor = nil
+            mapSearchNeedsLocationHint = false
+        } else if let anchor {
+            searchCenter = anchor.center
+            lastSearchAnchor = anchor.center
+            mapSearchNeedsLocationHint = false
+        } else if destination == .exactPlace {
+            searchCenter = nil
+            lastSearchAnchor = nil
+            mapSearchNeedsLocationHint = false
+        } else {
+            mapCandidates = []
+            selectedMapCandidate = nil
+            mapSearchNeedsLocationHint = true
+            return .current([])
         }
+
         if let specialtyQuery = saveSearchController.specialtyMapCandidateQuery(for: query) {
             let candidates = await mapCandidateSearchService.searchCandidates(
                 matching: specialtyQuery,
                 near: searchCenter,
-                span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+                span: anchor?.span ?? MapSearchGeography.defaultSearchSpan,
                 excluding: places
             )
             guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-            mapCandidates = candidates
-            selectedMapCandidate = nil
-            focusCameraOnMapCandidates(candidates)
-            return .current(candidates)
+            return finishPreparedSearch(
+                locallyRelevantCandidates(candidates, around: searchCenter),
+                generation: searchGeneration,
+                preservedResolution: preservedResolution,
+                focusingCamera: true,
+                alreadySanitized: true
+            )
         }
         let categories = saveSearchController.mapCandidateCategories(for: query)
         if !categories.isEmpty {
             selectedCategories = categories
             activeFilter = nil
         }
+        guard let categoryCenter = searchCenter else {
+            mapCandidates = []
+            selectedMapCandidate = nil
+            mapSearchNeedsLocationHint = true
+            return .current([])
+        }
         let candidates = await mapCandidateSearchService.searchCandidates(
-            near: searchCenter ?? mapCandidateSearchCenter(),
-            span: MKCoordinateSpan(latitudeDelta: 0.06, longitudeDelta: 0.06),
+            near: categoryCenter,
+            span: anchor?.span ?? MapSearchGeography.defaultSearchSpan,
             excluding: places,
             categories: categories
         )
         guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-        mapCandidates = candidates
-        selectedMapCandidate = nil
+        var filtered = sanitizedMapCandidates(candidates)
         if !categories.isEmpty {
-            mapCandidates = mapCandidates.filter { candidate in
+            filtered = filtered.filter { candidate in
                 guard let category = candidate.category else { return false }
                 return categories.contains(category)
             }
         }
-        focusCameraOnMapCandidates(mapCandidates)
-        return .current(mapCandidates)
+        return finishPreparedSearch(
+            locallyRelevantCandidates(filtered, around: categoryCenter),
+            generation: searchGeneration,
+            preservedResolution: preservedResolution,
+            focusingCamera: true,
+            alreadySanitized: true
+        )
+    }
+
+    /// Focus a Review candidate that already has trustworthy coordinates.
+    /// Does not start a provider search or save.
+    @discardableResult
+    func focusReviewCandidateOnMap(_ candidate: PlaceReviewCandidate) -> Bool {
+        guard candidate.status != "source_only",
+              candidate.hasReliableCoordinates,
+              let latitude = candidate.latitude,
+              let longitude = candidate.longitude
+        else { return false }
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        guard MapSearchGeography.isTrustworthyCoordinate(coordinate) else { return false }
+        selectReviewCandidate(candidate)
+        let region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        cameraPosition = .region(region)
+        visibleMapRegion = region
+        lastSearchAnchor = coordinate
+        return true
+    }
+
+    func updateVisibleMapRegion(_ region: MKCoordinateRegion) {
+        guard MapSearchGeography.isTrustworthyRegion(region) else { return }
+        visibleMapRegion = region
+    }
+
+    func attachExactSearchResults(_ candidates: [SaveMapCandidate]) {
+        guard let resolution = exactSearchResolution else { return }
+        exactSearchResolution = resolution.attaching(
+            candidateIDs: Set(sanitizedMapCandidates(candidates).map(\.id))
+        )
     }
 
     /// Drawer searches (including "Find exact place" on a Review clue) drop
     /// their result pins on the map; without moving the camera the user never
-    /// sees them. Fit the region around every candidate so the map takes the
-    /// user to the places it found.
+    /// sees them. Fit a local cluster so outliers and dateline pairs cannot
+    /// drag the camera across a continent.
     private func focusCameraOnMapCandidates(_ candidates: [SaveMapCandidate]) {
-        guard let minLatitude = candidates.map(\.latitude).min(),
-              let maxLatitude = candidates.map(\.latitude).max(),
-              let minLongitude = candidates.map(\.longitude).min(),
-              let maxLongitude = candidates.map(\.longitude).max()
-        else { return }
+        let coordinates = sanitizedMapCandidates(candidates).map(\.coordinate)
+        guard let region = MapSearchGeography.cameraRegion(
+            for: coordinates,
+            around: lastSearchAnchor
+        ) else { return }
+        cameraPosition = .region(region)
+        visibleMapRegion = region
+    }
 
-        let center = CLLocationCoordinate2D(
-            latitude: (minLatitude + maxLatitude) / 2,
-            longitude: (minLongitude + maxLongitude) / 2
+    private func genericSearchAnchor() -> (center: CLLocationCoordinate2D, span: MKCoordinateSpan)? {
+        MapSearchGeography.genericSearchAnchor(
+            visibleRegion: visibleMapRegion,
+            currentLocation: knownCurrentLocationCoordinate()
         )
-        let span = MKCoordinateSpan(
-            latitudeDelta: min(40, max(0.02, (maxLatitude - minLatitude) * 1.5)),
-            longitudeDelta: min(40, max(0.02, (maxLongitude - minLongitude) * 1.5))
-        )
-        cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+    }
+
+    private func knownCurrentLocationCoordinate() -> CLLocationCoordinate2D? {
+        guard let coordinate = locationService.currentLocation?.coordinate,
+              MapSearchGeography.isTrustworthyCoordinate(coordinate)
+        else { return nil }
+        return coordinate
+    }
+
+    private func explicitDestinationPolicy(for query: String) -> MapSearchDestinationPolicy {
+        if case .namedArea = saveSearchIntentParser.parse(query)?.locationMode {
+            return .namedArea
+        }
+        if saveSearchController.exactMapCandidateQuery(for: query) != nil {
+            return .exactPlace
+        }
+        return .generic
+    }
+
+    private func sanitizedMapCandidates(_ candidates: [SaveMapCandidate]) -> [SaveMapCandidate] {
+        candidates.filter(\.hasTrustworthyCoordinate)
+    }
+
+    private func locallyRelevantCandidates(
+        _ candidates: [SaveMapCandidate],
+        around anchor: CLLocationCoordinate2D?
+    ) -> [SaveMapCandidate] {
+        let valid = sanitizedMapCandidates(candidates)
+        guard let anchor, MapSearchGeography.isTrustworthyCoordinate(anchor) else { return valid }
+        let local = valid.filter {
+            MapSearchGeography.distanceMeters(from: anchor, to: $0.coordinate)
+                <= MapSearchGeography.localClusterRadiusMeters
+        }
+        return local
+    }
+
+    private func publishMapCandidates(
+        _ candidates: [SaveMapCandidate],
+        focusingCamera: Bool,
+        alreadySanitized: Bool = false
+    ) {
+        mapCandidates = alreadySanitized ? candidates : sanitizedMapCandidates(candidates)
+        selectedMapCandidate = nil
+        if focusingCamera {
+            if mapCandidates.isEmpty {
+                return
+            }
+            focusCameraOnMapCandidates(mapCandidates)
+        }
+    }
+
+    private func finishPreparedSearch(
+        _ candidates: [SaveMapCandidate],
+        generation: UUID,
+        preservedResolution: ExactSearchResolution?,
+        focusingCamera: Bool,
+        alreadySanitized: Bool = false
+    ) -> MapCandidateSearchResult {
+        guard mapCandidateSearchGeneration == generation else { return .superseded }
+        let published = alreadySanitized ? candidates.filter(\.hasTrustworthyCoordinate) : sanitizedMapCandidates(candidates)
+        mapCandidates = published
+        selectedMapCandidate = nil
+        if focusingCamera, !published.isEmpty {
+            focusCameraOnMapCandidates(published)
+        }
+        if let preservedResolution {
+            exactSearchResolution = preservedResolution.attaching(candidateIDs: Set(published.map(\.id)))
+        }
+        return .current(published)
     }
 
     private func currentLocationSearchCenter() async -> CLLocationCoordinate2D? {
-        let currentLocation = await locationService.requestCurrentLocation()
-        return currentLocation?.coordinate
-    }
-
-    private func mapCandidateSearchCenter() -> CLLocationCoordinate2D {
-        if let selectedPlace, selectedPlace.isMapKitMappable {
-            return selectedPlace.coordinate
-        }
-        if let firstPlace = places.first(where: \.isMapKitMappable) {
-            return firstPlace.coordinate
-        }
-        return CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
+        knownCurrentLocationCoordinate()
     }
 
     /// True exactly once after a save/import focused the map; resets on read.
@@ -2401,7 +2699,7 @@ final class MapViewModel: ObservableObject {
             latitude: candidate.latitude,
             longitude: candidate.longitude
         )
-        if SaveChromeNavigation.isSafeMapCoordinate(coordinate) {
+        if SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate) {
             cameraPosition = .region(MKCoordinateRegion(
                 center: coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
@@ -2442,11 +2740,14 @@ final class MapViewModel: ObservableObject {
         nearbyFilterAnchor = nil
         activeFilter = nil
         exactSearchResolution = nil
+        mapSearchNeedsLocationHint = false
+        lastSearchAnchor = nil
         clearRoute()
     }
 
     /// Links the current map-candidate results to the Review clue they came
-    /// from, so saving a candidate also retires that clue.
+    /// from, so saving a candidate also retires that clue. Empty IDs are
+    /// allowed so a later refine in the same session can attach results.
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
         guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
         exactSearchResolution = ExactSearchResolution(
@@ -2481,7 +2782,7 @@ final class MapViewModel: ObservableObject {
         pointOfInterestCategory: String?
     ) {
         let title = (rawTitle ?? "Map place").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, SaveChromeNavigation.isSafeMapCoordinate(coordinate) else {
+        guard !title.isEmpty, SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate) else {
             selectedMapFeature = nil
             return
         }
@@ -2798,7 +3099,7 @@ final class MapViewModel: ObservableObject {
             if let candidate = mapCandidate(nearLatitude: lat, longitude: lng) {
                 selectMapCandidate(candidate)
             }
-            guard SaveChromeNavigation.isSafeMapCoordinate(center),
+            guard SaveChromeNavigation.isTrustworthyMapCoordinate(center),
                   span.isFinite,
                   span > 0
             else { return }
@@ -2908,7 +3209,7 @@ final class MapViewModel: ObservableObject {
             latitude: (minLat + maxLat) / 2,
             longitude: (minLng + maxLng) / 2
         )
-        guard SaveChromeNavigation.isSafeMapCoordinate(center) else { return nil }
+        guard SaveChromeNavigation.isTrustworthyMapCoordinate(center) else { return nil }
         let span = MKCoordinateSpan(
             latitudeDelta: max((maxLat - minLat) * 1.4, 0.01),
             longitudeDelta: max((maxLng - minLng) * 1.4, 0.01)

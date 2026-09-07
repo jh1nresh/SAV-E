@@ -1018,7 +1018,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThanOrEqual(locate.frame.maxY, collapsedTop - 4)
         attach(app, name: "map-search-drawer-collapsed")
 
-        app.buttons["map.command.search"].tap()
+        // Drag from the collapsed shelf resizes without requesting keyboard.
+        app.buttons["map.command.search"].swipeUp()
         let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
@@ -1065,9 +1066,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         dragHandle(by: -160)
         XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
-        focus(app.textFields["map.search.input"])
-        XCTAssertTrue(app.keyboards.firstMatch.exists)
-        attach(app, name: "map-search-explicit-keyboard-focus")
+        dragHandle(by: 160)
+        XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))
+        dragHandle(by: 160)
+        XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
+        // Shelf tap opens the existing full-height panel and requests keyboard.
+        app.buttons["map.command.search"].tap()
+        XCTAssertTrue(large.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-search-shelf-tap-keyboard-focus")
         XCTAssertEqual(app.state, .runningForeground)
     }
 

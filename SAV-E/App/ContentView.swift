@@ -825,6 +825,7 @@ struct ContentView: View {
                 onRecommendOrder: openFoodAnalysis,
                 onPlanAroundPlace: openPlanAround,
                 onFindExactPlaceCandidate: openExactSearch,
+                onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
                 onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
@@ -961,7 +962,10 @@ struct ContentView: View {
                 await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
             },
             onPrepareMapSearch: { query in
-                await mapVM.prepareMapCandidatesForDrawerQuery(query)
+                await mapVM.prepareMapCandidatesForDrawerQuery(
+                    query,
+                    preservesExactSearchClue: isExactSearchSessionActive
+                )
             },
             onBeginExactSearchResolution: { candidate in
                 isExactSearchSessionActive = true
@@ -1008,7 +1012,8 @@ struct ContentView: View {
             onDismissMapDetail: {
                 mapVM.clearSelectedMapObject()
             },
-            onShowMapCandidatesOnMap: showMapCandidatesOnMap
+            onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
     }
@@ -1316,6 +1321,18 @@ struct ContentView: View {
         drawerVM.returnToCommands()
     }
 
+    /// A reliable Review map tap focuses that candidate. It does not search or save.
+    private func focusReviewCandidateOnMap(_ candidate: PlaceReviewCandidate) {
+        if mapVM.focusReviewCandidateOnMap(candidate) {
+            fullScreenRoute = nil
+            rootPath.removeAll()
+            selectedRootTab = .map
+            showMapCandidatesOnMap()
+            return
+        }
+        openExactSearch(candidate)
+    }
+
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -1328,31 +1345,41 @@ struct ContentView: View {
         fullScreenRoute = nil
         rootPath.removeAll()
         selectedRootTab = .map
-        isExactSearchSessionActive = false
-        mapVM.clearMapSearchResults()
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
         let requestID = UUID()
         exactSearchRequestID = requestID
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 180_000_000)
             guard exactSearchRequestID == requestID else { return }
-            let result = await mapVM.prepareMapCandidatesForDrawerQuery(query)
+            let result = await mapVM.prepareMapCandidatesForDrawerQuery(
+                query,
+                preservesExactSearchClue: true
+            )
             guard exactSearchRequestID == requestID else { return }
             guard case .current(let candidates) = result else { return }
+            mapVM.attachExactSearchResults(candidates)
+            guard exactSearchRequestID == requestID else { return }
             if candidates.isEmpty {
-                // No map match: fall back to the guided drawer flow so the
-                // user gets the "add another clue" explanation instead of an
-                // empty map.
-                openMapSearch(initialQuery: query)
+                // Keep the clue link so a typed refine can still retire it.
+                openExactSearchRefine(query: query)
             } else {
-                // Saving one of these pins resolves the clue itself, so the
-                // item leaves Review instead of lingering there.
-                mapVM.beginExactSearchResolution(for: candidate)
                 drawerVM.mapCandidates = candidates
                 exactSearchRequestID = nil
                 isExactSearchSessionActive = true
                 showMapCandidatesOnMap()
             }
         }
+    }
+
+    /// Empty exact search opens the existing map search panel without ending
+    /// the clue-resolution session or starting a second search that clears it.
+    private func openExactSearchRefine(query: String) {
+        guard incomingPlaceReceipt == nil else { return }
+        mapDetailDrawerItem = nil
+        presentAfterClearingExclusiveChrome(.mapDrawer(
+            DrawerLaunchRequest(target: .ask, initialQuery: query, focusesSearch: true)
+        ))
     }
 
     private func invalidateExactSearchRequest() {

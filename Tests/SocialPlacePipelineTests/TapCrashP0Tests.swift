@@ -103,6 +103,16 @@ final class TapCrashP0Tests: XCTestCase {
                 CLLocationCoordinate2D(latitude: 25.033, longitude: 121.565)
             )
         )
+        XCTAssertFalse(
+            SaveChromeNavigation.isTrustworthyMapCoordinate(
+                CLLocationCoordinate2D(latitude: 0, longitude: 0)
+            )
+        )
+        XCTAssertTrue(
+            SaveChromeNavigation.isTrustworthyMapCoordinate(
+                CLLocationCoordinate2D(latitude: 25.033, longitude: 121.565)
+            )
+        )
     }
 
     func testMapEmbeddedDrawerDoesNotCarrySheetDetents() throws {

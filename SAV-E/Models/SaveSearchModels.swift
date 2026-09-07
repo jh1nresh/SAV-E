@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 enum SaveSearchObjectType: String, Codable, CaseIterable, Hashable {
@@ -751,6 +752,14 @@ struct SaveMapCandidate: Identifiable, Hashable {
 }
 
 extension SaveMapCandidate {
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    var hasTrustworthyCoordinate: Bool {
+        SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate)
+    }
+
     var businessPhotoURLStrings: [String] {
         var values = businessPhotoURLs ?? []
         if let photoURL {
