@@ -94,7 +94,7 @@ final class SavePlanConversationConditionsTests: XCTestCase {
     }
 
     func testUnknownCitySwitchNeverUsesPreviousCity() {
-        for next in ["改去京都", "京都", "京都6天", "日本旅行6天五夜", "不要台北，改去京都"] {
+        for next in ["改去京都", "京都6天", "日本旅行6天五夜", "不要台北，改去京都"] {
             var conditions = completed()
             conditions.receive(next, areas: ["Taipei"])
             XCTAssertNil(conditions.area, next)
@@ -376,6 +376,108 @@ final class SavePlanConversationConditionsTests: XCTestCase {
         XCTAssertEqual(conversation.messages.last?.reply, "Added to your trip.")
         XCTAssertNil(conversation.assignmentPlace)
         XCTAssertEqual(store.trips.first?.places.count, 1)
+    }
+
+    func testPreferenceAndAmbiguousCityFollowupsPreserveConditionsAndAsk() {
+        for query in ["more cafes", "avoid bars", "京都", "make it kid friendly"] {
+            var conditions = completed()
+            conditions.receive(query, areas: ["Taipei"])
+            XCTAssertEqual(conditions.area, "Taipei")
+            XCTAssertEqual(conditions.days, 3)
+            XCTAssertEqual(conditions.pace, .relaxed)
+            XCTAssertNil(conditions.request(language: .english))
+            XCTAssertTrue(conditions.clarification(language: .english)?.contains("kept") == true)
+            conditions.receive("2 days", areas: ["Taipei"])
+            XCTAssertEqual(conditions.request(language: .english)?.days, 2)
+        }
+    }
+
+    func testExplicitRemovalChangesDraftAndCannotBeUndoneByPolish() throws {
+        let museum = place("Museum A", address: "Taipei")
+        let garden = place("Garden B", address: "Taipei")
+        let conversation = SavePlanConversation()
+        conversation.conditions = completed()
+        conversation.anchorPlaceID = museum.id
+        let request = try XCTUnwrap(conversation.conditions.request(language: .english))
+        let original = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: [museum, garden]))
+        conversation.draft = original
+        conversation.conditions.receive("more cafes", areas: ["Taipei"])
+
+        XCTAssertTrue(conversation.applyStopRemoval("keep the plan but remove Museum A", savedPlaces: [museum, garden], language: .english))
+        let edited = try XCTUnwrap(conversation.draft)
+        XCTAssertFalse(edited.placeIds.contains(museum.id.uuidString))
+        XCTAssertTrue(edited.placeIds.contains(garden.id.uuidString))
+        XCTAssertEqual(edited.itineraryDays.count, original.itineraryDays.count)
+        XCTAssertEqual(edited.itineraryDays.flatMap(\.stops).filter { $0.placeId == garden.id.uuidString },
+                       original.itineraryDays.flatMap(\.stops).filter { $0.placeId == garden.id.uuidString })
+        XCTAssertNil(conversation.anchorPlaceID)
+        XCTAssertTrue(conversation.excludedPlaceIDs.contains(museum.id))
+        XCTAssertEqual(SavePlanDraftBuilder.preservingSchedule(original, draft: edited), edited)
+        conversation.conditions.receive("2 days", areas: ["Taipei"])
+        var revisedRequest = try XCTUnwrap(conversation.conditions.request(language: .english))
+        XCTAssertEqual(revisedRequest.days, 2, "Clarification before removal cannot block a later valid condition")
+        revisedRequest.excludedPlaceIDs = conversation.excludedPlaceIDs
+        let duplicate = SaveMapCandidate(id: "same-museum", title: museum.name, subtitle: "Taipei",
+            latitude: museum.latitude, longitude: museum.longitude, category: .attraction)
+        let rebuilt = try XCTUnwrap(SavePlanDraftBuilder.draft(request: revisedRequest,
+            savedPlaces: [museum, garden], unsavedCandidates: [duplicate]))
+        XCTAssertFalse(rebuilt.placeIds.contains(museum.id.uuidString))
+        XCTAssertFalse(rebuilt.itineraryDays.flatMap(\.stops).contains { $0.placeName == museum.name })
+        XCTAssertEqual(museum.name, "Museum A", "A draft edit never mutates the saved place")
+    }
+
+    func testRemovalAmbiguityAndUnsupportedEditsKeepDraft() throws {
+        let first = place("Museum A", address: "1 Road, Taipei")
+        let second = place("Museum A", address: "2 Road, Taipei")
+        let stops = [first, second].map { ItineraryStop(id: UUID(), placeId: $0.id.uuidString,
+            placeName: $0.name, time: "3:00 PM", duration: 60, note: nil) }
+        let conversation = SavePlanConversation()
+        conversation.conditions = completed()
+        conversation.anchorPlaceID = second.id
+        let original = SaveAIResponse(componentType: .tripItinerary, title: "Taipei", placeIds: stops.compactMap(\.placeId),
+            navigationPlaceId: nil, transportMode: .walking, itineraryDays: [ItineraryDay(dayNumber: 1, label: nil, stops: stops)],
+            messageText: nil, mapAction: nil, aiMessage: nil)
+        conversation.draft = original
+        XCTAssertTrue(conversation.applyStopRemoval("remove Museum A", savedPlaces: [first, second], language: .english))
+        XCTAssertEqual(conversation.draft, original)
+        XCTAssertTrue(conversation.messages.last?.reply.contains("Full address") == true)
+        XCTAssertTrue(conversation.excludedPlaceIDs.isEmpty)
+        XCTAssertFalse(conversation.applyStopRemoval("don't remove Museum A", savedPlaces: [first, second], language: .english))
+        XCTAssertTrue(conversation.applyStopRemoval("remove Museum A, 1 Road, Taipei", savedPlaces: [first, second], language: .english))
+        XCTAssertFalse(conversation.draft?.placeIds.contains(first.id.uuidString) ?? true)
+        XCTAssertTrue(conversation.draft?.placeIds.contains(second.id.uuidString) == true)
+        XCTAssertEqual(conversation.anchorPlaceID, second.id)
+    }
+
+    func testCityResolutionPreservesChineseAddresses() {
+        for (address, area) in [("110台灣臺北市信義區, Taiwan", "臺北市"),
+                                ("臺北市信義區", "Taipei"), ("東京都台東区上野", "東京")] {
+            let saved = place("Museum", address: address)
+            XCTAssertTrue(SavePlanDraftBuilder.matches(area: area, place: saved), address)
+            XCTAssertEqual(SavePlanDraftBuilder.areas(from: [saved]).count, 1)
+        }
+    }
+
+    func testFullAddressStagesCityAndNeverMatchesCafeSubstring() throws {
+        let losAngeles = place("Anchor Museum", address: "123 Main St, Los Angeles, CA, USA")
+        let unrelated = place("Cafe Anywhere", address: "Taipei")
+        XCTAssertEqual(SavePlanDraftBuilder.areaLabel(for: losAngeles), "Los Angeles")
+        XCTAssertEqual(Set(SavePlanDraftBuilder.areas(from: [losAngeles, unrelated])), ["Los Angeles", "Taipei"])
+        XCTAssertFalse(SavePlanDraftBuilder.matches(area: "Los Angeles", place: unrelated))
+        XCTAssertFalse(SavePlanDraftBuilder.matches(area: "CA", place: unrelated))
+        let conversation = SavePlanConversation()
+        conversation.stage(place: losAngeles, addingToTrip: false, language: .english)
+        XCTAssertTrue(conversation.input.contains("Los Angeles"))
+        XCTAssertEqual(conversation.anchorPlaceID, losAngeles.id)
+        conversation.conditions.receive(conversation.input, areas: SavePlanDraftBuilder.areas(from: [losAngeles, unrelated]))
+        conversation.conditions.receive("1 day balanced; no time constraints", areas: ["Los Angeles", "Taipei"])
+        var request = try XCTUnwrap(conversation.conditions.request(language: .english))
+        request.anchorPlaceID = losAngeles.id
+        let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: [losAngeles, unrelated]))
+        XCTAssertTrue(draft.placeIds.contains(losAngeles.id.uuidString))
+        XCTAssertFalse(draft.placeIds.contains(unrelated.id.uuidString))
+        let berkeley = place("Museum", address: "123 Main St, Berkeley, CA 94704, USA")
+        XCTAssertEqual(SavePlanDraftBuilder.areaLabel(for: berkeley), "Berkeley")
     }
 
     private func completed() -> SavePlanConversationConditions {

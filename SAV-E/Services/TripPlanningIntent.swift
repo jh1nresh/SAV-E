@@ -111,10 +111,13 @@ struct SavePlanConversationConditions {
     private(set) var requests: [String] = []
     private(set) var unmatchedDestination: String?
     private(set) var unsupportedDays: Int?
+    private(set) var needsFollowUpClarification = false
     private(set) var arrivalAnswered = false
     private(set) var departureAnswered = false
 
     mutating func receive(_ message: String, areas: [String]) {
+        let hadArea = area != nil
+        needsFollowUpClarification = false
         let wasAskingDays = area != nil && days == nil
         requests.append(message)
         if requests.count > 12 { requests.removeFirst() }
@@ -154,7 +157,7 @@ struct SavePlanConversationConditions {
                   !["改成", "改為", "改为", "安排", "規劃", "plan", "for", "我想要", "第一", "最後", "最后", "第"].contains(destination) {
             area = nil
             unmatchedDestination = destination
-        } else if Self.isBareDestination(text) && !Self.paceAnswer(text).mentioned && !noWindow {
+        } else if area == nil && Self.isBareDestination(text) && !Self.paceAnswer(text).mentioned && !noWindow {
             area = nil
             unmatchedDestination = text
         } else if text.range(of: #"(?:不要|不去|不是|not)"#, options: .regularExpression) != nil,
@@ -194,9 +197,21 @@ struct SavePlanConversationConditions {
             arrivalAnswered = true
             departureAnswered = true
         }
+        // An established conversation may contain preferences or edit requests,
+        // not another city answer. Never silently redraft an unhandled request.
+        needsFollowUpClarification = hadArea && area != nil && distinct.isEmpty
+            && destinationChange == nil && Self.dayCount(text, allowBareNumber: wasAskingDays) == nil
+            && !parsedPace.mentioned && !arrival.mentioned && !departure.mentioned && !noWindow
+            && text.range(of: #"^\d{1,2}:\d{2}(?:\s*(?:am|pm))?$"#, options: .regularExpression) == nil
     }
 
     func clarification(language: AppLanguage) -> String? {
+        if needsFollowUpClarification {
+            return language.localized(
+                english: "I’ve kept your conditions and draft. I can change the city, days, pace or clock limits, or remove a confirmed stop by its exact name. Which would you like? For a new city, say ‘switch to …’. Other preferences are not applied automatically yet.",
+                traditionalChinese: "條件和草稿都保留著。目前可以改城市、天數、步調或時間，或用完整名稱移除已確認的站點。想改哪一項？換城市可說「改去⋯」。其他偏好目前不會自動套用。"
+            )
+        }
         if area == nil {
             if let unmatchedDestination {
                 return language.localized(
@@ -236,7 +251,7 @@ struct SavePlanConversationConditions {
     }
 
     func request(language: AppLanguage) -> SavePlanRequest? {
-        guard let area, let days, let pace, arrivalAnswered, departureAnswered else { return nil }
+        guard !needsFollowUpClarification, let area, let days, let pace, arrivalAnswered, departureAnswered else { return nil }
         if days == 1, let arrivalMinutes, let departureMinutes, departureMinutes <= arrivalMinutes { return nil }
         return SavePlanRequest(area: area, days: days, pace: pace, arrivalMinutes: arrivalMinutes, departureMinutes: departureMinutes, language: language, usesFlightBuffers: false)
     }

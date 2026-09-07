@@ -17,6 +17,7 @@ final class SavePlanConversation: ObservableObject {
     @Published var assignmentPlace: Place?
     @Published var assignmentInProgress = false
     var anchorPlaceID: UUID?
+    var excludedPlaceIDs = Set<UUID>()
 
     /// Stage an explicit place action in Plan. No submission, trip mutation,
     /// day count or pace is implied by opening this conversation.
@@ -31,12 +32,34 @@ final class SavePlanConversation: ObservableObject {
         } else {
             assignmentPlace = nil
             anchorPlaceID = place.id
+            excludedPlaceIDs = []
             conditions = SavePlanConversationConditions()
             turns = []
-            let area = SavedPlaceTripRecommender.areaLabel(for: place)
+            let area = SavePlanDraftBuilder.areaLabel(for: place)
             let location = area.map { " · \($0)" } ?? ""
             input = language.localized(english: "Plan around \(place.name)\(location)", traditionalChinese: "以「\(place.name)」為中心規劃\(location)")
         }
+    }
+
+    @discardableResult
+    func applyStopRemoval(_ query: String, savedPlaces: [Place], language: AppLanguage) -> Bool {
+        guard let target = SavePlanDraftBuilder.removalTarget(in: query) else { return false }
+        let reply: String
+        if let current = draft, let area = conditions.area, let pace = conditions.pace,
+           let result = SavePlanDraftBuilder.removingConfirmedStop(named: target, from: current,
+               savedPlaces: savedPlaces, area: area, pace: pace, language: language) {
+            draft = result.draft
+            excludedPlaceIDs.formUnion(result.removedIDs)
+            if let anchorPlaceID, result.removedIDs.contains(anchorPlaceID) { self.anchorPlaceID = nil }
+            reply = language.localized(english: "Removed \(target) from this draft. Your saved place is kept. Check the route between the remaining stops.", traditionalChinese: "已從這份草稿移除「\(target)」，已存地點仍保留。請重新確認剩餘站點間的路線。")
+        } else {
+            reply = language.localized(english: "Which confirmed stop should I remove? Use ‘remove Full name, Full address’ for a unique saved place shown in this draft. I’ve kept the draft unchanged.", traditionalChinese: "要移除哪個已確認站點？請用「移除完整名稱, 完整地址」指定草稿中的唯一已存地點。草稿還沒變動。")
+        }
+        messages.append(.init(request: query, reply: reply))
+        turns.append(ConversationTurn(userMessage: query, assistantResponse: reply))
+        if turns.count > 12 { turns.removeFirst() }
+        input = ""
+        return true
     }
 
     func assignPlace(_ place: Place, to trip: Trip, store: TripPackStore, language: AppLanguage) async {
@@ -320,6 +343,11 @@ struct SavePlanView: View {
     private func sendMessage() {
         let query = conversation.input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, !isPlanning, conversation.assignmentPlace == nil else { return }
+        if conversation.applyStopRemoval(query, savedPlaces: savedPlaces, language: languageSettings.language) {
+            isChatFocused = true
+            return
+        }
+        if conversation.conditions.requests.isEmpty { conversation.excludedPlaceIDs = [] }
         conversation.conditions.receive(query, areas: areas)
         if let question = conversation.conditions.clarification(language: languageSettings.language) {
             conversation.messages.append(.init(request: query, reply: question))
@@ -336,10 +364,12 @@ struct SavePlanView: View {
             conversation.anchorPlaceID = nil
         }
         request.anchorPlaceID = conversation.anchorPlaceID
+        request.excludedPlaceIDs = conversation.excludedPlaceIDs
         isChatFocused = false
         isPlanning = true
         planError = nil
-        let places = savedPlaces.filter { SavePlanDraftBuilder.matches(area: request.area, place: $0) }
+        let areaPlaces = savedPlaces.filter { SavePlanDraftBuilder.matches(area: request.area, place: $0) }
+        let places = areaPlaces.filter { $0.savedIDs.isDisjoint(with: request.excludedPlaceIDs) }
         let candidates = mapCandidates.filter { SavePlanDraftBuilder.matches(area: request.area, candidate: $0) }
         let planningMessage = conversation.conditions.planningMessage(language: languageSettings.language)
         let language = languageSettings.language
@@ -347,7 +377,7 @@ struct SavePlanView: View {
         planningTask = Task {
             defer { if !Task.isCancelled { isPlanning = false } }
             do {
-                guard var local = SavePlanDraftBuilder.draft(request: request, savedPlaces: places, unsavedCandidates: candidates) else {
+                guard var local = SavePlanDraftBuilder.draft(request: request, savedPlaces: areaPlaces, unsavedCandidates: candidates) else {
                     conversation.messages.append(.init(request: query, reply: localized(
                         "I can’t fit your confirmed places into these conditions yet. Your previous draft is kept. Add places in this area or adjust the time or destination.",
                         "目前無法把這些已確認地點排進所說的條件，上一版草稿仍保留著。可以補存這個區域的地點，或調整時間、目的地。"
@@ -374,10 +404,10 @@ struct SavePlanView: View {
                 if !isOffline {
                     let gaps = local.itineraryDays.flatMap { $0.health?.gaps ?? [] }
                     if !gaps.isEmpty {
-                        let extras = await TripGapLocalOptionsService().candidates(forGaps: gaps, days: local.itineraryDays, savedPlaces: places)
+                        let extras = await TripGapLocalOptionsService().candidates(forGaps: gaps, days: local.itineraryDays, savedPlaces: areaPlaces)
                         guard !Task.isCancelled else { return }
                         if !extras.isEmpty, let enriched = SavePlanDraftBuilder.draft(
-                            request: request, savedPlaces: places, unsavedCandidates: extras + candidates
+                            request: request, savedPlaces: areaPlaces, unsavedCandidates: extras + candidates
                         ) { local = enriched }
                     }
                     let polished = try await SaveAIService.shared.query(
