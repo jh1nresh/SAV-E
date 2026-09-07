@@ -60,7 +60,7 @@ final class RelatedPlaceSourcesPanelTests: XCTestCase {
         let current = requestIdentity(placeID: placeID, googlePlaceID: "ChIJ-B")
         func receipt(_ id: UUID, _ googleID: String?) -> RelatedSourcePlaceIdentity {
             RelatedSourcePlaceIdentity(id: id, name: "Venue", address: "Address",
-                latitude: nil, longitude: nil, googlePlaceId: googleID)
+                latitude: nil, longitude: nil, googlePlaceId: googleID, requestedGooglePlaceId: nil)
         }
 
         XCTAssertTrue(current.matches(receipt(placeID, "  ChIJ-B\n")))
@@ -69,6 +69,22 @@ final class RelatedPlaceSourcesPanelTests: XCTestCase {
         XCTAssertFalse(current.matches(receipt(UUID(), "ChIJ-B")))
         XCTAssertFalse(current.matches(receipt(placeID, nil)))
         XCTAssertFalse(requestIdentity(placeID: placeID, googlePlaceID: nil).matches(receipt(placeID, nil)))
+    }
+
+    func testCanonicalGoogleIDUsesVerifiedRequestIdentityAndRejectsOldVenue() throws {
+        let placeID = UUID()
+        let current = requestIdentity(placeID: placeID, googlePlaceID: "ChIJ-alias-B")
+        func receipt(_ requested: String?) throws -> RelatedSourcePlaceIdentity {
+            var json: [String: Any] = ["id": placeID.uuidString, "name": "Venue", "address": "Address",
+                                      "google_place_id": "ChIJ-canonical-B"]
+            if let requested { json["requested_google_place_id"] = requested }
+            return try JSONDecoder().decode(RelatedSourcePlaceIdentity.self,
+                from: JSONSerialization.data(withJSONObject: json))
+        }
+        XCTAssertTrue(current.matches(try receipt("  ChIJ-alias-B\n")))
+        XCTAssertFalse(current.matches(try receipt("ChIJ-previous-A")))
+        XCTAssertFalse(current.matches(try receipt("chij-alias-b")))
+        XCTAssertFalse(current.matches(try receipt(nil)), "Legacy aliases need a verified fresh receipt")
     }
 
     private func requestIdentity(placeID: UUID, googlePlaceID: String?) -> RelatedPlaceSourceRequestIdentity {
