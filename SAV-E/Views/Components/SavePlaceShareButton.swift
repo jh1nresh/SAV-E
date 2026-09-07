@@ -97,7 +97,12 @@ struct SavePlaceShareContent {
         // only in ?q/?ll would otherwise collapse to a provider home page.
         if ["maps.apple.com", "google.com", "www.google.com", "maps.google.com"].contains(host) {
             let path = sanitized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-            guard !path.isEmpty, path != "maps" else { return nil }
+            let identityFreePaths: Set<String> = if host == "maps.apple.com" {
+                ["", "place", "directions"]
+            } else {
+                ["", "maps", "maps/search", "maps/place", "maps/dir"]
+            }
+            guard !identityFreePaths.contains(path) else { return nil }
         }
         return sanitized
     }

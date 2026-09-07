@@ -159,6 +159,27 @@ final class SavePlaceShareButtonTests: XCTestCase {
     }
 
     @MainActor
+    func testIdentityFreeProviderPathsWithUnknownCoordinatesStayTextOnly() {
+        for sourceURL in [
+            "https://www.google.com/maps/place/?q=Kato",
+            "https://maps.apple.com/place?auid=123"
+        ] {
+            let payload = Self.payload(sourceURL: URL(string: sourceURL), latitude: 0, longitude: 0)
+            let content = SavePlaceShareContent(
+                subject: "Savvy Source Clue: Kato",
+                fallbackURL: nil,
+                fallbackText: "Savvy Source Clue\nKato\n777 S Alameda St",
+                payload: payload,
+                sourcePlaceId: nil,
+                optionalShareNote: nil
+            )
+
+            XCTAssertNil(content.immediateShareURL, sourceURL)
+            XCTAssertEqual(content.immediateShareText, "Savvy Source Clue\nKato\n777 S Alameda St", sourceURL)
+        }
+    }
+
+    @MainActor
     func testPreparedMessagePreservesReviewAndRecommendationState() {
         let payload = Self.payload(sourceURL: nil)
         let review = SavePlaceShareContent(
