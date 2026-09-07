@@ -102,6 +102,13 @@ let proseVenueCases: [ProseVenueRegressionCase] = [
     .init(caption: "Solomon R. Guggenheim Museum is located in New York.", venues: ["Solomon R. Guggenheim Museum": "New York"]),
     .init(caption: "J. Paul Getty Museum is located in Los Angeles.", venues: ["J. Paul Getty Museum": "Los Angeles"]),
     .init(caption: "Welcome. St. Louis Museum opens in Missouri.", venues: ["St. Louis Museum": "Missouri"]),
+    .init(caption: "Aurora Museum opens in Christmas Island.", venues: ["Aurora Museum": "Christmas Island"]),
+    .init(caption: "Aurora Museum opens in Sunset District.", venues: ["Aurora Museum": "Sunset District"]),
+    .init(caption: "Aurora Museum opens in São Paulo.", venues: ["Aurora Museum": "São Paulo"]),
+    .init(caption: "Aurora Museum opens in Montréal.", venues: ["Aurora Museum": "Montréal"]),
+    .init(caption: "Étoile Museum opens in Zürich.", venues: ["Étoile Museum": "Zürich"]),
+    .init(caption: "Café Étoile Restaurant is located in Québec.", venues: ["Café Étoile Restaurant": "Québec"]),
+    .init(caption: "Aurora Museum opens in São Paulo, Brazil.", venues: ["Aurora Museum": "São Paulo, Brazil"]),
     .init(caption: "Aurora Museum opens in Rio de", venues: [:]),
     .init(caption: "Aurora Museum opens in Washington, D.Curious", venues: [:]),
     .init(caption: "Aurora Museum opens in St.\nLouis", venues: [:]),
@@ -295,6 +302,47 @@ struct SocialPlaceParserRegressionRunner {
         }
         if laterVenue.resolverDecision.allowsDirectSave {
             failures.append("Mixed prose candidates must remain unconfirmed")
+        }
+
+        for name in ["Noon Cafe", "Home Cafe", "Midnight Garden"] {
+            additionalCaseCount += 1
+            let analysis = parser.analyze(evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/p/FixturePost/", resolvedURL: nil,
+                sharedTitle: nil, sharedText: "Dinner at \(name), Boston. Meet at Home, later.",
+                metadataTitle: nil, metadataDescription: nil, ocrLines: []
+            ))
+            if !analysis.placesFound.contains(where: { $0.displayName == name }) || analysis.placesFound.contains(where: { $0.displayName == "Home" }) {
+                failures.append("Non-venue filter lost specific venue: \(name)")
+            }
+        }
+        for falseName in ["Noon", "Home", "Link In Bio", "Midnight", "Our Website"] {
+            additionalCaseCount += 1
+            let analysis = parser.analyze(evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/p/FixturePost/", resolvedURL: nil,
+                sharedTitle: nil,
+                sharedText: "Dinner at Sunset Cafe, Boston. Meet at \(falseName), then leave.\n📍123 Main Street, Boston",
+                metadataTitle: nil, metadataDescription: nil, ocrLines: []
+            ))
+            if !analysis.placesFound.contains(where: { $0.displayName == "Sunset Cafe" }) ||
+                analysis.placesFound.contains(where: { $0.displayName == falseName }) {
+                failures.append("Expanded at matches accepted non-venue \(falseName)")
+            }
+        }
+        for address in ["123 Main Street, Boston", "123 Main St., Boston", "123 Main Street, Montréal"] {
+            additionalCaseCount += 1
+            let analysis = parser.analyze(evidence: SocialPlaceSourceEvidence(
+                sourceURL: "https://www.instagram.com/p/FixturePost/", resolvedURL: nil,
+                sharedTitle: nil, sharedText: "Aurora Museum is located at \(address).",
+                metadataTitle: nil, metadataDescription: nil, ocrLines: []
+            ))
+            guard let venue = analysis.placesFound.first(where: { $0.displayName == "Aurora Museum" }) else {
+                failures.append("Numeric street address lost named venue: \(address)")
+                continue
+            }
+            if !venue.locationClues.contains(address) || analysis.resolverDecision.allowsDirectSave ||
+                !venue.missingInfo.contains("Prose location clue; verify exact venue and address") {
+                failures.append("Numeric address lost unverified named association: \(address)")
+            }
         }
 
         let redirectSources = [

@@ -1541,6 +1541,11 @@ struct SocialPlaceParser {
                 let name = String(text[nameRange])
                 let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
                 guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) else { return nil }
+                if pattern == locationIntroPattern {
+                    let nonVenue = "^(?:" + Self.proseTemporalPattern
+                        + #"|Home|Work|School|The Office|My Place|Your Place|Link In Bio|The Link|Our Website|My Website)$"#
+                    guard cleaned.range(of: nonVenue, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+                }
                 // A paired HTML element is markup, not a bracketed venue name.
                 let closingTag = #"</\s*"# + NSRegularExpression.escapedPattern(for: name) + #"\s*>"#
                 guard text.range(of: closingTag, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
@@ -1613,23 +1618,27 @@ struct SocialPlaceParser {
         }
     }
 
+    private static let proseTemporalPattern = #"(?i:January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Noon|Midnight|Morning|Evening|Night|Midday|Sunrise|Sunset|Breakfast|Lunch|Dinner|Christmas|Easter|Summer|Winter|Spring|Autumn|Fall|New\h+Year)\b"#
+
     private func englishProseVenueCandidates(from text: String, sourceURL: String) -> [SocialPlaceCandidateDraft] {
         // A category mention or a person's name is insufficient. Require a
         // capitalized venue name and an explicit physical-location predicate,
         // keeping the location from that same sentence as an unverified clue.
         // Horizontal separators keep adjacent caption headings out of captures.
-        let word = #"[A-Z][A-Za-z0-9'’&-]*"#
-        let nameWord = #"(?:(?:St|Ste|Mt|Ft|Dr|Mr|Mrs|Ms|[A-Z])\.|"# + word + #")"#
+        let word = #"\p{Lu}[\p{L}\p{M}0-9'’&-]*"#
+        let nameWord = #"(?:(?:St|Ste|Mt|Ft|Dr|Mr|Mrs|Ms|\p{Lu})\.|"# + word + #")"#
         let name = nameWord + #"(?:\h+(?:of|the|and|for|&|"# + nameWord + #")){0,9}"#
         let connector = #"(?:de|da|do|dos|das|del|della|di|du|des|la|las|los|le|les|van|von|der|den|of|the|and)"#
-        let initialism = #"(?:[A-Z]\.)+[A-Z]\.?"#
-        let locationWord = #"(?:(?:St|Ste|Mt|Ft)\.\h+)?(?!(?:St|Ste|Mt|Ft|[A-Z])\.)"# + word
+        let initialism = #"(?:\p{Lu}\.)+\p{Lu}\.?"#
+        let locationWord = #"(?:(?:St|Ste|Mt|Ft)\.\h+)?(?!(?:St|Ste|Mt|Ft|\p{Lu})\.)"# + word
         let locationPart = #"(?:"# + initialism + #"|"# + locationWord
             + #"(?:\h+(?:"# + connector + #"\h+)*"# + locationWord + #"){0,5})"#
-        let location = locationPart + #"(?:,\h*"# + locationPart + #"){0,2}"#
+        let streetKind = #"(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Lane|Ln\.?|Boulevard|Blvd\.?|Drive|Dr\.?|Court|Ct\.?|Way|Place|Pl\.?|Terrace|Ter\.?|Parkway|Pkwy\.?)"#
+        let streetAddress = #"\d{1,6}\h+"# + word + #"(?:\h+"# + word + #"){0,5}\h+"# + streetKind
+        let location = "(?:" + streetAddress + "|" + locationPart + #")(?:,\h*"# + locationPart + #"){0,2}"#
         // Do not backtrack to a shorter city token or omit its next component.
-        let locationEnd = #"(?![A-Za-z0-9'’&-]|\.[A-Za-z]|\h+"# + connector + #"\b|\h+[A-Z]|,\h*[A-Z])(?=[,.!?;\s]|$)"#
-        let temporal = #"(?i:January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Noon|Midnight|Christmas|Easter|Summer|Winter|Spring|Autumn|Fall|New\h+Year)\b"#
+        let locationEnd = #"(?![\p{L}\p{M}0-9'’&-]|\.[\p{L}\p{M}]|\h+"# + connector + #"\b|\h+\p{Lu}|,\h*\p{Lu})(?=[,.!?;\s]|$)"#
+        let temporal = Self.proseTemporalPattern
         // An opening date is not a city; an adjacent physical-location phrase
         // may still provide the venue's unverified area clue.
         let timedOpening = #"(?:(?:in|at|near)\h+"# + temporal + #"\h+)?"#
@@ -1649,7 +1658,7 @@ struct SocialPlaceParser {
                     .trimmingCharacters(in: .whitespaces).count >= 2,
                   SocialPlaceEvidenceScorer.isUsableCandidateName(venue) else { return nil }
             let area = String(text[locationRange])
-            guard area.range(of: "^" + temporal, options: .regularExpression) == nil else { return nil }
+            guard area.range(of: "^(?:" + temporal + ")$", options: .regularExpression) == nil else { return nil }
             let sentence = String(text[sentenceRange])
             return draft(
                 name: venue,
