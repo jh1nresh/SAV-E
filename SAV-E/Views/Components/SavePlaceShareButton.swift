@@ -22,7 +22,7 @@ struct SavePlaceShareContent {
     /// share concise text rather than an embedded Savvy receipt or global pin.
     var immediateShareURL: URL? {
         guard let payload else { return nil }
-        if let sourceURL = payload.safeSourceURL,
+        if let sourceURL = specificPublicSourceURL,
            sourceURL.absoluteString.count <= Self.immediateURLMaximumLength {
             return sourceURL
         }
@@ -67,9 +67,11 @@ struct SavePlaceShareContent {
     private func compactShareText(including url: URL?) -> String {
         let lines: [String]
         if let payload {
-            lines = [payload.name, payload.address]
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+            lines = uniqueNonEmpty([
+                fallbackText.components(separatedBy: .newlines).first,
+                payload.name,
+                payload.address
+            ])
         } else {
             let fallbackLines = fallbackText.components(separatedBy: .newlines)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -82,6 +84,31 @@ struct SavePlaceShareContent {
             result += result.isEmpty ? url.absoluteString : "\n\(url.absoluteString)"
         }
         return result
+    }
+
+    private var specificPublicSourceURL: URL? {
+        guard let rawValue = payload?.sourceURL,
+              let rawComponents = URLComponents(string: rawValue),
+              let sanitized = ShareRoutePayloadSanitizer.publicURL(from: rawValue),
+              let host = rawComponents.host?.lowercased()
+        else { return nil }
+
+        // The sanitizer removes query items. A map URL whose identity lived
+        // only in ?q/?ll would otherwise collapse to a provider home page.
+        if ["maps.apple.com", "google.com", "www.google.com", "maps.google.com"].contains(host) {
+            let path = sanitized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
+            guard !path.isEmpty, path != "maps" else { return nil }
+        }
+        return sanitized
+    }
+
+    private func uniqueNonEmpty(_ values: [String?]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return nil }
+            return trimmed
+        }
     }
 
     static func place(_ place: Place) -> SavePlaceShareContent {
