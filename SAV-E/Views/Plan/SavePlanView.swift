@@ -9,6 +9,7 @@ final class SavePlanConversation: ObservableObject {
         let reply: String
     }
     @Published var input = ""
+    @Published var submittedQuery: String?
     @Published var messages: [Message] = []
     @Published var draft: SaveAIResponse?
     var turns: [ConversationTurn] = []
@@ -66,6 +67,12 @@ struct SavePlanView: View {
     @State private var isPlanning = false
     @State private var planError: String?
     @State private var planningTask: Task<Void, Never>?
+
+    private var assignmentTrips: [Trip] {
+        var seen = Set<UUID>()
+        return (tripStore.currentTrips + tripStore.upcomingTrips + tripStore.planningTrips)
+            .filter { seen.insert($0.id).inserted }
+    }
 
     private var areas: [String] {
         SavePlanDraftBuilder.areas(from: savedPlaces)
@@ -148,6 +155,8 @@ struct SavePlanView: View {
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.root")
+        .onAppear(perform: consumeSubmittedQuery)
+        .onChange(of: conversation.submittedQuery) { _, _ in consumeSubmittedQuery() }
         .onDisappear {
             planningTask?.cancel()
             isPlanning = false
@@ -206,7 +215,7 @@ struct SavePlanView: View {
             }
             if let place = conversation.assignmentPlace {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(tripStore.trips) { trip in
+                    ForEach(assignmentTrips) { trip in
                         Button(localized("Add to \(trip.name)", "加入「\(trip.name)」")) {
                             conversation.assignmentInProgress = true
                             Task {
@@ -278,6 +287,14 @@ struct SavePlanView: View {
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(SaveAtlasPalette.line.opacity(0.4)) }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
+    }
+
+    private func consumeSubmittedQuery() {
+        guard let query = conversation.submittedQuery, !isPlanning,
+              conversation.assignmentPlace == nil else { return }
+        conversation.submittedQuery = nil
+        conversation.input = query
+        sendMessage()
     }
 
     private func sendMessage() {
