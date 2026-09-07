@@ -971,7 +971,6 @@ struct ContentView: View {
                 isExactSearchSessionActive = true
                 mapVM.beginExactSearchResolution(for: candidate)
             },
-            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
             onClearMapSearchResults: {
                 isExactSearchSessionActive = false
                 guard exactSearchRequestID == nil else { return }
@@ -1013,7 +1012,8 @@ struct ContentView: View {
             onDismissMapDetail: {
                 mapVM.clearSelectedMapObject()
             },
-            onShowMapCandidatesOnMap: showMapCandidatesOnMap
+            onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
     }
