@@ -750,8 +750,11 @@ final class MapViewModel: ObservableObject {
         guard let candidate = reviewCandidates.first(where: { $0.id == focusedReviewCandidateID }),
               candidate.status != "source_only",
               candidate.hasReliableCoordinates,
-              let coordinate = candidate.coordinate,
-              MapSearchGeography.isTrustworthyCoordinate(coordinate) else { return [] }
+              let latitude = candidate.latitude,
+              let longitude = candidate.longitude,
+              MapSearchGeography.isTrustworthyCoordinate(
+                CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+              ) else { return [] }
         return [candidate]
     }
 
