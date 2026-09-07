@@ -2314,10 +2314,16 @@ final class MapViewModel: ObservableObject {
     }
 
     /// Plain map search bypasses assistant intent routing.
-    func searchMapPlaces(_ query: String) async {
+    /// Only the Review exact-refine flow may retain its clue-resolution link.
+    func searchMapPlaces(
+        _ query: String,
+        preservesExactSearchClue: Bool = false
+    ) async {
         let generation = beginMapCandidateSearch()
-        let preservedResolution = exactSearchResolution
-        exactSearchResolution = preservedResolution
+        let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
+        if !preservesExactSearchClue {
+            exactSearchResolution = nil
+        }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             mapCandidates = []
@@ -2442,6 +2448,27 @@ final class MapViewModel: ObservableObject {
         if !categories.isEmpty {
             selectedCategories = categories
             activeFilter = nil
+        }
+        if destination == .namedArea {
+            let candidates = await mapCandidateSearchService.searchCandidates(
+                matching: query,
+                near: nil,
+                span: nil,
+                excluding: places
+            )
+            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
+            let filtered = sanitizedMapCandidates(candidates).filter { candidate in
+                guard !categories.isEmpty else { return true }
+                guard let category = candidate.category else { return false }
+                return categories.contains(category)
+            }
+            return finishPreparedSearch(
+                filtered,
+                generation: searchGeneration,
+                preservedResolution: preservedResolution,
+                focusingCamera: true,
+                alreadySanitized: true
+            )
         }
         guard let categoryCenter = searchCenter else {
             mapCandidates = []

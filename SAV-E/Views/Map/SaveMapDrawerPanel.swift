@@ -224,6 +224,7 @@ struct SaveMapSearchContent: View {
     @ObservedObject var mapViewModel: MapViewModel
     let initialQuery: String
     let focusesSearch: Bool
+    let preservesExactSearchClue: Bool
     let onClose: () -> Void
     let onOpenPlace: (Place) -> Void
     let onOpenCandidate: (SaveMapCandidate) -> Void
@@ -360,7 +361,10 @@ struct SaveMapSearchContent: View {
         }
         .task(id: searchRequestID) {
             guard !submittedQuery.isEmpty else { return }
-            await mapViewModel.searchMapPlaces(submittedQuery)
+            await mapViewModel.searchMapPlaces(
+                submittedQuery,
+                preservesExactSearchClue: preservesExactSearchClue
+            )
         }
     }
 

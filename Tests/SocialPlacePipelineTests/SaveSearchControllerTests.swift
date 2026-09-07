@@ -4354,6 +4354,32 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(request.query, "咖啡 臺北")
     }
 
+    func testNamedAreaCategoryDrawerSearchUsesAreaQueryWithoutLocalAnchor() async throws {
+        let candidate = SaveMapCandidate(
+            id: "taipei-coffee",
+            title: "Taipei Coffee",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .cafe
+        )
+        let unrelated = SaveMapCandidate(
+            id: "taipei-hotel", title: "Taipei Hotel", subtitle: "Taipei",
+            latitude: taipei.latitude, longitude: taipei.longitude, category: .stay
+        )
+        let search = RecordingMapCandidateSearchService(candidates: [candidate, unrelated])
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        let result = await map.prepareMapCandidatesForDrawerQuery("咖啡 臺北")
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertEqual(request.query, "咖啡 臺北")
+        XCTAssertNil(request.near)
+        XCTAssertNil(request.span)
+        XCTAssertEqual(result.candidates?.map(\.id), [candidate.id])
+    }
+
     func testLocalResultsIgnoreUSOutlierAndInvalidCoordinates() async throws {
         let search = RecordingMapCandidateSearchService()
         search.nextMatchingResults = [
@@ -4469,13 +4495,52 @@ final class MapReviewLocationRepairTests: XCTestCase {
                 category: .cafe
             )
         ]
-        await map.searchMapPlaces("Snapshot Coffee Xinyi")
+        await map.searchMapPlaces(
+            "Snapshot Coffee Xinyi",
+            preservesExactSearchClue: true
+        )
         let refined = try XCTUnwrap(map.mapCandidates.first)
         XCTAssertTrue(map.mapCandidate(refined, resolvesReviewCandidateID: clue.id))
 
         let place = try await map.saveMapCandidateAsPlace(refined)
         XCTAssertEqual(place.name, "Snapshot Coffee Xinyi")
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    func testPlainMapSearchCannotResolveAnExistingReviewClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plain-search-does-not-resolve-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let candidate = SaveMapCandidate(
+            id: "plain-coffee",
+            title: "Plain Coffee",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .cafe
+        )
+        let search = RecordingMapCandidateSearchService(candidates: [candidate])
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(
+            name: "Exact Coffee",
+            address: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            status: "pending"
+        )
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+        map.updateVisibleMapRegion(region(around: taipei))
+
+        await map.searchMapPlaces("coffee")
+        XCTAssertFalse(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+
+        try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
     func testUnrelatedLaterSaveDoesNotRetirePriorClue() async throws {
@@ -4677,7 +4742,10 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     private func source(at relativePath: String) throws -> String {
-        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let url = root.appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
     }
