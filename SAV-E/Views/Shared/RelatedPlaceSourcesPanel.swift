@@ -7,6 +7,27 @@ enum RelatedPlaceSourcesLoadState: Equatable {
     case failed(RelatedPlaceSourcesDisplayError)
 }
 
+/// A source receipt is valid only for the exact confirmed venue identity that
+/// started the request. The same Map Stamp can be corrected in place.
+struct RelatedPlaceSourceRequestIdentity: Equatable {
+    let placeID: UUID
+    let googlePlaceID: String
+
+    init(place: Place) {
+        placeID = place.id
+        googlePlaceID = place.googlePlaceId?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+    }
+
+    var isConfirmed: Bool { !googlePlaceID.isEmpty }
+
+    func matches(_ receipt: RelatedSourcePlaceIdentity) -> Bool {
+        isConfirmed && receipt.id == placeID && receipt.googlePlaceId?
+            .trimmingCharacters(in: .whitespacesAndNewlines) == googlePlaceID
+    }
+}
+
 enum RelatedPlaceSourcesDisplayError: Equatable {
     case signInRequired
     case mapStampUnavailable
@@ -140,7 +161,7 @@ struct RelatedPlaceSourcesPanel: View {
             guard let requestID = loadRequestID else { return }
             await loadSources(requestID: requestID)
         }
-        .onChange(of: place.id) { _, _ in
+        .onChange(of: requestIdentity) { _, _ in
             loadRequestID = nil
             requestedForceRefresh = false
             state = .idle
@@ -179,6 +200,10 @@ struct RelatedPlaceSourcesPanel: View {
         switch state {
         case .idle:
             VStack(alignment: .leading, spacing: 10) {
+                if !hasGoogleIdentity {
+                    identityRequiredNotice
+                }
+
                 Text(languageSettings.localized(
                     english: "Search seven supported platforms for this confirmed place. Results will not change your Map Stamp or Trip.",
                     traditionalChinese: "在七個支援平台搜尋這個已確認地點；結果不會改動地圖章或行程。"
@@ -195,6 +220,7 @@ struct RelatedPlaceSourcesPanel: View {
                     systemImage: "sparkle.magnifyingglass",
                     forceRefresh: false
                 )
+                .disabled(!hasGoogleIdentity)
             }
 
         case .loading:
@@ -324,11 +350,35 @@ struct RelatedPlaceSourcesPanel: View {
             Label(title, systemImage: systemImage)
         }
         .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: .white))
-        .disabled(state == .loading)
+        .disabled(state == .loading || !hasGoogleIdentity)
         .accessibilityIdentifier("drawer.saved.relatedSources.find")
     }
 
+    private var hasGoogleIdentity: Bool {
+        requestIdentity.isConfirmed
+    }
+
+    private var requestIdentity: RelatedPlaceSourceRequestIdentity {
+        RelatedPlaceSourceRequestIdentity(place: place)
+    }
+
+    private var identityRequiredNotice: some View {
+        Label {
+            Text(languageSettings.localized(
+                english: "Confirm the exact Google place before searching public sources.",
+                traditionalChinese: "請先確認正確的 Google 地點，再搜尋公開來源。"
+            ))
+        } icon: {
+            Image(systemName: "checkmark.seal")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundColor(.saveCocoa)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("drawer.saved.relatedSources.identityRequired")
+    }
+
     private func startDiscovery(forceRefresh: Bool) {
+        guard hasGoogleIdentity else { return }
         SaveHaptics.tap()
         state = .loading
         requestedForceRefresh = forceRefresh
@@ -336,19 +386,25 @@ struct RelatedPlaceSourcesPanel: View {
     }
 
     private func loadSources(requestID: UUID) async {
-        let requestedPlaceID = place.id
+        let requestedPlace = place
+        let requestedIdentity = requestIdentity
         do {
-            let pack = try await discover(place, requestedForceRefresh)
+            let pack = try await discover(requestedPlace, requestedForceRefresh)
             try Task.checkCancellation()
             guard loadRequestID == requestID,
-                  place.id == requestedPlaceID
+                  requestIdentity == requestedIdentity
             else { return }
+            // A cached response can predate an in-place Google identity correction.
+            guard requestedIdentity.matches(pack.place) else {
+                state = .failed(.invalidResponse)
+                return
+            }
             state = .loaded(pack)
         } catch is CancellationError {
             return
         } catch {
             guard loadRequestID == requestID,
-                  place.id == requestedPlaceID
+                  requestIdentity == requestedIdentity
             else { return }
             state = .failed(RelatedPlaceSourcesDisplayError.classify(error))
         }
