@@ -378,7 +378,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
 
         var urlString = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&key=\(apiKey)"
 
-        if let location = near {
+        if let location = near, SaveChromeNavigation.isTrustworthyMapCoordinate(location) {
             urlString += "&location=\(location.latitude),\(location.longitude)&radius=5000"
         }
 
@@ -403,6 +403,8 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
                   let location = geometry["location"] as? [String: Any],
                   let lat = location["lat"] as? Double,
                   let lng = location["lng"] as? Double else { return nil }
+            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+            guard SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate) else { return nil }
 
             return GooglePlaceMatch(
                 id: placeId,

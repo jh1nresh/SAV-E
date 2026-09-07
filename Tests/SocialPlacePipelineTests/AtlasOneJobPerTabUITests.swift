@@ -473,6 +473,17 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
     }
 
+    func testMapSearchShelfTapFocusesAndDragDoesNot() throws {
+        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
+        let root = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(panel.contains("guard !collapsedDragConsumedTap else { return }"))
+        XCTAssertTrue(panel.contains("onExpand(true)"))
+        XCTAssertTrue(panel.contains("if stage == .collapsed { onExpand(false) }"))
+        XCTAssertTrue(panel.contains("case .collapsed:\n            onExpand(false)"))
+        XCTAssertTrue(root.contains("drawerDetent = request.focusesSearch ? .large : .medium"))
+        XCTAssertTrue(panel.contains("isFocused = focusesSearch"))
+    }
+
     func testPassportPutsLanguageAndProBehindDisclosure() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let disclosure = try identifierBody("profile.controlsDisclosure", in: passport)

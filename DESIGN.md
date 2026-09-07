@@ -598,6 +598,10 @@ Rules:
 - Current location remains bottom-right and one-handed.
 - Only reliable states get pins.
 - Unsaved nearby candidates are shown only after an explicit drawer action.
+- Tapping the collapsed search shelf opens the existing full-height panel,
+  focuses the search field, and shows the keyboard.
+- Dragging the handle or panel resizes through parked stages and must not
+  request keyboard focus. Tapping the resize handle remains a resize control.
 
 ### Plan
 

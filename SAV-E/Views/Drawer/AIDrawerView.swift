@@ -130,6 +130,8 @@ struct AIDrawerView: View {
     /// "Find exact place" promises the map: when the search lands candidate
     /// pins, the host closes this drawer surface so the user sees them.
     var onShowMapCandidatesOnMap: () -> Void = {}
+    /// Reliable Review map tap focuses that candidate without a new search.
+    var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var commandBarMinHeight: CGFloat = 52
@@ -247,6 +249,9 @@ struct AIDrawerView: View {
             },
             onFindExactPlaceCandidate: { candidate in
                 findExactPlace(for: candidate)
+            },
+            onFocusReviewCandidateOnMap: { candidate in
+                focusKnownReviewCandidateOnMap(candidate)
             },
             onSaveCandidate: { candidate, nameOverride in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
@@ -1285,6 +1290,14 @@ struct AIDrawerView: View {
         }
     }
 
+    private func focusKnownReviewCandidateOnMap(_ candidate: PlaceReviewCandidate) {
+        onFocusReviewCandidateOnMap(candidate)
+        if candidate.hasReliableCoordinates {
+            mapDetailDrawerItem = nil
+            onShowMapCandidatesOnMap()
+        }
+    }
+
     private func findExactPlace(for candidate: PlaceReviewCandidate) {
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -1299,6 +1312,7 @@ struct AIDrawerView: View {
             traditionalChinese: "正在替「\(candidate.name)」找精確地點。保存前請先確認地圖結果。"
         )
         withAnimation { drawerDetent = .medium }
+        onBeginExactSearchResolution(candidate)
 
         startMapSearch { requestID in
             let result = await onPrepareMapSearch(query)
@@ -1314,9 +1328,6 @@ struct AIDrawerView: View {
             } else {
                 viewModel.mapCandidates = candidates
                 addSpotStatus = nil
-                // Saving one of these pins resolves the clue itself, so the
-                // item leaves Review instead of lingering there.
-                onBeginExactSearchResolution(candidate)
                 // Take the user to the map itself: the camera has focused the
                 // candidate pins, so close the drawer instead of covering the
                 // map with a results list. Tapping a pin opens its receipt.
@@ -1536,6 +1547,7 @@ struct MapDetailDrawerView: View {
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
+    var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onRejectCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) -> Void
@@ -1894,6 +1906,7 @@ struct MapDetailDrawerView: View {
                         captureTripName: captureTripName,
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
+                        onFocusOnMap: { onFocusReviewCandidateOnMap(candidate) },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
                         onReject: { onRejectCandidate(candidate) },
                         onSaveSourceOnly: { onSaveCandidateAsSourceOnly(candidate) },
@@ -3298,6 +3311,7 @@ private struct ReviewCandidateDetailCard: View {
     var captureTripName: String?
     var isWorking: Bool
     var onFindExactPlace: () -> Void
+    var onFocusOnMap: (() -> Void)? = nil
     var onSave: (String?) -> Void
     var onReject: () -> Void
     var onSaveSourceOnly: () -> Void
@@ -3309,6 +3323,7 @@ private struct ReviewCandidateDetailCard: View {
         captureTripName: String?,
         isWorking: Bool,
         onFindExactPlace: @escaping () -> Void,
+        onFocusOnMap: (() -> Void)? = nil,
         onSave: @escaping (String?) -> Void,
         onReject: @escaping () -> Void,
         onSaveSourceOnly: @escaping () -> Void,
@@ -3318,6 +3333,7 @@ private struct ReviewCandidateDetailCard: View {
         self.captureTripName = captureTripName
         self.isWorking = isWorking
         self.onFindExactPlace = onFindExactPlace
+        self.onFocusOnMap = onFocusOnMap
         self.onSave = onSave
         self.onReject = onReject
         self.onSaveSourceOnly = onSaveSourceOnly
@@ -3337,9 +3353,15 @@ private struct ReviewCandidateDetailCard: View {
                     eyebrow: presentationEyebrow,
                     title: presentation.title,
                     contextLine: presentationContextLine,
-                    // Tapping the hero map jumps straight to the live map with
-                    // this clue's candidates pinned.
-                    onOpenOnMap: onFindExactPlace
+                    // Reliable coordinates focus this candidate. Source-only
+                    // or missing coords still run Find exact place.
+                    onOpenOnMap: {
+                        if candidate.hasReliableCoordinates {
+                            (onFocusOnMap ?? onFindExactPlace)()
+                        } else {
+                            onFindExactPlace()
+                        }
+                    }
                 )
 
                 VStack(alignment: .leading, spacing: 10) {

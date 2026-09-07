@@ -139,6 +139,10 @@ struct MapView: View {
                 .onChange(of: viewModel.selectedMapFeature) { _, feature in
                     viewModel.selectMapFeature(feature)
                 }
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    guard displayedPlaces == nil else { return }
+                    viewModel.updateVisibleMapRegion(context.region)
+                }
                 .accessibilityIdentifier("map.liveSurface")
                 .overlay(alignment: .bottomTrailing) {
                     CurrentLocationButton(
@@ -636,11 +640,5 @@ private extension PlaceReviewCandidate {
     var coordinate: CLLocationCoordinate2D? {
         guard hasReliableCoordinates, let latitude, let longitude else { return nil }
         return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-}
-
-private extension SaveMapCandidate {
-    var coordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
