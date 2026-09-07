@@ -1,361 +1,53 @@
-# Savvy iOS
+# Savvy
 
-Savvy is a private place-memory app for iOS. It turns messy travel and food clues — Instagram links, Threads posts, Xiaohongshu URLs, Google Maps links, web pages, voice/text commands, and Google Takeout exports — into confirmed **Map Stamps** with evidence receipts.
-
-Current app version in this repo: **1.0.0 (build 106)**.
-
-Build numbers live in `project.yml`. `SAV-E.xcodeproj` is generated from it, so a
-bump applied only to the generated project is undone by the next `xcodegen generate`.
-
-## Current product shape
-
-Savvy is no longer a generic map/list/trip app. The current app is:
+Savvy is a private place-memory app for iOS. It turns travel and food clues into user-confirmed **Map Stamps**, with evidence receipts and trip planning from saved places.
 
 ```text
-source clue → Save / Review receipt → confirmed Map Stamp → Home / Map / Plan / Passport
+Source clue → Review candidate → user confirmation → Map Stamp → Plan
 ```
 
-The core judgment is conservative: Savvy should not pretend a clue is a real place until the source, caption/OCR, public search, map match, or user decision gives enough evidence. Uncertain clues stay in **Review** with receipts and next actions.
+## Start here
 
-## What ships in the iOS app
-
-- **Five-part app shell** — Home, Map, a raised Save control, Plan, and Passport use a compact Liquid Glass tab bar. Save opens capture without replacing the selected tab.
-- **Region-based Home** — confirmed saves are grouped by region and use a stored or enriched place photo when one is available. The denser Saves library remains a child screen rather than a root tab.
-- **Map + three-stage search drawer** — the map keeps current-location controls and confirmed Map Stamps while search expands through compact, medium, and large stages for results, review, and place actions.
-- **Save capture** — the centre control accepts URLs, pasted text, voice/text commands, and Google Takeout exports, then routes uncertain clues through Review.
-- **Plan** — drafts a walking day from confirmed Map Stamps in a chosen city. Unsaved attractions stay labeled as Unsaved Candidates. Arrival and hotel times shrink the day; Savvy does not book flights or rooms.
-- **Review inbox** — imported social/web clues become review candidates with evidence, rejected evidence, confidence, and source-recovery receipts before saving.
-- **Map Stamps** — confirmed places support categories, visibility, detail cards, source links, notes, navigation, deletion, and list membership.
-- **Place recovery pipeline** — deterministic parser + public source-search fallback for Instagram/Threads/Xiaohongshu/web clues. Source-only clues remain source-only instead of creating fake places.
-- **Collaborative lists** — create lists, add places, share viewer/editor list links, join list links, and plan from list items.
-- **Referral/friends layer** — referral/profile links can hand off starter map packs and complete follow intent after install/open.
-- **Passport profile** — profile, language controls, visibility settings, stamp counts, waiting clues, receipt-style progress, and working invite/list share actions.
-- **Trips** — saved itineraries remain reachable from Plan and from a place. Plan is the permanent root workbench.
-- **App Intents / shortcuts** — local app intents for saving a URL and asking Savvy memory.
-- **Bilingual UI path** — English and Traditional Chinese app-language settings for user-visible surfaces.
-
-## Build 106 release state
-
-Last verified on 2026-08-25:
-
-- build 106 source is merged at `fc29cd4`, and [main CI run 32901152122](https://github.com/jh1nresh/SAV-E/actions/runs/32901152122) passed
-- the signed app, Share Extension, and App Clip archive was uploaded successfully to App Store Connect
-- the last App Store Connect read-back showed build 106 still processing
-- build 106 visibility in the internal `Test g` group and a real-device smoke test are not yet verified
-- external TestFlight, Beta Review, App Review, and public release are outside the current internal-testing boundary
-
-An upload is not proof that the build is available to testers. Confirm Apple processing, the exact internal group, and a real-device launch separately before reporting the build as TestFlight-ready.
-
-## Companion surfaces
-
-- **Share Extension** (`SAVEShareExtension`) accepts URLs/text from other apps and queues review candidates.
-- **App Clip** (`SAVEClip`) previews Savvy place links and private/share links on `sav-e-app.vercel.app` when Apple App Clip Experience + Associated Domains are configured.
-- **Web fallback** (`save-rn/`) serves public share previews, referral/list routes, and Apple association files through Vercel.
-- **Railway backend** (`backend/`) stores places/profiles/receipts/share links, verifies Privy auth, resolves short links, runs source recovery, and powers Sendblue/SLL-R experiments.
-- **iMessage extension** (`SAVEiMessageExtension`) exists as a parked spike. It is not embedded in shipping builds until icons and validation are complete.
-
-## Current non-goals / boundaries
-
-- Do not direct-save weak social metadata as a real place.
-- Do not configure `wanderly.app` for Universal Links/App Clips until its AASA endpoint returns raw Apple association JSON without Cloudflare/WAF challenge responses.
-- Do not ship `GEMINI_API_KEY` in app bundles. Gemini is a backend secret; client-side Gemini is private-development only.
-- Do not treat the iMessage target as production until it has app icons, reviewable UX, and validated build settings.
-- Full trip import, full referral App Clip profile previews, and production paywall/credits are not the current TestFlight boundary unless a later PR explicitly lands them.
-
-## Tech stack
-
-| Layer | Stack |
+| I want to… | Read |
 |---|---|
-| iOS app | SwiftUI, MapKit, App Intents, Speech/AVFoundation voice input |
-| Auth | Privy iOS SDK |
-| Backend | Railway Node/TypeScript API + Railway Postgres |
-| Place intelligence | Deterministic parsers, Google Places API, Gemini through the backend, public source recovery |
-| Share surfaces | iOS Share Extension, App Clip, Expo/React Native web fallback |
-| Web | Expo 54 / React Native Web / Vercel |
-| Tests | Swift unit/UI tests, Node backend tests, parser fixture scripts |
+| Understand the app and its boundaries | [Product overview](docs/product-overview.md) |
+| Set up a local checkout | [Setup](docs/setup.md) |
+| Build or run focused checks | [Verification](docs/verification.md) |
+| Work on design or product states | [Design contract](DESIGN.md) |
+| Configure share links and App Clips | [Sharing](docs/sharing.md) |
+| Prepare a signed release or TestFlight upload | [Release guide](docs/releasing.md) |
+| Find runbooks and historical records | [Documentation index](docs/README.md) |
+| Find a proposal, spec, or verification receipt | [Specification index](specs/README.md) |
 
-## Repository structure
+## Repository map
 
-```text
-SAV-E/                       SwiftUI iOS app
-├── App/                     App entry, auth/onboarding/link handling
-├── Views/                   Map, drawer, review, profile, import, trips, shared UI
-├── Models/                  Places, review candidates, lists, guides, social/referral models
-├── ViewModels/              Map, drawer, profile, trip state
-├── Services/                Parsing, search, persistence, local vault, AI, imports, location
-├── Intents/                 App Shortcuts / App Intents
-└── Resources/               Assets + local Secrets.plist template
-
-SAV-EShareExtension/         iOS share extension target
-SAV-EClip/                   App Clip target
-SAV-EShared/                 Shared parsers/config used by app, clip, extension
-SAV-EiMessage/               Parked iMessage extension spike
-backend/                     Railway TypeScript API + Postgres schema/tests
-save-rn/                     Expo web fallback for share/referral/list routes
-Tests/                       Swift unit and UI tests
-scripts/                     Build, config, parser, and fixture checks
-project.yml                  XcodeGen project definition
-```
-
-## Setup
-
-### 1. Clone
-
-```bash
-git clone https://github.com/JhiNResH/SAV-E.git
-cd SAV-E
-```
-
-### 2. Bootstrap local secrets
-
-```bash
-cp -n SAV-E/Resources/Secrets.plist.template SAV-E/Resources/Secrets.plist
-cp -n SAV-EShareExtension/Secrets.plist.template SAV-EShareExtension/Secrets.plist
-```
-
-Xcode also creates these local files from templates during build if they are missing. It does not overwrite existing `Secrets.plist` files; when templates change, compare manually and add new keys.
-
-Fill local values in `SAV-E/Resources/Secrets.plist` and `SAV-EShareExtension/Secrets.plist`:
-
-| Key | Purpose |
+| Area | Purpose |
 |---|---|
-| `GOOGLE_PLACES_API_KEY` | Google Places lookup/details |
-| `SAVE_API_URL` | Railway backend URL — for example, `https://wanderly-api-production.up.railway.app` |
-| `SAVE_PLACE_SHARE_BASE_URL` | Place share route — for example, `https://sav-e-app.vercel.app/p` |
-| `SAVE_TRIP_SHARE_BASE_URL` | Trip share route — for example, `https://sav-e-app.vercel.app/trip` |
-| `SAVE_SHARE_BASE_URL` | Legacy trip fallback — for example, `https://sav-e-app.vercel.app/trip` |
-| `SAVE_LIST_SHARE_BASE_URL` | Collaborative list route — for example, `https://sav-e-app.vercel.app/list` |
-| `PRIVY_APP_ID` | Privy Dashboard → App Settings → Basics |
-| `PRIVY_APP_CLIENT_ID` | Privy iOS client. Must allow bundle id `com.wanderly.app` and URL scheme `wanderly`. |
+| [SAV-E/](SAV-E/) | SwiftUI app: views, models, services, and App Intents |
+| [SAV-EShared/](SAV-EShared/) | Parsers and configuration shared by native targets |
+| [SAV-EShareExtension/](SAV-EShareExtension/) | Capture URLs and text from other apps |
+| [SAV-EClip/](SAV-EClip/) | App Clip share previews |
+| [SAV-EiMessage/](SAV-EiMessage/) | Parked iMessage extension spike |
+| [backend/](backend/README.md) | TypeScript API, Postgres schema, and backend tests |
+| [save-rn/](save-rn/) | Expo web fallback for share, referral, and list routes |
+| [services/evidence-rubric/](services/evidence-rubric/README.md) | Source-evidence evaluation service |
+| [supabase/](supabase/) | Supabase migrations and Edge Function implementation |
+| [Tests/](Tests/) · [fixtures/](fixtures/) | Native and CI tests; shared regression fixtures |
+| [scripts/](scripts/) | Build, configuration, release, and verification helpers |
+| [docs/](docs/README.md) | Maintainer guides, runbooks, security reviews, and history |
+| [specs/](specs/README.md) | Product proposals, contracts, and evidence records |
+| [design-assets/](design-assets/) | Design studies, brand assets, and App Store artwork |
+| [Prototypes/AtlasPostcard/](Prototypes/AtlasPostcard/README.md) | Atlas prototype, design decisions, and CI visual-parity assets |
 
-The app still reads legacy `WANDERLY_*` keys as a migration fallback for older local secrets, but new production config should use `SAVE_*` keys.
+## Project entry points
 
-Keep real values out of commits.
+- [project.yml](project.yml) owns XcodeGen targets and build numbers; [SAV-E.xcodeproj](SAV-E.xcodeproj/) is generated from it. Use the **SAV-E** scheme.
+- [Package.swift](Package.swift) defines the Swift package and its dependencies.
+- [vercel.json](vercel.json) configures the web fallback build and routing.
+- [AGENTS.md](AGENTS.md) defines contribution, verification, and approval boundaries.
+- [DESIGN.md](DESIGN.md) owns design intent and state language; [Color+Theme.swift](SAV-E/Extensions/Color+Theme.swift) owns palette values.
 
-### 3. Install backend dependencies
-
-```bash
-cd backend
-npm install
-npm run build
-```
-
-Railway service variables include:
-
-```bash
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-PRIVY_APP_ID=...
-PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
-PRIVY_APP_SECRET=...                 # needed for Privy user provisioning flows
-SAVE_GUEST_SESSION_SECRET=...        # stable guest sessions across restarts
-SAVE_MY_SAVES_SECRET=...             # stable /my/<token> links across restarts
-GEMINI_API_KEY=...                   # backend-only AI parsing/analysis
-SAVE_GEMINI_PROXY_MODELS=...         # comma-separated model allowlist for the proxy
-GOOGLE_PLACES_API_KEY=...            # backend source recovery / place enrichment
-```
-
-`SAVE_GEMINI_PROXY_MODELS` defaults to `gemini-3.5-flash` alone. The app walks
-`SAVEProductionConfig.defaultGeminiModelFallbacks`, so every model in that Swift
-constant must appear here or the fallback leg answers 400.
-
-`SAVE_GUEST_SESSION_SECRET` and `SAVE_MY_SAVES_SECRET` fall back to a random
-per-process value, which invalidates guest sessions and `/my/` links on every
-restart or deploy. Set both on Railway.
-
-Mainland-China POI resolution through `POST /place-resolve` is optional. It needs
-the explicit opt-in plus at least one key; otherwise the route answers 503 and the
-app resolves China places through Apple Maps instead:
-
-```bash
-AMAP_USAGE_AUTHORIZED=true              # explicit opt-in; the route stays off otherwise
-AMAP_INTERNATIONAL_WEB_SERVICE_KEY=...  # tried first, returns WGS84
-AMAP_WEB_SERVICE_KEY=...                # 高德开放平台 domestic key, returns GCJ-02
-```
-
-Amap keys are backend-only. The iOS `Secrets.plist` templates must not carry
-them; `SAVEProductionConfigTests` asserts that.
-
-Apply/update the schema against Railway Postgres when migrations/schema change:
-
-```bash
-psql "$DATABASE_URL" -f backend/sql/schema.sql
-```
-
-### 4. Generate and open the Xcode project
-
-```bash
-xcodegen generate
-open SAV-E.xcodeproj
-```
-
-Use the **SAV-E** scheme for the shipping app. The installed display name is **Savvy**; the internal app target remains `SAVE`, and bundle IDs stay under `com.wanderly.*` for production compatibility.
-
-## Local verification
-
-### iOS compile (default)
-
-Compile against the generic simulator destination without booting a runtime. Reuse the repository's canonical DerivedData directory:
-
-```bash
-scripts/xcodebuild-clean.sh \
-  -project SAV-E.xcodeproj \
-  -scheme SAV-E \
-  -configuration Debug \
-  -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
-  CODE_SIGNING_ALLOWED=NO \
-  COMPILER_INDEX_STORE_ENABLE=NO \
-  build
-```
-
-### Runtime Swift/UI tests
-
-Boot one headless simulator only when the changed behavior requires UIKit/SwiftUI runtime evidence, gestures, screenshots, accessibility, or an iOS XCTest bundle. Reuse one device and the same DerivedData directory, then shut the device down after the focused test.
-
-```bash
-scripts/xcodebuild-clean.sh \
-  -project SAV-E.xcodeproj \
-  -scheme SAV-E \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
-  CODE_SIGNING_ALLOWED=NO \
-  COMPILER_INDEX_STORE_ENABLE=NO \
-  test
-```
-
-### Backend tests
-
-```bash
-cd backend
-npm test
-```
-
-### Web fallback checks
-
-```bash
-cd save-rn
-npm install
-npm run check:import-links
-npm run check:save-cards
-npm run check:save-actions
-npm run export:web
-```
-
-### Focused parser / fixture scripts
-
-```bash
-swift scripts/social_place_regression.swift
-swift scripts/check-social-link-parser.swift
-swift scripts/check-social-ocr-fixtures.swift
-swift scripts/check-social-places-refine-fixtures.swift
-```
-
-The social place regression command reuses the canonical DerivedData path. It
-uses the caller-owned `SAVE_TEST_SIMULATOR_UDID` when supplied; otherwise it
-creates one temporary headless simulator, then shuts it down and deletes it
-after the focused XCTest. It requires at least 10 GiB of free disk space.
-
-## TestFlight archive
-
-Set `APPLE_TEAM_ID` to the 10-character Apple Developer Team ID for the account that owns the App IDs. XcodeGen passes it into all iOS targets as `DEVELOPMENT_TEAM`.
-
-```bash
-export APPLE_TEAM_ID=ABCDE12345
-xcodegen generate
-xcodebuild \
-  -project SAV-E.xcodeproj \
-  -scheme SAV-E \
-  -configuration Release \
-  -destination 'generic/platform=iOS' \
-  -archivePath "$PWD/build/SAV-E.xcarchive" \
-  -allowProvisioningUpdates \
-  APPLE_TEAM_ID="$APPLE_TEAM_ID" \
-  archive
-```
-
-Prepare App Store Connect upload options. The generated options are external-TestFlight ready by default. Set `TESTFLIGHT_SCOPE=internal` only for internal-only review builds.
-
-```bash
-APPLE_TEAM_ID="$APPLE_TEAM_ID" scripts/prepare-testflight-export-options.sh
-TESTFLIGHT_SCOPE=internal APPLE_TEAM_ID="$APPLE_TEAM_ID" scripts/prepare-testflight-export-options.sh build/ExportOptions.TestFlight.Internal.plist
-```
-
-Upload:
-
-```bash
-xcodebuild \
-  -exportArchive \
-  -archivePath "$PWD/build/SAV-E.xcarchive" \
-  -exportPath "$PWD/build/TestFlightUpload" \
-  -exportOptionsPlist "$PWD/build/ExportOptions.TestFlight.plist" \
-  -allowProvisioningUpdates \
-  APPLE_TEAM_ID="$APPLE_TEAM_ID"
-```
-
-## First TestFlight boundary
-
-Ship the native iOS app, Share Extension, and embedded App Clip for Savvy share links.
-
-Before upload:
-
-- register App IDs for `com.wanderly.app`, `com.wanderly.app.ShareExtension`, and `com.wanderly.app.Clip`
-- enable App Group `group.com.wanderly.app` for app and Share Extension
-- configure signing team/profiles in Xcode or release xcconfig
-- confirm App Store icon and privacy manifest are included
-- keep real API keys out of commits and restrict bundled keys where provider dashboards allow it
-
-These Apple identifiers are the existing production compatibility layer. User-facing naming, target display names, release config keys, and share URLs should use Savvy / SAVE naming.
-
-## Share, App Clip, and Universal Link routes
-
-Savvy separates share actions from map actions:
-
-- Share = Savvy link
-- Maps = Apple Maps / Google Maps link
-
-Production host: `sav-e-app.vercel.app`.
-
-Current public route shapes:
-
-```text
-/p/{shortCode}
-/p/{base64urlSharedPlaceDataJson}     # legacy readable
-/trip/{base64urlSharedTripDataJson}
-/list?d={base64SharedListPayloadJson}&r={viewer|editor}
-/r/{code}
-/u/{handle}?ref={code}
-/my/{signedToken}
-```
-
-The full app handles installed-app Universal Links and new `savvy://` deep links while continuing to accept legacy `wanderly://` links. The App Clip target can preview Savvy place payloads and private/share cards. Full trip import, full list previews, and full referral previews are later surfaces unless a newer release explicitly changes that boundary.
-
-For App Review:
-
-- keep `applinks:sav-e-app.vercel.app` in the app entitlement
-- keep `appclips:sav-e-app.vercel.app` in the App Clip entitlement
-- keep `appclips:sav-e-app.vercel.app` and `com.apple.developer.associated-appclip-app-identifiers` in the main app entitlement
-- set `APPLE_TEAM_ID` in Vercel so `npm run export:web` writes the real `/.well-known/apple-app-site-association`
-- set `APPLE_APP_STORE_ID` and `APP_CLIP_BUNDLE_ID` for the Smart App Banner meta written by `save-rn/scripts/patch-web-bundle.js`
-- disable bot challenges/WAF rules for `https://sav-e-app.vercel.app/p*`, `https://sav-e-app.vercel.app/r*`, and `https://sav-e-app.vercel.app/.well-known/apple-app-site-association`
-- configure App Store Connect App Clip Experiences on `sav-e-app.vercel.app` only
-- avoid `wanderly.app` until `https://wanderly.app/.well-known/apple-app-site-association` returns Apple association JSON without a challenge page
-
-Without those Apple/domain steps, the same URL still opens the web app, but iOS will not invoke the App Clip.
-
-## Design direction
-
-Savvy should feel like a warm private travel notebook, not a generic data table:
-
-| Token | Light | Dark |
-|---|---|---|
-| Background | `#FFF8F0` cream | `#1C1C1E` charcoal |
-| Accent | `#C75B39` terracotta | `#E8A87C` amber |
-| Secondary | `#A8B5A0` sage | `#A8B5A0` sage |
-| Text | `#2C2C2E` charcoal | `#FFFFFF` |
-| Radius | 16–32 px depending on surface | 16–32 px |
-| Font | SF Pro | SF Pro |
-
-UX rule: show the receipt behind a recommendation, but keep the main action simple — “what should I do next?”
+The installed app name is **Savvy**. Existing `SAV-E` paths and `com.wanderly.*` identifiers remain compatibility names. Release history is indexed in [docs](docs/README.md); build numbers and historical uploads do not establish current tester availability or public release.
 
 ## License
 
