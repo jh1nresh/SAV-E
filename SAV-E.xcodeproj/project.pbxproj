@@ -136,6 +136,7 @@
 		B4E71FBC15953C17578E4241 /* DebugOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AC60F7F1A412AC73D3FE11 /* DebugOverlay.swift */; };
 		B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */; };
+		C1A2B3C4D5E6F708192A3B4C /* SavePlaceShareButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D708192A3B4C /* SavePlaceShareButtonTests.swift */; };
 		B76C75E6A77E56F866167BA1 /* SaveGuideModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468D23D10B68903C13C10154 /* SaveGuideModels.swift */; };
 		B945C77C24159AB3A988E41D /* TripPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3583981E50146631D488BF56 /* TripPersistence.swift */; };
 		B9C3611B77E9CFF24690C115 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = FBBF8A5C536A8CDC47B3B30A /* ZIPFoundation */; };
@@ -432,6 +433,7 @@
 		C4D363893F89778FF5C3BE1A /* .gstack-version */ = {isa = PBXFileReference; path = ".gstack-version"; sourceTree = "<group>"; };
 		C7E2C636EDAE7EAA2E062014 /* GooglePlacesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesService.swift; sourceTree = "<group>"; };
 		C82C14E54DC79D7FD0402D51 /* AtlasFiveTabBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtlasFiveTabBarTests.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6D708192A3B4C /* SavePlaceShareButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlaceShareButtonTests.swift; sourceTree = "<group>"; };
 		CB5ACF05D119435062A8CA24 /* RelatedPlaceSourcesClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelatedPlaceSourcesClientTests.swift; sourceTree = "<group>"; };
 		CC74577E9D14A1648B111939 /* GoogleTakeoutImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleTakeoutImportView.swift; sourceTree = "<group>"; };
 		CF327EE5BF2F3299F2DAD7E1 /* PrivyAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivyAuthService.swift; sourceTree = "<group>"; };
@@ -896,6 +898,7 @@
 				F3619374EB059C824376AEC5 /* SaveVisitIntentTests.swift */,
 				2A813005C5623C1488B3AE00 /* SaveSearchIntentEvalTests.swift */,
 				24A89101A1BE721021DA73A1 /* ShareRouteCodecTests.swift */,
+				D1E2F3A4B5C6D708192A3B4C /* SavePlaceShareButtonTests.swift */,
 				6383E88214348C9728A5C35B /* SocialPlacePipelineTests.swift */,
 				8C1A0B0D0E0F1A2B3C4D5E62 /* TapCrashP0Tests.swift */,
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
@@ -1399,6 +1402,7 @@
 				BC55C57A6C88072A588A5531 /* SaveSearchIntentEvalTests.swift in Sources */,
 				D2CF1497F4FD4CC89C23E69A /* SavedPlaceTripRecommenderTests.swift in Sources */,
 				B686B444FCE28C57707BE9C5 /* ShareRouteCodecTests.swift in Sources */,
+				C1A2B3C4D5E6F708192A3B4C /* SavePlaceShareButtonTests.swift in Sources */,
 				77E9B588DF847D51CD055C59 /* SocialPlacePipelineTests.swift in Sources */,
 				8C1A0B0D0E0F1A2B3C4D5E63 /* TapCrashP0Tests.swift in Sources */,
 				C86068410AB6A519BCFA6710 /* TripGapLocalOptionsServiceTests.swift in Sources */,

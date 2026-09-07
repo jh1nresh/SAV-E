@@ -155,7 +155,7 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
-    func testShareContentMessageUsesResolvedShortURL() throws {
+    func testShareContentMessageLeavesTheSingleShareLinkURLToShareLink() throws {
         let fallbackURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/embeddedPayload"))
         let shortURL = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
         let content = SavePlaceShareContent(
@@ -169,8 +169,9 @@ final class ShareRouteCodecTests: XCTestCase {
 
         let message = content.message(for: shortURL)
 
-        XCTAssertTrue(message.contains(shortURL.absoluteString))
+        XCTAssertFalse(message.contains(shortURL.absoluteString))
         XCTAssertFalse(message.contains(fallbackURL.absoluteString))
+        XCTAssertEqual(message, "Savvy Map Stamp\nKato")
     }
 
     @MainActor
@@ -199,7 +200,7 @@ final class ShareRouteCodecTests: XCTestCase {
             optionalShareNote: nil
         )
 
-        XCTAssertEqual(content.immediateShareText, content.fallbackText)
+        XCTAssertTrue(content.immediateShareText.hasPrefix("Kato\nLos Angeles\nhttps://maps.apple.com/"))
         XCTAssertNil(content.fallbackURL)
     }
 

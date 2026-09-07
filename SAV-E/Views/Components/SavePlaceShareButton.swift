@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SavePlaceShareContent {
+    private static let immediateURLMaximumLength = 512
     let subject: String
     let fallbackURL: URL?
     let fallbackText: String
@@ -16,9 +17,26 @@ struct SavePlaceShareContent {
         cacheKey(includingOptionalNote: true)
     }
 
-    /// Safe item available before any network work. A short link may replace
-    /// it later, but the first tap never waits for that upgrade.
-    var immediateShareText: String { fallbackText }
+    /// A compact public source is preferred before network work. If it cannot
+    /// be shared safely, use a valid, specific Apple Maps location; otherwise
+    /// share concise text rather than an embedded Savvy receipt or global pin.
+    var immediateShareURL: URL? {
+        guard let payload else { return nil }
+        if let sourceURL = payload.safeSourceURL,
+           sourceURL.absoluteString.count <= Self.immediateURLMaximumLength {
+            return sourceURL
+        }
+        guard payload.hasValidCoordinate,
+              payload.lat != 0 || payload.lng != 0,
+              let mapsURL = payload.appleMapsURL,
+              mapsURL.absoluteString.count <= Self.immediateURLMaximumLength
+        else { return nil }
+        return mapsURL
+    }
+
+    var immediateShareText: String {
+        compactShareText(including: immediateShareURL)
+    }
 
     func cacheKey(includingOptionalNote: Bool) -> String {
         guard let payload = payload(includingOptionalNote: includingOptionalNote),
@@ -38,13 +56,32 @@ struct SavePlaceShareContent {
         return payload(includingOptionalNote: true)?.toURL()
     }
 
-    func message(for url: URL?, includingOptionalNote: Bool = false) -> String {
-        guard let fallbackURL, let url else { return fallbackText }
-        var message = fallbackText.replacingOccurrences(of: fallbackURL.absoluteString, with: url.absoluteString)
+    func message(for _: URL?, includingOptionalNote: Bool = false) -> String {
+        var message = compactShareText(including: nil)
         if includingOptionalNote, let optionalShareNote {
             message += "\nWhy I'm sharing: \(optionalShareNote)"
         }
         return message
+    }
+
+    private func compactShareText(including url: URL?) -> String {
+        let lines: [String]
+        if let payload {
+            lines = [payload.name, payload.address]
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        } else {
+            let fallbackLines = fallbackText.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            lines = Array(fallbackLines.prefix(2))
+        }
+
+        var result = lines.joined(separator: "\n")
+        if let url {
+            result += result.isEmpty ? url.absoluteString : "\n\(url.absoluteString)"
+        }
+        return result
     }
 
     static func place(_ place: Place) -> SavePlaceShareContent {
@@ -131,7 +168,7 @@ struct SavePlaceShareButton<Label: View>: View {
     init(content: SavePlaceShareContent, @ViewBuilder label: @escaping () -> Label) {
         self.content = content
         self.label = label
-        _shareURL = State(initialValue: content.fallbackURL)
+        _shareURL = State(initialValue: content.immediateShareURL)
         _activeContentKey = State(initialValue: content.stateKey)
     }
 
@@ -143,7 +180,7 @@ struct SavePlaceShareButton<Label: View>: View {
                 }
             } else {
                 // A short link is an upgrade, never a gate. When there is no
-                // embedded fallback URL, the first tap must still open the
+                // safe public URL, the first tap must still open the
                 // system share sheet with safe plain text while preparation
                 // continues in the background.
                 ShareLink(item: content.immediateShareText, subject: Text(content.subject)) {
@@ -191,16 +228,14 @@ struct SavePlaceShareButton<Label: View>: View {
             return
         } catch {
             guard !Task.isCancelled, activeContentKey == contentKey else { return }
-            if let fallback = content.fallbackURL {
-                shareURL = fallback
-            }
+            shareURL = content.immediateShareURL
         }
     }
 
     private func resetForCurrentContent(_ contentKey: String) {
         guard activeContentKey != contentKey else { return }
         activeContentKey = contentKey
-        shareURL = content.fallbackURL
+        shareURL = content.immediateShareURL
         basePreparationID = nil
     }
 }
