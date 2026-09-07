@@ -39,17 +39,21 @@ struct DrawerLaunchRequest: Equatable {
     let initialQuery: String?
     /// A tap focuses the field; resizing the Map card only reveals it.
     let focusesSearch: Bool
+    /// Only an explicit Review exact-refine launch may retain its clue link.
+    let preservesExactSearchClue: Bool
 
     init(
         id: UUID = UUID(),
         target: DrawerLaunchTarget,
         initialQuery: String? = nil,
-        focusesSearch: Bool = true
+        focusesSearch: Bool = true,
+        preservesExactSearchClue: Bool = false
     ) {
         self.id = id
         self.target = target
         self.initialQuery = initialQuery
         self.focusesSearch = focusesSearch
+        self.preservesExactSearchClue = preservesExactSearchClue
     }
 }
 

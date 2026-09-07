@@ -740,6 +740,7 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
+                        preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
                         onClose: collapseMapPanel,
                         onOpenPlace: { openMapDetail(.savedPlace($0)) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
@@ -1378,7 +1379,7 @@ struct ContentView: View {
         guard incomingPlaceReceipt == nil else { return }
         mapDetailDrawerItem = nil
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: .ask, initialQuery: query, focusesSearch: true)
+            DrawerLaunchRequest(target: .ask, initialQuery: query, focusesSearch: true, preservesExactSearchClue: true)
         ))
     }
 
