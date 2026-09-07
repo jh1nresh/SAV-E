@@ -194,15 +194,18 @@ enum SavePlanDraftBuilder {
         return (response, removedIDs)
     }
 
-    /// Pick the anchor and confirmed memory before optional external fills,
+    /// Pick the anchor and saved lodging constraints before ordinary memory and external fills,
     /// then retain the scheduler's chronological order and clocks.
     static func paceLimitedStops(_ stops: [ItineraryStop], maxStops: Int,
                                  savedPlaces: [Place], anchorPlaceID: UUID?) -> [ItineraryStop] {
         let savedIDs = Set(savedPlaces.flatMap { $0.savedIDs })
         let anchorIDs = savedPlaces.first(where: { $0.id == anchorPlaceID })?.savedIDs ?? []
+        let lodgingIDs = Set(savedPlaces.filter { $0.category == .stay }.flatMap { $0.savedIDs })
         func priority(_ stop: ItineraryStop) -> Int {
-            guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return 2 }
-            return anchorIDs.contains(id) ? 0 : (savedIDs.contains(id) ? 1 : 2)
+            guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return 3 }
+            if anchorIDs.contains(id) { return 0 }
+            if lodgingIDs.contains(id) { return 1 }
+            return savedIDs.contains(id) ? 2 : 3
         }
         let chosen = stops.indices.sorted {
             let left = priority(stops[$0]), right = priority(stops[$1])

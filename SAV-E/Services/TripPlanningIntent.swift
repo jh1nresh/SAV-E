@@ -112,6 +112,7 @@ struct SavePlanConversationConditions {
     private(set) var unmatchedDestination: String?
     private(set) var unsupportedDays: Int?
     private(set) var needsFollowUpClarification = false
+    private(set) var ambiguousDestinationPrefix: String?
     private(set) var arrivalAnswered = false
     private(set) var departureAnswered = false
 
@@ -133,8 +134,11 @@ struct SavePlanConversationConditions {
         let destinationChange = proposedDestination ?? trailingDestination.flatMap {
             $0.range(of: conditionPrefix, options: .regularExpression) == nil && !["a", "an", "the"].contains($0) ? $0 : nil
         }
-        let destinationText = destinationChange ?? text
-        let destinationWithDuration = Self.capture(text, pattern: #"^([\p{L} .'-]{1,40}?)(?:旅行|旅遊|行程|trip|travel|[0-9一二兩两三四五六七八九十]{1,3}\s*(?:天|日|days?\b))"#)
+        let retainedDestination = Self.capture(text, pattern: #"^(?:keep\s+|保留\s*|保持\s*)(.+)$"#)
+        let destinationText = destinationChange ?? retainedDestination ?? text
+        // A trip descriptor alone does not identify a destination. Require the
+        // duration boundary, including "Kyoto for 2 days" and "京都旅行6天".
+        let destinationWithDuration = Self.capture(text, pattern: #"^([\p{L} .'-]{1,40}?)(?:(?:旅行|旅遊|行程|\btrip\b|\btravel\b)\s*)?(?:\bfor\s+)?[0-9一二兩两三四五六七八九十]{1,3}\s*(?:天|日|days?\b)"#)
         let matchingAreas = areas.filter { area in
             Self.areaAliases(area).contains { alias in
                 let negated = #"(?:不要|不去|不是|not)\s*"# + NSRegularExpression.escapedPattern(for: alias)
@@ -149,14 +153,10 @@ struct SavePlanConversationConditions {
         if distinct.count == 1, let matched = matchingAreas.first {
             area = matched
             unmatchedDestination = nil
+            ambiguousDestinationPrefix = nil
         } else if distinct.count > 1 || destinationChange != nil {
             area = nil
             unmatchedDestination = distinct.isEmpty ? destinationText : nil
-        } else if area != nil, let destination = destinationWithDuration,
-                  Self.isBareDestination(destination),
-                  !["改成", "改為", "改为", "安排", "規劃", "plan", "for", "我想要", "第一", "最後", "最后", "第"].contains(destination) {
-            area = nil
-            unmatchedDestination = destination
         } else if area == nil && Self.isBareDestination(text) && !Self.paceAnswer(text).mentioned && !noWindow {
             area = nil
             unmatchedDestination = text
@@ -164,6 +164,16 @@ struct SavePlanConversationConditions {
                   areas.contains(where: { label in Self.areaAliases(label).contains(where: text.contains) }) {
             area = nil
             unmatchedDestination = nil
+        }
+
+        if area == nil { ambiguousDestinationPrefix = nil }
+
+        // An unknown prefix can be a city or a preference ("Kyoto for 2 days",
+        // "beach trip 2 days"). Keep confirmed context until the user clarifies.
+        if area != nil, distinct.isEmpty, destinationChange == nil,
+           let prefix = destinationWithDuration,
+           !["改成", "改為", "改为", "安排", "規劃", "plan", "plan a", "for", "我想要", "第一", "最後", "最后", "第"].contains(prefix) {
+            ambiguousDestinationPrefix = prefix
         }
 
         if let count = Self.dayCount(text, allowBareNumber: wasAskingDays) {
@@ -200,12 +210,18 @@ struct SavePlanConversationConditions {
         // An established conversation may contain preferences or edit requests,
         // not another city answer. Never silently redraft an unhandled request.
         needsFollowUpClarification = hadArea && area != nil && distinct.isEmpty
-            && destinationChange == nil && Self.dayCount(text, allowBareNumber: wasAskingDays) == nil
+            && destinationChange == nil && (ambiguousDestinationPrefix != nil || (Self.dayCount(text, allowBareNumber: wasAskingDays) == nil
             && !parsedPace.mentioned && !arrival.mentioned && !departure.mentioned && !noWindow
-            && text.range(of: #"^\d{1,2}:\d{2}(?:\s*(?:am|pm))?$"#, options: .regularExpression) == nil
+            && text.range(of: #"^\d{1,2}:\d{2}(?:\s*(?:am|pm))?$"#, options: .regularExpression) == nil))
     }
 
     func clarification(language: AppLanguage) -> String? {
+        if let prefix = ambiguousDestinationPrefix {
+            return language.localized(
+                english: "Does ‘\(prefix)’ name a different destination or describe a trip preference? I’ve kept your city and draft. Say ‘switch to …’ or ‘keep \(area ?? "this city")’. Other preferences are not applied automatically yet.",
+                traditionalChinese: "「\(prefix)」是新的目的地，還是旅行偏好？原本城市和草稿都保留著。請說「改去⋯」或「保留 \(area ?? "原本城市")」。其他偏好目前不會自動套用。"
+            )
+        }
         if needsFollowUpClarification {
             return language.localized(
                 english: "I’ve kept your conditions and draft. I can change the city, days, pace or clock limits, or remove a confirmed stop by its exact name. Which would you like? For a new city, say ‘switch to …’. Other preferences are not applied automatically yet.",
@@ -251,7 +267,7 @@ struct SavePlanConversationConditions {
     }
 
     func request(language: AppLanguage) -> SavePlanRequest? {
-        guard !needsFollowUpClarification, let area, let days, let pace, arrivalAnswered, departureAnswered else { return nil }
+        guard ambiguousDestinationPrefix == nil, !needsFollowUpClarification, let area, let days, let pace, arrivalAnswered, departureAnswered else { return nil }
         if days == 1, let arrivalMinutes, let departureMinutes, departureMinutes <= arrivalMinutes { return nil }
         return SavePlanRequest(area: area, days: days, pace: pace, arrivalMinutes: arrivalMinutes, departureMinutes: departureMinutes, language: language, usesFlightBuffers: false)
     }

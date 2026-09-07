@@ -94,7 +94,7 @@ final class SavePlanConversationConditionsTests: XCTestCase {
     }
 
     func testUnknownCitySwitchNeverUsesPreviousCity() {
-        for next in ["改去京都", "京都6天", "日本旅行6天五夜", "不要台北，改去京都"] {
+        for next in ["改去京都", "不要台北，改去京都"] {
             var conditions = completed()
             conditions.receive(next, areas: ["Taipei"])
             XCTAssertNil(conditions.area, next)
@@ -298,6 +298,136 @@ final class SavePlanConversationConditionsTests: XCTestCase {
             latitude: 35.71, longitude: 139.77, category: .cafe)
         XCTAssertTrue(SavePlanDraftBuilder.matches(area: "Tokyo", candidate: candidate))
         XCTAssertFalse(SavePlanDraftBuilder.matches(area: "Taipei", candidate: candidate))
+    }
+
+    func testTripDescriptorsWithoutDurationPreserveCityAndAsk() {
+        for query in ["family trip with kids", "food trip", "family travel with kids",
+                      "親子旅行", "美食行程", "美食旅遊"] {
+            var conditions = completed()
+            conditions.receive(query, areas: ["Taipei", "Tokyo"])
+            XCTAssertEqual(conditions.area, "Taipei", query)
+            XCTAssertEqual(conditions.days, 3, query)
+            XCTAssertNil(conditions.request(language: .english), query)
+            XCTAssertTrue(conditions.clarification(language: .english)?.contains("kept") == true, query)
+        }
+    }
+
+    func testUnknownDurationPrefixAsksDestinationOrPreferenceUntilCityIsAnswered() {
+        // Unknown cities and descriptors share the same ambiguous grammar.
+        // Keeping the city while blocking a new draft avoids guessing either way.
+        for query in ["family trip for 2 days", "food trip 2 days", "beach trip 2 days",
+                      "shopping trip 2 days", "relaxed trip 2 days", "親子旅行2天", "美食行程2天",
+                      "浪漫旅行2天", "Kyoto for 2 days", "京都6天", "日本旅行6天五夜"] {
+            var conditions = completed()
+            conditions.receive(query, areas: ["Taipei", "Tokyo"])
+            XCTAssertEqual(conditions.area, "Taipei", query)
+            XCTAssertNil(conditions.request(language: .english), query)
+            XCTAssertTrue(conditions.clarification(language: .english)?.contains("destination or") == true, query)
+            for followup in ["2 days", "packed", "start 10:00", "none"] {
+                conditions.receive(followup, areas: ["Taipei", "Tokyo"])
+                XCTAssertNil(conditions.request(language: .english), "\(query) → \(followup) must not assume Taipei")
+            }
+            conditions.receive("保留Taipei", areas: ["Taipei", "Tokyo"])
+            XCTAssertEqual(conditions.request(language: .english)?.area, "Taipei")
+            XCTAssertEqual(conditions.request(language: .english)?.days, 2)
+        }
+        var prompted = completed()
+        prompted.receive("beach trip 2 days", areas: ["Taipei", "Tokyo"])
+        let question = prompted.clarification(language: .traditionalChinese) ?? ""
+        let answer = question.components(separatedBy: "「").last?.components(separatedBy: "」").first ?? ""
+        XCTAssertEqual(answer, "保留 Taipei")
+        prompted.receive(answer, areas: ["Taipei", "Tokyo"])
+        XCTAssertEqual(prompted.request(language: .english)?.area, "Taipei", "The answer printed in the clarification must work")
+
+        var conditions = completed()
+        conditions.receive("Kyoto for 2 days", areas: ["Taipei", "Tokyo"])
+        conditions.receive("switch to Kyoto", areas: ["Taipei", "Tokyo"])
+        XCTAssertNil(conditions.area)
+        XCTAssertNil(conditions.ambiguousDestinationPrefix)
+        XCTAssertEqual(conditions.unmatchedDestination, "kyoto")
+        XCTAssertNil(conditions.request(language: .english))
+        conditions.receive("Tokyo", areas: ["Taipei", "Tokyo"])
+        XCTAssertEqual(conditions.request(language: .english)?.area, "Tokyo")
+        XCTAssertEqual(conditions.request(language: .english)?.days, 2)
+    }
+
+    func testExplicitAndKnownDestinationsResolveDurationAmbiguity() {
+        for (query, destination) in [("family trip in Kyoto for 2 days", "kyoto"),
+                                      ("3 days in Kyoto", "kyoto"), ("plan a 3 day trip to Kyoto", "kyoto")] {
+            var conditions = completed()
+            conditions.receive(query, areas: ["Taipei", "Tokyo"])
+            XCTAssertNil(conditions.area, query)
+            XCTAssertEqual(conditions.unmatchedDestination, destination, query)
+            XCTAssertNil(conditions.request(language: .english), query)
+        }
+        for query in ["Tokyo trip", "東京旅行", "Tokyo for 2 days"] {
+            var conditions = completed()
+            conditions.receive("beach trip 2 days", areas: ["Taipei", "Tokyo"])
+            conditions.receive(query, areas: ["Taipei", "Tokyo"])
+            XCTAssertEqual(conditions.request(language: .english)?.area, "Tokyo", query)
+        }
+    }
+
+    func testRelaxedPaceKeepsCheckInAndOutWithAnchorBeforeSavedMeals() throws {
+        let anchor = place("Anchor", address: "Taipei")
+        var stay = place("Hotel", address: "Taipei")
+        stay.category = .stay
+        var breakfast = place("Breakfast", address: "Taipei")
+        breakfast.category = .cafe
+        var lunch = place("Lunch", address: "Taipei")
+        lunch.category = .food
+        let saved = [anchor, stay, breakfast, lunch]
+        for language in [AppLanguage.english, .traditionalChinese] {
+            for day in [1, 2] {
+                let scheduled = SaveDayRhythmScheduler().schedule(orderedPlaces: [breakfast, lunch, anchor],
+                    unsavedCandidates: [], lodging: stay, dayNumber: day, dayCount: 2,
+                    windows: .standard, outputLanguage: language)
+                XCTAssertGreaterThan(scheduled.stops.count, ItineraryPace.relaxed.maxStopsPerDay)
+                let hotel = try XCTUnwrap(scheduled.stops.first { $0.placeId == stay.id.uuidString })
+                let activity = try XCTUnwrap(scheduled.stops.first { $0.placeId == anchor.id.uuidString })
+                let limited = SavePlanDraftBuilder.paceLimitedStops(scheduled.stops,
+                    maxStops: ItineraryPace.relaxed.maxStopsPerDay, savedPlaces: saved, anchorPlaceID: anchor.id)
+                XCTAssertEqual(limited.count, 3)
+                XCTAssertTrue(limited.contains(hotel), "Retain the exact lodging identity and clock")
+                XCTAssertTrue(limited.contains(activity), "Retain the exact anchor identity and clock")
+                XCTAssertEqual(limited, scheduled.stops.filter { limited.contains($0) })
+                let health = DeterministicTripPlanner().tripHealth(for: limited, savedPlaces: saved,
+                    dayNumber: day, maxStopsPerDay: 3, outputLanguage: language)
+                XCTAssertTrue(health.gaps.contains { $0.type == .missingLunch }, "A trimmed meal must remain a visible gap")
+            }
+        }
+        let request = SavePlanRequest(area: "Taipei", days: 2, pace: .relaxed,
+            arrivalMinutes: nil, departureMinutes: nil, language: .english,
+            usesFlightBuffers: false, anchorPlaceID: anchor.id)
+        let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: saved))
+        XCTAssertTrue(draft.itineraryDays[0].stops.contains { $0.placeId == anchor.id.uuidString })
+        for day in draft.itineraryDays {
+            XCTAssertTrue(day.stops.contains { $0.placeId == stay.id.uuidString })
+            XCTAssertLessThanOrEqual(day.stops.count, 3)
+        }
+    }
+
+    func testMergedLodgingIdentityIsPrioritizedWithoutExceedingCap() {
+        let anchor = place("Anchor", address: "Taipei")
+        var stay = place("Hotel", address: "Taipei")
+        stay.category = .stay
+        let oldID = UUID()
+        stay.mergedPlaceIDs = [oldID]
+        let breakfast = place("Breakfast", address: "Taipei")
+        let early = ItineraryStop(id: UUID(), placeId: breakfast.id.uuidString,
+            placeName: breakfast.name, time: "9:00 AM", duration: 45, note: nil)
+        let hotel = ItineraryStop(id: UUID(), placeId: oldID.uuidString,
+            placeName: stay.name, time: "11:00 AM", duration: 30, note: nil)
+        let late = ItineraryStop(id: UUID(), placeId: anchor.id.uuidString,
+            placeName: anchor.name, time: "3:00 PM", duration: 60, note: nil)
+        let stops = [early, hotel, late]
+        let saved = [breakfast, stay, anchor]
+        XCTAssertEqual(SavePlanDraftBuilder.paceLimitedStops(stops, maxStops: 2,
+            savedPlaces: saved, anchorPlaceID: anchor.id), [hotel, late])
+        XCTAssertEqual(SavePlanDraftBuilder.paceLimitedStops(stops, maxStops: 1,
+            savedPlaces: saved, anchorPlaceID: anchor.id), [late])
+        XCTAssertTrue(SavePlanDraftBuilder.paceLimitedStops(stops, maxStops: 0,
+            savedPlaces: saved, anchorPlaceID: anchor.id).isEmpty)
     }
 
     func testRelaxedDraftKeepsSavedAttractionAfterSuggestedMealsAndStay() throws {
