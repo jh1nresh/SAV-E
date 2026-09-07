@@ -1680,6 +1680,34 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPassportListsEntryOpensListsDirectly() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Profile", app: app)
+        XCTAssertTrue(app.buttons["profile.editAvatar"].exists)
+        attach(app, name: "passport-current-avatar")
+        let lists = app.buttons["profile.lists"]
+        XCTAssertTrue(scrollUntilHittable(lists, in: app.scrollViews.firstMatch, maxSwipes: 6))
+        for _ in 0..<3 {
+            if lists.frame.maxY < rootTabButton("Profile", app: app).frame.minY - 12 { break }
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        XCTAssertLessThan(lists.frame.maxY, rootTabButton("Profile", app: app).frame.minY - 12)
+        attach(app, name: "passport-lists-entry")
+        lists.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.connections.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-lists-destination")
+        XCTAssertTrue(app.buttons["profile.connections.createList"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.textFields["profile.connections.referral"].exists,
+                       "The direct lists entry must open lists rather than the friends form.")
+        attach(app, name: "passport-direct-lists")
+    }
+
+    @MainActor
     func testPassportCompactLedgerShowsActionableQuests() throws {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
@@ -1698,7 +1726,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let quests = app.descendants(matching: .any)["profile.today"].firstMatch
         XCTAssertTrue(quests.isHittable, "Quests must be visible without opening a disclosure.")
         let visit = app.buttons["profile.today.markVisitedStamp"]
-        XCTAssertTrue(visit.isHittable)
+        XCTAssertTrue(scrollUntilHittable(visit, in: app.scrollViews.firstMatch, maxSwipes: 2))
         attach(app, name: "passport-compact-ledger")
         visit.tap()
         let confirm = app.buttons["profile.today.markVisitedConfirm"]

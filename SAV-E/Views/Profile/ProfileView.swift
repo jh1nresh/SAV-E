@@ -44,6 +44,7 @@ struct ProfileView: View {
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var isRootTab = false
     @State private var opensConnections = false
+    @State private var opensListsDirectly = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
     @State private var recentFieldActivity = SavePassportFieldStreakStore.shared.recentActivity
@@ -97,9 +98,19 @@ struct ProfileView: View {
                     )
 
                     PassportHero(
-                        profile: viewModel.profile
+                        profile: viewModel.profile,
+                        localAvatarData: viewModel.localAvatarData,
+                        isAuthenticated: viewModel.isAuthenticated,
+                        allowsEditing: !PrivyAuthService.shared.isReviewerDemo,
+                        onEdit: {
+                            SaveHaptics.tap()
+                            draftDisplayName = viewModel.profile.displayName
+                            draftAvatarData = nil
+                            showEditProfile = true
+                        }
                     )
                     .padding(.horizontal)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("profile.cover")
 
                     if let errorMessage = viewModel.errorMessage {
@@ -204,20 +215,36 @@ struct ProfileView: View {
 
                         Button {
                             SaveHaptics.tap()
+                            opensListsDirectly = false
                             opensConnections = true
                         } label: {
                             SettingsRow(
                                 icon: "person.2.fill",
                                 title: languageSettings.localized(english: "Friends & Lists", traditionalChinese: "朋友與清單"),
                                 detail: languageSettings.localized(
-                                    english: "Manage people and shared place collections",
-                                    traditionalChinese: "管理朋友與共享地點清單"
+                                    english: "\(followedFriends.count) friends · \(collaborativeLists.count) lists",
+                                    traditionalChinese: "\(followedFriends.count) 位朋友 · \(collaborativeLists.count) 個清單"
                                 ),
                                 color: SaveAtlasPalette.mint
                             )
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("profile.connections")
+
+                        SettingsRow(
+                            icon: "list.bullet.rectangle",
+                            title: languageSettings.localized(english: "Your lists", traditionalChinese: "你的清單"),
+                            detail: languageSettings.localized(
+                                english: "\(collaborativeLists.count) shared place collections",
+                                traditionalChinese: "\(collaborativeLists.count) 個共享地點清單"
+                            ),
+                            color: SaveAtlasPalette.kraft,
+                            accessibilityIdentifier: "profile.lists"
+                        ) {
+                            SaveHaptics.tap()
+                            opensListsDirectly = true
+                            opensConnections = true
+                        }
 
                         SettingsRow(
                             icon: "arrow.right.square",
@@ -291,7 +318,10 @@ struct ProfileView: View {
                 NavigationStack { passportContent }
             }
         }
-        .task {
+        .task(id: currentUserID) {
+            viewModel.resetForCurrentSession()
+            draftAvatarData = nil
+            showEditProfile = false
             localSavedPlaces = savedPlaces
             refreshFieldStreak()
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
@@ -311,6 +341,7 @@ struct ProfileView: View {
         .onChange(of: opensConnections) { _, isOpen in
             guard !isOpen else { return }
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
+            opensListsDirectly = false
         }
         .sheet(item: $shareFocusPlace) { place in
             shareMissionSheet(place)
@@ -323,6 +354,7 @@ struct ProfileView: View {
                 displayName: $draftDisplayName,
                 avatarURLString: viewModel.profile.avatarUrl,
                 selectedAvatarData: $draftAvatarData,
+                localAvatarData: viewModel.localAvatarData,
                 isSaving: viewModel.isSaving,
                 errorMessage: viewModel.errorMessage,
                 onCancel: { showEditProfile = false },
@@ -407,6 +439,7 @@ struct ProfileView: View {
             onSearchFollowedFriends: onSearchFollowedFriends,
             onLoadMoreFollowedFriends: onLoadMoreFollowedFriends,
             onUnfollowFriend: onUnfollowFriend,
+            initiallyShowLists: opensListsDirectly,
             onSharedInvite: markInviteShared
         )
     }
@@ -604,6 +637,7 @@ private struct PassportConnectionsView: View {
     let onSearchFollowedFriends: (String) async -> Void
     let onLoadMoreFollowedFriends: () async -> Void
     let onUnfollowFriend: (SaveFollowedFriend) async throws -> Void
+    var initiallyShowLists = false
     var onSharedInvite: () -> Void = {}
 
     @State private var selectedSection: Section = .friends
@@ -644,6 +678,9 @@ private struct PassportConnectionsView: View {
         // was revoked, you were removed) land when the lists section shows.
         .task {
             await onRefreshLists()
+        }
+        .onAppear {
+            if initiallyShowLists { selectedSection = .lists }
         }
         .onChange(of: selectedSection) { _, newSection in
             guard newSection == .lists else { return }
@@ -1602,6 +1639,7 @@ private struct EditProfileSheet: View {
     @Binding var displayName: String
     let avatarURLString: String?
     @Binding var selectedAvatarData: Data?
+    let localAvatarData: Data?
     let isSaving: Bool
     let errorMessage: String?
     let onCancel: () -> Void
@@ -1611,7 +1649,7 @@ private struct EditProfileSheet: View {
     @State private var photoError: String?
 
     var body: some View {
-        let uploadPhotoTitle = languageSettings.localized(english: "Upload photo", traditionalChinese: "上傳照片")
+        let photoTitle = languageSettings.localized(english: "Choose photo", traditionalChinese: "選擇照片")
         let inkColor = Color.saveInk
         let horizontalPadding = SaveTheme.Spacing.md
         let honeyColor = SaveAtlasPalette.kraft
@@ -1669,11 +1707,12 @@ private struct EditProfileSheet: View {
                 VStack(spacing: SaveTheme.Spacing.sm) {
                     EditableProfileAvatar(
                         avatarURLString: avatarURLString,
-                        selectedAvatarData: selectedAvatarData
+                        selectedAvatarData: selectedAvatarData,
+                        localAvatarData: localAvatarData
                     )
 
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label(uploadPhotoTitle, systemImage: "camera.fill")
+                        Label(photoTitle, systemImage: "camera.fill")
                             .font(.caption.weight(.bold))
                             .foregroundColor(inkColor)
                             .padding(.horizontal, horizontalPadding)
@@ -1687,6 +1726,12 @@ private struct EditProfileSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isSaving)
+                    Text(languageSettings.localized(
+                        english: "Your photo is saved for this account on this device.",
+                        traditionalChinese: "照片會保存在這台裝置，僅用於此帳號。"
+                    ))
+                    .font(SaveTheme.Typography.supporting)
+                    .foregroundStyle(SaveAtlasPalette.muted)
 
                     if let photoError {
                         Text(photoError)
@@ -2105,16 +2150,30 @@ private struct PassportIconButton: View {
 private struct PassportHero: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let profile: UserProfile
+    let localAvatarData: Data?
+    let isAuthenticated: Bool
+    let allowsEditing: Bool
+    let onEdit: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
-            ProfileAvatarView(avatarURLString: profile.avatarUrl, size: 48)
+            Button(action: onEdit) {
+                ProfileAvatarView(
+                    avatarURLString: profile.avatarUrl,
+                    localAvatarData: localAvatarData,
+                    size: 48
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!allowsEditing)
+            .accessibilityLabel(languageSettings.localized(english: "Change Passport photo", traditionalChinese: "變更護照照片"))
+            .accessibilityIdentifier("profile.editAvatar")
             VStack(alignment: .leading, spacing: 6) {
                 Text(profile.displayName)
                     .font(SaveAtlasType.strong(22, relativeTo: .title2))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(profile.email ?? languageSettings.text(.localMemoHelper))
+                Text(profile.email ?? sessionSubtitle)
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .lineLimit(1)
@@ -2135,11 +2194,19 @@ private struct PassportHero: View {
         }
         .overlay { RoundedRectangle(cornerRadius: 18).stroke(SaveAtlasPalette.line.opacity(0.35)) }
     }
+
+    private var sessionSubtitle: String {
+        if isAuthenticated {
+            return languageSettings.localized(english: "Signed in to Savvy", traditionalChinese: "已登入 Savvy")
+        }
+        return languageSettings.localized(english: "Savvy on this device", traditionalChinese: "這台裝置上的 Savvy")
+    }
 }
 
 private struct EditableProfileAvatar: View {
     let avatarURLString: String?
     let selectedAvatarData: Data?
+    let localAvatarData: Data?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -2148,7 +2215,7 @@ private struct EditableProfileAvatar: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                ProfileAvatarView(avatarURLString: avatarURLString, size: 92)
+                ProfileAvatarView(avatarURLString: avatarURLString, localAvatarData: localAvatarData, size: 92)
             }
 
             Image(systemName: "camera.fill")
@@ -2168,11 +2235,16 @@ private struct EditableProfileAvatar: View {
 
 private struct ProfileAvatarView: View {
     let avatarURLString: String?
+    var localAvatarData: Data? = nil
     var size: CGFloat
 
     var body: some View {
         Group {
-            if let localImage {
+            if let localAvatarData, let image = UIImage(data: localAvatarData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let localImage {
                 Image(uiImage: localImage)
                     .resizable()
                     .scaledToFill()
@@ -2184,11 +2256,15 @@ private struct ProfileAvatarView: View {
                             .resizable()
                             .scaledToFill()
                     default:
-                        MemoMascotMark(size: size)
+                        Image("SavvyLogo")
+                            .resizable()
+                            .scaledToFill()
                     }
                 }
             } else {
-                MemoMascotMark(size: size)
+                Image("SavvyLogo")
+                    .resizable()
+                    .scaledToFill()
             }
         }
         .frame(width: size, height: size)
@@ -2392,14 +2468,14 @@ private struct PassportVisibilityPanel: View {
             if places.isEmpty {
                 Text(languageSettings.localized(
                     english: "Save places first, then choose which memories stay private or become shareable links.",
-                    traditionalChinese: "先保存地點，再選哪些記憶保持私密、哪些可以用公開連結分享。"
+                    traditionalChinese: "先保存地點。私人只自己看；朋友、公開連結與分享推薦依每個地點設定。"
                 ))
                     .font(SaveTheme.Typography.supporting)
                     .foregroundColor(.saveCocoa.opacity(0.72))
             } else {
                 Text(languageSettings.localized(
-                    english: "Choose who can see each saved place.",
-                    traditionalChinese: "選擇每個已存地點誰看得到。"
+                    english: "Each place keeps its own setting: private, friends, link, or Origin recommendation. Private notes stay private.",
+                    traditionalChinese: "每個地點各自設定：私人、朋友、公開連結或 Origin 推薦；私人筆記維持私密。"
                 ))
                     .font(SaveTheme.Typography.supporting)
                     .foregroundColor(.saveCocoa.opacity(0.72))
