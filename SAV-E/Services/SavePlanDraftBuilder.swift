@@ -7,6 +7,8 @@ struct SavePlanRequest: Equatable {
     var arrivalMinutes: Int?
     var departureMinutes: Int?
     var language: AppLanguage
+    var usesFlightBuffers: Bool = true
+    var anchorPlaceID: UUID? = nil
 }
 
 /// Turns a Plan composer request into an itinerary draft.
@@ -24,7 +26,8 @@ enum SavePlanDraftBuilder {
         let plannable = inArea.filter { $0.latitude != 0 || $0.longitude != 0 }
         guard !plannable.isEmpty else { return nil }
 
-        let days = max(1, min(request.days, TripPlanningIntent.maximumDays))
+        guard (1...TripPlanningIntent.maximumDays).contains(request.days) else { return nil }
+        let days = request.days
         let query = days == 1
             ? "Plan a day in \(request.area)"
             : "Plan \(days) days in \(request.area)"
@@ -42,15 +45,32 @@ enum SavePlanDraftBuilder {
         var windows = TripPlanWindows.standard
         windows.arrivalMinutes = request.arrivalMinutes
         windows.departureMinutes = request.departureMinutes
+        if !request.usesFlightBuffers {
+            windows.airportBufferMinutes = 0
+            windows.airportTransferMinutes = 0
+        }
         let lodging = plannable.first(where: { $0.category == .stay })
         let scheduler = SaveDayRhythmScheduler()
         var unusedUnsaved = unsavedCandidates.filter { matches(area: request.area, candidate: $0) }
-        let dayCount = max(response.itineraryDays.count, 1)
+        // A thin vault must not silently turn a six-day request into one day.
+        let plannedDays = (1...days).map { number in
+            response.itineraryDays.first(where: { $0.dayNumber == number }) ?? ItineraryDay(
+                dayNumber: number,
+                label: request.language.localized(english: "Day \(number) · needs more places", traditionalChinese: "第 \(number) 天 · 待補地點"),
+                stops: []
+            )
+        }
+        let dayCount = days
 
-        let rebuiltDays: [ItineraryDay] = response.itineraryDays.enumerated().map { _, day in
-            let dayPlaces = day.stops.compactMap { stop -> Place? in
+        let rebuiltDays: [ItineraryDay] = plannedDays.map { day in
+            var dayPlaces = day.stops.compactMap { stop -> Place? in
                 guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return nil }
                 return plannable.first(where: { $0.id == id })
+            }
+            if let anchorID = request.anchorPlaceID,
+               let anchor = plannable.first(where: { $0.id == anchorID }) {
+                dayPlaces.removeAll { $0.id == anchorID }
+                if day.dayNumber == 1 { dayPlaces.insert(anchor, at: 0) }
             }
             let result = scheduler.schedule(
                 orderedPlaces: dayPlaces,
@@ -61,10 +81,11 @@ enum SavePlanDraftBuilder {
                 windows: windows,
                 outputLanguage: request.language
             )
-            let usedNames = Set(result.stops.map(\.placeName))
+            let scheduledStops = Array(result.stops.prefix(request.pace.maxStopsPerDay))
+            let usedNames = Set(scheduledStops.map(\.placeName))
             unusedUnsaved.removeAll { $0.category != .stay && usedNames.contains($0.title) }
             let health = DeterministicTripPlanner().tripHealth(
-                for: result.stops,
+                for: scheduledStops,
                 savedPlaces: plannable,
                 dayNumber: day.dayNumber,
                 maxStopsPerDay: request.pace.maxStopsPerDay,
@@ -76,7 +97,7 @@ enum SavePlanDraftBuilder {
             return ItineraryDay(
                 dayNumber: day.dayNumber,
                 label: day.label,
-                stops: result.stops,
+                stops: scheduledStops,
                 health: TripHealth.scored(
                     strengths: health.strengths,
                     warnings: health.warnings,
@@ -87,9 +108,10 @@ enum SavePlanDraftBuilder {
         }
 
         let placeIds = rebuiltDays.flatMap(\.stops).compactMap(\.placeId)
+        if let anchor = request.anchorPlaceID, !placeIds.contains(anchor.uuidString) { return nil }
         response = SaveAIResponse(
             componentType: .tripItinerary,
-            title: response.title,
+            title: request.language.localized(english: "\(request.area) · \(days) days", traditionalChinese: "\(request.area) · \(days) 天"),
             placeIds: placeIds,
             navigationPlaceId: response.navigationPlaceId,
             transportMode: response.transportMode,
@@ -112,6 +134,31 @@ enum SavePlanDraftBuilder {
             travelLegs: []
         )
         return response
+    }
+
+    /// Plan conditions own place identity, day count, pace and clocks. A remote
+    /// polish may change notes only when it echoes that exact schedule.
+    static func preservingSchedule(_ polished: SaveAIResponse, draft: SaveAIResponse) -> SaveAIResponse {
+        guard polished.componentType == .tripItinerary,
+              polished.itineraryDays.count == draft.itineraryDays.count else { return draft }
+        var days: [ItineraryDay] = []
+        for (original, proposed) in zip(draft.itineraryDays, polished.itineraryDays) {
+            guard original.dayNumber == proposed.dayNumber, original.stops.count == proposed.stops.count else { return draft }
+            var stops: [ItineraryStop] = []
+            for (stop, copy) in zip(original.stops, proposed.stops) {
+                guard stop.placeId == copy.placeId, stop.placeName == copy.placeName,
+                      stop.time == copy.time, stop.duration == copy.duration else { return draft }
+                stops.append(ItineraryStop(
+                    id: stop.id, placeId: stop.placeId, placeState: stop.placeState,
+                    placeName: stop.placeName, time: stop.time, duration: stop.duration,
+                    note: copy.note ?? stop.note, sourceSummary: stop.sourceSummary,
+                    risks: stop.risks, mapCandidate: stop.mapCandidate
+                ))
+            }
+            days.append(ItineraryDay(dayNumber: original.dayNumber, label: original.label,
+                                     stops: stops, health: original.health, windowNote: original.windowNote))
+        }
+        return draft.replacingItineraryDays(days, tripHealth: draft.tripHealth)
     }
 
     /// Validate travel against the scheduled order; routing must never move a meal or a stay.
@@ -204,8 +251,8 @@ enum SavePlanDraftBuilder {
     private static func matches(area: String, text: String) -> Bool {
         let needle = area.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
-        let foldedNeedle = needle.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        let foldedText = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        let foldedNeedle = needle.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
+        let foldedText = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
         if foldedText.contains(foldedNeedle) { return true }
         if foldedNeedle.contains("taipei") && (foldedText.contains("台北") || foldedText.contains("臺北")) {
             return true
@@ -249,8 +296,8 @@ enum SavePlanDraftBuilder {
         ]
         if request.arrivalMinutes != nil || request.departureMinutes != nil {
             notes.append(outputLanguage.localized(
-                english: "Flight times only shrink the walking day. Savvy does not book tickets.",
-                traditionalChinese: "機票時間只用來縮短可走路程；Savvy 不會代訂機票。"
+                english: request.usesFlightBuffers ? "Flight times only shrink the walking day. Savvy does not book tickets." : "Your start and end clocks bound the itinerary; airport transfers are not assumed.",
+                traditionalChinese: request.usesFlightBuffers ? "機票時間只用來縮短可走路程；Savvy 不會代訂機票。" : "開始與結束時間只限制可排行程的時段，不會自行假設機場接駁時間。"
             ))
         }
         if lodging == nil, request.days >= 2 {
