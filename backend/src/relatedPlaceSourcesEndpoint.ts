@@ -116,7 +116,7 @@ export async function executeRelatedPlaceSourcesEndpoint(
 
   if (!request.forceRefresh) {
     const stored = await dependencies.loadStoredPack(placeId, userId);
-    if (stored && storedRequestMatches(stored, resolvedRequest)) {
+    if (stored && storedRequestMatches(stored, resolvedRequest, ownedPlace)) {
       return {
         statusCode: 200,
         body: storedPackResponseBody(stored, dependencies.now?.() ?? new Date()),
@@ -166,6 +166,12 @@ export async function executeRelatedPlaceSourcesEndpoint(
     sourceUrl: ownedPlace.sourceUrl,
   }, request);
   const body = relatedPlaceSourcePackResponseBody(pack);
+  // Keep request identity separate from Google's authoritative canonical ID.
+  // Both travel inside the existing JSON pack; no storage schema change.
+  body.place = {
+    ...(body.place as Record<string, unknown>),
+    requested_google_place_id: ownedPlace.googlePlaceId?.trim() ?? null,
+  };
   const stored: StoredRelatedPlaceSourcePack = {
     pack: body,
     fetchedAt: pack.receipt.checkedAt,
@@ -184,7 +190,16 @@ export async function executeRelatedPlaceSourcesEndpoint(
 function storedRequestMatches(
   stored: StoredRelatedPlaceSourcePack,
   request: { platforms: string[]; maxResultsPerPlatform: number },
+  ownedPlace: OwnedRelatedSourcePlace,
 ): boolean {
+  const place = stored.pack.place;
+  if (!place || typeof place !== "object" || Array.isArray(place)) return false;
+  const identity = place as Record<string, unknown>;
+  const requestedID = ownedPlace.googlePlaceId?.trim();
+  // Older packs can be reused only when their canonical ID equals the request.
+  const receiptID = identity.requested_google_place_id ?? identity.google_place_id;
+  if (!requestedID || typeof receiptID !== "string"
+      || receiptID.trim() !== requestedID || identity.id !== ownedPlace.id) return false;
   return stored.maxResultsPerPlatform === request.maxResultsPerPlatform
     && sortedStrings(stored.requestedPlatforms).join("\n") === sortedStrings(request.platforms).join("\n");
 }

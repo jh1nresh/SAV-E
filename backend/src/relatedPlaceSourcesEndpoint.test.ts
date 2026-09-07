@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { RelatedSourcePlaceIdentity } from "./relatedPlaceSources.js";
 import {
   executeRelatedPlaceSourcesEndpoint,
   hasAccountBearerAuthorization,
@@ -160,7 +161,7 @@ test("a matching owner-scoped pack is re-read without verification, quota, or di
   let quotaCount = 0;
   const storedPack: StoredRelatedPlaceSourcePack = {
     pack: {
-      place: { id: ownedPlace.id },
+      place: { id: ownedPlace.id, google_place_id: ownedPlace.googlePlaceId },
       sources: [],
       coverage: [{ platform: "instagram", status: "failed", queries: ["stored query"] }],
       receipt: { checked_at: "2026-08-15T12:00:00.000Z", privacy: "owner_private" },
@@ -311,4 +312,46 @@ test("owner quota blocks repeated discovery and resets after its window", () => 
 
   now += 10_000;
   assert.deepEqual(limiter.consume("owner-user"), { allowed: true });
+});
+
+
+test("canonical venue IDs retain request identity and cache only for that request", async () => {
+  const aliasPlace = { ...ownedPlace, googlePlaceId: "  ChIJ-alias-B  " };
+  let stored: StoredRelatedPlaceSourcePack | undefined;
+  let verificationCount = 0;
+  let discoveries = 0;
+  const dependencies = {
+    loadOwnedPlace: async () => aliasPlace,
+    loadStoredPack: async () => stored,
+    storePack: async (_place: string, _user: string, value: StoredRelatedPlaceSourcePack) => { stored = value; },
+    verifyPublicVenue: async () => { verificationCount += 1; return verifiedVenue; },
+    discover: async (place: RelatedSourcePlaceIdentity) => { discoveries += 1; return emptyPack(place); },
+  };
+  const first = await executeRelatedPlaceSourcesEndpoint(ownedPlace.id, "owner", {}, dependencies);
+  assert.equal((first.body.place as Record<string, unknown>).google_place_id, "ChIJcanonical");
+  assert.equal((first.body.place as Record<string, unknown>).requested_google_place_id, "ChIJ-alias-B");
+  const cached = await executeRelatedPlaceSourcesEndpoint(ownedPlace.id, "owner", {}, dependencies);
+  assert.equal((cached.body.place as Record<string, unknown>).requested_google_place_id, "ChIJ-alias-B");
+  assert.equal(verificationCount, 1);
+  assert.equal(discoveries, 1);
+});
+
+test("cache cannot cross corrected, case-different, or missing Google identities", async () => {
+  for (const googleID of ["ChIJ-previous-A", "chij-current-b", undefined]) {
+    let discoveries = 0;
+    const stale: StoredRelatedPlaceSourcePack = {
+      pack: { place: { id: ownedPlace.id, google_place_id: "ChIJcanonical", requested_google_place_id: googleID } },
+      fetchedAt: "2026-08-23T12:00:00.000Z", requestedPlatforms: ["instagram"],
+      maxResultsPerPlatform: 3, querySet: [],
+    };
+    const result = await executeRelatedPlaceSourcesEndpoint(ownedPlace.id, "owner", { platforms: ["instagram"] }, {
+      loadOwnedPlace: async () => ({ ...ownedPlace, googlePlaceId: "ChIJ-current-B" }),
+      loadStoredPack: async () => stale,
+      storePack: ignoreStoredPack,
+      verifyPublicVenue: async () => verifiedVenue,
+      discover: async (place) => { discoveries += 1; return emptyPack(place); },
+    });
+    assert.equal(discoveries, 1, `must bypass unrelated cache ${googleID}`);
+    assert.equal((result.body.place as Record<string, unknown>).requested_google_place_id, "ChIJ-current-B");
+  }
 });

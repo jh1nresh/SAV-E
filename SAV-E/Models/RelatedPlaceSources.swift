@@ -73,6 +73,7 @@ struct RelatedSourcePlaceIdentity: Codable, Equatable, Sendable {
     let latitude: Double?
     let longitude: Double?
     let googlePlaceId: String?
+    let requestedGooglePlaceId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -81,6 +82,7 @@ struct RelatedSourcePlaceIdentity: Codable, Equatable, Sendable {
         case latitude
         case longitude
         case googlePlaceId = "google_place_id"
+        case requestedGooglePlaceId = "requested_google_place_id"
     }
 }
 
