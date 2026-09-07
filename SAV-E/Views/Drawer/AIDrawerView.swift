@@ -101,7 +101,6 @@ struct AIDrawerView: View {
     var onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onInvestigateCandidateMore: (PlaceReviewCandidate) async throws -> Void = { _ in }
     var onSaveMapCandidate: (SaveMapCandidate) async throws -> Void = { _ in }
-    var onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void = { _, _ in }
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack = { _, _ in
         throw SupabaseError.notConfigured
@@ -109,6 +108,7 @@ struct AIDrawerView: View {
     var onImportSharedTextAsReviewCandidates: (String) async throws -> [UUID] = { _ in [] }
     var onOpenReview: () -> Void = {}
     var onAddPlaceToTrip: (Place) -> Void = { _ in }
+    var onPlanAroundPlace: (Place) -> Void = { _ in }
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil
     var onPrepareMapSearch: (String) async -> MapCandidateSearchResult = { _ in .current([]) }
     /// Links exact-place map results to the Review clue they resolve, so
@@ -242,14 +242,7 @@ struct AIDrawerView: View {
             },
             onPlanAroundPlace: { place in
                 closeMapDetail()
-                withAnimation { drawerDetent = .large }
-                Task {
-                    await viewModel.showPlanAround(
-                        anchor: place,
-                        reviewCandidates: reviewCandidates,
-                        outputLanguage: languageSettings.language
-                    )
-                }
+                onPlanAroundPlace(place)
             },
             onFindExactPlaceCandidate: { candidate in
                 findExactPlace(for: candidate)
@@ -299,9 +292,6 @@ struct AIDrawerView: View {
             },
             onSaveSocialPlace: { place in
                 Task { await saveSocialPlace(place) }
-            },
-            onUpdatePlaceVisibility: { place, visibility in
-                try await onUpdatePlaceVisibility(place, visibility)
             },
             onUpdatePlace: { place in
                 try await onUpdatePlace(place)
@@ -1558,7 +1548,6 @@ struct MapDetailDrawerView: View {
     let onInvestigateCandidateMore: (PlaceReviewCandidate) -> Void
     let onSaveMapCandidate: (SaveMapCandidate) -> Void
     let onSaveSocialPlace: (Place) -> Void
-    let onUpdatePlaceVisibility: (Place, PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
     let onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack
     let onAddPlaceToTrip: (Place) -> Void
@@ -1877,9 +1866,6 @@ struct MapDetailDrawerView: View {
                         onAddToTrip: { onAddPlaceToTrip(place) },
                         onDeletePlace: {
                             try await onDeletePlace(place)
-                        },
-                        onUpdateVisibility: { visibility in
-                            try await onUpdatePlaceVisibility(place, visibility)
                         },
                         onUpdatePlace: { updatedPlace in
                             try await onUpdatePlace(updatedPlace)
@@ -2377,7 +2363,6 @@ private struct SavedMapDetailDrawerContent: View {
     let onPlanAroundPlace: () -> Void
     let onAddToTrip: () -> Void
     let onDeletePlace: () async throws -> Void
-    let onUpdateVisibility: (PlaceVisibility) async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
     let onFindRelatedSources: (Place, Bool) async throws -> RelatedPlaceSourcePack
     @Environment(\.openURL) private var openURL
@@ -2391,9 +2376,6 @@ private struct SavedMapDetailDrawerContent: View {
     @State private var editAddress = ""
     @State private var editError: String?
     @State private var isEnrichingBusinessDetails = false
-    @State private var localVisibility: PlaceVisibility?
-    @State private var isUpdatingVisibility = false
-    @State private var visibilityError: String?
     @State private var localStatus: PlaceStatus?
     @State private var isUpdatingVisitIntent = false
     @State private var visitIntentError: String?
@@ -2402,9 +2384,6 @@ private struct SavedMapDetailDrawerContent: View {
         var value = place
         if let enrichedPlace, enrichedPlace.id == place.id {
             value = enrichedPlace
-        }
-        if let localVisibility {
-            value.visibility = localVisibility
         }
         if let localStatus {
             value.status = localStatus
@@ -2544,43 +2523,23 @@ private struct SavedMapDetailDrawerContent: View {
                 placeEditor
             }
 
-            Menu {
+            HStack(spacing: 12) {
                 Button(action: beginPlaceEdit) {
                     Label(languageSettings.text(.edit), systemImage: "pencil")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-
-                Section(languageSettings.localized(english: "Visibility", traditionalChinese: "可見範圍")) {
-                    ForEach(PlaceVisibility.allCases, id: \.self) { visibility in
-                        Button {
-                            Task { await updateVisibility(visibility) }
-                        } label: {
-                            Label(
-                                visibility.displayName(language: languageSettings.language),
-                                systemImage: visibility.systemImage
-                            )
-                        }
-                    }
-                }
-
+                .accessibilityIdentifier("drawer.saved.edit")
                 Button(role: .destructive) {
                     showDeleteConfirmation = true
                 } label: {
                     Label(languageSettings.localized(english: "Delete", traditionalChinese: "刪除"), systemImage: "trash")
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-            } label: {
-                Label(languageSettings.localized(english: "More", traditionalChinese: "更多"), systemImage: "ellipsis.circle")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.saveCocoa)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(SaveAtlasPalette.paper.opacity(0.24))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
-                    )
+                .accessibilityIdentifier("drawer.saved.delete")
             }
-            .disabled(isSavingPlaceEdit || isUpdatingVisibility)
-            .accessibilityIdentifier("drawer.saved.more")
+            .font(SaveAtlasType.body(13))
+            .buttonStyle(.plain)
+            .disabled(isSavingPlaceEdit || isDeleting)
 
             RelatedPlaceSourcesPanel(
                 place: detailPlace,
@@ -2596,11 +2555,6 @@ private struct SavedMapDetailDrawerContent: View {
                 Text(editError)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.red)
-            }
-            if let visibilityError {
-                Text(visibilityError)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.saveError)
             }
         }
         .padding(14)
@@ -2825,22 +2779,6 @@ private struct SavedMapDetailDrawerContent: View {
         editAddress = detailPlace.address
         editError = nil
         isEditingPlace = true
-    }
-
-    private func updateVisibility(_ visibility: PlaceVisibility) async {
-        guard visibility != detailPlace.effectiveVisibility else { return }
-        let previousVisibility = localVisibility
-        isUpdatingVisibility = true
-        visibilityError = nil
-        localVisibility = visibility
-        defer { isUpdatingVisibility = false }
-
-        do {
-            try await onUpdateVisibility(visibility)
-        } catch {
-            localVisibility = previousVisibility
-            visibilityError = error.localizedDescription
-        }
     }
 
     private func updateVisitIntent(_ status: PlaceStatus) async {

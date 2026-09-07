@@ -10,25 +10,11 @@ struct TripsHomeView: View {
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
-    @State private var showsCreateTrip = false
 
     var body: some View {
         TripsAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
         .tint(Color.saveCoralInk)
-        .sheet(isPresented: $showsCreateTrip) {
-            NewTripPackView { name, city, startDate, endDate in
-                if let trip = await store.createTrip(
-                    name: name,
-                    city: city,
-                    startDate: startDate,
-                    endDate: endDate
-                ) {
-                    store.selectTrip(trip.id)
-                    onOpenTrip(trip.id)
-                }
-            }
-        }
         .alert(
             localized("Trip could not sync", "行程無法同步"),
             isPresented: Binding(
@@ -62,140 +48,13 @@ struct TripsHomeView: View {
             language: languageSettings.language,
             onOpenAssistant: onOpenAssistant,
             onAskSubmit: onAskSubmit,
-            onCreateTrip: { showsCreateTrip = true },
+            onCreateTrip: onOpenAssistant,
             onOpenTrip: { tripID in
                 store.selectTrip(tripID)
                 onOpenTrip(tripID)
             },
             onOpenPassport: onOpenPassport
         )
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
-    }
-}
-
-struct NewTripPackView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let onCreate: (String, String, Date?, Date?) async -> Void
-    @State private var name = ""
-    @State private var city = ""
-    @State private var hasDates = true
-    @State private var startDate = Date()
-    @State private var endDate = Calendar.current.date(byAdding: .day, value: 2, to: Date()) ?? Date()
-    @State private var isCreating = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                SaveDottedBackground().ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        TripAtlasSheetHeader(
-                            eyebrow: localized("Little Atlas", "小小地圖集"),
-                            title: localized("Start a new Trip", "開始新行程"),
-                            subtitle: localized(
-                                "Give this route a name. You can keep shaping it as new Map Stamps arrive.",
-                                "先替路線命名，之後收到新的地圖章時可以繼續編排行程。"
-                            ),
-                            systemImage: "map.fill"
-                        )
-
-                        TripAtlasFieldCard(title: localized("Trip identity", "行程資訊")) {
-                            TripAtlasTextField(
-                                title: localized("Trip name", "行程名稱"),
-                                placeholder: localized("Taipei weekend", "台北週末"),
-                                text: $name
-                            )
-                            .accessibilityIdentifier("trip.create.name")
-
-                            TripAtlasDivider()
-
-                            TripAtlasTextField(
-                                title: localized("City or area", "城市或區域"),
-                                placeholder: localized("Taipei", "台北"),
-                                text: $city
-                            )
-                            .accessibilityIdentifier("trip.create.city")
-                        }
-
-                        TripAtlasFieldCard(title: localized("Travel dates", "旅行日期")) {
-                            Toggle(localized("Set dates", "設定日期"), isOn: $hasDates)
-                                .font(SaveAtlasType.display(16))
-                                .tint(SaveAtlasPalette.forest)
-
-                            if hasDates {
-                                TripAtlasDivider()
-                                DatePicker(
-                                    localized("Starts", "開始"),
-                                    selection: $startDate,
-                                    displayedComponents: .date
-                                )
-                                .font(SaveAtlasType.body(15))
-
-                                TripAtlasDivider()
-                                DatePicker(
-                                    localized("Ends", "結束"),
-                                    selection: $endDate,
-                                    in: startDate...,
-                                    displayedComponents: .date
-                                )
-                                .font(SaveAtlasType.body(15))
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 18)
-                    .padding(.bottom, 112)
-                }
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(localized("Cancel", "取消")) { dismiss() }
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                }
-            }
-            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    isCreating = true
-                    Task {
-                        await onCreate(
-                            name.trimmingCharacters(in: .whitespacesAndNewlines),
-                            city.trimmingCharacters(in: .whitespacesAndNewlines),
-                            hasDates ? startDate : nil,
-                            hasDates ? endDate : nil
-                        )
-                        isCreating = false
-                        dismiss()
-                    }
-                } label: {
-                    HStack(spacing: 8) {
-                        if isCreating {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "arrow.triangle.branch")
-                        }
-                        Text(localized("Create Trip", "建立行程"))
-                    }
-                }
-                .buttonStyle(TripAtlasPrimaryButtonStyle())
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
-                .opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.48 : 1)
-                .accessibilityIdentifier("trip.create.submit")
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
-                .background(SaveAtlasPalette.canvas.opacity(0.97))
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("trip.create.sheet")
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {

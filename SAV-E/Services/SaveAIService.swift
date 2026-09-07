@@ -25,6 +25,7 @@ final class SaveAIService {
             modelFallbacks: modelFallbacks,
             session: session,
             accessTokenProvider: { try await PrivyAuthService.shared.accessToken() },
+            guestTokenProvider: { ReviewDemoGuestTokenHolder.shared.current },
             directAPIKey: resolved
         )
         print("[SaveAI] Gemini transport configured: backend proxy or allowed direct fallback")

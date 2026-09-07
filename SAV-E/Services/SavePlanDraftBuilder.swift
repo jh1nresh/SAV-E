@@ -7,6 +7,9 @@ struct SavePlanRequest: Equatable {
     var arrivalMinutes: Int?
     var departureMinutes: Int?
     var language: AppLanguage
+    var usesFlightBuffers: Bool = true
+    var anchorPlaceID: UUID? = nil
+    var excludedPlaceIDs: Set<UUID> = []
 }
 
 /// Turns a Plan composer request into an itinerary draft.
@@ -21,10 +24,14 @@ enum SavePlanDraftBuilder {
         unsavedCandidates: [SaveMapCandidate] = []
     ) -> SaveAIResponse? {
         let inArea = savedPlaces.filter { matches(area: request.area, place: $0) }
-        let plannable = inArea.filter { $0.latitude != 0 || $0.longitude != 0 }
+        let excluded = inArea.filter { !$0.savedIDs.isDisjoint(with: request.excludedPlaceIDs) }
+        let plannable = inArea.filter {
+            $0.savedIDs.isDisjoint(with: request.excludedPlaceIDs) && ($0.latitude != 0 || $0.longitude != 0)
+        }
         guard !plannable.isEmpty else { return nil }
 
-        let days = max(1, min(request.days, TripPlanningIntent.maximumDays))
+        guard (1...TripPlanningIntent.maximumDays).contains(request.days) else { return nil }
+        let days = request.days
         let query = days == 1
             ? "Plan a day in \(request.area)"
             : "Plan \(days) days in \(request.area)"
@@ -42,15 +49,37 @@ enum SavePlanDraftBuilder {
         var windows = TripPlanWindows.standard
         windows.arrivalMinutes = request.arrivalMinutes
         windows.departureMinutes = request.departureMinutes
+        if !request.usesFlightBuffers {
+            windows.airportBufferMinutes = 0
+            windows.airportTransferMinutes = 0
+        }
         let lodging = plannable.first(where: { $0.category == .stay })
         let scheduler = SaveDayRhythmScheduler()
-        var unusedUnsaved = unsavedCandidates.filter { matches(area: request.area, candidate: $0) }
-        let dayCount = max(response.itineraryDays.count, 1)
+        var unusedUnsaved = unsavedCandidates.filter { candidate in
+            matches(area: request.area, candidate: candidate) && !excluded.contains {
+                $0.name.caseInsensitiveCompare(candidate.title) == .orderedSame
+                    && abs($0.latitude - candidate.latitude) < 0.001 && abs($0.longitude - candidate.longitude) < 0.001
+            }
+        }
+        // A thin vault must not silently turn a six-day request into one day.
+        let plannedDays = (1...days).map { number in
+            response.itineraryDays.first(where: { $0.dayNumber == number }) ?? ItineraryDay(
+                dayNumber: number,
+                label: request.language.localized(english: "Day \(number) · needs more places", traditionalChinese: "第 \(number) 天 · 待補地點"),
+                stops: []
+            )
+        }
+        let dayCount = days
 
-        let rebuiltDays: [ItineraryDay] = response.itineraryDays.enumerated().map { _, day in
-            let dayPlaces = day.stops.compactMap { stop -> Place? in
+        let rebuiltDays: [ItineraryDay] = plannedDays.map { day in
+            var dayPlaces = day.stops.compactMap { stop -> Place? in
                 guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return nil }
                 return plannable.first(where: { $0.id == id })
+            }
+            if let anchorID = request.anchorPlaceID,
+               let anchor = plannable.first(where: { $0.id == anchorID }) {
+                dayPlaces.removeAll { $0.id == anchorID }
+                if day.dayNumber == 1 { dayPlaces.insert(anchor, at: 0) }
             }
             let result = scheduler.schedule(
                 orderedPlaces: dayPlaces,
@@ -61,10 +90,12 @@ enum SavePlanDraftBuilder {
                 windows: windows,
                 outputLanguage: request.language
             )
-            let usedNames = Set(result.stops.map(\.placeName))
+            let scheduledStops = paceLimitedStops(result.stops, maxStops: request.pace.maxStopsPerDay,
+                                                  savedPlaces: plannable, anchorPlaceID: request.anchorPlaceID)
+            let usedNames = Set(scheduledStops.map(\.placeName))
             unusedUnsaved.removeAll { $0.category != .stay && usedNames.contains($0.title) }
             let health = DeterministicTripPlanner().tripHealth(
-                for: result.stops,
+                for: scheduledStops,
                 savedPlaces: plannable,
                 dayNumber: day.dayNumber,
                 maxStopsPerDay: request.pace.maxStopsPerDay,
@@ -76,7 +107,7 @@ enum SavePlanDraftBuilder {
             return ItineraryDay(
                 dayNumber: day.dayNumber,
                 label: day.label,
-                stops: result.stops,
+                stops: scheduledStops,
                 health: TripHealth.scored(
                     strengths: health.strengths,
                     warnings: health.warnings,
@@ -87,9 +118,10 @@ enum SavePlanDraftBuilder {
         }
 
         let placeIds = rebuiltDays.flatMap(\.stops).compactMap(\.placeId)
+        if let anchor = request.anchorPlaceID, !placeIds.contains(anchor.uuidString) { return nil }
         response = SaveAIResponse(
             componentType: .tripItinerary,
-            title: response.title,
+            title: request.language.localized(english: "\(request.area) · \(days) days", traditionalChinese: "\(request.area) · \(days) 天"),
             placeIds: placeIds,
             navigationPlaceId: response.navigationPlaceId,
             transportMode: response.transportMode,
@@ -112,6 +144,100 @@ enum SavePlanDraftBuilder {
             travelLegs: []
         )
         return response
+    }
+
+    static func removalTarget(in message: String) -> String? {
+        let pattern = #"(?i)^(?:(?:keep the plan but|please)\s+)?remove\s+(.+?)(?:\s+from (?:the|my) (?:plan|draft))?[.!]?$|^(?:保留行程[，,]?但)?(?:移除|刪除|去掉)\s*(.+?)[。！]?$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: message, range: NSRange(message.startIndex..<message.endIndex, in: message)) else { return nil }
+        for group in 1..<match.numberOfRanges {
+            if let range = Range(match.range(at: group), in: message) { return String(message[range]) }
+        }
+        return nil
+    }
+
+    /// Explicit removal changes only the in-memory draft. Exact saved identity
+    /// and a unique name/address match are required; ambiguity changes nothing.
+    static func removingConfirmedStop(named target: String, from draft: SaveAIResponse,
+                                      savedPlaces: [Place], area: String, pace: ItineraryPace,
+                                      language: AppLanguage) -> (draft: SaveAIResponse, removedIDs: Set<UUID>)? {
+        func key(_ value: String) -> String {
+            value.trimmingCharacters(in: .whitespacesAndNewlines)
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        }
+        let allStops = draft.itineraryDays.flatMap(\.stops)
+        let draftIDs = Set(allStops.compactMap { $0.placeId.flatMap(UUID.init(uuidString:)) })
+        let matches = savedPlaces.filter { place in
+            guard Self.matches(area: area, place: place), !place.savedIDs.isDisjoint(with: draftIDs) else { return false }
+            let displayedNames = allStops.filter { $0.placeId.flatMap(UUID.init(uuidString:)).map(place.savedIDs.contains) ?? false }.map(\.placeName)
+            let labels = [place.name, "\(place.name), \(place.address)"] + displayedNames
+            return labels.contains { key($0) == key(target) }
+        }
+        guard matches.count == 1, let place = matches.first else { return nil }
+        let removedIDs = place.savedIDs
+        let eligible = savedPlaces.filter { $0.savedIDs.isDisjoint(with: removedIDs) }
+        let days = draft.itineraryDays.map { day in
+            let stops = day.stops.filter { stop in
+                !(stop.placeId.flatMap(UUID.init(uuidString:)).map(removedIDs.contains) ?? false)
+            }
+            var changed = day.replacingStops(stops)
+            changed.health = DeterministicTripPlanner().tripHealth(for: stops, savedPlaces: eligible,
+                dayNumber: day.dayNumber, maxStopsPerDay: pace.maxStopsPerDay, outputLanguage: language)
+            return changed
+        }
+        let remainingIDs = days.flatMap(\.stops).compactMap(\.placeId)
+        let response = SaveAIResponse(componentType: draft.componentType, title: draft.title,
+            placeIds: remainingIDs, navigationPlaceId: draft.navigationPlaceId.flatMap { remainingIDs.contains($0) ? $0 : nil },
+            transportMode: draft.transportMode, itineraryDays: days,
+            tripHealth: DeterministicTripPlanner().overallTripHealth(for: days, outputLanguage: language),
+            messageText: draft.messageText, mapAction: nil, aiMessage: nil)
+        return (response, removedIDs)
+    }
+
+    /// Pick the anchor and saved lodging constraints before ordinary memory and external fills,
+    /// then retain the scheduler's chronological order and clocks.
+    static func paceLimitedStops(_ stops: [ItineraryStop], maxStops: Int,
+                                 savedPlaces: [Place], anchorPlaceID: UUID?) -> [ItineraryStop] {
+        let savedIDs = Set(savedPlaces.flatMap { $0.savedIDs })
+        let anchorIDs = savedPlaces.first(where: { $0.id == anchorPlaceID })?.savedIDs ?? []
+        let lodgingIDs = Set(savedPlaces.filter { $0.category == .stay }.flatMap { $0.savedIDs })
+        func priority(_ stop: ItineraryStop) -> Int {
+            guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return 3 }
+            if anchorIDs.contains(id) { return 0 }
+            if lodgingIDs.contains(id) { return 1 }
+            return savedIDs.contains(id) ? 2 : 3
+        }
+        let chosen = stops.indices.sorted {
+            let left = priority(stops[$0]), right = priority(stops[$1])
+            return left == right ? $0 < $1 : left < right
+        }.prefix(max(0, maxStops))
+        let indices = Set(chosen)
+        return stops.enumerated().filter { indices.contains($0.offset) }.map(\.element)
+    }
+
+    /// Plan conditions own place identity, day count, pace and clocks. A remote
+    /// polish may change notes only when it echoes that exact schedule.
+    static func preservingSchedule(_ polished: SaveAIResponse, draft: SaveAIResponse) -> SaveAIResponse {
+        guard polished.componentType == .tripItinerary,
+              polished.itineraryDays.count == draft.itineraryDays.count else { return draft }
+        var days: [ItineraryDay] = []
+        for (original, proposed) in zip(draft.itineraryDays, polished.itineraryDays) {
+            guard original.dayNumber == proposed.dayNumber, original.stops.count == proposed.stops.count else { return draft }
+            var stops: [ItineraryStop] = []
+            for (stop, copy) in zip(original.stops, proposed.stops) {
+                guard stop.placeId == copy.placeId, stop.placeName == copy.placeName,
+                      stop.time == copy.time, stop.duration == copy.duration else { return draft }
+                stops.append(ItineraryStop(
+                    id: stop.id, placeId: stop.placeId, placeState: stop.placeState,
+                    placeName: stop.placeName, time: stop.time, duration: stop.duration,
+                    note: copy.note ?? stop.note, sourceSummary: stop.sourceSummary,
+                    risks: stop.risks, mapCandidate: stop.mapCandidate
+                ))
+            }
+            days.append(ItineraryDay(dayNumber: original.dayNumber, label: original.label,
+                                     stops: stops, health: original.health, windowNote: original.windowNote))
+        }
+        return draft.replacingItineraryDays(days, tripHealth: draft.tripHealth)
     }
 
     /// Validate travel against the scheduled order; routing must never move a meal or a stay.
@@ -179,11 +305,29 @@ enum SavePlanDraftBuilder {
         return result
     }
 
+    /// Prefer the actual locality over the US state/country component used by
+    /// generic share labels. A coordinate-only stamp can still use its name.
+    static func areaLabel(for place: Place) -> String? {
+        let parts = place.address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let locality = (parts.count >= 3 ? Array(parts.dropFirst()) : parts).joined(separator: ", ")
+        if let city = SaveSearchIntentParser.namedArea(in: " " + SaveSearchIntentParser.normalize(locality)) { return city }
+        let countries = ["us", "usa", "united states", "united states of america"]
+        var localParts = parts
+        if let last = localParts.last, countries.contains(last.lowercased()) { localParts.removeLast() }
+        if localParts.count >= 2, let region = localParts.last,
+           region.range(of: #"^[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?$"#, options: .regularExpression) != nil {
+            return localParts[localParts.count - 2]
+        }
+        guard let label = SavedPlaceTripRecommender.areaLabel(for: place),
+              label.range(of: #"^[A-Z]{2}$"#, options: .regularExpression) == nil else { return nil }
+        return label
+    }
+
     static func areas(from places: [Place]) -> [String] {
         var counts: [String: Int] = [:]
         for place in places {
-            guard let area = SavedPlaceTripRecommender.areaLabel(for: place) else { continue }
-            counts[area, default: 0] += 1
+            let label = areaLabel(for: place) ?? place.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !label.isEmpty { counts[label, default: 0] += 1 }
         }
         return counts.keys.sorted { lhs, rhs in
             if counts[lhs, default: 0] != counts[rhs, default: 0] {
@@ -194,7 +338,9 @@ enum SavePlanDraftBuilder {
     }
 
     static func matches(area: String, place: Place) -> Bool {
-        matches(area: area, text: "\(place.name) \(place.address) \(SavedPlaceTripRecommender.areaLabel(for: place) ?? "")")
+        let label = areaLabel(for: place) ?? place.name
+        return !Set(SavePlanConversationConditions.areaAliases(area))
+            .isDisjoint(with: SavePlanConversationConditions.areaAliases(label))
     }
 
     static func matches(area: String, candidate: SaveMapCandidate) -> Bool {
@@ -204,28 +350,18 @@ enum SavePlanDraftBuilder {
     private static func matches(area: String, text: String) -> Bool {
         let needle = area.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
-        let foldedNeedle = needle.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        let foldedText = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        if foldedText.contains(foldedNeedle) { return true }
-        if foldedNeedle.contains("taipei") && (foldedText.contains("台北") || foldedText.contains("臺北")) {
-            return true
+        let foldedNeedle = needle.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
+        let foldedText = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
+        return SavePlanConversationConditions.areaAliases(foldedNeedle).contains { alias in
+            if alias.range(of: #"^[a-z .'-]+$"#, options: .regularExpression) != nil {
+                return foldedText.range(of: #"\b"# + NSRegularExpression.escapedPattern(for: alias) + #"\b"#, options: .regularExpression) != nil
+            }
+            return foldedText.contains(alias)
         }
-        if (foldedNeedle.contains("台北") || foldedNeedle.contains("臺北")) && foldedText.contains("taipei") {
-            return true
-        }
-        return false
     }
 
     private static func searchTerms(for area: String) -> [String] {
-        let trimmed = area.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        var terms = [trimmed]
-        if trimmed.contains("台北") || trimmed.contains("臺北") { terms.append("taipei") }
-        if trimmed.lowercased().contains("taipei") { terms.append("台北") }
-        return terms.map {
-            $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .lowercased()
-        }
+        SavePlanConversationConditions.areaAliases(area)
     }
 
     private static func pacePhrase(_ pace: ItineraryPace, query: String) -> String {
@@ -249,8 +385,8 @@ enum SavePlanDraftBuilder {
         ]
         if request.arrivalMinutes != nil || request.departureMinutes != nil {
             notes.append(outputLanguage.localized(
-                english: "Flight times only shrink the walking day. Savvy does not book tickets.",
-                traditionalChinese: "機票時間只用來縮短可走路程；Savvy 不會代訂機票。"
+                english: request.usesFlightBuffers ? "Flight times only shrink the walking day. Savvy does not book tickets." : "Your start and end clocks bound the itinerary; airport transfers are not assumed.",
+                traditionalChinese: request.usesFlightBuffers ? "機票時間只用來縮短可走路程；Savvy 不會代訂機票。" : "開始與結束時間只限制可排行程的時段，不會自行假設機場接駁時間。"
             ))
         }
         if lodging == nil, request.days >= 2 {

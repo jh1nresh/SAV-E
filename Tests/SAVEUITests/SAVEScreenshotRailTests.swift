@@ -714,6 +714,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(back.waitForExistence(timeout: stepTimeout))
         back.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        tapReachable(app.buttons["trips.create"])
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.chat.input"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
+        XCTAssertFalse(app.buttons["plan.options"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        attach(app, name: "trips-new-opens-plan-chat")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
@@ -733,7 +740,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testTripsAskRoutesToPlanDrawer() throws {
+    func testTripsAskRoutesToPlanChat() throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -747,27 +754,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
-        // Tapping the ask entry focuses a real input; typed text renders in
-        // the field before the child route hands off to the shared Map drawer.
+        // The typed request remains visible before submitting to Plan chat.
         let askInput = app.textFields["trips.assistant.input"]
         typeText("Plan a day from my stamps", into: askInput)
         XCTAssertEqual(askInput.value as? String, "Plan a day from my stamps")
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].exists)
 
-        // Trips is no longer a root tab. Submit returns to the root Map and
-        // expands the one shared drawer there.
         app.buttons["trips.assistant.submit"].tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
-        )
-        XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
-            1,
-            "Only one ask surface should be on screen."
-        )
-        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Plan", app: app).isSelected)
-        attach(app, name: "trips-ask-routes-to-map-drawer")
+        XCTAssertTrue(app.staticTexts["Plan a day from my stamps"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.chat.input"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertFalse(app.buttons["plan.options"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        attach(app, name: "trips-ask-routes-to-plan-chat")
     }
 
     @MainActor
@@ -1099,6 +1100,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThanOrEqual(send.frame.maxY, app.keyboards.firstMatch.frame.minY)
         attach(app, name: "plan-chat-keyboard")
         send.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Any first-day start'")).firstMatch.waitForExistence(timeout: stepTimeout))
+        typeText("none", into: input)
+        send.tap()
         XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["tripPlan.save"].exists)
         let review = app.buttons["plan.draft.review"]
@@ -1114,6 +1118,104 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["Plan a relaxed 1 day trip in Tokyo"].waitForExistence(timeout: stepTimeout))
         app.buttons["plan.allTrips"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
+    func testPlanKeepsSixDaysWhileAskingForCityAndUnknownSwitch() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let input = app.textFields["plan.chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        typeText("日本旅行6天五夜", into: input)
+        app.buttons["plan.chat.send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Got it, 6 days'")).firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        for answer in ["Taipei", "relaxed", "no time constraints"] {
+            typeText(answer, into: input)
+            tapReachable(app.buttons["plan.chat.send"])
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '3 more days in details'")).firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.options"].exists)
+        attach(app, name: "plan-six-day-conversation")
+        typeText("改去京都", into: input)
+        app.buttons["plan.chat.send"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS '京都' AND label CONTAINS 'saved places'")).firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].exists, "Clarification must retain the prior unsaved draft.")
+        attach(app, name: "plan-unknown-destination-keeps-draft")
+    }
+
+    @MainActor
+    func testPlaceActionsStagePlanAndRequireExplicitTripChoice() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openSavesFromHome(app: app)
+        app.buttons["saves.segment.mapStamps"].tap()
+        let place = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.place.'")).firstMatch
+        XCTAssertTrue(place.waitForExistence(timeout: stepTimeout))
+        tapReachable(place)
+        let detail = app.scrollViews["place.detail.scroll"]
+        XCTAssertTrue(detail.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["drawer.saved.more"].exists)
+        let edit = app.buttons["drawer.saved.edit"]
+        XCTAssertTrue(scrollUntilHittable(edit, in: detail, maxSwipes: 8))
+        edit.tap()
+        let name = app.textFields["Place name"]
+        XCTAssertTrue(name.waitForExistence(timeout: stepTimeout))
+        let savedName = name.value as? String ?? ""
+        XCTAssertFalse(savedName.isEmpty)
+        app.buttons["Cancel"].tap()
+        let delete = app.buttons["drawer.saved.delete"]
+        XCTAssertTrue(scrollUntilHittable(delete, in: detail, maxSwipes: 4))
+        delete.tap()
+        let deleteConfirmation = app.buttons["Delete Place"]
+        XCTAssertTrue(deleteConfirmation.waitForExistence(timeout: stepTimeout))
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            // Compact confirmation popovers dismiss by tapping outside and
+            // do not expose the system cancel action as a separate button.
+            detail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+        }
+        XCTAssertTrue(deleteConfirmation.waitForNonExistence(timeout: stepTimeout))
+        let around = app.buttons["drawer.saved.planAround"]
+        for _ in 0..<8 where !around.isHittable { detail.swipeDown() }
+        XCTAssertTrue(around.isHittable)
+        around.tap()
+        let input = app.textFields["plan.chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue((input.value as? String ?? "").contains(savedName))
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        attach(app, name: "plan-place-anchor-awaiting-input")
+        openRootTab("Home", app: app)
+        openSavesFromHome(app: app)
+        app.buttons["saves.segment.mapStamps"].tap()
+        XCTAssertTrue(place.waitForExistence(timeout: stepTimeout))
+        tapReachable(place)
+        XCTAssertTrue(detail.waitForExistence(timeout: stepTimeout))
+        let add = app.buttons["drawer.saved.addToTrip"]
+        XCTAssertTrue(scrollUntilHittable(add, in: detail, maxSwipes: 8))
+        add.tap()
+        attach(app, name: "plan-assignment-arrival")
+        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout), app.debugDescription)
+        XCTAssertTrue(app.buttons["plan.assignTrip.new"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
+        let existing = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plan.assignTrip.' AND identifier != 'plan.assignTrip.new'")).firstMatch
+        XCTAssertTrue(existing.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-explicit-trip-choice")
+        tapReachable(existing)
+        XCTAssertTrue(app.staticTexts["Added to your trip."].waitForExistence(timeout: timeout(20)))
+        XCTAssertFalse(app.descendants(matching: .any)["plan.tripChoices"].exists)
     }
 
     @MainActor
@@ -1137,10 +1239,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["plan.conversation"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["origin.root"].exists)
 
-        app.descendants(matching: .any)["plan.options"].firstMatch.tap()
-        let compose = app.buttons["plan.compose"]
-        XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
-        tapReachable(compose)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.options"].firstMatch.exists)
+        let input = app.textFields["plan.chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        typeText("Taipei 2 days balanced; no time constraints", into: input)
+        tapReachable(app.buttons["plan.chat.send"])
         XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: launchTimeout))
         attach(app, name: "plan-from-stamps")
         XCTAssertEqual(app.state, .runningForeground)
@@ -1157,13 +1260,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Plan", app: app)
         let scroll = app.scrollViews.firstMatch
-        app.descendants(matching: .any)["plan.options"].firstMatch.tap()
-        let compose = app.buttons["plan.compose"]
-        XCTAssertTrue(compose.waitForExistence(timeout: stepTimeout))
-        _ = scrollUntilHittable(compose, in: scroll, maxSwipes: 6)
-        XCTAssertTrue(scroll.frame.contains(compose.frame), "Composer action must be inside the visible scroll viewport.")
-        attach(app, name: "plan-manual-options")
-        tapReachable(compose)
+        XCTAssertFalse(app.descendants(matching: .any)["plan.options"].firstMatch.exists)
+        let input = app.textFields["plan.chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: stepTimeout))
+        typeText("Taipei 2 days balanced; no time constraints", into: input)
+        let send = app.buttons["plan.chat.send"]
+        XCTAssertTrue(send.isHittable)
+        attach(app, name: "plan-chat-conditions")
+        tapReachable(send)
         let review = app.buttons["plan.draft.review"]
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
         tapReachable(review)
@@ -1895,25 +1999,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         addToTrip.tap()
 
-        let createTripAndAdd = app.buttons
-            .matching(identifier: "saved.addToTrip.create")
-            .firstMatch
-        XCTAssertTrue(createTripAndAdd.waitForExistence(timeout: stepTimeout))
-        createTripAndAdd.tap()
-
-        XCTAssertTrue(app.descendants(matching: .any)["trip.create.sheet"].waitForExistence(timeout: stepTimeout))
-        let tripNameField = app.textFields["trip.create.name"]
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-assignment-arrival")
+        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout), app.debugDescription)
+        XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
+        let newPlan = app.buttons["plan.assignTrip.new"]
+        XCTAssertTrue(newPlan.waitForExistence(timeout: stepTimeout))
+        tapReachable(newPlan)
+        let planInput = app.textFields["plan.chat.input"]
+        XCTAssertTrue(planInput.waitForExistence(timeout: stepTimeout))
+        let staged = planInput.value as? String ?? ""
+        XCTAssertTrue(staged.contains(placeName))
+        XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
+        typeText(" 1 day balanced; no time constraints", into: planInput)
+        tapReachable(app.buttons["plan.chat.send"])
+        let review = app.buttons["plan.draft.review"]
+        XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        tapReachable(review)
+        let save = app.buttons["tripPlan.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: stepTimeout))
+        tapReachable(save)
+        let tripNameField = app.textFields["tripPlanSave.name"]
         XCTAssertTrue(tripNameField.waitForExistence(timeout: stepTimeout))
-        attach(app, name: "atlas-trip-create-sheet")
-        typeText(tripName, into: tripNameField)
-        typeText("Los Angeles", into: app.textFields["trip.create.city"])
-        app.buttons["trip.create.submit"].tap()
-
-        XCTAssertTrue(
-            app.descendants(matching: .any)["trip.create.sheet"]
-                .waitForNonExistence(timeout: stepTimeout),
-            "Trip create sheet never dismissed after submit."
-        )
+        replaceText(in: tripNameField, with: tripName)
+        attach(app, name: "atlas-reviewed-plan-save")
+        app.buttons["tripPlanSave.confirm"].tap()
+        let success = app.alerts.firstMatch
+        XCTAssertTrue(success.waitForExistence(timeout: timeout(20)))
+        XCTAssertTrue(success.staticTexts["Saved to Trip Packs"].exists)
+        success.buttons["OK"].tap()
+        app.buttons["plan.review.close"].tap()
         try assertSavedPlaceAndTripStopPersist(
             app: app,
             placeName: placeName,
@@ -2392,8 +2507,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 tripName
             )
         ).firstMatch
-        XCTAssertTrue(scrollUntilExists(tripCard, app: app), "Created Trip is missing.")
-        tripCard.tap()
+        if tripCard.exists {
+            tapReachable(tripCard)
+        } else {
+            // The Atlas cover shows two journeys; other saved drafts live
+            // in the explicit All trips menu, not below a scroll boundary.
+            let allTrips = app.buttons["trips.allTrips"]
+            XCTAssertTrue(allTrips.waitForExistence(timeout: stepTimeout))
+            allTrips.tap()
+            let savedTrip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", tripName)).firstMatch
+            XCTAssertTrue(savedTrip.waitForExistence(timeout: stepTimeout), "Created Trip is missing.\n\(app.debugDescription)")
+            savedTrip.tap()
+        }
 
         XCTAssertTrue(tripTabButton("Plan", app: app).waitForExistence(timeout: stepTimeout))
         let tripStop = app.buttons.matching(
