@@ -200,7 +200,7 @@ final class ShareRouteCodecTests: XCTestCase {
             optionalShareNote: nil
         )
 
-        XCTAssertTrue(content.immediateShareText.hasPrefix("Kato\nLos Angeles\nhttps://maps.apple.com/"))
+        XCTAssertTrue(content.immediateShareText.hasPrefix("Savvy Map Result\nKato\nLos Angeles\nhttps://maps.apple.com/"))
         XCTAssertNil(content.fallbackURL)
     }
 
