@@ -1177,8 +1177,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let delete = app.buttons["drawer.saved.delete"]
         XCTAssertTrue(scrollUntilHittable(delete, in: detail, maxSwipes: 4))
         delete.tap()
-        XCTAssertTrue(app.buttons["Delete Place"].waitForExistence(timeout: stepTimeout))
-        app.buttons["Cancel"].tap()
+        let deleteConfirmation = app.buttons["Delete Place"]
+        XCTAssertTrue(deleteConfirmation.waitForExistence(timeout: stepTimeout))
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            // Compact confirmation popovers dismiss by tapping outside and
+            // do not expose the system cancel action as a separate button.
+            detail.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
+        }
+        XCTAssertTrue(deleteConfirmation.waitForNonExistence(timeout: stepTimeout))
         let around = app.buttons["drawer.saved.planAround"]
         for _ in 0..<8 where !around.isHittable { detail.swipeDown() }
         XCTAssertTrue(around.isHittable)
@@ -1198,7 +1206,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let add = app.buttons["drawer.saved.addToTrip"]
         XCTAssertTrue(scrollUntilHittable(add, in: detail, maxSwipes: 8))
         add.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-assignment-arrival")
+        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout), app.debugDescription)
         XCTAssertTrue(app.buttons["plan.assignTrip.new"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
         let existing = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plan.assignTrip.' AND identifier != 'plan.assignTrip.new'")).firstMatch
@@ -1963,7 +1972,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         addToTrip.tap()
 
         XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-assignment-arrival")
+        XCTAssertTrue(app.descendants(matching: .any)["plan.tripChoices"].waitForExistence(timeout: stepTimeout), app.debugDescription)
         XCTAssertFalse(app.descendants(matching: .any)["trip.create.sheet"].exists)
         let newPlan = app.buttons["plan.assignTrip.new"]
         XCTAssertTrue(newPlan.waitForExistence(timeout: stepTimeout))

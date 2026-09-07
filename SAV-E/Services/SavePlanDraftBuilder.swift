@@ -229,8 +229,15 @@ enum SavePlanDraftBuilder {
     static func areas(from places: [Place]) -> [String] {
         var counts: [String: Int] = [:]
         for place in places {
-            guard let area = SavedPlaceTripRecommender.areaLabel(for: place) else { continue }
-            counts[area, default: 0] += 1
+            var labels = Set<String>()
+            if let area = SavedPlaceTripRecommender.areaLabel(for: place) { labels.insert(area) }
+            // Addresses without a country suffix can otherwise expose only a
+            // district. Reuse Map's city recognition on the locality suffix.
+            let locality = place.address.split(separator: ",").suffix(2).joined(separator: ", ")
+            if let city = SaveSearchIntentParser.namedArea(in: " " + SaveSearchIntentParser.normalize(locality)) {
+                labels.insert(city)
+            }
+            for label in labels { counts[label, default: 0] += 1 }
         }
         return counts.keys.sorted { lhs, rhs in
             if counts[lhs, default: 0] != counts[rhs, default: 0] {

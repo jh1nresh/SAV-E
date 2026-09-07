@@ -49,13 +49,13 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     /// Chosen against the Atlas/Postcard language rather than accepting
     /// defaults: Home is the notebook cover, Map is a folded paper map (not a
     /// globe — Savvy is a city-scale tool), Save is the capture control,
-    /// Plan is a conversation, Profile is the passport holder.
+    /// Plan is a calendar itinerary, Profile is the passport holder.
     var atlasIcon: String {
         switch self {
         case .home: "book.closed"
         case .map: "map"
         case .capture: "plus"
-        case .plan: "text.bubble"
+        case .plan: "calendar"
         case .profile: "person.crop.circle"
         }
     }

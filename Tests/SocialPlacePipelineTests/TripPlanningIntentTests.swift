@@ -49,6 +49,23 @@ final class TripPlanningIntentValidatorTests: XCTestCase {
 
 @MainActor
 final class SavePlanConversationConditionsTests: XCTestCase {
+    func testSixDayConversationUsesCityFromRealSavedAddressSuffix() throws {
+        let places = ReviewDemoSeed.places()
+        let areas = SavePlanDraftBuilder.areas(from: places)
+        XCTAssertTrue(areas.contains("Taipei"))
+        var conditions = SavePlanConversationConditions()
+        for answer in ["日本旅行6天五夜", "Taipei", "relaxed", "no time constraints"] {
+            conditions.receive(answer, areas: areas)
+        }
+        XCTAssertNil(conditions.clarification(language: .english))
+        let request = try XCTUnwrap(conditions.request(language: .english))
+        let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: places))
+        XCTAssertEqual(draft.itineraryDays.count, 6)
+        XCTAssertTrue(draft.placeIds.allSatisfy { id in
+            places.contains { $0.id.uuidString == id && $0.address.contains("Taipei") }
+        })
+    }
+
     func testJapanSixDaysAsksForCityWithoutSelectingSavedTaipei() {
         var conditions = SavePlanConversationConditions()
         conditions.receive("日本旅行6天五夜", areas: ["Taipei"])

@@ -93,6 +93,7 @@ struct SavePlanView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     heading
                     conversationContent
+                        .id("conversationEnd")
                     if let draft {
                         draftCanvas(draft)
                             .disabled(isPlanning)
@@ -111,6 +112,12 @@ struct SavePlanView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) { chatInput }
             .scrollDismissesKeyboard(.interactively)
+            .onChange(of: conversation.messages.count) { _, _ in
+                withAnimation { proxy.scrollTo("conversationEnd", anchor: .bottom) }
+            }
+            .onAppear {
+                if conversation.assignmentPlace != nil { proxy.scrollTo("conversationEnd", anchor: .bottom) }
+            }
             .onChange(of: conversation.draft) { _, _ in
                 withAnimation { proxy.scrollTo("latestDraft", anchor: .top) }
             }
@@ -243,6 +250,7 @@ struct SavePlanView: View {
                 .font(SaveAtlasType.body(15))
                 .foregroundStyle(SaveAtlasPalette.forest)
                 .disabled(conversation.assignmentInProgress || isPlanning)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("plan.tripChoices")
             }
             if isPlanning {
@@ -259,6 +267,7 @@ struct SavePlanView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.conversation")
     }
 
