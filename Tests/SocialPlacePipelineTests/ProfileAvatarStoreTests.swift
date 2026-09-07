@@ -95,6 +95,18 @@ final class ProfileAvatarStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testUnconfiguredRemoteProfileUpdateRejectsInsteadOfReportingSuccess() async {
+        do {
+            try await SupabaseService(apiBaseURL: nil).updateProfile(profile(named: "Changed"))
+            XCTFail("Missing API configuration must not report a persisted name")
+        } catch SupabaseError.notConfigured {
+            // Expected: the view model can report the real partial-save result.
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    @MainActor
     func testPhotoOnlyUpdatePersistsLocallyWithoutCallingProfileAPI() async {
         var updateCalls = 0
         let store = ProfileAvatarStore(baseDirectory: directory)

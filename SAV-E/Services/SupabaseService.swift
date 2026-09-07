@@ -682,7 +682,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func updateProfile(_ profile: UserProfile) async throws {
-        guard isConfigured else { return }
+        guard isConfigured else { throw SupabaseError.notConfigured }
 
         let updates: [String: Any?] = [
             "display_name": profile.displayName,
