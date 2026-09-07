@@ -95,10 +95,12 @@ struct SavePlaceShareContent {
 
         // The sanitizer removes query items. A map URL whose identity lived
         // only in ?q/?ll would otherwise collapse to a provider home page.
-        if ["maps.apple.com", "google.com", "www.google.com", "maps.google.com"].contains(host) {
+        if ["maps.apple.com", "google.com", "www.google.com", "maps.google.com", "uri.amap.com"].contains(host) {
             let path = sanitized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
             let identityFreePaths: Set<String> = if host == "maps.apple.com" {
                 ["", "place", "directions"]
+            } else if host == "uri.amap.com" {
+                ["marker"]
             } else {
                 ["", "maps", "maps/search", "maps/place", "maps/dir"]
             }

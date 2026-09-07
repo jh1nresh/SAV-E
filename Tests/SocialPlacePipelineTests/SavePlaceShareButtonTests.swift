@@ -162,7 +162,8 @@ final class SavePlaceShareButtonTests: XCTestCase {
     func testIdentityFreeProviderPathsWithUnknownCoordinatesStayTextOnly() {
         for sourceURL in [
             "https://www.google.com/maps/place/?q=Kato",
-            "https://maps.apple.com/place?auid=123"
+            "https://maps.apple.com/place?auid=123",
+            "https://uri.amap.com/marker?position=121.5,31.2&name=Kato"
         ] {
             let payload = Self.payload(sourceURL: URL(string: sourceURL), latitude: 0, longitude: 0)
             let content = SavePlaceShareContent(
@@ -177,6 +178,25 @@ final class SavePlaceShareButtonTests: XCTestCase {
             XCTAssertNil(content.immediateShareURL, sourceURL)
             XCTAssertEqual(content.immediateShareText, "Savvy Source Clue\nKato\n777 S Alameda St", sourceURL)
         }
+    }
+
+    @MainActor
+    func testAmapMarkerQueryFallsBackToSpecificAppleMapsURL() throws {
+        let payload = Self.payload(
+            sourceURL: URL(string: "https://uri.amap.com/marker?position=121.5,31.2&name=Kato")
+        )
+        let content = SavePlaceShareContent(
+            subject: "Savvy Map Stamp: Kato",
+            fallbackURL: nil,
+            fallbackText: "Savvy Map Stamp\nKato\n777 S Alameda St",
+            payload: payload,
+            sourcePlaceId: nil,
+            optionalShareNote: nil
+        )
+
+        XCTAssertEqual(content.immediateShareURL, payload.appleMapsURL)
+        XCTAssertTrue(content.immediateShareText.contains("https://maps.apple.com/"))
+        XCTAssertFalse(content.immediateShareText.contains("uri.amap.com/marker"))
     }
 
     @MainActor
