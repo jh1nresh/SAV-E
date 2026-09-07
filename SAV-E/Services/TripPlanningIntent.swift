@@ -122,7 +122,14 @@ struct SavePlanConversationConditions {
         let noWindow = text.range(of: #"^(?:none|no|no(?: time)? (?:constraints?|restrictions?|limits?)|no preference|any time|不用(?:時間)?(?:限制)?|沒有(?:時間)?(?:限制)?|没有(?:时间)?(?:限制)?|無(?:時間)?(?:限制)?|都可以)(?:[。.!！ ]*)$"#, options: .regularExpression) != nil || text.range(of: #"沒有時間限制|没有时间限制|不限時間|no time (?:constraints?|limits?|restrictions?)"#, options: .regularExpression) != nil
         let proposedChange = Self.capture(text, pattern: #"(?:改去|改到|改成|換去|換成|换成|前往|想去|switch to|change to|instead go to)\s*(.+)$"#)
         let conditionPrefix = #"^(?:[0-9]|[一二兩两三四五六七八九十]+天|開始|結束|抵達|離開|天數|步調|輕鬆|適中|普通|緊湊|多排|排滿|start|end|arriv|depart|relaxed|easy|slow|balanced|packed|busy)"#
-        let destinationChange = proposedChange.flatMap { $0.range(of: conditionPrefix, options: .regularExpression) == nil ? $0 : nil }
+        let proposedDestination = proposedChange.flatMap { $0.range(of: conditionPrefix, options: .regularExpression) == nil ? $0 : nil }
+        // English destinations can follow the duration, not just lead it.
+        let followsTrip = Self.dayCount(text, allowBareNumber: false) != nil
+            || text.range(of: #"\b(?:plan|trip|travel)\b"#, options: .regularExpression) != nil
+        let trailingDestination = followsTrip ? Self.capture(text, pattern: #"\b(?:in|to)\s+([\p{L}][\p{L} .'-]{0,39}?)(?=\s+(?:for|with|relaxed|easy|slow|balanced|packed|busy|[0-9])\b|[,;.!?]|$)"#) : nil
+        let destinationChange = proposedDestination ?? trailingDestination.flatMap {
+            $0.range(of: conditionPrefix, options: .regularExpression) == nil && !["a", "an", "the"].contains($0) ? $0 : nil
+        }
         let destinationText = destinationChange ?? text
         let destinationWithDuration = Self.capture(text, pattern: #"^([\p{L} .'-]{1,40}?)(?:旅行|旅遊|行程|trip|travel|[0-9一二兩两三四五六七八九十]{1,3}\s*(?:天|日|days?\b))"#)
         let matchingAreas = areas.filter { area in
@@ -240,11 +247,12 @@ struct SavePlanConversationConditions {
         return "Confirmed conditions: area=\(area ?? "unresolved"); days=\(days ?? 0); pace=\(pace?.rawValue ?? "unresolved"); first-day start=\(start); last-day end=\(end). Preserve the supplied draft schedule and only refine its notes.\n" + requests.joined(separator: "\n")
     }
 
-    private static func areaAliases(_ area: String) -> [String] {
+    static func areaAliases(_ area: String) -> [String] {
         let label = normalized(area)
         let short = label.hasSuffix("市") ? String(label.dropLast()) : label
         if ["taipei", "taipei city", "台北", "台北市"].contains(label) { return ["taipei", "台北"] }
-        return [label, short].filter { !$0.isEmpty }
+        if ["tokyo", "tokyo city", "東京", "東京都"].contains(label) { return ["tokyo", "東京"] }
+        return (label == short ? [label] : [label, short]).filter { !$0.isEmpty }
     }
 
     private static func areaKey(_ area: String) -> String {

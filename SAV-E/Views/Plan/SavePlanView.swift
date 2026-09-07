@@ -38,6 +38,24 @@ final class SavePlanConversation: ObservableObject {
             input = language.localized(english: "Plan around \(place.name)\(location)", traditionalChinese: "以「\(place.name)」為中心規劃\(location)")
         }
     }
+
+    func assignPlace(_ place: Place, to trip: Trip, store: TripPackStore, language: AppLanguage) async {
+        guard !assignmentInProgress, assignmentPlace?.id == place.id else { return }
+        assignmentInProgress = true
+        defer { assignmentInProgress = false }
+        let added = await store.addConfirmedPlace(place, to: trip.id)
+        let alreadyPresent = store.trips.first(where: { $0.id == trip.id })?.places.contains {
+            place.savedIDs.contains($0.placeId)
+        } ?? false
+        let reply = added ? language.localized(english: "Added to your trip.", traditionalChinese: "已加入行程。")
+            : alreadyPresent ? language.localized(english: "Already in your trip.", traditionalChinese: "這個地點已在行程中。")
+            : (store.errorMessage ?? language.localized(english: "Couldn’t add it. Please try again.", traditionalChinese: "暫時無法加入，請再試一次。"))
+        messages.append(.init(
+            request: language.localized(english: "Add \(place.name) to \(trip.name)", traditionalChinese: "將「\(place.name)」加入「\(trip.name)」"),
+            reply: reply
+        ))
+        if added || alreadyPresent { assignmentPlace = nil }
+    }
 }
 
 struct SavePlanView: View {
@@ -224,15 +242,8 @@ struct SavePlanView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(assignmentTrips) { trip in
                         Button(localized("Add to \(trip.name)", "加入「\(trip.name)」")) {
-                            conversation.assignmentInProgress = true
                             Task {
-                                let added = await tripStore.addConfirmedPlace(place, to: trip.id)
-                                conversation.assignmentInProgress = false
-                                conversation.messages.append(.init(
-                                    request: localized("Add \(place.name) to \(trip.name)", "將「\(place.name)」加入「\(trip.name)」"),
-                                    reply: added ? localized("Added to your trip.", "已加入行程。") : (tripStore.errorMessage ?? localized("Couldn’t add it. Please try again.", "暫時無法加入，請再試一次。"))
-                                ))
-                                if added { conversation.assignmentPlace = nil }
+                                await conversation.assignPlace(place, to: trip, store: tripStore, language: languageSettings.language)
                             }
                         }
                         .frame(minHeight: 44)

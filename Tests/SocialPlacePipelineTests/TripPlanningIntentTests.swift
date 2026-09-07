@@ -262,6 +262,122 @@ final class SavePlanConversationConditionsTests: XCTestCase {
         XCTAssertEqual(draft.itineraryDays.count, 1)
     }
 
+    func testDestinationAfterDurationClearsPreviousPlanArea() {
+        for answer in ["3 days in Kyoto", "plan a 3 day trip to Kyoto", "3 days in Kyoto relaxed"] {
+            var conditions = completed()
+            conditions.receive(answer, areas: ["Taipei", "Tokyo"])
+            XCTAssertNil(conditions.area, answer)
+            XCTAssertEqual(conditions.days, 3)
+            XCTAssertEqual(conditions.pace, .relaxed)
+            XCTAssertNil(conditions.request(language: .english))
+            XCTAssertTrue(conditions.clarification(language: .english)?.contains("kyoto") == true)
+        }
+        var conditions = completed()
+        conditions.receive("3 days in a relaxed pace", areas: ["Taipei"])
+        XCTAssertEqual(conditions.area, "Taipei")
+        conditions.receive("plan a 2 day trip to Tokyo", areas: ["Taipei", "Tokyo"])
+        XCTAssertEqual(conditions.area, "Tokyo")
+        XCTAssertEqual(conditions.days, 2)
+    }
+
+    func testTokyoLocalizedAliasesMatchSavedAreaAndDraft() throws {
+        let saved = place("Tokyo Museum", address: "Ueno, Tokyo, Japan")
+        let areas = SavePlanDraftBuilder.areas(from: [saved])
+        XCTAssertTrue(areas.contains("Tokyo"))
+        for answer in ["東京", "東京都", "Tokyo"] {
+            var conditions = completed()
+            conditions.receive(answer, areas: areas)
+            let request = try XCTUnwrap(conditions.request(language: .traditionalChinese))
+            let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: [saved]))
+            XCTAssertTrue(draft.placeIds.contains(saved.id.uuidString))
+        }
+        var conditions = completed()
+        conditions.receive("不要東京", areas: ["Tokyo"])
+        XCTAssertNil(conditions.area)
+        let candidate = SaveMapCandidate(id: "tokyo-fill", title: "喫茶店", subtitle: "東京都台東區",
+            latitude: 35.71, longitude: 139.77, category: .cafe)
+        XCTAssertTrue(SavePlanDraftBuilder.matches(area: "Tokyo", candidate: candidate))
+        XCTAssertFalse(SavePlanDraftBuilder.matches(area: "Taipei", candidate: candidate))
+    }
+
+    func testRelaxedDraftKeepsSavedAttractionAfterSuggestedMealsAndStay() throws {
+        let anchor = place("Taipei Museum", address: "Taipei")
+        var stay = place("Taipei Hotel", address: "Taipei")
+        stay.category = .stay
+        let suggestions = [PlaceCategory.cafe, .food].enumerated().map { index, category in
+            SaveMapCandidate(id: "fill-\(index)", title: "Meal \(index)", subtitle: "Taipei",
+                latitude: 25.04, longitude: 121.54, category: category)
+        }
+        let scheduled = SaveDayRhythmScheduler().schedule(orderedPlaces: [anchor], unsavedCandidates: suggestions,
+            lodging: stay, dayNumber: 1, dayCount: 2, windows: .standard, outputLanguage: .english)
+        XCTAssertFalse(scheduled.stops.prefix(ItineraryPace.relaxed.maxStopsPerDay).contains { $0.placeId == anchor.id.uuidString },
+            "Fixture must exercise the old chronological-prefix loss")
+        for anchorID in [nil, anchor.id] as [UUID?] {
+            let request = SavePlanRequest(area: "Taipei", days: 2, pace: .relaxed,
+                arrivalMinutes: nil, departureMinutes: nil, language: .english, usesFlightBuffers: false,
+                anchorPlaceID: anchorID)
+            let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request,
+                savedPlaces: [anchor, stay], unsavedCandidates: suggestions))
+            XCTAssertTrue(draft.placeIds.contains(anchor.id.uuidString))
+            XCTAssertTrue(draft.itineraryDays.allSatisfy { $0.stops.count <= ItineraryPace.relaxed.maxStopsPerDay })
+            if anchorID != nil { XCTAssertTrue(draft.itineraryDays[0].stops.contains { $0.placeId == anchor.id.uuidString }) }
+        }
+    }
+
+    func testPaceCapPrioritizesMergedAnchorIdentityWithoutChangingClocks() {
+        var anchor = place("Anchor", address: "Taipei")
+        let oldID = UUID()
+        anchor.mergedPlaceIDs = [oldID]
+        let early = ItineraryStop(id: UUID(), placeId: nil, placeName: "Suggested breakfast", time: "9:00 AM", duration: 60, note: nil)
+        let late = ItineraryStop(id: UUID(), placeId: oldID.uuidString, placeName: "Anchor", time: "3:00 PM", duration: 75, note: nil)
+        let limited = SavePlanDraftBuilder.paceLimitedStops([early, late], maxStops: 1,
+            savedPlaces: [anchor], anchorPlaceID: anchor.id)
+        XCTAssertEqual(limited, [late])
+    }
+
+    func testAlreadyAssignedMergedPlaceClosesChoicesWithoutWritingAgain() async {
+        var saved = place("Merged Museum", address: "Taipei")
+        let oldID = UUID()
+        saved.mergedPlaceIDs = [oldID]
+        let stop = TripStop(id: UUID(), placeId: oldID, placeName: "Old museum name", day: 1, orderIndex: 0)
+        let trip = Trip(id: UUID(), name: "Existing", city: "Taipei", places: [stop], isOptimized: false, createdAt: .distantPast)
+        let persistence = PlanAssignmentPersistence(trips: [trip])
+        let store = TripPackStore(userID: "plan-unit-test", persistence: persistence)
+        await store.load()
+        let conversation = SavePlanConversation()
+        conversation.stage(place: saved, addingToTrip: true, language: .english)
+
+        await conversation.assignPlace(saved, to: trip, store: store, language: .english)
+
+        XCTAssertEqual(conversation.messages.last?.reply, "Already in your trip.")
+        XCTAssertNil(conversation.assignmentPlace)
+        XCTAssertFalse(conversation.assignmentInProgress)
+        XCTAssertEqual(store.trips.first?.places, [stop])
+        XCTAssertEqual(persistence.updateCount, 0)
+    }
+
+    func testAssignmentRequiresStagingAndKeepsChoicesOnRealFailure() async {
+        let saved = place("Museum", address: "Taipei")
+        let trip = Trip(id: UUID(), name: "Existing", city: "Taipei", places: [], isOptimized: false, createdAt: .distantPast)
+        let persistence = PlanAssignmentPersistence(trips: [trip])
+        let store = TripPackStore(userID: "plan-unit-test", persistence: persistence)
+        await store.load()
+        let conversation = SavePlanConversation()
+        await conversation.assignPlace(saved, to: trip, store: store, language: .english)
+        XCTAssertEqual(persistence.updateCount, 0)
+        conversation.stage(place: saved, addingToTrip: true, language: .english)
+        persistence.failsUpdate = true
+        await conversation.assignPlace(saved, to: trip, store: store, language: .english)
+        XCTAssertNotEqual(conversation.messages.last?.reply, "Already in your trip.")
+        XCTAssertNotNil(conversation.assignmentPlace)
+        XCTAssertTrue(store.trips.first?.places.isEmpty == true)
+        persistence.failsUpdate = false
+        await conversation.assignPlace(saved, to: trip, store: store, language: .english)
+        XCTAssertEqual(conversation.messages.last?.reply, "Added to your trip.")
+        XCTAssertNil(conversation.assignmentPlace)
+        XCTAssertEqual(store.trips.first?.places.count, 1)
+    }
+
     private func completed() -> SavePlanConversationConditions {
         var conditions = SavePlanConversationConditions()
         conditions.receive("台北3天輕鬆", areas: ["Taipei"])
@@ -273,4 +389,21 @@ final class SavePlanConversationConditionsTests: XCTestCase {
         Place(id: UUID(), name: name, address: address, latitude: 25.04, longitude: 121.54,
               category: .attraction, status: .wantToGo, sourcePlatform: .other, createdAt: .distantPast)
     }
+}
+
+@MainActor
+private final class PlanAssignmentPersistence: TripPersisting {
+    enum Failure: Error { case update }
+    var trips: [Trip]
+    var updateCount = 0
+    var failsUpdate = false
+    init(trips: [Trip]) { self.trips = trips }
+    func fetchTrips(for userId: String) async throws -> [Trip] { trips }
+    func saveTrip(_ trip: Trip, userId: String) async throws { trips.append(trip) }
+    func updateTrip(_ trip: Trip) async throws {
+        updateCount += 1
+        if failsUpdate { throw Failure.update }
+        if let index = trips.firstIndex(where: { $0.id == trip.id }) { trips[index] = trip }
+    }
+    func deleteTrip(_ tripId: UUID) async throws { trips.removeAll { $0.id == tripId } }
 }

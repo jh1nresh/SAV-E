@@ -81,7 +81,8 @@ enum SavePlanDraftBuilder {
                 windows: windows,
                 outputLanguage: request.language
             )
-            let scheduledStops = Array(result.stops.prefix(request.pace.maxStopsPerDay))
+            let scheduledStops = paceLimitedStops(result.stops, maxStops: request.pace.maxStopsPerDay,
+                                                  savedPlaces: plannable, anchorPlaceID: request.anchorPlaceID)
             let usedNames = Set(scheduledStops.map(\.placeName))
             unusedUnsaved.removeAll { $0.category != .stay && usedNames.contains($0.title) }
             let health = DeterministicTripPlanner().tripHealth(
@@ -134,6 +135,24 @@ enum SavePlanDraftBuilder {
             travelLegs: []
         )
         return response
+    }
+
+    /// Pick the anchor and confirmed memory before optional external fills,
+    /// then retain the scheduler's chronological order and clocks.
+    static func paceLimitedStops(_ stops: [ItineraryStop], maxStops: Int,
+                                 savedPlaces: [Place], anchorPlaceID: UUID?) -> [ItineraryStop] {
+        let savedIDs = Set(savedPlaces.flatMap { $0.savedIDs })
+        let anchorIDs = savedPlaces.first(where: { $0.id == anchorPlaceID })?.savedIDs ?? []
+        func priority(_ stop: ItineraryStop) -> Int {
+            guard let raw = stop.placeId, let id = UUID(uuidString: raw) else { return 2 }
+            return anchorIDs.contains(id) ? 0 : (savedIDs.contains(id) ? 1 : 2)
+        }
+        let chosen = stops.indices.sorted {
+            let left = priority(stops[$0]), right = priority(stops[$1])
+            return left == right ? $0 < $1 : left < right
+        }.prefix(max(0, maxStops))
+        let indices = Set(chosen)
+        return stops.enumerated().filter { indices.contains($0.offset) }.map(\.element)
     }
 
     /// Plan conditions own place identity, day count, pace and clocks. A remote
@@ -266,26 +285,11 @@ enum SavePlanDraftBuilder {
         guard !needle.isEmpty else { return true }
         let foldedNeedle = needle.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
         let foldedText = text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).replacingOccurrences(of: "臺", with: "台")
-        if foldedText.contains(foldedNeedle) { return true }
-        if foldedNeedle.contains("taipei") && (foldedText.contains("台北") || foldedText.contains("臺北")) {
-            return true
-        }
-        if (foldedNeedle.contains("台北") || foldedNeedle.contains("臺北")) && foldedText.contains("taipei") {
-            return true
-        }
-        return false
+        return SavePlanConversationConditions.areaAliases(foldedNeedle).contains { foldedText.contains($0) }
     }
 
     private static func searchTerms(for area: String) -> [String] {
-        let trimmed = area.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        var terms = [trimmed]
-        if trimmed.contains("台北") || trimmed.contains("臺北") { terms.append("taipei") }
-        if trimmed.lowercased().contains("taipei") { terms.append("台北") }
-        return terms.map {
-            $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .lowercased()
-        }
+        SavePlanConversationConditions.areaAliases(area)
     }
 
     private static func pacePhrase(_ pace: ItineraryPace, query: String) -> String {
