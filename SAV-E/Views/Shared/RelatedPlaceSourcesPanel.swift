@@ -21,6 +21,11 @@ struct RelatedPlaceSourceRequestIdentity: Equatable {
     }
 
     var isConfirmed: Bool { !googlePlaceID.isEmpty }
+
+    func matches(_ receipt: RelatedSourcePlaceIdentity) -> Bool {
+        isConfirmed && receipt.id == placeID && receipt.googlePlaceId?
+            .trimmingCharacters(in: .whitespacesAndNewlines) == googlePlaceID
+    }
 }
 
 enum RelatedPlaceSourcesDisplayError: Equatable {
@@ -389,6 +394,11 @@ struct RelatedPlaceSourcesPanel: View {
             guard loadRequestID == requestID,
                   requestIdentity == requestedIdentity
             else { return }
+            // A cached response can predate an in-place Google identity correction.
+            guard requestedIdentity.matches(pack.place) else {
+                state = .failed(.invalidResponse)
+                return
+            }
             state = .loaded(pack)
         } catch is CancellationError {
             return

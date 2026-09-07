@@ -55,6 +55,22 @@ final class RelatedPlaceSourcesPanelTests: XCTestCase {
         )
     }
 
+    func testReceiptMustMatchConfirmedMapStampAndOpaqueGoogleIdentity() {
+        let placeID = UUID()
+        let current = requestIdentity(placeID: placeID, googlePlaceID: "ChIJ-B")
+        func receipt(_ id: UUID, _ googleID: String?) -> RelatedSourcePlaceIdentity {
+            RelatedSourcePlaceIdentity(id: id, name: "Venue", address: "Address",
+                latitude: nil, longitude: nil, googlePlaceId: googleID)
+        }
+
+        XCTAssertTrue(current.matches(receipt(placeID, "  ChIJ-B\n")))
+        XCTAssertFalse(current.matches(receipt(placeID, "ChIJ-A")), "Reject cached sources from the previous venue")
+        XCTAssertFalse(current.matches(receipt(placeID, "chij-b")), "Google IDs are case-sensitive")
+        XCTAssertFalse(current.matches(receipt(UUID(), "ChIJ-B")))
+        XCTAssertFalse(current.matches(receipt(placeID, nil)))
+        XCTAssertFalse(requestIdentity(placeID: placeID, googlePlaceID: nil).matches(receipt(placeID, nil)))
+    }
+
     private func requestIdentity(placeID: UUID, googlePlaceID: String?) -> RelatedPlaceSourceRequestIdentity {
         RelatedPlaceSourceRequestIdentity(place: Place(
             id: placeID,
