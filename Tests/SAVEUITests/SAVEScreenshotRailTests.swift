@@ -2479,8 +2479,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 tripName
             )
         ).firstMatch
-        XCTAssertTrue(scrollUntilExists(tripCard, app: app), "Created Trip is missing.")
-        tripCard.tap()
+        if tripCard.exists {
+            tapReachable(tripCard)
+        } else {
+            // The Atlas cover shows two journeys; other saved drafts live
+            // in the explicit All trips menu, not below a scroll boundary.
+            let allTrips = app.buttons["trips.allTrips"]
+            XCTAssertTrue(allTrips.waitForExistence(timeout: stepTimeout))
+            allTrips.tap()
+            let savedTrip = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", tripName)).firstMatch
+            XCTAssertTrue(savedTrip.waitForExistence(timeout: stepTimeout), "Created Trip is missing.\n\(app.debugDescription)")
+            savedTrip.tap()
+        }
 
         XCTAssertTrue(tripTabButton("Plan", app: app).waitForExistence(timeout: stepTimeout))
         let tripStop = app.buttons.matching(
