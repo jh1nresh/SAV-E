@@ -2174,6 +2174,7 @@ final class SaveSearchControllerTests: XCTestCase {
     func testPlainMapSearchUsesExactTextAndNewerResultsWin() async {
         let search = ControlledMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(Self.taipeiViewport)
         let old = Task { await map.searchMapPlaces("old cafe") }
         await search.waitUntilRequested("old cafe")
         let new = Task { await map.searchMapPlaces("new cafe") }
@@ -3997,6 +3998,11 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(response.aiMessage?.contains("invented lobster") == true)
     }
 
+    static let taipeiViewport = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 25.0330, longitude: 121.5654),
+        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+    )
+
     @MainActor
     private func exactSaveFixture() -> (clue: PlaceReviewCandidate, candidate: SaveMapCandidate) {
         (
@@ -4151,13 +4157,15 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
     struct MatchingRequest {
         let query: String
         let coordinate: CLLocationCoordinate2D?
+        let near: CLLocationCoordinate2D?
+        let span: MKCoordinateSpan?
     }
 
-    private let candidates: [SaveMapCandidate]
     private(set) var matchingRequests: [MatchingRequest] = []
+    var nextMatchingResults: [SaveMapCandidate]
 
-    init(candidates: [SaveMapCandidate]) {
-        self.candidates = candidates
+    init(candidates: [SaveMapCandidate] = []) {
+        nextMatchingResults = candidates
     }
 
     func searchCandidates(
@@ -4175,8 +4183,10 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
         span: MKCoordinateSpan?,
         excluding savedPlaces: [Place]
     ) async -> [SaveMapCandidate] {
-        matchingRequests.append(MatchingRequest(query: query, coordinate: coordinate))
-        return candidates
+        matchingRequests.append(
+            MatchingRequest(query: query, coordinate: coordinate, near: coordinate, span: span)
+        )
+        return nextMatchingResults
     }
 }
 
@@ -4275,5 +4285,491 @@ private final class SuspendedMapCandidatePlaceSaver: @unchecked Sendable {
         saveContinuation = nil
         lock.unlock()
         return continuation
+    }
+}
+
+@MainActor
+final class MapReviewLocationRepairTests: XCTestCase {
+    private let taipei = CLLocationCoordinate2D(latitude: 25.0330, longitude: 121.5654)
+    private let osaka = CLLocationCoordinate2D(latitude: 34.6937, longitude: 135.5023)
+    private let usVenue = CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194)
+
+    func testGenericCategorySearchUsesViewportNotSavedUSVenue() async throws {
+        for query in ["奶茶", "酒吧", "咖啡", "museum"] {
+            let search = RecordingMapCandidateSearchService()
+            let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+            map.places = [savedPlace(name: "Ferry Building", address: "San Francisco", coordinate: usVenue)]
+            map.selectedPlace = map.places[0]
+            map.updateVisibleMapRegion(region(around: taipei))
+
+            await map.searchMapPlaces(query)
+
+            let request = try XCTUnwrap(search.matchingRequests.last)
+            XCTAssertEqual(request.query, query)
+            let near = try XCTUnwrap(request.near)
+            XCTAssertEqual(near.latitude, taipei.latitude, accuracy: 0.0001)
+            XCTAssertEqual(near.longitude, taipei.longitude, accuracy: 0.0001)
+            XCTAssertNotEqual(near.latitude, usVenue.latitude, accuracy: 0.5)
+        }
+    }
+
+    func testPanningViewportChangesGenericSearchAnchor() async {
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.places = [savedPlace(name: "Ferry Building", address: "San Francisco", coordinate: usVenue)]
+        map.updateVisibleMapRegion(region(around: taipei))
+        await map.searchMapPlaces("咖啡")
+        map.updateVisibleMapRegion(region(around: osaka))
+        await map.searchMapPlaces("咖啡")
+
+        XCTAssertEqual(search.matchingRequests.count, 2)
+        XCTAssertEqual(search.matchingRequests[0].near?.latitude ?? 0, taipei.latitude, accuracy: 0.0001)
+        XCTAssertEqual(search.matchingRequests[1].near?.latitude ?? 0, osaka.latitude, accuracy: 0.0001)
+    }
+
+    func testGenericSearchWithoutAnchorKeepsCameraAndAsksForCity() async {
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.places = [savedPlace(name: "Ferry Building", address: "San Francisco", coordinate: usVenue)]
+        let before = cameraCenter(map)
+
+        await map.searchMapPlaces("奶茶")
+
+        XCTAssertTrue(search.matchingRequests.isEmpty)
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+        XCTAssertTrue(map.mapSearchNeedsLocationHint)
+        XCTAssertEqual(cameraCenter(map)?.latitude ?? 0, before?.latitude ?? 1, accuracy: 0.0001)
+        XCTAssertEqual(cameraCenter(map)?.longitude ?? 0, before?.longitude ?? 1, accuracy: 0.0001)
+    }
+
+    func testNamedTaipeiQueryCanSearchAwayFromViewport() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        await map.searchMapPlaces("咖啡 臺北")
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertNil(request.near)
+        XCTAssertEqual(request.query, "咖啡 臺北")
+    }
+
+    func testNamedAreaCategoryDrawerSearchUsesAreaQueryWithoutLocalAnchor() async throws {
+        let candidate = SaveMapCandidate(
+            id: "taipei-coffee",
+            title: "Taipei Coffee",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .cafe
+        )
+        let unrelated = SaveMapCandidate(
+            id: "taipei-hotel", title: "Taipei Hotel", subtitle: "Taipei",
+            latitude: taipei.latitude, longitude: taipei.longitude, category: .stay
+        )
+        let search = RecordingMapCandidateSearchService(candidates: [candidate, unrelated])
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        let result = await map.prepareMapCandidatesForDrawerQuery("咖啡 臺北")
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertEqual(request.query, "咖啡 臺北")
+        XCTAssertNil(request.near)
+        XCTAssertNil(request.span)
+        XCTAssertEqual(result.candidates?.map(\.id), [candidate.id])
+    }
+
+    func testLocalResultsIgnoreUSOutlierAndInvalidCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        search.nextMatchingResults = [
+            SaveMapCandidate(id: "local", title: "Local Tea", subtitle: "Taipei", latitude: 25.034, longitude: 121.564, category: .cafe),
+            SaveMapCandidate(id: "us", title: "US Tea", subtitle: "San Francisco", latitude: usVenue.latitude, longitude: usVenue.longitude, category: .cafe),
+            SaveMapCandidate(id: "nan", title: "Broken", subtitle: "Nowhere", latitude: .nan, longitude: 121, category: .cafe),
+            SaveMapCandidate(id: "zero", title: "Null Island", subtitle: "Ocean", latitude: 0, longitude: 0, category: .cafe),
+        ]
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: taipei))
+        await map.searchMapPlaces("奶茶")
+
+        XCTAssertEqual(map.mapCandidates.map(\.id), ["local"])
+        let focused = try XCTUnwrap(cameraCenter(map))
+        let distanceToTaipei = MapSearchGeography.distanceMeters(from: focused, to: taipei)
+        let distanceToUS = MapSearchGeography.distanceMeters(from: focused, to: usVenue)
+        XCTAssertEqual(focused.latitude, 25.034, accuracy: 0.02)
+        XCTAssertLessThan(distanceToTaipei, 8_000)
+        XCTAssertGreaterThan(distanceToUS, 8_000_000)
+    }
+
+    func testDatelineOppositesDoNotCreateContinentalFit() throws {
+        let west = CLLocationCoordinate2D(latitude: 21.3, longitude: 179.8)
+        let east = CLLocationCoordinate2D(latitude: 21.3, longitude: -179.8)
+        let region = try XCTUnwrap(
+            MapSearchGeography.cameraRegion(for: [west, east], around: nil)
+        )
+        XCTAssertLessThan(region.span.longitudeDelta, 10)
+        XCTAssertEqual(region.center.latitude, 21.3, accuracy: 0.05)
+        XCTAssertGreaterThan(abs(region.center.longitude), 170)
+    }
+
+    func testEmptyOrInvalidCoordinatesPreserveNoRegion() {
+        let empty = MapSearchGeography.cameraRegion(for: [], around: taipei)
+        let invalid = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: .nan, longitude: .infinity)],
+            around: taipei
+        )
+        let placeholder = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: 0, longitude: 0)],
+            around: taipei
+        )
+        let distant = MapSearchGeography.cameraRegion(
+            for: [CLLocationCoordinate2D(latitude: usVenue.latitude, longitude: usVenue.longitude)],
+            around: taipei
+        )
+        XCTAssertNil(empty)
+        XCTAssertNil(invalid)
+        XCTAssertNil(placeholder)
+        XCTAssertNil(distant)
+    }
+
+    func testReliableReviewMapFocusDoesNotSearch() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        let candidate = reviewClue(
+            name: "Known Cafe",
+            address: "Xinyi",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            status: "review"
+        )
+        map.reviewCandidates = [candidate]
+        let focused = map.focusReviewCandidateOnMap(candidate)
+
+        XCTAssertTrue(focused)
+        XCTAssertTrue(search.matchingRequests.isEmpty)
+        XCTAssertEqual(map.selectedReviewCandidate?.id, candidate.id)
+        let focusedRegion = try XCTUnwrap(map.cameraPosition.region)
+        XCTAssertEqual(focusedRegion.center.latitude, taipei.latitude, accuracy: 0.0001)
+        XCTAssertEqual(focusedRegion.center.longitude, taipei.longitude, accuracy: 0.0001)
+    }
+
+    func testSourceOnlyReviewMapFocusDoesNotPinOrSearch() async {
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        let clue = reviewClue(name: "Caption only", address: "", latitude: nil, longitude: nil, status: "source_only")
+        map.reviewCandidates = [clue]
+
+        XCTAssertFalse(map.focusReviewCandidateOnMap(clue))
+        XCTAssertTrue(search.matchingRequests.isEmpty)
+        XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
+    }
+
+    func testExactSearchEmptyRefineThenSaveRetiresClue() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-refine-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(name: "Snapshot Coffee", address: "Taipei", latitude: nil, longitude: nil, status: "pending")
+        map.reviewCandidates = [clue]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: clue)
+
+        let empty = await map.prepareMapCandidatesForDrawerQuery(
+            "Snapshot Coffee Taipei",
+            preservesExactSearchClue: true
+        )
+        XCTAssertEqual(empty.candidates?.isEmpty, true)
+
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "refined",
+                title: "Snapshot Coffee Xinyi",
+                subtitle: "110台灣臺北市信義區",
+                latitude: taipei.latitude,
+                longitude: taipei.longitude,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces(
+            "Snapshot Coffee Xinyi",
+            preservesExactSearchClue: true
+        )
+        let refined = try XCTUnwrap(map.mapCandidates.first)
+        XCTAssertTrue(map.mapCandidate(refined, resolvesReviewCandidateID: clue.id))
+
+        let place = try await map.saveMapCandidateAsPlace(refined)
+        XCTAssertEqual(place.name, "Snapshot Coffee Xinyi")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    func testPlainMapSearchCannotResolveAnExistingReviewClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plain-search-does-not-resolve-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let candidate = SaveMapCandidate(
+            id: "plain-coffee",
+            title: "Plain Coffee",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .cafe
+        )
+        let search = RecordingMapCandidateSearchService(candidates: [candidate])
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(
+            name: "Exact Coffee",
+            address: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            status: "pending"
+        )
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+        map.updateVisibleMapRegion(region(around: taipei))
+
+        await map.searchMapPlaces("coffee")
+        XCTAssertFalse(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+
+        try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    func testUnrelatedLaterSaveDoesNotRetirePriorClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("unrelated-save-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(name: "Keep me", address: "Taipei", latitude: nil, longitude: nil, status: "pending")
+        let linked = SaveMapCandidate(id: "linked", title: "Linked", subtitle: "Taipei", latitude: 25.03, longitude: 121.56, category: .cafe)
+        let later = SaveMapCandidate(id: "later", title: "Later", subtitle: "Taipei", latitude: 25.04, longitude: 121.57, category: .cafe)
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [linked]
+        map.beginExactSearchResolution(for: clue)
+        map.clearMapSearchResults()
+        map.mapCandidates = [later]
+
+        try await map.saveMapCandidateAsPlace(later)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    func testSameDisplayNameDifferentAddressesDoNotMerge() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("name-only-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        map.places = [
+            savedPlace(
+                name: "Snapshot Coffee",
+                address: "台北市大安區",
+                coordinate: CLLocationCoordinate2D(latitude: 25.033, longitude: 121.543)
+            )
+        ]
+        let other = SaveMapCandidate(
+            id: "other-branch",
+            title: "Snapshot Coffee",
+            subtitle: "台北市信義區",
+            latitude: 25.036,
+            longitude: 121.567,
+            category: .cafe
+        )
+        let saved = try await map.saveMapCandidateAsPlace(other)
+        XCTAssertEqual(map.places.count, 2)
+        XCTAssertNotEqual(saved.id, map.places[1].id)
+        XCTAssertEqual(saved.address, "台北市信義區")
+        XCTAssertEqual(map.places[1].address, "台北市大安區")
+    }
+
+    func testPersistFailureKeepsClueAndRetrySucceeds() async throws {
+        let saver = SuspendedMapCandidatePlaceSaver()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retry-save-\(UUID().uuidString).json")
+        let correctionURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retry-save-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: correctionURL)
+        }
+        let map = MapViewModel(
+            mapCandidatePlaceSaver: { place, userID in
+                try await saver.save(place: place, userID: userID)
+            },
+            mapCandidateUserIDProvider: { "retry-save" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: correctionURL),
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(name: "Retry Coffee", address: "Taipei", latitude: nil, longitude: nil, status: "pending")
+        let candidate = SaveMapCandidate(
+            id: "retry-candidate",
+            title: "Retry Coffee Xinyi",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .cafe
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+
+        let failing = Task { @MainActor in
+            try await map.saveMapCandidateAsPlace(candidate)
+        }
+        await saver.waitUntilStarted()
+        saver.fail()
+        do {
+            try await failing.value
+            XCTFail("Remote failure must reach the caller")
+        } catch is SuspendedMapCandidatePlaceSaver.Failure {
+            // expected
+        }
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let retry = Task { @MainActor in
+            try await map.saveMapCandidateAsPlace(candidate)
+        }
+        await saver.waitUntilStarted()
+        saver.succeed()
+        _ = try await retry.value
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    func testStaleSearchDoesNotStealCameraAfterCancel() async {
+        let search = ControlledMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: taipei))
+        let first = Task { await map.searchMapPlaces("old cafe") }
+        await search.waitUntilRequested("old cafe")
+        map.clearMapSearchResults()
+        let cameraAfterCancel = cameraCenter(map)
+        search.complete(
+            query: "old cafe",
+            with: [SaveMapCandidate(id: "stale", title: "Stale", subtitle: "Lagos", latitude: 6.5, longitude: 3.4, category: .cafe)]
+        )
+        await first.value
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+        XCTAssertEqual(cameraCenter(map)?.latitude ?? 0, cameraAfterCancel?.latitude ?? 1, accuracy: 0.0001)
+        XCTAssertEqual(cameraCenter(map)?.longitude ?? 0, cameraAfterCancel?.longitude ?? 1, accuracy: 0.0001)
+    }
+
+    func testReviewHeroAndExactSearchWiringStaySplit() throws {
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
+        XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
+        XCTAssertTrue(drawer.contains("Investigate"))
+        XCTAssertTrue(drawer.contains("onInvestigateMore"))
+        XCTAssertTrue(content.contains("focusReviewCandidateOnMap"))
+        XCTAssertTrue(content.contains("openExactSearchRefine"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
+        XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
+    }
+
+    func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {
+        let traditionalMode = SaveSearchIntentParser().parse("咖啡 臺北")?.locationMode
+        let simplifiedMode = SaveSearchIntentParser().parse("咖啡 台北")?.locationMode
+        let traditionalMatch = SaveSearchTextMatch.matchesSavedPlace("臺北市信義區松壽路11號", query: "台北")
+        let simplifiedMatch = SaveSearchTextMatch.matchesSavedPlace("台北市大安區", query: "臺北")
+        let folded = SaveSearchTextMatch.foldedForTaiwanCityMatch("臺北市")
+        XCTAssertEqual(traditionalMode, .namedArea("Taipei"))
+        XCTAssertEqual(simplifiedMode, .namedArea("Taipei"))
+        XCTAssertTrue(traditionalMatch)
+        XCTAssertTrue(simplifiedMatch)
+        XCTAssertEqual(folded, "台北市")
+        XCTAssertEqual("臺北市信義區", "臺北市信義區")
+    }
+
+    func testSavedPlaceSearchMatchesTaipeiVariants() {
+        let map = MapViewModel(usesRemotePersistence: false)
+        map.places = [
+            savedPlace(name: "信義咖啡", address: "臺北市信義區", coordinate: taipei)
+        ]
+        let matchesSimplifiedQuery = SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "台北")
+        let matchesTraditionalQuery = SaveSearchTextMatch.matchesSavedPlace(map.places[0].address, query: "臺北")
+        XCTAssertTrue(matchesSimplifiedQuery)
+        XCTAssertTrue(matchesTraditionalQuery)
+        XCTAssertEqual(map.places[0].address, "臺北市信義區")
+    }
+
+    private func cameraCenter(_ map: MapViewModel) -> CLLocationCoordinate2D? {
+        map.cameraPosition.region?.center
+    }
+
+    private func region(around center: CLLocationCoordinate2D) -> MKCoordinateRegion {
+        MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
+    }
+
+    private func savedPlace(name: String, address: String, coordinate: CLLocationCoordinate2D) -> Place {
+        Place(
+            id: UUID(),
+            name: name,
+            address: address,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            googlePlaceId: nil,
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = root.appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func reviewClue(
+        name: String,
+        address: String,
+        latitude: Double?,
+        longitude: Double?,
+        status: String
+    ) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: name,
+            address: address,
+            city: "Taipei",
+            latitude: latitude,
+            longitude: longitude,
+            evidence: ["Synthetic public fixture"],
+            confidence: 0.6,
+            missingInfo: latitude == nil ? ["Exact coordinates"] : [],
+            status: status,
+            createdAt: Date()
+        )
     }
 }

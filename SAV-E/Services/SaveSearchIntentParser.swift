@@ -211,6 +211,20 @@ struct SaveSearchIntentLexicon {
     }
 }
 
+/// Matching-only 台/臺 fold. Never rewrite stored or displayed text.
+enum SaveSearchTextMatch {
+    static func foldedForTaiwanCityMatch(_ value: String) -> String {
+        value.replacingOccurrences(of: "臺", with: "台")
+    }
+
+    static func matchesSavedPlace(_ haystack: String, query: String) -> Bool {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return true }
+        return foldedForTaiwanCityMatch(haystack)
+            .localizedStandardContains(foldedForTaiwanCityMatch(needle))
+    }
+}
+
 struct SaveSearchIntentParser {
     func parse(_ rawText: String) -> SaveSearchIntent? {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -299,7 +313,9 @@ struct SaveSearchIntentParser {
     private static func namedArea(in normalized: String) -> String? {
         if normalized.contains(" in la") || normalized.contains(" los angeles") { return "Los Angeles" }
         if normalized.contains(" irvine") { return "Irvine" }
-        if normalized.contains(" taipei") || normalized.contains("台北") { return "Taipei" }
+        if normalized.contains(" taipei") || SaveSearchTextMatch.foldedForTaiwanCityMatch(normalized).contains("台北") {
+            return "Taipei"
+        }
         if normalized.contains(" tokyo") || normalized.contains("東京") { return "Tokyo" }
         return nil
     }

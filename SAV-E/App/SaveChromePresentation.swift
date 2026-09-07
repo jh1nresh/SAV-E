@@ -84,4 +84,10 @@ enum SaveChromeNavigation {
             && (-90...90).contains(coordinate.latitude)
             && (-180...180).contains(coordinate.longitude)
     }
+
+    /// Rejects non-finite, out-of-range, and the 0,0 placeholder. Do not clamp.
+    static func isTrustworthyMapCoordinate(_ coordinate: CLLocationCoordinate2D) -> Bool {
+        isSafeMapCoordinate(coordinate)
+            && !(coordinate.latitude == 0 && coordinate.longitude == 0)
+    }
 }

@@ -309,7 +309,9 @@ struct PendingReviewCandidate: Codable {
 
     var hasReliableCoordinates: Bool {
         guard let latitude, let longitude else { return false }
-        return latitude != 0 || longitude != 0
+        return SaveChromeNavigation.isTrustworthyMapCoordinate(
+            CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        )
     }
 
     var isPlaceBearingSource: Bool {
@@ -432,7 +434,9 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     var hasReliableCoordinates: Bool {
         guard let latitude, let longitude else { return false }
-        return latitude != 0 || longitude != 0
+        return SaveChromeNavigation.isTrustworthyMapCoordinate(
+            CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        )
     }
 
     var hasSavableLocation: Bool {
