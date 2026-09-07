@@ -91,6 +91,17 @@ let proseVenueCases: [ProseVenueRegressionCase] = [
     .init(caption: "Aurora Museum opens in Rio de Janeiro, Brazil.", venues: ["Aurora Museum": "Rio de Janeiro, Brazil"]),
     .init(caption: "Aurora Museum opens in San Juan de la Cruz.", venues: ["Aurora Museum": "San Juan de la Cruz"]),
     .init(caption: "Aurora Museum opens in St. Louis. Cedar Gallery opens in Washington, D.C.", venues: ["Aurora Museum": "St. Louis", "Cedar Gallery": "Washington, D.C."]),
+    .init(caption: "Aurora Museum opens in May in London.", venues: ["Aurora Museum": "London"]),
+    .init(caption: "Aurora Museum opens at Noon in London.", venues: ["Aurora Museum": "London"]),
+    .init(caption: "Aurora Museum opens near Christmas in London.", venues: ["Aurora Museum": "London"]),
+    .init(caption: "Aurora Museum opens at Noon.", venues: [:]),
+    .init(caption: "Aurora Museum opens near Christmas.", venues: [:]),
+    .init(caption: "Aurora Museum opens in May.", venues: [:]),
+    .init(caption: "Aurora Museum opens in Mayfair.", venues: ["Aurora Museum": "Mayfair"]),
+    .init(caption: "St. Louis Museum opens in Missouri.", venues: ["St. Louis Museum": "Missouri"]),
+    .init(caption: "Solomon R. Guggenheim Museum is located in New York.", venues: ["Solomon R. Guggenheim Museum": "New York"]),
+    .init(caption: "J. Paul Getty Museum is located in Los Angeles.", venues: ["J. Paul Getty Museum": "Los Angeles"]),
+    .init(caption: "Welcome. St. Louis Museum opens in Missouri.", venues: ["St. Louis Museum": "Missouri"]),
     .init(caption: "Aurora Museum opens in Rio de", venues: [:]),
     .init(caption: "Aurora Museum opens in Washington, D.Curious", venues: [:]),
     .init(caption: "Aurora Museum opens in St.\nLouis", venues: [:]),
@@ -269,6 +280,21 @@ struct SocialPlaceParserRegressionRunner {
         if !mixedEvidence.placesFound.contains(where: { $0.displayName == "Harbor Square" }) ||
             !mixedEvidence.placesFound.contains(where: { $0.displayName == "Aurora Museum" }) {
             failures.append("Prose location suppression removed a separate earlier venue mention")
+        }
+
+        additionalCaseCount += 1
+        let laterVenue = parser.analyze(evidence: SocialPlaceSourceEvidence(
+            sourceURL: "https://www.instagram.com/p/FixturePost/", resolvedURL: nil,
+            sharedTitle: nil,
+            sharedText: "Aurora Museum opens at Harbor Square, Bristol. Dinner at Sunset Cafe, Boston.",
+            metadataTitle: nil, metadataDescription: nil, ocrLines: []
+        ))
+        let laterNames = Set(laterVenue.placesFound.map(\.displayName))
+        if !laterNames.contains("Aurora Museum") || !laterNames.contains("Sunset Cafe") || laterNames.contains("Harbor Square") {
+            failures.append("Suppressed prose location prevented a later independent venue")
+        }
+        if laterVenue.resolverDecision.allowsDirectSave {
+            failures.append("Mixed prose candidates must remain unconfirmed")
         }
 
         let redirectSources = [

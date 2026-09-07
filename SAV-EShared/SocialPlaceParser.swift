@@ -1530,38 +1530,43 @@ struct SocialPlaceParser {
             locationIntroPattern,
             #"(?i)\b(?:new\s+)?(?:brunch\s+)?(?:spot|place|restaurant|cafe)\s*:\s*([A-Z][A-Za-z0-9 &'._-]{2,60})\s*(?:[-–—|,]|\n|$)"#
         ]
-        return patterns.compactMap { pattern in
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
-                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)),
-                  let nameRange = Range(match.range(at: 1), in: text) else { return nil }
-            let name = String(text[nameRange])
-            let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
-            guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) else { return nil }
-            // A paired HTML element is markup, not a bracketed venue name.
-            let closingTag = #"</\s*"# + NSRegularExpression.escapedPattern(for: name) + #"\s*>"#
-            guard text.range(of: closingTag, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
-            // "Aurora Museum opens at Harbor Square, Boston" names one venue;
-            // the broad "at ..." rule must not promote its area to a second one.
-            if pattern == locationIntroPattern, proseCandidates.contains(where: { candidate in
-                candidate.evidence.contains { atom in
-                    guard atom.role == .venueName, let sentenceRange = text.range(of: atom.line) else { return false }
-                    return NSLocationInRange(match.range.location, NSRange(sentenceRange, in: text))
-                }
-            }) { return nil }
-            let location = firstLocationClue(in: text)
-            let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
-            return draft(
-                name: cleaned,
-                category: category(from: "\(cleaned)\n\(text)"),
-                sourceURL: sourceURL,
-                fullText: text,
-                locationClues: location.map { [$0] } ?? [],
-                atoms: [
-                    SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: cleaned, line: text, confidence: 0.6)
-                ],
-                confidence: location == nil ? 0.52 : 0.64,
-                tier: tier
-            )
+        return patterns.flatMap { pattern -> [SocialPlaceCandidateDraft] in
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
+            let matches = regex.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text))
+            // Suppressing an area paired with a prose venue must not hide a
+            // later independent "at ..." mention in the same caption.
+            let candidates = pattern == locationIntroPattern ? matches : Array(matches.prefix(1))
+            return candidates.compactMap { match in
+                guard let nameRange = Range(match.range(at: 1), in: text) else { return nil }
+                let name = String(text[nameRange])
+                let cleaned = SocialPlaceEvidenceScorer.cleanCandidateName(name)
+                guard SocialPlaceEvidenceScorer.isLikelyCaptionPlaceName(cleaned) else { return nil }
+                // A paired HTML element is markup, not a bracketed venue name.
+                let closingTag = #"</\s*"# + NSRegularExpression.escapedPattern(for: name) + #"\s*>"#
+                guard text.range(of: closingTag, options: [.regularExpression, .caseInsensitive]) == nil else { return nil }
+                // "Aurora Museum opens at Harbor Square, Boston" names one venue;
+                // the broad "at ..." rule must not promote its area to a second one.
+                if pattern == locationIntroPattern, proseCandidates.contains(where: { candidate in
+                    candidate.evidence.contains { atom in
+                        guard atom.role == .venueName, let sentenceRange = text.range(of: atom.line) else { return false }
+                        return NSLocationInRange(match.range.location, NSRange(sentenceRange, in: text))
+                    }
+                }) { return nil }
+                let location = firstLocationClue(in: text)
+                let tier = SocialPlaceEvidenceScorer.tier(hasAddress: location != nil)
+                return draft(
+                    name: cleaned,
+                    category: category(from: "\(cleaned)\n\(text)"),
+                    sourceURL: sourceURL,
+                    fullText: text,
+                    locationClues: location.map { [$0] } ?? [],
+                    atoms: [
+                        SocialEvidenceAtom(source: .captionSentence, role: .venueName, value: cleaned, line: text, confidence: 0.6)
+                    ],
+                    confidence: location == nil ? 0.52 : 0.64,
+                    tier: tier
+                )
+            }
         }
     }
 
@@ -1614,7 +1619,8 @@ struct SocialPlaceParser {
         // keeping the location from that same sentence as an unverified clue.
         // Horizontal separators keep adjacent caption headings out of captures.
         let word = #"[A-Z][A-Za-z0-9'’&-]*"#
-        let name = word + #"(?:\h+(?:of|the|and|for|&|"# + word + #")){0,9}"#
+        let nameWord = #"(?:(?:St|Ste|Mt|Ft|Dr|Mr|Mrs|Ms|[A-Z])\.|"# + word + #")"#
+        let name = nameWord + #"(?:\h+(?:of|the|and|for|&|"# + nameWord + #")){0,9}"#
         let connector = #"(?:de|da|do|dos|das|del|della|di|du|des|la|las|los|le|les|van|von|der|den|of|the|and)"#
         let initialism = #"(?:[A-Z]\.)+[A-Z]\.?"#
         let locationWord = #"(?:(?:St|Ste|Mt|Ft)\.\h+)?(?!(?:St|Ste|Mt|Ft|[A-Z])\.)"# + word
@@ -1623,8 +1629,12 @@ struct SocialPlaceParser {
         let location = locationPart + #"(?:,\h*"# + locationPart + #"){0,2}"#
         // Do not backtrack to a shorter city token or omit its next component.
         let locationEnd = #"(?![A-Za-z0-9'’&-]|\.[A-Za-z]|\h+"# + connector + #"\b|\h+[A-Z]|,\h*[A-Z])(?=[,.!?;\s]|$)"#
+        let temporal = #"(?i:January|February|March|April|May|June|July|August|September|October|November|December|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Noon|Midnight|Christmas|Easter|Summer|Winter|Spring|Autumn|Fall|New\h+Year)\b"#
+        // An opening date is not a city; an adjacent physical-location phrase
+        // may still provide the venue's unverified area clue.
+        let timedOpening = #"(?:(?:in|at|near)\h+"# + temporal + #"\h+)?"#
         // CRLF is one Swift Character: the full evidence range must include both.
-        let pattern = #"(?:^|(?:\r?\n|[.!?\r])\h*|[\"“]\h*)(?:The\h+)?("# + name + #")\h+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\h+(?:in|at|near)\h+("# + location + #")"# + locationEnd
+        let pattern = #"(?:^|(?:\r?\n|[.!?\r])\h*|[\"“]\h*)(?:The\h+)?("# + name + #")\h+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\h+"# + timedOpening + #"(?:in|at|near)\h+("# + location + #")"# + locationEnd
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         return regex.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)).compactMap { match in
             guard let nameRange = Range(match.range(at: 1), in: text),
@@ -1639,6 +1649,7 @@ struct SocialPlaceParser {
                     .trimmingCharacters(in: .whitespaces).count >= 2,
                   SocialPlaceEvidenceScorer.isUsableCandidateName(venue) else { return nil }
             let area = String(text[locationRange])
+            guard area.range(of: "^" + temporal, options: .regularExpression) == nil else { return nil }
             let sentence = String(text[sentenceRange])
             return draft(
                 name: venue,
