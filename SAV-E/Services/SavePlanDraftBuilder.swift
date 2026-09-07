@@ -237,6 +237,12 @@ enum SavePlanDraftBuilder {
             if let city = SaveSearchIntentParser.namedArea(in: " " + SaveSearchIntentParser.normalize(locality)) {
                 labels.insert(city)
             }
+            // A confirmed coordinate-only Map Stamp is still an explicit
+            // planning anchor. Use its name without inventing a city.
+            if labels.isEmpty {
+                let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { labels.insert(name) }
+            }
             for label in labels { counts[label, default: 0] += 1 }
         }
         return counts.keys.sorted { lhs, rhs in

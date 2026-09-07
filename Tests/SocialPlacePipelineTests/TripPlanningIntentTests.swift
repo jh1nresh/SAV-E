@@ -243,6 +243,25 @@ final class SavePlanConversationConditionsTests: XCTestCase {
         XCTAssertFalse(conversation.assignmentInProgress)
     }
 
+    func testCoordinateOnlySavedPlaceCanAnchorANewConversation() throws {
+        let saved = place("Quarter Sheets Pizza Club", address: "")
+        let conversation = SavePlanConversation()
+        conversation.stage(place: saved, addingToTrip: false, language: .english)
+        var conditions = conversation.conditions
+        conditions.receive(conversation.input, areas: SavePlanDraftBuilder.areas(from: [saved]))
+        XCTAssertEqual(conditions.area, saved.name)
+        XCTAssertNil(conditions.days)
+        XCTAssertNil(conditions.pace)
+        conditions.receive("1 day balanced; no time constraints", areas: SavePlanDraftBuilder.areas(from: [saved]))
+        let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(
+            request: SavePlanRequest(area: try XCTUnwrap(conditions.area),
+                days: try XCTUnwrap(conditions.days), pace: try XCTUnwrap(conditions.pace),
+                arrivalMinutes: nil, departureMinutes: nil, language: .english,
+                usesFlightBuffers: false, anchorPlaceID: saved.id), savedPlaces: [saved]))
+        XCTAssertTrue(draft.placeIds.contains(saved.id.uuidString))
+        XCTAssertEqual(draft.itineraryDays.count, 1)
+    }
+
     private func completed() -> SavePlanConversationConditions {
         var conditions = SavePlanConversationConditions()
         conditions.receive("台北3天輕鬆", areas: ["Taipei"])

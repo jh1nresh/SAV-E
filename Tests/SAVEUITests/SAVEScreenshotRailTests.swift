@@ -1983,7 +1983,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let staged = planInput.value as? String ?? ""
         XCTAssertTrue(staged.contains(placeName))
         XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
-        replaceText(in: planInput, with: staged + " 1 day balanced; no time constraints")
+        typeText(" 1 day balanced; no time constraints", into: planInput)
         tapReachable(app.buttons["plan.chat.send"])
         let review = app.buttons["plan.draft.review"]
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
