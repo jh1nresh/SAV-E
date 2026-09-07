@@ -4380,6 +4380,112 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(result.candidates?.map(\.id), [candidate.id])
     }
 
+    func testNamedAreaExactDrawerSearchIgnoresViewportAndFitsDestination() async throws {
+        let query = "coffee in Taipei"
+        XCTAssertNotNil(SaveSearchController().exactMapCandidateQuery(for: query))
+        XCTAssertEqual(SaveSearchIntentParser().parse(query)?.locationMode, .namedArea("Taipei"))
+        let candidate = SaveMapCandidate(id: "named-city", title: "Taipei Coffee", subtitle: "Taipei",
+            latitude: taipei.latitude, longitude: taipei.longitude, category: .cafe)
+        let search = RecordingMapCandidateSearchService(candidates: [candidate])
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        let result = await map.prepareMapCandidatesForDrawerQuery(query)
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertNil(request.near)
+        XCTAssertNil(request.span)
+        XCTAssertEqual(result.candidates?.map(\.id), [candidate.id])
+        XCTAssertEqual(cameraCenter(map)?.latitude ?? 0, taipei.latitude, accuracy: 0.001)
+    }
+
+    func testExactVenueWithoutNamedCityRetainsViewportBias() async throws {
+        let query = "Snapshot Coffee"
+        XCTAssertNotNil(SaveSearchController().exactMapCandidateQuery(for: query))
+        let search = RecordingMapCandidateSearchService()
+        let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        _ = await map.prepareMapCandidatesForDrawerQuery(query)
+
+        let request = try XCTUnwrap(search.matchingRequests.last)
+        XCTAssertEqual(request.near?.latitude ?? 0, osaka.latitude, accuracy: 0.001)
+        XCTAssertNotNil(request.span)
+    }
+
+    func testSearchDoesNotRequestDistanceLocation() async {
+        var requests = 0
+        let map = MapViewModel(mapCandidateDistanceLocationProvider: {
+            requests += 1
+            return nil
+        }, mapCandidateSearchService: RecordingMapCandidateSearchService(), usesRemotePersistence: false)
+        map.updateVisibleMapRegion(region(around: osaka))
+
+        await map.searchMapPlaces("coffee")
+        _ = await map.prepareMapCandidatesForDrawerQuery("coffee in Taipei")
+
+        XCTAssertEqual(requests, 0, "Search must use viewport or known location without prompting")
+    }
+
+    func testDistanceHydrationRequestsLocationWithoutSearchAnchor() async throws {
+        var requests = 0
+        let location = CLLocation(latitude: taipei.latitude, longitude: taipei.longitude)
+        let candidate = SaveMapCandidate(id: "distance", title: "Coffee", subtitle: "Taipei",
+            latitude: 25.034, longitude: 121.5654, category: .cafe)
+        let map = MapViewModel(mapCandidateDistanceLocationProvider: {
+            requests += 1
+            return location
+        }, usesRemotePersistence: false)
+        map.mapCandidates = [candidate]
+        map.selectedMapCandidate = candidate
+
+        await map.hydrateSelectedMapCandidateDistance(candidate)
+        await map.hydrateSelectedMapCandidateDistance(candidate)
+
+        XCTAssertEqual(requests, 1)
+        let distance = try XCTUnwrap(map.selectedMapCandidate?.distanceMeters)
+        XCTAssertGreaterThan(distance, 50)
+        XCTAssertLessThan(distance, 200)
+        XCTAssertEqual(map.mapCandidates.first?.distanceMeters, distance)
+        XCTAssertEqual(map.selectedMapCandidate?.evidence.filter { $0.hasPrefix("Distance:") }.count, 1)
+        XCTAssertNil(map.visibleMapRegion, "Distance hydration must not change the search viewport")
+    }
+
+    func testDistanceHydrationLeavesUnknownDistanceWhenLocationUnavailable() async {
+        let candidate = SaveMapCandidate(id: "denied", title: "Coffee", subtitle: "Taipei",
+            latitude: taipei.latitude, longitude: taipei.longitude, category: .cafe)
+        for location in [nil, CLLocation(latitude: 0, longitude: 0)] as [CLLocation?] {
+            let map = MapViewModel(mapCandidateDistanceLocationProvider: { location }, usesRemotePersistence: false)
+            map.selectedMapCandidate = candidate
+            await map.hydrateSelectedMapCandidateDistance(candidate)
+            XCTAssertNil(map.selectedMapCandidate?.distanceMeters)
+            XCTAssertFalse(map.selectedMapCandidate?.evidence.contains { $0.hasPrefix("Distance:") } ?? true)
+        }
+    }
+
+    func testDelayedDistanceDoesNotHydrateDifferentSelection() async {
+        let first = SaveMapCandidate(id: "first", title: "First", subtitle: "Taipei",
+            latitude: taipei.latitude, longitude: taipei.longitude, category: .cafe)
+        let second = SaveMapCandidate(id: "second", title: "Second", subtitle: "Osaka",
+            latitude: osaka.latitude, longitude: osaka.longitude, category: .cafe)
+        weak var weakMap: MapViewModel?
+        let location = CLLocation(latitude: taipei.latitude, longitude: taipei.longitude)
+        let map = MapViewModel(mapCandidateDistanceLocationProvider: {
+            await Task.yield()
+            weakMap?.selectedMapCandidate = second
+            return location
+        }, usesRemotePersistence: false)
+        weakMap = map
+        map.mapCandidates = [first, second]
+        map.selectedMapCandidate = first
+
+        await map.hydrateSelectedMapCandidateDistance(first)
+
+        XCTAssertEqual(map.selectedMapCandidate?.id, second.id)
+        XCTAssertNil(map.selectedMapCandidate?.distanceMeters)
+        XCTAssertTrue(map.mapCandidates.allSatisfy { $0.distanceMeters == nil })
+    }
+
     func testLocalResultsIgnoreUSOutlierAndInvalidCoordinates() async throws {
         let search = RecordingMapCandidateSearchService()
         search.nextMatchingResults = [
@@ -4443,14 +4549,37 @@ final class MapReviewLocationRepairTests: XCTestCase {
             status: "review"
         )
         map.reviewCandidates = [candidate]
+        XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
         let focused = map.focusReviewCandidateOnMap(candidate)
 
         XCTAssertTrue(focused)
+        XCTAssertEqual(map.reviewCandidatesOnMap.map(\.id), [candidate.id])
+        map.clearSelectedMapObject()
+        XCTAssertEqual(map.reviewCandidatesOnMap.map(\.id), [candidate.id])
+        map.selectReviewCandidate(candidate)
         XCTAssertTrue(search.matchingRequests.isEmpty)
         XCTAssertEqual(map.selectedReviewCandidate?.id, candidate.id)
         let focusedRegion = try XCTUnwrap(map.cameraPosition.region)
         XCTAssertEqual(focusedRegion.center.latitude, taipei.latitude, accuracy: 0.0001)
         XCTAssertEqual(focusedRegion.center.longitude, taipei.longitude, accuracy: 0.0001)
+    }
+
+    func testReviewFocusOnlyExposesOneEligibleCandidateUntilNextSearch() async {
+        let map = MapViewModel(mapCandidateSearchService: RecordingMapCandidateSearchService(), usesRemotePersistence: false)
+        let first = reviewClue(name: "First", address: "Taipei", latitude: taipei.latitude, longitude: taipei.longitude, status: "review")
+        let second = reviewClue(name: "Second", address: "Osaka", latitude: osaka.latitude, longitude: osaka.longitude, status: "review")
+        let source = reviewClue(name: "Source", address: "Taipei", latitude: taipei.latitude, longitude: taipei.longitude, status: "source_only")
+        map.reviewCandidates = [first, second, source]
+        map.selectReviewCandidate(first)
+        XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
+        XCTAssertFalse(map.focusReviewCandidateOnMap(source))
+        XCTAssertTrue(map.focusReviewCandidateOnMap(first))
+        XCTAssertTrue(map.focusReviewCandidateOnMap(second))
+        XCTAssertEqual(map.reviewCandidatesOnMap.map(\.id), [second.id])
+        XCTAssertTrue(map.places.isEmpty)
+        await map.searchMapPlaces("coffee")
+        XCTAssertTrue(map.reviewCandidatesOnMap.isEmpty)
+        XCTAssertEqual(map.reviewCandidates.count, 3)
     }
 
     func testSourceOnlyReviewMapFocusDoesNotPinOrSearch() async {

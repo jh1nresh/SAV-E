@@ -599,6 +599,7 @@ final class MapViewModel: ObservableObject {
     @Published var calculatedRoute: MKPolyline?
     @Published var reviewCandidates: [PlaceReviewCandidate] = []
     @Published var selectedReviewCandidate: PlaceReviewCandidate?
+    @Published private var focusedReviewCandidateID: UUID?
     @Published var mapCandidates: [SaveMapCandidate] = []
     @Published var selectedMapCandidate: SaveMapCandidate?
     @Published var selectedMapFeature: MapFeature?
@@ -642,6 +643,7 @@ final class MapViewModel: ObservableObject {
     private let authService: PrivyAuthService
     private let pendingImportService: PendingPlaceImportService
     private let locationService: LocationService
+    private let mapCandidateDistanceLocationProvider: () async -> CLLocation?
     private let googlePlacesService: GooglePlacesServiceProtocol
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private let saveLocalVaultService: SaveLocalVaultService
@@ -673,6 +675,7 @@ final class MapViewModel: ObservableObject {
         mapCandidateUserIDProvider: (() -> String?)? = nil,
         pendingImportService: PendingPlaceImportService = .shared,
         locationService: LocationService? = nil,
+        mapCandidateDistanceLocationProvider: (() async -> CLLocation?)? = nil,
         googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
@@ -698,7 +701,11 @@ final class MapViewModel: ObservableObject {
         self.relatedPlaceSourcesService = relatedPlaceSourcesService
         self.authService = PrivyAuthService.shared
         self.pendingImportService = pendingImportService
-        self.locationService = locationService ?? .shared
+        let locationService = locationService ?? .shared
+        self.locationService = locationService
+        self.mapCandidateDistanceLocationProvider = mapCandidateDistanceLocationProvider ?? {
+            await locationService.requestCurrentLocation()
+        }
         self.googlePlacesService = googlePlacesService
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
         self.saveLocalVaultService = saveLocalVaultService
@@ -738,8 +745,14 @@ final class MapViewModel: ObservableObject {
     }
 
     var reviewCandidatesOnMap: [PlaceReviewCandidate] {
-        // Review invariant: unresolved candidates never appear as default map pins.
-        []
+        // Only an explicit map-focus action exposes a Review pin. Keep it
+        // available after detail dismissal so the user can reopen the clue.
+        guard let candidate = reviewCandidates.first(where: { $0.id == focusedReviewCandidateID }),
+              candidate.status != "source_only",
+              candidate.hasReliableCoordinates,
+              let coordinate = candidate.coordinate,
+              MapSearchGeography.isTrustworthyCoordinate(coordinate) else { return [] }
+        return [candidate]
     }
 
     var visibleMapCandidates: [SaveMapCandidate] {
@@ -2390,21 +2403,6 @@ final class MapViewModel: ObservableObject {
             mapSearchNeedsLocationHint = false
             return .current([])
         }
-        if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
-            let candidates = await mapCandidateSearchService.searchCandidates(
-                matching: exactQuery,
-                near: genericSearchAnchor()?.center,
-                span: genericSearchAnchor()?.span,
-                excluding: places
-            )
-            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
-            return finishPreparedSearch(
-                candidates,
-                generation: searchGeneration,
-                preservedResolution: preservedResolution,
-                focusingCamera: true
-            )
-        }
 
         let destination = explicitDestinationPolicy(for: query)
         let anchor = genericSearchAnchor()
@@ -2426,6 +2424,22 @@ final class MapViewModel: ObservableObject {
             selectedMapCandidate = nil
             mapSearchNeedsLocationHint = true
             return .current([])
+        }
+
+        if let exactQuery = saveSearchController.exactMapCandidateQuery(for: query) {
+            let candidates = await mapCandidateSearchService.searchCandidates(
+                matching: exactQuery,
+                near: searchCenter,
+                span: searchCenter == nil ? nil : anchor?.span,
+                excluding: places
+            )
+            guard mapCandidateSearchGeneration == searchGeneration else { return .superseded }
+            return finishPreparedSearch(
+                candidates,
+                generation: searchGeneration,
+                preservedResolution: preservedResolution,
+                focusingCamera: true
+            )
         }
 
         if let specialtyQuery = saveSearchController.specialtyMapCandidateQuery(for: query) {
@@ -2511,6 +2525,7 @@ final class MapViewModel: ObservableObject {
         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         guard MapSearchGeography.isTrustworthyCoordinate(coordinate) else { return false }
         selectReviewCandidate(candidate)
+        focusedReviewCandidateID = candidate.id
         let region = MKCoordinateRegion(
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
@@ -2621,10 +2636,6 @@ final class MapViewModel: ObservableObject {
             exactSearchResolution = preservedResolution.attaching(candidateIDs: Set(published.map(\.id)))
         }
         return .current(published)
-    }
-
-    private func currentLocationSearchCenter() async -> CLLocationCoordinate2D? {
-        knownCurrentLocationCoordinate()
     }
 
     /// True exactly once after a save/import focused the map; resets on read.
@@ -2787,6 +2798,7 @@ final class MapViewModel: ObservableObject {
     private func beginMapCandidateSearch() -> UUID {
         let generation = UUID()
         mapCandidateSearchGeneration = generation
+        focusedReviewCandidateID = nil
         return generation
     }
 
@@ -2953,12 +2965,18 @@ final class MapViewModel: ObservableObject {
         )
     }
 
-    private func hydrateSelectedMapCandidateDistance(_ candidate: SaveMapCandidate) async {
-        guard candidate.distanceMeters == nil else { return }
-        guard selectedMapCandidate?.id == candidate.id else { return }
-        guard let center = await currentLocationSearchCenter() else { return }
-
-        var updatedCandidate = selectedMapCandidate ?? candidate
+    func hydrateSelectedMapCandidateDistance(_ candidate: SaveMapCandidate) async {
+        guard candidate.distanceMeters == nil,
+              selectedMapCandidate?.id == candidate.id,
+              selectedMapCandidate?.distanceMeters == nil else { return }
+        guard let location = await mapCandidateDistanceLocationProvider(),
+              !Task.isCancelled,
+              var updatedCandidate = selectedMapCandidate,
+              updatedCandidate.id == candidate.id,
+              updatedCandidate.distanceMeters == nil,
+              MapSearchGeography.isTrustworthyCoordinate(location.coordinate),
+              updatedCandidate.hasTrustworthyCoordinate else { return }
+        let center = location.coordinate
         let coordinate = CLLocationCoordinate2D(latitude: updatedCandidate.latitude, longitude: updatedCandidate.longitude)
         let distance = CLLocation(latitude: center.latitude, longitude: center.longitude)
             .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
