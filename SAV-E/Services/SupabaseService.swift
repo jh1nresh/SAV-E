@@ -108,12 +108,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     private let apiBaseURL: String?
 
-    init() {
-        if let explicit = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) {
-            self.apiBaseURL = explicit
-        } else {
-            self.apiBaseURL = nil
-        }
+    convenience init() {
+        self.init(apiBaseURL: SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]))
+    }
+
+    init(apiBaseURL: String?) {
+        self.apiBaseURL = apiBaseURL
     }
 
     private var isConfigured: Bool {
@@ -211,7 +211,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
-        guard isConfigured else { return }
+        guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody([
             "visibility": visibility.rawValue,
