@@ -4400,7 +4400,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     }
 
     func testExactVenueWithoutNamedCityRetainsViewportBias() async throws {
-        let query = "Snapshot Coffee"
+        let query = "search A Cheng Goose"
         XCTAssertNotNil(SaveSearchController().exactMapCandidateQuery(for: query))
         let search = RecordingMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
