@@ -88,22 +88,10 @@ final class ProfileViewModel: ObservableObject {
 
         guard let savingUserID = authService.currentUserId, !authService.isReviewerDemo else { return false }
         let previousProfile = profile
-        profile.displayName = trimmedName
-        // Device files are not cloud avatar URLs. Keep an existing remote URL if
-        // present, but never send a legacy file:// value back to the backend.
-        if profile.avatarUrl.flatMap(URL.init(string:))?.isFileURL == true {
-            profile.avatarUrl = nil
-        }
         let pendingAvatarData: Data?
-        let avatarUserID: String?
         do {
             pendingAvatarData = try avatarData.map(normalizedAvatarData)
-            avatarUserID = pendingAvatarData == nil ? nil : authService.currentUserId
-            if pendingAvatarData != nil, avatarUserID == nil {
-                throw ProfileImageError.notAuthenticated
-            }
         } catch {
-            profile = previousProfile
             errorMessage = error.localizedDescription
             return false
         }
@@ -111,24 +99,52 @@ final class ProfileViewModel: ObservableObject {
         errorMessage = nil
         defer { isSaving = false }
 
+        // A Passport photo has no cloud representation. Persist it before any
+        // profile API request so an offline name update cannot discard it.
         do {
-            try await supabaseService.updateProfile(profile)
+            if let pendingAvatarData {
+                try avatarStore.save(pendingAvatarData, for: savingUserID)
+            }
             guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
                 resetForCurrentSession()
                 return false
             }
-            if let pendingAvatarData, let avatarUserID {
-                try avatarStore.save(pendingAvatarData, for: avatarUserID)
+            if let pendingAvatarData {
                 localAvatarData = pendingAvatarData
             }
-            await loadProfile()
-            return authService.currentUserId == savingUserID && !authService.isReviewerDemo
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+
+        guard trimmedName != previousProfile.displayName else { return true }
+
+        var updatedProfile = previousProfile
+        updatedProfile.displayName = trimmedName
+        // Device files are not cloud avatar URLs. A name update is the only
+        // remaining reason to write this profile row, so omit the old value.
+        if updatedProfile.avatarUrl.flatMap(URL.init(string:))?.isFileURL == true {
+            updatedProfile.avatarUrl = nil
+        }
+        profile = updatedProfile
+
+        do {
+            try await supabaseService.updateProfile(updatedProfile)
+            guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
+                resetForCurrentSession()
+                return false
+            }
+            return true
         } catch {
             guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
                 resetForCurrentSession()
                 return false
             }
             profile = previousProfile
+            if pendingAvatarData != nil {
+                errorMessage = "Photo saved on this device. Couldn’t update your Passport name: \(error.localizedDescription)"
+                return true
+            }
             errorMessage = error.localizedDescription
             print("Failed to update profile: \(error)")
             return false
@@ -243,12 +259,10 @@ final class ProfileAvatarStore {
 
 private enum ProfileImageError: LocalizedError {
     case invalidImage
-    case notAuthenticated
 
     var errorDescription: String? {
         switch self {
         case .invalidImage: return "Couldn’t use that photo. Choose another image."
-        case .notAuthenticated: return "Sign in before changing your Passport photo."
         }
     }
 }
