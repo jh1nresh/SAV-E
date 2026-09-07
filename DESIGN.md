@@ -64,7 +64,7 @@ review, and friendly system intelligence.
 Rules:
 
 - Use `MemoMascotMark` for brand moments, onboarding, sign-in, empty states, and
-  Passport identity.
+  Passport guidance or brand lockups.
 - Memo should not become a random decoration on every row.
 - Memo copy should be short and useful: "Memo has 3 clues waiting", not mascot jokes.
 
@@ -123,6 +123,9 @@ Rules:
   not count as proof.
 - Do not call it a profile unless referring to the implementation file.
 - Passport should look like a notebook cover plus stamp ledger, not a settings table.
+- Passport identity uses the chosen photo saved for the current account on this
+  device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
+  avatar representation and does not sync between devices.
 
 ### Evidence Receipt
 
@@ -399,7 +402,7 @@ Use for:
 - Sign-in hero.
 - Onboarding.
 - Empty states.
-- Passport hero.
+- Passport guidance or a brand lockup, but not the account-avatar fallback.
 - Small brand lockup in top map navigation.
 
 Do not use for:
@@ -509,7 +512,8 @@ Source: `SAV-E/Views/Profile/ProfileView.swift`.
 
 Required content:
 
-- Memo identity.
+- Passport identity: the current account's device-local chosen photo when
+  available, otherwise `SavvyLogo`.
 - Passport name.
 - Map Stamps count.
 - Visited count; proof verification is a separate future evidence state.
@@ -523,7 +527,7 @@ Required content:
 
 Passport section order on the root tab:
 
-1. Compact identity (Memo + passport name)
+1. Compact identity (account photo or SavvyLogo + passport name)
 2. Compact collection ledger
 3. Your quests (visible live next steps)
 4. Field activity disclosure
