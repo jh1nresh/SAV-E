@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import SAVE
 
@@ -92,4 +93,122 @@ final class ProfileAvatarStoreTests: XCTestCase {
         ))
         XCTAssertNil(store.load(for: "account-b"))
     }
+
+    @MainActor
+    func testPhotoOnlyUpdatePersistsLocallyWithoutCallingProfileAPI() async {
+        var updateCalls = 0
+        let store = ProfileAvatarStore(baseDirectory: directory)
+        let model = makeProfileViewModel(
+            avatarStore: store,
+            updateProfileRemotely: { _ in updateCalls += 1 }
+        )
+        model.profile = profile(named: "Original")
+
+        let saved = await model.updateProfile(displayName: "Original", avatarData: avatarData())
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(updateCalls, 0)
+        XCTAssertNotNil(store.load(for: "account-a"))
+        XCTAssertNotNil(model.localAvatarData)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor
+    func testNameAndPhotoRemoteFailureKeepsPhotoAndRevertsName() async {
+        let store = ProfileAvatarStore(baseDirectory: directory)
+        let model = makeProfileViewModel(
+            avatarStore: store,
+            updateProfileRemotely: { _ in throw ProfileUpdateTestError.offline }
+        )
+        model.profile = profile(named: "Original")
+
+        let saved = await model.updateProfile(displayName: "Changed", avatarData: avatarData())
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.profile.displayName, "Original")
+        XCTAssertNotNil(store.load(for: "account-a"))
+        XCTAssertNotNil(model.localAvatarData)
+        XCTAssertTrue(model.errorMessage?.contains("Photo saved on this device") == true)
+        XCTAssertTrue(model.errorMessage?.contains("Offline") == true)
+    }
+
+    @MainActor
+    func testNameOnlyRemoteFailureReturnsFalseAndRestoresName() async {
+        let model = makeProfileViewModel(
+            avatarStore: ProfileAvatarStore(baseDirectory: directory),
+            updateProfileRemotely: { _ in throw ProfileUpdateTestError.offline }
+        )
+        model.profile = profile(named: "Original")
+
+        let saved = await model.updateProfile(displayName: "Changed", avatarData: nil)
+
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.profile.displayName, "Original")
+        XCTAssertEqual(model.errorMessage, "Offline")
+    }
+
+    @MainActor
+    func testAccountChangeAfterPhotoPersistenceDoesNotPublishOldAccountState() async {
+        var currentUserID = "account-a"
+        let store = ProfileAvatarStore(baseDirectory: directory)
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            avatarStore: store,
+            updateProfileRemotely: { _ in currentUserID = "account-b" },
+            currentUserIDProvider: { currentUserID },
+            reviewerDemoProvider: { false }
+        )
+        model.profile = profile(named: "Original")
+
+        let saved = await model.updateProfile(displayName: "Changed", avatarData: avatarData())
+
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.profile.id, UserProfile.empty.id)
+        XCTAssertNil(model.localAvatarData)
+        XCTAssertNotNil(store.load(for: "account-a"))
+        XCTAssertNil(store.load(for: "account-b"))
+    }
+
+    @MainActor
+    private func makeProfileViewModel(
+        avatarStore: ProfileAvatarStore,
+        updateProfileRemotely: @escaping (UserProfile) async throws -> Void
+    ) -> ProfileViewModel {
+        ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            avatarStore: avatarStore,
+            updateProfileRemotely: updateProfileRemotely,
+            currentUserIDProvider: { "account-a" },
+            reviewerDemoProvider: { false }
+        )
+    }
+
+    private func profile(named displayName: String) -> UserProfile {
+        UserProfile(
+            id: "account-a",
+            displayName: displayName,
+            email: nil,
+            avatarUrl: nil,
+            savedCount: 0,
+            visitedCount: 0,
+            citiesCount: 0,
+            isPremium: false,
+            collections: [],
+            createdAt: Date()
+        )
+    }
+
+    private func avatarData() -> Data {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        return image.jpegData(compressionQuality: 1)!
+    }
+}
+
+private enum ProfileUpdateTestError: LocalizedError {
+    case offline
+
+    var errorDescription: String? { "Offline" }
 }

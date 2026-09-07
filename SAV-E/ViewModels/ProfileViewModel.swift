@@ -15,23 +15,34 @@ final class ProfileViewModel: ObservableObject {
     private let authService: PrivyAuthService
     private let accountDeletionService: AccountDeletionProviding
     private let avatarStore: ProfileAvatarStore
+    private let updateProfileRemotely: (UserProfile) async throws -> Void
+    private let currentUserIDProvider: () -> String?
+    private let reviewerDemoProvider: () -> Bool
     private var loadedUserID: String?
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
         accountDeletionService: AccountDeletionProviding = SupabaseService.shared,
-        avatarStore: ProfileAvatarStore = .shared
+        avatarStore: ProfileAvatarStore = .shared,
+        updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
+        currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
+        reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
     ) {
         self.supabaseService = supabaseService
         self.accountDeletionService = accountDeletionService
         self.avatarStore = avatarStore
+        self.updateProfileRemotely = updateProfileRemotely ?? { profile in
+            try await supabaseService.updateProfile(profile)
+        }
+        self.currentUserIDProvider = currentUserIDProvider
+        self.reviewerDemoProvider = reviewerDemoProvider
         self.authService = PrivyAuthService.shared
     }
 
     var isAuthenticated: Bool { authService.isAuthenticated }
 
     func resetForCurrentSession() {
-        let userID = authService.isReviewerDemo ? nil : authService.currentUserId
+        let userID = reviewerDemoProvider() ? nil : currentUserIDProvider()
         guard loadedUserID != userID || userID == nil else { return }
         loadedUserID = userID
         profile = .empty
@@ -41,11 +52,11 @@ final class ProfileViewModel: ObservableObject {
 
     func loadProfile() async {
         resetForCurrentSession()
-        if authService.isReviewerDemo {
+        if reviewerDemoProvider() {
             errorMessage = nil
             return
         }
-        guard let userId = authService.currentUserId else { return }
+        guard let userId = currentUserIDProvider() else { return }
         localAvatarData = avatarStore.load(for: userId)
         isLoading = true
         errorMessage = nil
@@ -53,7 +64,7 @@ final class ProfileViewModel: ObservableObject {
 
         do {
             if let profile = try await supabaseService.fetchProfile(for: userId) {
-                guard !Task.isCancelled, authService.currentUserId == userId, !authService.isReviewerDemo else { return }
+                guard !Task.isCancelled, currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
                 self.profile = profile
                 if localAvatarData == nil {
                     localAvatarData = try? avatarStore.migrateLegacyAvatarIfNeeded(
@@ -69,7 +80,7 @@ final class ProfileViewModel: ObservableObject {
                 // URLSession cancellation is expected when the view task is torn down.
                 return
             }
-            guard authService.currentUserId == userId, !authService.isReviewerDemo else { return }
+            guard currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
             errorMessage = error.localizedDescription
             print("Failed to load profile: \(error)")
         }
@@ -86,7 +97,7 @@ final class ProfileViewModel: ObservableObject {
             return false
         }
 
-        guard let savingUserID = authService.currentUserId, !authService.isReviewerDemo else { return false }
+        guard let savingUserID = currentUserIDProvider(), !reviewerDemoProvider() else { return false }
         let previousProfile = profile
         let pendingAvatarData: Data?
         do {
@@ -105,7 +116,7 @@ final class ProfileViewModel: ObservableObject {
             if let pendingAvatarData {
                 try avatarStore.save(pendingAvatarData, for: savingUserID)
             }
-            guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
                 resetForCurrentSession()
                 return false
             }
@@ -129,14 +140,14 @@ final class ProfileViewModel: ObservableObject {
         profile = updatedProfile
 
         do {
-            try await supabaseService.updateProfile(updatedProfile)
-            guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
+            try await updateProfileRemotely(updatedProfile)
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
                 resetForCurrentSession()
                 return false
             }
             return true
         } catch {
-            guard authService.currentUserId == savingUserID, !authService.isReviewerDemo else {
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
                 resetForCurrentSession()
                 return false
             }
@@ -157,7 +168,7 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func deleteAccount() async -> Bool {
-        guard !authService.isReviewerDemo, let deletingUserID = authService.currentUserId else { return false }
+        guard !reviewerDemoProvider(), let deletingUserID = currentUserIDProvider() else { return false }
         isDeletingAccount = true
         errorMessage = nil
         defer { isDeletingAccount = false }
@@ -165,7 +176,7 @@ final class ProfileViewModel: ObservableObject {
         do {
             try await accountDeletionService.deleteAccount()
             try? avatarStore.remove(for: deletingUserID)
-            guard authService.currentUserId == deletingUserID, !authService.isReviewerDemo else { return true }
+            guard currentUserIDProvider() == deletingUserID, !reviewerDemoProvider() else { return true }
             try? SaveLocalVaultService.shared.deleteAllRecords()
             try? KeychainAccountReferenceStore.shared.clear()
             await authService.signOut()
