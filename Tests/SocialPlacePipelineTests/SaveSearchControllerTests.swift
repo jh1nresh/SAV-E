@@ -4153,17 +4153,20 @@ private struct StubAIDrawerLocationProvider: AIDrawerLocationProviding {
     }
 }
 
-private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol {
+private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol, @unchecked Sendable {
     struct MatchingRequest {
         let query: String
         let coordinate: CLLocationCoordinate2D?
+        let near: CLLocationCoordinate2D?
+        let span: MKCoordinateSpan?
     }
 
-    private let candidates: [SaveMapCandidate]
+    private let lock = NSLock()
     private(set) var matchingRequests: [MatchingRequest] = []
+    var nextMatchingResults: [SaveMapCandidate]
 
-    init(candidates: [SaveMapCandidate]) {
-        self.candidates = candidates
+    init(candidates: [SaveMapCandidate] = []) {
+        nextMatchingResults = candidates
     }
 
     func searchCandidates(
@@ -4181,8 +4184,13 @@ private final class RecordingMapCandidateSearchService: MapCandidateSearchServic
         span: MKCoordinateSpan?,
         excluding savedPlaces: [Place]
     ) async -> [SaveMapCandidate] {
-        matchingRequests.append(MatchingRequest(query: query, coordinate: coordinate))
-        return candidates
+        lock.lock()
+        matchingRequests.append(
+            MatchingRequest(query: query, coordinate: coordinate, near: coordinate, span: span)
+        )
+        let results = nextMatchingResults
+        lock.unlock()
+        return results
     }
 }
 
@@ -4429,12 +4437,9 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(focused)
         XCTAssertTrue(search.matchingRequests.isEmpty)
         XCTAssertEqual(map.selectedReviewCandidate?.id, candidate.id)
-        if case .region(let region) = map.cameraPosition {
-            XCTAssertEqual(region.center.latitude, taipei.latitude, accuracy: 0.0001)
-            XCTAssertEqual(region.center.longitude, taipei.longitude, accuracy: 0.0001)
-        } else {
-            XCTFail("Camera should focus the known candidate")
-        }
+        let focusedRegion = try XCTUnwrap(map.cameraPosition.region)
+        XCTAssertEqual(focusedRegion.center.latitude, taipei.latitude, accuracy: 0.0001)
+        XCTAssertEqual(focusedRegion.center.longitude, taipei.longitude, accuracy: 0.0001)
     }
 
     @MainActor
@@ -4714,39 +4719,5 @@ final class MapReviewLocationRepairTests: XCTestCase {
             status: status,
             createdAt: Date()
         )
-    }
-}
-
-private final class RecordingMapCandidateSearchService: MapCandidateSearchServiceProtocol, @unchecked Sendable {
-    struct MatchingRequest {
-        let query: String
-        let near: CLLocationCoordinate2D?
-        let span: MKCoordinateSpan?
-    }
-
-    private let lock = NSLock()
-    private(set) var matchingRequests: [MatchingRequest] = []
-    var nextMatchingResults: [SaveMapCandidate] = []
-
-    func searchCandidates(
-        near coordinate: CLLocationCoordinate2D,
-        span: MKCoordinateSpan,
-        excluding savedPlaces: [Place],
-        categories: Set<PlaceCategory>
-    ) async -> [SaveMapCandidate] {
-        []
-    }
-
-    func searchCandidates(
-        matching query: String,
-        near coordinate: CLLocationCoordinate2D?,
-        span: MKCoordinateSpan?,
-        excluding savedPlaces: [Place]
-    ) async -> [SaveMapCandidate] {
-        lock.lock()
-        matchingRequests.append(MatchingRequest(query: query, near: coordinate, span: span))
-        let results = nextMatchingResults
-        lock.unlock()
-        return results
     }
 }
