@@ -1612,10 +1612,11 @@ struct SocialPlaceParser {
         // A category mention or a person's name is insufficient. Require a
         // capitalized venue name and an explicit physical-location predicate,
         // keeping the location from that same sentence as an unverified clue.
+        // Horizontal separators keep adjacent caption headings out of captures.
         let word = #"[A-Z][A-Za-z0-9'’&-]*"#
-        let name = word + #"(?:\s+(?:of|the|and|for|&|"# + word + #")){0,9}"#
-        let location = word + #"(?:\s+"# + word + #"){0,5}(?:,\s*"# + word + #"(?:\s+"# + word + #"){0,4}){0,2}"#
-        let pattern = #"(?:^|[.!?\n]\s*|[\"“]\s*)(?:The\s+)?("# + name + #")\s+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\s+(?:in|at|near)\s+("# + location + #")(?=[,.!?;\s]|$)"#
+        let name = word + #"(?:\h+(?:of|the|and|for|&|"# + word + #")){0,9}"#
+        let location = word + #"(?:\h+"# + word + #"){0,5}(?:,\h*"# + word + #"(?:\h+"# + word + #"){0,4}){0,2}"#
+        let pattern = #"(?:^|[.!?\n]\h*|[\"“]\h*)(?:The\h+)?("# + name + #")\h+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\h+(?:in|at|near)\h+("# + location + #")(?=[,.!?;\s]|$)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         return regex.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)).compactMap { match in
             guard let nameRange = Range(match.range(at: 1), in: text),
@@ -1623,7 +1624,7 @@ struct SocialPlaceParser {
                   let sentenceRange = Range(match.range, in: text) else { return nil }
             let venue = String(text[nameRange])
             let categoryPattern = #"\b(?:Museum|Gallery|Park|Garden|Gardens|Theatre|Theater|Aquarium|Zoo|Library|Observatory|Restaurant|Cafe|Café|Hotel|Resort)\b"#
-            let venueEnding = categoryPattern + #"(?:\s+(?:of|for)\s+"# + name + #")?$"#
+            let venueEnding = categoryPattern + #"(?:\h+(?:of|for)\h+"# + name + #")?$"#
             guard venue.range(of: venueEnding, options: .regularExpression) != nil,
                   venue.range(of: #"^(?:This|That|Our|Your|My|A|An)\b"#, options: .regularExpression) == nil,
                   venue.replacingOccurrences(of: categoryPattern, with: "", options: .regularExpression)
