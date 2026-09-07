@@ -8,7 +8,7 @@ Scaffold a complete iOS app project for "SAV-E" — an AI-powered place discover
 > **This is the original scaffold brief, not a map of the repo as it stands.**
 > The tree below is what was asked for at the start; the shipped structure has
 > since diverged (some listed views were never built, others were added). For
-> the current layout read `README.md` and the directory itself.
+> the current layout read [the repository README](../../README.md) and the directory itself.
 
 ```
 SAV-E/
