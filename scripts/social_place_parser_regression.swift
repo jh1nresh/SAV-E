@@ -82,6 +82,18 @@ let proseVenueCases: [ProseVenueRegressionCase] = [
     .init(caption: "Aurora Museum opens in London\nNorthbank Gallery sits near Bristol", venues: ["Aurora Museum": "London", "Northbank Gallery": "Bristol"]),
     .init(caption: "Aurora Museum\topens\tin\tLondon", venues: ["Aurora Museum": "London"]),
     .init(caption: "Aurora Museum opens\nin London", venues: [:]),
+    .init(caption: "Aurora Museum opens in Rio de Janeiro.", venues: ["Aurora Museum": "Rio de Janeiro"]),
+    .init(caption: "Aurora Museum opens in St. Louis.", venues: ["Aurora Museum": "St. Louis"]),
+    .init(caption: "Aurora Museum opens in Washington, D.C.", venues: ["Aurora Museum": "Washington, D.C."]),
+    .init(caption: "Coming Soon\rAurora Museum opens in London\rTickets Available Soon", venues: ["Aurora Museum": "London"]),
+    .init(caption: "Coming Soon\r\n\r\nAurora Museum opens in St. Louis.\r\nTickets Available Soon", venues: ["Aurora Museum": "St. Louis"]),
+    .init(caption: "Aurora Museum opens in Washington,D.C.\nTickets Available Soon", venues: ["Aurora Museum": "Washington,D.C."]),
+    .init(caption: "Aurora Museum opens in Rio de Janeiro, Brazil.", venues: ["Aurora Museum": "Rio de Janeiro, Brazil"]),
+    .init(caption: "Aurora Museum opens in San Juan de la Cruz.", venues: ["Aurora Museum": "San Juan de la Cruz"]),
+    .init(caption: "Aurora Museum opens in St. Louis. Cedar Gallery opens in Washington, D.C.", venues: ["Aurora Museum": "St. Louis", "Cedar Gallery": "Washington, D.C."]),
+    .init(caption: "Aurora Museum opens in Rio de", venues: [:]),
+    .init(caption: "Aurora Museum opens in Washington, D.Curious", venues: [:]),
+    .init(caption: "Aurora Museum opens in St.\nLouis", venues: [:]),
     .init(caption: "", venues: [:]),
     .init(caption: "George Lucas and Frida Kahlo inspired my art today in Los Angeles.", venues: [:]),
     .init(caption: "George Lucas is about to open a museum in Los Angeles.", venues: [:]),
@@ -227,6 +239,12 @@ struct SocialPlaceParserRegressionRunner {
                         failures.append("Named prose venue must remain eligible for corroboration")
                     }
                     for candidate in analysis.placesFound {
+                        if testCase.caption.contains("\r\n" + candidate.displayName),
+                           candidate.evidence.contains(where: {
+                               $0.source == .captionSentence && $0.role == .venueName && $0.line.hasPrefix("\n")
+                           }) {
+                            failures.append("Prose evidence starts halfway through a CRLF character")
+                        }
                         if !candidate.evidence.contains(where: { $0.role == .sourceAccount && $0.value == source }) {
                             failures.append("Prose candidate lost original source")
                         }

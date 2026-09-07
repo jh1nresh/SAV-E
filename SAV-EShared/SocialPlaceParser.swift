@@ -1615,8 +1615,16 @@ struct SocialPlaceParser {
         // Horizontal separators keep adjacent caption headings out of captures.
         let word = #"[A-Z][A-Za-z0-9'’&-]*"#
         let name = word + #"(?:\h+(?:of|the|and|for|&|"# + word + #")){0,9}"#
-        let location = word + #"(?:\h+"# + word + #"){0,5}(?:,\h*"# + word + #"(?:\h+"# + word + #"){0,4}){0,2}"#
-        let pattern = #"(?:^|[.!?\n]\h*|[\"“]\h*)(?:The\h+)?("# + name + #")\h+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\h+(?:in|at|near)\h+("# + location + #")(?=[,.!?;\s]|$)"#
+        let connector = #"(?:de|da|do|dos|das|del|della|di|du|des|la|las|los|le|les|van|von|der|den|of|the|and)"#
+        let initialism = #"(?:[A-Z]\.)+[A-Z]\.?"#
+        let locationWord = #"(?:(?:St|Ste|Mt|Ft)\.\h+)?(?!(?:St|Ste|Mt|Ft|[A-Z])\.)"# + word
+        let locationPart = #"(?:"# + initialism + #"|"# + locationWord
+            + #"(?:\h+(?:"# + connector + #"\h+)*"# + locationWord + #"){0,5})"#
+        let location = locationPart + #"(?:,\h*"# + locationPart + #"){0,2}"#
+        // Do not backtrack to a shorter city token or omit its next component.
+        let locationEnd = #"(?![A-Za-z0-9'’&-]|\.[A-Za-z]|\h+"# + connector + #"\b|\h+[A-Z]|,\h*[A-Z])(?=[,.!?;\s]|$)"#
+        // CRLF is one Swift Character: the full evidence range must include both.
+        let pattern = #"(?:^|(?:\r?\n|[.!?\r])\h*|[\"“]\h*)(?:The\h+)?("# + name + #")\h+(?:opens?|reopens?|is located|is situated|sits|stands|can be found)\h+(?:in|at|near)\h+("# + location + #")"# + locationEnd
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         return regex.matches(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)).compactMap { match in
             guard let nameRange = Range(match.range(at: 1), in: text),
