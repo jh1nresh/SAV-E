@@ -49,6 +49,115 @@ final class TripPlanningIntentValidatorTests: XCTestCase {
 
 @MainActor
 final class SavePlanConversationConditionsTests: XCTestCase {
+    func testLosAngelesAliasesResolveOnlyEquivalentSavedCities() {
+        for label in ["Los Angeles", "洛杉磯", "洛杉矶", "LA"] {
+            for query in ["規劃 LA", "洛杉磯", "LA", "plan a trip to LA", "LA 3 days", "規劃 LA 3 天行程", "LA 3 days relaxed",
+                          "LA.", "LA!", "LA trip", "LA。", "LA，輕鬆", "LA relaxed", "LA3天", "LA two days", "LA a day", "LA day trip",
+                          "幫我規劃 LA 兩天行程", "请帮我规划 LA 2天", "請幫我規劃 LA 行程", "plan LA", "please plan LA", "help me plan LA"] {
+                var conditions = SavePlanConversationConditions()
+                conditions.receive(query, areas: [label, "Taipei"])
+                XCTAssertEqual(conditions.area, label, query)
+            }
+        }
+        for query in ["La Jolla", "La-Jolla", "La.Jolla", "La Jolla trip", "Kuala Lumpur", "Dallas", "不要 LA"] {
+            var conditions = SavePlanConversationConditions()
+            conditions.receive(query, areas: ["Los Angeles"])
+            XCTAssertNil(conditions.area, query)
+        }
+        XCTAssertFalse(SavePlanConversationConditions.areaAliases("Los Angeles").contains("la"))
+    }
+
+    func testEquivalentLosAngelesCitySuffixesDoNotRequireClarification() {
+        let labels = ["Los Angeles", "洛杉磯市", "洛杉矶市"]
+        for query in labels + ["規劃 LA"] {
+            var conditions = SavePlanConversationConditions()
+            conditions.receive(query, areas: labels)
+            XCTAssertEqual(conditions.area, "Los Angeles", query)
+            XCTAssertTrue(conditions.clarification(language: .english)?.contains("days") == true)
+        }
+    }
+
+    func testRejectedLosAngelesShorthandCannotReturnOnLaterCondition() {
+        for rejection in ["不要 LA", "不去LA", "not LA", "不要 LA。", "not LA, please", "not LA!", "不要 LA trip", "LA 3 days, not LA"] {
+            var conditions = SavePlanConversationConditions()
+            conditions.receive("Los Angeles 3 days relaxed; no time constraints", areas: ["Los Angeles"])
+            conditions.receive(rejection, areas: ["Los Angeles"])
+            XCTAssertNil(conditions.area, rejection)
+            XCTAssertEqual(conditions.days, 3)
+            conditions.receive("packed", areas: ["Los Angeles"])
+            XCTAssertNil(conditions.request(language: .english), rejection)
+        }
+        var conditions = SavePlanConversationConditions()
+        conditions.receive("Los Angeles 3 days relaxed; no time constraints", areas: ["Los Angeles"])
+        conditions.receive("not La Jolla", areas: ["Los Angeles"])
+        XCTAssertEqual(conditions.area, "Los Angeles")
+        XCTAssertTrue(conditions.needsFollowUpClarification)
+    }
+
+    func testRejectingUnselectedLosAngelesKeepsConfirmedCityAndConditions() {
+        let areas = ["Taipei", "Los Angeles"]
+        for rejection in ["not LA", "不要 LA。", "not Los Angeles", "不要洛杉磯"] {
+            var conditions = SavePlanConversationConditions()
+            conditions.receive("Taipei 3 days relaxed; no time constraints", areas: areas)
+            conditions.receive(rejection, areas: areas)
+            XCTAssertEqual(conditions.area, "Taipei", rejection)
+            XCTAssertEqual(conditions.days, 3)
+            XCTAssertEqual(conditions.pace, .relaxed)
+            conditions.receive("packed", areas: areas)
+            XCTAssertEqual(conditions.request(language: .english)?.area, "Taipei", rejection)
+        }
+    }
+
+    func testScreenshotConversationExplainsDurationAndRecoversAfterCorrection() throws {
+        var conditions = SavePlanConversationConditions()
+        for answer in ["規劃 LA", "10 天行程", "洛杉磯"] {
+            conditions.receive(answer, areas: ["Los Angeles", "Taipei"])
+        }
+        XCTAssertEqual(conditions.area, "Los Angeles")
+        XCTAssertEqual(conditions.unsupportedDays, 10)
+        XCTAssertNil(conditions.days)
+        XCTAssertTrue(conditions.clarification(language: .traditionalChinese)?.contains("10 天") == true)
+        XCTAssertNil(conditions.request(language: .english))
+        for answer in ["3 天", "輕鬆", "不用"] {
+            conditions.receive(answer, areas: ["Los Angeles", "Taipei"])
+        }
+        let request = try XCTUnwrap(conditions.request(language: .english))
+        XCTAssertEqual(request.area, "Los Angeles")
+        XCTAssertEqual(request.days, 3)
+        XCTAssertEqual(request.pace, .relaxed)
+    }
+
+    func testUnsupportedDurationIsNotHiddenByMissingSavedCity() {
+        var conditions = SavePlanConversationConditions()
+        conditions.receive("規劃 LA", areas: ["Taipei"])
+        XCTAssertEqual(conditions.unmatchedDestination, "la")
+        conditions.receive("10 天行程", areas: ["Taipei"])
+        XCTAssertTrue(conditions.clarification(language: .traditionalChinese)?.contains("10 天") == true)
+        XCTAssertNil(conditions.area)
+        XCTAssertNil(conditions.request(language: .english))
+        conditions.receive("3", areas: ["Taipei"])
+        XCTAssertEqual(conditions.days, 3)
+        XCTAssertEqual(conditions.unmatchedDestination, "la")
+        XCTAssertTrue(conditions.clarification(language: .english)?.contains("saved places") == true)
+    }
+
+    func testLosAngelesConversationDraftUsesOnlyMatchingSavedPlaces() throws {
+        let museum = place("Anchor Museum", address: "123 Main St, Los Angeles, CA, USA")
+        let unrelated = place("La Jolla Museum", address: "La Jolla")
+        let places = [museum, unrelated]
+        var conditions = SavePlanConversationConditions()
+        for answer in ["規劃 LA", "洛杉磯", "3 天", "輕鬆", "不用"] {
+            conditions.receive(answer, areas: SavePlanDraftBuilder.areas(from: places))
+        }
+        let request = try XCTUnwrap(conditions.request(language: .traditionalChinese))
+        let draft = try XCTUnwrap(SavePlanDraftBuilder.draft(request: request, savedPlaces: places))
+        XCTAssertEqual(draft.itineraryDays.count, 3)
+        XCTAssertTrue(draft.placeIds.contains(museum.id.uuidString))
+        XCTAssertFalse(draft.placeIds.contains(unrelated.id.uuidString))
+        XCTAssertTrue(SavePlanDraftBuilder.matches(area: "洛杉磯", place: museum))
+        XCTAssertFalse(SavePlanDraftBuilder.matches(area: "LA", place: unrelated))
+    }
+
     func testSixDayConversationUsesCityFromRealSavedAddressSuffix() throws {
         let places = ReviewDemoSeed.places()
         let areas = SavePlanDraftBuilder.areas(from: places)
@@ -292,6 +401,7 @@ final class SavePlanConversationConditionsTests: XCTestCase {
             XCTAssertTrue(draft.placeIds.contains(saved.id.uuidString))
         }
         var conditions = completed()
+        conditions.receive("東京", areas: ["Tokyo"])
         conditions.receive("不要東京", areas: ["Tokyo"])
         XCTAssertNil(conditions.area)
         let candidate = SaveMapCandidate(id: "tokyo-fill", title: "喫茶店", subtitle: "東京都台東區",
