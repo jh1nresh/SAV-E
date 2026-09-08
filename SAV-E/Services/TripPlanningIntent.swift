@@ -103,6 +103,9 @@ struct TripIntentJSONValidator {
 /// Conversation answers are explicit slots. Unrecognized destination changes
 /// clear the selected area; missing/invalid answers never acquire defaults.
 struct SavePlanConversationConditions {
+    // Sentence endings and known trip conditions can follow LA; another place
+    // word (La Jolla), hyphen, or an internal period (La.Jolla) cannot.
+    private static let losAngelesShorthand = #"la(?=$|[。！？；，：]|[.!?,;:](?=\s|$)|\s+(?:trip|travel|for|relaxed|easy|slow|balanced|packed|busy|start|end|arrival|departure)\b|\s*[0-9一二兩两三四五六七八九十]+\s*(?:天|日|days?\b)|\s+(?:(?:a|one|two|three|four|five|six|seven|eight|nine|ten)\s+days?|day\s+trip)\b|\s*(?:行程|旅行|旅遊|輕鬆|適中|緊湊))"#
     private(set) var area: String?
     private(set) var days: Int?
     private(set) var pace: ItineraryPace?
@@ -119,7 +122,7 @@ struct SavePlanConversationConditions {
     mutating func receive(_ message: String, areas: [String]) {
         let hadArea = area != nil
         needsFollowUpClarification = false
-        let wasAskingDays = area != nil && days == nil
+        let wasAskingDays = unsupportedDays != nil || (area != nil && days == nil)
         requests.append(message)
         if requests.count > 12 { requests.removeFirst() }
         let text = Self.normalized(message)
@@ -135,12 +138,21 @@ struct SavePlanConversationConditions {
             $0.range(of: conditionPrefix, options: .regularExpression) == nil && !["a", "an", "the"].contains($0) ? $0 : nil
         }
         let retainedDestination = Self.capture(text, pattern: #"^(?:keep\s+|保留\s*|保持\s*)(.+)$"#)
-        let destinationText = destinationChange ?? retainedDestination ?? text
+        let planningDestination = Self.capture(text, pattern: #"^(?:(?:請|请|幫我|帮我|please\b|help me\b)\s*)*(?:規劃|规划|plan\b)\s*(.+)$"#)
+        let destinationText = destinationChange ?? retainedDestination ?? planningDestination ?? text
         // A trip descriptor alone does not identify a destination. Require the
         // duration boundary, including "Kyoto for 2 days" and "京都旅行6天".
         let destinationWithDuration = Self.capture(text, pattern: #"^([\p{L} .'-]{1,40}?)(?:(?:旅行|旅遊|行程|\btrip\b|\btravel\b)\s*)?(?:\bfor\s+)?[0-9一二兩两三四五六七八九十]{1,3}\s*(?:天|日|days?\b)"#)
         let matchingAreas = areas.filter { area in
-            Self.areaAliases(area).contains { alias in
+            let aliases = Self.areaAliases(area)
+            let conversationAliases = aliases.contains("los angeles") ? aliases + ["la"] : aliases
+            return conversationAliases.contains { alias in
+                // LA is a destination shorthand, not the first word of La Jolla.
+                if alias == "la" {
+                    let negated = #"(?:不要|不去|不是|\bnot)\s*"# + Self.losAngelesShorthand
+                    guard destinationText.range(of: negated, options: .regularExpression) == nil else { return false }
+                    return destinationText.range(of: "^" + Self.losAngelesShorthand, options: .regularExpression) != nil
+                }
                 let negated = #"(?:不要|不去|不是|not)\s*"# + NSRegularExpression.escapedPattern(for: alias)
                 guard destinationText.range(of: negated, options: .regularExpression) == nil else { return false }
                 if alias.range(of: #"^[a-z ]+$"#, options: .regularExpression) != nil {
@@ -157,11 +169,24 @@ struct SavePlanConversationConditions {
         } else if distinct.count > 1 || destinationChange != nil {
             area = nil
             unmatchedDestination = distinct.isEmpty ? destinationText : nil
-        } else if area == nil && Self.isBareDestination(text) && !Self.paceAnswer(text).mentioned && !noWindow {
+        } else if area == nil && Self.isBareDestination(destinationText) && !Self.paceAnswer(text).mentioned && !noWindow {
             area = nil
-            unmatchedDestination = text
+            unmatchedDestination = destinationText
         } else if text.range(of: #"(?:不要|不去|不是|not)"#, options: .regularExpression) != nil,
-                  areas.contains(where: { label in Self.areaAliases(label).contains(where: text.contains) }) {
+                  areas.contains(where: { label in
+                      let aliases = Self.areaAliases(label)
+                      let rejected = aliases.contains(where: text.contains)
+                          || (aliases.contains("los angeles") && text.range(
+                              of: #"(?:不要|不去|不是|\bnot)\s*"# + Self.losAngelesShorthand,
+                              options: .regularExpression) != nil)
+                      guard rejected else { return false }
+                      // Keep Taipei when the user rejects still-offered LA.
+                      // A leftover Taipei must not survive 不要東京 when Tokyo
+                      // is the only saved area this turn.
+                      guard let area else { return true }
+                      let currentStillOffered = areas.contains { Self.areaKey($0) == Self.areaKey(area) }
+                      return !currentStillOffered || Self.areaKey(label) == Self.areaKey(area)
+                  }) {
             area = nil
             unmatchedDestination = nil
         }
@@ -216,6 +241,9 @@ struct SavePlanConversationConditions {
     }
 
     func clarification(language: AppLanguage) -> String? {
+        if let unsupportedDays {
+            return language.localized(english: "You asked for \(unsupportedDays) days. This draft supports 1–7 days. How many days should this draft cover?", traditionalChinese: "你說的是 \(unsupportedDays) 天；目前一份草稿支援 1–7 天。這份草稿想先安排幾天？")
+        }
         if let prefix = ambiguousDestinationPrefix {
             return language.localized(
                 english: "Does ‘\(prefix)’ name a different destination or describe a trip preference? I’ve kept your city and draft. Say ‘switch to …’ or ‘keep \(area ?? "this city")’. Other preferences are not applied automatically yet.",
@@ -241,9 +269,6 @@ struct SavePlanConversationConditions {
                 traditionalChinese: days.map { "記下 \($0) 天了。這次想安排哪個城市或區域？我會使用你在那裡已存的地點。" }
                     ?? "這次想安排哪個城市或區域？我會使用你在那裡已存的地點。"
             )
-        }
-        if let unsupportedDays {
-            return language.localized(english: "You asked for \(unsupportedDays) days. This draft supports 1–7 days. How many days should this draft cover?", traditionalChinese: "你說的是 \(unsupportedDays) 天；目前一份草稿支援 1–7 天。這份草稿想先安排幾天？")
         }
         if days == nil {
             return language.localized(english: "How many days do you have?", traditionalChinese: "這次有幾天可以玩？")
@@ -283,6 +308,8 @@ struct SavePlanConversationConditions {
         let short = label.hasSuffix("市") ? String(label.dropLast()) : label
         if ["taipei", "taipei city", "台北", "台北市"].contains(label) { return ["taipei", "台北"] }
         if ["tokyo", "tokyo city", "東京", "東京都"].contains(label) { return ["tokyo", "東京"] }
+        // Keep the short LA token out of free-text candidate/address matching.
+        if ["los angeles", "la", "洛杉磯", "洛杉矶"].contains(short) { return ["los angeles", "洛杉磯", "洛杉矶"] }
         return (label == short ? [label] : [label, short]).filter { !$0.isEmpty }
     }
 
