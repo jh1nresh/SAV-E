@@ -175,11 +175,17 @@ struct SavePlanConversationConditions {
         } else if text.range(of: #"(?:不要|不去|不是|not)"#, options: .regularExpression) != nil,
                   areas.contains(where: { label in
                       let aliases = Self.areaAliases(label)
-                      guard let area, !Set(aliases).isDisjoint(with: Self.areaAliases(area)) else { return false }
-                      return aliases.contains(where: text.contains)
+                      let rejected = aliases.contains(where: text.contains)
                           || (aliases.contains("los angeles") && text.range(
                               of: #"(?:不要|不去|不是|\bnot)\s*"# + Self.losAngelesShorthand,
                               options: .regularExpression) != nil)
+                      guard rejected else { return false }
+                      // Keep Taipei when the user rejects still-offered LA.
+                      // A leftover Taipei must not survive 不要東京 when Tokyo
+                      // is the only saved area this turn.
+                      guard let area else { return true }
+                      let currentStillOffered = areas.contains { Self.areaKey($0) == Self.areaKey(area) }
+                      return !currentStillOffered || Self.areaKey(label) == Self.areaKey(area)
                   }) {
             area = nil
             unmatchedDestination = nil

@@ -401,7 +401,6 @@ final class SavePlanConversationConditionsTests: XCTestCase {
             XCTAssertTrue(draft.placeIds.contains(saved.id.uuidString))
         }
         var conditions = completed()
-        conditions.receive("東京", areas: ["Tokyo"])
         conditions.receive("不要東京", areas: ["Tokyo"])
         XCTAssertNil(conditions.area)
         let candidate = SaveMapCandidate(id: "tokyo-fill", title: "喫茶店", subtitle: "東京都台東區",
