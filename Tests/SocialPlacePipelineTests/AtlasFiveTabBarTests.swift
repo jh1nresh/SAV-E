@@ -215,7 +215,9 @@ final class AtlasFiveTabBarTests: XCTestCase {
         let content = try contentViewSource()
 
         XCTAssertTrue(plan.contains("plan.root"))
-        XCTAssertTrue(plan.contains("Plan from Map Stamps"))
+        XCTAssertTrue(plan.contains("plan.chat.input"))
+        XCTAssertTrue(plan.contains("conditions.clarification"))
+        XCTAssertFalse(plan.contains("plan.options"))
         XCTAssertTrue(plan.contains("SavePlanDraftBuilder.draft"))
         XCTAssertTrue(plan.contains("SaveAtlasType"))
         XCTAssertFalse(plan.contains("font(AtlasType."))

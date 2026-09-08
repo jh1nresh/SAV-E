@@ -23,7 +23,7 @@ struct RelatedPlaceSourceRequestIdentity: Equatable {
     var isConfirmed: Bool { !googlePlaceID.isEmpty }
 
     func matches(_ receipt: RelatedSourcePlaceIdentity) -> Bool {
-        isConfirmed && receipt.id == placeID && receipt.googlePlaceId?
+        isConfirmed && receipt.id == placeID && (receipt.requestedGooglePlaceId ?? receipt.googlePlaceId)?
             .trimmingCharacters(in: .whitespacesAndNewlines) == googlePlaceID
     }
 }

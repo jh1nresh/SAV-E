@@ -64,7 +64,7 @@ review, and friendly system intelligence.
 Rules:
 
 - Use `MemoMascotMark` for brand moments, onboarding, sign-in, empty states, and
-  Passport identity.
+  Passport guidance or brand lockups.
 - Memo should not become a random decoration on every row.
 - Memo copy should be short and useful: "Memo has 3 clues waiting", not mascot jokes.
 
@@ -93,8 +93,8 @@ Rules:
 - Map Stamps may appear as pins.
 - Map Stamps use the stamp/seal visual family: `SaveMemoryBadge(.saved)`,
   `PlaceMapPin`, honey or category stamp color, dark ink outline.
-- Map Stamp actions can include Navigate, Plan around this, View source, and Delete
-  in overflow.
+- Map Stamp actions can include Navigate, Plan around this, View source, Edit,
+  and Delete with explicit confirmation.
 
 ### Review Clue
 
@@ -123,6 +123,9 @@ Rules:
   not count as proof.
 - Do not call it a profile unless referring to the implementation file.
 - Passport should look like a notebook cover plus stamp ledger, not a settings table.
+- Passport identity uses the chosen photo saved for the current account on this
+  device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
+  avatar representation and does not sync between devices.
 
 ### Evidence Receipt
 
@@ -399,7 +402,7 @@ Use for:
 - Sign-in hero.
 - Onboarding.
 - Empty states.
-- Passport hero.
+- Passport guidance or a brand lockup, but not the account-avatar fallback.
 - Small brand lockup in top map navigation.
 
 Do not use for:
@@ -509,7 +512,8 @@ Source: `SAV-E/Views/Profile/ProfileView.swift`.
 
 Required content:
 
-- Memo identity.
+- Passport identity: the current account's device-local chosen photo when
+  available, otherwise `SavvyLogo`.
 - Passport name.
 - Map Stamps count.
 - Visited count; proof verification is a separate future evidence state.
@@ -523,7 +527,7 @@ Required content:
 
 Passport section order on the root tab:
 
-1. Compact identity (Memo + passport name)
+1. Compact identity (account photo or SavvyLogo + passport name)
 2. Compact collection ledger
 3. Your quests (visible live next steps)
 4. Field activity disclosure
@@ -609,7 +613,7 @@ Use a single conversation with typed itinerary previews, following the interacti
 pattern in Anthropic's commerce-agent reference. Keep the Atlas palette and native
 SwiftUI components. Each response shows a compact unsaved draft with at most three
 day previews; complete stops, travel checks, candidate confirmation, and explicit
-Save as Trip live in a review sheet. The composer stays accessible while chatting.
+Save as Trip live in a review sheet. The chat input stays accessible while chatting.
 Conversation turns remain available for follow-up requests. This is a presentation
 pattern, not adoption of the reference demo's backend or payment architecture.
 
@@ -618,7 +622,22 @@ Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stam
 Rules:
 
 - Plan is a root tab. It is not a social feed and not a booking desk.
-- Conversation first; city, days, pace, and arrival/departure clocks remain in the optional Plan options disclosure.
+- City, days, pace, and first-day start / last-day end constraints come from the
+  conversation. Ask only for missing conditions; optional clocks can be declined.
+  Do not preselect a city, day count, pace, calendar, or separate options form.
+- A country-only request retains its duration and asks for a city. An unknown or
+  unsupported city never falls back to an unrelated saved city. Keep the prior
+  unsaved draft while clarifying or recovering from a failure.
+- Requested days remain visible even when some need more places. Model polish
+  cannot silently change confirmed place identity, day count, pace, or clocks.
+- Place actions open this same Plan conversation. Plan around this stages the
+  exact place without submitting. Add to Trip offers eligible existing trips
+  and a new-plan choice inline; only an explicit existing-trip selection writes
+  that place to the chosen trip. Saved trips remain accessible from Plan.
+- New trip from Saved trips opens a blank Plan input while retaining prior drafts
+  and saved trips. It does not open a calendar or manual trip form.
+- A question submitted from Trips continues in Plan chat and asks for missing
+  conditions there; it does not open a second planning drawer.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.
 - Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
 - Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.
@@ -661,7 +680,9 @@ Rules:
 - Add to Trip is the one coral primary. Plan around this sits beside it as a
   paper secondary. Do not restyle Plan around as honey or a second coral
   button.
-- Destructive actions in overflow.
+- Edit and Delete are direct text actions, secondary to planning. Delete always
+  requires explicit confirmation. Do not hide them in a generic More menu.
+- Visibility controls belong in Profile; they are not a second detail menu.
 - Source link clickable when available.
 
 ### Review Queue

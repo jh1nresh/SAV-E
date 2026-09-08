@@ -123,6 +123,7 @@ private enum PendingChromePresentation {
     case passport
     case cover(SaveFullScreenRoute)
     case mapDrawer(DrawerLaunchRequest)
+    case plan
 
     var exclusiveChrome: SaveChromeExclusive {
         switch self {
@@ -132,7 +133,7 @@ private enum PendingChromePresentation {
             return .passport
         case .cover:
             return .cover
-        case .mapDrawer:
+        case .mapDrawer, .plan:
             return .none
         }
     }
@@ -195,11 +196,6 @@ struct ContentView: View {
     @State private var drawerDetent: PresentationDetent
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
-    @State private var pendingTripAssignmentPlace: Place?
-    @State private var isTripAssignmentDialogPresented = false
-    @State private var isFullScreenTripAssignmentDialogPresented = false
-    @State private var isTransitioningToTripCreation = false
-    @State private var isCreatingTripForAssignment = false
     @State private var pendingCaptureTripID: UUID?
     @State private var activeTripID: UUID?
     @State private var drawerLaunchRequest: DrawerLaunchRequest
@@ -310,54 +306,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
             passportView(isRootTab: false)
-        }
-        .sheet(isPresented: $isCreatingTripForAssignment, onDismiss: handleTripComposerDismiss) {
-            NewTripPackView { name, city, startDate, endDate in
-                guard let place = pendingTripAssignmentPlace else {
-                    finishTripAssignment()
-                    return
-                }
-
-                if let trip = await tripStore.createTrip(
-                    name: name,
-                    city: city,
-                    startDate: startDate,
-                    endDate: endDate
-                ) {
-                    await addConfirmedPlaceToTrip(place, tripID: trip.id)
-                }
-                finishTripAssignment()
-            }
-            .environment(\.appLanguageSettings, languageSettings)
-        }
-        .confirmationDialog(
-            languageSettings.localized(
-                english: "Saved. Add it to a Trip?",
-                traditionalChinese: "已收藏。要加入行程嗎？"
-            ),
-            isPresented: $isTripAssignmentDialogPresented,
-            titleVisibility: .visible
-        ) {
-            tripAssignmentActions(dismissFullScreen: false)
-        } message: {
-            tripAssignmentMessage
-        }
-        .onChange(of: isTripAssignmentDialogPresented) { _, isPresented in
-            guard !isPresented,
-                  !isCreatingTripForAssignment,
-                  !isTransitioningToTripCreation,
-                  pendingTripAssignmentPlace != nil
-            else { return }
-            finishTripAssignment()
-        }
-        .onChange(of: isFullScreenTripAssignmentDialogPresented) { _, isPresented in
-            guard !isPresented,
-                  !isCreatingTripForAssignment,
-                  !isTransitioningToTripCreation,
-                  pendingTripAssignmentPlace != nil
-            else { return }
-            finishTripAssignment()
-            fullScreenRoute = nil
         }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
@@ -664,10 +612,8 @@ struct ContentView: View {
                     TripsHomeView(
                         store: tripStore,
                         savedPlaces: mapVM.places,
-                        onOpenAssistant: { openDrawer(.ask, tripID: nil) },
-                        onAskSubmit: { query in
-                            openDrawer(.ask, tripID: nil, initialQuery: query)
-                        },
+                        onOpenAssistant: { openPlanConversation() },
+                        onAskSubmit: { openPlanConversation(submittedQuery: $0) },
                         onOpenTrip: {
                             rootPath = SaveChromeNavigation.pathByOpening(
                                 .trip($0),
@@ -833,16 +779,13 @@ struct ContentView: View {
                 onInvestigateCandidateMore: investigateFullScreenCandidate,
                 onSaveMapCandidate: saveFullScreenMapCandidate,
                 onSaveSocialPlace: saveFullScreenSocialPlace,
-                onUpdatePlaceVisibility: { place, visibility in
-                    try await mapVM.updatePlaceVisibility(place, visibility: visibility)
-                },
                 onUpdatePlace: { place in
                     try await mapVM.updatePlace(place)
                 },
                 onFindRelatedSources: { place, forceRefresh in
                     try await mapVM.discoverRelatedSources(for: place, forceRefresh: forceRefresh)
                 },
-                onAddPlaceToTrip: requestFullScreenTripAssignment,
+                onAddPlaceToTrip: requestTripAssignment,
                 onCreateList: {
                     mapVM.createCollaborativeList(
                         title: languageSettings.localized(english: "New list", traditionalChinese: "新清單"),
@@ -876,18 +819,7 @@ struct ContentView: View {
             } message: {
                 Text(fullScreenActionError ?? "")
             }
-            .confirmationDialog(
-                languageSettings.localized(
-                    english: "Saved. Add it to a Trip?",
-                    traditionalChinese: "已收藏。要加入行程嗎？"
-                ),
-                isPresented: $isFullScreenTripAssignmentDialogPresented,
-                titleVisibility: .visible
-            ) {
-                tripAssignmentActions(dismissFullScreen: true)
-            } message: {
-                tripAssignmentMessage
-            }
+
         }
     }
 
@@ -941,9 +873,6 @@ struct ContentView: View {
                     requestTripAssignment(for: place)
                 }
             },
-            onUpdatePlaceVisibility: { place, visibility in
-                try await mapVM.updatePlaceVisibility(place, visibility: visibility)
-            },
             onUpdatePlace: { place in
                 try await mapVM.updatePlace(place)
             },
@@ -959,6 +888,7 @@ struct ContentView: View {
                 rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
             },
             onAddPlaceToTrip: requestTripAssignment,
+            onPlanAroundPlace: openPlanAround,
             onSaveTripPlan: { name, city, stops in
                 await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
             },
@@ -1109,7 +1039,7 @@ struct ContentView: View {
     private var occupyingExclusiveChrome: SaveChromeExclusive {
         SaveChromeNavigation.occupyingExclusive(
             hasCover: fullScreenRoute != nil,
-            isTripComposerPresented: isCreatingTripForAssignment,
+            isTripComposerPresented: false,
             isPassportPresented: isPassportPresented,
             isRootSheetPresented: isRootSheetPresented
         )
@@ -1144,7 +1074,6 @@ struct ContentView: View {
             suppressChromeDismissSideEffects = true
             isRootSheetPresented = false
             isPassportPresented = false
-            isCreatingTripForAssignment = false
             fullScreenRoute = nil
         }
     }
@@ -1157,6 +1086,9 @@ struct ContentView: View {
             isPassportPresented = true
         case .cover(let route):
             fullScreenRoute = route
+        case .plan:
+            rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+            selectedRootTab = .plan
         case .mapDrawer(let request):
             drawerLaunchRequest = request
             drawerDetent = request.focusesSearch ? .large : .medium
@@ -1175,14 +1107,6 @@ struct ContentView: View {
             await Task.yield()
             suppressChromeDismissSideEffects = false
             activateChromePresentation(pendingChromePresentation)
-        }
-    }
-
-    private func handleTripComposerDismiss() {
-        if suppressChromeDismissSideEffects {
-            handleExclusiveChromeDismiss()
-        } else {
-            finishTripAssignment()
         }
     }
 
@@ -1233,7 +1157,7 @@ struct ContentView: View {
                 let place = try await mapVM.saveReviewCandidateAsPlace(candidate, nameOverride: nameOverride)
                 if pendingOriginPlanCandidateID == candidate.id {
                     pendingOriginPlanCandidateID = nil
-                    requestFullScreenTripAssignment(for: place)
+                    requestTripAssignment(for: place)
                 } else {
                     fullScreenRoute = nil
                 }
@@ -1290,7 +1214,7 @@ struct ContentView: View {
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
-                    requestFullScreenTripAssignment(for: place)
+                    requestTripAssignment(for: place)
                 } else {
                     fullScreenRoute = nil
                 }
@@ -1436,14 +1360,34 @@ struct ContentView: View {
     }
 
     private func openPlanAround(_ place: Place) {
-        transitionToPlanningDrawer {
-            await drawerVM.showPlanAround(
-                anchor: place,
-                reviewCandidates: mapVM.reviewCandidates,
-                outputLanguage: languageSettings.language
-            )
-            drawerDetent = .large
+        stagePlaceInPlan(place, addingToTrip: false)
+    }
+
+    private func openPlanConversation(submittedQuery: String? = nil) {
+        if !planConversation.assignmentInProgress {
+            planConversation.assignmentPlace = nil
+            planConversation.anchorPlaceID = nil
+            planConversation.submittedQuery = submittedQuery
+            if submittedQuery == nil {
+                planConversation.input = ""
+                planConversation.conditions = SavePlanConversationConditions()
+                planConversation.turns = []
+            }
         }
+        presentAfterClearingExclusiveChrome(.plan)
+    }
+
+    private func stagePlaceInPlan(_ place: Place, addingToTrip: Bool) {
+        planConversation.stage(place: place, addingToTrip: addingToTrip, language: languageSettings.language)
+        pendingReceiptMapDetail = nil
+        incomingPlaceReceipt = nil
+        mapDetailDrawerItem = nil
+        isMapPanelExpanded = false
+        pendingCaptureTripID = nil
+        pendingOriginPlanCandidateID = nil
+        // Reuse the exclusive-chrome dismissal gate; don't open another sheet
+        // or resume pending capture while the place detail is closing.
+        presentAfterClearingExclusiveChrome(.plan)
     }
 
     private func transitionToPlanningDrawer(
@@ -1545,13 +1489,8 @@ struct ContentView: View {
         let pendingDetail = pendingReceiptMapDetail
         pendingReceiptMapDetail = nil
         incomingPlaceReceipt = nil
-        if pendingTripAssignmentPlace == nil {
-            pendingCaptureTripID = nil
-        }
+        pendingCaptureTripID = nil
         drawerVM.returnToCommands()
-        if pendingTripAssignmentPlace != nil {
-            presentTripAssignmentDialog()
-        }
         guard let pendingDetail else {
             mapVM.clearSelectedMapObject()
             resumePendingOnboardingCaptureIfNeeded()
@@ -1577,22 +1516,6 @@ struct ContentView: View {
             handleExclusiveChromeDismiss()
             return
         }
-        if isTransitioningToTripCreation {
-            Task { @MainActor in
-                await Task.yield()
-                guard pendingTripAssignmentPlace != nil else {
-                    isTransitioningToTripCreation = false
-                    return
-                }
-                isCreatingTripForAssignment = true
-                isTransitioningToTripCreation = false
-            }
-            return
-        }
-        if pendingTripAssignmentPlace != nil {
-            presentTripAssignmentDialog()
-            return
-        }
         resumePendingOnboardingCaptureIfNeeded()
     }
 
@@ -1602,7 +1525,7 @@ struct ContentView: View {
               incomingPlaceReceipt == nil,
               fullScreenRoute == nil,
               !isRootSheetPresented,
-              pendingTripAssignmentPlace == nil
+              planConversation.assignmentPlace == nil
         else { return }
 
         Task { @MainActor in
@@ -1612,27 +1535,10 @@ struct ContentView: View {
                   incomingPlaceReceipt == nil,
                   fullScreenRoute == nil,
                   !isRootSheetPresented,
-                  pendingTripAssignmentPlace == nil
+                  planConversation.assignmentPlace == nil
             else { return }
             fullScreenRoute = .capture
         }
-    }
-
-    private func presentTripAssignmentDialog() {
-        Task { @MainActor in
-            await Task.yield()
-            isTripAssignmentDialogPresented = true
-        }
-    }
-
-    private var tripAssignmentChoices: [Trip] {
-        let availableTrips = tripStore.currentTrips + tripStore.upcomingTrips + tripStore.planningTrips
-        var seen = Set<UUID>()
-        let uniqueTrips = availableTrips.filter { seen.insert($0.id).inserted }
-        guard let pendingCaptureTripID,
-              let originTrip = uniqueTrips.first(where: { $0.id == pendingCaptureTripID })
-        else { return uniqueTrips }
-        return [originTrip] + uniqueTrips.filter { $0.id != pendingCaptureTripID }
     }
 
     private var captureTripName: String? {
@@ -1640,95 +1546,8 @@ struct ContentView: View {
         return tripStore.trips.first(where: { $0.id == pendingCaptureTripID })?.name
     }
 
-    @ViewBuilder
-    private func tripAssignmentActions(dismissFullScreen: Bool) -> some View {
-        ForEach(tripAssignmentChoices) { trip in
-            Button(languageSettings.localized(
-                english: "Add to \(trip.name)",
-                traditionalChinese: "加入「\(trip.name)」"
-            )) {
-                guard let place = pendingTripAssignmentPlace else { return }
-                finishTripAssignment()
-                if dismissFullScreen {
-                    fullScreenRoute = nil
-                }
-                Task { await addConfirmedPlaceToTrip(place, tripID: trip.id) }
-            }
-        }
-        Button(languageSettings.localized(
-            english: "Create new Trip and add",
-            traditionalChinese: "新增行程並加入"
-        )) {
-            isTransitioningToTripCreation = true
-            if dismissFullScreen {
-                isFullScreenTripAssignmentDialogPresented = false
-                fullScreenRoute = nil
-            } else {
-                isTripAssignmentDialogPresented = false
-                Task { @MainActor in
-                    await Task.yield()
-                    guard pendingTripAssignmentPlace != nil else {
-                        isTransitioningToTripCreation = false
-                        return
-                    }
-                    isCreatingTripForAssignment = true
-                    isTransitioningToTripCreation = false
-                }
-            }
-        }
-        .accessibilityIdentifier("saved.addToTrip.create")
-        Button(
-            languageSettings.localized(
-                english: "Keep in Savvy only",
-                traditionalChinese: "只存到 Savvy"
-            ),
-            role: .cancel
-        ) {
-            finishTripAssignment()
-            if dismissFullScreen {
-                fullScreenRoute = nil
-            }
-        }
-    }
-
-    private var tripAssignmentMessage: Text {
-        Text(languageSettings.localized(
-            english: tripAssignmentChoices.isEmpty
-                ? "This place is in Saved. Create a Trip now, or keep it in Saved only."
-                : "Choose the exact Trip, create a new one, or keep the place in Saved only.",
-            traditionalChinese: tripAssignmentChoices.isEmpty
-                ? "這個地點已收藏；現在建立行程，或只保留在收藏。"
-                : "請選擇現有行程、建立新行程，或只保留在收藏。"
-        ))
-    }
-
-    private func requestFullScreenTripAssignment(for place: Place) {
-        pendingTripAssignmentPlace = place
-        isFullScreenTripAssignmentDialogPresented = true
-    }
-
     private func requestTripAssignment(for place: Place) {
-        pendingTripAssignmentPlace = place
-        if fullScreenRoute != nil {
-            fullScreenRoute = nil
-        } else if isRootSheetPresented {
-            isRootSheetPresented = false
-        } else {
-            presentTripAssignmentDialog()
-        }
-    }
-
-    private func finishTripAssignment() {
-        isTripAssignmentDialogPresented = false
-        isFullScreenTripAssignmentDialogPresented = false
-        isTransitioningToTripCreation = false
-        pendingTripAssignmentPlace = nil
-        pendingCaptureTripID = nil
-        pendingOriginPlanCandidateID = nil
-    }
-
-    private func addConfirmedPlaceToTrip(_ place: Place, tripID: UUID) async {
-        _ = await tripStore.addConfirmedPlace(place, to: tripID)
+        stagePlaceInPlan(place, addingToTrip: true)
     }
 
     private func refreshSelectedMapDetailPlace(from places: [Place]) {

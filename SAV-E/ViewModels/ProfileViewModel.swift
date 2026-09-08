@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CryptoKit
 
 @MainActor
 final class ProfileViewModel: ObservableObject {
@@ -8,33 +9,69 @@ final class ProfileViewModel: ObservableObject {
     @Published var isSaving = false
     @Published var isDeletingAccount = false
     @Published var errorMessage: String?
+    @Published private(set) var localAvatarData: Data?
 
     private let supabaseService: SupabaseServiceProtocol
     private let authService: PrivyAuthService
     private let accountDeletionService: AccountDeletionProviding
+    private let avatarStore: ProfileAvatarStore
+    private let updateProfileRemotely: (UserProfile) async throws -> Void
+    private let currentUserIDProvider: () -> String?
+    private let reviewerDemoProvider: () -> Bool
+    private var loadedUserID: String?
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
-        accountDeletionService: AccountDeletionProviding = SupabaseService.shared
+        accountDeletionService: AccountDeletionProviding = SupabaseService.shared,
+        avatarStore: ProfileAvatarStore = .shared,
+        updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
+        currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
+        reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
     ) {
         self.supabaseService = supabaseService
         self.accountDeletionService = accountDeletionService
+        self.avatarStore = avatarStore
+        self.updateProfileRemotely = updateProfileRemotely ?? { profile in
+            try await supabaseService.updateProfile(profile)
+        }
+        self.currentUserIDProvider = currentUserIDProvider
+        self.reviewerDemoProvider = reviewerDemoProvider
         self.authService = PrivyAuthService.shared
     }
 
+    var isAuthenticated: Bool { authService.isAuthenticated }
+
+    func resetForCurrentSession() {
+        let userID = reviewerDemoProvider() ? nil : currentUserIDProvider()
+        guard loadedUserID != userID || userID == nil else { return }
+        loadedUserID = userID
+        profile = .empty
+        localAvatarData = nil
+        errorMessage = nil
+    }
+
     func loadProfile() async {
-        if authService.isReviewerDemo {
+        resetForCurrentSession()
+        if reviewerDemoProvider() {
             errorMessage = nil
             return
         }
-        guard let userId = authService.currentUserId else { return }
+        guard let userId = currentUserIDProvider() else { return }
+        localAvatarData = avatarStore.load(for: userId)
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         do {
             if let profile = try await supabaseService.fetchProfile(for: userId) {
+                guard !Task.isCancelled, currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
                 self.profile = profile
+                if localAvatarData == nil {
+                    localAvatarData = try? avatarStore.migrateLegacyAvatarIfNeeded(
+                        from: profile.avatarUrl,
+                        for: userId
+                    )
+                }
             }
         } catch is CancellationError {
             // View lifecycle cancelled the profile load; do not surface as a user-facing error.
@@ -43,6 +80,7 @@ final class ProfileViewModel: ObservableObject {
                 // URLSession cancellation is expected when the view task is torn down.
                 return
             }
+            guard currentUserIDProvider() == userId, !reviewerDemoProvider() else { return }
             errorMessage = error.localizedDescription
             print("Failed to load profile: \(error)")
         }
@@ -59,26 +97,65 @@ final class ProfileViewModel: ObservableObject {
             return false
         }
 
+        guard let savingUserID = currentUserIDProvider(), !reviewerDemoProvider() else { return false }
         let previousProfile = profile
-        profile.displayName = trimmedName
-        if let avatarData {
-            do {
-                profile.avatarUrl = try saveAvatarImage(avatarData)
-            } catch {
-                errorMessage = error.localizedDescription
-                return false
-            }
+        let pendingAvatarData: Data?
+        do {
+            pendingAvatarData = try avatarData.map(normalizedAvatarData)
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
 
+        // A Passport photo has no cloud representation. Persist it before any
+        // profile API request so an offline name update cannot discard it.
         do {
-            try await supabaseService.updateProfile(profile)
-            await loadProfile()
+            if let pendingAvatarData {
+                try avatarStore.save(pendingAvatarData, for: savingUserID)
+            }
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
+                resetForCurrentSession()
+                return false
+            }
+            if let pendingAvatarData {
+                localAvatarData = pendingAvatarData
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+
+        guard trimmedName != previousProfile.displayName else { return true }
+
+        var updatedProfile = previousProfile
+        updatedProfile.displayName = trimmedName
+        // Device files are not cloud avatar URLs. A name update is the only
+        // remaining reason to write this profile row, so omit the old value.
+        if updatedProfile.avatarUrl.flatMap(URL.init(string:))?.isFileURL == true {
+            updatedProfile.avatarUrl = nil
+        }
+        profile = updatedProfile
+
+        do {
+            try await updateProfileRemotely(updatedProfile)
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
+                resetForCurrentSession()
+                return false
+            }
             return true
         } catch {
+            guard currentUserIDProvider() == savingUserID, !reviewerDemoProvider() else {
+                resetForCurrentSession()
+                return false
+            }
             profile = previousProfile
+            if pendingAvatarData != nil {
+                errorMessage = "Photo saved on this device. Couldn’t update your Passport name: \(error.localizedDescription)"
+                return true
+            }
             errorMessage = error.localizedDescription
             print("Failed to update profile: \(error)")
             return false
@@ -87,19 +164,23 @@ final class ProfileViewModel: ObservableObject {
 
     func signOut() async {
         await authService.signOut()
+        resetForCurrentSession()
     }
 
     func deleteAccount() async -> Bool {
-        guard !authService.isReviewerDemo else { return false }
+        guard !reviewerDemoProvider(), let deletingUserID = currentUserIDProvider() else { return false }
         isDeletingAccount = true
         errorMessage = nil
         defer { isDeletingAccount = false }
 
         do {
             try await accountDeletionService.deleteAccount()
+            try? avatarStore.remove(for: deletingUserID)
+            guard currentUserIDProvider() == deletingUserID, !reviewerDemoProvider() else { return true }
             try? SaveLocalVaultService.shared.deleteAllRecords()
             try? KeychainAccountReferenceStore.shared.clear()
             await authService.signOut()
+            resetForCurrentSession()
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -107,7 +188,7 @@ final class ProfileViewModel: ObservableObject {
         }
     }
 
-    private func saveAvatarImage(_ data: Data) throws -> String {
+    private func normalizedAvatarData(_ data: Data) throws -> Data {
         guard let image = UIImage(data: data) else {
             throw ProfileImageError.invalidImage
         }
@@ -123,22 +204,67 @@ final class ProfileViewModel: ObservableObject {
             throw ProfileImageError.invalidImage
         }
 
-        let directory = try avatarDirectory()
-        let fileURL = directory.appendingPathComponent("profile-avatar.jpg")
-        try jpegData.write(to: fileURL, options: .atomic)
-        return fileURL.absoluteString
+        return jpegData
+    }
+}
+
+/// Keeps a chosen Passport photo on this device, scoped to the authenticated
+/// account. It deliberately has no URL representation to send to Supabase.
+final class ProfileAvatarStore {
+    static let shared = ProfileAvatarStore()
+
+    private let fileManager: FileManager
+    private let baseDirectory: URL
+
+    init(fileManager: FileManager = .default, baseDirectory: URL? = nil) {
+        self.fileManager = fileManager
+        self.baseDirectory = baseDirectory ?? fileManager
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Profile/Avatars", isDirectory: true)
     }
 
-    private func avatarDirectory() throws -> URL {
-        let supportDirectory = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = supportDirectory.appendingPathComponent("Profile", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
+    func load(for userID: String) -> Data? {
+        try? Data(contentsOf: fileURL(for: userID))
+    }
+
+    func save(_ data: Data, for userID: String) throws {
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try data.write(to: fileURL(for: userID), options: .atomic)
+    }
+
+    func remove(for userID: String) throws {
+        let url = fileURL(for: userID)
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        try fileManager.removeItem(at: url)
+    }
+
+    /// Imports only the old app-owned avatar file into one account's local
+    /// store. Arbitrary file URLs must never become Passport photos.
+    func migrateLegacyAvatarIfNeeded(from avatarURLString: String?, for userID: String) throws -> Data? {
+        if let existing = load(for: userID) { return existing }
+        guard !fileManager.fileExists(atPath: fileURL(for: userID).path),
+              let avatarURLString,
+              let legacyReference = URL(string: avatarURLString),
+              legacyReference.isFileURL,
+              legacyReference.standardizedFileURL == legacyAvatarURL.standardizedFileURL
+        else { return nil }
+
+        let data = try Data(contentsOf: legacyAvatarURL)
+        guard !data.isEmpty else { return nil }
+        try save(data, for: userID)
+        return data
+    }
+
+    var legacyAvatarURL: URL {
+        baseDirectory
+            .deletingLastPathComponent()
+            .appendingPathComponent("profile-avatar.jpg")
+    }
+
+    private func fileURL(for userID: String) -> URL {
+        let digest = SHA256.hash(data: Data(userID.utf8))
+        let filename = digest.map { String(format: "%02x", $0) }.joined()
+        return baseDirectory.appendingPathComponent("\(filename).jpg")
     }
 }
 
@@ -146,6 +272,8 @@ private enum ProfileImageError: LocalizedError {
     case invalidImage
 
     var errorDescription: String? {
-        "Couldn’t use that photo. Choose another image."
+        switch self {
+        case .invalidImage: return "Couldn’t use that photo. Choose another image."
+        }
     }
 }
