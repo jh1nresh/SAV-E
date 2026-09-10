@@ -303,10 +303,35 @@ struct SavePlanConversationConditions {
         return SavePlanRequest(area: area, days: days, pace: pace, arrivalMinutes: arrivalMinutes, departureMinutes: departureMinutes, language: language, usesFlightBuffers: false)
     }
 
-    func planningMessage(language: AppLanguage) -> String {
-        let start = arrivalMinutes.map { String(format: "%02d:%02d", $0 / 60, $0 % 60) } ?? "none"
-        let end = departureMinutes.map { String(format: "%02d:%02d", $0 / 60, $0 % 60) } ?? "none"
-        return "Confirmed conditions: area=\(area ?? "unresolved"); days=\(days ?? 0); pace=\(pace?.rawValue ?? "unresolved"); first-day start=\(start); last-day end=\(end). Preserve the supplied draft schedule and only refine its notes.\n" + requests.joined(separator: "\n")
+    /// Local recovery only. The live Plan path sends every turn to the model first.
+    /// Defaults are provisional and must be disclosed, never described as user answers.
+    func provisionalRequest(language: AppLanguage) -> SavePlanRequest? {
+        guard area != nil, ambiguousDestinationPrefix == nil, unmatchedDestination == nil,
+              unsupportedDays == nil, !needsFollowUpClarification else { return nil }
+        var value = self
+        value.days = days ?? 1
+        value.pace = pace ?? .balanced
+        // Invalid explicit clocks cannot turn into unlimited time through a default.
+        let last = requests.last?.lowercased() ?? ""
+        if !arrivalAnswered && last.range(of: #"start|arriv|開始|抵達|到達"#, options: .regularExpression) != nil { return nil }
+        if !departureAnswered && last.range(of: #"end by|depart|結束|離開"#, options: .regularExpression) != nil { return nil }
+        value.arrivalAnswered = true
+        value.departureAnswered = true
+        return value.request(language: language)
+    }
+
+    mutating func acceptAgentRequest(_ request: SavePlanRequest) {
+        area = request.area
+        days = request.days
+        pace = request.pace
+        arrivalMinutes = request.arrivalMinutes
+        departureMinutes = request.departureMinutes
+        arrivalAnswered = true
+        departureAnswered = true
+        unmatchedDestination = nil
+        unsupportedDays = nil
+        needsFollowUpClarification = false
+        ambiguousDestinationPrefix = nil
     }
 
     static func areaAliases(_ area: String) -> [String] {

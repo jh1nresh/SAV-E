@@ -15,6 +15,7 @@ final class SavePlanConversation: ObservableObject {
     @Published var messages: [Message] = []
     @Published var draft: SaveAIResponse?
     var turns: [ConversationTurn] = []
+    var agentRequest: SavePlanRequest?
     var conditions = SavePlanConversationConditions()
     @Published var assignmentPlace: Place?
     @Published var assignmentInProgress = false
@@ -30,6 +31,7 @@ final class SavePlanConversation: ObservableObject {
         messages = []
         draft = nil
         turns = []
+        agentRequest = nil
         conditions = SavePlanConversationConditions()
         assignmentPlace = nil
         anchorPlaceID = nil
@@ -51,33 +53,13 @@ final class SavePlanConversation: ObservableObject {
             assignmentPlace = nil
             anchorPlaceID = place.id
             excludedPlaceIDs = []
+            agentRequest = nil
             conditions = SavePlanConversationConditions()
             turns = []
             let area = SavePlanDraftBuilder.areaLabel(for: place)
             let location = area.map { " · \($0)" } ?? ""
             input = language.localized(english: "Plan around \(place.name)\(location)", traditionalChinese: "以「\(place.name)」為中心規劃\(location)")
         }
-    }
-
-    @discardableResult
-    func applyStopRemoval(_ query: String, savedPlaces: [Place], language: AppLanguage) -> Bool {
-        guard let target = SavePlanDraftBuilder.removalTarget(in: query) else { return false }
-        let reply: String
-        if let current = draft, let area = conditions.area, let pace = conditions.pace,
-           let result = SavePlanDraftBuilder.removingConfirmedStop(named: target, from: current,
-               savedPlaces: savedPlaces, area: area, pace: pace, language: language) {
-            draft = result.draft
-            excludedPlaceIDs.formUnion(result.removedIDs)
-            if let anchorPlaceID, result.removedIDs.contains(anchorPlaceID) { self.anchorPlaceID = nil }
-            reply = language.localized(english: "Removed \(target) from this draft. Your saved place is kept. Check the route between the remaining stops.", traditionalChinese: "已從這份草稿移除「\(target)」，已存地點仍保留。請重新確認剩餘站點間的路線。")
-        } else {
-            reply = language.localized(english: "Which confirmed stop should I remove? Use ‘remove Full name, Full address’ for a unique saved place shown in this draft. I’ve kept the draft unchanged.", traditionalChinese: "要移除哪個已確認站點？請用「移除完整名稱, 完整地址」指定草稿中的唯一已存地點。草稿還沒變動。")
-        }
-        messages.append(.init(request: query, reply: reply))
-        turns.append(ConversationTurn(userMessage: query, assistantResponse: reply))
-        if turns.count > 12 { turns.removeFirst() }
-        input = ""
-        return true
     }
 
     func assignPlace(_ place: Place, to trip: Trip, store: TripPackStore, language: AppLanguage) async {
@@ -430,101 +412,62 @@ struct SavePlanView: View {
     private func sendMessage() {
         let query = conversation.input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, !isPlanning, conversation.assignmentPlace == nil else { return }
-        if conversation.applyStopRemoval(query, savedPlaces: savedPlaces, language: languageSettings.language) {
-            isChatFocused = true
-            return
-        }
-        if conversation.conditions.requests.isEmpty { conversation.excludedPlaceIDs = [] }
-        conversation.conditions.receive(query, areas: areas)
-        if let question = conversation.conditions.clarification(language: languageSettings.language) {
-            conversation.messages.append(.init(request: query, reply: question))
-            conversation.turns.append(ConversationTurn(userMessage: query, assistantResponse: question))
-            if conversation.turns.count > 12 { conversation.turns.removeFirst() }
-            conversation.input = ""
-            isChatFocused = true
-            return
-        }
-        guard var request = conversation.conditions.request(language: languageSettings.language) else { return }
-        if let anchorID = conversation.anchorPlaceID,
-           let anchor = savedPlaces.first(where: { $0.id == anchorID }),
-           !SavePlanDraftBuilder.matches(area: request.area, place: anchor) {
-            conversation.anchorPlaceID = nil
-        }
-        request.anchorPlaceID = conversation.anchorPlaceID
-        request.excludedPlaceIDs = conversation.excludedPlaceIDs
-        isChatFocused = false
-        isPlanning = true
-        planError = nil
-        let areaPlaces = savedPlaces.filter { SavePlanDraftBuilder.matches(area: request.area, place: $0) }
-        let places = areaPlaces.filter { $0.savedIDs.isDisjoint(with: request.excludedPlaceIDs) }
-        let candidates = mapCandidates.filter { SavePlanDraftBuilder.matches(area: request.area, candidate: $0) }
-        let planningMessage = conversation.conditions.planningMessage(language: languageSettings.language)
-        let language = languageSettings.language
-        let history = conversation.turns
         let sessionID = conversation.sessionID
+        let language = languageSettings.language
+        let places = savedPlaces
+        let currentDraft = conversation.draft
+        let request = conversation.agentRequest
+        // Only conversational text goes back to the model, never serialized place notes/addresses.
+        let history = conversation.messages.suffix(8).map {
+            ConversationTurn(userMessage: $0.request, assistantResponse: $0.reply)
+        }
+        let anchorID = conversation.anchorPlaceID
+        let candidates = mapCandidates
+        isPlanning = true
+        isChatFocused = false
+        planError = nil
         planningTask = Task {
-            guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
             defer { if !Task.isCancelled, conversation.sessionID == sessionID { isPlanning = false } }
             do {
-                guard var local = SavePlanDraftBuilder.draft(request: request, savedPlaces: areaPlaces, unsavedCandidates: candidates) else {
-                    conversation.messages.append(.init(request: query, reply: localized(
-                        "I can’t fit your confirmed places into these conditions yet. Your previous draft is kept. Add places in this area or adjust the time or destination.",
-                        "目前無法把這些已確認地點排進所說的條件，上一版草稿仍保留著。可以補存這個區域的地點，或調整時間、目的地。"
-                    )))
-                    conversation.input = ""
-                    return
-                }
-                var isOffline = false
+                let result: SavePlanAgentResult
+                var offline = false
+                var fixture: SavePlanAgentResult?
 #if DEBUG
-                isOffline = ReviewDemo.isOfflineUITestMode
-                if isOffline, ProcessInfo.processInfo.arguments.contains("--uitest-plan-candidate"),
-                   let firstDay = local.itineraryDays.first {
-                    let candidate = SaveMapCandidate(title: "Plan Test Garden", subtitle: "Taipei", latitude: 25.04, longitude: 121.54,
-                        category: .attraction, sourceURL: "https://example.com/plan-garden")
-                    let stop = ItineraryStop(id: UUID(), placeId: nil, placeState: .externalSuggestion,
-                        placeName: candidate.title, time: nil, duration: 60, note: nil,
-                        sourceSummary: "Public map candidate", risks: [.externalSuggestion], mapCandidate: candidate)
-                    local = local.replacingItineraryDays(
-                        [firstDay.replacingStops([stop] + firstDay.stops)] + local.itineraryDays.dropFirst(), tripHealth: nil
-                    )
+                offline = ReviewDemo.isOfflineUITestMode
+                if offline {
+                    fixture = try SavePlanAgent.reviewFixture(query: query, history: history, request: request,
+                        draft: currentDraft, savedPlaces: places, anchorID: anchorID, language: language)
                 }
 #endif
-                var response = local
-                if !isOffline {
-                    let gaps = local.itineraryDays.flatMap { $0.health?.gaps ?? [] }
-                    if !gaps.isEmpty {
-                        let extras = await TripGapLocalOptionsService().candidates(forGaps: gaps, days: local.itineraryDays, savedPlaces: areaPlaces)
-                        guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
-                        if !extras.isEmpty, let enriched = SavePlanDraftBuilder.draft(
-                            request: request, savedPlaces: areaPlaces, unsavedCandidates: extras + candidates
-                        ) { local = enriched }
-                    }
-                    let polished = try await SaveAIService.shared.query(
-                        planningMessage, places: places, conversationHistory: history,
-                        outputLanguage: language, deterministicDraftOverride: local,
-                        maxStopsPerDay: request.pace.maxStopsPerDay
-                    )
-                    guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
-                    response = SavePlanDraftBuilder.preservingSchedule(polished, draft: local)
-                    response = await SavePlanDraftBuilder.checkingTravel(response, savedPlaces: places, language: language)
+                if let fixture {
+                    result = fixture
+                } else {
+                    result = try await SavePlanAgent(generate: { try await SaveAIService.shared.planDecision($0) }).respond(
+                        query: query, history: history, request: request, draft: currentDraft,
+                        savedPlaces: places, candidates: candidates, anchorID: anchorID, language: language)
                 }
-                guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
-                conversation.turns.append(ConversationTurn(userMessage: query, assistantResponse: SaveAIService.shared.encodeResponse(response)))
-                if conversation.turns.count > 12 { conversation.turns.removeFirst() }
-                let reply = response.componentType == .tripItinerary
-                    ? localized("Here’s a draft. Tell me what you’d like to change, or review it before saving.", "先排好這版草稿。可以繼續聊想調整的地方，或確認內容後儲存。")
-                    : response.aiMessage ?? response.messageText ?? response.title ?? localized("Tell me more about your trip.", "再多說一點你想怎麼玩。")
-                conversation.messages.append(.init(request: query, reply: reply))
-                if response.componentType == .tripItinerary {
-                    showsDraftDetails = false
+                try Task.checkCancellation()
+                guard conversation.sessionID == sessionID else { return }
+                guard conversation.draft == currentDraft else {
+                    throw SavePlanAgentValidationError("The draft changed while planning; keep the newer draft.")
+                }
+                if let response = result.draft {
                     draft = response
+                    conversation.agentRequest = result.request
+                    if let request = result.request { conversation.conditions.acceptAgentRequest(request) }
+                    if let anchorID, !response.placeIds.contains(anchorID.uuidString) { conversation.anchorPlaceID = nil }
+                    showsDraftDetails = false
                 }
+                conversation.messages.append(.init(request: query, reply: result.message))
+                conversation.turns.append(ConversationTurn(userMessage: query, assistantResponse: result.message))
+                if conversation.turns.count > 12 { conversation.turns.removeFirst() }
                 if conversation.input.trimmingCharacters(in: .whitespacesAndNewlines) == query { conversation.input = "" }
             } catch {
                 guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
+                // A failed semantic edit must not be presented as a successful generic redraft.
                 planError = localized(
-                    "Couldn’t finish this draft. Your message is kept; please try again.",
-                    "這次沒能完成草稿，訊息已保留，請再試一次。"
+                    "Savvy couldn’t finish this change. Your draft and message are kept; please try again.",
+                    "Savvy 這次沒能完成調整，原本草稿和訊息都留著，請再試一次。"
                 )
             }
         }

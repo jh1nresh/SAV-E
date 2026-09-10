@@ -622,14 +622,25 @@ Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stam
 Rules:
 
 - Plan is a root tab. It is not a social feed and not a booking desk.
-- City, days, pace, and first-day start / last-day end constraints come from the
-  conversation. Ask only for missing conditions; optional clocks can be declined.
-  Do not preselect a city, day count, pace, calendar, or separate options form.
+- Every Plan turn reaches the semantic planner with the current draft and bounded
+  place inventory. The model chooses a draft edit, one necessary clarification,
+  or one nearby candidate lookup; no required pace/time questionnaire.
+- A clear destination is enough for a first provisional draft. Unspecified duration,
+  pace and clocks may use a disclosed one-day, balanced, 09:00–21:00 assumption.
+  Never invent a city. Explicit user conditions override these editable defaults.
+- Natural-language edits can select, replace, remove, reorder and reschedule stops.
+  Day patches preserve omitted days exactly. A changed global condition requires
+  all affected days. Only known place references and valid, nonoverlapping times
+  pass validation; the model gets bounded correction feedback before any mutation.
+- Candidate lookup is limited to one nearby search per turn, anchored to a saved
+  place in the requested area. At most three model decisions run per turn.
+  Search results remain unconfirmed. Failed edits keep the previous draft and input.
 - A country-only request retains its duration and asks for a city. An unknown or
   unsupported city never falls back to an unrelated saved city. Keep the prior
   unsaved draft while clarifying or recovering from a failure.
-- Requested days remain visible even when some need more places. Model polish
-  cannot silently change confirmed place identity, day count, pace, or clocks.
+- Requested days remain visible even when some need more places. Place identity
+  comes from local inventory, never generated names or IDs. Travel and opening-hour
+  uncertainty remains visible; the agent must not claim bookings or verified hours.
 - Place actions open this same Plan conversation. Plan around this stages the
   exact place without submitting. Add to Trip offers eligible existing trips
   and a new-plan choice inline; only an explicit existing-trip selection writes
@@ -640,8 +651,8 @@ Rules:
   discard confirmation; saved trips are always retained. No calendar or manual form.
 - Trips has a New trip action, with no second planning composer. Planning questions
   and missing-condition clarification belong only in Plan.
-- A reply of no pace preference chooses balanced and still asks about time limits;
-  it never silently answers both questions.
+- A reply of no preference accepts provisional choices and proceeds; it does not
+  trigger another mandatory question about optional clocks.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.
 - Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
 - Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.

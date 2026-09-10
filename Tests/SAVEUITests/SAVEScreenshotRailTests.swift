@@ -1094,9 +1094,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThanOrEqual(app.buttons["plan.newTrip"].frame.minY, app.frame.minY)
         attach(app, name: "plan-chat-keyboard")
         send.tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Any first-day start'")).firstMatch.waitForExistence(timeout: stepTimeout))
-        typeText("none", into: input)
-        send.tap()
         XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["tripPlan.save"].exists)
         let review = app.buttons["plan.draft.review"]
@@ -1116,6 +1113,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testPlanSemanticDayEditStaysInOneConversation() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let input = app.textFields["plan.chat.input"]
+        typeText("Taipei 2 days", into: input)
+        tapReachable(app.buttons["plan.chat.send"])
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'What pace would you like'")).firstMatch.exists)
+        attach(app, name: "plan-agent-first-draft")
+        typeText("Day two is too tiring; make it lighter", into: input)
+        tapReachable(app.buttons["plan.chat.send"])
+        XCTAssertTrue(app.staticTexts["I’ve made day two lighter and kept day one unchanged."].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].exists)
+        attach(app, name: "plan-agent-local-day-edit")
+        tapReachable(app.buttons["plan.draft.review"])
+        let shorterVisit = app.staticTexts["45 min"].firstMatch
+        XCTAssertTrue(scrollUntilHittable(shorterVisit, in: app.scrollViews.firstMatch, maxSwipes: 8))
+        attach(app, name: "plan-agent-shorter-visit")
+    }
+
+    @MainActor
     func testPlanCanStartAgainWithoutLosingSavedTrips() throws {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
@@ -1125,7 +1148,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Plan", app: app)
         let input = app.textFields["plan.chat.input"]
-        for answer in ["Taipei", "7", "more places", "none"] {
+        for answer in ["Taipei 7 days packed"] {
             typeText(answer, into: input)
             tapReachable(app.buttons["plan.chat.send"])
         }
@@ -1171,7 +1194,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["plan.chat.send"].tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Got it, 6 days'")).firstMatch.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
-        for answer in ["Taipei", "relaxed", "no time constraints"] {
+        for answer in ["Taipei"] {
             typeText(answer, into: input)
             tapReachable(app.buttons["plan.chat.send"])
         }
