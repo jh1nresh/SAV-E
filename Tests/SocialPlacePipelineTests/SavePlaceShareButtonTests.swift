@@ -3,6 +3,13 @@ import XCTest
 
 final class SavePlaceShareButtonTests: XCTestCase {
     @MainActor
+    func testRepeatedReadsKeepShareTaskIdentityAndURLStable() throws {
+        let content = SavePlaceShareContent.place(ReviewDemoSeed.places()[0])
+        XCTAssertEqual(Set((0..<30).map { _ in content.stateKey }).count, 1)
+        XCTAssertEqual(Set((0..<30).map { _ in content.immediateShareURL }).count, 1)
+    }
+
+    @MainActor
     func testFirstTapAlwaysSharesSavvyPlaceRegardlessOfSource() throws {
         for source in [nil, "https://www.instagram.com/p/venue/", "https://maps.apple.com/?q=Other&ll=1,2",
                        "https://www.google.com/maps/place/Kato", "https://example.com/" + String(repeating: "a", count: 600)] as [String?] {

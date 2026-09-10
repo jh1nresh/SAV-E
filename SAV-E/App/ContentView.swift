@@ -631,6 +631,7 @@ struct ContentView: View {
                 }
             }
         }
+        .ignoresSafeArea(.keyboard, edges: selectedRootTab == .plan && rootPath.isEmpty ? .bottom : [])
     }
 
     private var planView: some View {

@@ -175,6 +175,9 @@ struct SavePlanView: View {
             .onChange(of: conversation.draft) { _, _ in
                 withAnimation { proxy.scrollTo("latestDraft", anchor: .top) }
             }
+            .onChange(of: showsDraftDetails) { _, _ in
+                withAnimation { proxy.scrollTo("latestDraft", anchor: .top) }
+            }
             .placed(x: 0, y: 159, width: AtlasMetrics.width, height: max(160, min(620, AtlasMetrics.height - keyboardOverlap - 171)))
             }
 
@@ -276,10 +279,13 @@ struct SavePlanView: View {
                     .saveAtlasPaper(radius: 16)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(trip.name)
+                .accessibilityHint(trip.city)
                 .accessibilityIdentifier("plan.savedTrip.\(trip.id.uuidString)")
             }
         }
         .foregroundStyle(SaveAtlasPalette.forest)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.savedTrips")
     }
 
@@ -525,6 +531,21 @@ struct SavePlanView: View {
     }
 
     private func draftCanvas(_ draft: SaveAIResponse) -> some View {
+        Group {
+            if showsDraftDetails {
+                VStack(alignment: .leading, spacing: 12) {
+                    draftReviewButton
+                    itineraryDetails(draft)
+                }
+            } else {
+                draftSummary(draft)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("plan.draft")
+    }
+
+    private func draftSummary(_ draft: SaveAIResponse) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Label(localized("DRAFT · NOT SAVED", "草稿 · 尚未儲存"), systemImage: "map")
@@ -566,29 +587,28 @@ struct SavePlanView: View {
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
-            Button { showsDraftDetails.toggle() } label: {
-                HStack {
-                    Text(showsDraftDetails ? localized("Hide details", "收起詳情") : localized("Review & save", "確認並儲存"))
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                }
-                .font(SaveAtlasType.strong(15))
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .background(SaveAtlasPalette.kraft.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("plan.draft.review")
-            if showsDraftDetails {
-                itineraryDetails(draft)
-            }
+            draftReviewButton
         }
         .padding(16)
         .foregroundStyle(SaveAtlasPalette.ink)
         .saveAtlasPaper(radius: 18)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("plan.draft")
+    }
+
+    private var draftReviewButton: some View {
+        Button { showsDraftDetails.toggle() } label: {
+            HStack {
+                Text(showsDraftDetails ? localized("Hide details", "收起詳情") : localized("Review & save", "確認並儲存"))
+                Spacer()
+                Image(systemName: showsDraftDetails ? "chevron.up" : "chevron.down")
+            }
+            .font(SaveAtlasType.strong(15))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .background(SaveAtlasPalette.kraft.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("plan.draft.review")
     }
 
     private func previewLabel(_ stop: ItineraryStop) -> String {

@@ -29,8 +29,10 @@ struct SavePlaceShareContent {
     }
 
     func cacheKey(includingOptionalNote: Bool) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
         guard let payload = payload(includingOptionalNote: includingOptionalNote),
-              let data = try? JSONEncoder().encode(payload)
+              let data = try? encoder.encode(payload)
         else { return fallbackText }
         return "\(sourcePlaceId?.uuidString ?? "unverified")|\(data.base64EncodedString())"
     }

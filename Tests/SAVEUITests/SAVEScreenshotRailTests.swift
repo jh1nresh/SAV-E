@@ -1090,6 +1090,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let send = app.buttons["plan.chat.send"]
         XCTAssertTrue(send.isHittable)
         XCTAssertLessThanOrEqual(send.frame.maxY, app.keyboards.firstMatch.frame.minY)
+        XCTAssertTrue(app.buttons["plan.newTrip"].isHittable)
+        XCTAssertGreaterThanOrEqual(app.buttons["plan.newTrip"].frame.minY, app.frame.minY)
         attach(app, name: "plan-chat-keyboard")
         send.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Any first-day start'")).firstMatch.waitForExistence(timeout: stepTimeout))
