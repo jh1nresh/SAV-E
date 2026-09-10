@@ -646,7 +646,6 @@ struct ContentView: View {
                 )
             },
             onOpenPassport: openPassport,
-            onOpenTrips: { rootPath = SaveChromeNavigation.pathByOpening(.trips, currently: rootPath) },
             onConfirmCandidate: { candidate in
                 if let existing = mapVM.places.first(where: {
                     $0.name.localizedCaseInsensitiveCompare(candidate.title) == .orderedSame
@@ -1365,13 +1364,10 @@ struct ContentView: View {
 
     private func openPlanConversation(submittedQuery: String? = nil) {
         if !planConversation.assignmentInProgress {
-            planConversation.assignmentPlace = nil
-            planConversation.anchorPlaceID = nil
-            planConversation.submittedQuery = submittedQuery
-            if submittedQuery == nil {
-                planConversation.input = ""
-                planConversation.conditions = SavePlanConversationConditions()
-                planConversation.turns = []
+            if let submittedQuery {
+                planConversation.submittedQuery = submittedQuery
+            } else {
+                planConversation.requestsNewPlan = true
             }
         }
         presentAfterClearingExclusiveChrome(.plan)

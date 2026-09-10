@@ -8,6 +8,8 @@ final class SavePlanConversation: ObservableObject {
         let request: String
         let reply: String
     }
+    @Published var requestsNewPlan = false
+    @Published private(set) var sessionID = UUID()
     @Published var input = ""
     @Published var submittedQuery: String?
     @Published var messages: [Message] = []
@@ -18,6 +20,21 @@ final class SavePlanConversation: ObservableObject {
     @Published var assignmentInProgress = false
     var anchorPlaceID: UUID?
     var excludedPlaceIDs = Set<UUID>()
+
+    func startNewPlan() {
+        guard !assignmentInProgress else { return }
+        sessionID = UUID()
+        requestsNewPlan = false
+        input = ""
+        submittedQuery = nil
+        messages = []
+        draft = nil
+        turns = []
+        conditions = SavePlanConversationConditions()
+        assignmentPlace = nil
+        anchorPlaceID = nil
+        excludedPlaceIDs = []
+    }
 
     /// Stage an explicit place action in Plan. No submission, trip mutation,
     /// day count or pace is implied by opening this conversation.
@@ -30,6 +47,7 @@ final class SavePlanConversation: ObservableObject {
                 reply: language.localized(english: "Which saved trip should it join, or would you like a new plan?", traditionalChinese: "要加入哪個已存行程，還是開始一份新草稿？")
             ))
         } else {
+            sessionID = UUID()
             assignmentPlace = nil
             anchorPlaceID = place.id
             excludedPlaceIDs = []
@@ -88,19 +106,14 @@ struct SavePlanView: View {
     @ObservedObject var conversation: SavePlanConversation
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
-    let onOpenTrips: () -> Void
     let onConfirmCandidate: (SaveMapCandidate) async throws -> Place
 
     @Environment(\.appLanguageSettings) private var languageSettings
     @FocusState private var isChatFocused: Bool
     @State private var keyboardOverlap: CGFloat = 0
-    @State private var reviewDraft: PlanReviewDraft?
-    @State private var pendingTripID: UUID?
-
-    private struct PlanReviewDraft: Identifiable {
-        let id = UUID()
-        let response: SaveAIResponse
-    }
+    @State private var showsSavedTrips = false
+    @State private var showsDraftDetails = false
+    @State private var confirmsNewPlan = false
     private var draft: SaveAIResponse? {
         get { conversation.draft }
         nonmutating set { conversation.draft = newValue }
@@ -129,29 +142,29 @@ struct SavePlanView: View {
             }
             .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
 
+            planActions
+                .placed(x: 16, y: 105, width: AtlasMetrics.width - 32, height: 44)
+
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     heading
-                    conversationContent
-                        .id("conversationEnd")
-                    if let draft {
-                        draftCanvas(draft)
-                            .disabled(isPlanning)
-                            .id("latestDraft")
+                    if showsSavedTrips {
+                        savedTripsContent
+                    } else {
+                        conversationContent
+                            .id("conversationEnd")
+                        if let draft {
+                            draftCanvas(draft)
+                                .disabled(isPlanning)
+                                .id("latestDraft")
+                        }
                     }
-                    Button(action: onOpenTrips) {
-                        Label(localized("Saved trips", "已存行程"), systemImage: "list.bullet")
-                            .font(SaveAtlasType.body(14))
-                            .frame(minHeight: 44)
-                    }
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .accessibilityIdentifier("plan.allTrips")
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) { chatInput }
+            .safeAreaInset(edge: .bottom, spacing: 0) { if !showsSavedTrips { chatInput } }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: conversation.messages.count) { _, _ in
                 withAnimation { proxy.scrollTo("conversationEnd", anchor: .bottom) }
@@ -162,7 +175,7 @@ struct SavePlanView: View {
             .onChange(of: conversation.draft) { _, _ in
                 withAnimation { proxy.scrollTo("latestDraft", anchor: .top) }
             }
-            .placed(x: 0, y: 105, width: AtlasMetrics.width, height: max(160, min(674, AtlasMetrics.height - keyboardOverlap - 117)))
+            .placed(x: 0, y: 159, width: AtlasMetrics.width, height: max(160, min(620, AtlasMetrics.height - keyboardOverlap - 171)))
             }
 
         }
@@ -177,33 +190,28 @@ struct SavePlanView: View {
         }
         }
         .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
-        .sheet(item: $reviewDraft, onDismiss: {
-            if let tripID = pendingTripID {
-                pendingTripID = nil
-                onOpenTrip(tripID)
-            }
-        }) { review in
-            NavigationStack {
-                ScrollView {
-                    itineraryDetails(review.response)
-                        .padding(16)
-                }
-                .background(SaveAtlasPalette.canvas)
-                .navigationTitle(localized("Review your plan", "確認行程"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(localized("Done", "完成")) { reviewDraft = nil }
-                            .accessibilityIdentifier("plan.review.close")
-                    }
-                }
-            }
-            .presentationDetents([.large])
+        .alert(localized("Start a new trip?", "開始新行程？"), isPresented: $confirmsNewPlan) {
+            Button(localized("Cancel", "取消"), role: .cancel) {}
+            Button(localized("Start new trip", "開始新行程"), role: .destructive) { startNewPlan() }
+        } message: {
+            Text(localized("This unsaved draft will be cleared. Your saved trips are kept.", "目前未儲存的草稿會清除，已存行程會保留。"))
+        }
+        .onChange(of: conversation.requestsNewPlan) { _, requested in
+            if requested { requestNewPlan() }
+        }
+        .onChange(of: conversation.sessionID) { _, _ in
+            planningTask?.cancel()
+            isPlanning = false
+            showsSavedTrips = false
+            showsDraftDetails = false
         }
         .environment(\.atlasPresentation, atlasPresentation)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.root")
-        .onAppear(perform: consumeSubmittedQuery)
+        .onAppear {
+            if conversation.requestsNewPlan { requestNewPlan() }
+            consumeSubmittedQuery()
+        }
         .onChange(of: conversation.submittedQuery) { _, _ in consumeSubmittedQuery() }
         .onDisappear {
             planningTask?.cancel()
@@ -222,12 +230,85 @@ struct SavePlanView: View {
         }
     }
 
+    private var planActions: some View {
+        HStack(spacing: 16) {
+            Button(action: requestNewPlan) {
+                Label(localized("New trip", "新建行程"), systemImage: "plus")
+                    .frame(minHeight: 44)
+            }
+            .disabled(conversation.assignmentInProgress)
+            .accessibilityIdentifier("plan.newTrip")
+            Spacer()
+            Button {
+                isChatFocused = false
+                showsSavedTrips.toggle()
+            } label: {
+                Label(showsSavedTrips ? localized("Back to plan", "返回規劃") : localized("Saved trips", "已存行程"),
+                      systemImage: showsSavedTrips ? "arrow.left" : "list.bullet")
+                    .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("plan.allTrips")
+        }
+        .font(SaveAtlasType.body(14))
+        .foregroundStyle(SaveAtlasPalette.forest)
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+    }
+
+    private var savedTripsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if tripStore.trips.isEmpty {
+                Text(localized("No saved trips yet. Start a new trip to plan from your saved places.", "還沒有已存行程。點「新建行程」，從已存地點開始規劃。"))
+                    .font(SaveAtlasType.body(16))
+            }
+            ForEach(tripStore.trips) { trip in
+                Button { onOpenTrip(trip.id) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(trip.name).font(SaveAtlasType.strong(17))
+                            Text(trip.city).font(SaveAtlasType.body(14))
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                    .saveAtlasPaper(radius: 16)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("plan.savedTrip.\(trip.id.uuidString)")
+            }
+        }
+        .foregroundStyle(SaveAtlasPalette.forest)
+        .accessibilityIdentifier("plan.savedTrips")
+    }
+
+    private func requestNewPlan() {
+        conversation.requestsNewPlan = false
+        guard !conversation.assignmentInProgress else { return }
+        if draft != nil {
+            confirmsNewPlan = true
+        } else {
+            startNewPlan()
+        }
+    }
+
+    private func startNewPlan() {
+        planningTask?.cancel()
+        isPlanning = false
+        planError = nil
+        conversation.startNewPlan()
+        showsSavedTrips = false
+        showsDraftDetails = false
+        isChatFocused = true
+    }
+
     private var heading: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(localized("Plan with Savvy", "和 Savvy 一起規劃"))
+            Text(showsSavedTrips ? localized("Saved trips", "已存行程") : localized("Plan with Savvy", "和 Savvy 一起規劃"))
                 .font(SaveAtlasType.strong(25, relativeTo: .title2))
                 .foregroundStyle(SaveAtlasPalette.forest)
-            Text(localized("A trip from the places you’ve saved.", "從你已存的地點，聊出一趟行程。"))
+            Text(showsSavedTrips ? localized("Open a trip to see its places and route.", "選擇行程，查看地點與路線。") : localized("A trip from the places you’ve saved.", "從你已存的地點，聊出一趟行程。"))
                 .font(SaveAtlasType.body(14))
                 .foregroundStyle(SaveAtlasPalette.muted)
         }
@@ -374,8 +455,10 @@ struct SavePlanView: View {
         let planningMessage = conversation.conditions.planningMessage(language: languageSettings.language)
         let language = languageSettings.language
         let history = conversation.turns
+        let sessionID = conversation.sessionID
         planningTask = Task {
-            defer { if !Task.isCancelled { isPlanning = false } }
+            guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
+            defer { if !Task.isCancelled, conversation.sessionID == sessionID { isPlanning = false } }
             do {
                 guard var local = SavePlanDraftBuilder.draft(request: request, savedPlaces: areaPlaces, unsavedCandidates: candidates) else {
                     conversation.messages.append(.init(request: query, reply: localized(
@@ -405,7 +488,7 @@ struct SavePlanView: View {
                     let gaps = local.itineraryDays.flatMap { $0.health?.gaps ?? [] }
                     if !gaps.isEmpty {
                         let extras = await TripGapLocalOptionsService().candidates(forGaps: gaps, days: local.itineraryDays, savedPlaces: areaPlaces)
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
                         if !extras.isEmpty, let enriched = SavePlanDraftBuilder.draft(
                             request: request, savedPlaces: areaPlaces, unsavedCandidates: extras + candidates
                         ) { local = enriched }
@@ -415,21 +498,24 @@ struct SavePlanView: View {
                         outputLanguage: language, deterministicDraftOverride: local,
                         maxStopsPerDay: request.pace.maxStopsPerDay
                     )
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
                     response = SavePlanDraftBuilder.preservingSchedule(polished, draft: local)
                     response = await SavePlanDraftBuilder.checkingTravel(response, savedPlaces: places, language: language)
                 }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
                 conversation.turns.append(ConversationTurn(userMessage: query, assistantResponse: SaveAIService.shared.encodeResponse(response)))
                 if conversation.turns.count > 12 { conversation.turns.removeFirst() }
                 let reply = response.componentType == .tripItinerary
                     ? localized("Here’s a draft. Tell me what you’d like to change, or review it before saving.", "先排好這版草稿。可以繼續聊想調整的地方，或確認內容後儲存。")
                     : response.aiMessage ?? response.messageText ?? response.title ?? localized("Tell me more about your trip.", "再多說一點你想怎麼玩。")
                 conversation.messages.append(.init(request: query, reply: reply))
-                if response.componentType == .tripItinerary { draft = response }
+                if response.componentType == .tripItinerary {
+                    showsDraftDetails = false
+                    draft = response
+                }
                 if conversation.input.trimmingCharacters(in: .whitespacesAndNewlines) == query { conversation.input = "" }
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
                 planError = localized(
                     "Couldn’t finish this draft. Your message is kept; please try again.",
                     "這次沒能完成草稿，訊息已保留，請再試一次。"
@@ -480,9 +566,9 @@ struct SavePlanView: View {
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
-            Button { reviewDraft = PlanReviewDraft(response: draft) } label: {
+            Button { showsDraftDetails.toggle() } label: {
                 HStack {
-                    Text(localized("Review & save", "確認並儲存"))
+                    Text(showsDraftDetails ? localized("Hide details", "收起詳情") : localized("Review & save", "確認並儲存"))
                     Spacer()
                     Image(systemName: "arrow.right")
                 }
@@ -494,6 +580,9 @@ struct SavePlanView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("plan.draft.review")
+            if showsDraftDetails {
+                itineraryDetails(draft)
+            }
         }
         .padding(16)
         .foregroundStyle(SaveAtlasPalette.ink)
@@ -522,8 +611,8 @@ struct SavePlanView: View {
                 await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
             },
             onOpenTrip: { tripID in
-                pendingTripID = tripID
-                reviewDraft = nil
+                conversation.startNewPlan()
+                onOpenTrip(tripID)
             },
             onConfirmCandidate: onConfirmCandidate
         )

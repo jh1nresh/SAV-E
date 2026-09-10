@@ -175,7 +175,7 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
-    func testShareContentWithoutFallbackURLKeepsImmediatePlainTextItem() {
+    func testShareContentWithoutFallbackURLStillBuildsSavvyPlaceLink() throws {
         let content = SavePlaceShareContent(
             subject: "Savvy Map Result: Kato",
             fallbackURL: nil,
@@ -200,7 +200,10 @@ final class ShareRouteCodecTests: XCTestCase {
             optionalShareNote: nil
         )
 
-        XCTAssertTrue(content.immediateShareText.hasPrefix("Savvy Map Result\nKato\nLos Angeles\nhttps://maps.apple.com/"))
+        let url = try XCTUnwrap(content.immediateShareURL)
+        XCTAssertEqual(SharedPlaceData.from(url: url)?.name, "Kato")
+        XCTAssertTrue(content.immediateShareText.hasPrefix("Savvy Map Result\nKato\nLos Angeles\n"))
+        XCTAssertFalse(content.immediateShareText.contains("maps.apple.com"))
         XCTAssertNil(content.fallbackURL)
     }
 

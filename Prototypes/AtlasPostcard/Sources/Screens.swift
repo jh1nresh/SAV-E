@@ -1254,17 +1254,15 @@ struct TripsAtlasScreen: View {
                 Spacer(minLength: 12)
 
                 HStack(spacing: 10) {
-                    TripsAskField(onSubmit: presentation.onAskSubmit)
-
                     Button(action: presentation.onCreateTrip) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 19, weight: .bold))
+                        Label(presentation.newTripLabel, systemImage: "plus")
+                            .font(AtlasType.strong(16))
                             .foregroundStyle(.white)
-                            .frame(width: 50, height: 50)
+                            .frame(maxWidth: .infinity, minHeight: 50)
                             .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Start a new Trip")
+                    .accessibilityLabel(presentation.newTripLabel)
                     .accessibilityIdentifier("trips.create")
                 }
                 .padding(.horizontal, 17)
@@ -1366,95 +1364,6 @@ private struct TripRecommendationCard: View {
         .accessibilityLabel(recommendation.title)
         .accessibilityHint(recommendation.subtitle)
         .accessibilityIdentifier("trips.recommendation.\(recommendation.id)")
-    }
-}
-
-/// Trips P1: a real inline ask input replacing the old fake-input Button.
-/// Idle rendering must stay pixel-equal to the previous button (placeholder is
-/// drawn by hand, not by TextField) so Atlas parity crops keep passing.
-private struct TripsAskField: View {
-    let onSubmit: (String) -> Void
-    @State private var query = ""
-    @FocusState private var focused: Bool
-
-    /// The resting row sits under the software keyboard (row bottom y≈772 in
-    /// the flow layout, keyboard top ≈538 in canvas units). A fixed lift
-    /// clears every current iPhone keyboard after ReferenceViewport scaling,
-    /// so no keyboard-frame observation is needed.
-    private let focusedLift: CGFloat = 264
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AtlasPalette.forest)
-
-            ZStack(alignment: .leading) {
-                if query.isEmpty {
-                    // Short enough to fit the 402pt row without truncating;
-                    // the accessibility label keeps the full sentence.
-                    Text("Ask Savvy to plan a trip")
-                        .font(AtlasType.strong(14))
-                        .foregroundStyle(AtlasPalette.ink)
-                        .lineLimit(1)
-                        .allowsHitTesting(false)
-                }
-
-                TextField("", text: $query)
-                    .font(AtlasType.strong(14))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .tint(AtlasPalette.coral)
-                    .focused($focused)
-                    .submitLabel(.send)
-                    .onSubmit(submit)
-                    .accessibilityLabel("Ask Savvy to plan from your Map Stamps")
-                    .accessibilityIdentifier("trips.assistant.input")
-            }
-
-            Spacer(minLength: 0)
-
-            Button(action: submit) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 31, height: 31)
-                    .background(AtlasPalette.coral, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Ask Savvy")
-            .accessibilityIdentifier("trips.assistant.submit")
-        }
-        .padding(.horizontal, 13)
-        .frame(maxWidth: .infinity, minHeight: 50)
-        .background(AtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(AtlasPalette.line.opacity(0.34), lineWidth: 1)
-        }
-        .shadow(
-            color: AtlasPalette.ink.opacity(focused ? 0.14 : 0.06),
-            radius: focused ? 10 : 6,
-            y: focused ? 4 : 2
-        )
-        .contentShape(Rectangle())
-        .onTapGesture { focused = true }
-        .offset(y: focused ? -focusedLift : 0)
-        // Same curve as SaveTheme.Motion.standardSpring; SaveTheme itself is
-        // not compiled into the AtlasPostcardPrototype target.
-        .animation(.spring(response: 0.52, dampingFraction: 0.86), value: focused)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("trips.assistant")
-    }
-
-    private func submit() {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            focused = true
-            return
-        }
-        focused = false
-        query = ""
-        onSubmit(trimmed)
     }
 }
 

@@ -613,7 +613,7 @@ Use a single conversation with typed itinerary previews, following the interacti
 pattern in Anthropic's commerce-agent reference. Keep the Atlas palette and native
 SwiftUI components. Each response shows a compact unsaved draft with at most three
 day previews; complete stops, travel checks, candidate confirmation, and explicit
-Save as Trip live in a review sheet. The chat input stays accessible while chatting.
+Save as Trip expand inline in the same Plan surface. The chat input stays accessible while chatting.
 Conversation turns remain available for follow-up requests. This is a presentation
 pattern, not adoption of the reference demo's backend or payment architecture.
 
@@ -634,10 +634,14 @@ Rules:
   exact place without submitting. Add to Trip offers eligible existing trips
   and a new-plan choice inline; only an explicit existing-trip selection writes
   that place to the chosen trip. Saved trips remain accessible from Plan.
-- New trip from Saved trips opens a blank Plan input while retaining prior drafts
-  and saved trips. It does not open a calendar or manual trip form.
-- A question submitted from Trips continues in Plan chat and asks for missing
-  conditions there; it does not open a second planning drawer.
+- New trip and Saved trips stay visible above the Plan conversation. Saved trips
+  appear inline and open directly into the selected trip, without another landing page.
+- New trip clears conversation conditions and messages. An unsaved draft requires
+  discard confirmation; saved trips are always retained. No calendar or manual form.
+- Trips has a New trip action, with no second planning composer. Planning questions
+  and missing-condition clarification belong only in Plan.
+- A reply of no pace preference chooses balanced and still asks about time limits;
+  it never silently answers both questions.
 - Confirmed Map Stamps are the only stops that can be saved into a Trip.
 - Unsaved attractions, meals, or hotels appear as Unsaved Candidates (sky), never as Map Stamps.
 - Travel windows (arrival, departure, check-in, check-out) are Trip Stop constraints, not places.

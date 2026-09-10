@@ -692,9 +692,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.buttons["trips.capture"].exists,
             "Trips dropped its header capture button; capture lives on Home and Saves."
         )
-        // The ask entry is a real input now, not a button (spec P1), so the
-        // query is type-agnostic while the identifier stays the same.
-        XCTAssertTrue(app.descendants(matching: .any)["trips.assistant"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["trips.assistant"].exists)
         XCTAssertTrue(app.buttons["trips.create"].exists)
         let firstTrip = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")
@@ -754,16 +752,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: launchTimeout))
 
-        // The typed request remains visible before submitting to Plan chat.
-        let askInput = app.textFields["trips.assistant.input"]
-        typeText("Plan a day from my stamps", into: askInput)
-        XCTAssertEqual(askInput.value as? String, "Plan a day from my stamps")
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].exists)
-
-        app.buttons["trips.assistant.submit"].tap()
+        XCTAssertFalse(app.textFields["trips.assistant.input"].exists)
+        tapReachable(app.buttons["trips.create"])
         XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Plan", app: app).isSelected)
-        XCTAssertTrue(app.staticTexts["Plan a day from my stamps"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["plan.chat.input"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         XCTAssertFalse(app.buttons["plan.options"].exists)
@@ -1111,13 +1103,55 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         review.tap()
         XCTAssertTrue(app.buttons["tripPlan.save"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "plan-review-details")
-        app.buttons["plan.review.close"].tap()
+        XCTAssertFalse(app.buttons["plan.review.close"].exists)
+        tapReachable(review)
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
         openRootTab("Home", app: app)
         openRootTab("Plan", app: app)
         XCTAssertTrue(app.staticTexts["Plan a relaxed 1 day trip in Tokyo"].waitForExistence(timeout: stepTimeout))
         app.buttons["plan.allTrips"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.savedTrips"].waitForExistence(timeout: stepTimeout))
+    }
+
+    @MainActor
+    func testPlanCanStartAgainWithoutLosingSavedTrips() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openRootTab("Plan", app: app)
+        let input = app.textFields["plan.chat.input"]
+        for answer in ["Taipei", "7", "more places", "none"] {
+            typeText(answer, into: input)
+            tapReachable(app.buttons["plan.chat.send"])
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        let newTrip = app.buttons["plan.newTrip"]
+        XCTAssertTrue(newTrip.isHittable)
+        newTrip.tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: stepTimeout))
+        alert.buttons["Cancel"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].exists)
+        newTrip.tap()
+        alert.buttons["Start new trip"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.staticTexts["more places"].exists)
+        typeText("Tokyo 1 day balanced; no time constraints", into: input)
+        tapReachable(app.buttons["plan.chat.send"])
+        XCTAssertTrue(app.descendants(matching: .any)["plan.draft"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-second-draft")
+        app.buttons["plan.allTrips"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["plan.savedTrips"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(input.exists)
+        XCTAssertFalse(app.textFields["trips.assistant.input"].exists)
+        let trip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plan.savedTrip.'")).firstMatch
+        XCTAssertTrue(trip.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "plan-saved-trips-inline")
+        trip.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
@@ -1314,13 +1348,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let allTrips = app.buttons["plan.allTrips"]
         XCTAssertTrue(scrollUntilHittable(allTrips, in: app.scrollViews.firstMatch, maxSwipes: 8))
         allTrips.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
-        let tripMenu = app.buttons["trips.allTrips"]
-        XCTAssertTrue(tripMenu.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(tripMenu.label.contains("4"))
-        tripMenu.tap()
-        let savedTrip = app.buttons[savedName]
-        XCTAssertTrue(savedTrip.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.savedTrips"].waitForExistence(timeout: stepTimeout))
+        let savedTrip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plan.savedTrip.' AND label CONTAINS %@", savedName)).firstMatch
+        XCTAssertTrue(scrollUntilHittable(savedTrip, in: app.scrollViews.firstMatch, maxSwipes: 8))
         attach(app, name: "plan-all-four-trips")
         savedTrip.tap()
         XCTAssertTrue(app.descendants(matching: .any)["trip.plan"].waitForExistence(timeout: stepTimeout))
@@ -2028,7 +2058,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(success.waitForExistence(timeout: timeout(20)))
         XCTAssertTrue(success.staticTexts["Saved to Trip Packs"].exists)
         success.buttons["OK"].tap()
-        app.buttons["plan.review.close"].tap()
+        XCTAssertFalse(app.buttons["plan.review.close"].exists)
+        tapReachable(review)
         try assertSavedPlaceAndTripStopPersist(
             app: app,
             placeName: placeName,

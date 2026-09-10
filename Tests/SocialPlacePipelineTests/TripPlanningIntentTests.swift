@@ -49,6 +49,68 @@ final class TripPlanningIntentValidatorTests: XCTestCase {
 
 @MainActor
 final class SavePlanConversationConditionsTests: XCTestCase {
+    func testScreenshotColloquialPaceAdvancesToTimeThenDraft() throws {
+        var conditions = SavePlanConversationConditions()
+        for answer in ["以「and.room_taipei」為中心規劃 · Taipei", "7", "多一點"] {
+            conditions.receive(answer, areas: ["Taipei"])
+        }
+        XCTAssertEqual(conditions.pace, .packed)
+        XCTAssertFalse(conditions.needsFollowUpClarification)
+        XCTAssertTrue(conditions.clarification(language: .traditionalChinese)?.contains("第一天") == true)
+        conditions.receive("沒有", areas: ["Taipei"])
+        let request = try XCTUnwrap(conditions.request(language: .traditionalChinese))
+        XCTAssertEqual(request.days, 7)
+        XCTAssertEqual(request.pace, .packed)
+    }
+
+    func testNoPacePreferenceAnswersOnlyPaceQuestion() {
+        var conditions = SavePlanConversationConditions()
+        conditions.receive("Taipei 2 days", areas: ["Taipei"])
+        conditions.receive("都可以", areas: ["Taipei"])
+        XCTAssertEqual(conditions.pace, .balanced)
+        XCTAssertFalse(conditions.arrivalAnswered)
+        XCTAssertNil(conditions.request(language: .english))
+        conditions.receive("都可以", areas: ["Taipei"])
+        XCTAssertNotNil(conditions.request(language: .english))
+    }
+
+    func testNegatedMorePlacesDoesNotSelectPacked() {
+        for answer in ["不要多一點", "not more places", "不要太緊湊"] {
+            var conditions = SavePlanConversationConditions()
+            conditions.receive("Taipei 2 days", areas: ["Taipei"])
+            conditions.receive(answer, areas: ["Taipei"])
+            XCTAssertNil(conditions.pace, answer)
+        }
+    }
+
+    func testNewPlanResetsEveryConversationConditionAndAllowsSecondDraft() throws {
+        let conversation = SavePlanConversation()
+        let saved = place("Taipei Museum", address: "Taipei")
+        conversation.conditions = completed()
+        conversation.draft = SavePlanDraftBuilder.draft(
+            request: try XCTUnwrap(conversation.conditions.request(language: .english)), savedPlaces: [saved])
+        conversation.messages = [.init(request: "old", reply: "old draft")]
+        conversation.input = "old input"
+        conversation.submittedQuery = "queued old request"
+        conversation.anchorPlaceID = saved.id
+        conversation.excludedPlaceIDs = [saved.id]
+        let oldID = conversation.sessionID
+        conversation.startNewPlan()
+        XCTAssertNotEqual(conversation.sessionID, oldID)
+        XCTAssertNil(conversation.draft)
+        XCTAssertNil(conversation.submittedQuery)
+        XCTAssertNil(conversation.anchorPlaceID)
+        XCTAssertTrue(conversation.messages.isEmpty)
+        XCTAssertTrue(conversation.input.isEmpty)
+        XCTAssertTrue(conversation.excludedPlaceIDs.isEmpty)
+        XCTAssertTrue(conversation.turns.isEmpty)
+        XCTAssertNil(conversation.conditions.area)
+        conversation.conditions.receive("Taipei 1 day packed; no time constraints", areas: ["Taipei"])
+        let request = try XCTUnwrap(conversation.conditions.request(language: .english))
+        XCTAssertEqual(request.days, 1)
+        XCTAssertNotNil(SavePlanDraftBuilder.draft(request: request, savedPlaces: [saved]))
+    }
+
     func testLosAngelesAliasesResolveOnlyEquivalentSavedCities() {
         for label in ["Los Angeles", "洛杉磯", "洛杉矶", "LA"] {
             for query in ["規劃 LA", "洛杉磯", "LA", "plan a trip to LA", "LA 3 days", "規劃 LA 3 天行程", "LA 3 days relaxed",
