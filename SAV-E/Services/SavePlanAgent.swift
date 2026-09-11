@@ -384,7 +384,7 @@ extension SavePlanAgent {
     static func reviewFixture(query: String, history: [ConversationTurn], request: SavePlanRequest?,
                               draft: SaveAIResponse?, savedPlaces: [Place], anchorID: UUID?, language: AppLanguage) throws -> SavePlanAgentResult {
         var conditions = SavePlanConversationConditions()
-        let areas = Array(Set(savedPlaces.compactMap { SavePlanDraftBuilder.areaLabel(for: $0) }))
+        let areas = SavePlanDraftBuilder.areas(from: savedPlaces)
         if let request { conditions.acceptAgentRequest(request) }
         else { for turn in history { conditions.receive(turn.userMessage, areas: areas) } }
         conditions.receive(query, areas: areas)

@@ -34,6 +34,56 @@ final class SavePlanAgentTests: XCTestCase {
             savedPlaces: places, candidates: [], anchorID: nil, language: .traditionalChinese)
     }
 
+    func testOfflineFixturePlansAroundCoordinateOnlyStamp() throws {
+        let anchor = place("Quarter Sheets Pizza Club", area: "", category: .food)
+        let conversation = SavePlanConversation()
+        conversation.stage(place: anchor, addingToTrip: false, language: .english)
+        let result = try SavePlanAgent.reviewFixture(
+            query: conversation.input + " 1 day balanced; no time constraints", history: [],
+            request: nil, draft: nil, savedPlaces: [anchor], anchorID: anchor.id, language: .english)
+        XCTAssertEqual(try XCTUnwrap(result.draft).placeIds, [anchor.id.uuidString])
+    }
+
+    func testConfirmedCanvasIdentitySurvivesUntouchedDayFollowUp() throws {
+        let a = place("Museum"), b = place("Garden"), confirmed = place("New Cafe", category: .cafe)
+        let candidate = SaveMapCandidate(id: "new-cafe", title: confirmed.name, subtitle: "Taipei",
+                                        latitude: confirmed.latitude, longitude: confirmed.longitude, category: .cafe)
+        var action = decision([[a], [b]])
+        action.changedDays?[0].stops[0].ref = "c:" + candidate.id
+        let first = try validate(action, places: [a, b], candidates: [candidate])
+        let original = try XCTUnwrap(first.draft)
+        let conversation = SavePlanConversation()
+        conversation.draft = original
+        var canvas = TripCanvasDraft(days: original.itineraryDays)
+        canvas.confirmExternalStop(original.itineraryDays[0].stops[0].id, as: confirmed)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
+        let edited = try XCTUnwrap(conversation.draft)
+        XCTAssertEqual(edited.itineraryDays[0].stops[0].placeState, .confirmedMapStamp)
+        XCTAssertTrue(edited.placeIds.contains(confirmed.id.uuidString))
+        var followUp = decision([[a], [b]])
+        followUp.changedDays?.removeFirst()
+        followUp.changedDays?[0].stops[0].duration = 45
+        let result = try validate(followUp, places: [a, b, confirmed],
+                                  previous: .init(message: first.message, request: first.request, draft: edited))
+        XCTAssertEqual(result.draft?.itineraryDays[0], edited.itineraryDays[0])
+        conversation.startNewPlan()
+        conversation.updateDraftDays(canvas.visibleDays, replacing: edited)
+        XCTAssertNil(conversation.draft, "A late callback cannot restore a discarded draft.")
+    }
+
+    func testManualCanvasEditsBecomeTheConversationDraft() throws {
+        let a = place("Museum"), b = place("Garden"), c = place("Gallery")
+        let original = try XCTUnwrap(validate(decision([[a, b, c]]), places: [a, b, c]).draft)
+        let conversation = SavePlanConversation()
+        conversation.draft = original
+        var canvas = TripCanvasDraft(days: original.itineraryDays)
+        canvas.moveStopEarlier(original.itineraryDays[0].stops[1].id)
+        canvas.skipStop(original.itineraryDays[0].stops[2].id)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
+        XCTAssertEqual(conversation.draft?.itineraryDays, canvas.visibleDays)
+        XCTAssertEqual(conversation.draft?.placeIds, [b.id.uuidString, a.id.uuidString])
+    }
+
     func testFirstTurnReachesModelWithoutPaceOrClockQuestionnaire() async throws {
         let a = place("Museum")
         var calls = 0

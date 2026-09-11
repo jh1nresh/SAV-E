@@ -12,6 +12,7 @@ struct TripItineraryComponent: View {
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)?
     var onOpenTrip: ((UUID) -> Void)? = nil
     var onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
+    var onDaysChange: (([ItineraryDay]) -> Void)? = nil
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var shareItem: TripItineraryShareItem?
     @State private var exportAlert: TripItineraryExportAlert?
@@ -35,7 +36,8 @@ struct TripItineraryComponent: View {
         travelLegs: [TripTravelLeg] = [],
         onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil,
         onOpenTrip: ((UUID) -> Void)? = nil,
-        onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
+        onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil,
+        onDaysChange: (([ItineraryDay]) -> Void)? = nil
     ) {
         self.title = title
         self.sourceDays = days
@@ -46,6 +48,7 @@ struct TripItineraryComponent: View {
         self.onSaveTripPlan = onSaveTripPlan
         self.onOpenTrip = onOpenTrip
         self.onConfirmCandidate = onConfirmCandidate
+        self.onDaysChange = onDaysChange
         _canvas = State(initialValue: TripCanvasDraft(days: days))
     }
 
@@ -194,11 +197,15 @@ struct TripItineraryComponent: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: sourceDays) { _, _ in
+            guard sourceDays != canvas.visibleDays else { return }
             canvas = TripCanvasDraft(days: sourceDays)
             confirmedPlaces = []
             savedTripID = nil
         }
-        .onChange(of: canvas.visibleDays) { _, _ in savedTripID = nil }
+        .onChange(of: canvas.visibleDays) { _, days in
+            savedTripID = nil
+            if days != sourceDays { onDaysChange?(days) }
+        }
         .disabled(isConfirmingCandidate || isSavingTrip)
         .confirmationDialog(
             languageSettings.localized(english: "Confirm this place", traditionalChinese: "確認這個地點"),

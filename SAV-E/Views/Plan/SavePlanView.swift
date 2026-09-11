@@ -22,6 +22,18 @@ final class SavePlanConversation: ObservableObject {
     var anchorPlaceID: UUID?
     var excludedPlaceIDs = Set<UUID>()
 
+    func updateDraftDays(_ days: [ItineraryDay], replacing source: SaveAIResponse) {
+        guard draft == source else { return }
+        draft = SaveAIResponse(
+            componentType: source.componentType, title: source.title,
+            placeIds: days.flatMap(\.stops).compactMap(\.placeId),
+            navigationPlaceId: source.navigationPlaceId, transportMode: source.transportMode,
+            itineraryDays: days, tripHealth: source.tripHealth, messageText: source.messageText,
+            mapAction: source.mapAction, aiMessage: source.aiMessage,
+            followUpChoices: source.followUpChoices, travelLegs: source.travelLegs
+        )
+    }
+
     func startNewPlan() {
         guard !assignmentInProgress else { return }
         sessionID = UUID()
@@ -577,7 +589,8 @@ struct SavePlanView: View {
                 conversation.startNewPlan()
                 onOpenTrip(tripID)
             },
-            onConfirmCandidate: onConfirmCandidate
+            onConfirmCandidate: onConfirmCandidate,
+            onDaysChange: { conversation.updateDraftDays($0, replacing: draft) }
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.draft.details")

@@ -720,6 +720,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
         attach(app, name: "trips-new-opens-plan-chat")
 
+        app.scrollViews.firstMatch.swipeDown()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: stepTimeout))
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
@@ -1338,6 +1340,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
         confirm.tap()
         XCTAssertTrue(candidate.waitForNonExistence(timeout: timeout(30)))
+        XCTAssertTrue(scrollUntilHittable(review, in: scroll, maxSwipes: 10))
+        review.tap()
+        review.tap()
+        XCTAssertFalse(candidate.exists, "A confirmed candidate must stay confirmed after reopening details.")
+        typeText("Day two is too tiring; make it lighter", into: input)
+        tapReachable(send)
+        XCTAssertTrue(app.staticTexts["I’ve made day two lighter and kept day one unchanged."].waitForExistence(timeout: stepTimeout))
+        tapReachable(review)
+        XCTAssertFalse(candidate.exists, "Editing day two must retain the confirmed identity on day one.")
         let save = app.buttons["tripPlan.save"]
         for _ in 0..<10 {
             if save.isHittable { break }
