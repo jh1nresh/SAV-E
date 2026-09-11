@@ -1367,6 +1367,8 @@ struct ContentView: View {
         if !planConversation.assignmentInProgress {
             if let submittedQuery {
                 planConversation.assignmentPlace = nil
+                planConversation.anchorPlaceID = nil
+                planConversation.agentRequest?.anchorPlaceID = nil
                 planConversation.submittedQuery = submittedQuery
             } else {
                 planConversation.requestsNewPlan = true
