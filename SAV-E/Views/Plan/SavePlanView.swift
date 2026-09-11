@@ -395,6 +395,13 @@ struct SavePlanView: View {
                 .submitLabel(.send)
                 .onSubmit(sendMessage)
                 .accessibilityIdentifier("plan.chat.input")
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(localized("Done", "完成")) { isChatFocused = false }
+                            .accessibilityIdentifier("plan.keyboardDone")
+                    }
+                }
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 17, weight: .semibold))

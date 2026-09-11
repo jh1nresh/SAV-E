@@ -720,7 +720,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
         attach(app, name: "trips-new-opens-plan-chat")
 
-        app.scrollViews.firstMatch.swipeDown()
+        let keyboardDone = app.buttons["plan.keyboardDone"]
+        XCTAssertTrue(keyboardDone.waitForExistence(timeout: stepTimeout))
+        keyboardDone.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: stepTimeout))
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
