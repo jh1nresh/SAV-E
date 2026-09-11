@@ -1366,6 +1366,7 @@ struct ContentView: View {
     private func openPlanConversation(submittedQuery: String? = nil) {
         if !planConversation.assignmentInProgress {
             if let submittedQuery {
+                planConversation.assignmentPlace = nil
                 planConversation.submittedQuery = submittedQuery
             } else {
                 planConversation.requestsNewPlan = true
