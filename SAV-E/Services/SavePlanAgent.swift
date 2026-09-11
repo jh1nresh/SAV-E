@@ -230,6 +230,10 @@ struct SavePlanAgent {
             }
         }
         let priorStops = previousDraft?.itineraryDays.flatMap(\.stops) ?? []
+        let retainedIDs = Set((previousDraft?.itineraryDays ?? []).filter {
+            (1...count).contains($0.dayNumber) && !dayIDs.contains($0.dayNumber)
+        }.flatMap(\.stops).map(\.id))
+        var allocatedIDs = retainedIDs
         var days: [ItineraryDay] = []
         for number in 1...count {
             guard let patch = patches.first(where: { $0.day == number }) else {
@@ -250,12 +254,18 @@ struct SavePlanAgent {
                     ?? candidate.map({ SavePlanDraftBuilder.matches(area: area, candidate: $0) }) ?? false else {
                     throw reject("Unknown or out-of-area reference \(planned.ref). Use inventory references only.")
                 }
-                let prior = priorStops.first { stop in
+                func matchesAvailablePrior(_ stop: ItineraryStop) -> Bool {
+                    guard !allocatedIDs.contains(stop.id) else { return false }
                     if let place { return stop.placeId == place.id.uuidString }
                     return candidate.map { stop.mapCandidate?.id == $0.id } ?? false
                 }
+                let sameDayStops = previousDraft?.itineraryDays.first { $0.dayNumber == number }?.stops ?? []
+                let prior = sameDayStops.first(where: matchesAvailablePrior)
+                    ?? priorStops.first(where: matchesAvailablePrior)
+                let stopID = prior?.id ?? UUID()
+                allocatedIDs.insert(stopID)
                 stops.append(ItineraryStop(
-                    id: prior?.id ?? UUID(), placeId: place?.id.uuidString,
+                    id: stopID, placeId: place?.id.uuidString,
                     placeState: place == nil ? .externalSuggestion : .confirmedMapStamp,
                     placeName: place?.name ?? candidate!.title, time: TripClock.display(from: planned.start),
                     duration: planned.duration, note: nil,

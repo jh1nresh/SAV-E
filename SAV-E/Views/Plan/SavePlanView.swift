@@ -32,6 +32,12 @@ final class SavePlanConversation: ObservableObject {
             mapAction: source.mapAction, aiMessage: source.aiMessage,
             followUpChoices: source.followUpChoices, travelLegs: source.travelLegs
         )
+        if let anchorID = anchorPlaceID ?? agentRequest?.anchorPlaceID,
+           source.placeIds.contains(anchorID.uuidString),
+           draft?.placeIds.contains(anchorID.uuidString) == false {
+            anchorPlaceID = nil
+            agentRequest?.anchorPlaceID = nil
+        }
     }
 
     func startNewPlan() {

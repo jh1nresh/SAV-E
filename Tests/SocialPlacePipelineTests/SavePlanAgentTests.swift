@@ -98,6 +98,28 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertTrue(result.message.contains("這版先採用"))
     }
 
+    func testExplicitCanvasAnchorRemovalReleasesConstraintForNextEdit() throws {
+        let anchor = place("Museum"), other = place("Garden")
+        let first = try validate(decision([[anchor], [other]]), places: [anchor, other], anchor: anchor.id)
+        let original = try XCTUnwrap(first.draft)
+        let conversation = SavePlanConversation()
+        conversation.draft = original
+        conversation.agentRequest = first.request
+        conversation.anchorPlaceID = anchor.id
+        var canvas = TripCanvasDraft(days: original.itineraryDays)
+        canvas.skipStop(original.itineraryDays[0].stops[0].id)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
+        XCTAssertNil(conversation.anchorPlaceID)
+        XCTAssertNil(conversation.agentRequest?.anchorPlaceID)
+        var patch = decision([[], [other]])
+        patch.changedDays?.removeFirst()
+        patch.changedDays?[0].stops[0].duration = 45
+        let result = try validate(patch, places: [anchor, other], previous: .init(
+            message: first.message, request: conversation.agentRequest, draft: conversation.draft))
+        XCTAssertEqual(result.draft?.placeIds, [other.id.uuidString])
+        XCTAssertNil(result.request?.anchorPlaceID)
+    }
+
     func testLocalDayEditPreservesOtherDayExactlyAndChangesActualStops() throws {
         let a = place("Museum"), b = place("Garden"), c = place("Cafe", category: .cafe)
         let first = try validate(decision([[a], [b, c]]), places: [a, b, c])
@@ -162,6 +184,38 @@ final class SavePlanAgentTests: XCTestCase {
         let result = try validate(decision([[c, a]]), places: [a, b, c], previous: first)
         XCTAssertEqual(result.draft?.placeIds, [c.id.uuidString, a.id.uuidString])
         XCTAssertEqual(result.draft?.itineraryDays[0].stops.last?.id, first.draft?.itineraryDays[0].stops.first?.id)
+    }
+
+    func testRepeatedHotelKeepsDistinctDayIdentityAfterLaterDayPatch() throws {
+        let hotel = place("Hotel", category: .stay), museum = place("Museum")
+        let first = try validate(decision([[hotel], [museum, hotel]]), places: [hotel, museum])
+        let original = try XCTUnwrap(first.draft)
+        var patch = decision([[hotel], [museum, hotel]])
+        patch.changedDays?.removeFirst()
+        patch.changedDays?[0].stops[1].duration = 45
+        let result = try validate(patch, places: [hotel, museum], previous: first)
+        let days = try XCTUnwrap(result.draft).itineraryDays
+        XCTAssertEqual(days[0], original.itineraryDays[0])
+        XCTAssertEqual(days[1].stops[1].id, original.itineraryDays[1].stops[1].id)
+        XCTAssertEqual(Set(days.flatMap(\.stops).map(\.id)).count, 3)
+        var canvas = TripCanvasDraft(days: days)
+        canvas.moveStopEarlier(days[1].stops[1].id)
+        XCTAssertEqual(canvas.visibleDays[0], days[0])
+        XCTAssertEqual(canvas.visibleDays[1].stops.first?.id, days[1].stops[1].id)
+        canvas.skipStop(days[1].stops[1].id)
+        XCTAssertEqual(canvas.visibleDays[0], days[0])
+        XCTAssertEqual(canvas.visibleDays[1].stops.map(\.placeId), [museum.id.uuidString])
+    }
+
+    func testNewHotelOccurrenceCannotReuseLaterRetainedDayIdentity() throws {
+        let hotel = place("Hotel", category: .stay), museum = place("Museum")
+        let first = try validate(decision([[museum], [hotel]]), places: [hotel, museum])
+        var patch = decision([[museum, hotel], [hotel]])
+        patch.changedDays?.removeLast()
+        let result = try validate(patch, places: [hotel, museum], previous: first)
+        let days = try XCTUnwrap(result.draft).itineraryDays
+        XCTAssertEqual(days[1], first.draft?.itineraryDays[1])
+        XCTAssertNotEqual(days[0].stops[1].id, days[1].stops[0].id)
     }
 
     func testInvalidModelReferencesCannotBePromoted() throws {
