@@ -556,6 +556,55 @@ test("runSourceSearchRecovery skips hours and uses venue line before non-US addr
   assert.equal(output.candidates[0].address, "首爾特別市 鐘路區 淸進洞 70");
 });
 
+test("runSourceSearchRecovery preserves address-local venue over earlier quoted clues", async () => {
+  for (const introduction of ["今天吃「豚骨拉麵」", "昨天去「一蘭拉麵」，今天換這家"]) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: "https://www.instagram.com/reel/addressLocalVenue/", maxQueries: 0 },
+      async () => `<meta property="og:title" content="alice on Instagram: &quot;${introduction}
+松阪亭別邸
+📍台北市大安區安和路一段100號&quot;">`,
+      async () => [],
+      { placesCorroborator: async () => undefined },
+    );
+    assert.equal(output.candidates.length, 1);
+    assert.equal(output.candidates[0].name, "松阪亭別邸", introduction);
+    assert.equal(output.candidates[0].address, "台北市大安區安和路一段100號");
+    assert.equal(output.receipt.output, "review_candidate");
+  }
+});
+
+test("runSourceSearchRecovery retains explicitly labeled venue names resembling creator titles", async () => {
+  for (const name of ["咖啡日記", "味蕾食堂", "coffee.diary"]) {
+    for (const address of ["台北大安區", "台北市大安區安和路一段100號"]) {
+      const output = await runSourceSearchRecovery(
+        { sourceUrl: "https://www.instagram.com/reel/labeledVenue/", maxQueries: 0 },
+        async () => `<meta property="og:title" content="alice on Instagram: &quot;店名「${name}」
+📍${address}&quot;">`,
+        async () => [],
+        { placesCorroborator: async () => undefined },
+      );
+      assert.equal(output.candidates.length, 1, `${name}: ${address}`);
+      assert.equal(output.candidates[0].name, name);
+      assert.equal(output.candidates[0].address, address);
+      assert.equal(output.receipt.output, "review_candidate");
+      assert.ok(output.candidates[0].missingInfo.includes("Verified coordinates"));
+    }
+  }
+});
+
+test("runSourceSearchRecovery rejects empty venue labels near addresses", async () => {
+  for (const label of ["店名「」", "店名："]) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: "https://www.instagram.com/reel/emptyVenueLabel/", maxQueries: 0 },
+      async () => `<meta property="og:title" content="alice on Instagram: &quot;${label}
+📍台北市大安區安和路一段100號&quot;">`,
+      async () => [],
+      { placesCorroborator: async () => undefined },
+    );
+    assert.equal(output.candidates.length, 0, label);
+  }
+});
+
 test("runSourceSearchRecovery keeps quoted CJK venue bound to street door number", async () => {
   const output = await runSourceSearchRecovery(
     {

@@ -287,7 +287,7 @@ function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): Sou
   const address = addressFromText(evidenceText);
   const venueClue = sourceMetadataVenueClue(evidenceText);
   const name = address
-    ? preferredMetadataVenueName(evidenceText, address, venueClue?.name)
+    ? sourceMetadataPlaceName(evidenceText, address)
     : venueClue?.name;
   if (!name || !isUsableCandidateName(name)) return [];
 
@@ -804,26 +804,20 @@ function mediaEvidenceTextEvidence(mediaEvidence: SourceMediaEvidence[]): string
   });
 }
 
-function preferredMetadataVenueName(
-  text: string,
-  address: string,
-  quotedName?: string,
-): string | undefined {
-  if (quotedName && isUsableCandidateName(quotedName) && !looksLikeCreatorDiaryTitle(quotedName)) {
-    return quotedName;
-  }
-  return sourceMetadataPlaceName(text, address);
-}
-
 function sourceMetadataPlaceName(text: string, address: string): string | undefined {
   const addressIndex = metadataAddressIndex(text, address);
   if (addressIndex < 0) return undefined;
 
   const beforeAddress = text.slice(0, addressIndex);
-  const candidates = beforeAddress
-    .split(/\n|["“”「」『』]/)
-    .map(cleanMetadataPlaceLine)
-    .filter((line) => line && isUsableCandidateName(line) && !looksLikeHours(line) && !looksLikeCreatorDiaryTitle(line));
+  const candidates = instagramCaptionBody(beforeAddress)
+    .split(/\n/)
+    .flatMap((line) => {
+      const labeled = storeLabeledVenueName(line);
+      if (labeled) return [labeled];
+      return line.split(/["“”「」『』]/)
+        .map(cleanMetadataPlaceLine)
+        .filter((name) => isUsableCandidateName(name) && !looksLikeHours(name) && !looksLikeCreatorDiaryTitle(name));
+    });
 
   const candidate = candidates.at(-1);
   const handleName = instagramCaptionVenueHandleName(beforeAddress);
@@ -840,7 +834,7 @@ function sourceMetadataVenueClue(text: string): { name: string; area?: string } 
     .filter((name) => !sameCanonicalName(name, ownerTitle) && looksLikeVenueQuotedName(name));
   const name = labeled ?? quoted[0];
   if (!name || !isUsableCandidateName(name)) return undefined;
-  if (sameCanonicalName(name, ownerTitle) || looksLikeCreatorDiaryTitle(name) || looksLikeAreaOnlyName(name)) {
+  if (!labeled && (sameCanonicalName(name, ownerTitle) || looksLikeCreatorDiaryTitle(name) || looksLikeAreaOnlyName(name))) {
     return undefined;
   }
   return area ? { name, area } : { name };
@@ -859,7 +853,7 @@ function storeLabeledVenueName(text: string): string | undefined {
   const quoted = text.match(/店名\s*[:：]?\s*[「『《"“]\s*([^」』》"”]{2,40})\s*[」』》"”]/);
   if (quoted) {
     const name = cleanQuotedVenueName(quoted[1]);
-    if (name && isUsableCandidateName(name) && !looksLikeCreatorDiaryTitle(name) && !looksLikeAreaOnlyName(name)) {
+    if (name && isUsableCandidateName(name) && !looksLikeAreaOnlyName(name)) {
       return name;
     }
   }
@@ -867,7 +861,7 @@ function storeLabeledVenueName(text: string): string | undefined {
   const plain = text.match(/店名\s*[:：]\s*([^\n\r#@📍]{2,40})/);
   if (!plain) return undefined;
   const name = cleanQuotedVenueName(plain[1]);
-  if (!name || !isUsableCandidateName(name) || looksLikeCreatorDiaryTitle(name) || looksLikeAreaOnlyName(name)) {
+  if (!name || !isUsableCandidateName(name) || looksLikeAreaOnlyName(name)) {
     return undefined;
   }
   return name;
@@ -1016,6 +1010,7 @@ function isUsableCandidateName(value: string): boolean {
   if (value.length < 2 || value.length > 90) return false;
   if (/\b(instagram|reel|reels|tiktok|facebook|login|explore|hashtag|comments?|likes?)\b/i.test(value)) return false;
   if (/^\d+$/.test(value)) return false;
+  if (/^(?:店名|店家)\s*[:：]?$/.test(value)) return false;
   if (!/[A-Za-z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(value)) return false;
   if (/^(home|help center|restaurant|restaurants?|venue|venues?|place|travel|food|coffee|hotel|google maps|directions)$/i.test(value)) return false;
   if (lowered.startsWith("the best ") || lowered.startsWith("best ")) return false;
