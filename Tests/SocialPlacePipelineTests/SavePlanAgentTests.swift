@@ -303,8 +303,12 @@ final class SavePlanAgentTests: XCTestCase {
 
     func testSearchReturnsGroundedUnconfirmedPlaceThroughSameValidator() async throws {
         let a = place("Museum")
-        let candidate = SaveMapCandidate(id: "new-cafe", title: "Cafe", subtitle: "Taipei", latitude: 25.041,
+        let candidate = SaveMapCandidate(id: "new-cafe", title: "Cafe", subtitle: "Nearby unsaved place", latitude: 25.041,
                                         longitude: 121.54, category: .cafe)
+        let far = SaveMapCandidate(id: "far-cafe", title: "Far Cafe", subtitle: "Taipei", latitude: 26,
+                                  longitude: 121.54, category: .cafe)
+        let invalid = SaveMapCandidate(id: "invalid-cafe", title: "Invalid Cafe", subtitle: "Taipei", latitude: .nan,
+                                      longitude: 121.54, category: .cafe)
         let search = SavePlanAgentDecision(action: "search", message: "找附近咖啡店", area: "Taipei",
                                           searchAnchor: "s:" + a.id.uuidString, searchCategories: ["cafe"])
         var proposal = decision([[a]])
@@ -313,14 +317,18 @@ final class SavePlanAgentTests: XCTestCase {
         var calls = 0, searches = 0
         var runner = agent { prompt in
             defer { calls += 1 }
-            if calls == 1 { XCTAssertTrue(prompt.contains("new-cafe")) }
+            if calls == 1 {
+                XCTAssertTrue(prompt.contains("new-cafe"))
+                XCTAssertFalse(prompt.contains("far-cafe"))
+                XCTAssertFalse(prompt.contains("invalid-cafe"))
+            }
             return replies[calls]
         }
         runner.search = { anchor, categories in
             searches += 1
             XCTAssertEqual(anchor.id, a.id)
             XCTAssertEqual(categories, [.cafe])
-            return [candidate]
+            return [candidate, far, invalid]
         }
         let result = try await respond(runner, places: [a])
         XCTAssertEqual(calls, 2); XCTAssertEqual(searches, 1)
@@ -329,6 +337,28 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertEqual(stop.placeState, .externalSuggestion)
         XCTAssertEqual(stop.mapCandidate, candidate)
         XCTAssertEqual(result.draft?.placeIds, [a.id.uuidString])
+        proposal.changedDays?[0].stops[1].duration = 45
+        let followUp = try validate(proposal, places: [a], previous: result)
+        let preserved = try XCTUnwrap(followUp.draft?.itineraryDays[0].stops.last)
+        XCTAssertEqual(preserved.id, stop.id)
+        XCTAssertEqual(preserved.mapCandidate, candidate)
+        XCTAssertEqual(preserved.placeState, .externalSuggestion)
+        XCTAssertNil(preserved.placeId)
+        XCTAssertEqual(preserved.duration, 45)
+    }
+
+    func testNearbySearchBoundsWrapLongitudeAndRejectOutsideRegion() {
+        var anchor = place("Island")
+        anchor.longitude = 179.99
+        let near = SaveMapCandidate(id: "near", title: "Cafe", subtitle: "", latitude: anchor.latitude,
+                                   longitude: -179.99, category: .cafe)
+        let far = SaveMapCandidate(id: "far", title: "Cafe", subtitle: "Taipei", latitude: anchor.latitude + 0.026,
+                                  longitude: 179.99, category: .cafe)
+        XCTAssertTrue(SavePlanAgent.Inventory.isNearby(near, anchor: anchor))
+        XCTAssertFalse(SavePlanAgent.Inventory.isNearby(far, anchor: anchor))
+        let inventory = SavePlanAgent.Inventory(savedPlaces: [anchor], candidates: [near], draft: nil, anchorID: nil)
+        XCTAssertTrue(inventory.matches(area: "Taipei", candidate: near))
+        XCTAssertFalse(inventory.matches(area: "Tokyo", candidate: near))
     }
 
     func testInvalidDecisionGetsFeedbackAndBoundedRepair() async throws {

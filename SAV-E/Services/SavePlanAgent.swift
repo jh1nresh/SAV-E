@@ -92,8 +92,8 @@ struct SavePlanAgent {
                     searched = true
                     let found = await search(anchor, categories)
                     try Task.checkCancellation()
-                    // Search output remains unconfirmed and must be in the requested area.
-                    inventory.add(found.filter { SavePlanDraftBuilder.matches(area: area, candidate: $0) })
+                    // Search regions are provider hints; enforce the actual local bounds.
+                    inventory.add(found.filter { Inventory.isNearby($0, anchor: anchor) })
                     feedback = "Search completed. Use the updated inventory. Do not search again. Empty results mean leave an honest gap; never invent a place."
                     continue
                 }
@@ -166,6 +166,20 @@ struct SavePlanAgent {
                 }) else { continue }
                 publicPlaces["c:" + candidate.id] = candidate
             }
+        }
+
+        func matches(area: String, candidate: SaveMapCandidate) -> Bool {
+            SavePlanDraftBuilder.matches(area: area, candidate: candidate) || saved.values.contains {
+                SavePlanDraftBuilder.matches(area: area, place: $0) && Self.isNearby(candidate, anchor: $0)
+            }
+        }
+
+        static func isNearby(_ candidate: SaveMapCandidate, anchor: Place) -> Bool {
+            guard located(candidate.latitude, candidate.longitude), located(anchor.latitude, anchor.longitude) else { return false }
+            let longitudeDifference = abs(candidate.longitude - anchor.longitude)
+            let span = TripGapLocalOptionsService.searchSpan
+            return abs(candidate.latitude - anchor.latitude) <= span.latitudeDelta / 2
+                && min(longitudeDifference, 360 - longitudeDifference) <= span.longitudeDelta / 2
         }
 
         static func located(_ latitude: Double, _ longitude: Double) -> Bool {
@@ -251,7 +265,7 @@ struct SavePlanAgent {
                 let place = inventory.saved[planned.ref]
                 let candidate = inventory.publicPlaces[planned.ref]
                 guard place.map({ SavePlanDraftBuilder.matches(area: area, place: $0) })
-                    ?? candidate.map({ SavePlanDraftBuilder.matches(area: area, candidate: $0) }) ?? false else {
+                    ?? candidate.map({ inventory.matches(area: area, candidate: $0) }) ?? false else {
                     throw reject("Unknown or out-of-area reference \(planned.ref). Use inventory references only.")
                 }
                 func matchesAvailablePrior(_ stop: ItineraryStop) -> Bool {
