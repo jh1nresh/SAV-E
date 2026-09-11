@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
+		A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000002 /* SavePlanAgent.swift */; };
 		07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE79719B259620EE6212C7 /* Place.swift */; };
 		08517724B9C3842471E1208C /* DeterministicTripPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B04498A61BB7C182195E5A /* DeterministicTripPlanner.swift */; };
 		0FEBCEB093E4D8A2DC0F3E9E /* DebugBridgeTouch.m in Sources */ = {isa = PBXBuildFile; fileRef = 76691C29972046D687A86071 /* DebugBridgeTouch.m */; };
@@ -289,6 +291,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
+		A117DCD202609100000000002 /* SavePlanAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgent.swift; sourceTree = "<group>"; };
 		059853D65770FEA0F3E4A6FD /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
 		087079BA81CF1E30FDEDEA1D /* SAVEUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEUITestCase.swift; sourceTree = "<group>"; };
 		088DFD7077650B834811C66B /* SharedTripData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTripData.swift; sourceTree = "<group>"; };
@@ -697,6 +701,7 @@
 				425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */,
 				A6C366D3712F5DE04F5EEC40 /* SavePlanAroundController.swift */,
 				5A6B7C8D9E0F1A2B3C4D5E6F /* SaveDayRhythmScheduler.swift */,
+				A117DCD202609100000000002 /* SavePlanAgent.swift */,
 				8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */,
 				5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */,
 				6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */,
@@ -913,6 +918,7 @@
 				1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */,
 				B40BE7E1473151BFB17AFC74 /* TripHoursAnnotatorTests.swift */,
 				BA40E8E2D89DC469AF709827 /* TripPackStoreTests.swift */,
+				A117DCD202609100000000004 /* SavePlanAgentTests.swift */,
 				45DAD0BA5FA9ABEA91FBE732 /* TripPlanningIntentTests.swift */,
 				551D153380E6AEFA2C6BF632 /* TripPlanSaveTests.swift */,
 				F7E75F1477A312E985B4F1AD /* TripRouteServiceTests.swift */,
@@ -1421,6 +1427,7 @@
 				4E0E17A42FE83F382BEA166C /* TripHoursAnnotatorTests.swift in Sources */,
 				80D97179FF0FD6D5B51F9B61 /* TripPackStoreTests.swift in Sources */,
 				8111929D20C39DD9E9E4F1A3 /* TripPlanSaveTests.swift in Sources */,
+				A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */,
 				FEAA95149EB31AF726E72444 /* TripPlanningIntentTests.swift in Sources */,
 				7899E606842CE2B045E5E738 /* TripRouteServiceTests.swift in Sources */,
 				3AE07A508B3AB47A5B8C4813 /* VerifiedPlaceClaimsClientTests.swift in Sources */,
@@ -1540,6 +1547,7 @@
 				6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */,
 				3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */,
 				6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */,
+				A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */,
 				9D0E1F2A3B4C5D6E7F8091A2 /* SavePlanDraftBuilder.swift in Sources */,
 				F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */,
 				9B89D237E9E3B0347D707D58 /* SavePlaceFromURLIntent.swift in Sources */,

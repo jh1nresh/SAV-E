@@ -2625,7 +2625,7 @@ async function recordAIUsageEvent(userId: string, event: AIUsageEvent): Promise<
 
 function geminiProxyModel(value: unknown): string {
   const model = typeof value === "string" && value.trim() ? value.trim() : "gemini-3.5-flash";
-  const allowed = new Set((process.env.SAVE_GEMINI_PROXY_MODELS ?? "gemini-3.5-flash")
+  const allowed = new Set((process.env.SAVE_GEMINI_PROXY_MODELS ?? "gemini-3.5-flash,gemini-2.5-flash")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean));

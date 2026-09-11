@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct SavePlaceShareContent {
-    private static let immediateURLMaximumLength = 512
     let subject: String
     let fallbackURL: URL?
     let fallbackText: String
@@ -17,21 +16,12 @@ struct SavePlaceShareContent {
         cacheKey(includingOptionalNote: true)
     }
 
-    /// A compact public source is preferred before network work. If it cannot
-    /// be shared safely, use a valid, specific Apple Maps location; otherwise
-    /// share concise text rather than an embedded Savvy receipt or global pin.
+    /// The first tap must open this place in Savvy, even before the short-link
+    /// service responds. Source evidence remains inside the place receipt.
     var immediateShareURL: URL? {
-        guard let payload else { return nil }
-        if let sourceURL = specificPublicSourceURL,
-           sourceURL.absoluteString.count <= Self.immediateURLMaximumLength {
-            return sourceURL
-        }
-        guard payload.hasValidCoordinate,
-              payload.lat != 0 || payload.lng != 0,
-              let mapsURL = payload.appleMapsURL,
-              mapsURL.absoluteString.count <= Self.immediateURLMaximumLength
-        else { return nil }
-        return mapsURL
+        guard let payload, payload.hasValidCoordinate,
+              payload.lat != 0 || payload.lng != 0 else { return nil }
+        return payload.withShareNote(nil).toURL()
     }
 
     var immediateShareText: String {
@@ -39,15 +29,17 @@ struct SavePlaceShareContent {
     }
 
     func cacheKey(includingOptionalNote: Bool) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
         guard let payload = payload(includingOptionalNote: includingOptionalNote),
-              let data = try? JSONEncoder().encode(payload)
+              let data = try? encoder.encode(payload)
         else { return fallbackText }
         return "\(sourcePlaceId?.uuidString ?? "unverified")|\(data.base64EncodedString())"
     }
 
     func payload(includingOptionalNote: Bool) -> SharedPlaceData? {
         guard let payload else { return nil }
-        guard includingOptionalNote else { return payload }
+        guard includingOptionalNote else { return payload.withShareNote(nil) }
         return payload.withShareNote(optionalShareNote)
     }
 
@@ -84,29 +76,6 @@ struct SavePlaceShareContent {
             result += result.isEmpty ? url.absoluteString : "\n\(url.absoluteString)"
         }
         return result
-    }
-
-    private var specificPublicSourceURL: URL? {
-        guard let rawValue = payload?.sourceURL,
-              let rawComponents = URLComponents(string: rawValue),
-              let sanitized = ShareRoutePayloadSanitizer.publicURL(from: rawValue),
-              let host = rawComponents.host?.lowercased()
-        else { return nil }
-
-        // The sanitizer removes query items. A map URL whose identity lived
-        // only in ?q/?ll would otherwise collapse to a provider home page.
-        if ["maps.apple.com", "google.com", "www.google.com", "maps.google.com", "uri.amap.com"].contains(host) {
-            let path = sanitized.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).lowercased()
-            let identityFreePaths: Set<String> = if host == "maps.apple.com" {
-                ["", "place", "directions"]
-            } else if host == "uri.amap.com" {
-                ["marker"]
-            } else {
-                ["", "maps", "maps/search", "maps/place", "maps/dir"]
-            }
-            guard !identityFreePaths.contains(path) else { return nil }
-        }
-        return sanitized
     }
 
     private func uniqueNonEmpty(_ values: [String?]) -> [String] {

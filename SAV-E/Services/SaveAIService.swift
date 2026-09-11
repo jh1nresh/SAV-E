@@ -31,6 +31,19 @@ final class SaveAIService {
         print("[SaveAI] Gemini transport configured: backend proxy or allowed direct fallback")
     }
 
+    /// The Plan tab uses semantic actions rather than itinerary text polish.
+    func planDecision(_ prompt: String) async throws -> String {
+        let json = try await geminiTransport.generateContent(body: [
+            "contents": [["role": "user", "parts": [["text": prompt]]]],
+            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 4096, "responseMimeType": "application/json"]
+        ])
+        guard let candidates = json["candidates"] as? [[String: Any]],
+              let content = candidates.first?["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let text = parts.first?["text"] as? String else { throw SaveAIError.emptyResponse }
+        return text
+    }
+
     func query(
         _ userMessage: String,
         places: [Place],

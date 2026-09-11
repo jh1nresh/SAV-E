@@ -204,7 +204,7 @@ enum SaveAtlasPresentationFactory {
         }
 
         presentation.onOpenAssistant = onOpenAssistant
-        presentation.onAskSubmit = onAskSubmit
+        presentation.newTripLabel = language.localized(english: "New trip", traditionalChinese: "新建行程")
         // A recommendation runs the same ask path a typed question does, so
         // the answer lands in the same expanding surface.
         presentation.onPlanRecommendation = onAskSubmit

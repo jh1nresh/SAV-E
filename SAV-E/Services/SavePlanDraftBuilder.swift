@@ -146,54 +146,6 @@ enum SavePlanDraftBuilder {
         return response
     }
 
-    static func removalTarget(in message: String) -> String? {
-        let pattern = #"(?i)^(?:(?:keep the plan but|please)\s+)?remove\s+(.+?)(?:\s+from (?:the|my) (?:plan|draft))?[.!]?$|^(?:保留行程[，,]?但)?(?:移除|刪除|去掉)\s*(.+?)[。！]?$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: message, range: NSRange(message.startIndex..<message.endIndex, in: message)) else { return nil }
-        for group in 1..<match.numberOfRanges {
-            if let range = Range(match.range(at: group), in: message) { return String(message[range]) }
-        }
-        return nil
-    }
-
-    /// Explicit removal changes only the in-memory draft. Exact saved identity
-    /// and a unique name/address match are required; ambiguity changes nothing.
-    static func removingConfirmedStop(named target: String, from draft: SaveAIResponse,
-                                      savedPlaces: [Place], area: String, pace: ItineraryPace,
-                                      language: AppLanguage) -> (draft: SaveAIResponse, removedIDs: Set<UUID>)? {
-        func key(_ value: String) -> String {
-            value.trimmingCharacters(in: .whitespacesAndNewlines)
-                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        }
-        let allStops = draft.itineraryDays.flatMap(\.stops)
-        let draftIDs = Set(allStops.compactMap { $0.placeId.flatMap(UUID.init(uuidString:)) })
-        let matches = savedPlaces.filter { place in
-            guard Self.matches(area: area, place: place), !place.savedIDs.isDisjoint(with: draftIDs) else { return false }
-            let displayedNames = allStops.filter { $0.placeId.flatMap(UUID.init(uuidString:)).map(place.savedIDs.contains) ?? false }.map(\.placeName)
-            let labels = [place.name, "\(place.name), \(place.address)"] + displayedNames
-            return labels.contains { key($0) == key(target) }
-        }
-        guard matches.count == 1, let place = matches.first else { return nil }
-        let removedIDs = place.savedIDs
-        let eligible = savedPlaces.filter { $0.savedIDs.isDisjoint(with: removedIDs) }
-        let days = draft.itineraryDays.map { day in
-            let stops = day.stops.filter { stop in
-                !(stop.placeId.flatMap(UUID.init(uuidString:)).map(removedIDs.contains) ?? false)
-            }
-            var changed = day.replacingStops(stops)
-            changed.health = DeterministicTripPlanner().tripHealth(for: stops, savedPlaces: eligible,
-                dayNumber: day.dayNumber, maxStopsPerDay: pace.maxStopsPerDay, outputLanguage: language)
-            return changed
-        }
-        let remainingIDs = days.flatMap(\.stops).compactMap(\.placeId)
-        let response = SaveAIResponse(componentType: draft.componentType, title: draft.title,
-            placeIds: remainingIDs, navigationPlaceId: draft.navigationPlaceId.flatMap { remainingIDs.contains($0) ? $0 : nil },
-            transportMode: draft.transportMode, itineraryDays: days,
-            tripHealth: DeterministicTripPlanner().overallTripHealth(for: days, outputLanguage: language),
-            messageText: draft.messageText, mapAction: nil, aiMessage: nil)
-        return (response, removedIDs)
-    }
-
     /// Pick the anchor and saved lodging constraints before ordinary memory and external fills,
     /// then retain the scheduler's chronological order and clocks.
     static func paceLimitedStops(_ stops: [ItineraryStop], maxStops: Int,
@@ -213,31 +165,6 @@ enum SavePlanDraftBuilder {
         }.prefix(max(0, maxStops))
         let indices = Set(chosen)
         return stops.enumerated().filter { indices.contains($0.offset) }.map(\.element)
-    }
-
-    /// Plan conditions own place identity, day count, pace and clocks. A remote
-    /// polish may change notes only when it echoes that exact schedule.
-    static func preservingSchedule(_ polished: SaveAIResponse, draft: SaveAIResponse) -> SaveAIResponse {
-        guard polished.componentType == .tripItinerary,
-              polished.itineraryDays.count == draft.itineraryDays.count else { return draft }
-        var days: [ItineraryDay] = []
-        for (original, proposed) in zip(draft.itineraryDays, polished.itineraryDays) {
-            guard original.dayNumber == proposed.dayNumber, original.stops.count == proposed.stops.count else { return draft }
-            var stops: [ItineraryStop] = []
-            for (stop, copy) in zip(original.stops, proposed.stops) {
-                guard stop.placeId == copy.placeId, stop.placeName == copy.placeName,
-                      stop.time == copy.time, stop.duration == copy.duration else { return draft }
-                stops.append(ItineraryStop(
-                    id: stop.id, placeId: stop.placeId, placeState: stop.placeState,
-                    placeName: stop.placeName, time: stop.time, duration: stop.duration,
-                    note: copy.note ?? stop.note, sourceSummary: stop.sourceSummary,
-                    risks: stop.risks, mapCandidate: stop.mapCandidate
-                ))
-            }
-            days.append(ItineraryDay(dayNumber: original.dayNumber, label: original.label,
-                                     stops: stops, health: original.health, windowNote: original.windowNote))
-        }
-        return draft.replacingItineraryDays(days, tripHealth: draft.tripHealth)
     }
 
     /// Validate travel against the scheduled order; routing must never move a meal or a stay.

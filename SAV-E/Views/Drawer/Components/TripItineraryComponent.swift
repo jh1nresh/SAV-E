@@ -12,13 +12,13 @@ struct TripItineraryComponent: View {
     var onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)?
     var onOpenTrip: ((UUID) -> Void)? = nil
     var onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
+    var onDaysChange: (([ItineraryDay], [Place]) -> Void)? = nil
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var shareItem: TripItineraryShareItem?
     @State private var exportAlert: TripItineraryExportAlert?
     @State private var exportTask: Task<Void, Never>?
     @State private var canvas: TripCanvasDraft
     @State private var localGapCandidates: [SaveMapCandidate] = []
-    @State private var isLoadingLocalGapCandidates = false
     @State private var saveTripPrompt: TripPlanSavePrompt?
     @State private var isSavingTrip = false
     @State private var savedTripID: UUID?
@@ -35,7 +35,8 @@ struct TripItineraryComponent: View {
         travelLegs: [TripTravelLeg] = [],
         onSaveTripPlan: ((_ name: String, _ city: String, _ stops: [TripPlanPersistableStop]) async -> Trip?)? = nil,
         onOpenTrip: ((UUID) -> Void)? = nil,
-        onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil
+        onConfirmCandidate: ((SaveMapCandidate) async throws -> Place)? = nil,
+        onDaysChange: (([ItineraryDay], [Place]) -> Void)? = nil
     ) {
         self.title = title
         self.sourceDays = days
@@ -46,6 +47,7 @@ struct TripItineraryComponent: View {
         self.onSaveTripPlan = onSaveTripPlan
         self.onOpenTrip = onOpenTrip
         self.onConfirmCandidate = onConfirmCandidate
+        self.onDaysChange = onDaysChange
         _canvas = State(initialValue: TripCanvasDraft(days: days))
     }
 
@@ -194,11 +196,16 @@ struct TripItineraryComponent: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .onChange(of: sourceDays) { _, _ in
+            guard sourceDays != canvas.visibleDays else { return }
             canvas = TripCanvasDraft(days: sourceDays)
-            confirmedPlaces = []
+            let referencedIDs = Set(sourceDays.flatMap(\.stops).compactMap(\.placeId))
+            confirmedPlaces = confirmedPlaces.filter { referencedIDs.contains($0.id.uuidString) }
             savedTripID = nil
         }
-        .onChange(of: canvas.visibleDays) { _, _ in savedTripID = nil }
+        .onChange(of: canvas.visibleDays) { _, days in
+            savedTripID = nil
+            if days != sourceDays { onDaysChange?(days, availablePlaces) }
+        }
         .disabled(isConfirmingCandidate || isSavingTrip)
         .confirmationDialog(
             languageSettings.localized(english: "Confirm this place", traditionalChinese: "確認這個地點"),
@@ -541,20 +548,19 @@ struct TripItineraryComponent: View {
     /// Loads public options for the open gaps once per plan. Fire-and-forget:
     /// a plan built from saved places must still render if this never returns.
     private func loadLocalGapCandidates() async {
-        guard !ReviewDemo.isOfflineUITestMode else { return }
+        guard !Task.isCancelled, !ReviewDemo.isOfflineUITestMode else { return }
         guard let gaps = tripHealth?.gaps, !gaps.isEmpty else {
             localGapCandidates = []
             return
         }
-        guard !isLoadingLocalGapCandidates else { return }
-        isLoadingLocalGapCandidates = true
-        defer { isLoadingLocalGapCandidates = false }
-
-        localGapCandidates = await TripGapLocalOptionsService().candidates(
+        localGapCandidates = []
+        let candidates = await TripGapLocalOptionsService().candidates(
             forGaps: gaps,
             days: canvas.visibleDays,
             savedPlaces: places
         )
+        guard !Task.isCancelled else { return }
+        localGapCandidates = candidates
     }
 
     private func dayNumber(for gap: TripGap) -> Int {
