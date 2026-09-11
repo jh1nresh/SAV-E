@@ -113,14 +113,14 @@ struct SavePlanAgent {
                     checked.travelLegs = checkedDays.travelLegs + (draft?.travelLegs ?? []).filter {
                         retainedPairs.contains($0.fromPlaceId + ":" + $0.toPlaceId)
                     }
-                    let conflicts = checked.itineraryDays.filter { $0.stops.contains { $0.risks.contains(.tooFarFromPrevious) } }
+                    let conflicts = checked.itineraryDays.filter { changed.contains($0.dayNumber) && $0.stops.contains { $0.risks.contains(.tooFarFromPrevious) } }
                     if !conflicts.isEmpty, attempt + 1 < Self.maximumDecisions {
-                        let legs = checked.travelLegs.map { "\($0.fromPlaceId) -> \($0.toPlaceId): \($0.durationMinutes) min" }.joined(separator: "; ")
+                        let legs = checkedDays.travelLegs.map { "\($0.fromPlaceId) -> \($0.toPlaceId): \($0.durationMinutes) min" }.joined(separator: "; ")
                         feedback = "Travel check rejected the proposal on days \(conflicts.map(\.dayNumber)). It was NOT applied. Actual travel legs: \(legs). Revise those days' times or stops, preserving the user's other constraints."
                         continue
                     }
                     result.draft = checked
-                    if !conflicts.isEmpty {
+                    if checked.itineraryDays.contains(where: { $0.stops.contains { $0.risks.contains(.tooFarFromPrevious) } }) {
                         result.message += language.localized(english: "\nSome transfers still need more time; review the marked legs before using this draft.",
                             traditionalChinese: "\n部分交通仍需要更多時間，請先查看草稿標出的路段。")
                     }
@@ -214,6 +214,18 @@ struct SavePlanAgent {
         if previousDraft == nil || scheduleChanged || previousDraft?.transportMode != transport {
             guard Set(dayIDs) == Set(1...count) else { throw reject("New trip or changed global constraints require every day, including empty days.") }
         }
+        func validateSchedule(_ stops: [(start: Int?, duration: Int?)], day number: Int) throws {
+            guard stops.count <= pace.maxStopsPerDay else { throw reject("Day \(number) exceeds the \(pace.maxStopsPerDay)-stop pace limit; explicitly repair its day.") }
+            var earliest = number == 1 ? decision.startMinutes ?? 540 : 540
+            let latest = number == count ? decision.endMinutes ?? 1260 : 1260
+            for stop in stops {
+                guard let start = stop.start, let duration = stop.duration, (15...240).contains(duration), start >= earliest,
+                      start <= latest - duration else {
+                    throw reject("Day \(number) has overlapping/out-of-window stops. Explicitly repair its day with 15–240 minute visits and at least 15 minutes between stops.")
+                }
+                earliest = start + duration + 15
+            }
+        }
         let priorStops = previousDraft?.itineraryDays.flatMap(\.stops) ?? []
         var days: [ItineraryDay] = []
         for number in 1...count {
@@ -221,19 +233,14 @@ struct SavePlanAgent {
                 guard let original = previousDraft?.itineraryDays.first(where: { $0.dayNumber == number }) else {
                     throw reject("Missing day \(number).")
                 }
+                try validateSchedule(original.stops.map { ($0.time.flatMap(TripClock.minutes(fromDisplay:)), $0.duration) }, day: number)
                 days.append(original)
                 continue
             }
-            guard patch.stops.count <= pace.maxStopsPerDay else { throw reject("Day \(number) exceeds the \(pace.maxStopsPerDay)-stop pace limit.") }
+            try validateSchedule(patch.stops.map { ($0.start, $0.duration) }, day: number)
             var stops: [ItineraryStop] = []
-            var earliest = number == 1 ? decision.startMinutes ?? 540 : 540
             let latest = number == count ? decision.endMinutes ?? 1260 : 1260
             for planned in patch.stops {
-                guard (15...240).contains(planned.duration), planned.start >= earliest,
-                      planned.start <= latest - planned.duration else {
-                    throw reject("Day \(number) has overlapping/out-of-window stops. Use 15–240 minute visits and at least 15 minutes between stops.")
-                }
-                earliest = planned.start + planned.duration + 15
                 let place = inventory.saved[planned.ref]
                 let candidate = inventory.publicPlaces[planned.ref]
                 guard place.map({ SavePlanDraftBuilder.matches(area: area, place: $0) })

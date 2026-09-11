@@ -110,6 +110,52 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertEqual(c.name, "Cafe")
     }
 
+    func testRetainedManuallyReorderedDayRequiresExplicitRepair() async throws {
+        let a = place("Museum"), b = place("Garden"), c = place("Cafe")
+        var first = try validate(decision([[a, b], [c]]), places: [a, b, c])
+        let original = try XCTUnwrap(first.draft)
+        var canvas = TripCanvasDraft(days: original.itineraryDays)
+        canvas.moveStopEarlier(original.itineraryDays[0].stops[1].id)
+        first.draft = original.replacingItineraryDays(canvas.visibleDays, tripHealth: original.tripHealth)
+        var patch = decision([[a, b], [c]])
+        patch.changedDays?.removeFirst()
+        let invalid = try json(patch)
+        let repaired = try json(decision([[b, a], [c]]))
+        var calls = 0
+        let result = try await respond(agent { prompt in
+            calls += 1
+            if calls == 1 { return invalid }
+            XCTAssertTrue(prompt.contains("Day 1 has overlapping/out-of-window stops"))
+            return repaired
+        }, places: [a, b, c], previous: first)
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(result.draft?.itineraryDays[0].stops.map(\.placeId), [b.id.uuidString, a.id.uuidString])
+        XCTAssertEqual(result.draft?.itineraryDays[0].stops.map(\.time), ["10:00 AM", "12:00 PM"])
+    }
+
+    func testRetainedDayRejectsInvalidDurationWindowClockAndPace() throws {
+        let a = place("Museum"), b = place("Garden")
+        let first = try validate(decision([[a], [b]]), places: [a, b])
+        let draft = try XCTUnwrap(first.draft)
+        let stop = draft.itineraryDays[0].stops[0]
+        var patch = decision([[a], [b]])
+        patch.changedDays?.removeFirst()
+        for (time, duration) in [("10:00 AM", 14), ("10:00 AM", 241), ("8:00 AM", 60), ("8:30 PM", 60), ("invalid", 60)] {
+            let invalid = ItineraryStop(id: stop.id, placeId: stop.placeId, placeName: stop.placeName,
+                                        time: time, duration: duration, note: nil)
+            var days = draft.itineraryDays
+            days[0] = days[0].replacingStops([invalid])
+            XCTAssertThrowsError(try validate(patch, places: [a, b], previous: .init(message: first.message,
+                request: first.request, draft: draft.replacingItineraryDays(days, tripHealth: draft.tripHealth))))
+        }
+        var days = draft.itineraryDays
+        days[0] = days[0].replacingStops(Array(repeating: stop, count: 20))
+        XCTAssertThrowsError(try validate(patch, places: [a, b], previous: .init(message: first.message,
+            request: first.request, draft: draft.replacingItineraryDays(days, tripHealth: draft.tripHealth)))) { error in
+            XCTAssertTrue(String(describing: error).contains("pace limit"))
+        }
+    }
+
     func testReplacementAndReorderingUseCanonicalPlaceIdentity() throws {
         let a = place("Museum"), b = place("Cafe A", category: .cafe), c = place("Cafe B", category: .cafe)
         let first = try validate(decision([[a, b]]), places: [a, b, c])
@@ -296,18 +342,34 @@ final class SavePlanAgentTests: XCTestCase {
 
     func testTravelChecksOnlyChangedDayAndPreservesOtherDayDecoration() async throws {
         let a = place("Museum"), b = place("Garden"), c = place("Cafe", category: .cafe)
-        let first = try validate(decision([[a], [b, c]]), places: [a, b, c])
-        var patch = decision([[a], [c]])
+        var first = try validate(decision([[a, b], [c]]), places: [a, b, c])
+        let draft = try XCTUnwrap(first.draft)
+        var days = draft.itineraryDays
+        var stops = days[0].stops
+        stops[1].risks.append(.tooFarFromPrevious)
+        days[0] = days[0].replacingStops(stops)
+        days[0].windowNote = "Existing transfer warning"
+        first.draft = draft.replacingItineraryDays(days, tripHealth: draft.tripHealth)
+        let retainedLeg = TripTravelLeg(fromPlaceId: a.id.uuidString, toPlaceId: b.id.uuidString,
+                                        durationMinutes: 90, distanceMeters: 6000, mode: .walking)
+        first.draft?.travelLegs = [retainedLeg]
+        var patch = decision([[a, b], [c]])
+        patch.changedDays?[1].stops[0].duration = 45
         patch.changedDays?.removeFirst()
         let output = try json(patch)
         var checkedNumbers: [Int] = []
-        var runner = agent { _ in output }
+        var calls = 0
+        var runner = agent { _ in calls += 1; return output }
         runner.checkTravel = { draft, _, _ in
             checkedNumbers = draft.itineraryDays.map(\.dayNumber)
             return draft
         }
         let result = try await respond(runner, places: [a, b, c], previous: first)
+        XCTAssertTrue(result.message.contains("部分交通仍需要更多時間"))
+        XCTAssertEqual(calls, 1, "A retained travel warning must not retry an unrelated day edit.")
         XCTAssertEqual(checkedNumbers, [2])
+        XCTAssertEqual(result.draft?.travelLegs, [retainedLeg])
+        XCTAssertEqual(result.draft?.itineraryDays[1].stops[0].duration, 45)
         XCTAssertEqual(result.draft?.itineraryDays[0], first.draft?.itineraryDays[0])
     }
 
