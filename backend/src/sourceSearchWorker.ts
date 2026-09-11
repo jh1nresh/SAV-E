@@ -285,26 +285,40 @@ function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): Sou
   if (!metadata) return [];
   const evidenceText = decodedMetadataText(metadata);
   const address = addressFromText(evidenceText);
-  if (!address) return [];
-
-  const name = sourceMetadataPlaceName(evidenceText, address);
+  const venueClue = sourceMetadataVenueClue(evidenceText);
+  const name = address
+    ? sourceMetadataPlaceName(evidenceText, address)
+    : venueClue?.name;
   if (!name || !isUsableCandidateName(name)) return [];
+
+  const hasStreetAddress = Boolean(address);
+  const area = hasStreetAddress ? undefined : venueClue?.area;
 
   return [{
     name,
-    address,
+    address: address ?? area ?? "",
     evidence: [
-      "Source metadata contains explicit place/address evidence",
+      hasStreetAddress
+        ? "Source metadata contains explicit place/address evidence"
+        : "Source metadata contains a venue name without a street address",
       metadata.title ? `Source metadata title: ${cleanText(metadata.title)}` : "",
       metadata.description ? `Source metadata description: ${cleanText(metadata.description)}` : "",
       metadata.resolvedURL ? `Source metadata URL: ${metadata.resolvedURL}` : "",
+      !hasStreetAddress && area ? `Area clue from source metadata: ${area}` : "",
     ].filter(Boolean),
-    confidence: 0.62,
-    missingInfo: [
-      "Confirm exact address",
-      "Verified coordinates",
-      "Source metadata-derived candidate; verify before saving",
-    ],
+    confidence: hasStreetAddress ? 0.62 : 0.46,
+    missingInfo: hasStreetAddress
+      ? [
+        "Confirm exact address",
+        "Verified coordinates",
+        "Source metadata-derived candidate; verify before saving",
+      ]
+      : [
+        "Confirm exact street address",
+        "Verified coordinates",
+        "Places corroboration or Maps refine before saving",
+        "User confirmation before saving as Map Stamp",
+      ],
   }];
 }
 
@@ -795,15 +809,114 @@ function sourceMetadataPlaceName(text: string, address: string): string | undefi
   if (addressIndex < 0) return undefined;
 
   const beforeAddress = text.slice(0, addressIndex);
-  const candidates = beforeAddress
-    .split(/\n|["“”]/)
-    .map(cleanMetadataPlaceLine)
-    .filter((line) => line && isUsableCandidateName(line) && !looksLikeHours(line));
+  const candidates = instagramCaptionBody(beforeAddress)
+    .split(/\n/)
+    .flatMap((line) => {
+      const labeled = storeLabeledVenueName(line);
+      if (labeled) return [labeled];
+      return line.split(/["“”「」『』]/)
+        .map(cleanMetadataPlaceLine)
+        .filter((name) => isUsableCandidateName(name) && !looksLikeHours(name) && !looksLikeCreatorDiaryTitle(name));
+    });
 
   const candidate = candidates.at(-1);
   const handleName = instagramCaptionVenueHandleName(beforeAddress);
   if (handleName && (!candidate || looksLikeContextCandidateLine(candidate))) return handleName;
   return candidate;
+}
+
+function sourceMetadataVenueClue(text: string): { name: string; area?: string } | undefined {
+  const caption = instagramCaptionBody(text);
+  const ownerTitle = instagramOwnerTitle(text);
+  const area = taiwanAreaClue(caption) ?? taiwanAreaClue(text);
+  const labeled = storeLabeledVenueName(caption);
+  const quoted = quotedCJKVenueNames(caption)
+    .filter((name) => !sameCanonicalName(name, ownerTitle) && looksLikeVenueQuotedName(name));
+  const name = labeled ?? quoted[0];
+  if (!name || !isUsableCandidateName(name)) return undefined;
+  if (!labeled && (sameCanonicalName(name, ownerTitle) || looksLikeCreatorDiaryTitle(name) || looksLikeAreaOnlyName(name))) {
+    return undefined;
+  }
+  return area ? { name, area } : { name };
+}
+
+function instagramCaptionBody(text: string): string {
+  return text.match(/\bon\s+Instagram:\s*["“”']?([\s\S]*)/i)?.[1] ?? text;
+}
+
+function instagramOwnerTitle(text: string): string | undefined {
+  const title = text.match(/^(.{2,80}?)\s+on\s+Instagram\s*:/i)?.[1]?.trim();
+  return title ? cleanText(title) : undefined;
+}
+
+function storeLabeledVenueName(text: string): string | undefined {
+  const quoted = text.match(/店名\s*[:：]?\s*[「『《"“]\s*([^」』》"”]{2,40})\s*[」』》"”]/);
+  if (quoted) {
+    const name = cleanQuotedVenueName(quoted[1]);
+    if (name && isUsableCandidateName(name) && !looksLikeAreaOnlyName(name)) {
+      return name;
+    }
+  }
+
+  const plain = text.match(/店名\s*[:：]\s*([^\n\r#@📍]{2,40})/);
+  if (!plain) return undefined;
+  const name = cleanQuotedVenueName(plain[1]);
+  if (!name || !isUsableCandidateName(name) || looksLikeAreaOnlyName(name)) {
+    return undefined;
+  }
+  return name;
+}
+
+function quotedCJKVenueNames(text: string): string[] {
+  const names: string[] = [];
+  for (const match of text.matchAll(/[「『《]\s*([^」』》\n\r]{2,40})\s*[」』》]/g)) {
+    const name = cleanQuotedVenueName(match[1]);
+    if (name) names.push(name);
+  }
+  return unique(names);
+}
+
+function cleanQuotedVenueName(value: string): string {
+  return cleanText(value)
+    .replace(/^(?:店名|店家)\s*[:：]?\s*/, "")
+    .replace(/[📍#].*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeVenueQuotedName(name: string): boolean {
+  if (!isUsableCandidateName(name) || looksLikeCreatorDiaryTitle(name) || looksLikeAreaOnlyName(name)) {
+    return false;
+  }
+  if (looksLikeQuotedMarketingOrDish(name)) return false;
+  return /店|亭|屋|館|馆|樓|楼|苑|莊|庄|居|坊|室|堂|軒|轩|閣|阁|庵|邸|燒肉|烧肉|火鍋|火锅|壽司|寿司|拉麵|拉面|咖啡|餐廳|餐厅|食堂|酒場|酒吧|麵店|飯店|酒店/.test(name);
+}
+
+function looksLikeCreatorDiaryTitle(name: string): boolean {
+  return /日記|食記|味蕾|foodie|blogger|探店筆記|的味蕾/i.test(name) ||
+    /^@[A-Za-z0-9._]{3,30}$/.test(name) ||
+    /^[A-Za-z0-9]+[._][A-Za-z0-9._]{1,29}$/.test(name);
+}
+
+function looksLikeAreaOnlyName(name: string): boolean {
+  return /^(?:台北|臺北|台中|臺中|台南|臺南|高雄|新北|桃園|新竹)?(?:市)?[\u4e00-\u9fff]{0,4}(?:區|区|市)$/.test(name);
+}
+
+function looksLikeQuotedMarketingOrDish(name: string): boolean {
+  return /分鐘|現烤|招牌|必點|吐司|沾醬|爆紅|打卡|幸福|入口|控不能/.test(name);
+}
+
+function taiwanAreaClue(text: string): string | undefined {
+  const match = text.match(/(台北|臺北|台中|臺中|台南|臺南|高雄|新北|桃園|新竹)(?:市)?(\s*[\u4e00-\u9fff]{1,3}(?:區|区))?/);
+  if (!match) return undefined;
+  const city = normalizeTaiwanCity(match[1]);
+  const district = (match[2] ?? "").replace(/\s+/g, "").replace(/区$/, "區");
+  return `${city}${district}`;
+}
+
+function sameCanonicalName(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) return false;
+  return canonicalName(left) === canonicalName(right);
 }
 
 function metadataAddressIndex(text: string, address: string): number {
@@ -897,6 +1010,7 @@ function isUsableCandidateName(value: string): boolean {
   if (value.length < 2 || value.length > 90) return false;
   if (/\b(instagram|reel|reels|tiktok|facebook|login|explore|hashtag|comments?|likes?)\b/i.test(value)) return false;
   if (/^\d+$/.test(value)) return false;
+  if (/^(?:店名|店家)\s*[:：]?$/.test(value)) return false;
   if (!/[A-Za-z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(value)) return false;
   if (/^(home|help center|restaurant|restaurants?|venue|venues?|place|travel|food|coffee|hotel|google maps|directions)$/i.test(value)) return false;
   if (lowered.startsWith("the best ") || lowered.startsWith("best ")) return false;
@@ -1001,12 +1115,19 @@ function firstSocialHandle(text: string): string | undefined {
 function cityQualifiedVenueClue(text: string): { city: string; name: string } | undefined {
   const genericNames = new Set(["那間店", "那家店", "這間店", "这间店", "這家店", "这家店", "那個地方", "那个地方"]);
   const match = text.match(/(台南|臺南|台北|臺北|台中|臺中|高雄|新北|桃園)的([^\n\r，,。！!？?@#]{2,24})/);
-  if (!match) return undefined;
-  const city = normalizeTaiwanCity(match[1]);
-  const name = cleanText(match[2]).replace(/[「」『』"']/g, "").trim();
-  if (!name || genericNames.has(name) || looksLikeAddress(name)) return undefined;
-  if (!isUsableCandidateName(name)) return undefined;
-  return { city, name };
+  if (match) {
+    const city = normalizeTaiwanCity(match[1]);
+    const name = cleanText(match[2]).replace(/[「」『』"']/g, "").trim();
+    if (name && !genericNames.has(name) && !looksLikeAddress(name) && isUsableCandidateName(name)) {
+      return { city, name };
+    }
+  }
+
+  const clue = sourceMetadataVenueClue(text);
+  if (!clue?.name || !clue.area || genericNames.has(clue.name)) return undefined;
+  const city = clue.area.match(/^(台北|台中|台南|高雄|新北|桃園|新竹)/)?.[1];
+  if (!city || looksLikeAddress(clue.name) || !isUsableCandidateName(clue.name)) return undefined;
+  return { city, name: clue.name };
 }
 
 function normalizeTaiwanCity(city: string): string {

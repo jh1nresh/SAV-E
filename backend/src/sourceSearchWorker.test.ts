@@ -556,6 +556,182 @@ test("runSourceSearchRecovery skips hours and uses venue line before non-US addr
   assert.equal(output.candidates[0].address, "首爾特別市 鐘路區 淸進洞 70");
 });
 
+test("runSourceSearchRecovery preserves address-local venue over earlier quoted clues", async () => {
+  for (const introduction of ["今天吃「豚骨拉麵」", "昨天去「一蘭拉麵」，今天換這家"]) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: "https://www.instagram.com/reel/addressLocalVenue/", maxQueries: 0 },
+      async () => `<meta property="og:title" content="alice on Instagram: &quot;${introduction}
+松阪亭別邸
+📍台北市大安區安和路一段100號&quot;">`,
+      async () => [],
+      { placesCorroborator: async () => undefined },
+    );
+    assert.equal(output.candidates.length, 1);
+    assert.equal(output.candidates[0].name, "松阪亭別邸", introduction);
+    assert.equal(output.candidates[0].address, "台北市大安區安和路一段100號");
+    assert.equal(output.receipt.output, "review_candidate");
+  }
+});
+
+test("runSourceSearchRecovery retains explicitly labeled venue names resembling creator titles", async () => {
+  for (const name of ["咖啡日記", "味蕾食堂", "coffee.diary"]) {
+    for (const address of ["台北大安區", "台北市大安區安和路一段100號"]) {
+      const output = await runSourceSearchRecovery(
+        { sourceUrl: "https://www.instagram.com/reel/labeledVenue/", maxQueries: 0 },
+        async () => `<meta property="og:title" content="alice on Instagram: &quot;店名「${name}」
+📍${address}&quot;">`,
+        async () => [],
+        { placesCorroborator: async () => undefined },
+      );
+      assert.equal(output.candidates.length, 1, `${name}: ${address}`);
+      assert.equal(output.candidates[0].name, name);
+      assert.equal(output.candidates[0].address, address);
+      assert.equal(output.receipt.output, "review_candidate");
+      assert.ok(output.candidates[0].missingInfo.includes("Verified coordinates"));
+    }
+  }
+});
+
+test("runSourceSearchRecovery rejects empty venue labels near addresses", async () => {
+  for (const label of ["店名「」", "店名："]) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: "https://www.instagram.com/reel/emptyVenueLabel/", maxQueries: 0 },
+      async () => `<meta property="og:title" content="alice on Instagram: &quot;${label}
+📍台北市大安區安和路一段100號&quot;">`,
+      async () => [],
+      { placesCorroborator: async () => undefined },
+    );
+    assert.equal(output.candidates.length, 0, label);
+  }
+});
+
+test("runSourceSearchRecovery keeps quoted CJK venue bound to street door number", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/DStreetQuotedVenue/",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="pattie.eat on Instagram: &quot;店名「松阪亭別邸」
+📍台北市大安區安和路一段100號&quot;">
+        `;
+      }
+      return "";
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "松阪亭別邸");
+  assert.equal(output.candidates[0].address, "台北市大安區安和路一段100號");
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("explicit place/address evidence")));
+  assert.doesNotMatch(output.candidates[0].name, /pattie/i);
+  assert.doesNotMatch(output.candidates[0].name, /味蕾/);
+});
+
+test("runSourceSearchRecovery emits weak review candidate from IG venue quote without street", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/Dcx98KTJL7n/",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="pattie.eat on Instagram: &quot;店名「松阪亭別邸」📍台北大安區 #台北美食&quot;">
+          <meta property="og:description" content="珮蒂的味蕾日記 on Instagram: &quot;店名「松阪亭別邸」📍台北大安區&quot;">
+        `;
+      }
+      return `
+        <div class="result">
+          <a class="result__a" href="https://www.instagram.com/reels/">Instagram</a>
+        </div>
+      `;
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "松阪亭別邸");
+  assert.equal(output.candidates[0].address, "台北大安區");
+  assert.ok(output.candidates[0].confidence < 0.62);
+  assert.ok(output.candidates[0].evidence.some((item) => item.includes("venue name without a street address")));
+  assert.ok(
+    output.candidates[0].evidence.some((item) => item === "Rubric verdict: weak") ||
+      output.candidates[0].evidence.some((item) => item === "Rubric verdict: likely"),
+  );
+  assert.ok(output.candidates[0].missingInfo.includes("Confirm exact street address"));
+  assert.ok(output.candidates[0].missingInfo.includes("Verified coordinates"));
+  assert.ok(output.candidates[0].missingInfo.some((item) => /Places|Maps refine|User confirmation/i.test(item)));
+  assert.doesNotMatch(output.candidates[0].name, /pattie/i);
+  assert.doesNotMatch(output.candidates[0].name, /味蕾/);
+  assert.ok(!output.candidates.some((candidate) => /pattie|味蕾日記/i.test(candidate.name)));
+  assert.equal(output.receipt.output, "review_candidate");
+  assert.equal(output.receipt.capabilityLevel, "metadata_enrichment");
+  assert.ok(output.queries.includes("松阪亭別邸 台北 地址"));
+});
+
+test("runSourceSearchRecovery does not promote IG creator diary title as venue", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/Dcx98CreatorOnly/",
+      maxQueries: 1,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="珮蒂的味蕾日記｜台北美食 on Instagram: &quot;今天想吃什麼呢 #台北美食 @pattie.eat&quot;">
+          <meta property="og:description" content="「珮蒂的味蕾日記」今天想吃什麼呢">
+        `;
+      }
+      return "";
+    },
+  );
+
+  assert.equal(output.candidates.length, 0);
+  assert.ok(!output.receipt.found.includes("review_candidate"));
+});
+
+test("runSourceSearchRecovery keeps no-street IG venue as review candidate after Places refine", async () => {
+  const output = await runSourceSearchRecovery(
+    {
+      sourceUrl: "https://www.instagram.com/reel/Dcx98KTJL7n/",
+      maxQueries: 0,
+    },
+    async (url) => {
+      if (url.includes("instagram.com")) {
+        return `
+          <meta property="og:title" content="pattie.eat on Instagram: &quot;店名「松阪亭別邸」📍台北大安區&quot;">
+        `;
+      }
+      return "";
+    },
+    async () => [],
+    {
+      placesCorroborator: async (candidate) => {
+        assert.equal(candidate.name, "松阪亭別邸");
+        assert.match(candidate.address, /台北大安區/);
+        return {
+          name: "松阪亭別邸",
+          address: "台北市大安區安和路一段",
+          placeId: "places-matsuzaka-tei",
+          confidenceBoost: 0.18,
+          evidence: ["Places resolver matched the candidate by name/area query"],
+        };
+      },
+    },
+  );
+
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "松阪亭別邸");
+  assert.equal(output.candidates[0].address, "台北市大安區安和路一段");
+  assert.equal(output.candidates[0].latitude, undefined);
+  assert.ok(output.candidates[0].evidence.some((item) => item === "Rubric verdict: likely"));
+  assert.ok(output.candidates[0].missingInfo.includes("Verified coordinates"));
+  assert.ok(output.candidates[0].missingInfo.includes("User confirmation before saving as Map Stamp"));
+  assert.equal(output.receipt.output, "review_candidate");
+});
+
 test("runSourceSearchRecovery keeps generic live search pages diagnostic-only", async () => {
   const output = await runSourceSearchRecovery(
     {
