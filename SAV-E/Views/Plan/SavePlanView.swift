@@ -474,7 +474,7 @@ struct SavePlanView: View {
                     draft = response
                     conversation.agentRequest = result.request
                     if let request = result.request { conversation.conditions.acceptAgentRequest(request) }
-                    if let anchorID, !response.placeIds.contains(anchorID.uuidString) { conversation.anchorPlaceID = nil }
+                    conversation.anchorPlaceID = result.request?.anchorPlaceID
                     showsDraftDetails = false
                 }
                 conversation.messages.append(.init(request: query, reply: result.message))

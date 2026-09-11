@@ -214,8 +214,37 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertNil(result.draft)
         XCTAssertEqual(first.draft?.placeIds, [a.id.uuidString])
         XCTAssertThrowsError(try validate(decision([[b]]), places: [a, b], anchor: a.id))
-        let later = try validate(decision([[b]]), places: [a, b], previous: first, anchor: a.id)
+        XCTAssertThrowsError(try validate(decision([[b]]), places: [a, b], previous: first, anchor: a.id))
+        var replacement = decision([[b]])
+        replacement.releaseAnchor = true
+        let later = try validate(replacement, places: [a, b], previous: first, anchor: a.id)
         XCTAssertEqual(later.draft?.placeIds, [b.id.uuidString])
+        XCTAssertNil(later.request?.anchorPlaceID)
+    }
+
+    func testInitialWrongCityCannotBypassAnchorEvenWithReleaseMarker() throws {
+        let anchor = place("Museum"), elsewhere = place("Tokyo Garden", area: "Tokyo")
+        var action = decision([[elsewhere]])
+        action.area = "Tokyo"
+        for release in [false, true] {
+            action.releaseAnchor = release
+            XCTAssertThrowsError(try validate(action, places: [anchor, elsewhere], anchor: anchor.id))
+        }
+    }
+
+    func testLocalPatchPreservesActiveAnchorWithoutReleaseMarker() throws {
+        let anchor = place("Museum"), other = place("Garden")
+        let first = try validate(decision([[anchor], [other]]), places: [anchor, other], anchor: anchor.id)
+        var patch = decision([[anchor], [other]])
+        patch.changedDays?.removeFirst()
+        patch.changedDays?[0].stops[0].duration = 45
+        let result = try validate(patch, places: [anchor, other], previous: first)
+        XCTAssertEqual(result.request?.anchorPlaceID, anchor.id)
+        XCTAssertEqual(result.draft?.itineraryDays[0], first.draft?.itineraryDays[0])
+        var omission = decision([[other], []])
+        XCTAssertThrowsError(try validate(omission, places: [anchor, other], previous: result))
+        omission.releaseAnchor = false
+        XCTAssertThrowsError(try validate(omission, places: [anchor, other], previous: result))
     }
 
     func testSearchReturnsGroundedUnconfirmedPlaceThroughSameValidator() async throws {
