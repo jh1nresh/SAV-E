@@ -122,6 +122,7 @@ struct SavePlanConversationConditions {
     mutating func receive(_ message: String, areas: [String]) {
         let hadArea = area != nil
         needsFollowUpClarification = false
+        let wasAskingPace = area != nil && days != nil && pace == nil
         let wasAskingDays = unsupportedDays != nil || (area != nil && days == nil)
         requests.append(message)
         if requests.count > 12 { requests.removeFirst() }
@@ -208,7 +209,12 @@ struct SavePlanConversationConditions {
             days = nil
             unsupportedDays = nil
         }
-        let parsedPace = Self.paceAnswer(text)
+        let noPacePreference = wasAskingPace && text.range(
+            of: #"^(?:都可以|都行|隨意|随意|沒差|没差|any|either|no preference)(?:[。.!！ ]*)$"#,
+            options: .regularExpression
+        ) != nil
+        let parsedPace: (mentioned: Bool, value: ItineraryPace?) = noPacePreference
+            ? (true, .balanced) : Self.paceAnswer(text)
         if parsedPace.mentioned { pace = parsedPace.value }
 
         let awaitingArrivalOnly = !arrivalAnswered && departureAnswered
@@ -223,7 +229,7 @@ struct SavePlanConversationConditions {
             if awaitingDepartureOnly { departureMinutes = clock.minutes; departureAnswered = clock.minutes != nil }
         }
 
-        if noWindow, area != nil, days != nil, pace != nil {
+        if noWindow, !noPacePreference, area != nil, days != nil, pace != nil {
             // A reply to the remaining clock question keeps the clock already
             // supplied. An explicit reset after both answers clears both.
             if arrivalAnswered && departureAnswered {
@@ -297,10 +303,35 @@ struct SavePlanConversationConditions {
         return SavePlanRequest(area: area, days: days, pace: pace, arrivalMinutes: arrivalMinutes, departureMinutes: departureMinutes, language: language, usesFlightBuffers: false)
     }
 
-    func planningMessage(language: AppLanguage) -> String {
-        let start = arrivalMinutes.map { String(format: "%02d:%02d", $0 / 60, $0 % 60) } ?? "none"
-        let end = departureMinutes.map { String(format: "%02d:%02d", $0 / 60, $0 % 60) } ?? "none"
-        return "Confirmed conditions: area=\(area ?? "unresolved"); days=\(days ?? 0); pace=\(pace?.rawValue ?? "unresolved"); first-day start=\(start); last-day end=\(end). Preserve the supplied draft schedule and only refine its notes.\n" + requests.joined(separator: "\n")
+    /// Local recovery only. The live Plan path sends every turn to the model first.
+    /// Defaults are provisional and must be disclosed, never described as user answers.
+    func provisionalRequest(language: AppLanguage) -> SavePlanRequest? {
+        guard area != nil, ambiguousDestinationPrefix == nil, unmatchedDestination == nil,
+              unsupportedDays == nil, !needsFollowUpClarification else { return nil }
+        var value = self
+        value.days = days ?? 1
+        value.pace = pace ?? .balanced
+        // Invalid explicit clocks cannot turn into unlimited time through a default.
+        let last = requests.last?.lowercased() ?? ""
+        if !arrivalAnswered && last.range(of: #"start|arriv|開始|抵達|到達"#, options: .regularExpression) != nil { return nil }
+        if !departureAnswered && last.range(of: #"end by|depart|結束|離開"#, options: .regularExpression) != nil { return nil }
+        value.arrivalAnswered = true
+        value.departureAnswered = true
+        return value.request(language: language)
+    }
+
+    mutating func acceptAgentRequest(_ request: SavePlanRequest) {
+        area = request.area
+        days = request.days
+        pace = request.pace
+        arrivalMinutes = request.arrivalMinutes
+        departureMinutes = request.departureMinutes
+        arrivalAnswered = true
+        departureAnswered = true
+        unmatchedDestination = nil
+        unsupportedDays = nil
+        needsFollowUpClarification = false
+        ambiguousDestinationPrefix = nil
     }
 
     static func areaAliases(_ area: String) -> [String] {
@@ -347,10 +378,10 @@ struct SavePlanConversationConditions {
         let groups: [(ItineraryPace, String)] = [
             (.relaxed, #"輕鬆|轻松|放鬆|慢慢|不要太趕|\b(?:relaxed|easy|slow|slower|not too packed)\b"#),
             (.balanced, #"適中|适中|普通|\bbalanced\b"#),
-            (.packed, #"緊湊|紧凑|多排|排滿|排满|\b(?:packed|busy)\b"#)
+            (.packed, #"緊湊|紧凑|多排|排滿|排满|多一點|多一点|多一些|\b(?:packed|busy|more stops|more places)\b"#)
         ]
         let sanitized = text.replacingOccurrences(of: "not too packed", with: "relaxed")
-            .replacingOccurrences(of: #"(?:不要|不想|別|not)\s*(?:太)?(?:輕鬆|放鬆|緊湊|排滿|relaxed|packed)"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?:不要|不想|別|not)\s*(?:太)?(?:輕鬆|放鬆|緊湊|排滿|多一點|多一点|多一些|more stops|more places|relaxed|packed)"#, with: "", options: .regularExpression)
         let values = groups.filter { sanitized.range(of: $0.1, options: .regularExpression) != nil }.map(\.0)
         let mentioned = groups.contains { text.range(of: $0.1, options: .regularExpression) != nil }
         return (mentioned, values.count == 1 ? values.first : nil)

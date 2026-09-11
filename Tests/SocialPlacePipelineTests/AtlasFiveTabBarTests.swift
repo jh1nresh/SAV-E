@@ -216,9 +216,9 @@ final class AtlasFiveTabBarTests: XCTestCase {
 
         XCTAssertTrue(plan.contains("plan.root"))
         XCTAssertTrue(plan.contains("plan.chat.input"))
-        XCTAssertTrue(plan.contains("conditions.clarification"))
+        XCTAssertFalse(plan.contains("conditions.clarification"), "Fixed slot questions must not gate the live Plan path")
         XCTAssertFalse(plan.contains("plan.options"))
-        XCTAssertTrue(plan.contains("SavePlanDraftBuilder.draft"))
+        XCTAssertTrue(plan.contains("SavePlanAgent(generate:"))
         XCTAssertTrue(plan.contains("SaveAtlasType"))
         XCTAssertFalse(plan.contains("font(AtlasType."))
         XCTAssertTrue(plan.contains("Unsaved Candidate") || plan.contains("尚未儲存") || content.contains("SavePlanView("))

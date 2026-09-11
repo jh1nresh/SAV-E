@@ -237,24 +237,20 @@ struct TripCanvasDraft: Equatable {
     }
 
     mutating func confirmExternalStop(_ stopID: UUID, as place: Place) {
-        guard let location = location(of: stopID),
-              let original = stop(with: stopID),
-              original.placeState == .externalSuggestion,
-              original.mapCandidate != nil else { return }
-        var stops = days[location.dayIndex].stops
-        stops[location.stopIndex] = ItineraryStop(
-            id: original.id,
-            placeId: place.id.uuidString,
-            placeState: .confirmedMapStamp,
-            placeName: place.name,
-            time: original.time,
-            duration: original.duration,
-            note: original.note,
-            sourceSummary: place.address,
-            risks: original.risks.filter { $0 != .externalSuggestion }
-        )
-        days[location.dayIndex] = days[location.dayIndex].replacingStops(stops)
-        approvedExternalStopIDs.remove(stopID)
+        guard let original = stop(with: stopID), original.placeState == .externalSuggestion,
+              let candidateID = original.mapCandidate?.id else { return }
+        for dayIndex in days.indices {
+            let stops = days[dayIndex].stops.map { stop -> ItineraryStop in
+                guard stop.placeState == .externalSuggestion, stop.mapCandidate?.id == candidateID else { return stop }
+                approvedExternalStopIDs.remove(stop.id)
+                return ItineraryStop(
+                    id: stop.id, placeId: place.id.uuidString, placeState: .confirmedMapStamp,
+                    placeName: place.name, time: stop.time, duration: stop.duration, note: stop.note,
+                    sourceSummary: place.address, risks: stop.risks.filter { $0 != .externalSuggestion }
+                )
+            }
+            days[dayIndex] = days[dayIndex].replacingStops(stops)
+        }
     }
 
     mutating func skipStop(_ stopID: UUID) {
