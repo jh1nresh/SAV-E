@@ -22,15 +22,47 @@ final class SavePlanConversation: ObservableObject {
     var anchorPlaceID: UUID?
     var excludedPlaceIDs = Set<UUID>()
 
-    func updateDraftDays(_ days: [ItineraryDay], replacing source: SaveAIResponse) {
+    func updateDraftDays(_ days: [ItineraryDay], replacing source: SaveAIResponse, availablePlaces: [Place], language: AppLanguage) {
         guard draft == source else { return }
+        let planner = DeterministicTripPlanner()
+        let normalizedDays = days.map { day -> ItineraryDay in
+            if let original = source.itineraryDays.first(where: { $0.dayNumber == day.dayNumber }), original.stops == day.stops {
+                return original
+            }
+            let stops = day.stops.map { stop -> ItineraryStop in
+                var updated = stop
+                updated.risks.removeAll { $0 == .tooFarFromPrevious }
+                return updated
+            }
+            var updated = day.replacingStops(stops)
+            updated.health = planner.tripHealth(for: stops, savedPlaces: availablePlaces, dayNumber: day.dayNumber,
+                maxStopsPerDay: agentRequest?.pace.maxStopsPerDay ?? ItineraryPace.balanced.maxStopsPerDay, outputLanguage: language)
+            let start = day.dayNumber == 1 ? agentRequest?.arrivalMinutes ?? 540 : 540
+            let end = day.dayNumber == (agentRequest?.days ?? days.count) ? agentRequest?.departureMinutes ?? 1260 : 1260
+            updated.windowNote = language.localized(
+                english: "\(TripClock.display(from: start)) – \(TripClock.display(from: end)) · draft window",
+                traditionalChinese: "\(TripClock.display(from: start)) – \(TripClock.display(from: end)) · 草稿時段")
+            if stops.count > 1 {
+                updated.windowNote = (updated.windowNote ?? "") + " · " + language.localized(
+                    english: "Travel times are unverified. Check the route before following this draft.",
+                    traditionalChinese: "交通時間尚未確認。出發前請先檢查路線。")
+            }
+            return updated
+        }
+        let retainedPairs = Set(days.filter { day in
+            source.itineraryDays.first(where: { $0.dayNumber == day.dayNumber })?.stops == day.stops
+        }.flatMap { day in
+            zip(day.stops, day.stops.dropFirst()).map { $0.routingID + ":" + $1.routingID }
+        })
         draft = SaveAIResponse(
             componentType: source.componentType, title: source.title,
             placeIds: days.flatMap(\.stops).compactMap(\.placeId),
             navigationPlaceId: source.navigationPlaceId, transportMode: source.transportMode,
-            itineraryDays: days, tripHealth: source.tripHealth, messageText: source.messageText,
+            itineraryDays: normalizedDays, tripHealth: planner.overallTripHealth(for: normalizedDays, outputLanguage: language), messageText: source.messageText,
             mapAction: source.mapAction, aiMessage: source.aiMessage,
-            followUpChoices: source.followUpChoices, travelLegs: source.travelLegs
+            followUpChoices: source.followUpChoices, travelLegs: source.travelLegs.filter {
+                retainedPairs.contains($0.fromPlaceId + ":" + $0.toPlaceId)
+            }
         )
         if let anchorID = anchorPlaceID ?? agentRequest?.anchorPlaceID,
            source.placeIds.contains(anchorID.uuidString),
@@ -603,7 +635,7 @@ struct SavePlanView: View {
                 onOpenTrip(tripID)
             },
             onConfirmCandidate: onConfirmCandidate,
-            onDaysChange: { conversation.updateDraftDays($0, replacing: draft) }
+            onDaysChange: { conversation.updateDraftDays($0, replacing: draft, availablePlaces: $1, language: languageSettings.language) }
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plan.draft.details")

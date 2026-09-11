@@ -56,7 +56,7 @@ final class SavePlanAgentTests: XCTestCase {
         conversation.draft = original
         var canvas = TripCanvasDraft(days: original.itineraryDays)
         canvas.confirmExternalStop(original.itineraryDays[0].stops[0].id, as: confirmed)
-        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original, availablePlaces: [a, b, confirmed], language: .english)
         let edited = try XCTUnwrap(conversation.draft)
         XCTAssertEqual(edited.itineraryDays[0].stops[0].placeState, .confirmedMapStamp)
         XCTAssertTrue(edited.placeIds.contains(confirmed.id.uuidString))
@@ -67,7 +67,7 @@ final class SavePlanAgentTests: XCTestCase {
                                   previous: .init(message: first.message, request: first.request, draft: edited))
         XCTAssertEqual(result.draft?.itineraryDays[0], edited.itineraryDays[0])
         conversation.startNewPlan()
-        conversation.updateDraftDays(canvas.visibleDays, replacing: edited)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: edited, availablePlaces: [a, b, confirmed], language: .english)
         XCTAssertNil(conversation.draft, "A late callback cannot restore a discarded draft.")
     }
 
@@ -79,9 +79,57 @@ final class SavePlanAgentTests: XCTestCase {
         var canvas = TripCanvasDraft(days: original.itineraryDays)
         canvas.moveStopEarlier(original.itineraryDays[0].stops[1].id)
         canvas.skipStop(original.itineraryDays[0].stops[2].id)
-        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
-        XCTAssertEqual(conversation.draft?.itineraryDays, canvas.visibleDays)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original, availablePlaces: [a, b, c], language: .english)
+        XCTAssertEqual(conversation.draft?.itineraryDays.flatMap(\.stops), canvas.visibleDays.flatMap(\.stops))
         XCTAssertEqual(conversation.draft?.placeIds, [b.id.uuidString, a.id.uuidString])
+    }
+
+    func testCanvasLunchRemovalRecomputesDayAndOverallHealth() throws {
+        let museum = place("Museum"), lunch = place("Lunch", category: .food)
+        let first = try validate(decision([[museum, lunch]]), places: [museum, lunch])
+        let source = try XCTUnwrap(first.draft)
+        XCTAssertFalse(source.itineraryDays[0].health?.gaps.contains { $0.type == .missingLunch } ?? true)
+        let conversation = SavePlanConversation()
+        conversation.draft = source
+        conversation.agentRequest = first.request
+        var canvas = TripCanvasDraft(days: source.itineraryDays)
+        canvas.skipStop(source.itineraryDays[0].stops[1].id)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: source, availablePlaces: [museum, lunch], language: .english)
+        let edited = try XCTUnwrap(conversation.draft)
+        XCTAssertTrue(edited.itineraryDays[0].health?.gaps.contains { $0.type == .missingLunch } ?? false)
+        XCTAssertTrue(edited.tripHealth?.gaps.contains { $0.type == .missingLunch } ?? false)
+        XCTAssertEqual(edited.itineraryDays[0].stops[0].id, source.itineraryDays[0].stops[0].id)
+    }
+
+    func testCanvasEditInvalidatesOnlyChangedDayTravelEvidence() throws {
+        let a = place("Museum"), b = place("Garden"), c = place("Gallery"), d = place("Cafe"), e = place("Park")
+        let first = try validate(decision([[a, b, c], [d, e]]), places: [a, b, c, d, e])
+        var source = try XCTUnwrap(first.draft)
+        var days = source.itineraryDays
+        var stops = days[0].stops
+        stops[2].risks.append(.tooFarFromPrevious)
+        days[0] = days[0].replacingStops(stops)
+        days[0].windowNote = "Stale travel warning"
+        days[1].windowNote = "Retained route evidence"
+        source = source.replacingItineraryDays(days, tripHealth: source.tripHealth)
+        let retained = TripTravelLeg(fromPlaceId: d.id.uuidString, toPlaceId: e.id.uuidString,
+                                    durationMinutes: 20, distanceMeters: 1000, mode: .walking)
+        source.travelLegs = [TripTravelLeg(fromPlaceId: b.id.uuidString, toPlaceId: c.id.uuidString,
+                                           durationMinutes: 120, distanceMeters: 8000, mode: .walking), retained]
+        let conversation = SavePlanConversation()
+        conversation.draft = source
+        conversation.agentRequest = first.request
+        var canvas = TripCanvasDraft(days: days)
+        canvas.skipStop(stops[1].id)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: source, availablePlaces: [a, b, c, d, e], language: .english)
+        let edited = try XCTUnwrap(conversation.draft)
+        XCTAssertEqual(edited.itineraryDays[1], days[1])
+        XCTAssertEqual(edited.travelLegs, [retained])
+        XCTAssertFalse(edited.itineraryDays[0].stops.contains { $0.risks.contains(.tooFarFromPrevious) })
+        XCTAssertTrue(edited.itineraryDays[0].windowNote?.contains("Travel times are unverified") ?? false)
+        XCTAssertTrue(edited.itineraryDays[0].windowNote?.contains("9:00 AM – 9:00 PM") ?? false)
+        XCTAssertFalse(edited.itineraryDays[0].windowNote?.contains("Stale travel warning") ?? true)
+        XCTAssertEqual(edited.tripHealth, DeterministicTripPlanner().overallTripHealth(for: edited.itineraryDays, outputLanguage: .english))
     }
 
     func testFirstTurnReachesModelWithoutPaceOrClockQuestionnaire() async throws {
@@ -108,7 +156,7 @@ final class SavePlanAgentTests: XCTestCase {
         conversation.anchorPlaceID = anchor.id
         var canvas = TripCanvasDraft(days: original.itineraryDays)
         canvas.skipStop(original.itineraryDays[0].stops[0].id)
-        conversation.updateDraftDays(canvas.visibleDays, replacing: original)
+        conversation.updateDraftDays(canvas.visibleDays, replacing: original, availablePlaces: [anchor, other], language: .english)
         XCTAssertNil(conversation.anchorPlaceID)
         XCTAssertNil(conversation.agentRequest?.anchorPlaceID)
         var patch = decision([[], [other]])
@@ -345,6 +393,82 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertEqual(preserved.placeState, .externalSuggestion)
         XCTAssertNil(preserved.placeId)
         XCTAssertEqual(preserved.duration, 45)
+    }
+
+    func testSearchPrioritizesFreshResultAtCapacityAndKeepsDraftCandidate() async throws {
+        let a = place("Museum")
+        let old = (0..<60).map { SaveMapCandidate(id: "old-\($0)", title: "Old \($0)", subtitle: "Taipei",
+                                                latitude: 25.041, longitude: 121.54, category: .cafe) }
+        let fresh = SaveMapCandidate(id: "fresh", title: "Fresh", subtitle: "", latitude: 25.042,
+                                     longitude: 121.54, category: .cafe)
+        var initial = decision([[a]])
+        initial.changedDays?[0].stops.append(.init(ref: "c:old-0", start: 720, duration: 45))
+        let first = try validate(initial, places: [a], candidates: old)
+        let search = SavePlanAgentDecision(action: "search", message: "Searching", area: "Taipei",
+            searchAnchor: "s:" + a.id.uuidString, searchCategories: ["cafe"])
+        var proposal = initial
+        proposal.changedDays?[0].stops.append(.init(ref: "c:fresh", start: 840, duration: 45))
+        let replies = try [json(search), json(proposal)]
+        var calls = 0
+        var runner = agent { prompt in
+            defer { calls += 1 }
+            if calls == 1 {
+                XCTAssertTrue(prompt.contains("c:fresh"))
+                XCTAssertTrue(prompt.contains("c:old-0"))
+            }
+            return replies[calls]
+        }
+        runner.search = { _, _ in [fresh] }
+        let result = try await runner.respond(query: "Find another cafe", history: [], request: first.request,
+            draft: first.draft, savedPlaces: [a], candidates: old, anchorID: nil, language: .english)
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(result.draft?.itineraryDays[0].stops.compactMap { $0.mapCandidate?.id }, ["old-0", "fresh"])
+        var inventory = SavePlanAgent.Inventory(savedPlaces: [a], candidates: old, draft: first.draft, anchorID: nil)
+        inventory.prioritizeSearch([fresh], draft: first.draft)
+        XCTAssertEqual(inventory.publicPlaces.count, 60)
+        XCTAssertNotNil(inventory.publicPlaces["c:old-0"])
+        XCTAssertNotNil(inventory.publicPlaces["c:fresh"])
+    }
+
+    func testConfirmRepeatedCandidateCanonicalizesAllOccurrencesOnly() throws {
+        let anchor = place("Museum"), confirmed = place("Hotel", category: .stay)
+        let hotel = SaveMapCandidate(id: "hotel", title: "Hotel", subtitle: "Taipei", latitude: 25.041,
+                                     longitude: 121.54, category: .stay)
+        let other = SaveMapCandidate(id: "different-hotel", title: "Hotel", subtitle: "Taipei", latitude: 25.06,
+                                     longitude: 121.54, category: .stay)
+        var action = decision([[anchor], [], []])
+        action.changedDays?[0].stops.append(.init(ref: "c:hotel", start: 720, duration: 60))
+        action.changedDays?[1].stops = [.init(ref: "c:hotel", start: 600, duration: 45)]
+        action.changedDays?[2].stops = [.init(ref: "c:different-hotel", start: 600, duration: 60)]
+        let first = try validate(action, places: [anchor], candidates: [hotel, other])
+        let source = try XCTUnwrap(first.draft)
+        var canvas = TripCanvasDraft(days: source.itineraryDays)
+        canvas.confirmExternalStop(source.itineraryDays[0].stops[1].id, as: confirmed)
+        let days = canvas.visibleDays
+        for (day, index) in [(0, 1), (1, 0)] {
+            let stop = days[day].stops[index], original = source.itineraryDays[day].stops[index]
+            XCTAssertEqual(stop.id, original.id)
+            XCTAssertEqual(stop.time, original.time)
+            XCTAssertEqual(stop.duration, original.duration)
+            XCTAssertEqual(stop.note, original.note)
+            XCTAssertEqual(stop.placeId, confirmed.id.uuidString)
+            XCTAssertEqual(stop.placeState, .confirmedMapStamp)
+            XCTAssertFalse(stop.risks.contains(.externalSuggestion))
+        }
+        XCTAssertNotEqual(days[0].stops[1].id, days[1].stops[0].id)
+        XCTAssertEqual(days[2], source.itineraryDays[2])
+        let conversation = SavePlanConversation()
+        conversation.draft = source
+        conversation.agentRequest = first.request
+        conversation.updateDraftDays(days, replacing: source, availablePlaces: [anchor, confirmed], language: .english)
+        var patch = action
+        patch.changedDays = [action.changedDays![2]]
+        patch.changedDays?[0].stops[0].duration = 45
+        let result = try validate(patch, places: [anchor, confirmed], previous: .init(message: first.message,
+            request: first.request, draft: conversation.draft))
+        XCTAssertEqual(result.draft?.itineraryDays[0], conversation.draft?.itineraryDays[0])
+        XCTAssertEqual(result.draft?.itineraryDays[1], conversation.draft?.itineraryDays[1])
+        XCTAssertEqual(result.draft?.itineraryDays[2].stops[0].placeState, .externalSuggestion)
     }
 
     func testNearbySearchBoundsWrapLongitudeAndRejectOutsideRegion() {

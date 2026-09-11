@@ -93,7 +93,7 @@ struct SavePlanAgent {
                     let found = await search(anchor, categories)
                     try Task.checkCancellation()
                     // Search regions are provider hints; enforce the actual local bounds.
-                    inventory.add(found.filter { Inventory.isNearby($0, anchor: anchor) })
+                    inventory.prioritizeSearch(found.filter { Inventory.isNearby($0, anchor: anchor) }, draft: draft)
                     feedback = "Search completed. Use the updated inventory. Do not search again. Empty results mean leave an honest gap; never invent a place."
                     continue
                 }
@@ -166,6 +166,13 @@ struct SavePlanAgent {
                 }) else { continue }
                 publicPlaces["c:" + candidate.id] = candidate
             }
+        }
+
+        mutating func prioritizeSearch(_ candidates: [SaveMapCandidate], draft: SaveAIResponse?) {
+            let retained = draft?.itineraryDays.flatMap(\.stops).compactMap(\.mapCandidate) ?? []
+            let previous = publicPlaces.keys.sorted().compactMap { publicPlaces[$0] }
+            publicPlaces = [:]
+            add(retained + candidates + previous)
         }
 
         func matches(area: String, candidate: SaveMapCandidate) -> Bool {
