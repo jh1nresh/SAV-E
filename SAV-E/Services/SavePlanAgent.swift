@@ -47,6 +47,33 @@ struct SavePlanAgent {
     typealias Search = (Place, Set<PlaceCategory>) async -> [SaveMapCandidate]
 
     static let maximumDecisions = 3
+
+    static func failureMessage(for error: Error, hasDraft: Bool, language: AppLanguage) -> String {
+        let reason: String
+        switch error {
+        case SAVEGeminiTransportError.upstreamStatus(let status) where status == 429 || (500...599).contains(status):
+            reason = language.localized(
+                english: "The planning service is temporarily unavailable. Please try again later.",
+                traditionalChinese: "規劃服務暫時無法使用，請稍後再試。")
+        case SAVEGeminiTransportError.notConfigured, SAVEGeminiTransportError.unsupportedModel:
+            reason = language.localized(
+                english: "The planning service is unavailable right now. Please try again later.",
+                traditionalChinese: "規劃服務目前無法使用，請稍後再試。")
+        case is URLError:
+            reason = language.localized(
+                english: "Couldn’t connect to the planning service. Check your connection or try again later.",
+                traditionalChinese: "無法連線至規劃服務。請檢查網路連線，或稍後再試。")
+        default:
+            reason = language.localized(
+                english: hasDraft ? "Savvy couldn’t finish this change. Please try again." : "Savvy couldn’t finish this plan. Please try again.",
+                traditionalChinese: hasDraft ? "Savvy 這次沒能完成調整，請再試一次。" : "Savvy 這次沒能完成規劃，請再試一次。")
+        }
+        let preserved = language.localized(
+            english: hasDraft ? "Your draft and message are kept." : "Your message is kept.",
+            traditionalChinese: hasDraft ? "原本草稿和你輸入的訊息都已保留。" : "你輸入的訊息已保留。")
+        return reason + " " + preserved
+    }
+
     let generate: Generate
     var checkTravel: (SaveAIResponse, [Place], AppLanguage) async -> SaveAIResponse = { draft, places, language in
         await SavePlanDraftBuilder.checkingTravel(draft, savedPlaces: places, language: language)

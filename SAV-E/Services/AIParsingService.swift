@@ -144,6 +144,9 @@ final class AIParsingService: AIParsingServiceProtocol {
             if case .upstreamStatus(let status) = error {
                 throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: status))
             }
+            if case .unsupportedModel = error {
+                throw AIParsingError.parsingFailed(Self.userFacingGeminiError(statusCode: 400))
+            }
             throw AIParsingError.apiKeyMissing
         }
     }
