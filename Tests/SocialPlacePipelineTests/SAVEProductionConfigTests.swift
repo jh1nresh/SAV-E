@@ -239,3 +239,125 @@ final class SAVEProductionConfigTests: XCTestCase {
             .deletingLastPathComponent()
     }
 }
+
+@MainActor
+final class SAVEGeminiTransportFailureTests: XCTestCase {
+    private let wrapped429 = #"{"error":"Gemini upstream request failed","status":429}"#
+    private let unsupported = #"{"error":"Unsupported Gemini model"}"#
+
+    private func transport(_ responses: [(Int, String)], proxy: Bool = true, attempts: Int = 1) -> SAVEGeminiTransport {
+        TransportFailureURLProtocol.responses = responses
+        TransportFailureURLProtocol.requestCount = 0
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [TransportFailureURLProtocol.self]
+        return SAVEGeminiTransport(modelFallbacks: ["first", "second", "third"],
+            session: URLSession(configuration: config), accessTokenProvider: nil,
+            guestTokenProvider: proxy ? { "synthetic-guest" } : nil,
+            directAPIKey: proxy ? nil : "synthetic-key", maxAttemptsPerModel: attempts,
+            transientRetryDelayNanoseconds: 0)
+    }
+
+    private func expectStatus(_ status: Int, from transport: SAVEGeminiTransport) async {
+        do {
+            _ = try await transport.generateContent(body: ["contents": []])
+            XCTFail("Expected failure")
+        } catch SAVEGeminiTransportError.upstreamStatus(let actual) {
+            XCTAssertEqual(actual, status)
+        } catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testWrappedQuotaFailureSurvivesUnsupportedFallbacks() async {
+        let runner = transport([(502, wrapped429), (400, unsupported), (400, unsupported)])
+        await expectStatus(429, from: runner)
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 3)
+    }
+
+    func testWrappedQuotaRetriesRemainBoundedAndSupportedFallbackSucceeds() async throws {
+        let runner = transport([(502, wrapped429), (502, wrapped429), (200, #"{"ok":true}"#)], attempts: 2)
+        let result = try await runner.generateContent(body: [:])
+        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 3)
+    }
+
+    func testUnsupportedFirstModelAllowsSupportedFallback() async throws {
+        let runner = transport([(400, unsupported), (200, #"{"ok":true}"#)])
+        let result = try await runner.generateContent(body: [:])
+        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 2)
+    }
+
+    func testMalformedAndUnknownProxyEnvelopesKeepOuterStatus() async {
+        for body in ["not-json", #"{"error":"unknown","status":429}"#,
+                     #"{"error":"Gemini upstream request failed","status":200}"#,
+                     #"{"error":"Gemini upstream request failed","status":429.5}"#] {
+            var runner = transport([(502, body)])
+            runner.modelFallbacks = ["first"]
+            await expectStatus(502, from: runner)
+            XCTAssertEqual(TransportFailureURLProtocol.requestCount, 1)
+        }
+    }
+
+    func testAuthAndOrdinaryClientErrorsRemainTerminal() async {
+        for status in [400, 401, 403] {
+            let runner = transport([(status, wrapped429), (200, "{}")])
+            await expectStatus(status, from: runner)
+            XCTAssertEqual(TransportFailureURLProtocol.requestCount, 1)
+        }
+    }
+
+    func testDirectResponseCannotSpoofBackendEnvelope() async {
+        for body in [wrapped429, unsupported] {
+            let runner = transport([(400, body), (200, "{}")], proxy: false)
+            await expectStatus(400, from: runner)
+            XCTAssertEqual(TransportFailureURLProtocol.requestCount, 1)
+        }
+    }
+
+    func testCancelledRequestDoesNotStartFallback() async {
+        let runner = transport([(200, "{}")])
+        let task = Task<Void, Error> {
+            withUnsafeCurrentTask { $0?.cancel() }
+            _ = try await runner.generateContent(body: [:])
+        }
+        do { _ = try await task.value; XCTFail("Expected cancellation") }
+        catch is CancellationError {}
+        catch { XCTFail("Unexpected cancellation error: \(error)") }
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 0)
+    }
+}
+
+private final class TransportFailureURLProtocol: URLProtocol {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var responses: [(Int, String)] = []
+        var requestCount = 0
+    }
+    private static let state = State()
+    static var responses: [(Int, String)] {
+        get { state.lock.withLock { state.responses } }
+        set { state.lock.withLock { state.responses = newValue } }
+    }
+    static var requestCount: Int {
+        get { state.lock.withLock { state.requestCount } }
+        set { state.lock.withLock { state.requestCount = newValue } }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let next = Self.state.lock.withLock { () -> (Int, String)? in
+            Self.state.requestCount += 1
+            return Self.state.responses.isEmpty ? nil : Self.state.responses.removeFirst()
+        }
+        guard let (status, body) = next else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}

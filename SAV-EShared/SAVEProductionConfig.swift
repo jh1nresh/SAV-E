@@ -96,6 +96,12 @@ struct SAVEGeminiTransport {
             do {
                 return try await generateContentWithRetry(body: body, model: model)
             } catch {
+                try Task.checkCancellation()
+                if error is CancellationError { throw error }
+                if case SAVEGeminiTransportError.unsupportedModel = error {
+                    if lastError == nil { lastError = error }
+                    continue
+                }
                 lastError = error
                 if case SAVEGeminiTransportError.upstreamStatus(let status) = error,
                    status == 404 || status == 429 || (500...599).contains(status) {
@@ -111,14 +117,17 @@ struct SAVEGeminiTransport {
         let attempts = max(maxAttemptsPerModel, 1)
         var lastError: Error?
         for attempt in 1...attempts {
+            try Task.checkCancellation()
             do {
                 return try await generateContent(body: body, model: model)
             } catch {
+                try Task.checkCancellation()
+                if error is CancellationError { throw error }
                 lastError = error
                 guard attempt < attempts, isTransientError(error) else { throw error }
                 // Brief backoff so a momentary 429/5xx/network blip does not
                 // fail the whole link parse.
-                try? await Task.sleep(nanoseconds: transientRetryDelayNanoseconds << UInt64(attempt - 1))
+                try await Task.sleep(nanoseconds: transientRetryDelayNanoseconds << UInt64(attempt - 1))
             }
         }
         throw lastError ?? SAVEGeminiTransportError.emptyResponse
@@ -187,7 +196,7 @@ struct SAVEGeminiTransport {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(authorization.value, forHTTPHeaderField: authorization.header)
         request.httpBody = requestBody
-        return try await decodeResponse(for: request)
+        return try await decodeResponse(for: request, isBackendProxy: true)
     }
 
     private func generateDirect(body: [String: Any], model: String, apiKey: String) async throws -> [String: Any] {
@@ -200,12 +209,27 @@ struct SAVEGeminiTransport {
         return try await decodeResponse(for: request)
     }
 
-    private func decodeResponse(for request: URLRequest) async throws -> [String: Any] {
+    private struct ProxyErrorEnvelope: Decodable {
+        let error: String
+        let status: Int?
+    }
+
+    private func decodeResponse(for request: URLRequest, isBackendProxy: Bool = false) async throws -> [String: Any] {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw SAVEGeminiTransportError.emptyResponse
         }
         guard http.statusCode == 200 else {
+            if isBackendProxy, http.statusCode != 401, http.statusCode != 403,
+               let envelope = try? JSONDecoder().decode(ProxyErrorEnvelope.self, from: data) {
+                if http.statusCode == 400, envelope.error == "Unsupported Gemini model" {
+                    throw SAVEGeminiTransportError.unsupportedModel
+                }
+                if (500...599).contains(http.statusCode), envelope.error == "Gemini upstream request failed",
+                   let status = envelope.status, (400...599).contains(status) {
+                    throw SAVEGeminiTransportError.upstreamStatus(status)
+                }
+            }
             throw SAVEGeminiTransportError.upstreamStatus(http.statusCode)
         }
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -217,6 +241,7 @@ struct SAVEGeminiTransport {
 
 enum SAVEGeminiTransportError: Error {
     case notConfigured
+    case unsupportedModel
     case upstreamStatus(Int)
     case emptyResponse
 }
